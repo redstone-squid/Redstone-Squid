@@ -35,7 +35,17 @@ class RecordRunRepository(Protocol):
 
     async def get_active_record(self, result_id: int) -> ActiveRecord | None: ...
 
-    async def list_active_records(self, *, after_id: int | None, limit: int) -> Sequence[ActiveRecord]: ...
+    async def list_active_records(
+        self,
+        *,
+        offset: int,
+        after_id: int | None,
+        before_id: int | None,
+        descending: bool,
+        limit: int,
+    ) -> Sequence[ActiveRecord]: ...
+
+    async def count_active_records(self) -> int: ...
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 

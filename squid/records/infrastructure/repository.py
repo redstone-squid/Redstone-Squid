@@ -315,18 +315,51 @@ class PostgresRecordRepository:
 
     async def get_active_record(self, result_id: int) -> ActiveRecord | None:
         """Return an active result by its public result identifier."""
-        records = await self._active_records(result_id=result_id, after_id=None, limit=1)
+        records = await self._active_records(result_id=result_id, limit=1)
         return records[0] if records else None
 
-    async def list_active_records(self, *, after_id: int | None, limit: int) -> Sequence[ActiveRecord]:
-        """List active results using descending-ID keyset pagination."""
-        return await self._active_records(result_id=None, after_id=after_id, limit=limit)
+    async def list_active_records(
+        self,
+        *,
+        offset: int,
+        after_id: int | None,
+        before_id: int | None,
+        descending: bool,
+        limit: int,
+    ) -> Sequence[ActiveRecord]:
+        """List one page of active results in display order.
+
+        ID anchors page relative to the display order; a `before_id` page is fetched in reversed
+        order and restored in memory, leaving its overfetched row at the front for the caller.
+        """
+        return await self._active_records(
+            result_id=None,
+            offset=offset,
+            after_id=after_id,
+            before_id=before_id,
+            descending=descending,
+            limit=limit,
+        )
+
+    async def count_active_records(self) -> int:
+        """Count active results across the currently active computation runs."""
+        async with self._session_factory() as session:
+            statement = (
+                select(func.count())
+                .select_from(RecordResult)
+                .join(RecordComputationRun, RecordComputationRun.id == RecordResult.run_id)
+                .where(RecordComputationRun.is_active.is_(True))
+            )
+            return await session.scalar(statement) or 0
 
     async def _active_records(
         self,
         *,
         result_id: int | None,
-        after_id: int | None,
+        offset: int = 0,
+        after_id: int | None = None,
+        before_id: int | None = None,
+        descending: bool = True,
         limit: int,
     ) -> tuple[ActiveRecord, ...]:
         async with self._session_factory() as session:
@@ -338,9 +371,23 @@ class PostgresRecordRepository:
             )
             if result_id is not None:
                 statement = statement.where(RecordResult.id == result_id)
-            if after_id is not None:
-                statement = statement.where(RecordResult.id < after_id)
-            rows = (await session.execute(statement.order_by(RecordResult.id.desc()).limit(limit))).all()
+            reverse = before_id is not None
+            if before_id is not None:
+                # Walk away from the anchor in reversed display order; the page is flipped back below.
+                statement = statement.where(
+                    RecordResult.id > before_id if descending else RecordResult.id < before_id
+                ).order_by(RecordResult.id.asc() if descending else RecordResult.id.desc())
+            else:
+                if after_id is not None:
+                    statement = statement.where(
+                        RecordResult.id < after_id if descending else RecordResult.id > after_id
+                    )
+                statement = statement.order_by(RecordResult.id.desc() if descending else RecordResult.id.asc())
+            if offset:
+                statement = statement.offset(offset)
+            rows = (await session.execute(statement.limit(limit))).all()
+            if reverse:
+                rows = list(reversed(rows))
             if not rows:
                 return ()
             result_ids = [result.id for result, _definition in rows]

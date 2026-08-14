@@ -64,10 +64,25 @@ class FakeRuns:
     async def get_active_record(self, result_id: int) -> ActiveRecord | None:
         return self.active_records.get(result_id)
 
-    async def list_active_records(self, *, after_id: int | None, limit: int) -> Sequence[ActiveRecord]:
-        ordered = sorted(self.active_records, reverse=True)
-        remaining = [result_id for result_id in ordered if after_id is None or result_id < after_id]
-        return tuple(self.active_records[result_id] for result_id in remaining[:limit])
+    async def list_active_records(
+        self,
+        *,
+        offset: int = 0,
+        after_id: int | None = None,
+        before_id: int | None = None,
+        descending: bool = True,
+        limit: int,
+    ) -> Sequence[ActiveRecord]:
+        ordered = sorted(self.active_records, reverse=descending)
+        if before_id is not None:
+            kept = [rid for rid in ordered if (rid > before_id if descending else rid < before_id)]
+            return tuple(self.active_records[rid] for rid in kept[-limit:])
+        if after_id is not None:
+            ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
+        return tuple(self.active_records[rid] for rid in ordered[offset : offset + limit])
+
+    async def count_active_records(self) -> int:
+        return len(self.active_records)
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))

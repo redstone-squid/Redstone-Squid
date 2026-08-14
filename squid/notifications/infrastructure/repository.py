@@ -5,9 +5,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, delete, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, Select, delete, exists, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -229,27 +230,55 @@ class PostgresNotificationRepository:
             return removed is not None
 
     async def list_inbox(
-        self, account_id: int, *, after_id: int | None, limit: int, include_staff: bool
+        self,
+        account_id: int,
+        *,
+        offset: int,
+        after_id: int | None,
+        before_id: int | None,
+        limit: int,
+        include_staff: bool,
     ) -> Sequence[InboxNotification]:
+        """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
         async with self._session_factory() as session:
-            enabled = await session.scalar(
-                select(NotificationProfile.web_enabled).where(
-                    NotificationProfile.account_id == account_id,
-                    NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
-                )
-            )
-            if not enabled:
+            if not await self._web_inbox_enabled(session, account_id):
                 return ()
-            statement = select(NotificationRecord).where(
-                NotificationRecord.account_id == account_id,
-                NotificationRecord.web_visible.is_(True),
+            statement = _inbox_filter(select(NotificationRecord), account_id=account_id, include_staff=include_staff)
+            reverse = before_id is not None
+            if before_id is not None:
+                # Walk away from the anchor in reversed display order; the page is flipped back below.
+                statement = statement.where(NotificationRecord.id > before_id).order_by(NotificationRecord.id.asc())
+            else:
+                if after_id is not None:
+                    statement = statement.where(NotificationRecord.id < after_id)
+                statement = statement.order_by(NotificationRecord.id.desc())
+            if offset:
+                statement = statement.offset(offset)
+            rows = (await session.scalars(statement.limit(limit))).all()
+            ordered = reversed(rows) if reverse else rows
+            return tuple(_inbox(row) for row in ordered)
+
+    async def count_inbox(self, account_id: int, *, include_staff: bool) -> int:
+        """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""
+        async with self._session_factory() as session:
+            if not await self._web_inbox_enabled(session, account_id):
+                return 0
+            statement = _inbox_filter(
+                select(func.count()).select_from(NotificationRecord),
+                account_id=account_id,
+                include_staff=include_staff,
             )
-            if after_id is not None:
-                statement = statement.where(NotificationRecord.id < after_id)
-            if not include_staff:
-                statement = statement.where(NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED.value)
-            rows = (await session.scalars(statement.order_by(NotificationRecord.id.desc()).limit(limit))).all()
-            return tuple(_inbox(row) for row in rows)
+            return await session.scalar(statement) or 0
+
+    @staticmethod
+    async def _web_inbox_enabled(session: AsyncSession, account_id: int) -> bool:
+        enabled = await session.scalar(
+            select(NotificationProfile.web_enabled).where(
+                NotificationProfile.account_id == account_id,
+                NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
+            )
+        )
+        return bool(enabled)
 
     async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool:
         async with self._session_factory() as session, session.begin():
@@ -798,6 +827,17 @@ def _subscription(row: NotificationSubscriptionRecord) -> NotificationSubscripti
         record_filter=None if row.filter is None else RecordSubscriptionFilter.from_dict(dict(row.filter)),
         created_at=row.created_at,
     )
+
+
+def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, include_staff: bool) -> S:
+    """Apply the web-visibility rules shared by inbox page and count queries."""
+    statement = statement.where(
+        NotificationRecord.account_id == account_id,
+        NotificationRecord.web_visible.is_(True),
+    )
+    if not include_staff:
+        statement = statement.where(NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED.value)
+    return statement
 
 
 def _inbox(row: NotificationRecord) -> InboxNotification:

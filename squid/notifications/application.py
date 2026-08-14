@@ -46,8 +46,17 @@ class NotificationRepository(Protocol):
     async def delete_subscription(self, account_id: int, subscription_id: int) -> bool: ...
 
     async def list_inbox(
-        self, account_id: int, *, after_id: int | None, limit: int, include_staff: bool
+        self,
+        account_id: int,
+        *,
+        offset: int,
+        after_id: int | None,
+        before_id: int | None,
+        limit: int,
+        include_staff: bool,
     ) -> Sequence[InboxNotification]: ...
+
+    async def count_inbox(self, account_id: int, *, include_staff: bool) -> int: ...
 
     async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool: ...
 
@@ -138,20 +147,32 @@ class NotificationService:
         self,
         account_id: int,
         *,
+        offset: int = 0,
         after_id: int | None = None,
+        before_id: int | None = None,
         limit: int = 20,
         include_staff: bool = False,
     ) -> Sequence[InboxNotification]:
-        """List web-visible inbox items newest first."""
+        """List one page of web-visible inbox items in newest-first display order.
+
+        ID anchors page relative to the display order; a `before_id` page carries its overfetched
+        row at the front for the caller to trim. `offset` skips rows instead.
+        """
         if not 1 <= limit <= 100:
             msg = "limit must be between 1 and 100"
             raise ValueError(msg)
         return await self._repository.list_inbox(
             account_id,
+            offset=offset,
             after_id=after_id,
+            before_id=before_id,
             limit=limit,
             include_staff=include_staff,
         )
+
+    async def count_inbox(self, account_id: int, *, include_staff: bool = False) -> int:
+        """Count the caller's web-visible inbox items."""
+        return await self._repository.count_inbox(account_id, include_staff=include_staff)
 
     async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool = False) -> None:
         """Mark a visible caller-owned inbox item as read."""

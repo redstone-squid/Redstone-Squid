@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import Select, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -18,6 +18,7 @@ from whenever import Instant
 
 from squid.accounts.domain import IdentityProvider, normalize_ign
 from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
+from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
 from squid.builds.domain import (
     Build,
     Status,
@@ -45,6 +46,25 @@ from squid.tags.infrastructure.models import (
 from squid.versions.infrastructure.models import Version
 
 logger = logging.getLogger(__name__)
+
+
+def _page_filter[S: Select[Any]](
+    statement: S,
+    *,
+    statuses: frozenset[Status],
+    submitter_id: int | None,
+    submitter_account_id: int | None,
+) -> S:
+    """Apply the status and submitter visibility policy shared by page and count queries."""
+    statement = statement.where(SQLBuild.submission_status.in_(statuses))
+    if submitter_account_id is not None:
+        statement = statement.where(SQLBuild.submitter_account_id == submitter_account_id)
+    elif submitter_id is not None:
+        statement = statement.join(AccountIdentity, AccountIdentity.account_id == SQLBuild.submitter_account_id).where(
+            AccountIdentity.provider == IdentityProvider.DISCORD,
+            AccountIdentity.subject == str(submitter_id),
+        )
+    return statement
 
 
 def _mapper_load_options() -> tuple[Any, ...]:
@@ -134,35 +154,69 @@ class BuildRepository:
         statuses: frozenset[Status],
         submitter_id: int | None,
         submitter_account_id: int | None = None,
-        after_id: int | None,
+        sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
+        offset: int = 0,
+        after_id: int | None = None,
+        before_id: int | None = None,
         limit: int,
     ) -> list[Build]:
-        """Load an authoritative keyset page for status and submitter views."""
+        """Load one page of authoritative builds in display order for status and submitter views.
+
+        ID anchors page relative to the display order, so they require the ID sort. A `before_id`
+        page is fetched in reversed order and restored in memory; its overfetched row therefore
+        sits at the front for the caller to trim.
+        """
         if not statuses or limit <= 0:
             return []
+        if sort.field != "id" and (after_id is not None or before_id is not None):
+            msg = "ID anchors require the ID sort"
+            raise ValueError(msg)
         async with self._session_factory() as session:
-            statement = select(SQLBuild).where(SQLBuild.submission_status.in_(statuses))
-            if submitter_account_id is not None:
-                statement = statement.where(SQLBuild.submitter_account_id == submitter_account_id)
-            elif submitter_id is not None:
-                statement = statement.join(
-                    AccountIdentity, AccountIdentity.account_id == SQLBuild.submitter_account_id
-                ).where(
-                    AccountIdentity.provider == IdentityProvider.DISCORD,
-                    AccountIdentity.subject == str(submitter_id),
-                )
-            if after_id is not None:
-                statement = statement.where(SQLBuild.id < after_id)
-            rows = (
-                (
-                    await session.scalars(
-                        statement.order_by(desc(SQLBuild.id)).limit(limit).options(*_mapper_load_options())
-                    )
-                )
-                .unique()
-                .all()
+            statement = _page_filter(
+                select(SQLBuild),
+                statuses=statuses,
+                submitter_id=submitter_id,
+                submitter_account_id=submitter_account_id,
             )
-            return await self._mapper.to_domain_many(session, rows)
+            reverse = before_id is not None
+            if sort.field == "submission_time":
+                time_order = SQLBuild.submission_time.desc() if sort.descending else SQLBuild.submission_time.asc()
+                id_order = SQLBuild.id.desc() if sort.descending else SQLBuild.id.asc()
+                statement = statement.order_by(time_order.nulls_last(), id_order)
+            elif before_id is not None:
+                # Walk away from the anchor in reversed display order; the page is flipped back below.
+                statement = statement.where(
+                    SQLBuild.id > before_id if sort.descending else SQLBuild.id < before_id
+                ).order_by(SQLBuild.id.asc() if sort.descending else SQLBuild.id.desc())
+            else:
+                if after_id is not None:
+                    statement = statement.where(SQLBuild.id < after_id if sort.descending else SQLBuild.id > after_id)
+                statement = statement.order_by(SQLBuild.id.desc() if sort.descending else SQLBuild.id.asc())
+            if offset:
+                statement = statement.offset(offset)
+            rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
+            ordered = list(reversed(rows)) if reverse else list(rows)
+            return await self._mapper.to_domain_many(session, ordered)
+
+    async def count(
+        self,
+        *,
+        statuses: frozenset[Status],
+        submitter_id: int | None = None,
+        submitter_account_id: int | None = None,
+    ) -> int:
+        """Count the builds a listing can display under a visibility policy."""
+        if not statuses:
+            return 0
+        async with self._session_factory() as session:
+            statement = _page_filter(
+                # Distinct guards against row multiplication from the identity join.
+                select(func.count(func.distinct(SQLBuild.id))).select_from(SQLBuild),
+                statuses=statuses,
+                submitter_id=submitter_id,
+                submitter_account_id=submitter_account_id,
+            )
+            return await session.scalar(statement) or 0
 
     async def get_by_message_id(self, message_id: int) -> Build | None:
         """
