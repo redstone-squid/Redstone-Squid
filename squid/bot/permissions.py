@@ -119,11 +119,11 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
     async def grant(
         self,
         ctx: Context[BotT],
+        pattern: str,
         user: discord.User | None = None,
         role: discord.Role | None = None,
-        *,
-        pattern: str,
         scope: ScopeChoice = "guild",
+        *,
         reason: str = "",
     ) -> None:
         """Allow a user or Discord role to use a permission."""
@@ -134,11 +134,11 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
     async def deny(
         self,
         ctx: Context[BotT],
+        pattern: str,
         user: discord.User | None = None,
         role: discord.Role | None = None,
-        *,
-        pattern: str,
         scope: ScopeChoice = "guild",
+        *,
         reason: str = "",
     ) -> None:
         """Deny a permission. A more specific allow still wins; use forbid for an absolute stop."""
@@ -149,12 +149,12 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
     async def forbid(
         self,
         ctx: Context[BotT],
+        pattern: str,
         user: discord.User | None = None,
         role: discord.Role | None = None,
-        *,
-        pattern: str,
-        reason: str,
         scope: ScopeChoice = "global",
+        *,
+        reason: str,
     ) -> None:
         """Withhold a permission absolutely. Owner only, and the reason is recorded."""
         await self._write(ctx, user, role, pattern, scope, Effect.FORBID, reason)
@@ -195,10 +195,9 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
     async def revoke(
         self,
         ctx: Context[BotT],
+        pattern: str,
         user: discord.User | None = None,
         role: discord.Role | None = None,
-        *,
-        pattern: str,
         scope: ScopeChoice = "guild",
     ) -> None:
         """Remove a rule entirely. Different from denying it: absence falls back to the default."""
