@@ -1,7 +1,7 @@
 """Build application service tests."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import Literal, cast
 from unittest.mock import AsyncMock
@@ -14,10 +14,19 @@ from squid.builds.application import BuildEditPatch, DoorSubmissionInput, Restri
 from squid.builds.application.services import (
     BuildService,
 )
+from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.errors import InvalidStateError
 from squid.sponsors import PublicSponsor
+from squid.tags.domain import (
+    TagAssignment,
+    TagAuthority,
+    TagDefinition,
+    TagModerationStatus,
+    TagSemanticKind,
+    TagValueType,
+)
 
 
 class FakeBuildRepository:
@@ -80,6 +89,91 @@ class FakeEmbeddings:
         self.indexed.append(build)
 
 
+class FakeTaxonomyResolver:
+    """Echo known names back as official assignments, like the real resolver.
+
+    Restriction names must appear in ``known_restrictions`` (name -> bucket) to
+    resolve; patterns resolve when listed in ``known_patterns``. Anything else
+    is reported unknown, normalized.
+    """
+
+    def __init__(
+        self,
+        known_restrictions: dict[str, str] | None = None,
+        known_patterns: tuple[str, ...] = ("Regular", "Full Lamp"),
+    ) -> None:
+        self.known_restrictions = known_restrictions or {
+            "Seamless": "wiring-placement",
+            "Locational": "miscellaneous",
+            "Locational with fixes": "miscellaneous",
+            "Directional": "miscellaneous",
+            "Directional with fixes": "miscellaneous",
+        }
+        self.known_patterns = known_patterns
+
+    async def resolve_official(
+        self,
+        *,
+        build_kind: str | None,
+        restrictions: Sequence[str],
+        patterns: Sequence[str],
+    ) -> TaxonomyResolution:
+        del build_kind
+        restriction_lookup = {
+            normalize_tag_name(name): (name, bucket) for name, bucket in self.known_restrictions.items()
+        }
+        pattern_lookup = {normalize_tag_name(name): name for name in self.known_patterns}
+        assignments: list[TagAssignment] = []
+        unknown_restrictions: set[str] = set()
+        unknown_patterns: set[str] = set()
+        next_id = 1
+        for requested in dict.fromkeys(restrictions):
+            match = restriction_lookup.get(normalize_tag_name(requested))
+            if match is None:
+                unknown_restrictions.add(normalize_tag_name(requested))
+                continue
+            name, bucket = match
+            assignments.append(
+                TagAssignment(
+                    definition=TagDefinition(
+                        id=next_id,
+                        stable_key=normalize_tag_name(name).replace(" ", "-"),
+                        display_name=name,
+                        authority=TagAuthority.OFFICIAL,
+                        semantic_kind=TagSemanticKind.RESTRICTION,
+                        value_type=TagValueType.NONE,
+                        moderation_status=TagModerationStatus.APPROVED,
+                        restriction_type=bucket,
+                    )
+                )
+            )
+            next_id += 1
+        for requested in dict.fromkeys(patterns):
+            name = pattern_lookup.get(normalize_tag_name(requested))
+            if name is None:
+                unknown_patterns.add(normalize_tag_name(requested))
+                continue
+            assignments.append(
+                TagAssignment(
+                    definition=TagDefinition(
+                        id=1000 + next_id,
+                        stable_key="pattern-" + normalize_tag_name(name).replace(" ", "-"),
+                        display_name=name,
+                        authority=TagAuthority.OFFICIAL,
+                        semantic_kind=TagSemanticKind.PATTERN,
+                        value_type=TagValueType.NONE,
+                        moderation_status=TagModerationStatus.APPROVED,
+                    )
+                )
+            )
+            next_id += 1
+        return TaxonomyResolution(
+            assignments=tuple(assignments),
+            unknown_restrictions=frozenset(unknown_restrictions),
+            unknown_patterns=frozenset(unknown_patterns),
+        )
+
+
 def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None = None) -> BuildService:
     return BuildService(
         repository,
@@ -87,6 +181,7 @@ def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None 
         FakeRestrictionRepository(),
         FakeVersions(),
         FakeEmbeddings(),
+        FakeTaxonomyResolver(),
     )
 
 
@@ -378,7 +473,9 @@ async def test_save_prepares_defaults_then_indexes_after_relational_persistence(
     repository = FakeBuildRepository()
     embeddings = FakeEmbeddings()
     locks = FakeBuildLocks()
-    service = BuildService(repository, locks, FakeRestrictionRepository(), FakeVersions(), embeddings)
+    service = BuildService(
+        repository, locks, FakeRestrictionRepository(), FakeVersions(), embeddings, FakeTaxonomyResolver()
+    )
     build = Build(id=42)
 
     await service.save(build)

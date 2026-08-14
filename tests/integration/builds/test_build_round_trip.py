@@ -1,19 +1,20 @@
-"""Round-trip coverage pinning the build mapper's save→load semantics.
+"""Round-trip coverage pinning the build persistence semantics.
 
 This is the safety net for the build aggregate redesign: the door/extender field
 lists currently exist in four hand-maintained copies across the mapper and the
 repository, and nothing else ties them together. Every test here runs against a
 migrated PostgreSQL database, exercising the real write path
-(`BuildRepository.save`) and the real read path (`BuildMapper.to_domain`).
+(`apply_build_taxonomy` + `BuildRepository.save`) and the real read path
+(`BuildMapper.to_domain`).
 
-The suite also *characterizes* three known save/load asymmetries rather than
-hiding them, so later phases can flip each expectation deliberately:
+Taxonomy names are resolved into tag assignments at edit time by
+``apply_build_taxonomy``, which canonicalizes the typed restriction fields and
+records unresolvable or ambiguous names in ``extra_info``. After it runs,
+save→load is the identity (up to database-generated timestamps), and ``save()``
+itself persists ``build.tags`` verbatim without interpreting the string fields.
 
-1. Restriction/pattern names that fail to resolve against official tags are
-   diverted into ``extra_info`` on save and never return to the typed fields.
-2. ``save()`` mutates its input: ``tags`` is reassigned and ``door_type`` gains
-   a default ``"Regular"`` pattern.
-3. Missing door dimensions are silently defaulted to 1x2 on write.
+One asymmetry remains characterized for a later phase: missing door dimensions
+are silently defaulted to 1x2 on write.
 """
 
 from dataclasses import fields as dataclass_fields
@@ -25,8 +26,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.infrastructure.models import Account
+from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.settings.infrastructure.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.models import TagAlias, TagApplicability, TagDefinition
@@ -228,6 +231,16 @@ def _assert_round_trip(saved: Build, loaded: Build) -> None:
             assert loaded_value == saved_value, f"{name} did not round-trip"
 
 
+async def _resolve_and_save(
+    session_factory: async_sessionmaker[AsyncSession],
+    repository: BuildRepository,
+    build: Build,
+) -> None:
+    """Persist the way the application service does: resolve taxonomy, then save."""
+    await apply_build_taxonomy(build, OfficialTagResolver(session_factory))
+    await repository.save(build)
+
+
 @pytest.mark.parametrize("category", list(BuildCategory), ids=lambda category: category.value)
 async def test_round_trip_is_identity_for_known_taxonomy(
     migrated_session_factory: async_sessionmaker[AsyncSession],
@@ -237,7 +250,7 @@ async def test_round_trip_is_identity_for_known_taxonomy(
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(category, account_id)
-    await repository.save(build)
+    await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
     loaded = await repository.get_by_id(build.id)
@@ -255,7 +268,7 @@ async def test_update_round_trip_preserves_category_fields(
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(category, account_id)
-    await repository.save(build)
+    await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
     build.description = "Edited description"
@@ -265,7 +278,7 @@ async def test_update_round_trip_preserves_category_fields(
         build.normal_opening_time = 20
     elif category is BuildCategory.EXTENDER:
         build.extension_length = 11
-    await repository.save(build)
+    await _resolve_and_save(migrated_session_factory, repository, build)
 
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
@@ -275,15 +288,17 @@ async def test_update_round_trip_preserves_category_fields(
 async def test_alias_resolves_to_canonical_display_name(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A restriction submitted under an alias loads back under the canonical name."""
+    """A restriction submitted under an alias canonicalizes at edit time."""
     account_id = await _seed_catalogue(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = [OBSERVERLESS_ALIAS]
-    await repository.save(build)
+    await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
+    # apply_build_taxonomy rewrote the field to the canonical display name.
+    assert build.component_restrictions == ["Observerless"]
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
     assert loaded.component_restrictions == ["Observerless"]
@@ -319,13 +334,10 @@ async def test_original_message_round_trips(
     assert loaded.original_message == "the original submission text"
 
 
-# --- Characterized asymmetries -----------------------------------------------
-# These pin CURRENT behaviour. They are expected to be rewritten when taxonomy
-# resolution moves out of save(): unknowns will then be handled at edit time,
-# save() will stop mutating its input, and save→load will become the identity.
+# --- Edit-time taxonomy handling ---------------------------------------------
 
 
-async def test_asymmetry_unknown_restriction_is_diverted_and_lost(
+async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
@@ -333,20 +345,21 @@ async def test_asymmetry_unknown_restriction_is_diverted_and_lost(
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = ["Imaginary Component"]
+    await apply_build_taxonomy(build, OfficialTagResolver(migrated_session_factory))
+
+    # The unresolvable name moved into extra_info before anything was saved,
+    # and the typed field was canonicalized, so save→load stays the identity.
+    assert build.extra_info["unknown_restrictions"] == {"component_restrictions": ["Imaginary Component"]}
+    assert build.component_restrictions == []
+
     await repository.save(build)
     assert build.id is not None
-
-    # save() mutated the caller's extra_info to divert the unresolvable name.
-    assert build.extra_info["unknown_restrictions"] == {"component_restrictions": ["Imaginary Component"]}
-
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
-    # The name does NOT return to the typed field: save→load is lossy here.
-    assert loaded.component_restrictions == []
-    assert loaded.extra_info["unknown_restrictions"] == {"component_restrictions": ["Imaginary Component"]}
+    _assert_round_trip(build, loaded)
 
 
-async def test_asymmetry_ambiguous_restriction_is_treated_as_unknown(
+async def test_ambiguous_restriction_is_recorded_as_unknown(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
@@ -354,9 +367,9 @@ async def test_asymmetry_ambiguous_restriction_is_treated_as_unknown(
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     # Matches two official definitions via their shared alias, so it resolves
-    # to neither and is diverted like an unknown.
+    # to neither and is recorded like an unknown.
     build.component_restrictions = [AMBIGUOUS_ALIAS]
-    await repository.save(build)
+    await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
     loaded = await repository.get_by_id(build.id)
@@ -365,7 +378,30 @@ async def test_asymmetry_ambiguous_restriction_is_treated_as_unknown(
     assert loaded.extra_info["unknown_restrictions"] == {"component_restrictions": [AMBIGUOUS_ALIAS]}
 
 
-async def test_asymmetry_save_mutates_tags_and_defaults_door_pattern(
+async def test_save_persists_tags_verbatim_without_mutating_input(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The repository no longer interprets the restriction string fields."""
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+
+    build = _make_build(BuildCategory.DOOR, account_id)
+    build.door_type = []
+    await repository.save(build)
+
+    # Without apply_build_taxonomy, the strings are not resolved, no default
+    # pattern is injected, and the input is not mutated.
+    assert build.door_type == []
+    assert build.tags == []
+
+    assert build.id is not None
+    loaded = await repository.get_by_id(build.id)
+    assert loaded is not None
+    assert loaded.tags == []
+    assert loaded.door_type == []
+
+
+async def test_apply_build_taxonomy_defaults_door_pattern(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
@@ -373,13 +409,13 @@ async def test_asymmetry_save_mutates_tags_and_defaults_door_pattern(
 
     build = _make_build(BuildCategory.DOOR, account_id)
     build.door_type = []
-    assert build.tags == []
-    await repository.save(build)
+    await apply_build_taxonomy(build, OfficialTagResolver(migrated_session_factory))
 
-    # save() injected the default pattern and reassigned tags on the input.
+    # The default pattern is materialized visibly at edit time.
     assert build.door_type == ["Regular"]
     assert {assignment.definition.stable_key for assignment in build.tags} >= {"pattern-regular"}
 
+    await repository.save(build)
     assert build.id is not None
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
@@ -503,13 +539,9 @@ async def test_round_trip_property(
         versions=["Java 1.21.0"],
         **values,  # type: ignore[arg-type]
     )
-    door_defaulting = build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} and not build.door_type
-    await repository.save(build)
+    await _resolve_and_save(session_factory, repository, build)
     assert build.id is not None
 
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
-    if door_defaulting:
-        # Characterized asymmetry: the default pattern appears on both sides.
-        assert loaded.door_type == ["Regular"]
     _assert_round_trip(build, loaded)

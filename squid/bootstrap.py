@@ -27,7 +27,7 @@ from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.queries import BuildMetadataRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
-from squid.builds.infrastructure.taxonomy import BuildTagsManager
+from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
 from squid.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
@@ -266,6 +266,7 @@ class _ServiceGraph:
             self.restriction_repository,
             self.version_service,
             self.embedding_service,
+            OfficialTagResolver(self.db.async_session),
         )
 
     @cached_property

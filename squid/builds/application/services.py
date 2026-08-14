@@ -14,6 +14,7 @@ from squid.builds.application.ports import (
     DefaultVersionResolver,
 )
 from squid.builds.application.restrictions import RestrictionRepository
+from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
 from squid.builds.domain import Build, BuildCategory, Status
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InvalidStateError
@@ -29,12 +30,14 @@ class BuildService:
         restrictions: RestrictionRepository,
         versions: DefaultVersionResolver,
         embeddings: BuildEmbeddingCoordinator,
+        taxonomy: BuildTaxonomyResolver,
     ) -> None:
         self._repository = repository
         self._locks = locks
         self._restrictions = restrictions
         self._versions = versions
         self._embeddings = embeddings
+        self._taxonomy = taxonomy
 
     async def get(self, build_id: int) -> Build | None:
         return await self._repository.get_by_id(build_id)
@@ -201,6 +204,10 @@ class BuildService:
         """Persist a build when the caller already owns any required edit lease."""
         if not build.versions:
             build.versions = [await self._versions.newest("Java")]
+        # Resolve the editable taxonomy strings into tag assignments here, at the
+        # last application-owned step, so the repository persists build.tags
+        # verbatim and unresolvable names are recorded before anything is saved.
+        await apply_build_taxonomy(build, self._taxonomy)
         await self._embeddings.prepare(build)
         await self._repository.save(build)
         await self._embeddings.index(build)
