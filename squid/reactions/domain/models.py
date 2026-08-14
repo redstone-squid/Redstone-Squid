@@ -11,8 +11,8 @@ class ReactionActor:
     user_id: int
     guild_id: int = 0
     role_ids: frozenset[int] = frozenset()
-    is_staff: bool = False
-    is_trusted: bool = False
+    capabilities: frozenset[str] = frozenset()
+    """Permission node names this actor was resolved to hold; see `VoteActor`."""
 
 
 @dataclass(frozen=True, slots=True)

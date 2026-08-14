@@ -6,6 +6,7 @@ from math import inf, nan
 import pytest
 from whenever import Instant
 
+from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.voting.application import VoteService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -26,6 +27,9 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
+
+STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
+DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
 
 
 def snapshot(
@@ -240,7 +244,7 @@ async def test_refresh_log_carries_session_id_without_user_attributes(caplog: py
 
 
 @pytest.mark.parametrize(
-    ("emoji", "is_staff", "expected_weight"),
+    ("emoji", "has_staff_weight", "expected_weight"),
     [
         ("👍", False, 1.0),
         ("👎", False, -1.0),
@@ -250,7 +254,7 @@ async def test_refresh_log_carries_session_id_without_user_attributes(caplog: py
 )
 async def test_cast_vote_applies_choice_and_staff_weight(
     emoji: str,
-    is_staff: bool,
+    has_staff_weight: bool,
     expected_weight: float,
 ) -> None:
     initial = snapshot()
@@ -265,7 +269,7 @@ async def test_cast_vote_applies_choice_and_staff_weight(
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=is_staff, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, capabilities=STAFF if has_staff_weight else frozenset()),
         emoji,
     )
 
@@ -324,13 +328,13 @@ async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
     assert repository.cast_calls == []
 
 
-async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
+async def test_delete_log_vote_requires_the_delete_log_capability() -> None:
     repository = FakeVoteRepository(snapshot(kind="delete_log"))
     service = VoteService(repository)
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70),
         "👍",
     )
 
@@ -338,7 +342,7 @@ async def test_delete_log_vote_requires_trusted_or_staff_actor() -> None:
     assert repository.cast_calls == []
 
 
-async def test_staff_actor_can_vote_on_delete_log_without_trusted_flag() -> None:
+async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_applies() -> None:
     initial = snapshot(kind="delete_log")
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
@@ -351,7 +355,7 @@ async def test_staff_actor_can_vote_on_delete_log_without_trusted_flag() -> None
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=True, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, capabilities=STAFF | DELETE_LOG),
         "👍",
     )
 
@@ -365,7 +369,7 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=True),
+        VoteActor(account_id=7, discord_id=70, capabilities=DELETE_LOG),
         "👍",
     )
 
@@ -387,7 +391,7 @@ async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70),
         "👍",
     )
 
@@ -412,7 +416,7 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
     repository.get_by_message = get_after_mutation  # type: ignore[method-assign]
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70),
         "👎",
     )
 
@@ -437,7 +441,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=True, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70, capabilities=STAFF),
         "<:strong_yes:123>",
     )
 
@@ -451,7 +455,7 @@ async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, is_staff=False, is_trusted=False),
+        VoteActor(account_id=7, discord_id=70),
         "🤷",
     )
 

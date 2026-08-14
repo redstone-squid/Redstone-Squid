@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable, Sequence
 from typing import override
 
+from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import RoleMultiplier, WeightScope
 from squid.voting.application.ports import VoteWeightPolicy
@@ -21,7 +22,10 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
 
         self._policy = RoleWeightPolicy(
             multipliers,
-            eligibility=lambda actor, scope: scope.kind != "delete_log" or actor.is_trusted or actor.is_staff,
+            eligibility=lambda actor, scope: (
+                scope.kind != "delete_log" or VOTE_LOG_DELETE_CAST.name in actor.capabilities
+            ),
+            staff_capability=VOTE_WEIGHT_STAFF.name,
         )
 
     @override

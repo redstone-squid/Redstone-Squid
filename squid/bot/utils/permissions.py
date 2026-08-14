@@ -1,9 +1,9 @@
 """Permission checking utilities for the bot.
 
-Commands declare the permission *nodes* they need with `requires(...)` and the
-engine in `squid.permissions` decides. The four tier checks this replaced are
-gone; the tier *functions* below survive only for the imperative call sites still
-being converted, and go with them.
+Commands declare the permission *nodes* they need with `requires(...)`, and the
+engine in `squid.permissions` decides. Nothing here knows about tiers any more:
+`check_is_home_server` is the one remaining non-node check, and it asks where a
+command runs rather than who is running it.
 """
 
 from collections.abc import Callable
@@ -159,59 +159,15 @@ def requires(
             forbidden=any(decision.reason is Reason.FORBIDDEN for decision in decisions),
         )
 
-    predicate.__squid_nodes__ = tuple(node.name for node in resolved)  # pyright: ignore[reportFunctionMemberAccess]
-    predicate.__squid_mode__ = mode  # pyright: ignore[reportFunctionMemberAccess]
+    # Stamped on the predicate so the taxonomy test can read a command's real
+    # contract instead of guessing it from a check's name.
+    predicate.__squid_nodes__ = tuple(node.name for node in resolved)  # pyrefly: ignore[missing-attribute]
+    predicate.__squid_mode__ = mode  # pyrefly: ignore[missing-attribute]
     return check(predicate)
 
 
 def _satisfied(decisions: tuple[Decision, ...], mode: CheckMode) -> bool:
     return any(d.allowed for d in decisions) if mode == "any" else all(d.allowed for d in decisions)
-
-
-async def is_global_admin(bot: "squid.bot.app.RedstoneSquid", user_id: int) -> bool:
-    """Return whether a user is the Discord application owner or a persisted global administrator."""
-    if await bot.is_owner(discord.Object(id=user_id)):  # type: ignore[arg-type]
-        return True
-    account = await bot.services.accounts.get_account(user_id)
-    return bool(
-        account is not None
-        and account.id is not None
-        and await bot.services.authorization.is_global_administrator(account.id)
-    )
-
-
-def _has_server_admin_permission(member: discord.Member) -> bool:
-    return has_manage_server(member)
-
-
-async def is_server_admin(bot: "squid.bot.app.RedstoneSquid", server_id: int | None, user_id: int) -> bool:
-    """Return whether a user administers the bot globally or the specified Discord guild."""
-    if await is_global_admin(bot, user_id):
-        return True
-    if server_id is None:
-        return False
-    guild = bot.get_guild(server_id)
-    member = guild.get_member(user_id) if guild is not None else None
-    return member is not None and _has_server_admin_permission(member)
-
-
-async def is_trusted_or_global_admin(bot: "squid.bot.app.RedstoneSquid", server_id: int | None, user_id: int) -> bool:
-    """Return whether a user is a global administrator or has a configured Trusted role."""
-    if await is_global_admin(bot, user_id):
-        return True
-    if server_id is None:
-        return False
-    guild = bot.get_guild(server_id)
-    member = guild.get_member(user_id) if guild is not None else None
-    if member is None:
-        return False
-    trusted_role_ids = await bot.services.settings.get(server_id, "Trusted")
-    return any(role.id in trusted_role_ids for role in member.roles)
-
-
-def is_owner_server(bot: "squid.bot.app.RedstoneSquid", server_id: int) -> bool:
-    """Return whether a server hosts features scoped to the bot's home community."""
-    return server_id == bot.owner_server_id
 
 
 @cache

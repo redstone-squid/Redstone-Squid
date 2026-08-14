@@ -27,7 +27,9 @@ async def test_role_policy_applies_eligibility_before_loading_configuration() ->
         called = True
         return ()
 
-    policy = RoleWeightPolicy(multipliers, eligibility=lambda actor, scope: actor.is_trusted)
+    policy = RoleWeightPolicy(
+        multipliers, eligibility=lambda actor, scope: "vote.log_delete.cast" in actor.capabilities
+    )
 
     assert await policy.calculate(ReactionActor(1), WeightScope(10, "delete_log")) is None
     assert not called
