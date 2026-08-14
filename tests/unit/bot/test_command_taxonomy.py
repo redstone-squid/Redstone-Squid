@@ -186,6 +186,15 @@ def _assert_check_counts(commands: Iterable[AnyCommand], expected: dict[str, int
     assert {name: len(_command(commands, name).checks) for name in expected} == expected
 
 
+def _commands_of(cog: type) -> list[AnyCommand]:
+    """Read a cog's command tree without constructing it.
+
+    `__new__` skips `__init__`, which wants a live bot; pyrefly cannot follow
+    that through a heterogeneous list of cog classes, hence the cast.
+    """
+    return cast(Any, cog).__new__(cog).__cog_commands__
+
+
 def _nodes(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
     """The permission nodes a command declares, read off its check predicates."""
     return {
@@ -270,7 +279,7 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
         (StarboardCog, "starboard", "starboard recount"),
         (RecordCog, "admin", "admin records-rebuild"),
     ):
-        commands = cog.__new__(cog).__cog_commands__
+        commands = _commands_of(cog)
         assert _nodes(commands, member) <= _nodes(commands, group)
 
 
@@ -282,7 +291,7 @@ def test_every_privileged_command_declares_a_node() -> None:
     """
     ungated: set[str] = set()
     for cog in PUBLIC_COGS:
-        for command in cog.__new__(cog).__cog_commands__:
+        for command in _commands_of(cog):
             if command.hidden:
                 continue
             for entry in (command, *getattr(command, "commands", ())):
