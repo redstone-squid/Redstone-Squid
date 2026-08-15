@@ -172,16 +172,29 @@ def compare(left: bytes, right: bytes, *, preset: FingerprintPreset) -> Schemati
 def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> bytes:
     """Render a schematic to PNG bytes. Phase 3 wires this up; the plumbing exists now."""
     schematic = _load(data)
-    config = nucleation.RenderConfig.create()
-    config.set_isometric(request.width, request.height)
-    config.set_sphere_fit(request.sphere_fit)
-    config.set_background(*request.background)
+    config = _render_config(request)
     pack_digest = hashlib.sha256(resource_pack).hexdigest()
     pack = _RESOURCE_PACK_CACHE.get(pack_digest)
     if pack is None:
         pack = nucleation.ResourcePack.from_bytes(resource_pack)
         _RESOURCE_PACK_CACHE[pack_digest] = pack
     return base64.b64decode(nucleation.Renderer.render_png_b64_with_pack(schematic, pack, config))
+
+
+def _render_config(request: RenderRequest) -> Any:
+    """Translate an application render request to Nucleation's camera API."""
+    config = nucleation.RenderConfig.create(request.width, request.height)
+    config.set_isometric()
+    config.set_orthographic(request.projection == "orthographic")
+    config.set_sphere_fit(request.sphere_fit)
+    if request.yaw is not None:
+        config.set_yaw(request.yaw)
+    if request.pitch is not None:
+        config.set_pitch(request.pitch)
+    if request.zoom is not None:
+        config.set_zoom(request.zoom)
+    config.set_background(*request.background)
+    return config
 
 
 def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
