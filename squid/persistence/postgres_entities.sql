@@ -77,15 +77,6 @@ begin
 end;
 $$;
 
-CREATE FUNCTION public.update_updated_at_column() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.updated_at = now();
-    RETURN NEW;
-END;
-$$;
-
 CREATE FUNCTION public.enqueue_build_search_projection() RETURNS trigger
     LANGUAGE plpgsql
     AS $$

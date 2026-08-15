@@ -39,6 +39,8 @@ def upgrade() -> None:
     op.execute("DROP FUNCTION IF EXISTS public.initialize_discord_message_projection()")
     op.execute("DROP FUNCTION IF EXISTS public.project_discord_message_desired_state()")
     op.execute("DROP FUNCTION IF EXISTS public.get_unsent_builds(bigint)")
+    # `update_messages_updated_at` was this function's only trigger.
+    op.execute("DROP FUNCTION IF EXISTS public.update_updated_at_column()")
 
     op.drop_index("messages_projection_pending_idx", table_name="messages")
     for name in (
@@ -129,6 +131,18 @@ def downgrade() -> None:
         ["desired_revision"],
         unique=False,
         postgresql_where=sa.text("projection_resource_kind IS NOT NULL AND desired_revision > applied_revision"),
+    )
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION public.update_updated_at_column() RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+        BEGIN
+            NEW.updated_at = now();
+            RETURN NEW;
+        END;
+        $$
+        """
     )
     op.execute(
         "CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages "
