@@ -478,7 +478,7 @@ class VoteRepository:
         # The guild comes from the message fact; the post says which messages are ours.
         locations = (
             await session.execute(
-                select(DiscordPost.message_id, DiscordPost.channel_id, Message.server_id)
+                select(DiscordPost.message_id, DiscordPost.channel_id, Message.guild_id)
                 .join(Message, Message.id == DiscordPost.message_id)
                 .where(
                     DiscordPost.resource_kind == "vote_session",
@@ -489,7 +489,7 @@ class VoteRepository:
             )
         ).all()
         vote_messages = tuple(
-            VoteMessage(message_id, channel_id, server_id or 0) for message_id, channel_id, server_id in locations
+            VoteMessage(message_id, channel_id, guild_id or 0) for message_id, channel_id, guild_id in locations
         )
         vote_rows = (
             await session.scalars(select(Vote).where(Vote.vote_session_id == row.id).order_by(Vote.account_id))

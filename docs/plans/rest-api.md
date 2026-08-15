@@ -300,7 +300,7 @@ Mirror `search_projection_queue`, the pattern already proven in this repo:
 ```sql
 CREATE TABLE discord_sync_queue (
     id            bigserial PRIMARY KEY,
-    resource_kind text NOT NULL CHECK (resource_kind IN ('build', 'vote_session')),
+    resource_kind text NOT NULL CHECK (resource_kind IN ('build', 'vote_session', 'starboard_entry')),
     source_key    text NOT NULL,
     action        text NOT NULL CHECK (action IN ('refresh', 'delete')),
     enqueued_at   timestamptz NOT NULL DEFAULT now(),
@@ -323,22 +323,31 @@ enqueues automatically, and `squid.api*` never imports anything Discord-shaped. 
 
 Owner: `squid/sync/` — `DiscordSyncService.claim(limit)`/`complete(id)`/`fail(id, error)` over
 `DiscordSyncQueueRepository`, exposed as `ApplicationServices.discord_sync`. Consumer:
-`squid/bot/sync/reconciler.py`, a `@tasks.loop(seconds=15)` copied structurally from
-`squid/bot/submission/records.py:235` (same try/except-log, same
-`before_loop: await self.bot.wait_until_ready()`), reusing
-`GenericVoteSession(...).update_messages()`. `discord.NotFound` means
-`MessageService.untrack(message_id)` and complete the job; `attempts` drives exponential skip, then
+`squid/bot/sync/reconciler.py`, a 15-second periodic job that hands every claimed job to
+`PostReconciler`. **Amended:** the reconciler no longer knows how any surface renders. A
+`PostRenderer` answers "which channels should hold a post for this resource, and what does it say",
+and the diff loop sends, edits or deletes to match, recording each post in `discord_posts`. That
+replaced three separately invented idempotency schemes and made deletion need no branch of its own,
+since a vanished resource simply wants no posts. `discord.NotFound` inside the loop tombstones the
+post rather than deleting its row; `attempts` drives exponential skip, then
 drop with a logged error.
 
 Fold the search-projection drain into this same loop and document that it runs only in the bot
 process — `refresh_search_index` is wired into `ApplicationServices` but its only caller is a bot
 cog, so an API-only deployment currently has a permanently frozen index.
 
-**Implementation correction.** A delete trigger fires after related message rows have cascaded,
-so a delete job no longer has the Discord message IDs needed to delete or untrack those messages.
-The reconciler acknowledges and logs these jobs; refresh jobs are fully durable. Deleting tracked
-Discord messages requires a future tombstone payload or a pre-delete message outbox and is not
-silently claimed as implemented here.
+**Implementation correction (resolved).** A delete trigger fires after related message rows have
+cascaded, so a delete job no longer had the Discord message IDs needed to delete those messages.
+Posts are now recorded in `discord_posts`, keyed by `(resource_kind, resource_key)` rather than by
+a foreign key to the deleted row, so they survive their resource and the reconciler can still find
+them. Deletion also stopped needing a branch of its own: a renderer reports a vanished resource as
+wanting no posts, and the diff loop removes what is left.
+
+**Generation is a sequence, not a counter.** Acknowledging a job deletes its queue row, so a
+per-resource counter restarted at 1 on the next enqueue and could name a revision below one already
+applied — which, because the check constraint fired inside the enqueueing statement, aborted the
+user's write rather than merely stalling a refresh. `discord_sync_generation_seq` is global and
+exempt from rollback.
 
 The same migration drops `get_outdated_messages` and deletes `MessageService.get_outdated` and
 `MessageRepository.get_outdated_messages`.

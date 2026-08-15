@@ -8,10 +8,11 @@
 - `confidence` remains part of the model contract but is not copied into `Build.extra_info`.
   The domain's typed JSON shape has no durable confidence field, and persisting an undocumented
   key would make the inference change leak into the storage contract.
-- The message table is keyed by Discord message ID, so one source message cannot be tracked to
-  every build when a bundle yields multiple builds. All primary messages are tracked to the
-  first inferred build. This preserves bundle-level rerun idempotency; representing the full
-  many-to-many provenance would require a migration and is outside this rework.
+- ~~The message table is keyed by Discord message ID, so one source message cannot be tracked to
+  every build when a bundle yields multiple builds.~~ **Resolved.** `build_source_messages` is
+  many-to-many in both directions, so every primary message links to every build it produced and
+  each keeps its own content instead of being concatenated into one row. Rerun idempotency is now
+  `BuildService.list_ids_for_source_message`.
 - Attachment mirroring is performed once per bundle and the resulting media is attached to each
   inferred build. The structured result deliberately contains source message IDs, not
   attachment IDs, and `Build` has no transient multi-message provenance field from which the
