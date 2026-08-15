@@ -31,7 +31,8 @@
 - [ ] Consider dynamic `facet.<name>` filters so new projected facets do not require a field-registry code change.
 - [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, and RRF behavior.
   - Pagination and facet sorting are covered by `tests/integration/search/test_repository_pagination.py`.
-- [ ] Add autocomplete for field names, taxonomy values, and canonical record base keys.
+- [x] Add autocomplete for field names, taxonomy values, and canonical record base keys.
+  - See `docs/plans/autocomplete.md` for the source registry the three surfaces share.
 - [ ] Replace raw showcase qualifiers with parameterized taxonomy tags.
   - Store metric kind, value, unit, display order, and evidence.
   - Consider Pareto-frontier calculation for builds with multiple showcase metrics.
@@ -41,7 +42,8 @@
 - [ ] Persist failed computation attempts for auditing instead of only rolling back and retrying.
 - [ ] Improve co-holder history from a linear predecessor chain to an explicit set-based transition model.
 - [ ] Add moderation tooling for missing completion dates, timing evidence, volume evidence, and version support.
-- [ ] Add a friendly category selector for `/records lookup` instead of requiring a canonical base key and numeric IDs.
+- [x] Add a friendly category selector for `/records lookup` instead of requiring a canonical base key and numeric IDs.
+  - Autocomplete completes the base key, and restrictions are picked by name while still submitting IDs.
 - [ ] Add integration tests for record recomputation triggers, queue retries, advisory locking, and atomic activation.
 
 ## Migration and cleanup
