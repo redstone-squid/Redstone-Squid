@@ -659,7 +659,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         else:
             async with self.builds.edit(self.build.id, patch) as edit:
                 self.build = await edit.commit()
-            await interaction.client.for_build(self.build).update_messages()
+            await interaction.client.refresh_posts("build", str(self.build.id))
         self.stop()
         success = StaticLayout(
             discord.ui.TextDisplay(t(self.locale, _("## Changes saved"))),

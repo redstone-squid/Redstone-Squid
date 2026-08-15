@@ -37,9 +37,7 @@ class ReactionEvent:
         async with self._message_lock:
             if self._message_loaded:
                 return self._message
-            message = await self._bot.get_or_fetch_message(
-                self.payload.channel_id, self.payload.message_id, untrack_if_missing=False
-            )
+            message = await self._bot.get_or_fetch_message(self.payload.channel_id, self.payload.message_id)
             object.__setattr__(self, "_message", message)
             object.__setattr__(self, "_message_loaded", True)
             return message

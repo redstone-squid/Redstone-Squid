@@ -18,7 +18,7 @@ def to_message_fact(message: discord.Message) -> MessageFact:
         author_id=message.author.id,
         guild_id=message.guild.id if message.guild is not None else None,
         content=message.content,
-        created_at=Instant.from_py_datetime(message.created_at),
+        created_at=Instant(message.created_at),
     )
 
 

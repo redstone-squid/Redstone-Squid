@@ -1,9 +1,7 @@
 """Handles the display of a build object."""
 
-import asyncio
 import logging
 import mimetypes
-from functools import partial
 from typing import TYPE_CHECKING, Literal, cast, override
 
 import discord
@@ -18,14 +16,11 @@ from squid.bot.utils.components import (
     CardSection,
     StaticLayout,
     card_container,
-    edit_layout,
-    no_mentions,
     truncate_display_text,
 )
 from squid.bot.voting.build_session import BuildVoteSession
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.domain.titles import format_build_display_title
-from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -101,47 +96,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             if source.channel_id is not None:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
-
-    async def get_display_messages(self) -> list[discord.Message]:
-        """Get all messages from the bot that are related to this build.
-
-        This does not include messages from other users, only the bot's messages.
-        """
-        assert self.bot.user is not None, "Bot should be logged in"
-        assert self.build.id is not None, "Persisted display messages require a build ID"
-        messages = await self.bot.services.messages.list_for_build(self.build.id, self.bot.user.id)
-        maybe_messages = await run_all(
-            [
-                partial(self.bot.get_or_fetch_message, row.channel_id, row.id)
-                for row in messages
-                if row.channel_id is not None
-            ],
-            limit=DISCORD_FANOUT_LIMIT,
-        )
-        return [msg for msg in maybe_messages if msg is not None]
-
-    async def update_messages(self) -> None:
-        """Updates all messages which for this build."""
-        if self.build.id is None:
-            msg = "Build id is None."
-            raise ValueError(msg)
-
-        # Get all messages for a build
-        async with asyncio.TaskGroup() as tg:
-            msg_task = tg.create_task(self.get_display_messages())
-            layout_task = tg.create_task(self.render_layout())
-
-        messages = await msg_task
-        layout = await layout_task
-
-        async def _update_single_message(message: discord.Message):
-            await edit_layout(message, layout, allowed_mentions=no_mentions())
-            await self.bot.services.messages.update_edited_time(message.id)
-
-        await run_all(
-            [partial(_update_single_message, message) for message in messages],
-            limit=DISCORD_FANOUT_LIMIT,
-        )
 
     async def render_layout(self) -> StaticLayout:
         """Render a standalone Components V2 layout for the build."""

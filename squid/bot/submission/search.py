@@ -276,9 +276,11 @@ class SearchCog[
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            build = await self.builds.deny(build_id)
+            await self.builds.deny(build_id)
 
-            await self.bot.for_build(build).update_messages()
+            # Denying removes the card rather than editing it, which the renderer
+            # expresses by wanting no posts for a build in this state.
+            await self.bot.refresh_posts("build", str(build_id))
 
             await edit_layout(
                 sent_message,

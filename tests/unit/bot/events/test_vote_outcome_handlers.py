@@ -111,7 +111,7 @@ async def test_an_approved_delete_log_vote_deletes_its_target() -> None:
     await DeleteVotedMessageHandler(bot).handle(_event())
 
     message.delete.assert_awaited_once()
-    bot.get_or_fetch_message.assert_awaited_once_with(8, 7, untrack_if_missing=False)
+    bot.get_or_fetch_message.assert_awaited_once_with(8, 7)
 
 
 async def test_an_already_deleted_target_is_not_an_error() -> None:
