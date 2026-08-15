@@ -2,6 +2,7 @@
 
 from sqlalchemy import Table
 
+import squid.persistence.model_registry  # noqa: F401  # every model must be mapped before the walk
 from squid.persistence.base import Base
 
 
@@ -12,6 +13,10 @@ def with_foreign_key_targets(*tables: Table) -> tuple[Table, ...]:
     whole database, but writing out the transitive foreign-key targets by hand is how a
     subset turns into a second copy of the schema that drifts from the models. Deriving
     the closure keeps the test's list down to the tables it actually cares about.
+
+    Resolving a foreign key needs its target mapped, which is why this module imports the
+    registry: a caller that only imported its own models would otherwise fail here with a
+    `NoReferencedTableError` for something two hops away.
     """
     required: set[Table] = set()
     pending = list(tables)
