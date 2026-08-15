@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 _KEY_PREFIX = "{squid-rate-limit}:v1"
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _VOTE_WRITE_PATH = "/v1/vote-sessions/{vote_session_id}/votes"
+_SUGGEST_PATH = "/v1/suggest/{source}"
 _MINECRAFT_CHALLENGE_START_PATHS = frozenset(
     {
         "/v1/minecraft/auth/paper/challenges",
@@ -146,6 +147,7 @@ class ApiRateLimitPolicies:
     principal: RateLimitPolicy
     write: RateLimitPolicy
     vote: RateLimitPolicy
+    suggest: RateLimitPolicy
     minecraft_challenge_start: RateLimitPolicy
     minecraft_challenge_exchange: RateLimitPolicy
     minecraft_challenge_approval: RateLimitPolicy
@@ -158,6 +160,7 @@ class ApiRateLimitPolicies:
             principal=RateLimitPolicy("principal", config.principal_requests, window),
             write=RateLimitPolicy("write", config.write_requests, window),
             vote=RateLimitPolicy("vote", config.vote_requests, window),
+            suggest=RateLimitPolicy("suggest", config.suggest_requests, window),
             minecraft_challenge_start=RateLimitPolicy(
                 "minecraft-challenge-start",
                 config.minecraft_challenge_start_requests,
@@ -426,6 +429,10 @@ async def enforce_route_rate_limits(
         checks.append(RateLimitRequest(policies.write, identity))
     if principal.kind != "anonymous" and route_path == _VOTE_WRITE_PATH:
         checks.append(RateLimitRequest(policies.vote, identity))
+    if route_path == _SUGGEST_PATH:
+        # Its own bucket in both directions: one user typing must not exhaust their read quota,
+        # and a client that forgets to debounce must not exhaust everyone else's.
+        checks.append(RateLimitRequest(policies.suggest, identity))
     if not checks:
         return
 

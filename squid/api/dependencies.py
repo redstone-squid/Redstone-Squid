@@ -14,6 +14,7 @@ from squid.records.application import RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
+from squid.suggestions.application import SuggestionService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -53,6 +54,10 @@ def get_search(services: Services) -> SearchService:
     return services.search
 
 
+def get_suggestions(services: Services) -> SuggestionService:
+    return services.suggestions
+
+
 def get_tags(services: Services) -> TagService:
     return services.tags
 
@@ -89,6 +94,7 @@ Records = Annotated[RecordService, Depends(get_records)]
 Notifications = Annotated[NotificationService, Depends(get_notifications)]
 Schematics = Annotated[SchematicService, Depends(get_schematics)]
 Search = Annotated[SearchService, Depends(get_search)]
+Suggestions = Annotated[SuggestionService, Depends(get_suggestions)]
 Tags = Annotated[TagService, Depends(get_tags)]
 Accounts = Annotated[AccountService, Depends(get_accounts)]
 Versions = Annotated[VersionService, Depends(get_versions)]

@@ -36,7 +36,7 @@ COMMAND_MODULES = [
 def discord_registry() -> SuggestionRegistry:
     stub: Any = SimpleNamespace()
     return build_registry(
-        session_factory=stub,
+        repository=stub,
         search=stub,
         versions=stub,
         tags=stub,

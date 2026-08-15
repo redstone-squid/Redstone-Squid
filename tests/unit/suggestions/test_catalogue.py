@@ -25,7 +25,7 @@ def registry(*, discord: bool = False) -> SuggestionRegistry:
     extras: dict[str, Any] = (
         {"starboards": stub, "permission_roles": stub, "notifications": stub, "accounts": stub} if discord else {}
     )
-    return build_registry(session_factory=stub, search=stub, versions=stub, tags=stub, **extras)
+    return build_registry(repository=stub, search=stub, versions=stub, tags=stub, **extras)
 
 
 def test_the_api_registry_omits_gateway_only_sources() -> None:

@@ -54,8 +54,8 @@ class TaxonomyProvider:
         return await self._cache.get(None)
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
-        entries = await self._reader.taxonomy(
-            self._semantic_kind, build_kind=self._build_kind, authority=self._authority
+        entries = _ordered(
+            await self._reader.taxonomy(self._semantic_kind, build_kind=self._build_kind, authority=self._authority)
         )
         return tuple(
             # The stable key is submitted while the display name is what people read and type, so
@@ -98,8 +98,8 @@ class TaxonomyIdProvider:
         return await self._cache.get(None)
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
-        entries = await self._reader.taxonomy(
-            self._semantic_kind, build_kind=self._build_kind, authority=self._authority
+        entries = _ordered(
+            await self._reader.taxonomy(self._semantic_kind, build_kind=self._build_kind, authority=self._authority)
         )
         return tuple(
             candidate(
@@ -133,6 +133,16 @@ class PendingTagProvider:
             )
             for item in await self._tags.pending()
         )
+
+
+def _ordered(entries: Sequence[TaxonomyEntry]) -> list[TaxonomyEntry]:
+    """Sort in Python rather than trusting the database collation.
+
+    The order decides the content revision an enumerable source publishes, and a revision that
+    moves because a server's collation differs would look to clients like the option set changed.
+    This is the same key `ApprovedSubmissionOptionCatalog` uses, so both catalogues agree.
+    """
+    return sorted(entries, key=lambda entry: (entry.display_name.casefold(), entry.stable_key))
 
 
 def _alias_hint(entry: TaxonomyEntry) -> str | None:

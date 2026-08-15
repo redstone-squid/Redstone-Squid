@@ -113,9 +113,9 @@ from squid.submissions.infrastructure.finalization_events import (
     PollableFinalizationStatusPublisher,
 )
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordSyncService
@@ -405,7 +405,7 @@ class _ServiceGraph:
 
     @cached_property
     def submission_forms(self) -> SubmissionFormService:
-        return SubmissionFormService(ApprovedSubmissionOptionCatalog(self.tags, self.version_service))
+        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions))
 
     @cached_property
     def submission_drafts(self) -> SubmissionDraftService:

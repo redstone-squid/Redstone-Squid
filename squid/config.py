@@ -415,6 +415,8 @@ class RateLimitConfig(_FrozenModel):
     principal_requests: int = Field(default=300, ge=1)
     write_requests: int = Field(default=60, ge=1)
     vote_requests: int = Field(default=30, ge=1)
+    suggest_requests: int = Field(default=1_200, ge=1)
+    """Typeahead runs per keystroke, so it needs headroom the generic read quota does not give."""
     minecraft_challenge_start_requests: int = Field(default=10, ge=1)
     minecraft_challenge_exchange_requests: int = Field(default=120, ge=1)
     minecraft_challenge_approval_requests: int = Field(default=20, ge=1)
