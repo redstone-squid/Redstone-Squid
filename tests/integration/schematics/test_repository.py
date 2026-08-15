@@ -96,10 +96,7 @@ async def test_new_payload_stores_only_object_metadata(
     async with async_session_factory() as session:
         state = (
             await session.execute(
-                text(
-                    "SELECT object_key IS NOT NULL "
-                    "FROM schematic_files WHERE sha256 = :digest"
-                ),
+                text("SELECT object_key IS NOT NULL FROM schematic_files WHERE sha256 = :digest"),
                 {"digest": digest},
             )
         ).one()
