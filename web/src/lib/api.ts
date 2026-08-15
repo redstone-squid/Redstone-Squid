@@ -7,6 +7,7 @@ import {
   recordsList,
   searchExecute,
   searchTermsSuggest,
+  suggestionsGet,
 } from "../generated/sdk.gen";
 import type {
   BuildDetail,
@@ -18,6 +19,7 @@ import type {
   RecordDetail,
   SearchScope,
   SearchSuggestions,
+  SuggestionPage,
 } from "../generated/types.gen";
 import { getRuntimeConfig, type RuntimeConfig } from "./config";
 import type { Locale } from "./i18n";
@@ -183,6 +185,27 @@ export async function fetchSuggestions(locale: Locale, q: string): Promise<Searc
   const result = await searchTermsSuggest({
     client: createCatalogueClient(locale),
     query: { q, limit: 8 },
+  });
+  return unwrap(result);
+}
+
+export type SuggestQuery = {
+  source: string;
+  q?: string;
+  cursor?: number;
+  limit?: number;
+};
+
+/** Complete a value from any registered suggestion source. */
+export async function fetchSuggestionPage(locale: Locale, query: SuggestQuery): Promise<SuggestionPage> {
+  const result = await suggestionsGet({
+    client: createCatalogueClient(locale),
+    path: { source: query.source },
+    query: {
+      q: query.q ?? "",
+      limit: Math.min(query.limit ?? 8, 25),
+      ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+    },
   });
   return unwrap(result);
 }
