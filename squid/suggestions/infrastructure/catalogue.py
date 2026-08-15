@@ -25,6 +25,7 @@ from squid.suggestions.infrastructure.providers import (
     DocumentProvider,
     PendingTagProvider,
     SearchFieldProvider,
+    SearchQueryProvider,
     SearchSortProvider,
     StaticProvider,
     TaxonomyIdProvider,
@@ -110,7 +111,7 @@ def build_registry(
     return SuggestionRegistry.of(
         (
             *_taxonomy_sources(repository),
-            *_search_sources(search),
+            *_search_sources(search, repository),
             *_document_sources(repository),
             *_static_sources(),
             *_permission_sources(),
@@ -275,8 +276,16 @@ def _taxonomy_sources(repository: PostgresSuggestionRepository) -> tuple[Suggest
     )
 
 
-def _search_sources(search: SearchFields) -> tuple[SuggestionSource, ...]:
+def _search_sources(
+    search: SearchFields,
+    repository: PostgresSuggestionRepository,
+) -> tuple[SuggestionSource, ...]:
     return (
+        SuggestionSource(
+            id="search_query",
+            provider=SearchQueryProvider(search, repository),
+            kind_label="query",
+        ),
         SuggestionSource(
             id="search_fields",
             provider=SearchFieldProvider(search),

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.infrastructure.models import Account, CreatorAlias
 from squid.records.infrastructure.models import RecordCompetition, RecordDefinition
-from squid.search.infrastructure.models import SearchDocument
+from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
 from squid.tags.infrastructure.models import TagApplicability, TagDefinition
 from squid.versions.infrastructure.models import Version
 
@@ -186,6 +186,24 @@ class PostgresSuggestionRepository:
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).all()
         return [(str(row.public_creator_id), row.name) for row in rows]
+
+    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
+        """Return distinct indexed values of one projected facet, prefix-matched.
+
+        Matching is case-folded against `lower(text_value)` so it can ride the functional index
+        added for exactly this query; an `ILIKE` here would fall back to a sequential scan over
+        every facet row in the corpus.
+        """
+        statement = select(SearchDocumentFacet.text_value).where(
+            SearchDocumentFacet.field_name == field_name,
+            SearchDocumentFacet.text_value.is_not(None),
+        )
+        normalized = prefix.strip().casefold()
+        if normalized:
+            statement = statement.where(func.lower(SearchDocumentFacet.text_value).startswith(normalized))
+        statement = statement.distinct().order_by(SearchDocumentFacet.text_value).limit(limit)
+        async with self._session_factory() as session:
+            return [value for value in (await session.scalars(statement)).all() if value is not None]
 
     async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str]]:
         """Return record competition UUIDs with a readable identity and its category key."""

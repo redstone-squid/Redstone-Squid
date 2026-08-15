@@ -68,7 +68,7 @@ class SearchCog[
         self.restrictions = bot.services.restrictions
         self.register_edit_context_menu()
 
-    @autocompletes(sort="search_sorts")
+    @autocompletes(sort="search_sorts", query="search_query")
     @commands.hybrid_command("search")
     @app_commands.describe(
         query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
