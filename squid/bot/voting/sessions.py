@@ -13,7 +13,7 @@ import discord
 
 from squid.bot._types import GuildMessageable
 from squid.builds.domain import Build, Status
-from squid.voting.domain import VoteOption
+from squid.voting.domain import VoteKind, VoteOption
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -44,7 +44,7 @@ async def ensure_build_review(
 
     options: list[VoteOption] = []
     for guild_id in {channel.guild.id for channel in unique_channels}:
-        options.extend((await bot.services.votes.emoji_preset(guild_id, "build")).options)
+        options.extend((await bot.services.votes.emoji_preset(guild_id, VoteKind.BUILD)).options)
 
     session_id = await bot.services.votes.ensure_build_submission_vote(
         author_account_id=build.submitter_account_id,
@@ -75,7 +75,7 @@ async def start_delete_log_vote(
         msg = "Delete-log votes require a guild message."
         raise ValueError(msg)
 
-    options = (await bot.services.votes.emoji_preset(target_message.guild.id, "delete_log")).options
+    options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
     author = await bot.services.accounts.get_or_create_account(author_id)
     assert author.id is not None
     session_id = await bot.services.votes.start_delete_log_vote(

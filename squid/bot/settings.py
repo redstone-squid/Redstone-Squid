@@ -19,7 +19,7 @@ from squid.permissions.domain.catalogue import (
     SETTINGS_VOTING_EDIT,
 )
 from squid.settings.domain import ScalarChannelSetting, Setting
-from squid.voting.domain import RoleWeight, VoteChoice, VoteKindLiteral, VoteOption
+from squid.voting.domain import RoleWeight, VoteChoice, VoteKind, VoteOption
 from squid.voting.errors import InvalidVoteConfigurationError
 
 if TYPE_CHECKING:
@@ -219,18 +219,18 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @voting_settings.command(name="show")
     @requires(SETTINGS_SERVER_VIEW)
-    async def show_voting(self, ctx: Context[BotT], kind: VoteKindLiteral = "build") -> None:
+    async def show_voting(self, ctx: Context[BotT], kind: VoteKind = VoteKind.BUILD) -> None:
         """Show effective voting configuration for a session kind."""
         assert ctx.guild is not None
         preset = await self.bot.services.votes.emoji_preset(ctx.guild.id, kind)
         weights = await self.bot.services.votes.get_role_weights(ctx.guild.id, kind)
         aliases = "\n".join(f"{option.choice.value}: {option.emoji}" for option in preset.options)
         roles = "\n".join(f"<@&{weight.role_id}>: {weight.multiplier:g}x" for weight in weights) or "None"
-        await ctx.send(f"**{kind} emojis**\n{aliases}\n\n**Role multipliers**\n{roles}", ephemeral=True)
+        await ctx.send(f"**{kind.value} emojis**\n{aliases}\n\n**Role multipliers**\n{roles}", ephemeral=True)
 
     @voting_settings.command(name="emojis")
     @requires(SETTINGS_VOTING_EDIT)
-    async def edit_voting_emojis(self, ctx: Context[BotT], kind: VoteKindLiteral) -> None:
+    async def edit_voting_emojis(self, ctx: Context[BotT], kind: VoteKind) -> None:
         """Open the emoji preset editor."""
         assert ctx.guild is not None
         if ctx.interaction is None:
@@ -244,9 +244,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @voting_settings.command(name="weight-set")
     @requires(SETTINGS_VOTING_EDIT)
-    async def set_vote_weight(
-        self, ctx: Context[BotT], kind: VoteKindLiteral, role: discord.Role, multiplier: float
-    ) -> None:
+    async def set_vote_weight(self, ctx: Context[BotT], kind: VoteKind, role: discord.Role, multiplier: float) -> None:
         """Set one role multiplier for a session kind."""
         assert ctx.guild is not None
         if role.guild != ctx.guild:
@@ -262,7 +260,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @voting_settings.command(name="weight-remove")
     @requires(SETTINGS_VOTING_EDIT)
-    async def remove_vote_weight(self, ctx: Context[BotT], kind: VoteKindLiteral, role: discord.Role) -> None:
+    async def remove_vote_weight(self, ctx: Context[BotT], kind: VoteKind, role: discord.Role) -> None:
         """Remove one role multiplier for a session kind."""
         assert ctx.guild is not None
         if role.guild != ctx.guild:
@@ -273,7 +271,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @voting_settings.command(name="reset")
     @requires(SETTINGS_VOTING_EDIT)
-    async def reset_voting(self, ctx: Context[BotT], kind: VoteKindLiteral | None = None) -> None:
+    async def reset_voting(self, ctx: Context[BotT], kind: VoteKind | None = None) -> None:
         """Reset voting configuration for one kind or the whole server."""
         assert ctx.guild is not None
         await self.bot.services.votes.reset_configuration(ctx.guild.id, kind)
@@ -283,8 +281,8 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 class VoteEmojiModal(ErrorHandledModal):
     """Edit an ordered guild emoji preset as one choice/emoji pair per line."""
 
-    def __init__(self, cog: SettingsCog, kind: VoteKindLiteral, value: str):
-        super().__init__(title=f"{kind} vote emojis")
+    def __init__(self, cog: SettingsCog, kind: VoteKind, value: str):
+        super().__init__(title=f"{kind.value} vote emojis")
         self.cog = cog
         self.kind = kind
         self.aliases = discord.ui.TextInput(
@@ -309,7 +307,7 @@ class VoteEmojiModal(ErrorHandledModal):
                     msg = "Each line must use `choice | emoji`."
                     raise InvalidVoteConfigurationError(msg)  # noqa: TRY301
                 choice_text, emoji = parts
-                choice = VoteChoice.GENERIC if self.kind == "generic" else VoteChoice(choice_text)
+                choice = VoteChoice.GENERIC if self.kind is VoteKind.GENERIC else VoteChoice(choice_text)
                 parsed = discord.PartialEmoji.from_str(emoji)
                 if parsed.is_custom_emoji():
                     custom = interaction.guild.get_emoji(parsed.id or 0)
