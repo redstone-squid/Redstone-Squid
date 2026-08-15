@@ -15,6 +15,8 @@ from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
 from squid.worker.queue_health import QUEUE_HEALTH_SQL
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
+DYNAMIC_VOTING_REVISION = "4c9e7a2b1d63"
+"""The migration whose downgrade path the drift test also exercises."""
 
 
 @pytest.fixture
@@ -52,13 +54,22 @@ def test_migrations_create_schema_without_drift(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A clean PostgreSQL database reaches head with all managed entities in sync."""
+    """A clean PostgreSQL database reaches head with all managed entities in sync.
+
+    The dynamic-voting downgrade is exercised here rather than in a test of its own on
+    purpose: reaching a downgradable state costs a full run of the chain, and a downgrade
+    is the one path that never runs in production, so it is the one most likely to be
+    wrong. Fusing the two pays the setup cost once.
+    """
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
 
     command.upgrade(config, "head")
     command.check(config)
-    command.downgrade(config, "d9f6a8b2c4e1")
+    # Expressed relative to the migration under test rather than by naming whichever
+    # revision currently precedes it, so inserting an earlier revision cannot silently
+    # retarget this to undo a different migration.
+    command.downgrade(config, f"{DYNAMIC_VOTING_REVISION}-1")
 
     downgrade_engine = create_engine(migration_database_url)
     try:
