@@ -49,7 +49,7 @@ dependencies = [
 #
 # Pinned exactly, not ranged: fingerprints and data-version loss reports are version-scoped
 # outputs we persist, so upgrading is a deliberate act that requires a backfill plan.
-schematics = ["nucleation==0.10.1"]
+schematics = ["nucleation==0.10.14"]
 observability = [
     "opentelemetry-exporter-otlp-proto-http>=1.44,<2",
     "opentelemetry-instrumentation-aiohttp-client>=0.65b0,<1",
@@ -89,7 +89,7 @@ dev = [
     # `x86_64` but has no wheel, and a machine-only marker sends it to the sdist, which needs
     # a Rust toolchain and fails `uv sync` outright. PEP 508 has no libc marker, so musl
     # cannot be excluded the same way; Alpine contributors must skip this group by hand.
-    "nucleation==0.10.1 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')",
+    "nucleation==0.10.14 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')",
 ]
 fuzz = [
     "atheris>=3.0.0; sys_platform == 'linux'",
@@ -118,7 +118,7 @@ exclude-newer = "7 days"
 # the global cutoff would pin us to a version several API generations behind the one this
 # integration targets. Carved out deliberately: the dependency is pinned exactly and its
 # wheel hashes are locked, and it is an optional extra that no default deployment installs.
-exclude-newer-package = { nucleation = "2026-08-05T00:00:00Z" }
+exclude-newer-package = { nucleation = "2026-08-16T00:00:00Z" }
 
 [tool.uv.extra-build-variables]
 cryptography = { ANDROID_API_LEVEL = "24" }

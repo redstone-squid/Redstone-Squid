@@ -12,7 +12,7 @@ exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for 
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
-nucleation = "2026-08-05T00:00:00Z"
+nucleation = "2026-08-16T00:00:00Z"
 
 [[package]]
 name = "advanced-alchemy"
@@ -1789,13 +1789,13 @@ wheels = [
 
 [[package]]
 name = "nucleation"
-version = "0.10.1"
+version = "0.10.14"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fe/e6/c939b3e2f59fe07e18a8168dc361918a5c32285ece20bbc63e7f302a62f4/nucleation-0.10.1.tar.gz", hash = "sha256:0f5eb9021d55cc7eef18a9b094e739b4b2c8eeb2aa0329c8c95749a2b591284b", size = 2141719, upload-time = "2026-08-04T00:01:16.521Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/80/5b/e04933567eda71903d6ad60f4843aad3ff9b1a1792c805ae89a5f9206ae4/nucleation-0.10.14.tar.gz", hash = "sha256:2bf0af2c5e06686a2db9d6d0f0885b5802a6c87d81325f7765aa98026406e39a", size = 2865734, upload-time = "2026-08-15T06:56:15.014Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/c1/c33a753b893653d0d05529f9cc44dde7e2f71f70a8c30a9520cfc25b598e/nucleation-0.10.1-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:20601e58e189331530b42082abe9b8c897e1178d9b13787819b3535bce7f11ba", size = 12509782, upload-time = "2026-08-04T00:01:06.848Z" },
-    { url = "https://files.pythonhosted.org/packages/16/01/b907ddd59549539fe4e526e38b03e03fc9b49281019b70d8c6b618bf4d0b/nucleation-0.10.1-cp312-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:21d00a55bfbc8d9824c74053eda0ae0fdef4353e9f7d4d1dd4dd94652479f88d", size = 15124559, upload-time = "2026-08-04T00:01:11.272Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/3a/44607208d74f126102ad347381de629ef6ca144db11f700ebcdcf974ba72/nucleation-0.10.1-cp312-abi3-win_amd64.whl", hash = "sha256:a4b2ee2ff168c696da3d05ac619b77c73f33e659b0763cf969496f5e8e894d90", size = 10255026, upload-time = "2026-08-04T00:01:13.919Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/4c/3362ae1d6f9e2200c499de77e196c6a00d093cdb4ee79d6689f28a85bc73/nucleation-0.10.14-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:18a620fa99f24988f2963763734d48b22ff3cfc66a9c01c19d6a1f49302d0d1a", size = 13997183, upload-time = "2026-08-15T06:56:08.484Z" },
+    { url = "https://files.pythonhosted.org/packages/ee/f1/56e06ca540e60522c6969036a327f7ee97fd9cfcde7cc84d6fbf1c489404/nucleation-0.10.14-cp312-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:965d46fbdae7ff95992ee9ba35c8e9b62aef5d03454bc92f72070aa4d7c5e286", size = 16991485, upload-time = "2026-08-15T06:56:11.279Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/81/2b0b31dbbc384748edf14b704b5221f58d35b189636b4fc6be0e3a6abaa4/nucleation-0.10.14-cp312-abi3-win_amd64.whl", hash = "sha256:4ac3b4e3b42ec089576ab3bf4fddfe4b41003d8080213dede057d5b5d3b83b81", size = 11945552, upload-time = "2026-08-15T06:56:13.466Z" },
 ]
 
 [[package]]
@@ -2924,7 +2924,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jishaku", specifier = ">=2.6.0" },
     { name = "markdown", specifier = ">=3.7" },
-    { name = "nucleation", marker = "extra == 'schematics'", specifier = "==0.10.1" },
+    { name = "nucleation", marker = "extra == 'schematics'", specifier = "==0.10.14" },
     { name = "openai", specifier = ">=1.58.1" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'observability'", specifier = ">=1.44,<2" },
     { name = "opentelemetry-instrumentation-aiohttp-client", marker = "extra == 'observability'", specifier = ">=0.65b0,<1" },
@@ -2949,7 +2949,7 @@ dev = [
     { name = "bump-my-version", specifier = ">=0.29.0" },
     { name = "docker", specifier = ">=7.2,<8" },
     { name = "hypothesis", specifier = ">=6.0.0" },
-    { name = "nucleation", marker = "(platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')", specifier = "==0.10.1" },
+    { name = "nucleation", marker = "(platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin')", specifier = "==0.10.14" },
     { name = "pip-tools", specifier = ">=7.4.1" },
     { name = "prek", specifier = ">=0.2.28" },
     { name = "pyrefly", specifier = ">=0.44.0" },

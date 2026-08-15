@@ -354,11 +354,11 @@ mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
     # via markdown-it-py
-nucleation==0.10.1 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin') \
-    --hash=sha256:0f5eb9021d55cc7eef18a9b094e739b4b2c8eeb2aa0329c8c95749a2b591284b \
-    --hash=sha256:20601e58e189331530b42082abe9b8c897e1178d9b13787819b3535bce7f11ba \
-    --hash=sha256:21d00a55bfbc8d9824c74053eda0ae0fdef4353e9f7d4d1dd4dd94652479f88d \
-    --hash=sha256:a4b2ee2ff168c696da3d05ac619b77c73f33e659b0763cf969496f5e8e894d90
+nucleation==0.10.14 ; (platform_machine == 'x86_64' and sys_platform != 'darwin') or (platform_machine == 'arm64' and sys_platform == 'darwin') \
+    --hash=sha256:18a620fa99f24988f2963763734d48b22ff3cfc66a9c01c19d6a1f49302d0d1a \
+    --hash=sha256:2bf0af2c5e06686a2db9d6d0f0885b5802a6c87d81325f7765aa98026406e39a \
+    --hash=sha256:4ac3b4e3b42ec089576ab3bf4fddfe4b41003d8080213dede057d5b5d3b83b81 \
+    --hash=sha256:965d46fbdae7ff95992ee9ba35c8e9b62aef5d03454bc92f72070aa4d7c5e286
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
