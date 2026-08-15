@@ -18,7 +18,7 @@ from squid.bot.utils.components import (
     card_container,
     truncate_display_text,
 )
-from squid.bot.voting.build_session import BuildVoteSession
+from squid.bot.voting.sessions import ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.domain.titles import format_build_display_title
 
@@ -85,7 +85,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             msg = "The build must be pending to post it."
             raise ValueError(msg)
 
-        await BuildVoteSession.ensure_submission(self.bot, build, await self.get_channels_to_post_to())
+        await ensure_build_review(self.bot, build, await self.get_channels_to_post_to())
 
     async def get_original_message(self) -> discord.Message | None:
         """Gets the message this build was submitted from, if it is still reachable."""

@@ -19,7 +19,7 @@ from squid.bot.message_adapter import to_message_fact
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.utils.components import edit_layout
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
-from squid.posts.domain import DiscordPost, ResourceKind
+from squid.posts.domain import DiscordPost, ResourceKind, Surface
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -38,9 +38,35 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Whether a renderer is registered for this kind of resource."""
         return resource_kind in self._renderers
 
+    async def adopt(
+        self,
+        message: discord.Message,
+        resource_kind: ResourceKind,
+        resource_key: str,
+        surface: Surface,
+    ) -> None:
+        """Take ownership of a message someone else already sent.
+
+        Some cards go where a person chose rather than where configuration says — a
+        delete-log vote, a published poll — so the command sends the message and hands
+        it over. From then on it is an ordinary post the diff loop keeps rendered.
+        """
+        await self.bot.services.messages.observe(to_message_fact(message))
+        await self.bot.services.posts.record(
+            message_id=message.id,
+            channel_id=message.channel.id,
+            resource_kind=resource_kind,
+            resource_key=resource_key,
+            surface=surface,
+            applied_revision=0,
+        )
+
     async def reconcile(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
         """Send, edit, or delete posts until Discord matches the renderer's answer."""
-        renderer = self._renderers[resource_kind]
+        renderer = self._renderers.get(resource_kind)
+        if renderer is None:
+            logger.warning("No renderer is registered for %s posts", resource_kind)
+            return
         existing = await self.bot.services.posts.list_for_resource(resource_kind, resource_key)
         desired = await renderer.desired(resource_key)
 
