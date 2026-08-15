@@ -32,7 +32,8 @@ shared reaction routing (8).
 10. [Shared reaction routing](10-shared-reaction-routing.md)
 11. [API, auth, records, and sync](11-api-auth-records-sync.md)
 12. [Runtime and observability](12-runtime-observability.md)
-13. [Test and tooling cleanup](13-test-tooling-cleanup.md)
+13. [Test and tooling cleanup](13-test-tooling-cleanup.md) —
+    [thread dispositions](13-test-tooling-dispositions.md)
 
 ## Suggested sequence
 
