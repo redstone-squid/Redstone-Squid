@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.builds.domain import Status
+from squid.builds.infrastructure.models import Build
 from squid.messages.infrastructure.models import Message
 from squid.persistence.base import Base
 from squid.settings.infrastructure.models import ServerSetting
@@ -27,6 +29,7 @@ from tests.helpers.schema import with_foreign_key_targets
 GUILD_ID = 503
 CHANNEL_ID = 502
 TARGET_MESSAGE_ID = 501
+BUILD_ID = 42
 AUTHOR_ACCOUNT_IDS = (99, 100)
 VOTER_ACCOUNT_IDS = (7, 8)
 
@@ -50,6 +53,9 @@ async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
     from the real metadata means the constraints under test are the shipped ones.
     """
     async with async_engine.begin() as connection:
+        # `builds` is in the closure through build_vote_sessions.build_id, and it carries a
+        # pgvector column, so the type has to exist before the tables are created.
+        await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
         yield
@@ -59,19 +65,26 @@ async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
 
 
 @pytest.fixture(autouse=True)
-async def referenced_rows(
-    vote_schema: None, async_session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    """Satisfy the account and guild foreign keys the real schema declares.
+async def referenced_rows(vote_schema: None, async_session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """Satisfy the account, guild and build foreign keys the real schema declares.
 
-    Written through the mapped tables so the ids stay the fixed literals the assertions
-    read, which `Account`'s generated primary key does not allow through the ORM.
+    The hand-written schema this replaces declared none of them, so a vote session could
+    reference a build or an account that did not exist. Written through the mapped tables
+    so the ids stay the fixed literals the assertions read, which the generated primary
+    keys do not allow through the ORM.
     """
     async with async_session_factory.begin() as session:
         await session.execute(
             insert(Account).values([{"id": account_id} for account_id in (*AUTHOR_ACCOUNT_IDS, *VOTER_ACCOUNT_IDS)])
         )
         await session.execute(insert(ServerSetting).values(server_id=GUILD_ID))
+        await session.execute(
+            insert(Build).values(
+                id=BUILD_ID,
+                submission_status=Status.PENDING,
+                submitter_account_id=AUTHOR_ACCOUNT_IDS[0],
+            )
+        )
 
 
 async def attach_vote_message(
@@ -146,9 +159,7 @@ async def seed_delete_log_vote(
                 target_server_id=GUILD_ID,
             )
         )
-        await attach_vote_message(
-            session, message_id=message_id, vote_session_id=vote_session_id, content="Vote now"
-        )
+        await attach_vote_message(session, message_id=message_id, vote_session_id=vote_session_id, content="Vote now")
         if votes:
             await session.execute(
                 insert(Vote),
@@ -204,7 +215,7 @@ async def test_vote_aggregates_are_persisted_by_repository(
         author_account_id=99,
         pass_threshold=3,
         fail_threshold=-3,
-        build_id=42,
+        build_id=BUILD_ID,
         changes=[("submission_status", "pending", "confirmed")],
     )
     delete_session_id = await repository.create_delete_log_session(
@@ -275,20 +286,23 @@ async def test_initial_build_vote_creation_is_idempotent(
         author_account_id=99,
         pass_threshold=3,
         fail_threshold=-3,
-        build_id=42,
+        build_id=BUILD_ID,
         changes=[("submission_status", "pending", "confirmed")],
     )
     second = await repository.get_or_create_build_submission_session(
         author_account_id=100,
         pass_threshold=4,
         fail_threshold=-2,
-        build_id=42,
+        build_id=BUILD_ID,
         changes=[("submission_status", "pending", "confirmed")],
     )
 
     async with async_session_factory() as session:
         roots = await session.scalar(text("SELECT count(*) FROM vote_sessions"))
-        targets = await session.scalar(text("SELECT count(*) FROM build_vote_sessions WHERE build_id = 42"))
+        targets = await session.scalar(
+            text("SELECT count(*) FROM build_vote_sessions WHERE build_id = :build_id"),
+            {"build_id": BUILD_ID},
+        )
 
     assert second == first
     assert roots == 1
@@ -298,6 +312,11 @@ async def test_initial_build_vote_creation_is_idempotent(
 async def test_target_failure_rolls_back_vote_root(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    """The build exists, so the only thing that can fail here is the unserializable payload.
+
+    Worth stating because a missing build would also raise `StatementError`, and the test
+    would then pass without ever reaching the two-insert sequence it is about.
+    """
     repository = VoteRepository(async_session_factory)
 
     with pytest.raises(StatementError):
@@ -305,7 +324,7 @@ async def test_target_failure_rolls_back_vote_root(
             author_account_id=99,
             pass_threshold=3,
             fail_threshold=-3,
-            build_id=42,
+            build_id=BUILD_ID,
             changes=[("invalid", object(), object())],
         )
 

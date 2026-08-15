@@ -29,7 +29,6 @@ from squid.voting.application import VoteService
 from squid.voting.domain import GenericPoll, VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteTarget
 from tests.unit.api.fakes import MockDatabaseManager
 
-
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
 RENDER_RECIPE_HASH = "b" * 64
 
