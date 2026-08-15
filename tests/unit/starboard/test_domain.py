@@ -7,12 +7,10 @@ from whenever import Instant
 
 from squid.reactions.domain import ReactionActor
 from squid.starboard.domain import (
-    EntryAction,
     OriginMessage,
     StarboardConfig,
     StarboardEmoji,
-    StarboardEntry,
-    decide_entry_action,
+    entry_should_be_posted,
     evaluate_vote,
 )
 
@@ -65,33 +63,31 @@ def test_unconfigured_reactions_and_deleted_origins_are_ignored() -> None:
 @pytest.mark.parametrize(
     ("score", "posted", "expected"),
     [
-        (-1, False, EntryAction.NOOP),
-        (0, True, EntryAction.REMOVE),
-        (0.1, False, EntryAction.NOOP),
-        (0.1, True, EntryAction.UPDATE),
-        (3, False, EntryAction.SEND),
-        (3, True, EntryAction.UPDATE),
+        (-1, False, False),
+        (0, True, False),
+        # Between required_remove and required nothing changes either way, which is
+        # what stops an entry at the boundary flickering in and out of the channel.
+        (0.1, False, False),
+        (0.1, True, True),
+        (3, False, True),
+        (3, True, True),
     ],
 )
-def test_entry_hysteresis(score: float, posted: bool, expected: EntryAction) -> None:
-    entry = StarboardEntry(1, 100, posted_message_id=200 if posted else None)
-    assert decide_entry_action(config(), entry, score, origin_present=True) is expected
+def test_entry_hysteresis(score: float, posted: bool, expected: bool) -> None:
+    assert entry_should_be_posted(config(), score, origin_present=True, currently_posted=posted) is expected
 
 
-def test_origin_delete_only_removes_linked_existing_posts() -> None:
-    posted = StarboardEntry(1, 100, posted_message_id=200)
-    assert decide_entry_action(config(), posted, 5, origin_present=False) is EntryAction.REMOVE
-    assert decide_entry_action(config(link_deletes=False), posted, 5, origin_present=False) is EntryAction.NOOP
-    assert decide_entry_action(config(), StarboardEntry(1, 100), 5, origin_present=False) is EntryAction.NOOP
+def test_origin_delete_only_removes_mirrors_on_boards_that_link_deletes() -> None:
+    assert entry_should_be_posted(config(), 5, origin_present=False, currently_posted=True) is False
+    assert entry_should_be_posted(config(link_deletes=False), 5, origin_present=False, currently_posted=True) is True
+    assert entry_should_be_posted(config(), 5, origin_present=False, currently_posted=False) is False
 
 
 @given(st.lists(st.floats(min_value=-100, max_value=100, allow_nan=False, allow_infinity=False), min_size=1))
 def test_increasing_scores_never_remove_after_send(scores: list[float]) -> None:
-    has_sent = False
-    entry = StarboardEntry(1, 100)
+    """Once posted, a rising score can never take the mirror back down."""
+    posted = False
     for score in sorted(scores):
-        action = decide_entry_action(config(), entry, score, origin_present=True)
-        assert not (has_sent and action is EntryAction.REMOVE)
-        if action is EntryAction.SEND:
-            has_sent = True
-            entry = replace(entry, posted_message_id=200)
+        wanted = entry_should_be_posted(config(), score, origin_present=True, currently_posted=posted)
+        assert not (posted and not wanted)
+        posted = wanted

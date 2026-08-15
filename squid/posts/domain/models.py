@@ -16,6 +16,15 @@ voted on, while a delete-log vote or a generic poll stands alone.
 """
 
 
+def starboard_entry_key(starboard_id: int, origin_message_id: int) -> str:
+    """Address one starboard entry as a post resource.
+
+    Composite because an entry is one message on one board, and a resource key is a
+    single string.
+    """
+    return f"{starboard_id}:{origin_message_id}"
+
+
 @dataclass(frozen=True, slots=True)
 class PostTarget:
     """Where a post should exist, before it has been sent."""

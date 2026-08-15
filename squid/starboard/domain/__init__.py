@@ -2,7 +2,6 @@
 
 from squid.starboard.domain.models import (
     EDITABLE_SETTINGS,
-    EntryAction,
     OriginMessage,
     StarboardConfig,
     StarboardDirection,
@@ -11,13 +10,12 @@ from squid.starboard.domain.models import (
     StarboardSource,
     StarboardVote,
     VoteVerdict,
-    decide_entry_action,
+    entry_should_be_posted,
     evaluate_vote,
 )
 
 __all__ = [
     "EDITABLE_SETTINGS",
-    "EntryAction",
     "OriginMessage",
     "StarboardConfig",
     "StarboardDirection",
@@ -26,6 +24,6 @@ __all__ = [
     "StarboardSource",
     "StarboardVote",
     "VoteVerdict",
-    "decide_entry_action",
+    "entry_should_be_posted",
     "evaluate_vote",
 ]
