@@ -106,18 +106,21 @@ def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture
         configure_observability(enabled_config(), service_name="api")
 
 
-def test_correlation_id_uses_active_trace_id(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_id", return_value="a" * 32)
+def test_correlation_id_stays_unique_without_a_tracer(mocker: MockerFixture) -> None:
+    """Errors stay correlatable on deployments that never installed the SDK.
 
-    assert observability.correlation_id() == "a" * 32
-
-
-def test_correlation_id_has_a_local_fallback(mocker: MockerFixture) -> None:
+    `build_error_presentation` shows this id to the user and logs it beside the redacted
+    diagnostic, so the untraced path has to keep producing distinct ids rather than a
+    constant. That it prefers the active trace id when there is one is proven for real,
+    against a live tracer, in tests/integration/observability/test_traces.py.
+    """
     mocker.patch.object(observability, "_current_trace_id", return_value=None)
 
-    error_id = observability.correlation_id()
+    error_ids = {observability.correlation_id() for _ in range(3)}
 
-    assert len(error_id) == 12
+    assert len(error_ids) == 3
+    assert all(len(error_id) == 12 for error_id in error_ids)
+    assert all(set(error_id) <= set("0123456789abcdef") for error_id in error_ids)
     assert int(error_id, 16) >= 0
 
 

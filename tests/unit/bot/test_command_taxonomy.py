@@ -78,6 +78,13 @@ PUBLIC_COGS = (
 )
 
 EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
+    # The command surface users see, restated so that changing it is a reviewable diff.
+    #
+    # Kept deliberately, despite the maintenance: a command is a public interface, and
+    # both directions of drift are silent otherwise. A command dropped by a refactor
+    # takes a documented entry point away with no failing test, and a command added
+    # without a plan ships to every guild. Neither shows up in a behavioural test,
+    # because the behaviour of a command nobody calls is nothing.
     "account": ("approve-claim", "claim", "claims", "link", "reject-claim", "unlink"),
     "admin": (
         "records-gaps",
@@ -205,6 +212,7 @@ def _nodes(commands: Iterable[AnyCommand], qualified_name: str) -> set[str]:
 
 
 def test_public_prefix_command_tree_matches_taxonomy() -> None:
+    """Adding or removing a user-visible command must be a deliberate edit here."""
     assert _public_command_names() == _qualified_names(EXPECTED_PREFIX_COMMAND_TREE)
 
 
