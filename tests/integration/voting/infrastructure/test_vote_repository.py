@@ -80,8 +80,10 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
             insert(Account).values([{"id": account_id} for account_id in (*AUTHOR_ACCOUNT_IDS, *VOTER_ACCOUNT_IDS)])
         )
         await session.execute(insert(ServerSetting).values(server_id=GUILD_ID))
+        # `Build.__table__`, not `Build`: the entity is the base of a joined-inheritance
+        # hierarchy, so an ORM-level insert targets the polymorphic join rather than a table.
         await session.execute(
-            insert(Build).values(
+            insert(Build.__table__).values(
                 id=BUILD_ID,
                 submission_status=Status.PENDING,
                 submitter_account_id=AUTHOR_ACCOUNT_IDS[0],
@@ -102,7 +104,7 @@ async def attach_vote_message(
     await session.execute(
         insert(Message).values(
             id=message_id,
-            server_id=GUILD_ID,
+            guild_id=GUILD_ID,
             channel_id=CHANNEL_ID,
             author_id=AUTHOR_ACCOUNT_IDS[0],
             content=content,
