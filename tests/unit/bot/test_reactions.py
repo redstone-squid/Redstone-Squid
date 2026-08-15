@@ -95,7 +95,7 @@ async def test_event_resolves_message_once_without_untracking() -> None:
     event = ReactionEvent(make_reaction_payload(), "⭐", None, harness.bot)
 
     assert await asyncio.gather(event.message(), event.message()) == [message, message]
-    harness.get_or_fetch_message.assert_awaited_once_with(20, 10, untrack_if_missing=False)
+    harness.get_or_fetch_message.assert_awaited_once_with(20, 10)
 
 
 async def test_add_then_remove_for_one_message_are_processed_in_order() -> None:

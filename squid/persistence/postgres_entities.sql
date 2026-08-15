@@ -321,6 +321,26 @@ BEGIN
         dead_at = NULL,
         attempts = 0,
         last_error = NULL;
+
+    -- A review card embeds the build it is voting on, so a build change makes the
+    -- session's cards stale too. Their posts are keyed by session, not by build, so
+    -- the sessions have to be enqueued in their own right.
+    IF target_kind = 'build' AND target_action = 'refresh' THEN
+        INSERT INTO public.discord_sync_queue
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'vote_session', bvs.vote_session_id::text, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        FROM public.build_vote_sessions bvs
+        WHERE bvs.build_id = target_key
+        ON CONFLICT (resource_kind, source_key) DO UPDATE
+        SET generation = EXCLUDED.generation,
+            enqueued_at = EXCLUDED.enqueued_at,
+            claimed_at = NULL,
+            dead_at = NULL,
+            attempts = 0,
+            last_error = NULL;
+    END IF;
     RETURN NULL;
 END;
 $$;

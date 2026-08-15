@@ -172,7 +172,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                 await edit.commit()
 
             await asyncio.gather(
-                self.bot.for_build(build).update_messages(),
+                self.bot.refresh_posts("build", str(build.id)),
                 edit_layout(
                     sent_message,
                     info_layout(t(locale, _("Success")), t(locale, _("Build edited successfully"))),

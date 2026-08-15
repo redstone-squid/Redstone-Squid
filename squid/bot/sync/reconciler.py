@@ -49,13 +49,17 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     async def _process_job(self, job: SyncJob) -> None:
         try:
-            if job.action == "delete":
+            # The same reconciler the bot exposes for latency nudges, so a command and
+            # this job cannot render a resource two different ways.
+            posts = self.bot.post_reconciler
+            if posts.handles(job.resource_kind):
+                # A delete needs no special case: the renderer reports a vanished
+                # resource as "no posts wanted", and the diff loop removes them.
+                await posts.reconcile(job.resource_kind, job.source_key, job.generation)
+            elif job.action == "delete":
                 await self._delete_projection(job)
-            elif job.resource_kind == "build":
-                await self._refresh_build(int(job.source_key))
             else:
                 await self._refresh_vote(int(job.source_key))
-            if job.action == "refresh":
                 await self.bot.services.messages.mark_projection_applied(
                     job.resource_kind,
                     job.source_key,
@@ -72,24 +76,19 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await self.bot.services.discord_sync.complete(job)
 
     async def _delete_projection(self, job: SyncJob) -> None:
-        """Delete retained Discord targets and their tracking rows idempotently."""
+        """Delete retained Discord targets and their tracking rows idempotently.
+
+        Only vote sessions still take this path; build posts are removed by the
+        reconciler's diff loop.
+        """
         targets = await self.bot.services.messages.list_projection(job.resource_kind, job.source_key)
         for target in targets:
             if target.channel_id is not None:
-                message = await self.bot.get_or_fetch_message(
-                    target.channel_id,
-                    target.id,
-                    untrack_if_missing=False,
-                )
+                message = await self.bot.get_or_fetch_message(target.channel_id, target.id)
                 if message is not None:
                     with contextlib.suppress(discord.NotFound):
                         await message.delete()
             await self.bot.services.messages.untrack(target.id)
-
-    async def _refresh_build(self, build_id: int) -> None:
-        build = await self.bot.services.build_queries.get(build_id)
-        if build is not None:
-            await self.bot.for_build(build).update_messages()
 
     async def _refresh_vote(self, vote_session_id: int) -> None:
         """Re-render a vote session's messages.
