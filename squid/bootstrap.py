@@ -67,6 +67,8 @@ from squid.permissions.infrastructure.repository import (
 )
 from squid.persistence.engine import DatabaseEngine
 from squid.persistence.wake_listener import PostgresWakeListener
+from squid.posts.application import PostService
+from squid.posts.infrastructure.repository import PostRepository
 from squid.records.application import RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
@@ -642,6 +644,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
+        posts=PostService(PostRepository(db.async_session)),
         permissions=graph.permissions,
         permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
