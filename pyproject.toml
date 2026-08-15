@@ -128,9 +128,14 @@ jsonschema-rs = { ANDROID_API_LEVEL = "24" }
 orjson = { ANDROID_API_LEVEL = "24" }
 pydantic-core = { ANDROID_API_LEVEL = "24" }
 prek = { ANDROID_API_LEVEL = "24" }
-pyrefly = { ANDROID_API_LEVEL = "24" }
+# Pyrefly also enables LTO for releases; rustc's LLVM backend exceeds the memory available on
+# Android while linking the binary built in place of the unavailable platform wheel.
+pyrefly = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
 rpds-py = { ANDROID_API_LEVEL = "24" }
-ruff = { ANDROID_API_LEVEL = "24" }
+# Ruff's release profile enables fat LTO, which can exhaust Android's linker during the final
+# binary link. The PyPI wheels do not target Android, so keep the source build's optimizations
+# but disable LTO to bound its peak memory use on Termux.
+ruff = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
 
 [tool.ruff]
 line-length = 120
