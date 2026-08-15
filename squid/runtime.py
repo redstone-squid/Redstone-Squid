@@ -44,6 +44,7 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionFormService,
 )
+from squid.suggestions.application import SuggestionService
 from squid.sync import DiscordSyncService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
@@ -76,6 +77,7 @@ class ApiServices:
     submission_forms: SubmissionFormService
     submission_drafts: SubmissionDraftService
     submission_finalization: SubmissionFinalizationService
+    suggestions: SuggestionService
     media_jobs: MediaNormalizationJobService | None
     minecraft_installations: InstallationCredentialService | None
     minecraft_player_authorization: PlayerAuthorizationService | None
@@ -104,6 +106,7 @@ class BotServices:
     tags: TagService
     settings: SettingsService
     starboards: StarboardService
+    suggestions: SuggestionService
     accounts: AccountService
     versions: VersionService
     votes: VoteService

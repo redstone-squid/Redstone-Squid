@@ -116,6 +116,8 @@ from squid.submissions.infrastructure.finalization_repository import PostgresFin
 from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.suggestions.application import SuggestionService
+from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
 from squid.sync import DiscordSyncService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
@@ -461,6 +463,17 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def suggestions(self) -> SuggestionService:
+        return SuggestionService(
+            build_suggestion_registry(
+                session_factory=self.db.async_session,
+                search=self.search,
+                versions=self.version_service,
+                tags=self.tags,
+            )
+        )
+
+    @cached_property
     def search_embeddings(self) -> SearchEmbeddingService:
         return SearchEmbeddingService(
             self.embedding_model,
@@ -586,6 +599,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_forms=graph.submission_forms,
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
+        suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
         minecraft_player_authorization=graph.minecraft_player_authorization,
@@ -615,6 +629,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         tags=graph.tags,
         settings=SettingsService(SettingsRepository(db.async_session)),
         starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
+        suggestions=graph.suggestions,
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
