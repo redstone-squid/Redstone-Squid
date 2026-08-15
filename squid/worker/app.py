@@ -131,11 +131,6 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
-            self._maintain_artifacts,
-            name="artifact-maintenance",
-            interval=maintenance_interval,
-        )
-        self._supervisor.start_periodic(
             self._cleanup_schematic_jobs,
             name="schematic-job-cleanup",
             interval=max(maintenance_interval, 300),
@@ -188,7 +183,6 @@ class DatabaseWorker:
             "record-maintenance",
             "due-votes",
             "stale-build-locks",
-            "artifact-maintenance",
             "schematic-job-cleanup",
             "media-storage-cleanup",
             "queue-health",
@@ -277,15 +271,6 @@ class DatabaseWorker:
     async def _clean_stale_build_locks(self) -> None:
         with trace_span("squid.worker.stale_build_locks", {"squid.surface": "background_loop"}):
             await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
-
-    async def _maintain_artifacts(self) -> None:
-        with trace_span("squid.worker.artifact_maintenance", {"squid.surface": "background_loop"}):
-            migrated, recovered = await self._services.schematics.maintain_storage()
-        if migrated or recovered:
-            logger.info(
-                "Schematic artifact maintenance completed",
-                extra={"squid.artifacts.migrated": migrated, "squid.artifacts.recovered": recovered},
-            )
 
     async def _cleanup_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):
