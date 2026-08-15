@@ -9,9 +9,7 @@ from whenever import Instant
 
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
-from squid.bot.message_adapter import to_tracked_message
-from squid.bot.utils.components import edit_interaction_layout, edit_layout, no_mentions, text_layout
-from squid.bot.voting.generic_session import GenericVoteSession
+from squid.bot.utils.components import edit_interaction_layout, no_mentions, text_layout
 from squid.voting.domain import VoteOption, VoteVisibility
 from squid.voting.errors import InvalidVoteConfigurationError
 
@@ -142,14 +140,11 @@ class PollConfirmation(ExpiringLayoutView):
         )
         await interaction.response.defer(ephemeral=True)
         channel = cast(GuildMessageable, interaction.channel)
+        # The poll goes where the author ran the command, so publication is explicit;
+        # the reconciler owns the card from the moment it is handed over.
         message = await channel.send(view=text_layout("Publishing poll…"), allowed_mentions=no_mentions())
-        await self.cog.bot.services.messages.track(
-            to_tracked_message(message), purpose="vote", vote_session_id=session_id
-        )
-        session = await GenericVoteSession.from_id(self.cog.bot, session_id)
-        assert session is not None
-        await edit_layout(message, text_layout(session.render()), allowed_mentions=no_mentions())
-        await session.add_reactions(message)
+        await self.cog.bot.post_reconciler.adopt(message, "vote_session", str(session_id), "vote_card")
+        await self.cog.bot.refresh_posts("vote_session", str(session_id))
         await interaction.edit_original_response(
             view=text_layout(f"Published: {message.jump_url}"), allowed_mentions=no_mentions()
         )

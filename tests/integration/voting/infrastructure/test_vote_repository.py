@@ -13,6 +13,7 @@ from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Build
 from squid.messages.infrastructure.models import Message
 from squid.persistence.base import Base
+from squid.posts.infrastructure.models import DiscordPost
 from squid.settings.infrastructure.models import ServerSetting
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
 from squid.voting.infrastructure.models import (
@@ -41,6 +42,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
     cast(Table, GenericVoteSession.__table__),
     cast(Table, Vote.__table__),
     cast(Table, Message.__table__),
+    cast(Table, DiscordPost.__table__),
 )
 
 
@@ -90,16 +92,30 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
 async def attach_vote_message(
     session: AsyncSession, *, message_id: int, vote_session_id: int, content: str | None = None
 ) -> None:
-    """Register the Discord message a vote session is rendered on."""
+    """Register the Discord message a vote session is rendered on.
+
+    The message row is the bare fact that a message exists; the post row is what makes it
+    a card for this session. The repository addresses sessions through `discord_posts`
+    rather than through `messages.vote_session_id`, so a message without a post is not
+    findable, which is the point of writing both here.
+    """
     await session.execute(
         insert(Message).values(
             id=message_id,
             server_id=GUILD_ID,
             channel_id=CHANNEL_ID,
             author_id=AUTHOR_ACCOUNT_IDS[0],
-            purpose="vote",
             content=content,
-            vote_session_id=vote_session_id,
+        )
+    )
+    await session.execute(
+        insert(DiscordPost).values(
+            message_id=message_id,
+            channel_id=CHANNEL_ID,
+            resource_kind="vote_session",
+            resource_key=str(vote_session_id),
+            surface="vote_card",
+            applied_revision=0,
         )
     )
 

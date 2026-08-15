@@ -3,13 +3,15 @@
 from collections.abc import Sequence
 from typing import cast
 
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import Text, delete, func, insert, or_, select, update
+from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.messages.infrastructure.models import Message
 from squid.persistence.repository import BaseAsyncRepository
+from squid.posts.infrastructure.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     EmojiPreset,
@@ -39,10 +41,6 @@ from squid.voting.infrastructure.models import (
     VoteSession,
     VoteSessionOption,
 )
-
-
-class _MessageModelRepository(BaseAsyncRepository[Message]):
-    model_type = Message
 
 
 class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
@@ -464,8 +462,12 @@ class VoteRepository:
     ) -> VoteSession | None:
         statement = (
             select(VoteSession)
-            .join(Message, Message.vote_session_id == VoteSession.id)
-            .where(Message.id == message_id, Message.purpose == "vote")
+            .join(DiscordPost, DiscordPost.resource_key == cast_sql(VoteSession.id, Text))
+            .where(
+                DiscordPost.message_id == message_id,
+                DiscordPost.resource_kind == "vote_session",
+                DiscordPost.suppressed_at.is_(None),
+            )
         )
         if for_update:
             statement = statement.with_for_update(of=VoteSession)
@@ -473,13 +475,21 @@ class VoteRepository:
 
     @staticmethod
     async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:
-        messages = await _MessageModelRepository(session=session).get_many(
-            Message.vote_session_id == row.id, order_by=(Message.id, False)
-        )
+        # The guild comes from the message fact; the post says which messages are ours.
+        locations = (
+            await session.execute(
+                select(DiscordPost.message_id, DiscordPost.channel_id, Message.server_id)
+                .join(Message, Message.id == DiscordPost.message_id)
+                .where(
+                    DiscordPost.resource_kind == "vote_session",
+                    DiscordPost.resource_key == str(row.id),
+                    DiscordPost.suppressed_at.is_(None),
+                )
+                .order_by(DiscordPost.message_id)
+            )
+        ).all()
         vote_messages = tuple(
-            VoteMessage(message.id, message.channel_id, message.server_id)
-            for message in messages
-            if message.channel_id is not None
+            VoteMessage(message_id, channel_id, server_id or 0) for message_id, channel_id, server_id in locations
         )
         vote_rows = (
             await session.scalars(select(Vote).where(Vote.vote_session_id == row.id).order_by(Vote.account_id))

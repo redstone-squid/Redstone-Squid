@@ -1,4 +1,8 @@
-"""Desired Discord projection reconciler tests."""
+"""Reconciliation job-draining tests.
+
+What each resource renders is covered in `tests/unit/bot/posts/test_reconciler.py`;
+this is only about claiming, acknowledging, and dead-lettering.
+"""
 
 from typing import Literal
 from unittest.mock import AsyncMock, Mock
@@ -6,7 +10,6 @@ from unittest.mock import AsyncMock, Mock
 from whenever import Instant
 
 from squid.bot.sync.reconciler import ReconciliationCog
-from squid.messages.domain import MessageRecord
 from squid.sync import SyncJob
 
 
@@ -27,10 +30,9 @@ def _job(
     )
 
 
-def _cog(*, renders_posts: bool = True) -> tuple[ReconciliationCog, AsyncMock]:
+def _cog() -> tuple[ReconciliationCog, AsyncMock]:
     cog = ReconciliationCog.__new__(ReconciliationCog)
     bot = AsyncMock()
-    bot.post_reconciler.handles = Mock(return_value=renders_posts)
     cog.bot = bot
     return cog, bot
 
@@ -54,64 +56,31 @@ async def test_reconciler_starts_only_after_cog_registration_and_is_awaited_on_u
     bot.background_tasks.cancel.assert_awaited_once_with(task)
 
 
-async def test_a_rendered_resource_is_handed_to_the_post_reconciler() -> None:
-    """Build posts are reconciled, not projected, so no message row is acknowledged."""
+async def test_a_claimed_job_is_rendered_then_acknowledged() -> None:
     cog, bot = _cog()
 
     await cog._process_job(_job(generation=7))
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("build", "42", 7)
-    bot.services.messages.mark_projection_applied.assert_not_awaited()
     bot.services.discord_sync.complete.assert_awaited_once()
 
 
-async def test_a_delete_needs_no_special_case_for_a_rendered_resource() -> None:
-    """A vanished resource wants no posts, and the diff loop removes what is left."""
+async def test_deletion_needs_no_branch_of_its_own() -> None:
+    """A vanished resource wants no posts, so the diff loop removes what is left."""
     cog, bot = _cog()
 
-    await cog._process_job(_job(action="delete", generation=7))
+    await cog._process_job(_job(action="delete", generation=7, resource_kind="vote_session"))
 
-    bot.post_reconciler.reconcile.assert_awaited_once_with("build", "42", 7)
-    bot.services.messages.untrack.assert_not_awaited()
-
-
-async def test_vote_refresh_marks_only_the_rendered_generation_before_acknowledging() -> None:
-    cog, bot = _cog(renders_posts=False)
-    cog._refresh_vote = AsyncMock()  # type: ignore[method-assign]
-
-    await cog._process_job(_job(generation=7, resource_kind="vote_session"))
-
-    cog._refresh_vote.assert_awaited_once_with(42)
-    bot.services.messages.mark_projection_applied.assert_awaited_once_with("vote_session", "42", 7)
+    bot.post_reconciler.reconcile.assert_awaited_once_with("vote_session", "42", 7)
     bot.services.discord_sync.complete.assert_awaited_once()
 
 
-async def test_delete_removes_retained_discord_targets_and_tracking_rows() -> None:
-    cog, bot = _cog(renders_posts=False)
-    message = AsyncMock()
-    bot.get_or_fetch_message.return_value = message
-    bot.services.messages.list_projection.return_value = (
-        MessageRecord(
-            id=100,
-            server_id=10,
-            channel_id=20,
-            author_id=30,
-            purpose="vote",
-            content=None,
-            build_id=None,
-            vote_session_id=None,
-            updated_at=None,
-            projection_resource_kind="vote_session",
-            projection_source_key="42",
-            desired_action="delete",
-            desired_revision=4,
-            applied_revision=3,
-        ),
-    )
+async def test_a_failed_render_is_retried_rather_than_acknowledged() -> None:
+    cog, bot = _cog()
+    bot.post_reconciler.reconcile.side_effect = RuntimeError("discord is down")
+    bot.services.discord_sync.fail.return_value = False
 
-    await cog._process_job(_job(action="delete", generation=4, resource_kind="vote_session"))
+    await cog._process_job(_job())
 
-    message.delete.assert_awaited_once_with()
-    bot.services.messages.untrack.assert_awaited_once_with(100)
-    bot.services.messages.mark_projection_applied.assert_not_awaited()
-    bot.services.discord_sync.complete.assert_awaited_once()
+    bot.services.discord_sync.fail.assert_awaited_once()
+    bot.services.discord_sync.complete.assert_not_awaited()

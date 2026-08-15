@@ -19,7 +19,7 @@ from squid.bootstrap import create_bot_runtime
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator
-from squid.bot.posts import BuildCardRenderer, PostReconciler
+from squid.bot.posts import BuildCardRenderer, PostReconciler, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
@@ -98,7 +98,7 @@ class RedstoneSquid(Bot):
         self.source_code_url = config.source_code_url
         self.background_tasks = BackgroundTaskSupervisor()
         self.reactions = ReactionRouter(self)
-        self.post_reconciler = PostReconciler(self, [BuildCardRenderer(self)])
+        self.post_reconciler = PostReconciler(self, [BuildCardRenderer(self), VoteSessionRenderer(self)])
         self.catbox = CatboxClient(catbox_config)
         self.media_previews = MediaPreviewClient()
         # Permission checks resolve a Discord id to an account on every command,
