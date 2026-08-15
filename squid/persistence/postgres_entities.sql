@@ -32,21 +32,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.get_unsent_builds(server_id_input bigint) RETURNS SETOF public.builds
-    LANGUAGE plpgsql
-    AS $$
-  begin
-    return query select *
-    from builds
-    where id not in (
-      select build_id
-      from messages
-      where server_id = server_id_input
-      )
-    and submission_status = 1;  -- accepted
-  end;
-$$;
-
 CREATE FUNCTION public.power_set_max(txt text[], max_k integer DEFAULT 8) RETURNS SETOF text[]
     LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE
     AS $$
@@ -507,44 +492,9 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.project_discord_message_desired_state() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    UPDATE public.messages
-    SET desired_action = NEW.action,
-        desired_revision = NEW.generation
-    WHERE projection_resource_kind = NEW.resource_kind
-      AND projection_source_key = NEW.source_key;
-    RETURN NULL;
-END;
-$$;
-
-CREATE FUNCTION public.initialize_discord_message_projection() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-DECLARE
-    current_generation bigint;
-BEGIN
-    IF NEW.projection_resource_kind IS NULL OR NEW.projection_source_key IS NULL THEN
-        RETURN NEW;
-    END IF;
-    SELECT generation INTO current_generation
-    FROM public.discord_sync_queue
-    WHERE resource_kind = NEW.projection_resource_kind
-      AND source_key = NEW.projection_source_key;
-    NEW.desired_action := 'refresh';
-    NEW.desired_revision := COALESCE(current_generation, 1);
-    NEW.applied_revision := NEW.desired_revision;
-    RETURN NEW;
-END;
-$$;
-
 CREATE TRIGGER delete_orphaned_build_vote_sessions_after_builds AFTER DELETE ON public.builds FOR EACH STATEMENT EXECUTE FUNCTION public.delete_orphaned_build_vote_sessions_after_builds_delete();
 
 CREATE TRIGGER set_locked_at BEFORE UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.set_locked_at();
-
-CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER builds_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.builds FOR EACH ROW EXECUTE FUNCTION public.enqueue_build_search_projection();
 
@@ -603,10 +553,6 @@ CREATE TRIGGER starboard_entries_enqueue_discord_sync AFTER INSERT OR DELETE OR 
 CREATE TRIGGER starboards_enqueue_discord_sync AFTER UPDATE ON public.starboards FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
 
 CREATE TRIGGER starboard_origin_messages_enqueue_discord_sync AFTER UPDATE OF deleted_at ON public.starboard_origin_messages FOR EACH ROW EXECUTE FUNCTION public.enqueue_starboard_sync();
-
-CREATE TRIGGER discord_sync_queue_project_desired_state AFTER INSERT OR UPDATE OF generation, action ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.project_discord_message_desired_state();
-
-CREATE TRIGGER messages_initialize_discord_projection BEFORE INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.initialize_discord_message_projection();
 
 CREATE TRIGGER builds_emit_domain_event AFTER INSERT OR UPDATE OF submission_status ON public.builds FOR EACH ROW EXECUTE FUNCTION public.emit_domain_event();
 

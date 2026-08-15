@@ -277,7 +277,7 @@ def _source_message(message: Message) -> SourceMessage:
     """Map one message fact reached through a build's source-message link."""
     return SourceMessage(
         message_id=message.id,
-        guild_id=message.server_id,
+        guild_id=message.guild_id,
         channel_id=message.channel_id,
         author_id=message.author_id,
         content=message.content,

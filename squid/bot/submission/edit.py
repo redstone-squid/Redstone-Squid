@@ -193,15 +193,22 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
                 allowed_mentions=no_mentions(),
             )
 
-        message_record = await self.messages.get(message.id)
-        if message_record is None or message_record.build_id is None:
+        # Which build a card shows is a property of the post, not of the message: the
+        # same message row is just a fact about a Discord message.
+        post = await self.bot.services.posts.resolve(message.id)
+        if post is None or post.resource_kind != "build":
             return await interaction.followup.send(
                 view=text_layout(t(locale, _("This does not look like a build."))),
                 ephemeral=True,
                 allowed_mentions=no_mentions(),
             )
 
-        build = await self.builds.get(message_record.build_id)
-        assert build is not None
+        build = await self.builds.get(int(post.resource_key))
+        if build is None:
+            return await interaction.followup.send(
+                view=text_layout(t(locale, _("This does not look like a build."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
         await BuildEditView(build, self.builds).send(interaction, ephemeral=True)
         return None

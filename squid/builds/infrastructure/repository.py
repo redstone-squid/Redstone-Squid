@@ -677,10 +677,6 @@ class BuildRepository:
             by_id = {build.id: build for build in await self._mapper.to_domain_many(session, sql_builds)}
             return [by_id.get(build_id) for build_id in build_ids]
 
-    async def get_unsent_builds(self, server_id: int) -> list[Build] | None:
-        """Get all the builds that have not been posted on the server"""
-        raise NotImplementedError
-
 
 def _split_tag_value(
     assignment: DomainTagAssignment,
