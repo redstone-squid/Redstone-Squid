@@ -1,6 +1,5 @@
 """Discord listeners and configuration commands for starboards."""
 
-import asyncio
 import contextlib
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal, override
@@ -11,13 +10,11 @@ from discord.ext import commands
 from discord.ext.commands import Context, guild_only, hybrid_group
 from whenever import Instant
 
-from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.bot.starboard.render import starboard_layout
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
-from squid.bot.utils.components import edit_layout, no_mentions, text_layout
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -29,11 +26,10 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
+from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
-from squid.starboard.application import EntryPlan
 from squid.starboard.domain import (
     EDITABLE_SETTINGS,
-    EntryAction,
     OriginMessage,
     StarboardConfig,
     StarboardEmoji,
@@ -92,7 +88,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         if result.remove_reaction:
             with contextlib.suppress(discord.NotFound, discord.Forbidden):
                 await message.remove_reaction(payload.emoji, member)
-        self._schedule(result.plans)
+        self._schedule(result.keys)
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         payload = event.payload
@@ -108,92 +104,25 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
-        plans = await self.service.refresh(payload.message_id, force=True)
-        self._schedule((plan for plan in plans if plan.config.link_edits), force=True)
+        self._schedule(await self.service.refresh(payload.message_id, force=True), force=True)
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
-        deleted_post = await self.service.reset_deleted_post(payload.message_id)
-        if deleted_post is not None:
-            self._debouncer.schedule(deleted_post, force=True)
+        # A deleted *post* is tombstoned by the shared message listener and repaired by
+        # the reconciler, so only the origin's disappearance is starboard business.
         self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel) -> None:
         await self.service.disable_channel(channel.id)
 
-    def _schedule(self, plans: Iterable[EntryPlan], *, force: bool = False) -> None:
-        for plan in plans:
-            self._debouncer.schedule((plan.config.id, plan.origin.id), force=force)
-
-    async def _refresh_key(self, key: EntryKey, force: bool) -> None:
-        starboard_id, origin_message_id = key
-        plans = await self.service.refresh(origin_message_id, force=force)
-        plan = next((item for item in plans if item.config.id == starboard_id), None)
-        if plan is not None:
-            await self._execute(plan)
-
-    async def _execute(self, plan: EntryPlan) -> None:
-        if plan.action is EntryAction.NOOP:
-            return
-        if plan.action is EntryAction.REMOVE:
-            if plan.entry.posted_message_id is not None and plan.entry.posted_channel_id is not None:
-                posted = await self._message(plan.entry.posted_channel_id, plan.entry.posted_message_id)
-                if posted is not None:
-                    with contextlib.suppress(discord.NotFound):
-                        await posted.delete()
-            await self.service.mark_removed(plan)
-            return
-        destination = await self._channel(plan.config.channel_id)
-        origin = await self._message(plan.origin.channel_id, plan.origin.id)
-        if destination is None or origin is None or self._unsafe_nsfw(origin.channel, destination):
-            return
-        mentions = (
-            discord.AllowedMentions(everyone=False, roles=False, users=(origin.author,), replied_user=False)
-            if plan.config.ping_author
-            else no_mentions()
-        )
-        locale = await resolve_locale(origin, self.bot.services.settings)
-        if plan.action is EntryAction.SEND:
-            posted = await destination.send(
-                view=starboard_layout(plan, origin, locale=locale), allowed_mentions=mentions
-            )
-            await self.service.mark_posted(plan, posted.id, destination.id)
-            await self._autoreact(posted, plan)
-            return
-        if plan.entry.posted_message_id is None or plan.entry.posted_channel_id is None:
-            return
-        posted = await self._message(plan.entry.posted_channel_id, plan.entry.posted_message_id)
-        if posted is None:
-            await self.service.mark_removed(plan)
-            self._debouncer.schedule((plan.config.id, plan.origin.id), force=True)
-            return
-        await edit_layout(posted, starboard_layout(plan, origin, locale=locale), allowed_mentions=mentions)
-        await self.service.mark_rendered(plan)
-
-    async def _autoreact(self, message: discord.Message, plan: EntryPlan) -> None:
-        for item in plan.config.emojis:
-            enabled = plan.config.autoreact_upvote if item.direction == "up" else plan.config.autoreact_downvote
-            if enabled:
-                with contextlib.suppress(discord.Forbidden):
-                    await message.add_reaction(item.emoji)
-                await asyncio.sleep(0)
-
-    async def _channel(self, channel_id: int) -> GuildMessageable | None:
-        channel = await self.bot.get_or_fetch_messageable_channel(channel_id)
-        return channel if isinstance(channel, GuildMessageable) else None
-
-    async def _message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        return await self.bot.get_or_fetch_message(channel_id, message_id)
-
-    @staticmethod
-    def _unsafe_nsfw(source: discord.abc.Messageable, destination: GuildMessageable) -> bool:
-        source_nsfw = bool(getattr(source, "is_nsfw", lambda: False)())
-        destination_nsfw = bool(getattr(destination, "is_nsfw", lambda: False)())
-        return source_nsfw and not destination_nsfw
+    def _schedule(self, keys: Iterable[EntryKey], *, force: bool = False) -> None:
+        for key in keys:
+            self._debouncer.schedule(key, force=force)
 
     @staticmethod
     def _origin(message: discord.Message) -> OriginMessage:
+        """Read the source-message facts starboard policy is decided from."""
         assert message.guild is not None
         channel_nsfw = bool(getattr(message.channel, "is_nsfw", lambda: False)())
         has_image = any((item.content_type or "").startswith("image/") for item in message.attachments) or any(
@@ -209,6 +138,17 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             is_nsfw=channel_nsfw,
             has_image=has_image,
         )
+
+    async def _refresh_key(self, key: EntryKey, force: bool) -> None:
+        """Nudge the reconciler for one entry.
+
+        The debouncer exists for latency, not correctness: the score write already
+        enqueued durable work, so a dropped nudge costs a few seconds rather than a
+        missing post. Coalescing reaction storms is what it is actually for.
+        """
+        del force
+        starboard_id, origin_message_id = key
+        await self.bot.refresh_posts("starboard_entry", starboard_entry_key(starboard_id, origin_message_id))
 
     @hybrid_group(name="starboard")
     @guild_only()

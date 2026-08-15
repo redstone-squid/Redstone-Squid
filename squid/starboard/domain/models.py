@@ -1,7 +1,6 @@
 """Starboard snapshots and pure scoring rules."""
 
 from dataclasses import dataclass
-from enum import StrEnum
 from math import isfinite
 from typing import Literal
 
@@ -173,15 +172,9 @@ class StarboardEntry:
     origin_message_id: int
     score: float = 0.0
     raw_count: int = 0
-    posted_message_id: int | None = None
-    posted_channel_id: int | None = None
     last_rendered_score: float | None = None
     first_posted_at: Instant | None = None
     updated_at: Instant | None = None
-
-    @property
-    def posted(self) -> bool:
-        return self.posted_message_id is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,15 +195,6 @@ class VoteVerdict:
     @classmethod
     def remove_reaction(cls) -> "VoteVerdict":
         return cls("remove_reaction")
-
-
-class EntryAction(StrEnum):
-    """A transport operation required for a materialized starboard entry."""
-
-    SEND = "send"
-    UPDATE = "update"
-    REMOVE = "remove"
-    NOOP = "noop"
 
 
 def evaluate_vote(
@@ -235,17 +219,27 @@ def evaluate_vote(
     return VoteVerdict.accept(option.direction)
 
 
-def decide_entry_action(
+def entry_should_be_posted(
     config: StarboardConfig,
-    entry: StarboardEntry,
     score: float,
+    *,
     origin_present: bool,
-) -> EntryAction:
-    """Choose a post action with a stable hysteresis band."""
+    currently_posted: bool,
+) -> bool:
+    """Whether this entry warrants a post right now, with a stable hysteresis band.
+
+    Replaces a four-way send/update/remove/noop decision. Those verbs described what
+    to *do* about a post, which only made sense while the entry row remembered whether
+    one existed; the reconciler compares this answer against the posts that are
+    actually there and works out the verb itself.
+    """
     if not origin_present:
-        return EntryAction.REMOVE if config.link_deletes and entry.posted else EntryAction.NOOP
+        # A deleted source removes its mirror only where the board links deletions.
+        return currently_posted and not config.link_deletes
     if score <= config.required_remove:
-        return EntryAction.REMOVE if entry.posted else EntryAction.NOOP
+        return False
     if score >= config.required:
-        return EntryAction.UPDATE if entry.posted else EntryAction.SEND
-    return EntryAction.UPDATE if entry.posted else EntryAction.NOOP
+        return True
+    # Between the two thresholds nothing changes, which is what stops an entry
+    # hovering at the boundary from flickering in and out of the channel.
+    return currently_posted

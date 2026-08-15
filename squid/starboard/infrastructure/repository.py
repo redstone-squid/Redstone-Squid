@@ -7,14 +7,13 @@ from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.starboard.application.ports import EntryPlan, PendingVote
+from squid.starboard.application.ports import EntryKey, EntryState, PendingVote
 from squid.starboard.domain import (
     OriginMessage,
     StarboardConfig,
     StarboardDirection,
     StarboardEmoji,
     StarboardEntry,
-    decide_entry_action,
 )
 from squid.starboard.infrastructure.models import (
     Starboard,
@@ -76,7 +75,7 @@ class PostgresStarboardRepository:
 
     async def record_votes(
         self, origin: OriginMessage, user_id: int, votes: Sequence[PendingVote]
-    ) -> Sequence[EntryPlan]:
+    ) -> Sequence[EntryKey]:
         if not votes:
             return ()
         async with self._session_factory.begin() as session:
@@ -137,7 +136,7 @@ class PostgresStarboardRepository:
                 session, origin.id, {vote.config.id for vote in votes}, force=False, origin=origin
             )
 
-    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> Sequence[EntryPlan]:
+    async def withdraw_vote(self, origin_message_id: int, user_id: int, emoji: str) -> Sequence[EntryKey]:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin_message_id)
             starboard_ids = set(
@@ -155,7 +154,7 @@ class PostgresStarboardRepository:
 
     async def recount_votes(
         self, origin: OriginMessage, votes: Sequence[tuple[int, PendingVote]]
-    ) -> Sequence[EntryPlan]:
+    ) -> Sequence[EntryKey]:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin.id)
             await session.execute(
@@ -203,7 +202,7 @@ class PostgresStarboardRepository:
                 )
             return await self._refresh_locked(session, origin.id, starboard_ids, force=True, origin=origin)
 
-    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryPlan]:
+    async def clear_votes(self, origin_message_id: int, emoji: str | None = None) -> Sequence[EntryKey]:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin_message_id)
             statement = delete(StarboardVote).where(StarboardVote.origin_message_id == origin_message_id)
@@ -212,12 +211,12 @@ class PostgresStarboardRepository:
             starboard_ids = set(await session.scalars(statement.returning(StarboardVote.starboard_id)))
             return await self._refresh_locked(session, origin_message_id, starboard_ids, force=False)
 
-    async def refresh(self, origin_message_id: int, *, force: bool = False) -> Sequence[EntryPlan]:
+    async def refresh(self, origin_message_id: int, *, force: bool = False) -> Sequence[EntryKey]:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin_message_id)
             return await self._refresh_locked(session, origin_message_id, None, force=force)
 
-    async def mark_origin_deleted(self, origin_message_id: int) -> Sequence[EntryPlan]:
+    async def mark_origin_deleted(self, origin_message_id: int) -> Sequence[EntryKey]:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin_message_id)
             changed = await session.execute(
@@ -230,23 +229,6 @@ class PostgresStarboardRepository:
                 return ()
             return await self._refresh_locked(session, origin_message_id, None, force=True)
 
-    async def mark_posted(self, starboard_id: int, origin_message_id: int, message_id: int, channel_id: int) -> None:
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                update(StarboardEntryRow)
-                .where(
-                    StarboardEntryRow.starboard_id == starboard_id,
-                    StarboardEntryRow.origin_message_id == origin_message_id,
-                )
-                .values(
-                    posted_message_id=message_id,
-                    posted_channel_id=channel_id,
-                    last_rendered_score=StarboardEntryRow.score,
-                    first_posted_at=func.coalesce(StarboardEntryRow.first_posted_at, func.now()),
-                    updated_at=func.now(),
-                )
-            )
-
     async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None:
         async with self._session_factory.begin() as session:
             await session.execute(
@@ -258,27 +240,18 @@ class PostgresStarboardRepository:
                 .values(last_rendered_score=score, updated_at=func.now())
             )
 
-    async def mark_removed(self, starboard_id: int, origin_message_id: int) -> None:
-        async with self._session_factory.begin() as session:
-            await session.execute(
-                update(StarboardEntryRow)
-                .where(
-                    StarboardEntryRow.starboard_id == starboard_id,
-                    StarboardEntryRow.origin_message_id == origin_message_id,
-                )
-                .values(posted_message_id=None, posted_channel_id=None, last_rendered_score=None, updated_at=func.now())
-            )
-
-    async def reset_deleted_post(self, posted_message_id: int) -> tuple[int, int] | None:
-        async with self._session_factory.begin() as session:
-            result = await session.execute(
-                update(StarboardEntryRow)
-                .where(StarboardEntryRow.posted_message_id == posted_message_id)
-                .values(posted_message_id=None, posted_channel_id=None, last_rendered_score=None, updated_at=func.now())
-                .returning(StarboardEntryRow.starboard_id, StarboardEntryRow.origin_message_id)
-            )
-            row = result.one_or_none()
-            return (row[0], row[1]) if row is not None else None
+    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:
+        """Load one entry with its board configuration and origin facts."""
+        async with self._session_factory() as session:
+            entry_row = await session.get(StarboardEntryRow, (starboard_id, origin_message_id))
+            origin_row = await session.get(StarboardOriginMessage, origin_message_id)
+            if entry_row is None or origin_row is None:
+                return None
+            starboard_row = await session.get(Starboard, starboard_id)
+            if starboard_row is None:
+                return None
+            config = await self._to_config(session, starboard_row)
+            return EntryState(config, self._origin(origin_row), self._entry(entry_row))
 
     async def disable_channel(self, channel_id: int) -> None:
         async with self._session_factory.begin() as session:
@@ -365,7 +338,7 @@ class PostgresStarboardRepository:
         *,
         force: bool,
         origin: OriginMessage | None = None,
-    ) -> Sequence[EntryPlan]:
+    ) -> Sequence[EntryKey]:
         if starboard_ids is not None and not starboard_ids:
             return ()
         statement = select(StarboardEntryRow).where(StarboardEntryRow.origin_message_id == origin_message_id)
@@ -377,7 +350,7 @@ class PostgresStarboardRepository:
             if origin_row is None:
                 return ()
             origin = self._origin(origin_row)
-        plans: list[EntryPlan] = []
+        keys: list[EntryKey] = []
         for entry_row in entries:
             score, raw_count = (
                 await session.execute(
@@ -399,13 +372,9 @@ class PostgresStarboardRepository:
             ).one()
             entry_row.score = float(score)
             entry_row.raw_count = int(raw_count)
-            config = await self._get_by_id(session, entry_row.starboard_id)
-            entry = self._entry(entry_row)
-            action = decide_entry_action(config, entry, entry.score, origin.present)
-            if action.value == "update" and not force and entry.last_rendered_score == entry.score:
-                action = type(action).NOOP
-            plans.append(EntryPlan(config, origin, entry, action))
-        return plans
+            if force or entry_row.last_rendered_score != entry_row.score:
+                keys.append((entry_row.starboard_id, origin_message_id))
+        return keys
 
     @staticmethod
     async def _lock(session: AsyncSession, origin_message_id: int) -> None:
@@ -482,8 +451,6 @@ class PostgresStarboardRepository:
             row.origin_message_id,
             row.score,
             row.raw_count,
-            row.posted_message_id,
-            row.posted_channel_id,
             row.last_rendered_score,
             row.first_posted_at,
             row.updated_at,

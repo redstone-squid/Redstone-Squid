@@ -3,6 +3,14 @@
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.posts.renderers import BuildCardRenderer
+from squid.bot.posts.starboard_renderer import StarboardEntryRenderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 
-__all__ = ["BuildCardRenderer", "DesiredPost", "PostReconciler", "PostRenderer", "VoteSessionRenderer"]
+__all__ = [
+    "BuildCardRenderer",
+    "DesiredPost",
+    "PostReconciler",
+    "PostRenderer",
+    "StarboardEntryRenderer",
+    "VoteSessionRenderer",
+]
