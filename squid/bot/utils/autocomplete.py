@@ -25,6 +25,7 @@ from squid.observability import trace_span
 from squid.suggestions.application import SuggestionSource
 from squid.suggestions.domain import (
     MAX_SUGGESTIONS,
+    ReplacementSpan,
     Suggestion,
     SuggestionRequest,
     SuggestionViewer,
@@ -146,10 +147,28 @@ async def _choices(
             context=dict(context(interaction)) if context is not None else {},
             locale=str(interaction.locale),
             viewer=await _viewer(interaction, source),
+            # Discord never reports a caret position, and someone typing is at the end of what
+            # they have typed, so the end of the input is the only caret this surface can know.
+            cursor=None,
         ),
         authorizer=_InteractionAuthorizer(interaction),
     )
+    if result.replacement is not None:
+        # A choice replaces the whole option value, so a source that completes part of the input
+        # has to be spliced back into the rest of it here.
+        return [_spliced_choice(item, query, result.replacement, prefix) for item in result.items]
     return [_choice(item, source, prefix, separator) for item in result.items]
+
+
+def _spliced_choice(
+    item: Suggestion,
+    query: str,
+    span: ReplacementSpan,
+    prefix: str,
+) -> app_commands.Choice[str]:
+    """Rebuild the whole option value with one span replaced."""
+    value = prefix + query[: span.start] + item.value + query[span.end :]
+    return app_commands.Choice(name=_truncate(value), value=value)
 
 
 async def _viewer(
@@ -192,8 +211,12 @@ def _name(item: Suggestion, prefix: str, separator: str | None) -> str:
     label = item.label if item.description is None else f"{item.label} — {item.description}"
     if separator is not None and prefix:
         label = f"{prefix}{label}"
+    return _truncate(label)
+
+
+def _truncate(label: str) -> str:
     if len(label) <= CHOICE_NAME_LIMIT:
         return label
-    # Keep the tail: for a list the entry being completed is at the end, and it is the part the
-    # user is choosing between.
+    # Keep the tail: whether it is a list entry or a query token, the part being completed is at
+    # the end, and it is what the user is choosing between.
     return "…" + label[-(CHOICE_NAME_LIMIT - 1) :]

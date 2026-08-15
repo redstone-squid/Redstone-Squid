@@ -2,6 +2,7 @@
 
 from squid.suggestions.infrastructure.providers.documents import DocumentProvider
 from squid.suggestions.infrastructure.providers.search_fields import SearchFieldProvider, SearchSortProvider
+from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 from squid.suggestions.infrastructure.providers.static import CallableProvider, StaticProvider
 from squid.suggestions.infrastructure.providers.taxonomy import (
     PendingTagProvider,
@@ -15,6 +16,7 @@ __all__ = [
     "DocumentProvider",
     "PendingTagProvider",
     "SearchFieldProvider",
+    "SearchQueryProvider",
     "SearchSortProvider",
     "StaticProvider",
     "TaxonomyIdProvider",
