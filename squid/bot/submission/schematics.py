@@ -16,6 +16,7 @@ from discord.ext.commands import Context
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import StaticLayout, no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.builds.application import BuildService
@@ -53,6 +54,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         """Inspect, download, and convert a build's schematic."""
         await ctx.send_help("build schematic")
 
+    @autocompletes(build_id="builds")
     @schematic_group.command(name="info")  # type: ignore
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect.")))
     async def schematic_info(self, ctx: Context[BotT], build_id: int) -> None:
@@ -67,6 +69,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(build_id="builds")
     @schematic_group.command(name="download")  # type: ignore
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to download.")),
@@ -99,6 +102,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(build_id="builds", version="approved_source_versions")
     @schematic_group.command(name="convert")  # type: ignore
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to convert.")),
@@ -134,6 +138,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="measure-timing")  # type: ignore
     @requires(BUILD_SCHEMATIC_MEASURE_TIMING)
     @app_commands.describe(
@@ -161,6 +166,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         result = await self.schematics.measure_timing(build_id, input_position=position)
         await _say(ctx, _describe_timing(result, locale=locale), ephemeral=True)
 
+    @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="detect-lattice")  # type: ignore
     @requires(BUILD_SCHEMATIC_DETECT_LATTICE)
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))

@@ -8,6 +8,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.ui.views import ConfirmationView
+from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
@@ -88,6 +89,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     allowed_mentions=no_mentions(),
                 )
 
+    @autocompletes(name="creators")
     @account_group.command(name="claim")
     @app_commands.describe(name=app_commands.locale_str(_("A creator name credited on builds you worked on.")))
     async def claim(self, ctx: Context[BotT], *, name: str) -> None:
@@ -120,6 +122,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(claim_id="alias_claims_pending")
     @account_group.command(name="approve-claim")
     @requires(ACCOUNT_CLAIM_APPROVE)
     async def approve_claim(self, ctx: Context[BotT], claim_id: int) -> None:
@@ -133,6 +136,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(claim_id="alias_claims_pending")
     @account_group.command(name="reject-claim")
     @requires(ACCOUNT_CLAIM_REJECT)
     async def reject_claim(self, ctx: Context[BotT], claim_id: int) -> None:

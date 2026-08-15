@@ -33,6 +33,30 @@ class VersionProvider:
         return tuple(candidate(name, kind="version") for name in names)
 
 
+class VersionIdReader(Protocol):
+    """Read version database ids with their display names."""
+
+    async def version_ids(self) -> Sequence[tuple[int, str]]: ...
+
+
+class VersionIdProvider:
+    """Suggest versions by name while submitting the database id the command expects."""
+
+    def __init__(self, reader: VersionIdReader) -> None:
+        self._reader = reader
+        self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
+
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        del request
+        return await self._cache.get(None)
+
+    async def _load(self, _key: None) -> tuple[Candidate, ...]:
+        return tuple(
+            candidate(str(version_id), label=name, kind="version", terms=(name, str(version_id)))
+            for version_id, name in await self._reader.version_ids()
+        )
+
+
 def _sort_key(value: str) -> tuple[bool, tuple[int, ...]]:
     """Order Java before Bedrock, and newer releases before older ones."""
     edition, _, version = value.partition(" ")

@@ -464,14 +464,37 @@ class _ServiceGraph:
 
     @cached_property
     def suggestions(self) -> SuggestionService:
+        """Suggestion sources available to every process."""
         return SuggestionService(
             build_suggestion_registry(
                 session_factory=self.db.async_session,
                 search=self.search,
                 versions=self.version_service,
                 tags=self.tags,
+                notifications=self.notifications,
+                accounts=self.accounts,
             )
         )
+
+    @cached_property
+    def bot_suggestions(self) -> SuggestionService:
+        """Suggestions plus the guild-scoped sources only the gateway process can answer."""
+        return SuggestionService(
+            build_suggestion_registry(
+                session_factory=self.db.async_session,
+                search=self.search,
+                versions=self.version_service,
+                tags=self.tags,
+                notifications=self.notifications,
+                accounts=self.accounts,
+                starboards=self.starboards,
+                permission_roles=self.permission_admin,
+            )
+        )
+
+    @cached_property
+    def starboards(self) -> StarboardService:
+        return StarboardService(PostgresStarboardRepository(self.db.async_session))
 
     @cached_property
     def search_embeddings(self) -> SearchEmbeddingService:
@@ -628,8 +651,8 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         search=graph.search,
         tags=graph.tags,
         settings=SettingsService(SettingsRepository(db.async_session)),
-        starboards=StarboardService(PostgresStarboardRepository(db.async_session)),
-        suggestions=graph.suggestions,
+        starboards=graph.starboards,
+        suggestions=graph.bot_suggestions,
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
