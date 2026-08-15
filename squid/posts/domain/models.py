@@ -8,8 +8,12 @@ from whenever import Instant
 ResourceKind = Literal["build", "vote_session", "starboard_entry"]
 """What a post renders. One kind per renderer registered with the reconciler."""
 
-Surface = Literal["build_card", "build_review", "starboard_entry"]
-"""Which presentation a post uses. Several surfaces can render the same resource kind."""
+Surface = Literal["build_card", "build_review", "vote_card", "starboard_entry"]
+"""Which presentation a post uses. Several surfaces can render the same resource kind.
+
+`build_review` and `vote_card` are both vote sessions: a review embeds the build being
+voted on, while a delete-log vote or a generic poll stands alone.
+"""
 
 
 @dataclass(frozen=True, slots=True)

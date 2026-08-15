@@ -23,7 +23,7 @@ class DiscordPost(Base, kw_only=True):
             name="discord_posts_resource_kind_check",
         ),
         CheckConstraint(
-            "surface IN ('build_card', 'build_review', 'starboard_entry')",
+            "surface IN ('build_card', 'build_review', 'vote_card', 'starboard_entry')",
             name="discord_posts_surface_check",
         ),
         CheckConstraint("applied_revision >= 0", name="discord_posts_applied_revision_check"),

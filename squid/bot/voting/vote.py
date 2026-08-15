@@ -2,7 +2,7 @@
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Literal, cast, override
+from typing import TYPE_CHECKING, cast, override
 
 import discord
 from discord import app_commands
@@ -13,11 +13,8 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import build_subject
-from squid.bot.voting.base_session import AbstractVoteSession
-from squid.bot.voting.build_session import BuildVoteSession
-from squid.bot.voting.delete_log_session import DeleteLogVoteSession
-from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import PollModal
+from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
@@ -57,28 +54,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self._background_tasks = {tracked for tracked in self._background_tasks if not tracked.finished.is_set()}
         self._background_tasks.add(handle)
 
-    async def get_vote_session(
-        self, message_id: int, *, status: Literal["open", "closed"] | None = None
-    ) -> AbstractVoteSession | GenericVoteSession | None:
-        """Gets a vote session from the database.
-
-        Args:
-            message_id: The message ID of the vote session.
-            status: The status of the vote session. If None, it will get any status.
-        """
-        snapshot = await self.vote_service.get_session(message_id)
-        if snapshot is None or (status is not None and snapshot.status != status):
-            return None
-        if snapshot.kind == "build":
-            return await BuildVoteSession.from_id(self.bot, snapshot.id)
-        if snapshot.kind == "delete_log":
-            return await DeleteLogVoteSession.from_id(self.bot, snapshot.id)
-        if snapshot.kind == "generic":
-            return await GenericVoteSession.from_id(self.bot, snapshot.id)
-        logger.error("Unknown vote session kind: %s", snapshot.kind)
-        msg = f"Unknown vote session kind: {snapshot.kind}"
-        raise NotImplementedError(msg)
-
     async def on_reaction_add(self, event: ReactionEvent) -> None:
         """Handles reactions to update vote counts anonymously."""
         payload = event.payload
@@ -86,8 +61,8 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if payload.user_id == self.bot.user.id:  # type: ignore
             return
 
-        vote_session = await self.get_vote_session(payload.message_id, status="open")
-        if vote_session is None:
+        snapshot = await self.vote_service.get_session(payload.message_id)
+        if snapshot is None or snapshot.status != "open":
             return
 
         message = await event.message()
@@ -99,9 +74,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return  # Ignore bot reactions
 
         emoji_name = str(payload.emoji)
-        snapshot = await self.vote_service.get_session(payload.message_id)
-        if snapshot is None:
-            return
         guild_options = snapshot.options_for_guild(payload.guild_id or 0)
         if emoji_name not in {option.emoji for option in guild_options}:
             return
@@ -115,7 +87,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
             self._track(remove_reaction_task)
 
-        if isinstance(vote_session, DeleteLogVoteSession) and payload.guild_id is None:
+        if snapshot.kind == "delete_log" and payload.guild_id is None:
             # Voting in DMs is not implemented
             return
 
@@ -142,7 +114,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if not result.accepted or result.session is None:
             return
 
-        vote_session.apply_persisted_state(result.session)
         if (
             snapshot.kind == "generic"
             and snapshot.poll is not None
@@ -152,7 +123,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         ):
             with contextlib.suppress(discord.NotFound, discord.Forbidden):
                 await message.remove_reaction(previous.emoji, user)
-        await vote_session.update_messages()
+        await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         """Synchronize reaction removal for polls that publicly retain reactions."""
@@ -175,8 +146,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         actor = await self._actor(member, snapshot.kind)
         result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
         if result.accepted and result.session is not None:
-            session = GenericVoteSession(self.bot, result.session)
-            await session.update_messages()
+            await self.bot.refresh_posts("vote_session", str(result.session.id))
 
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
         """Ignore reaction clears; vote sessions remove anonymous reactions eagerly."""
@@ -207,7 +177,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if not result.accepted or result.session is None:
             await ctx.send(f"Could not close poll: {result.rejection}.", ephemeral=True)
             return
-        await GenericVoteSession(self.bot, result.session).update_messages()
+        await self.bot.refresh_posts("vote_session", str(result.session.id))
         await ctx.send("Poll closed.", ephemeral=True)
 
     @vote_group.command(name="refresh")
@@ -227,7 +197,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
         result = await self.vote_service.refresh(message.id)
         if result.session is not None:
-            await GenericVoteSession(self.bot, result.session).update_messages()
+            await self.bot.refresh_posts("vote_session", str(result.session.id))
         suffix = "" if result.complete else f" Some accounts could not be resolved: {result.unresolved_account_ids}."
         await ctx.send(f"Poll weights refreshed.{suffix}", ephemeral=True)
 
@@ -328,8 +298,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
 
         async with self.bot.get_running_message(ctx, locale=locale) as message:
-            await DeleteLogVoteSession.create(
-                self.bot, [message], author_id=ctx.author.id, target_message=target_message
+            await start_delete_log_vote(
+                self.bot,
+                author_id=ctx.author.id,
+                target_message=target_message,
+                published_message=message,
             )
 
 

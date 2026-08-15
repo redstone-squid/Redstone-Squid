@@ -4,8 +4,8 @@ from math import inf, nan
 import pytest
 from whenever import Instant
 
-from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import parse_poll_duration
+from squid.bot.voting.rendering import generic_poll_text
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.voting.application import RoleVoteWeightPolicy
 from squid.voting.domain import (
@@ -106,8 +106,8 @@ def test_hidden_poll_suppresses_live_totals_and_reports_tie_at_close() -> None:
     assert snapshot.poll is not None
     hidden = replace(snapshot, poll=replace(snapshot.poll, visibility="anonymous_hidden"))
 
-    live = GenericVoteSession(None, hidden).render()  # type: ignore[arg-type]
-    closed = GenericVoteSession(None, replace(hidden, status="closed", result="cancelled")).render()  # type: ignore[arg-type]
+    live = generic_poll_text(hidden)
+    closed = generic_poll_text(replace(hidden, status="closed", result="cancelled"))
 
     assert "votes" not in live
     assert "Tie: One, Two" in closed
@@ -118,7 +118,7 @@ def test_visible_poll_lists_voters() -> None:
     assert snapshot.poll is not None
     visible = replace(snapshot, poll=replace(snapshot.poll, visibility="visible_live"))
 
-    assert "<@420>" in GenericVoteSession(None, visible).render()  # type: ignore[arg-type]
+    assert "<@420>" in generic_poll_text(visible)
 
 
 def test_binary_aliases_may_repeat_choice_but_not_emoji_per_guild() -> None:
