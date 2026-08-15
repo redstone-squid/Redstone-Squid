@@ -128,6 +128,46 @@ jsonschema-rs = { ANDROID_API_LEVEL = "24" }
 orjson = { ANDROID_API_LEVEL = "24" }
 pydantic-core = { ANDROID_API_LEVEL = "24" }
 prek = { ANDROID_API_LEVEL = "24" }
+# Three upstream build bugs block the sdist on Termux/Android; see
+# docs/plans/nucleation-android-build.md for full repro details. Each can be dropped once a
+# fixed release lands:
+#
+# 1. https://github.com/Schem-at/Nucleation/issues/38 -- The wheel's default feature set is
+#    "bridge-full", which pulls in rquickjs (scripting-js) for embedded JS scripting.
+#    rquickjs-sys 0.9.0 ships pregenerated
+#    bindgen output for a fixed target list that does not include aarch64-linux-android,
+#    so the build fails outright even though nucleation_adapter.py never touches the
+#    scripting bridge. The generated C++ bindings under src/sub_modules are NOT
+#    conditionally generated per feature -- CMakeLists.txt globs all of them in
+#    unconditionally -- so every *other* bridge-full feature must stay enabled or the
+#    link fails looking for FFI symbols (e.g. IoLayout_destroy) the Rust side never
+#    exported. scripting-js is the only feature that is both build-broken on Android and
+#    safe to drop: bridge/scripting.rs's exported symbol is unconditional and only
+#    branches internally on scripting-js/scripting-lua, so dropping just scripting-js
+#    keeps the C++/Rust symbol contract intact.
+# 2. https://github.com/Schem-at/Nucleation/issues/36 -- CMakeLists.txt links the compiled
+#    extension against `${Python3_SABI_LIBRARY}`, but it calls `find_package(Python ...)`
+#    (singular), which populates `Python_SABI_LIBRARY` -- the `Python3_`-prefixed variable
+#    is never set, so the module links with no libpython dependency at all. glibc Linux
+#    hides this: the main Python executable
+#    already exports CPython's C-API symbols globally, so the extension resolves them at
+#    load time regardless. Android's bionic linker does not do that implicit resolution,
+#    so the resulting .so fails to import with "dlopen failed: cannot locate symbol
+#    PyExc_ImportError". CMAKE_ARGS is scikit-build-core's documented passthrough for
+#    extra `-D` args; supplying the variable under its real (buggy) name at the command
+#    line forces cmake to pick it up even on an incremental reconfigure of the cached
+#    build dir, where an env-seeded value would be ignored once already cached. The
+#    unversioned libpython3.so is Termux's stable-ABI shim (not tied to a Python minor
+#    version), matching what `Python_SABI_LIBRARY` would have resolved to.
+# 3. https://github.com/Schem-at/Nucleation/issues/37 -- The `rendering` feature links wgpu,
+#    whose Android GPU backend calls ANativeWindow_* (surface creation) from libandroid.so.
+#    CMakeLists.txt links platform system libraries for WIN32 and APPLE but has no ANDROID
+#    branch, so the link leaves those calls
+#    unresolved; same glibc-hides-it/bionic-doesn't split as the SABI library above.
+#    nanobind_add_module builds a CMake MODULE library (it's dlopen'd, never linked
+#    against directly), so the flag belongs on CMAKE_MODULE_LINKER_FLAGS --
+#    CMAKE_SHARED_LINKER_FLAGS silently does not apply to MODULE targets.
+nucleation = { NUCLEATION_FEATURES = "bridge,meshing,simulation,rendering,scripting-lua,voxelize,world-segment,store-ssh,mc-tick,routing,hdl", CMAKE_ARGS = "-DPython3_SABI_LIBRARY=/data/data/com.termux/files/usr/lib/libpython3.so -DCMAKE_MODULE_LINKER_FLAGS=-landroid" }
 # Pyrefly also enables LTO for releases; rustc's LLVM backend exceeds the memory available on
 # Android while linking the binary built in place of the unavailable platform wheel.
 pyrefly = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
