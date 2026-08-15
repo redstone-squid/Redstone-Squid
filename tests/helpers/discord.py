@@ -44,6 +44,64 @@ def make_interaction(
     return InteractionHarness(interaction, send_initial, send_followup)
 
 
+def make_autocomplete_interaction(
+    suggestions: object,
+    *,
+    user_id: int = 1,
+    guild_id: int | None = None,
+    locale: str = "en-US",
+    account_id: int = 11,
+    allowed_nodes: frozenset[str] = frozenset(),
+) -> discord.Interaction[discord.Client]:
+    """Create the interaction contract an autocomplete callback reads.
+
+    Unlike `make_interaction`, this carries a client with a services container, because an
+    autocomplete callback answers from `bot.services.suggestions` rather than from a cog.
+    `allowed_nodes` is what the permission engine would grant this user.
+    """
+
+    async def decisions(subject: object, nodes: object) -> tuple[object, ...]:
+        del subject
+        return tuple(
+            SimpleNamespace(node=node, allowed=node in allowed_nodes, reason=None)
+            for node in cast(tuple[object, ...], nodes)
+        )
+
+    async def permission_allows(subject: object, node: object) -> bool:
+        del subject
+        return str(getattr(node, "name", node)) in allowed_nodes
+
+    async def resolve_account(accounts: object, discord_id: int) -> int:
+        del accounts, discord_id
+        return account_id
+
+    async def is_owner(user: object) -> bool:
+        del user
+        return False
+
+    client = SimpleNamespace(
+        services=SimpleNamespace(
+            suggestions=suggestions,
+            permissions=SimpleNamespace(allows=permission_allows, decisions=decisions),
+            accounts=SimpleNamespace(),
+        ),
+        account_ids=SimpleNamespace(resolve=resolve_account),
+        is_owner=is_owner,
+    )
+    return cast(
+        discord.Interaction[discord.Client],
+        SimpleNamespace(
+            client=client,
+            user=SimpleNamespace(id=user_id),
+            guild=None,
+            guild_id=guild_id,
+            locale=locale,
+            channel_id=2,
+            command=None,
+        ),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class MessageHarness:
     """A message together with its observable edit method."""
