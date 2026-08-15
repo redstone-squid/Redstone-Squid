@@ -320,6 +320,15 @@ def _document_sources(repository: PostgresSuggestionRepository) -> tuple[Suggest
             kind_label="build",
         ),
         SuggestionSource(
+            # Titles rather than ids: this backs a free-text search box, where the answer is words
+            # to search for.
+            id="build_titles",
+            provider=DocumentProvider(
+                repository, "build", statuses=PUBLIC_BUILD_STATUSES, kind_label="build", by_title=True
+            ),
+            kind_label="build",
+        ),
+        SuggestionSource(
             id="records",
             provider=DocumentProvider(repository, "record", kind_label="record"),
             kind_label="record",

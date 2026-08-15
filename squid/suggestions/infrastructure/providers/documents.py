@@ -36,11 +36,13 @@ class DocumentProvider:
         *,
         statuses: Collection[str] | None = None,
         kind_label: str = "",
+        by_title: bool = False,
     ) -> None:
         self._reader = reader
         self._resource_kind = resource_kind
         self._statuses = statuses
         self._kind_label = kind_label or resource_kind
+        self._by_title = by_title
 
     async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
         entries = await self._reader.documents(
@@ -52,8 +54,10 @@ class DocumentProvider:
         return SuggestionResult(
             items=tuple(
                 Suggestion(
-                    value=entry.source_key,
-                    label=_label(entry),
+                    # A free-text search box wants words to search for; a command parameter that
+                    # names one build wants its identifier. Same rows, different answer.
+                    value=entry.title if self._by_title else entry.source_key,
+                    label=entry.title if self._by_title else _label(entry),
                     description=entry.subtitle,
                     kind=self._kind_label,
                 )
