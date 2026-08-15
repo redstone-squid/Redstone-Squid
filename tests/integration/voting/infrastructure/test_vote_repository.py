@@ -1,111 +1,94 @@
 import asyncio
 from collections.abc import AsyncGenerator, Mapping
+from typing import cast
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import Table, insert, text
 from sqlalchemy.exc import StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-# Register the account FK target in Base metadata for this intentionally minimal schema.
-from squid.accounts.infrastructure.models import Account as _Account  # noqa: F401
+from squid.accounts.infrastructure.models import Account
+from squid.messages.infrastructure.models import Message
+from squid.persistence.base import Base
+from squid.settings.infrastructure.models import ServerSetting
 from squid.voting.domain import DEFAULT_VOTE_OPTIONS, StoredVoteMutation, VoteChoice, VoteOption, VoteTarget
+from squid.voting.infrastructure.models import (
+    BuildVoteSession,
+    DeleteLogVoteSession,
+    GenericVoteSession,
+    Vote,
+    VoteSession,
+    VoteSessionOption,
+)
 from squid.voting.infrastructure.repository import VoteRepository
+from tests.helpers.schema import with_foreign_key_targets
 
-_CREATE_SCHEMA = """
-CREATE TABLE vote_sessions (
-    id BIGSERIAL PRIMARY KEY,
-    status VARCHAR NOT NULL,
-    result VARCHAR NOT NULL,
-    author_account_id BIGINT NOT NULL,
-    kind VARCHAR NOT NULL,
-    pass_threshold INTEGER NOT NULL,
-    fail_threshold INTEGER NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE TABLE vote_session_options (
-    vote_session_id BIGINT REFERENCES vote_sessions(id) ON DELETE CASCADE,
-    identifier VARCHAR NOT NULL,
-    guild_id BIGINT NOT NULL DEFAULT 0,
-    emoji VARCHAR NOT NULL,
-    choice VARCHAR NOT NULL CHECK (choice IN ('approve', 'deny', 'generic')),
-    label VARCHAR,
-    multiplier DOUBLE PRECISION NOT NULL,
-    position SMALLINT NOT NULL,
-    PRIMARY KEY (vote_session_id, guild_id, emoji),
-    UNIQUE (vote_session_id, guild_id, position),
-    CHECK (
-        multiplier > 0
-        AND multiplier != 'Infinity'::double precision
-        AND multiplier != 'NaN'::double precision
-    ),
-    CHECK (position >= 0)
-);
-CREATE TABLE delete_log_vote_sessions (
-    vote_session_id BIGINT PRIMARY KEY REFERENCES vote_sessions(id) ON DELETE CASCADE,
-    target_message_id BIGINT NOT NULL,
-    target_channel_id BIGINT NOT NULL,
-    target_server_id BIGINT NOT NULL
-);
-CREATE TABLE build_vote_sessions (
-    vote_session_id BIGINT PRIMARY KEY REFERENCES vote_sessions(id) ON DELETE CASCADE,
-    build_id BIGINT NOT NULL,
-    changes JSONB NOT NULL
-);
-CREATE TABLE generic_vote_sessions (
-    vote_session_id BIGINT PRIMARY KEY REFERENCES vote_sessions(id) ON DELETE CASCADE,
-    guild_id BIGINT NOT NULL,
-    question VARCHAR NOT NULL,
-    visibility VARCHAR NOT NULL,
-    deadline TIMESTAMPTZ NOT NULL
-);
-CREATE TABLE messages (
-    id BIGINT PRIMARY KEY,
-    server_id BIGINT NOT NULL,
-    channel_id BIGINT,
-    author_id BIGINT NOT NULL,
-    purpose VARCHAR NOT NULL,
-    content VARCHAR,
-    build_id BIGINT,
-    vote_session_id BIGINT REFERENCES vote_sessions(id),
-    projection_resource_kind VARCHAR,
-    projection_source_key VARCHAR,
-    desired_action VARCHAR NOT NULL DEFAULT 'refresh',
-    desired_revision BIGINT NOT NULL DEFAULT 1,
-    applied_revision BIGINT NOT NULL DEFAULT 1,
-    updated_at TIMESTAMPTZ DEFAULT now()
-);
-CREATE TABLE votes (
-    vote_session_id BIGINT REFERENCES vote_sessions(id) ON DELETE CASCADE,
-    account_id BIGINT NOT NULL,
-    discord_id BIGINT NOT NULL,
-    guild_id BIGINT NOT NULL,
-    option_id VARCHAR NOT NULL,
-    emoji VARCHAR NOT NULL,
-    weight DOUBLE PRECISION NOT NULL CHECK (weight > 0),
-    PRIMARY KEY (vote_session_id, account_id)
-);
-"""
+GUILD_ID = 503
+CHANNEL_ID = 502
+TARGET_MESSAGE_ID = 501
+AUTHOR_ACCOUNT_IDS = (99, 100)
+VOTER_ACCOUNT_IDS = (7, 8)
 
-_DROP_SCHEMA = """
-DROP TABLE IF EXISTS
-    votes, messages, generic_vote_sessions, build_vote_sessions, delete_log_vote_sessions,
-    vote_session_options, vote_sessions CASCADE;
-"""
+_TABLES: tuple[Table, ...] = with_foreign_key_targets(
+    cast(Table, VoteSession.__table__),
+    cast(Table, VoteSessionOption.__table__),
+    cast(Table, BuildVoteSession.__table__),
+    cast(Table, DeleteLogVoteSession.__table__),
+    cast(Table, GenericVoteSession.__table__),
+    cast(Table, Vote.__table__),
+    cast(Table, Message.__table__),
+)
 
 
 @pytest.fixture(autouse=True)
 async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
-    """Create the minimal production-shaped schema needed by the custom repository."""
+    """Create the voting tables from the models rather than from a hand-written copy.
+
+    The DDL this replaces had to be edited by hand every time a voting column changed,
+    and any column it forgot was one the repository was never tested against. Building
+    from the real metadata means the constraints under test are the shipped ones.
+    """
     async with async_engine.begin() as connection:
-        for statement in _CREATE_SCHEMA.strip().split(";"):
-            if statement.strip():
-                await connection.execute(text(statement))
+        await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
         yield
     finally:
         async with async_engine.begin() as connection:
-            await connection.execute(text(_DROP_SCHEMA))
+            await connection.run_sync(Base.metadata.drop_all, tables=tuple(reversed(_TABLES)))
+
+
+@pytest.fixture(autouse=True)
+async def referenced_rows(
+    vote_schema: None, async_session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Satisfy the account and guild foreign keys the real schema declares.
+
+    Written through the mapped tables so the ids stay the fixed literals the assertions
+    read, which `Account`'s generated primary key does not allow through the ORM.
+    """
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            insert(Account).values([{"id": account_id} for account_id in (*AUTHOR_ACCOUNT_IDS, *VOTER_ACCOUNT_IDS)])
+        )
+        await session.execute(insert(ServerSetting).values(server_id=GUILD_ID))
+
+
+async def attach_vote_message(
+    session: AsyncSession, *, message_id: int, vote_session_id: int, content: str | None = None
+) -> None:
+    """Register the Discord message a vote session is rendered on."""
+    await session.execute(
+        insert(Message).values(
+            id=message_id,
+            server_id=GUILD_ID,
+            channel_id=CHANNEL_ID,
+            author_id=AUTHOR_ACCOUNT_IDS[0],
+            purpose="vote",
+            content=content,
+            vote_session_id=vote_session_id,
+        )
+    )
 
 
 async def seed_delete_log_vote(
@@ -115,87 +98,102 @@ async def seed_delete_log_vote(
     fail_threshold: int = -3,
     votes: Mapping[int, float] | None = None,
 ) -> tuple[int, int]:
-    """Persist an open delete-log vote session and return its session/message IDs."""
+    """Persist an open delete-log vote session and return its session/message IDs.
+
+    Written against the mapped tables rather than the repository under test: these rows
+    stand in for sessions an earlier release created, so building them through the code
+    being tested would make several of these tests tautological.
+    """
     async with session_factory.begin() as session:
         vote_session_id = (
             await session.execute(
-                text(
-                    """
-                    INSERT INTO vote_sessions
-                        (status, result, author_account_id, kind, pass_threshold, fail_threshold)
-                    VALUES
-                        ('open', 'pending', 99, 'delete_log', :pass_threshold, :fail_threshold)
-                    RETURNING id
-                    """
-                ),
-                {"pass_threshold": pass_threshold, "fail_threshold": fail_threshold},
+                insert(VoteSession)
+                .values(
+                    status="open",
+                    result="pending",
+                    author_account_id=AUTHOR_ACCOUNT_IDS[0],
+                    kind="delete_log",
+                    pass_threshold=pass_threshold,
+                    fail_threshold=fail_threshold,
+                )
+                .returning(VoteSession.id)
             )
         ).scalar_one()
         message_id = 1_000 + vote_session_id
+        # Projected from the domain defaults rather than restated, so that the
+        # `snapshot.options == DEFAULT_VOTE_OPTIONS` assertions below prove a round trip
+        # instead of comparing two hand-written copies of the same four options.
         await session.execute(
-            text(
-                """
-                INSERT INTO vote_session_options
-                    (vote_session_id, identifier, guild_id, emoji, choice, multiplier, position)
-                VALUES
-                    (:vote_session_id, 'approve', 0, '👍', 'approve', 1.0, 0),
-                    (:vote_session_id, 'approve', 0, '✅', 'approve', 1.0, 1),
-                    (:vote_session_id, 'deny', 0, '👎', 'deny', 1.0, 2),
-                    (:vote_session_id, 'deny', 0, '❌', 'deny', 1.0, 3)
-                """
-            ),
-            {"vote_session_id": vote_session_id},
+            insert(VoteSessionOption),
+            [
+                {
+                    "vote_session_id": vote_session_id,
+                    "identifier": option.identifier,
+                    "guild_id": option.guild_id or 0,
+                    "emoji": option.emoji,
+                    "choice": option.choice.value,
+                    "multiplier": option.multiplier,
+                    "position": option.position,
+                }
+                for option in DEFAULT_VOTE_OPTIONS
+            ],
         )
         await session.execute(
-            text(
-                """
-                INSERT INTO delete_log_vote_sessions
-                    (vote_session_id, target_message_id, target_channel_id, target_server_id)
-                VALUES
-                    (:vote_session_id, 501, 502, 503)
-                """
-            ),
-            {"vote_session_id": vote_session_id},
+            insert(DeleteLogVoteSession).values(
+                vote_session_id=vote_session_id,
+                target_message_id=TARGET_MESSAGE_ID,
+                target_channel_id=CHANNEL_ID,
+                target_server_id=GUILD_ID,
+            )
         )
-        await session.execute(
-            text(
-                """
-                INSERT INTO messages
-                    (id, server_id, channel_id, author_id, purpose, content, vote_session_id)
-                VALUES
-                    (:message_id, 503, 502, 99, 'vote', 'Vote now', :vote_session_id)
-                """
-            ),
-            {"message_id": message_id, "vote_session_id": vote_session_id},
+        await attach_vote_message(
+            session, message_id=message_id, vote_session_id=vote_session_id, content="Vote now"
         )
         if votes:
             await session.execute(
-                text(
-                    """
-                    INSERT INTO votes
-                        (vote_session_id, account_id, discord_id, guild_id, option_id, emoji, weight)
-                    VALUES (
-                        :vote_session_id,
-                        :account_id,
-                        :discord_id,
-                        503,
-                        CASE WHEN :weight < 0 THEN 'deny' ELSE 'approve' END,
-                        CASE WHEN :weight < 0 THEN '👎' ELSE '👍' END,
-                        abs(:weight)
-                    )
-                    """
-                ),
+                insert(Vote),
                 [
                     {
                         "vote_session_id": vote_session_id,
                         "account_id": account_id,
                         "discord_id": account_id * 10,
-                        "weight": weight,
+                        "guild_id": GUILD_ID,
+                        "option_id": "deny" if weight < 0 else "approve",
+                        "emoji": "👎" if weight < 0 else "👍",
+                        "weight": abs(weight),
                     }
                     for account_id, weight in votes.items()
                 ],
             )
     return vote_session_id, message_id
+
+
+async def seed_generic_poll(
+    session_factory: async_sessionmaker[AsyncSession],
+    repository: VoteRepository,
+    *,
+    question: str,
+    visibility: str,
+    deadline: Instant,
+    options: tuple[VoteOption, ...],
+) -> tuple[int, int]:
+    """Open a generic poll through the repository and put a message on it.
+
+    Every value a test asserts on stays in the caller's hands; only the message row,
+    which no assertion reads, lives here.
+    """
+    session_id = await repository.create_generic_session(
+        author_account_id=AUTHOR_ACCOUNT_IDS[0],
+        guild_id=GUILD_ID,
+        question=question,
+        visibility=visibility,
+        deadline=deadline,
+        options=options,
+    )
+    message_id = 10_000 + session_id
+    async with session_factory.begin() as session:
+        await attach_vote_message(session, message_id=message_id, vote_session_id=session_id)
+    return session_id, message_id
 
 
 async def test_vote_aggregates_are_persisted_by_repository(
@@ -386,9 +384,9 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
     )
     repository = VoteRepository(async_session_factory)
 
-    inserted = await repository.cast_vote(message_id, 7, 70, 503, "approve", "👍", 1.0)
-    replaced = await repository.cast_vote(message_id, 7, 70, 503, "deny", "👎", 1.0)
-    removed = await repository.cast_vote(message_id, 7, 70, 503, "deny", "👎", 1.0)
+    inserted = await repository.cast_vote(message_id, 7, 70, GUILD_ID, "approve", "👍", 1.0)
+    replaced = await repository.cast_vote(message_id, 7, 70, GUILD_ID, "deny", "👎", 1.0)
+    removed = await repository.cast_vote(message_id, 7, 70, GUILD_ID, "deny", "👎", 1.0)
 
     assert inserted is not None
     assert (inserted.previous_weight, inserted.current_weight) == (None, 1.0)
@@ -416,7 +414,7 @@ async def test_cast_vote_closes_at_either_threshold(
     repository = VoteRepository(async_session_factory)
 
     option_id, emoji = ("approve", "👍") if desired_weight > 0 else ("deny", "👎")
-    mutation = await repository.cast_vote(message_id, 7, 70, 503, option_id, emoji, abs(desired_weight))
+    mutation = await repository.cast_vote(message_id, 7, 70, GUILD_ID, option_id, emoji, abs(desired_weight))
 
     assert mutation is not None
     assert mutation.just_closed
@@ -435,8 +433,8 @@ async def test_concurrent_votes_report_exactly_one_closure(
     repository = VoteRepository(async_session_factory)
 
     results = await asyncio.gather(
-        repository.cast_vote(message_id, 7, 70, 503, "approve", "👍", 1.0),
-        repository.cast_vote(message_id, 8, 80, 503, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 7, 70, GUILD_ID, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 8, 80, GUILD_ID, "approve", "👍", 1.0),
     )
 
     mutations = [result for result in results if isinstance(result, StoredVoteMutation)]
@@ -454,33 +452,21 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     repository = VoteRepository(async_session_factory)
-    options = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=503, label="One"),
-        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=503, label="Two"),
-    )
-    deadline = Instant.now().subtract(seconds=1)
-    session_id = await repository.create_generic_session(
-        author_account_id=99,
-        guild_id=503,
+    session_id, message_id = await seed_generic_poll(
+        async_session_factory,
+        repository,
         question="Choose one",
         visibility="anonymous_hidden",
-        deadline=deadline,
-        options=options,
+        # Already past, so the poll is due the moment it opens.
+        deadline=Instant.now().subtract(seconds=1),
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=GUILD_ID, label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
+        ),
     )
-    message_id = 10_000 + session_id
-    async with async_session_factory.begin() as session:
-        await session.execute(
-            text(
-                """
-                INSERT INTO messages (id, server_id, channel_id, author_id, purpose, vote_session_id)
-                VALUES (:message_id, 503, 502, 99, 'vote', :session_id)
-                """
-            ),
-            {"message_id": message_id, "session_id": session_id},
-        )
 
-    await repository.cast_vote(message_id, 7, 70, 503, "one", "1️⃣", 3)
-    await repository.cast_vote(message_id, 8, 80, 503, "two", "2️⃣", 1)
+    await repository.cast_vote(message_id, 7, 70, GUILD_ID, "one", "1️⃣", 3)
+    await repository.cast_vote(message_id, 8, 80, GUILD_ID, "two", "2️⃣", 1)
     snapshot = await repository.get_by_message(message_id)
 
     assert snapshot is not None
