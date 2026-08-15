@@ -80,8 +80,6 @@ class SchematicStore(Protocol):
 
     async def get_file(self, sha256: str) -> bytes | None: ...
 
-    async def maintain_storage(self, *, limit: int = 20) -> tuple[int, int]: ...
-
     async def record_analysis(
         self,
         build_id: int,
