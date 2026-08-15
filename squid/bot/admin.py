@@ -10,6 +10,7 @@ from discord.ext.commands import Context, Greedy
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
@@ -44,6 +45,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Propose, apply, and review build tags."""
         await ctx.send_help("tag")
 
+    @autocompletes(query_name="search_fields")
     @tag_group.command(name="propose")
     @app_commands.describe(
         name=app_commands.locale_str(_("Public display name.")),
@@ -74,6 +76,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(build_id="builds", tag_id="showcase_tag_ids")
     @tag_group.command(name="apply")
     @app_commands.describe(
         build_id=app_commands.locale_str(_("A build you submitted.")),
@@ -123,6 +126,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(tag_id="tags_pending")
     @tag_group.command(name="approve")
     @requires(TAG_PROPOSAL_APPROVE)
     async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
@@ -137,6 +141,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(tag_id="tags_pending")
     @tag_group.command(name="reject")
     @requires(TAG_PROPOSAL_REJECT)
     async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
@@ -151,6 +156,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(tag_id="showcase_tag_ids")
     @tag_group.command(name="archive")
     @requires(TAG_PROPOSAL_ARCHIVE)
     async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:

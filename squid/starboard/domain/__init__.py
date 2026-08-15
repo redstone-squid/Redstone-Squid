@@ -1,6 +1,7 @@
 """Public starboard domain API."""
 
 from squid.starboard.domain.models import (
+    EDITABLE_SETTINGS,
     EntryAction,
     OriginMessage,
     StarboardConfig,
@@ -15,6 +16,7 @@ from squid.starboard.domain.models import (
 )
 
 __all__ = [
+    "EDITABLE_SETTINGS",
     "EntryAction",
     "OriginMessage",
     "StarboardConfig",

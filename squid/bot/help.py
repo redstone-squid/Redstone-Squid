@@ -8,12 +8,13 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
-from rapidfuzz import process
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import CardField, CardSection, error_layout, help_layout, no_mentions
 from squid.config import BuildConfig
 from squid.core.i18n import _
+from squid.suggestions.application import candidate, rank
+from squid.suggestions.domain import MAX_SUGGESTIONS
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -107,22 +108,24 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def command_autocomplete(
         self, _interaction: discord.Interaction[BotT], needle: str
     ) -> list[app_commands.Choice[str]]:
+        """Complete a command or cog name.
+
+        Not a registry source: the candidates are this process's loaded command tree, which no
+        other surface can see. It still ranks through the shared matcher so `/help` orders results
+        the same way every other autocomplete does.
+        """
         if not needle:
             return [
                 app_commands.Choice(name=cog_name, value=cog_name)
                 for cog_name, cog in self.bot.cogs.items()
                 if cog.get_commands()
-            ][:25]
+            ][:MAX_SUGGESTIONS]
 
-        commands = [command.qualified_name for command in self.bot.walk_commands()]
-
-        matches = process.extract(
-            needle,
-            commands,
-            limit=25,
-            score_cutoff=30,
-        )
-        return [app_commands.Choice(name=match[0], value=match[0]) for match in matches]
+        candidates = [candidate(command.qualified_name) for command in self.bot.walk_commands()]
+        return [
+            app_commands.Choice(name=match.label, value=match.value)
+            for match in rank(needle, candidates, limit=MAX_SUGGESTIONS)
+        ]
 
 
 class Help(commands.MinimalHelpCommand):

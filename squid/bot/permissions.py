@@ -14,6 +14,7 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import build_subject, requires, subject_for
 from squid.core.errors import ValidationError
@@ -88,6 +89,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         """Inspect and grant permissions."""
         await ctx.send_help("perm")
 
+    @autocompletes(search="permission_nodes")
     @perm_group.command(name="nodes")
     @requires(PERM_NODE_VIEW)
     @app_commands.describe(search=app_commands.locale_str(_("Only show nodes containing this text.")))
@@ -104,12 +106,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         ]
         await self._reply(ctx, _("Permission nodes ({page}/{pages})").format(page=page, pages=pages), "\n".join(lines))
 
-    @nodes.autocomplete("search")
-    async def _node_autocomplete(
-        self, _interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return _pattern_choices(current)
-
+    @autocompletes(pattern="permission_patterns")
     @perm_group.command(name="grant")
     @requires(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL, mode="any")
     @app_commands.describe(
@@ -129,6 +126,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         """Allow a user or Discord role to use a permission."""
         await self._write(ctx, user, role, pattern, scope, Effect.ALLOW, reason)
 
+    @autocompletes(pattern="permission_patterns")
     @perm_group.command(name="deny")
     @requires(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL, mode="any")
     async def deny(
@@ -144,6 +142,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         """Deny a permission. A more specific allow still wins; use forbid for an absolute stop."""
         await self._write(ctx, user, role, pattern, scope, Effect.DENY, reason)
 
+    @autocompletes(pattern="permission_patterns")
     @perm_group.command(name="forbid")
     @requires(PERM_GRANT_GLOBAL)
     async def forbid(
@@ -190,6 +189,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
             f"{effect_label(int(effect))} `{pattern}` for {subject} ({scope_label(self._scope(ctx, scope))})",
         )
 
+    @autocompletes(pattern="permission_patterns")
     @perm_group.command(name="revoke")
     @requires(PERM_GRANT_GUILD, PERM_GRANT_GLOBAL, mode="any")
     async def revoke(
@@ -242,6 +242,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         ]
         await self._reply(ctx, _("Permission rules"), "\n".join(lines))
 
+    @autocompletes(node="permission_nodes")
     @perm_group.command(name="explain")
     @requires(PERM_SUBJECT_INSPECT)
     async def explain(self, ctx: Context[BotT], user: discord.Member, node: str) -> None:
@@ -250,15 +251,6 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         decision = await self.bot.services.permissions.check(subject, node)
         await self._reply(ctx, _("Permission decision"), render_decision(decision, user.display_name))
 
-    @explain.autocomplete("node")
-    @grant.autocomplete("pattern")
-    @deny.autocomplete("pattern")
-    @revoke.autocomplete("pattern")
-    async def _pattern_autocomplete(
-        self, _interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return _pattern_choices(current)
-
     @perm_group.command(name="whoami")
     @requires(PERM_NODE_VIEW)
     async def whoami(self, ctx: Context[BotT]) -> None:
@@ -266,6 +258,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         held = await self.bot.services.permissions.capabilities(await subject_for(ctx), CATALOGUE)
         await self._reply(ctx, _("Your permissions"), "\n".join(f"`{name}`" for name in sorted(held)))
 
+    @autocompletes(node="permission_nodes")
     @perm_group.command(name="test")
     @requires(PERM_SUBJECT_INSPECT)
     async def test(self, ctx: Context[BotT], user: discord.Member, node: str) -> None:
@@ -313,6 +306,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         ]
         await self._reply(ctx, _("Permission roles"), "\n".join(lines))
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="show")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def show_role(self, ctx: Context[BotT], slug: str) -> None:
@@ -358,6 +352,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         )
         await self._reply(ctx, _("Role created"), f"`{role.slug}` at rank {role.rank}")
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="delete")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def delete_role(self, ctx: Context[BotT], slug: str) -> None:
@@ -367,12 +362,20 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         removed = await self.admin.delete_role(actor, await self.admin.role(slug, guild_id=guild_id))
         await self._reply(ctx, _("Role deleted") if removed else _("Role unchanged"), f"`{slug}`")
 
+    @autocompletes(
+        slug=suggests("permission_roles", context=guild_context),
+        pattern="permission_patterns",
+    )
     @role_group.command(name="include")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def include(self, ctx: Context[BotT], slug: str, pattern: str) -> None:
         """Add a permission pattern to a role."""
         await self._pattern(ctx, slug, pattern, INCLUDE_MODE, _("Role includes `{pattern}`"))
 
+    @autocompletes(
+        slug=suggests("permission_roles", context=guild_context),
+        pattern="permission_patterns",
+    )
     @role_group.command(name="exclude")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def exclude(self, ctx: Context[BotT], slug: str, pattern: str) -> None:
@@ -386,6 +389,10 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         await self.admin.add_pattern(actor, role, pattern, mode=mode)
         await self._reply(ctx, _("Role updated"), str(message).format(pattern=pattern))
 
+    @autocompletes(
+        slug=suggests("permission_roles", context=guild_context),
+        pattern="permission_patterns",
+    )
     @role_group.command(name="remove-pattern")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def remove_pattern(self, ctx: Context[BotT], slug: str, pattern: str) -> None:
@@ -396,6 +403,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         removed = await self.admin.remove_pattern(actor, role, pattern)
         await self._reply(ctx, _("Role updated") if removed else _("Role unchanged"), f"`{pattern}`")
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="add-role")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def add_role(self, ctx: Context[BotT], slug: str, included: str) -> None:
@@ -409,6 +417,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         )
         await self._reply(ctx, _("Role updated"), f"`{slug}` now includes `{included}`")
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="remove-role")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def remove_role(self, ctx: Context[BotT], slug: str, included: str) -> None:
@@ -422,6 +431,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         )
         await self._reply(ctx, _("Role updated") if removed else _("Role unchanged"), f"`{slug}` / `{included}`")
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="rank")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def rank(self, ctx: Context[BotT], slug: str, rank: int) -> None:
@@ -431,6 +441,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         await self.admin.set_rank(actor, await self.admin.role(slug, guild_id=guild_id), rank)
         await self._reply(ctx, _("Role updated"), f"`{slug}` is now rank {rank}")
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="assign")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def assign(
@@ -457,6 +468,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         )
         await self._reply(ctx, _("Role assigned"), f"`{slug}`")
 
+    @autocompletes(slug=suggests("permission_roles", context=guild_context))
     @role_group.command(name="unassign")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
     async def unassign(
@@ -481,19 +493,6 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
             scope_guild_id=self._scope(ctx, scope),
         )
         await self._reply(ctx, _("Role unassigned") if removed else _("Nothing changed"), f"`{slug}`")
-
-
-def _pattern_choices(current: str) -> list[app_commands.Choice[str]]:
-    """Leaves, their wildcard ancestors, and tag selectors, filtered by what was typed."""
-    candidates: list[str] = []
-    for node in CATALOGUE:
-        candidates.append(node.name)
-        segments = node.name.split(".")
-        candidates.extend(f"{'.'.join(segments[:depth])}.**" for depth in range(1, len(segments)))
-        candidates.extend(f"@{tag.value}" for tag in node.tags)
-    candidates.append("**")
-    unique = sorted({candidate for candidate in candidates if current.lower() in candidate.lower()})
-    return [app_commands.Choice(name=candidate, value=candidate) for candidate in unique[:25]]
 
 
 def render_decision(decision, subject_label: str) -> str:

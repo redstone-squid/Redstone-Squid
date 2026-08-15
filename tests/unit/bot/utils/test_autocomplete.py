@@ -142,6 +142,20 @@ async def test_multi_value_shows_the_committed_prefix_in_the_label() -> None:
     assert first.name == "full_lamp,seamless"
 
 
+async def test_an_integer_source_in_multi_mode_still_yields_string_values() -> None:
+    """A comma-separated list of ids is a string parameter, whatever the entries are."""
+    source = SuggestionSource(
+        id="restriction_ids",
+        provider=StaticProvider.labelled([("3", "Seamless"), ("7", "Full Lamp")]),
+        value_type=ValueType.INTEGER,
+        multi_value=",",
+    )
+    interaction = make_autocomplete_interaction(service_with(source))
+    (choice,) = await suggests("restriction_ids", multi=True)(interaction, "3, lamp")
+    assert choice.value == "3,7"
+    assert isinstance(choice.value, str)
+
+
 async def test_without_multi_the_whole_input_is_the_query() -> None:
     provider = RecordingProvider()
     source = SuggestionSource(id="approved_restrictions", provider=provider, multi_value=",")

@@ -8,6 +8,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ext.commands.bot import app_commands
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import info_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
@@ -37,6 +38,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(version_string="approved_source_versions")
     @version_group.command(name="add")
     @requires(VERSION_ENTRY_CREATE)
     @app_commands.rename(version_string="version")

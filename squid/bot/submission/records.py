@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
@@ -77,6 +78,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(current_version_id="version_ids")
     @admin_group.command(name="records-rebuild")
     @requires(RECORD_ENTRY_REBUILD)
     @app_commands.describe(
@@ -111,6 +113,11 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
+    @autocompletes(
+        base_key="record_base_keys",
+        version_id="version_ids",
+        restrictions=suggests("restriction_ids", multi=True),
+    )
     @admin_group.command(name="records-lookup")
     @requires(RECORD_ENTRY_INSPECT)
     @commands.cooldown(2, 60, commands.BucketType.user)
