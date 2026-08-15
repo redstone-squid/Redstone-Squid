@@ -13,3 +13,5 @@ The scripts in `migrations/` are used to provide additional information accompan
 `setup-codex-cloud-env.sh` prepares a new Codex Cloud environment. Configure it as the setup script with `bash scripts/setup-codex-cloud-env.sh`. Configure `codex-cloud-maintenance.sh` with `bash scripts/codex-cloud-maintenance.sh` as the maintenance script to refresh the locked dependencies when a cached environment resumes.
 
 `just dependency-report` exports a CycloneDX 1.5 software bill of materials from `uv.lock`. `just gha-analysis` analyzes GitHub Actions workflows with `zizmor` and requires an authenticated `gh` CLI. `just visualize-dependencies` writes an SVG dependency graph to `docs/dependencies.svg`.
+
+`android-link-with-libpython3.sh` is not meant to be run directly; it's a cargo linker override (wired in via `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` in `pyproject.toml`'s `[tool.uv.extra-build-variables]`) that gets PyO3 extension modules (`cryptography`, `jsonschema-rs`) to actually link against Termux's `libpython3.so` when built from source on Android. See the script's own header comment for why this is needed.

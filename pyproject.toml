@@ -121,10 +121,36 @@ exclude-newer = "7 days"
 exclude-newer-package = { nucleation = "2026-08-16T00:00:00Z" }
 
 [tool.uv.extra-build-variables]
-cryptography = { ANDROID_API_LEVEL = "24" }
+# cryptography and jsonschema-rs are PyO3 extension modules. pyo3-ffi's build script already
+# detects Android correctly and emits `cargo:rustc-link-lib=python3` -- pyo3-build-config
+# special-cases target.environment == Android specifically because it knows the glibc trick
+# (resolving CPython C-API symbols from the already-running process without an explicit NEEDED
+# entry) doesn't work on bionic. Same failure mode as nucleation's Python3_SABI_LIBRARY bug
+# (see docs/plans/nucleation-android-build.md), different cause: the modules fail to import
+# with "dlopen failed: cannot locate symbol PyLong_Type" (jsonschema-rs: _Py_TrueStruct).
+#
+# `-lpython3` genuinely reaches the final linker invocation -- confirmed by capturing the
+# actual argv cargo invokes the linker with, via `maturin build -vv` run directly against the
+# same source tree uv builds from. But Termux's default clang/lld toolchain links with
+# --as-needed active, and nothing earlier on that argv (dozens of .rlib archives, then
+# `-lssl -lcrypto -ldl -llog -lunwind -ldl -lm -lc`, then `-nodefaultlibs`) leaves an
+# unresolved symbol at the point `-lpython3` is processed, so the linker silently drops it
+# from DT_NEEDED even though PyLong_Type et al. are genuinely referenced elsewhere in the
+# same object code. RUSTFLAGS and CARGO_ENCODED_RUSTFLAGS were both tried first (simpler, no
+# wrapper script needed) and both still produced an unlinked .so -- consistent with the same
+# elision landing on whichever position the flag ends up in, not a maturin/cargo propagation
+# bug as such.
+#
+# scripts/android-link-with-libpython3.sh sidesteps the guesswork about argv position: it
+# wraps `cc` and re-asserts `-lpython3` (Termux's unversioned, version-independent stable-ABI
+# shim) wrapped in --no-as-needed/--as-needed on every real link invocation, which --as-needed
+# cannot drop. Intermediate rlib compiles never invoke a linker at all, so it's a no-op there.
+# Assumes this repo is checked out at /data/data/com.termux/files/home/Redstone-Squid, matching
+# the same assumption already baked into nucleation's CMAKE_ARGS entry below.
+cryptography = { ANDROID_API_LEVEL = "24", CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "/data/data/com.termux/files/home/Redstone-Squid/scripts/android-link-with-libpython3.sh" }
 hypothesis = { ANDROID_API_LEVEL = "24" }
 jiter = { ANDROID_API_LEVEL = "24" }
-jsonschema-rs = { ANDROID_API_LEVEL = "24" }
+jsonschema-rs = { ANDROID_API_LEVEL = "24", CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER = "/data/data/com.termux/files/home/Redstone-Squid/scripts/android-link-with-libpython3.sh" }
 orjson = { ANDROID_API_LEVEL = "24" }
 pydantic-core = { ANDROID_API_LEVEL = "24" }
 prek = { ANDROID_API_LEVEL = "24" }
