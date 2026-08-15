@@ -76,8 +76,7 @@ async def process_group(
     """Import one group without aborting the backfill on failure."""
     try:
         for message in primary:
-            tracked = await services.messages.get(message.id)
-            if tracked is not None and tracked.build_id is not None:
+            if await services.builds.list_ids_for_source_message(message.id):
                 return ImportSummary(groups=1, skipped_existing=1)
         builds = await ingest_message_bundle(
             primary,

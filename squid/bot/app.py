@@ -126,6 +126,7 @@ class RedstoneSquid(Bot):
 
         extensions = [
             "squid.bot.reactions",
+            "squid.bot.messages",
             "squid.bot.misc_commands",
             "squid.bot.settings",
             "squid.bot.submission",

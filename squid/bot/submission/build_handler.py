@@ -93,13 +93,13 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         await BuildVoteSession.ensure_submission(self.bot, build, await self.get_channels_to_post_to())
 
     async def get_original_message(self) -> discord.Message | None:
-        """Gets the original message of the build."""
+        """Gets the message this build was submitted from, if it is still reachable."""
         if self._build_original_message_obj:
             return self._build_original_message_obj
 
-        original = self.build.original_message
-        if original is not None and original.channel_id is not None:
-            return await self.bot.get_or_fetch_message(original.channel_id, original.message_id)
+        for source in self.build.source_messages:
+            if source.channel_id is not None:
+                return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
     async def get_display_messages(self) -> list[discord.Message]:

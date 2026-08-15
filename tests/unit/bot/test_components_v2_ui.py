@@ -20,7 +20,7 @@ from squid.bot.submission.ui.views import (
     SubmissionModal,
 )
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, OriginalMessage, Status
+from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, SourceMessage, Status
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
@@ -48,7 +48,7 @@ def display_build() -> Build:
         versions=["Java 1.20"],
         links=[BuildLink(url="https://example.com/build.png", media_type="image")],
         extra_info={},
-        original_message=OriginalMessage(message_id=3, server_id=1, channel_id=2),
+        source_messages=(SourceMessage(message_id=3, guild_id=1, channel_id=2),),
     )
 
 
