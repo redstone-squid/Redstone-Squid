@@ -153,8 +153,12 @@ def test_submission_form_uses_explicit_v2_rows() -> None:
     payload = form.to_components()
 
     assert form.has_components_v2()
-    assert [component["type"] for component in payload] == [17, 1, 1, 1]
-    assert len(payload[-1]["components"]) == 4
+    assert [component["type"] for component in payload] == [
+        discord.ComponentType.container.value,
+        discord.ComponentType.action_row.value,
+        discord.ComponentType.action_row.value,
+        discord.ComponentType.action_row.value,
+    ]
     assert "Only the door type and opening size are required" in str(payload)
     assert [button["label"] for button in payload[-1]["components"]] == [
         "Edit basics",
@@ -166,9 +170,10 @@ def test_submission_form_uses_explicit_v2_rows() -> None:
 
 def test_confirmation_view_contains_prompt_and_actions() -> None:
     view = ConfirmationView("Proceed?")
+    payload = view.to_components()
 
-    assert view.to_components()[0]["content"] == "Proceed?"
-    assert len(view.to_components()[1]["components"]) == 2
+    assert payload[0]["content"] == "Proceed?"
+    assert [button["label"] for button in payload[1]["components"]] == ["Confirm", "Cancel"]
 
 
 def test_user_data_consent_view_discloses_storage_and_actions() -> None:
