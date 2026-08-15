@@ -102,7 +102,7 @@ class MockBuildQueries:
 
 class MockSearch:
     async def search(self, _request: object) -> SearchPage:
-        return SearchPage(hits=(), total=0, next=None, prev_offset=None)
+        return SearchPage(hits=(), total=0, next=None, prev=None)
 
     async def suggest(self, _query: str, *, limit: int = 5) -> tuple[str, ...]:
         return ()
