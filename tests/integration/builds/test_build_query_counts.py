@@ -21,8 +21,8 @@ from squid.builds.infrastructure.repository import BuildRepository
 from squid.versions.infrastructure.models import Version
 
 # Row query + tag-assignment and tag-definition eager loads + links eager load,
-# then the creator, submitter-identity and version batches.
-_EXPECTED_PAGE_QUERIES = 6
+# then the creator, submitter-identity, version and source-message batches.
+_EXPECTED_PAGE_QUERIES = 7
 
 
 @contextmanager
@@ -103,9 +103,10 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
     assert len(builds) == count
     # One row query, two eager loads (tag assignments and their definitions are
     # one selectin each... links is the second), and the mapper's cross-context
-    # batches for creators, submitter identities and versions. The message batch
-    # is skipped when no build carries an original message. The point is that
-    # none of these scale with the page.
+    # batches for creators, submitter identities, versions and source messages.
+    # Source messages cost one query whether or not the page has any, because
+    # provenance is a link table now rather than a column on the build row. The
+    # point is that none of these scale with the page.
     assert len(statements) == _EXPECTED_PAGE_QUERIES, "\n".join(statements)
 
 

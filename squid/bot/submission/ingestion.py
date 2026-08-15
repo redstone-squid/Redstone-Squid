@@ -5,7 +5,6 @@ from collections.abc import Sequence
 
 import discord
 
-from squid.bot.message_adapter import to_tracked_message
 from squid.bot.submission.attachments import classify_attachment
 from squid.bot.submission.media import MediaMirror
 from squid.bot.submission.message_context import assemble_bundle
@@ -113,14 +112,4 @@ async def ingest_message_bundle(
                     },
                 )
 
-    # The tracked-message table is keyed by Discord message id, so a source can identify the
-    # bundle for idempotency but cannot point to multiple inferred builds.
-    tracked_build = builds[0]
-    assert tracked_build.id is not None
-    for message in primary:
-        await services.messages.track(
-            to_tracked_message(message),
-            purpose="build_original_message",
-            build_id=tracked_build.id,
-        )
     return builds

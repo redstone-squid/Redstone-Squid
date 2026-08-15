@@ -2,16 +2,48 @@
 
 from collections.abc import Sequence
 
+from whenever import Instant
+
 from squid.messages.application.ports import MessageRepository
-from squid.messages.domain import MessagePurposeLiteral, MessageRecord, ProjectionResourceKind, TrackedMessage
+from squid.messages.domain import (
+    MessageFact,
+    MessagePurposeLiteral,
+    MessageRecord,
+    ProjectionResourceKind,
+    TrackedMessage,
+)
 from squid.messages.errors import InvalidMessageError
 
 
 class MessageService:
-    """Validate and persist tracked message metadata."""
+    """Record what is true about Discord messages, and what they are used for."""
 
     def __init__(self, repository: MessageRepository):
         self._repository = repository
+
+    async def observe(self, fact: MessageFact) -> None:
+        """Record a Discord message as a fact, refreshing it if already known.
+
+        Idempotent by design: the same message legitimately arrives from several
+        directions (a build's provenance, a starboard origin, a vote target), and
+        each is recording the same row rather than competing for it.
+        """
+        await self._repository.upsert_fact(fact)
+
+    async def record_edit(self, message_id: int, content: str | None) -> bool:
+        """Refresh stored content after Discord reports an edit.
+
+        Returns whether a stored message matched; most edits are to messages the
+        bot has no reason to know about.
+        """
+        return await self._repository.record_edit(message_id, content, Instant.now())
+
+    async def mark_deleted(self, message_id: int) -> bool:
+        """Tombstone a message Discord reports gone, retaining it as a fact.
+
+        Returns whether a stored message matched.
+        """
+        return await self._repository.mark_deleted(message_id, Instant.now())
 
     async def track(
         self,
@@ -21,7 +53,9 @@ class MessageService:
         build_id: int | None = None,
         vote_session_id: int | None = None,
     ) -> None:
-        if purpose in ("view_pending_build", "confirm_pending_build") and build_id is None:
+        # "confirm_pending_build" used to be listed here, but it is not a member of
+        # MessagePurposeLiteral, so "view_confirmed_build" went unvalidated instead.
+        if purpose in ("view_pending_build", "view_confirmed_build") and build_id is None:
             msg = "build_id cannot be None for this purpose."
             raise InvalidMessageError(msg, context={"purpose": purpose})
         if purpose == "vote" and vote_session_id is None:

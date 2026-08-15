@@ -30,8 +30,8 @@ from squid.builds.domain import (
     BuildLink,
     DoorBuild,
     ExtenderBuild,
-    OriginalMessage,
     OtherBuild,
+    SourceMessage,
     Status,
 )
 from squid.builds.infrastructure.repository import BuildRepository
@@ -319,7 +319,7 @@ async def test_alias_resolves_to_canonical_display_name(
     assert loaded.component_restrictions == ["Observerless"]
 
 
-async def test_original_message_round_trips(
+async def test_source_messages_round_trip(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
@@ -330,12 +330,15 @@ async def test_original_message_round_trips(
         submission_status=build.submission_status,
         submitter_account_id=account_id,
         versions=["Java 1.21.0"],
-        original_message=OriginalMessage(
-            message_id=6000,
-            server_id=4000,
-            channel_id=5000,
-            author_id=7000,
-            content="the original submission text",
+        source_messages=(
+            SourceMessage(
+                message_id=6000,
+                guild_id=4000,
+                channel_id=5000,
+                author_id=7000,
+                content="the original submission text",
+            ),
+            SourceMessage(message_id=6001, guild_id=4000, channel_id=5000, author_id=7000, content="a follow-up"),
         ),
     )
     await repository.save(frozen)
@@ -343,12 +346,45 @@ async def test_original_message_round_trips(
 
     loaded = await repository.get_by_id(frozen.id)
     assert loaded is not None
-    assert loaded.original_message is not None
-    assert loaded.original_message.server_id == 4000
-    assert loaded.original_message.channel_id == 5000
-    assert loaded.original_message.message_id == 6000
-    assert loaded.original_message.author_id == 7000
-    assert loaded.original_message.content == "the original submission text"
+    assert [message.message_id for message in loaded.source_messages] == [6000, 6001]
+    first = loaded.source_messages[0]
+    assert first.guild_id == 4000
+    assert first.channel_id == 5000
+    assert first.author_id == 7000
+    assert first.content == "the original submission text"
+    # The submission link points at the request, not at a trailing image.
+    assert loaded.original_link == "https://discord.com/channels/4000/5000/6000"
+
+
+async def test_one_message_can_source_several_builds(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A build-log message that yields a bundle links to every build it produced.
+
+    The replaced `builds.original_message_id` could only name one build per message,
+    so half a bundle's provenance was silently dropped.
+    """
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    shared = SourceMessage(message_id=8000, guild_id=4000, channel_id=5000, author_id=7000, content="two doors")
+
+    build_ids: list[int] = []
+    for _ in range(2):
+        build = OtherBuild(
+            submission_status=Status.PENDING,
+            submitter_account_id=account_id,
+            versions=["Java 1.21.0"],
+            source_messages=(shared,),
+        )
+        await repository.save(build)
+        assert build.id is not None
+        build_ids.append(build.id)
+
+    assert sorted(await repository.list_ids_for_source_message(8000)) == sorted(build_ids)
+    for build_id in build_ids:
+        loaded = await repository.get_by_id(build_id)
+        assert loaded is not None
+        assert [message.message_id for message in loaded.source_messages] == [8000]
 
 
 # --- Edit-time taxonomy handling ---------------------------------------------

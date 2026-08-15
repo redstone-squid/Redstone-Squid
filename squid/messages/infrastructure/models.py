@@ -38,17 +38,31 @@ class Message(Base):
     id: Mapped[int] = mapped_column(
         BigInteger, primary_key=True
     )  # init=True because this is the message ID, which should be known when creating the object
-    server_id: Mapped[int] = mapped_column(
+    server_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("server_settings.server_id", name="public_messages_server_id_fkey", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
     )
+    """The guild the message was sent in, or NULL in DMs."""
     channel_id: Mapped[int | None] = mapped_column(BigInteger)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    purpose: Mapped[str] = mapped_column(
-        Text, nullable=False, comment="The reason why the message is stored in the database"
+    purpose: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        default=None,
+        comment="Legacy tracking role; NULL for plain observed facts. Removed once every writer moves to discord_posts.",
     )
-    content: Mapped[str | None] = mapped_column(Text)
+    content: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When Discord created the message. Denormalised from the snowflake so ordering needs no function."""
+    observed_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    """When the bot first recorded this message."""
+    edited_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When `content` was last refreshed from a Discord edit."""
+    deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """Set when Discord reports the message gone. The row is a retained fact, never erased."""
     build_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="public_messages_build_id_fkey", ondelete="SET NULL"),

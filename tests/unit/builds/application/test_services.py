@@ -46,6 +46,11 @@ class FakeBuildRepository:
             return self.build
         return None
 
+    async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
+        if self.build is None or self.build.id is None:
+            return []
+        return [self.build.id for source in self.build.source_messages if source.message_id == message_id]
+
 
 class FakeRestrictionRepository:
     async def fetch_all_restrictions(self) -> list[RestrictionDefinition]:
