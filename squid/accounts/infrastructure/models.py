@@ -104,6 +104,13 @@ class CreatorAlias(Base):
     __tablename__ = "creator_aliases"
     __table_args__ = (
         UniqueConstraint("normalized_name", name="creator_aliases_normalized_name_key"),
+        Index(
+            # The unique constraint above serves equality only; a creator typeahead needs a prefix
+            # scan, which under a non-C collation requires an explicit `text_pattern_ops` index.
+            "creator_aliases_normalized_name_prefix_idx",
+            "normalized_name",
+            postgresql_ops={"normalized_name": "text_pattern_ops"},
+        ),
         CheckConstraint(
             "(account_id IS NULL) = (claimed_at IS NULL)",
             name="creator_aliases_claim_complete",

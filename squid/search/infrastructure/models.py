@@ -104,6 +104,20 @@ class SearchDocumentFacet(Base, kw_only=True):
             postgresql_where=text("text_value IS NOT NULL"),
         ),
         Index(
+            # Equality on the plain index above cannot serve a prefix scan: under any non-C
+            # collation a btree's ordering is not the byte ordering `LIKE 'x%'` needs. Typeahead
+            # matches case-folded, so the index is on `lower(text_value)` with `text_pattern_ops`.
+            # The operator class is inline rather than in `postgresql_ops` because that mapping is
+            # keyed by column name and is silently dropped for an expression, which would emit an
+            # index without `text_pattern_ops` and diverge from the migration. Alembic cannot
+            # compare an expression carrying an operator clause and skips it, which is correct
+            # here: the migration creates exactly this.
+            "search_document_facets_text_prefix_idx",
+            "field_name",
+            text("lower(text_value) text_pattern_ops"),
+            postgresql_where=text("text_value IS NOT NULL"),
+        ),
+        Index(
             "search_document_facets_numeric_idx",
             "field_name",
             "numeric_value",
