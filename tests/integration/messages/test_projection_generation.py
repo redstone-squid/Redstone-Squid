@@ -1,12 +1,10 @@
 """Coverage for the generation counter that decides whether a Discord post is stale.
 
-The desired-state projection is driven entirely by Postgres triggers, so its failure
-modes only appear against a real database. Nothing else exercises them.
+The generation is driven entirely by Postgres triggers, so its failure modes only
+appear against a real database. Nothing else exercises them.
 """
 
-import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 
@@ -48,51 +46,91 @@ async def _revisions(session: AsyncSession) -> tuple[int, int]:
     return (row[0], row[1])
 
 
-@pytest.mark.xfail(
-    reason="Completing a sync job deletes the queue row, so generation restarts at 1 and "
-    "the desired revision is projected below applied_revision.",
-    raises=IntegrityError,
-    strict=True,
-)
 async def test_generation_survives_job_completion(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A build stays editable after a coalesced refresh has been rendered and acknowledged.
 
+    With a per-row counter this aborted the third edit: acknowledging the job deleted
+    the queue row, the next enqueue restarted at 1, and projecting that 1 onto a message
+    already applied at 2 violated `messages_projection_revisions_valid` — inside the
+    statement doing the edit.
+
     Each step commits separately because `enqueue_discord_sync` stamps `now()`, which is
     the transaction timestamp: coalescing two edits inside one transaction would leave
-    `enqueued_at` unchanged and never bump the generation.
+    `enqueued_at` unchanged and never re-enqueue.
     """
     async with migrated_session_factory.begin() as session:
         build_id = await _seed(session)
 
-    # A second edit coalesces onto the queued row and bumps the generation past 1.
+    # A second edit coalesces onto the queued row and takes a fresh generation.
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET ai_generated = true WHERE id = :id"), {"id": build_id})
 
     async with migrated_session_factory() as session:
-        assert await _generation(session, build_id) == 2
-        assert await _revisions(session) == (2, 1)
+        coalesced = await _generation(session, build_id)
+        assert coalesced is not None
+        desired, applied = await _revisions(session)
+        assert desired == coalesced
+        assert applied < desired
 
     # The reconciler renders the card and acknowledges the generation it rendered.
     async with migrated_session_factory.begin() as session:
-        await session.execute(text("UPDATE messages SET applied_revision = 2 WHERE id = 100 AND desired_revision = 2"))
+        await session.execute(
+            text(
+                "UPDATE messages SET applied_revision = :generation WHERE id = 100 AND desired_revision = :generation"
+            ),
+            {"generation": coalesced},
+        )
 
-    async with migrated_session_factory() as session:
-        assert await _revisions(session) == (2, 2)
-
-    # `ClaimedRowQueue.complete` deletes the acknowledged row, taking the counter with it.
+    # `ClaimedRowQueue.complete` deletes the acknowledged row, taking its generation with it.
     async with migrated_session_factory.begin() as session:
         await session.execute(
             text("DELETE FROM discord_sync_queue WHERE resource_kind = 'build' AND source_key = :key"),
             {"key": str(build_id)},
         )
 
-    # The next edit re-inserts at generation 1, projecting a desired revision below the
-    # applied one. This must not take the user's build edit down with it.
+    # The edit that used to abort.
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE builds SET ai_generated = false WHERE id = :id"), {"id": build_id})
 
     async with migrated_session_factory() as session:
+        reissued = await _generation(session, build_id)
+        assert reissued is not None
+        # The sequence keeps climbing across the delete, so the re-enqueued generation
+        # outranks what was already applied and the message is seen as stale again.
+        assert reissued > coalesced
         desired, applied = await _revisions(session)
-        assert desired >= applied
+        assert desired == reissued
+        assert applied < desired
+
+
+async def test_generations_are_unique_across_resources(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Generations come from one sequence, so no two enqueues collide.
+
+    A per-resource counter made generation 1 mean different things for different
+    builds, which is only safe while nothing compares them.
+    """
+    async with migrated_session_factory.begin() as session:
+        await session.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
+        account_id = (await session.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id"))).scalar_one()
+        for _ in range(3):
+            await session.execute(
+                text(
+                    "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
+                    "VALUES (0, 'Utility', :account_id, false)"
+                ),
+                {"account_id": account_id},
+            )
+
+    async with migrated_session_factory() as session:
+        generations = list(
+            (
+                await session.scalars(text("SELECT generation FROM discord_sync_queue WHERE resource_kind = 'build'"))
+            ).all()
+        )
+
+    assert len(generations) == 3
+    assert len(set(generations)) == 3

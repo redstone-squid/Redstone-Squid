@@ -204,12 +204,15 @@ BEGIN
             last_error = NULL;
 
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
-        SELECT 'build', assignment.build_id::text, 'refresh', now(), NULL, NULL, 0, NULL
+            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        SELECT
+            'build', assignment.build_id::text, 'refresh',
+            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action,
+            generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
             claimed_at = NULL,
             dead_at = NULL,
@@ -300,11 +303,19 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM public.builds WHERE id = target_key) THEN RETURN NULL; END IF;
     END IF;
 
+    -- The generation is drawn from a sequence rather than counted per row. Acknowledging
+    -- a job deletes its queue row, so a per-row counter restarted at 1 on the next edit
+    -- and could name a revision below one already applied. Sequences are exempt from
+    -- rollback, which is exactly what a staleness token needs.
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, enqueued_at, claimed_at, dead_at, attempts, last_error)
-    VALUES (target_kind, target_key::text, target_action, now(), NULL, NULL, 0, NULL)
+        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+    VALUES (
+        target_kind, target_key::text, target_action,
+        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+    )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
+        generation = EXCLUDED.generation,
         enqueued_at = EXCLUDED.enqueued_at,
         claimed_at = NULL,
         dead_at = NULL,
@@ -422,15 +433,6 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION public.bump_discord_sync_generation() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
-BEGIN
-    NEW.generation := OLD.generation + 1;
-    RETURN NEW;
-END;
-$$;
-
 CREATE FUNCTION public.project_discord_message_desired_state() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
@@ -521,8 +523,6 @@ CREATE TRIGGER extender_timing_variants_enqueue_discord_sync AFTER INSERT OR DEL
 CREATE TRIGGER vote_sessions_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.vote_sessions FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
 
 CREATE TRIGGER votes_enqueue_discord_sync AFTER INSERT OR DELETE OR UPDATE ON public.votes FOR EACH ROW EXECUTE FUNCTION public.enqueue_discord_sync();
-
-CREATE TRIGGER discord_sync_queue_bump_generation BEFORE UPDATE OF enqueued_at ON public.discord_sync_queue FOR EACH ROW WHEN (OLD.enqueued_at IS DISTINCT FROM NEW.enqueued_at) EXECUTE FUNCTION public.bump_discord_sync_generation();
 
 CREATE TRIGGER discord_sync_queue_project_desired_state AFTER INSERT OR UPDATE OF generation, action ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.project_discord_message_desired_state();
 
