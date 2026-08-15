@@ -1,6 +1,7 @@
 """Guard the Discord transport against reintroducing legacy message UI."""
 
 import ast
+from collections import defaultdict
 from pathlib import Path
 from typing import override
 
@@ -69,13 +70,23 @@ def test_bot_uses_components_v2_outside_archive_relay() -> None:
 
 
 def test_reaction_router_owns_all_raw_reaction_listeners() -> None:
-    owners: list[str] = []
+    """Every gateway reaction event enters through the router, and only through it.
+
+    Compared as a name-per-file mapping rather than a count: a cog that grows its own
+    listener and a router that loses one are different bugs, and the diff says which.
+    """
+    listeners: dict[str, set[str]] = defaultdict(set)
     for path in BOT_ROOT.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        owners.extend(
-            str(path.relative_to(BOT_ROOT))
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("on_raw_reaction_")
-        )
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name.startswith("on_raw_reaction_"):
+                listeners[str(path.relative_to(BOT_ROOT))].add(node.name)
 
-    assert owners == ["reactions.py"] * 4
+    assert dict(listeners) == {
+        "reactions.py": {
+            "on_raw_reaction_add",
+            "on_raw_reaction_clear",
+            "on_raw_reaction_clear_emoji",
+            "on_raw_reaction_remove",
+        }
+    }
