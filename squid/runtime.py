@@ -33,6 +33,7 @@ from squid.permissions.application import (
     PermissionService,
 )
 from squid.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
+from squid.posts.application import PostService
 from squid.records.application import RecordComputationService, RecordService
 from squid.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.search.application import SearchEmbeddingService, SearchService
@@ -96,6 +97,7 @@ class BotServices:
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
+    posts: PostService
     permissions: PermissionService
     permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher
