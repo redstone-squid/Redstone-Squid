@@ -86,13 +86,33 @@ def apply_guardrails(limits: Mapping[str, int]) -> None:
     if resource is None:  # pragma: no cover - Windows
         return
 
-    _set_limit(resource.RLIMIT_AS, limits["memory_bytes"])
+    _set_limit(resource.RLIMIT_AS, limits["memory_bytes"] + _current_address_space_bytes())
     _set_limit(resource.RLIMIT_CPU, limits["cpu_seconds"])
     _set_limit(resource.RLIMIT_FSIZE, limits["file_size_bytes"])
     try:
         os.nice(5)
     except OSError:  # pragma: no cover - permitted to fail in restricted sandboxes
         logger.debug("Could not lower worker priority.", exc_info=True)
+
+
+def _current_address_space_bytes() -> int:
+    """This process's already-mapped virtual address space, so `RLIMIT_AS` bounds the budget
+    a payload gets rather than the interpreter's own baseline footprint.
+
+    That baseline is not portable: Termux's bionic/Scudo allocator reserves on the order of
+    10 GB of address space before a single line of this module runs, dwarfing the configured
+    memory budget and making an absolute `RLIMIT_AS` fail during interpreter start-up, before
+    the engine is even imported. glibc hosts have a much smaller baseline, which is why this
+    went unnoticed there. `resource.getrusage` reports peak resident set size, not mapped
+    address space, so it can't stand in for this.
+    """
+    assert resource is not None
+    try:
+        with open("/proc/self/statm", "rb") as handle:
+            size_pages = int(handle.readline().split()[0])
+    except (OSError, ValueError, IndexError):  # pragma: no cover - non-Linux POSIX has no /proc
+        return 0
+    return size_pages * resource.getpagesize()
 
 
 def _set_limit(which: int, soft: int) -> None:
