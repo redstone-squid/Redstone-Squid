@@ -179,6 +179,9 @@ def test_migrations_create_schema_without_drift(
             )
             queue_health_after = {row.queue: row for row in connection.execute(text(QUEUE_HEALTH_SQL)).mappings()}
             connection.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
+            # A post records only the generation it was rendered at; what it *should*
+            # show lives on the queue row, so staleness is a join rather than a desired
+            # revision written onto the post by a trigger.
             seeded_generation = connection.execute(
                 text(
                     "INSERT INTO discord_sync_queue (resource_kind, source_key) "
@@ -186,30 +189,30 @@ def test_migrations_create_schema_without_drift(
                 )
             ).scalar_one()
             connection.execute(
+                text("INSERT INTO messages (id, guild_id, channel_id, author_id) VALUES (100, 999, 200, 300)")
+            )
+            connection.execute(
                 text(
-                    "INSERT INTO messages ("
-                    "id, server_id, channel_id, author_id, purpose, projection_resource_kind, projection_source_key"
-                    ") VALUES (100, 999, 200, 300, 'view_confirmed_build', 'build', '42')"
+                    "INSERT INTO discord_posts ("
+                    "message_id, channel_id, resource_kind, resource_key, surface, applied_revision"
+                    ") VALUES (100, 200, 'build', '42', 'build_card', 0)"
                 )
             )
-            initial_projection_state = connection.execute(
-                text("SELECT desired_action, desired_revision, applied_revision FROM messages WHERE id = 100")
-            ).one()
-            connection.execute(
+            stale_post = connection.execute(
+                text(
+                    "SELECT p.applied_revision < q.generation "
+                    "FROM discord_posts p JOIN discord_sync_queue q "
+                    "ON q.resource_kind = p.resource_kind AND q.source_key = p.resource_key "
+                    "WHERE p.message_id = 100"
+                )
+            ).scalar_one()
+            reissued_generation = connection.execute(
                 text(
                     "UPDATE discord_sync_queue "
                     "SET action = 'delete', enqueued_at = enqueued_at + interval '1 second' "
-                    "WHERE resource_kind = 'build' AND source_key = '42'"
+                    "WHERE resource_kind = 'build' AND source_key = '42' RETURNING generation"
                 )
-            )
-            updated_projection_state = connection.execute(
-                text(
-                    "SELECT m.desired_action, m.desired_revision, m.applied_revision, q.generation "
-                    "FROM messages m JOIN discord_sync_queue q "
-                    "ON q.resource_kind = m.projection_resource_kind AND q.source_key = m.projection_source_key "
-                    "WHERE m.id = 100"
-                )
-            ).one()
+            ).scalar_one()
     finally:
         engine.dispose()
 
@@ -238,11 +241,11 @@ def test_migrations_create_schema_without_drift(
     }
     assert queue_health_after["discord_sync"].ready == queue_health_before["discord_sync"].ready + 1
     assert queue_health_after["discord_sync"].in_flight == queue_health_before["discord_sync"].in_flight
-    # Generations come from a shared sequence, so assert the relationships between them
-    # rather than literal values: a new message starts level with the queued generation,
-    # and changing the queued action projects down without moving it.
-    assert initial_projection_state == ("refresh", seeded_generation, seeded_generation)
-    assert updated_projection_state == ("delete", seeded_generation, seeded_generation, seeded_generation)
+    # Generations come from a shared sequence, so assert the relationships rather than
+    # literal values. A post recorded below the queued generation reads as stale, and
+    # re-enqueueing keeps the generation rather than restarting it.
+    assert stale_post is True
+    assert reissued_generation == seeded_generation
 
 
 def test_sponsor_migration_refuses_to_discard_retained_provenance(
@@ -400,7 +403,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
             connection.execute(
                 text(
                     """
-                    CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+                    CREATE OR REPLACE FUNCTION public.set_locked_at()
                     RETURNS trigger
                     LANGUAGE plpgsql
                     AS $$
@@ -411,7 +414,7 @@ def test_alembic_detects_managed_function_and_trigger_drift(
                     """
                 )
             )
-            connection.execute(text("DROP TRIGGER update_messages_updated_at ON public.messages"))
+            connection.execute(text("DROP TRIGGER builds_enqueue_discord_sync ON public.builds"))
     finally:
         engine.dispose()
 

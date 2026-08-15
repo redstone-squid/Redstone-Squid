@@ -576,7 +576,7 @@ class BuildRepository:
                 pg_insert(Message)
                 .values(
                     id=source.message_id,
-                    server_id=source.guild_id,
+                    guild_id=source.guild_id,
                     channel_id=source.channel_id,
                     author_id=source.author_id,
                     content=source.content,
@@ -585,7 +585,7 @@ class BuildRepository:
                 .on_conflict_do_update(
                     index_elements=[Message.id],
                     set_={
-                        "server_id": source.guild_id,
+                        "guild_id": source.guild_id,
                         "channel_id": source.channel_id,
                         "author_id": source.author_id,
                         "content": source.content,
