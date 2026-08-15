@@ -121,7 +121,6 @@ def test_correlation_id_stays_unique_without_a_tracer(mocker: MockerFixture) -> 
     assert len(error_ids) == 3
     assert all(len(error_id) == 12 for error_id in error_ids)
     assert all(set(error_id) <= set("0123456789abcdef") for error_id in error_ids)
-    assert int(error_id, 16) >= 0
 
 
 def test_trace_context_filter_adds_active_ids(mocker: MockerFixture) -> None:
