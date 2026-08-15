@@ -11,6 +11,36 @@ from squid.reactions.domain import ReactionActor
 
 type StarboardDirection = Literal["up", "down"]
 type VoteVerdictAction = Literal["accept", "ignore", "remove_reaction"]
+type SettingKind = Literal["boolean", "threshold", "integer", "text"]
+
+EDITABLE_SETTINGS: dict[str, SettingKind] = {
+    "enabled": "boolean",
+    "self_vote": "boolean",
+    "allow_bots": "boolean",
+    "require_image": "boolean",
+    "autoreact_upvote": "boolean",
+    "autoreact_downvote": "boolean",
+    "remove_invalid_reactions": "boolean",
+    "link_edits": "boolean",
+    "link_deletes": "boolean",
+    "jump_to_message": "boolean",
+    "attachments_list": "boolean",
+    "replied_to": "boolean",
+    "ping_author": "boolean",
+    "required": "threshold",
+    "required_remove": "threshold",
+    "min_age_seconds": "integer",
+    "max_age_seconds": "integer",
+    "colour": "integer",
+    "channel_id": "integer",
+    "name": "text",
+    "display_emoji": "text",
+}
+"""Every setting `/starboard edit` accepts, and how its value is parsed.
+
+Shared with the suggestion registry so the names a user can be offered and the names the command
+will actually accept cannot drift apart.
+"""
 
 
 @dataclass(frozen=True, slots=True)

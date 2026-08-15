@@ -17,7 +17,13 @@ from squid.tags.domain import TagDefinition
 class TaxonomyReader(Protocol):
     """Read approved taxonomy values shaped for matching."""
 
-    async def taxonomy(self, semantic_kind: str, *, build_kind: str | None = None) -> Sequence[TaxonomyEntry]: ...
+    async def taxonomy(
+        self,
+        semantic_kind: str,
+        *,
+        build_kind: str | None = None,
+        authority: str | None = "official",
+    ) -> Sequence[TaxonomyEntry]: ...
 
 
 class PendingTagDefinitions(Protocol):
@@ -35,10 +41,12 @@ class TaxonomyProvider:
         semantic_kind: str,
         *,
         build_kind: str | None = None,
+        authority: str | None = "official",
     ) -> None:
         self._reader = reader
         self._semantic_kind = semantic_kind
         self._build_kind = build_kind
+        self._authority = authority
         self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
@@ -46,7 +54,9 @@ class TaxonomyProvider:
         return await self._cache.get(None)
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
-        entries = await self._reader.taxonomy(self._semantic_kind, build_kind=self._build_kind)
+        entries = await self._reader.taxonomy(
+            self._semantic_kind, build_kind=self._build_kind, authority=self._authority
+        )
         return tuple(
             # The stable key is submitted while the display name is what people read and type, so
             # both are matchable — as are aliases, which is the whole point of restriction aliases.
@@ -56,6 +66,48 @@ class TaxonomyProvider:
                 description=_alias_hint(entry),
                 kind=entry.semantic_kind,
                 terms=(entry.display_name, entry.stable_key, *entry.aliases),
+            )
+            for entry in entries
+        )
+
+
+class TaxonomyIdProvider:
+    """Suggest taxonomy values by name while submitting the numeric tag id.
+
+    Some commands persist restriction identifiers rather than names. Completing by name and
+    submitting the id keeps those commands working unchanged while removing the step where a user
+    had to look the number up somewhere else first.
+    """
+
+    def __init__(
+        self,
+        reader: TaxonomyReader,
+        semantic_kind: str,
+        *,
+        build_kind: str | None = None,
+        authority: str | None = "official",
+    ) -> None:
+        self._reader = reader
+        self._semantic_kind = semantic_kind
+        self._build_kind = build_kind
+        self._authority = authority
+        self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
+
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        del request
+        return await self._cache.get(None)
+
+    async def _load(self, _key: None) -> tuple[Candidate, ...]:
+        entries = await self._reader.taxonomy(
+            self._semantic_kind, build_kind=self._build_kind, authority=self._authority
+        )
+        return tuple(
+            candidate(
+                value=str(entry.id),
+                label=entry.display_name,
+                description=_alias_hint(entry),
+                kind=entry.semantic_kind,
+                terms=(entry.display_name, entry.stable_key, str(entry.id), *entry.aliases),
             )
             for entry in entries
         )

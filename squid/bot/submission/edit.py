@@ -11,6 +11,7 @@ from discord.ext.commands import Context, flag
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditView, ConfirmationView
+from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import (
     DimensionsConverter,
@@ -103,6 +104,15 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         command_to_get_to_build: str | None | MissingType = flag(default=MISSING, converter=NoneStrConverter, description='The command to get to the build in the server.')
         # fmt: on
 
+    @autocompletes(
+        build_id="builds",
+        pattern=suggests("approved_patterns", multi=True),
+        works_in="approved_source_versions",
+        wiring_placement_restrictions=suggests("approved_restrictions", multi=True),
+        animated_restrictions=suggests("approved_restrictions", multi=True),
+        component_restrictions=suggests("approved_restrictions", multi=True),
+        creators=suggests("creators", multi=True),
+    )
     @BuildCommandGroup.build_hybrid_group.command(name="edit")  # type: ignore
     @requires(BUILD_SUBMISSION_EDIT)
     async def edit_door(self, ctx: Context[BotT], *, flags: EditDoorFlags):

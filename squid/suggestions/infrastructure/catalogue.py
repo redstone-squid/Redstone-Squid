@@ -11,7 +11,9 @@ from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.i18n import SUPPORTED_LOCALES
 from squid.permissions.domain.catalogue import (
+    ACCOUNT_CLAIM_LIST,
     BUILD_SUBMISSION_VIEW_PENDING,
     TAG_PROPOSAL_LIST,
 )
@@ -25,12 +27,33 @@ from squid.suggestions.infrastructure.providers import (
     SearchFieldProvider,
     SearchSortProvider,
     StaticProvider,
+    TaxonomyIdProvider,
     TaxonomyProvider,
+    VersionIdProvider,
     VersionProvider,
+)
+from squid.suggestions.infrastructure.providers.guilds import (
+    GuildStarboards,
+    PermissionRoleProvider,
+    PermissionRoles,
+    StarboardNameProvider,
+    StarboardSettingProvider,
+)
+from squid.suggestions.infrastructure.providers.notifications import (
+    AccountSubscriptions,
+    SubscriptionProvider,
 )
 from squid.suggestions.infrastructure.providers.permissions import (
     PermissionNodeProvider,
     PermissionPatternProvider,
+)
+from squid.suggestions.infrastructure.providers.records import (
+    AliasClaimProvider,
+    CompetitionProvider,
+    CreatorProfileProvider,
+    CreatorProvider,
+    PendingAliasClaims,
+    RecordBaseKeyProvider,
 )
 from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 from squid.tags.domain import TagDefinition, TagSemanticKind
@@ -66,8 +89,17 @@ def build_registry(
     search: SearchFields,
     versions: CanonicalMinecraftVersions,
     tags: PendingTagDefinitions,
+    starboards: GuildStarboards | None = None,
+    permission_roles: PermissionRoles | None = None,
+    notifications: AccountSubscriptions | None = None,
+    accounts: PendingAliasClaims | None = None,
 ) -> SuggestionRegistry:
-    """Assemble every source this deployment can answer."""
+    """Assemble every source this deployment can answer.
+
+    The optional dependencies are Discord-only capabilities; the API process has no starboards or
+    guild-scoped permission roles, so those sources are simply absent there rather than registered
+    against a service that does not exist.
+    """
     repository = PostgresSuggestionRepository(session_factory)
     return SuggestionRegistry.of(
         (
@@ -76,6 +108,9 @@ def build_registry(
             *_document_sources(repository),
             *_static_sources(),
             *_permission_sources(),
+            *_guild_sources(starboards, permission_roles),
+            *_viewer_sources(notifications),
+            *_claim_sources(accounts),
             SuggestionSource(
                 id="approved_source_versions",
                 provider=VersionProvider(versions),
@@ -90,7 +125,97 @@ def build_registry(
                 value_type=ValueType.INTEGER,
                 kind_label="tag",
             ),
+            SuggestionSource(
+                id="version_ids",
+                provider=VersionIdProvider(repository),
+                kind=SourceKind.ENUMERABLE,
+                value_type=ValueType.INTEGER,
+                kind_label="version",
+            ),
+            SuggestionSource(
+                id="record_base_keys",
+                provider=RecordBaseKeyProvider(repository),
+                kind_label="record_category",
+            ),
+            SuggestionSource(
+                id="creators",
+                provider=CreatorProvider(repository),
+                kind_label="creator",
+                multi_value=",",
+            ),
+            SuggestionSource(
+                id="creator_profiles",
+                provider=CreatorProfileProvider(repository),
+                kind_label="creator",
+            ),
+            SuggestionSource(
+                id="competitions",
+                provider=CompetitionProvider(repository),
+                kind_label="competition",
+            ),
         )
+    )
+
+
+def _guild_sources(
+    starboards: GuildStarboards | None,
+    permission_roles: PermissionRoles | None,
+) -> tuple[SuggestionSource, ...]:
+    sources: list[SuggestionSource] = [
+        SuggestionSource(
+            id="starboard_settings",
+            provider=StarboardSettingProvider(),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="starboard_setting",
+        )
+    ]
+    if starboards is not None:
+        sources.append(
+            SuggestionSource(
+                id="starboard_names",
+                provider=StarboardNameProvider(starboards),
+                context_keys=frozenset({"guild_id"}),
+                kind_label="starboard",
+            )
+        )
+    if permission_roles is not None:
+        sources.append(
+            SuggestionSource(
+                id="permission_roles",
+                provider=PermissionRoleProvider(permission_roles),
+                context_keys=frozenset({"guild_id"}),
+                kind_label="permission_role",
+            )
+        )
+    return tuple(sources)
+
+
+def _claim_sources(accounts: PendingAliasClaims | None) -> tuple[SuggestionSource, ...]:
+    if accounts is None:
+        return ()
+    return (
+        SuggestionSource(
+            id="alias_claims_pending",
+            provider=AliasClaimProvider(accounts),
+            visibility=Visibility.REQUIRES_NODE,
+            required_node=ACCOUNT_CLAIM_LIST.name,
+            value_type=ValueType.INTEGER,
+            kind_label="claim",
+        ),
+    )
+
+
+def _viewer_sources(notifications: AccountSubscriptions | None) -> tuple[SuggestionSource, ...]:
+    if notifications is None:
+        return ()
+    return (
+        SuggestionSource(
+            id="notification_subscriptions",
+            provider=SubscriptionProvider(notifications),
+            visibility=Visibility.VIEWER_SCOPED,
+            value_type=ValueType.INTEGER,
+            kind_label="subscription",
+        ),
     )
 
 
@@ -111,11 +236,28 @@ def _taxonomy_sources(repository: PostgresSuggestionRepository) -> tuple[Suggest
             kind_label="pattern",
         ),
         SuggestionSource(
+            # Showcase tags are proposed by users, so unlike restrictions and patterns they are
+            # never `official` and must not be filtered on authority.
             id="approved_showcase_tags",
-            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value),
+            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
             kind=SourceKind.ENUMERABLE,
             multi_value=",",
             kind_label="showcase",
+        ),
+        SuggestionSource(
+            id="showcase_tag_ids",
+            provider=TaxonomyIdProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
+            kind=SourceKind.ENUMERABLE,
+            value_type=ValueType.INTEGER,
+            kind_label="showcase",
+        ),
+        SuggestionSource(
+            id="restriction_ids",
+            provider=TaxonomyIdProvider(repository, TagSemanticKind.RESTRICTION.value),
+            kind=SourceKind.ENUMERABLE,
+            value_type=ValueType.INTEGER,
+            multi_value=",",
+            kind_label="restriction",
         ),
         SuggestionSource(
             id="door_types",
@@ -189,6 +331,12 @@ def _static_sources() -> tuple[SuggestionSource, ...]:
             provider=StaticProvider.of([item.value for item in VersionScope], kind="version_scope"),
             kind=SourceKind.ENUMERABLE,
             kind_label="version_scope",
+        ),
+        SuggestionSource(
+            id="locales",
+            provider=StaticProvider.of(sorted(SUPPORTED_LOCALES), kind="locale"),
+            kind=SourceKind.ENUMERABLE,
+            kind_label="locale",
         ),
     )
 

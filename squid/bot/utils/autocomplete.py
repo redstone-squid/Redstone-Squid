@@ -82,22 +82,31 @@ def suggests(
                 logger.exception("Autocomplete failed", extra={"source": source, "current": current})
             return []
 
+    # Stamped so the wiring test can read which source a command actually asks for. discord.py
+    # validates that the parameter exists; nothing else would catch a source id that does not.
+    autocomplete.__squid_source__ = source  # pyrefly: ignore[missing-attribute]
     return autocomplete
 
 
-def autocompletes(**params: str) -> Callable[[Any], Any]:
+def autocompletes(**params: "str | AutocompleteCallback") -> Callable[[Any], Any]:
     """Attach suggestion sources to several parameters of one command.
 
     Applied above the command decorator, so it receives the built command:
 
-        @autocompletes(build_id="builds")
+        @autocompletes(build_id="builds", restrictions=suggests("restriction_ids", multi=True))
         @build_group.command(name="view")
         async def view_build(self, ctx, build_id: int) -> None: ...
+
+    A parameter that needs no configuration is named by its source id; anything else passes a
+    `suggests(...)` callback directly. discord.py rejects an unknown parameter name or an
+    unsupported option type at decoration time, so a mismatch fails at import rather than in
+    production.
     """
 
     def decorator(command: Any) -> Any:
         for parameter, source in params.items():
-            command.autocomplete(parameter)(suggests(source))
+            callback = suggests(source) if isinstance(source, str) else source
+            command.autocomplete(parameter)(callback)
         return command
 
     return decorator
@@ -169,12 +178,13 @@ def _choice(
     prefix: str,
     separator: str | None,
 ) -> app_commands.Choice[Any]:
-    value = prefix + item.value if separator is not None else item.value
+    if separator is not None:
+        # A list-valued parameter is a string parameter by construction, whatever the type of the
+        # individual entries: the value carries everything already typed alongside this one.
+        return app_commands.Choice(name=_name(item, prefix, separator), value=prefix + item.value)
     return app_commands.Choice(
         name=_name(item, prefix, separator),
-        # A source is declared integer-valued only where the parameter is an integer, and an
-        # integer parameter cannot carry the already-typed prefix of a list.
-        value=int(value) if source.value_type is ValueType.INTEGER else value,
+        value=int(item.value) if source.value_type is ValueType.INTEGER else item.value,
     )
 
 

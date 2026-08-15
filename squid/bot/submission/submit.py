@@ -21,6 +21,7 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
+from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
 from squid.bot.utils.embeds import RunningMessage
@@ -101,6 +102,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         world_download_urls: list[str] = flag(name="world_download_links", default=_list_default, converter=ListConverter, description='Links to download the world.')
         # fmt: on
 
+    @autocompletes(
+        pattern=suggests("approved_patterns", multi=True),
+        works_in="approved_source_versions",
+        restrictions=suggests("approved_restrictions", multi=True),
+        creators=suggests("creators", multi=True),
+    )
     @BuildCommandGroup.build_hybrid_group.command(name="submit-full")  # type: ignore
     async def submit_door(self, ctx: Context[BotT], *, flags: SubmitDoorFlags):
         """Submit a build with every field available at once.
