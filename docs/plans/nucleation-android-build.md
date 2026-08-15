@@ -57,18 +57,19 @@ With all three workarounds applied (see `pyproject.toml`'s
 `from_data` round-trip, `Fingerprint.compute`, and `TickSimulation.from_schematic` -- the calls
 `nucleation_adapter.py` actually makes for import, sanitization, and simulation.
 
-## A fourth finding: not an upstream bug, ours to fix separately
+## A fourth finding: application regression, fixed locally
 
 `nucleation_adapter.py`'s `render()` (`squid/schematics/infrastructure/nucleation_adapter.py`)
-calls `nucleation.RenderConfig.create()` with no arguments, then `.set_isometric(...)` and
-`.set_background(...)`. None of those three calls match the installed 0.10.14 API:
-`RenderConfig.create` requires `(width: int, height: int)`, and neither `set_isometric` nor
-`set_background` exist on `RenderConfig` at all (only `set_yaw`/`set_pitch`/`set_zoom`/
-`set_sphere_fit`/`set_fov`/`set_directional_light`). `render()` will raise `TypeError` /
-`AttributeError` immediately on any call, on any platform -- this isn't Android-specific.
+called `nucleation.RenderConfig.create()` with no arguments, then `.set_isometric(width,
+height)`. The installed 0.10.14 API instead requires `RenderConfig.create(width, height)` and
+exposes a no-argument `set_isometric()`. `set_background(r, g, b, a)` is still present; the
+initial inspection missed it. The old adapter therefore raised `TypeError` before reaching the
+GPU on every platform -- this wasn't Android-specific.
 
 The rendering surface evidently changed shape after `render()` was first written (git history:
 `8466182c`, "schematics: render submission previews") and before the `nucleation` pin was
-bumped to 0.10.14 in `06f55f90`. This needs its own fix -- mapping the isometric framing and
-background color onto the current `create(width, height)` + yaw/pitch/zoom/fov API -- tracked
-separately from the build issues above since it's application code, not a packaging problem.
+bumped to 0.10.14 in `06f55f90`. Fixed in `13a1adcc`: the adapter now creates the config with
+the requested dimensions, establishes Nucleation's isometric baseline, selects the requested
+projection, and then applies sphere-fit, camera overrides, and the RGBA background. A focused
+contract test invokes the installed binding so another signature mismatch fails before a real
+render job. No upstream issue was filed because Nucleation's 0.10.14 guide and binding agree.
