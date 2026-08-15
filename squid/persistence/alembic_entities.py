@@ -17,6 +17,6 @@ ALEMBIC_UTIL_ENTITIES: list[ReplaceableEntity] = [
 ]
 """The exact functions and triggers Alembic owns in the public schema."""
 
-if len(_FUNCTION_SQL) != 16 or len(_TRIGGER_SQL) != 41:
-    msg = "postgres_entities.sql must define exactly 16 functions and 41 triggers"
+if len(_FUNCTION_SQL) != 13 or len(_TRIGGER_SQL) != 38:
+    msg = "postgres_entities.sql must define exactly 13 functions and 38 triggers"
     raise RuntimeError(msg)

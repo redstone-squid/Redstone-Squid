@@ -1,14 +1,8 @@
-"""Tracked message domain values."""
+"""Discord message domain values."""
 
 from dataclasses import dataclass
-from typing import Literal
 
 from whenever import Instant
-
-MessagePurposeLiteral = Literal["view_pending_build", "view_confirmed_build", "vote", "build_original_message"]
-"""Legacy tracking roles, retired as each writer moves onto `discord_posts`."""
-
-ProjectionResourceKind = Literal["build", "vote_session"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,35 +23,20 @@ class MessageFact:
 
 
 @dataclass(frozen=True, slots=True)
-class TrackedMessage:
-    """Discord message metadata needed for persistence."""
-
-    id: int
-    server_id: int
-    channel_id: int
-    author_id: int
-    content: str | None
-
-
-@dataclass(frozen=True, slots=True)
 class MessageRecord:
-    """Stored message metadata exposed outside persistence."""
+    """A stored message fact, as read back out of persistence."""
 
     id: int
-    server_id: int | None
     channel_id: int | None
     author_id: int
-    purpose: MessagePurposeLiteral | None
-    content: str | None
-    build_id: int | None
-    vote_session_id: int | None
-    updated_at: Instant | None
+    guild_id: int | None = None
+    content: str | None = None
     created_at: Instant | None = None
     observed_at: Instant | None = None
     edited_at: Instant | None = None
     deleted_at: Instant | None = None
-    projection_resource_kind: ProjectionResourceKind | None = None
-    projection_source_key: str | None = None
-    desired_action: Literal["refresh", "delete"] = "refresh"
-    desired_revision: int = 1
-    applied_revision: int = 1
+
+    @property
+    def is_deleted(self) -> bool:
+        """Whether Discord has reported this message gone."""
+        return self.deleted_at is not None

@@ -1,20 +1,11 @@
 """Tracked message application service tests."""
 
-from collections.abc import Sequence
 from dataclasses import replace
 
-import pytest
 from whenever import Instant
 
 from squid.messages.application import MessageService
-from squid.messages.domain import (
-    MessageFact,
-    MessagePurposeLiteral,
-    MessageRecord,
-    ProjectionResourceKind,
-    TrackedMessage,
-)
-from squid.messages.errors import InvalidMessageError
+from squid.messages.domain import MessageFact, MessageRecord
 
 
 class FakeMessageRepository:
@@ -37,49 +28,24 @@ class FakeMessageRepository:
         self.edited_at[message_id] = edited_at
         return True
 
+    async def get_by_id(self, message_id: int) -> MessageRecord | None:
+        fact = self.facts.get(message_id)
+        if fact is None:
+            return None
+        return MessageRecord(
+            id=fact.id,
+            channel_id=fact.channel_id,
+            author_id=fact.author_id,
+            guild_id=fact.guild_id,
+            content=fact.content,
+            deleted_at=self.deleted_at.get(message_id),
+        )
+
     async def mark_deleted(self, message_id: int, deleted_at: Instant) -> bool:
         if message_id not in self.facts or message_id in self.deleted_at:
             return False
         self.deleted_at[message_id] = deleted_at
         return True
-
-    async def insert(
-        self,
-        message_id: int,
-        server_id: int,
-        channel_id: int,
-        author_id: int,
-        purpose: MessagePurposeLiteral,
-        content: str | None,
-        *,
-        build_id: int | None = None,
-        vote_session_id: int | None = None,
-    ) -> None:
-        return None
-
-    async def update_edited_time(self, message_id: int) -> None:
-        return None
-
-    async def get_by_id(self, message_id: int) -> MessageRecord | None:
-        return None
-
-    async def delete_by_id(self, message_id: int) -> MessageRecord:
-        msg = "not implemented by this test fake"
-        raise LookupError(msg)
-
-    async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
-        return []
-
-    async def list_for_build_purpose(self, build_id: int, purpose: MessagePurposeLiteral) -> Sequence[MessageRecord]:
-        return []
-
-    async def list_projection(self, resource_kind: ProjectionResourceKind, source_key: str) -> Sequence[MessageRecord]:
-        return []
-
-    async def mark_projection_applied(
-        self, resource_kind: ProjectionResourceKind, source_key: str, generation: int
-    ) -> None:
-        return None
 
 
 def _fact(message_id: int = 1, *, content: str | None = "hello") -> MessageFact:
@@ -125,20 +91,3 @@ async def test_edits_and_deletes_report_whether_the_message_was_known() -> None:
     # A redelivered raw event must not move the tombstone forward.
     assert await service.mark_deleted(1) is False
     assert await service.mark_deleted(999) is False
-
-
-async def test_message_service_requires_vote_session_id() -> None:
-    service = MessageService(FakeMessageRepository())
-    message = TrackedMessage(1, 2, 3, 4, "content")
-
-    with pytest.raises(InvalidMessageError, match="vote_session_id"):
-        await service.track(message, "vote")
-
-
-async def test_message_service_requires_build_id_for_build_views() -> None:
-    """`view_confirmed_build` went unvalidated: the guard named a purpose that never existed."""
-    service = MessageService(FakeMessageRepository())
-    message = TrackedMessage(1, 2, 3, 4, "content")
-
-    with pytest.raises(InvalidMessageError, match="build_id"):
-        await service.track(message, "view_confirmed_build")
