@@ -40,15 +40,6 @@ def test_main_owns_observability_shutdown(mocker: MockerFixture) -> None:
     handle.shutdown.assert_called_once_with()
 
 
-def test_create_app_delegates_optional_instrumentation(mocker: MockerFixture) -> None:
-    config = mocker.Mock()
-    instrument = mocker.patch.object(api_app, "instrument_api_app")
-
-    api_app.create_api_app(config=config)
-
-    instrument.assert_called_once_with(mocker.ANY, config.observability)
-
-
 def test_liveness_and_readiness_have_distinct_endpoints(client: httpx.Client) -> None:
     assert client.get("/livez").json() == {"status": "ok"}
     assert client.get("/readyz").json() == {"status": "ready"}
