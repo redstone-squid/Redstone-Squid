@@ -85,7 +85,8 @@ class PendingTagDefinitions(Protocol):
 
 def build_registry(
     *,
-    session_factory: async_sessionmaker[AsyncSession],
+    session_factory: async_sessionmaker[AsyncSession] | None = None,
+    repository: PostgresSuggestionRepository | None = None,
     search: SearchFields,
     versions: CanonicalMinecraftVersions,
     tags: PendingTagDefinitions,
@@ -98,9 +99,14 @@ def build_registry(
 
     The optional dependencies are Discord-only capabilities; the API process has no starboards or
     guild-scoped permission roles, so those sources are simply absent there rather than registered
-    against a service that does not exist.
+    against a service that does not exist. `repository` is an injection point for tests, which need
+    the real providers and revision arithmetic without a database behind them.
     """
-    repository = PostgresSuggestionRepository(session_factory)
+    if repository is None:
+        if session_factory is None:
+            msg = "build_registry needs either a session factory or a repository"
+            raise ValueError(msg)
+        repository = PostgresSuggestionRepository(session_factory)
     return SuggestionRegistry.of(
         (
             *_taxonomy_sources(repository),
