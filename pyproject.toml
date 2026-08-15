@@ -114,17 +114,23 @@ link-mode = "copy"
 exclude-newer = "7 days"
 # maturin cannot infer Termux's minimum SDK from its Python platform metadata. These packages
 # build from source on Android, where Termux's current toolchain targets API 24.
-extra-build-variables = {
-    cryptography = { ANDROID_API_LEVEL = "24" },
-    jiter = { ANDROID_API_LEVEL = "24" },
-    orjson = { ANDROID_API_LEVEL = "24" },
-    pydantic-core = { ANDROID_API_LEVEL = "24" },
-}
 # nucleation releases faster than the 7-day soak window (0.3.0 -> 0.9.2 inside two weeks), so
 # the global cutoff would pin us to a version several API generations behind the one this
 # integration targets. Carved out deliberately: the dependency is pinned exactly and its
 # wheel hashes are locked, and it is an optional extra that no default deployment installs.
 exclude-newer-package = { nucleation = "2026-08-05T00:00:00Z" }
+
+[tool.uv.extra-build-variables]
+cryptography = { ANDROID_API_LEVEL = "24" }
+hypothesis = { ANDROID_API_LEVEL = "24" }
+jiter = { ANDROID_API_LEVEL = "24" }
+jsonschema-rs = { ANDROID_API_LEVEL = "24" }
+orjson = { ANDROID_API_LEVEL = "24" }
+pydantic-core = { ANDROID_API_LEVEL = "24" }
+prek = { ANDROID_API_LEVEL = "24" }
+pyrefly = { ANDROID_API_LEVEL = "24" }
+rpds-py = { ANDROID_API_LEVEL = "24" }
+ruff = { ANDROID_API_LEVEL = "24" }
 
 [tool.ruff]
 line-length = 120
