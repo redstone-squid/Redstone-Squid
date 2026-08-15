@@ -13,7 +13,7 @@ from squid.api.security import Principal, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.permissions.domain.catalogue import VOTE_POLL_CAST
-from squid.voting.domain import CastVoteResult
+from squid.voting.domain import CastVoteResult, VoteRejection
 
 router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
 UserVoter = Annotated[Principal, Depends(requires(VOTE_POLL_CAST))]
@@ -85,15 +85,15 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
     match result.rejection:
         case None:
             return
-        case "not_found":
+        case VoteRejection.NOT_FOUND:
             raise _vote_not_found(vote_session_id)
-        case "closed":
+        case VoteRejection.CLOSED:
             msg = "The vote session is closed."
             raise ConflictError(msg, resource="vote_session")
-        case "invalid_option":
+        case VoteRejection.INVALID_OPTION:
             msg = "The option is not available in this guild."
             raise ValidationError(msg, resource="vote")
-        case "wrong_guild" | "not_eligible" | "not_authorized":
+        case VoteRejection.WRONG_GUILD | VoteRejection.NOT_ELIGIBLE | VoteRejection.NOT_AUTHORIZED:
             raise AuthorizationError
 
 

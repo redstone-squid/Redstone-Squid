@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from whenever import Instant
 
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CreatorAlias, CreatorProfile
@@ -26,7 +25,8 @@ from squid.tags.domain import (
 from squid.versions.application.services import VersionService
 from squid.versions.domain import MinecraftVersion
 from squid.voting.application import VoteService
-from squid.voting.domain import GenericPoll, VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteTarget
+from squid.voting.domain import VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteVisibility
+from tests.helpers.voting import poll_snapshot
 from tests.unit.api.fakes import MockDatabaseManager
 
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
@@ -202,20 +202,14 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     app_factory: tuple[FastAPI, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
-    session = VoteSessionSnapshot(
+    session = poll_snapshot(
         id=9,
         author_account_id=123,
-        kind="generic",
-        status="open",
-        result="pending",
-        pass_threshold=1,
-        fail_threshold=1,
-        votes={111: 2.5},
-        messages=(),
+        question="Pick a color",
+        visibility=VoteVisibility.ANONYMOUS_HIDDEN,
+        guild_id=99,
         options=(VoteOption("1", VoteChoice.GENERIC, identifier="red", label="Red"),),
-        target=VoteTarget(),
         selections=(VoteSelection(111, 222, 99, "red", "1", 2.5),),
-        poll=GenericPoll("Pick a color", "anonymous_hidden", 99, Instant.now().add(hours=1)),
     )
     _override(app, votes=VoteFake(session))
 
