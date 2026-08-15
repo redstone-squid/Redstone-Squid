@@ -9661,6 +9661,224 @@
         }
       }
     },
+    "/v1/suggest": {
+      "get": {
+        "tags": [
+          "suggest"
+        ],
+        "summary": "List Sources",
+        "description": "Publish the registered sources and how to drive each one.",
+        "operationId": "suggestion_sources_list",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SuggestionSourceInfo"
+                  },
+                  "type": "array",
+                  "title": "Response List Sources V1 Suggest Get"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/suggest/{source}": {
+      "get": {
+        "tags": [
+          "suggest"
+        ],
+        "summary": "Suggest",
+        "description": "Return ranked completions for a partially typed value.\n\nAn unknown source is a 404, because that is a bad URL. Anything else — a gated source the\ncaller cannot read, a provider that failed — is an empty list, matching what the other\nsurfaces do: a dropdown with nothing in it, not an error under a half-typed word.",
+        "operationId": "suggestions_get",
+        "security": [
+          {}
+        ],
+        "parameters": [
+          {
+            "name": "source",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 25,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,63}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionPage"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/tags": {
       "get": {
         "tags": [
@@ -15023,6 +15241,15 @@
         "title": "ServerProfileSchema",
         "description": "Explicit public listing and sponsor preferences for a Paper server."
       },
+      "SourceKind": {
+        "type": "string",
+        "enum": [
+          "enumerable",
+          "queried"
+        ],
+        "title": "SourceKind",
+        "description": "How a source produces candidates."
+      },
       "StoredDraftResponse": {
         "properties": {
           "id": {
@@ -15219,6 +15446,157 @@
         ],
         "title": "SubscriptionKind",
         "description": "Durable subject types an account may follow."
+      },
+      "SuggestionItem": {
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "Value"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "value",
+          "label",
+          "description",
+          "kind"
+        ],
+        "title": "SuggestionItem",
+        "description": "One candidate completion.\n\n`value` is what a client submits and `label` is what it shows. They differ wherever a command\nor form field stores an identifier the user should never have to see."
+      },
+      "SuggestionPage": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionReplacement"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestionItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "source",
+          "revision",
+          "replacement",
+          "items"
+        ],
+        "title": "SuggestionPage",
+        "description": "Ranked completions for one partially typed value."
+      },
+      "SuggestionReplacement": {
+        "properties": {
+          "start": {
+            "type": "integer",
+            "title": "Start"
+          },
+          "end": {
+            "type": "integer",
+            "title": "End"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SuggestionReplacement",
+        "description": "The half-open range of the submitted query a value replaces."
+      },
+      "SuggestionSourceInfo": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/ValueType"
+          },
+          "context_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Context Keys"
+          },
+          "multi_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Multi Value"
+          },
+          "requires_authentication": {
+            "type": "boolean",
+            "title": "Requires Authentication"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "value_type",
+          "context_keys",
+          "multi_value",
+          "requires_authentication"
+        ],
+        "title": "SuggestionSourceInfo",
+        "description": "What a client needs to know to drive one source without hardcoding it."
       },
       "TagDetail": {
         "properties": {
@@ -15558,6 +15936,15 @@
         ],
         "title": "ValueKind",
         "description": "Canonical JSON value expected from a field."
+      },
+      "ValueType": {
+        "type": "string",
+        "enum": [
+          "string",
+          "integer"
+        ],
+        "title": "ValueType",
+        "description": "The scalar type a suggestion's value carries."
       },
       "VersionDetail": {
         "properties": {
@@ -15919,6 +16306,10 @@
     {
       "name": "search",
       "description": "Search grammar and field discovery."
+    },
+    {
+      "name": "suggest",
+      "description": "Typeahead completions for registered value sources."
     },
     {
       "name": "submissions",

@@ -2389,6 +2389,13 @@ export type ServerProfileSchema = {
 };
 
 /**
+ * SourceKind
+ *
+ * How a source produces candidates.
+ */
+export type SourceKind = 'enumerable' | 'queried';
+
+/**
  * StoredDraftResponse
  *
  * The compacted current state of one caller-owned synchronized draft.
@@ -2498,6 +2505,96 @@ export type SubmissionOrigin = 'discord' | 'web' | 'cli' | 'paper' | 'fabric';
  * Durable subject types an account may follow.
  */
 export type SubscriptionKind = 'creator' | 'record' | 'record_filter';
+
+/**
+ * SuggestionItem
+ *
+ * One candidate completion.
+ *
+ * `value` is what a client submits and `label` is what it shows. They differ wherever a command
+ * or form field stores an identifier the user should never have to see.
+ */
+export type SuggestionItem = {
+    /**
+     * Value
+     */
+    value: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Kind
+     */
+    kind: string;
+};
+
+/**
+ * SuggestionPage
+ *
+ * Ranked completions for one partially typed value.
+ */
+export type SuggestionPage = {
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Revision
+     */
+    revision: number | null;
+    replacement: SuggestionReplacement | null;
+    /**
+     * Items
+     */
+    items: Array<SuggestionItem>;
+};
+
+/**
+ * SuggestionReplacement
+ *
+ * The half-open range of the submitted query a value replaces.
+ */
+export type SuggestionReplacement = {
+    /**
+     * Start
+     */
+    start: number;
+    /**
+     * End
+     */
+    end: number;
+};
+
+/**
+ * SuggestionSourceInfo
+ *
+ * What a client needs to know to drive one source without hardcoding it.
+ */
+export type SuggestionSourceInfo = {
+    /**
+     * Id
+     */
+    id: string;
+    kind: SourceKind;
+    value_type: ValueType;
+    /**
+     * Context Keys
+     */
+    context_keys: Array<string>;
+    /**
+     * Multi Value
+     */
+    multi_value: string | null;
+    /**
+     * Requires Authentication
+     */
+    requires_authentication: boolean;
+};
 
 /**
  * TagDetail
@@ -2689,6 +2786,13 @@ export type ValidationError = {
  * Canonical JSON value expected from a field.
  */
 export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_list' | 'game_ticks';
+
+/**
+ * ValueType
+ *
+ * The scalar type a suggestion's value carries.
+ */
+export type ValueType = 'string' | 'integer';
 
 /**
  * VersionDetail
@@ -6399,6 +6503,96 @@ export type SubmissionMediaGetResponses = {
 };
 
 export type SubmissionMediaGetResponse = SubmissionMediaGetResponses[keyof SubmissionMediaGetResponses];
+
+export type SuggestionSourcesListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/suggest';
+};
+
+export type SuggestionSourcesListErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SuggestionSourcesListError = SuggestionSourcesListErrors[keyof SuggestionSourcesListErrors];
+
+export type SuggestionSourcesListResponses = {
+    /**
+     * Response List Sources V1 Suggest Get
+     *
+     * Successful Response
+     */
+    200: Array<SuggestionSourceInfo>;
+};
+
+export type SuggestionSourcesListResponse = SuggestionSourcesListResponses[keyof SuggestionSourcesListResponses];
+
+export type SuggestionsGetData = {
+    body?: never;
+    path: {
+        /**
+         * Source
+         */
+        source: string;
+    };
+    query?: {
+        /**
+         * Q
+         */
+        q?: string;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Cursor
+         */
+        cursor?: number | null;
+        /**
+         * Category
+         */
+        category?: string | null;
+    };
+    url: '/v1/suggest/{source}';
+};
+
+export type SuggestionsGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SuggestionsGetError = SuggestionsGetErrors[keyof SuggestionsGetErrors];
+
+export type SuggestionsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: SuggestionPage;
+};
+
+export type SuggestionsGetResponse = SuggestionsGetResponses[keyof SuggestionsGetResponses];
 
 export type TagsListData = {
     body?: never;

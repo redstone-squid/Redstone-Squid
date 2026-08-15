@@ -16,6 +16,7 @@ from squid.api.v1.schematics import router as schematics_router
 from squid.api.v1.search import router as search_router
 from squid.api.v1.submission_media import router as submission_media_router
 from squid.api.v1.submissions import router as submissions_router
+from squid.api.v1.suggest import router as suggest_router
 from squid.api.v1.tags import router as tags_router
 from squid.api.v1.users import profiles_router
 from squid.api.v1.users import router as users_router
@@ -39,6 +40,7 @@ router.include_router(schematics_router)
 router.include_router(search_router)
 router.include_router(submissions_router)
 router.include_router(submission_media_router)
+router.include_router(suggest_router)
 router.include_router(tags_router)
 router.include_router(users_router)
 router.include_router(profiles_router)
@@ -57,6 +59,7 @@ TAGS_METADATA = [
     },
     {"name": "builds", "description": "Public redstone build catalog."},
     {"name": "search", "description": "Search grammar and field discovery."},
+    {"name": "suggest", "description": "Typeahead completions for registered value sources."},
     {"name": "submissions", "description": "Revisioned submission forms and synchronized drafts."},
     {"name": "records", "description": "Active computed record results."},
     {"name": "tags", "description": "Published build and record taxonomy."},

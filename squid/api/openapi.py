@@ -140,6 +140,8 @@ OPERATIONS = (
     _operation("get", "/v1/search/fields", "search_fields_list"),
     _operation("get", "/v1/search/suggest", "search_terms_suggest"),
     _operation("get", "/v1/search", "search_execute"),
+    _operation("get", "/v1/suggest", "suggestion_sources_list"),
+    _operation("get", "/v1/suggest/{source}", "suggestions_get"),
     _operation(
         "get",
         "/v1/submissions/drafts",
