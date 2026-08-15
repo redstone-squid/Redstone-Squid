@@ -15,11 +15,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.infrastructure.models import AccountIdentity, CreatorAlias
-from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, BuildLink, OriginalMessage
+from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, BuildLink, SourceMessage
 from squid.builds.infrastructure.models import (
     Build as SQLBuild,
 )
-from squid.builds.infrastructure.models import BuildCreator, BuildVersion, Door, Entrance, Extender, Other, Utility
+from squid.builds.infrastructure.models import (
+    BuildCreator,
+    BuildSourceMessage,
+    BuildVersion,
+    Door,
+    Entrance,
+    Extender,
+    Other,
+    Utility,
+)
 from squid.core.errors import DataIntegrityError
 from squid.messages.infrastructure.models import Message
 from squid.sponsors import PublicSponsor
@@ -84,7 +93,7 @@ class _CrossContextValues:
     creators: Mapping[int, list[str]]
     submitter_discord_ids: Mapping[int, int]
     versions: Mapping[int, list[str]]
-    messages: Mapping[int, Message]
+    source_messages: Mapping[int, list[SourceMessage]]
 
 
 class BuildMapper:
@@ -112,9 +121,6 @@ class BuildMapper:
         build_ids = [sql_build.id for sql_build in sql_builds]
         account_ids = {
             sql_build.submitter_account_id for sql_build in sql_builds if sql_build.submitter_account_id is not None
-        }
-        message_ids = {
-            sql_build.original_message_id for sql_build in sql_builds if sql_build.original_message_id is not None
         }
 
         creators: dict[int, list[str]] = {build_id: [] for build_id in build_ids}
@@ -145,13 +151,18 @@ class BuildMapper:
                 f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
             )
 
-        messages: dict[int, Message] = {}
-        if message_ids:
-            messages = {
-                message.id: message
-                for message in (await session.scalars(select(Message).where(Message.id.in_(message_ids)))).all()
-            }
-        return _CrossContextValues(creators, submitter_discord_ids, versions, messages)
+        # Links and message facts in one statement: two tables, but one round trip, so
+        # provenance costs the same whether or not the page has any.
+        source_messages: dict[int, list[SourceMessage]] = {build_id: [] for build_id in build_ids}
+        for build_id, message in await session.execute(
+            select(BuildSourceMessage.build_id, Message)
+            .join(Message, BuildSourceMessage.message_id == Message.id)
+            .where(BuildSourceMessage.build_id.in_(build_ids))
+            .order_by(BuildSourceMessage.build_id, BuildSourceMessage.position)
+        ):
+            source_messages[build_id].append(_source_message(message))
+
+        return _CrossContextValues(creators, submitter_discord_ids, versions, source_messages)
 
     @staticmethod
     def _to_domain(sql_build: SQLBuild, values: _CrossContextValues) -> Build:
@@ -165,10 +176,7 @@ class BuildMapper:
             if sql_build.submitter_account_id is None
             else values.submitter_discord_ids.get(sql_build.submitter_account_id)
         )
-        original_message = _original_message(
-            sql_build.original_message_id,
-            None if sql_build.original_message_id is None else values.messages.get(sql_build.original_message_id),
-        )
+        source_messages = tuple(values.source_messages.get(sql_build.id, ()))
 
         tags = [_tag_assignment_to_domain(assignment) for assignment in sql_build.tag_assignments]
         official_restrictions = [
@@ -235,7 +243,7 @@ class BuildMapper:
             description=sql_build.description,
             submission_time=sql_build.submission_time,
             edited_time=sql_build.edited_time,
-            original_message=original_message,
+            source_messages=source_messages,
             ai_generated=sql_build.ai_generated,
             embedding=sql_build.embedding,
             **category_values_from_row(sql_build),
@@ -265,14 +273,11 @@ class BuildMapper:
         )
 
 
-def _original_message(message_id: int | None, message: Message | None) -> OriginalMessage | None:
-    if message_id is None:
-        return None
-    if message is None:
-        return OriginalMessage(message_id=message_id)
-    return OriginalMessage(
-        message_id=message_id,
-        server_id=message.server_id,
+def _source_message(message: Message) -> SourceMessage:
+    """Map one message fact reached through a build's source-message link."""
+    return SourceMessage(
+        message_id=message.id,
+        guild_id=message.server_id,
         channel_id=message.channel_id,
         author_id=message.author_id,
         content=message.content,

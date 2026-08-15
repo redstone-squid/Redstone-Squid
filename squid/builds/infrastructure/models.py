@@ -127,17 +127,6 @@ class Build(Base, kw_only=True):
         ForeignKey("accounts.id", name="builds_submitter_account_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    original_message_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey(
-            "messages.id",
-            name="builds_original_message_id_fkey",
-            ondelete="SET NULL",
-            onupdate="CASCADE",
-            use_alter=True,
-        ),
-        default=None,
-    )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(
         VECTOR(EMBEDDING_DIMENSION),
@@ -165,7 +154,6 @@ class Build(Base, kw_only=True):
     build_versions: Mapped[list[BuildVersion]] = relationship(
         back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
     )
-
     tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
         default_factory=list,
         lazy="selectin",
@@ -295,6 +283,33 @@ class BuildCreator(Base):
     )
 
     build: Mapped[Build] = relationship(back_populates="build_creators", lazy="raise_on_sql", repr=False, default=None)
+
+
+# Deliberately reachable only by explicit query, with no relationship on ``Build``:
+# ``BuildMapper`` batch-loads these joined to ``messages`` in a single statement, so an
+# eager load here would just add a second query to every page.
+class BuildSourceMessage(Base):
+    """Association table between builds and the Discord messages they came from.
+
+    Many-to-many in both directions: one submission can span a body message plus
+    follow-up images, and one build-log message can yield several builds at once.
+    The message side is RESTRICT because a message row is a retained fact that
+    outlives the builds referring to it; deleting a build only drops the link.
+    """
+
+    __tablename__ = "build_source_messages"
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="build_source_messages_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    message_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("messages.id", name="build_source_messages_message_id_fkey", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    """Submission order, so the first message stays identifiable as the request itself."""
 
 
 class BuildVersion(Base):

@@ -183,11 +183,15 @@ class BuildLink:
 
 
 @dataclass(frozen=True, slots=True)
-class OriginalMessage:
-    """The Discord message a build was originally submitted or inferred from."""
+class SourceMessage:
+    """A Discord message a build was submitted or inferred from.
+
+    A build can have several: a submission is often a body message plus follow-up
+    images, and one build-log message can yield several builds at once.
+    """
 
     message_id: int
-    server_id: int | None = None
+    guild_id: int | None = None
     channel_id: int | None = None
     author_id: int | None = None
     content: str | None = None
@@ -197,10 +201,10 @@ class OriginalMessage:
         """The Discord jump link to the message."""
         if self.channel_id is None:
             return None
-        if self.server_id is None:
+        if self.guild_id is None:
             msg = "This message is from DMs."
             raise NotImplementedError(msg)
-        return f"https://discord.com/channels/{self.server_id}/{self.channel_id}/{self.message_id}"
+        return f"https://discord.com/channels/{self.guild_id}/{self.channel_id}/{self.message_id}"
 
 
 class StagedMedia:
@@ -366,7 +370,7 @@ class Build(StagedMedia, StagedTaxonomy):
     submission_time: Instant | None = None
     edited_time: Instant | None = None
 
-    original_message: Final[OriginalMessage | None] = frozen_field(default=None)
+    source_messages: Final[tuple[SourceMessage, ...]] = frozen_field(default=())
 
     ai_generated: bool | None = None
     embedding: list[float] | None = field(default=None, repr=False)
@@ -378,8 +382,15 @@ class Build(StagedMedia, StagedTaxonomy):
 
     @property
     def original_link(self) -> str | None:
-        """The link to the original message of the build."""
-        return self.original_message.link if self.original_message is not None else None
+        """The jump link to the message this build was submitted from, if any.
+
+        The first source message is the submission itself; later ones are follow-ups
+        such as images, so linking anything else would point away from the request.
+        """
+        for message in self.source_messages:
+            if (link := message.link) is not None:
+                return link
+        return None
 
     @property
     def dimensions(self) -> tuple[int | None, int | None, int | None]:
@@ -549,7 +560,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
     completion_evidence: str | None = None
     description: str | None = None
 
-    original_message: OriginalMessage | None = None
+    source_messages: tuple[SourceMessage, ...] = ()
 
     ai_generated: bool | None = None
 
@@ -617,7 +628,7 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
             "completion_at": self.completion_at,
             "completion_evidence": self.completion_evidence,
             "description": self.description,
-            "original_message": self.original_message,
+            "source_messages": tuple(self.source_messages),
             "ai_generated": self.ai_generated,
         }
         match self.category:

@@ -1,5 +1,6 @@
 """Build application ports."""
 
+from collections.abc import Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from typing import Literal, Protocol
@@ -35,6 +36,8 @@ class BuildRepository(Protocol):
     async def get_by_id(self, build_id: int) -> Build | None: ...
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
+
+    async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]: ...
 
     async def save(self, build: Build) -> None: ...
 
