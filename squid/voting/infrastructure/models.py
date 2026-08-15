@@ -20,27 +20,43 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
-from squid.voting.domain import VoteChoiceLiteral, VoteSessionResultLiteral, VoteVisibility
+from squid.persistence.types import InstantUTC, StrEnumText
+from squid.voting.domain import VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+
+_KIND_VALUES = ", ".join(f"'{kind.value}'" for kind in VoteKind)
+_CHOICE_VALUES = ", ".join(f"'{choice.value}'" for choice in VoteChoice)
+_STATUS_VALUES = ", ".join(f"'{status.value}'" for status in VoteStatus)
+_RESULT_VALUES = ", ".join(f"'{result.value}'" for result in VoteSessionResult)
+_VISIBILITY_VALUES = ", ".join(f"'{visibility.value}'" for visibility in VoteVisibility)
+
+THRESHOLD_CONSTRAINT = (
+    "CASE WHEN kind = 'generic'"
+    " THEN pass_threshold IS NULL AND fail_threshold IS NULL"
+    " ELSE pass_threshold > 0 AND fail_threshold < 0"
+    " END"
+)
+"""Thresholds belong to score-closing kinds only.
+
+Generic polls close on a deadline, so a threshold on one is unreadable state; this
+is the constraint that stopped the `32767`/`-32768` sentinels from coming back.
+"""
 
 
 class VoteSession(Base, kw_only=True):
-    """A voting session for builds or log deletions."""
+    """A voting session for builds, log deletions, or generic polls."""
 
     __tablename__ = "vote_sessions"
     __table_args__ = (
-        CheckConstraint("fail_threshold < 0", name="vote_sessions_fail_threshold_check"),
-        CheckConstraint("pass_threshold > 0", name="vote_sessions_pass_threshold_check"),
-        CheckConstraint(
-            "result = ANY (ARRAY['approved', 'denied', 'cancelled', 'pending'])",
-            name="vote_sessions_result_check",
-        ),
+        CheckConstraint(THRESHOLD_CONSTRAINT, name="vote_sessions_threshold_kind_check"),
+        CheckConstraint(f"kind = ANY (ARRAY[{_KIND_VALUES}])", name="vote_sessions_kind_check"),
+        CheckConstraint(f"status = ANY (ARRAY[{_STATUS_VALUES}])", name="vote_sessions_status_check"),
+        CheckConstraint(f"result = ANY (ARRAY[{_RESULT_VALUES}])", name="vote_sessions_result_check"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
-    status: Mapped[str] = mapped_column(Text, nullable=False)
-    result: Mapped[VoteSessionResultLiteral] = mapped_column(
-        Text,
+    status: Mapped[VoteStatus] = mapped_column(StrEnumText(VoteStatus), nullable=False)
+    result: Mapped[VoteSessionResult] = mapped_column(
+        StrEnumText(VoteSessionResult),
         nullable=False,
         server_default=text("'pending'::text"),
         comment="The result of the vote session.",
@@ -49,9 +65,9 @@ class VoteSession(Base, kw_only=True):
         ForeignKey("accounts.id", name="vote_sessions_author_account_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
-    pass_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    fail_threshold: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    kind: Mapped[VoteKind] = mapped_column(StrEnumText(VoteKind), nullable=False)
+    pass_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    fail_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
@@ -77,7 +93,7 @@ class VoteSessionOption(Base, kw_only=True):
         UniqueConstraint(
             "vote_session_id", "guild_id", "position", name="vote_session_options_vote_session_id_position_key"
         ),
-        CheckConstraint("choice IN ('approve', 'deny', 'generic')", name="vote_session_options_choice_check"),
+        CheckConstraint(f"choice IN ({_CHOICE_VALUES})", name="vote_session_options_choice_check"),
         CheckConstraint(
             "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
             name="vote_session_options_multiplier_check",
@@ -99,7 +115,7 @@ class VoteSessionOption(Base, kw_only=True):
     identifier: Mapped[str] = mapped_column(Text, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, server_default=text("0"))
     emoji: Mapped[str] = mapped_column(Text, primary_key=True)
-    choice: Mapped[VoteChoiceLiteral] = mapped_column(Text, nullable=False)
+    choice: Mapped[VoteChoice] = mapped_column(StrEnumText(VoteChoice), nullable=False)
     label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -158,7 +174,7 @@ class GenericVoteSession(Base, kw_only=True):
     __tablename__ = "generic_vote_sessions"
     __table_args__ = (
         CheckConstraint(
-            "visibility IN ('anonymous_live', 'visible_live', 'anonymous_hidden')",
+            f"visibility IN ({_VISIBILITY_VALUES})",
             name="generic_vote_sessions_visibility_check",
         ),
         Index("generic_vote_sessions_deadline_idx", "deadline"),
@@ -168,11 +184,16 @@ class GenericVoteSession(Base, kw_only=True):
         ForeignKey("vote_sessions.id", ondelete="CASCADE", onupdate="CASCADE"),
         primary_key=True,
     )
-    guild_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("server_settings.server_id", ondelete="RESTRICT"), nullable=False
+    guild_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("server_settings.server_id", ondelete="RESTRICT"), nullable=True
     )
+    """The guild whose emoji palette the poll was drafted against.
+
+    Nullable so a poll can be created by a transport that has no guild -- the REST API
+    or a standalone draft -- and have its presentation messages attached afterwards.
+    """
     question: Mapped[str] = mapped_column(Text, nullable=False)
-    visibility: Mapped[VoteVisibility] = mapped_column(Text, nullable=False)
+    visibility: Mapped[VoteVisibility] = mapped_column(StrEnumText(VoteVisibility), nullable=False)
     deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
 
@@ -216,16 +237,16 @@ class GuildVoteEmoji(Base, kw_only=True):
     __tablename__ = "guild_vote_emojis"
     __table_args__ = (
         UniqueConstraint("guild_id", "kind", "position", name="guild_vote_emojis_position_key"),
-        CheckConstraint("kind IN ('build', 'delete_log', 'generic')"),
-        CheckConstraint("choice IN ('approve', 'deny', 'generic')"),
+        CheckConstraint(f"kind IN ({_KIND_VALUES})"),
+        CheckConstraint(f"choice IN ({_CHOICE_VALUES})"),
     )
     guild_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), primary_key=True
     )
-    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[VoteKind] = mapped_column(StrEnumText(VoteKind), primary_key=True)
     identifier: Mapped[str] = mapped_column(Text, nullable=False)
     emoji: Mapped[str] = mapped_column(Text, primary_key=True)
-    choice: Mapped[VoteChoiceLiteral] = mapped_column(Text, nullable=False)
+    choice: Mapped[VoteChoice] = mapped_column(StrEnumText(VoteChoice), nullable=False)
     label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
@@ -235,7 +256,7 @@ class GuildVoteRoleWeight(Base, kw_only=True):
 
     __tablename__ = "guild_vote_role_weights"
     __table_args__ = (
-        CheckConstraint("kind IN ('build', 'delete_log', 'generic')"),
+        CheckConstraint(f"kind IN ({_KIND_VALUES})"),
         CheckConstraint(
             "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
             name="guild_vote_role_weights_multiplier_check",
@@ -244,6 +265,6 @@ class GuildVoteRoleWeight(Base, kw_only=True):
     guild_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), primary_key=True
     )
-    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    kind: Mapped[VoteKind] = mapped_column(StrEnumText(VoteKind), primary_key=True)
     role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     multiplier: Mapped[float] = mapped_column(Float, nullable=False)

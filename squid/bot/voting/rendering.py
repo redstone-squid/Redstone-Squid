@@ -45,6 +45,10 @@ def render_build_review(
     else:
         approve = primary_emoji(snapshot, VoteChoice.APPROVE, guild_id)
         deny = primary_emoji(snapshot, VoteChoice.DENY, guild_id)
+        # A build review always threshold-closes, so both thresholds are set; the
+        # nullable ones belong to generic polls, which never reach this renderer.
+        assert snapshot.pass_threshold is not None
+        assert snapshot.fail_threshold is not None
         vote_text = (
             "### Vote in progress\n"
             f"React with {approve} to **accept** or {deny} to **deny**. Votes are anonymous.\n"
@@ -110,7 +114,9 @@ def generic_poll_text(snapshot: VoteSessionSnapshot) -> str:
     raw = snapshot.raw_tallies()
     weighted = snapshot.weighted_tallies()
     lines = [f"## {poll.question}"]
-    for option in snapshot.options_for_guild(poll.guild_id):
+    # A poll drafted outside a guild has no aliases of its own, so it falls back to
+    # the unscoped options rather than to some arbitrary guild's palette.
+    for option in snapshot.options_for_guild(poll.guild_id or 0):
         line = f"{option.emoji} **{option.label}**"
         if show_totals:
             line += (

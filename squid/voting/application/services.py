@@ -6,19 +6,20 @@ from math import isfinite
 
 from whenever import Instant
 
-from squid.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY
 from squid.voting.application.policies import RoleVoteWeightPolicy
 from squid.voting.application.ports import VoteActorResolver, VoteRepository, VoteWeightPolicy
 from squid.voting.domain import (
     DEFAULT_GENERIC_EMOJIS,
     DEFAULT_VOTE_OPTIONS,
+    MAX_POLL_DURATION_SECONDS,
+    MIN_POLL_DURATION_SECONDS,
     CastVoteResult,
     EmojiPreset,
     RoleWeight,
     VoteActor,
     VoteChange,
     VoteChoice,
-    VoteKindLiteral,
+    VoteKind,
     VoteOption,
     VoteRefreshResult,
     VoteRejection,
@@ -64,7 +65,7 @@ class VoteService:
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
         """Create a build vote and its target atomically."""
-        options = normalize_vote_options(options, kind="build")
+        options = normalize_vote_options(options, kind=VoteKind.BUILD)
         return await self._repository.create_build_session(
             author_account_id=author_account_id,
             pass_threshold=pass_threshold,
@@ -90,7 +91,7 @@ class VoteService:
         can race the event consumer. The repository serializes both callers by build
         so they converge on one session.
         """
-        options = normalize_vote_options(options, kind="build")
+        options = normalize_vote_options(options, kind=VoteKind.BUILD)
         return await self._repository.get_or_create_build_submission_session(
             author_account_id=author_account_id,
             pass_threshold=pass_threshold,
@@ -112,7 +113,7 @@ class VoteService:
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
         """Create a message-deletion vote and its target atomically."""
-        options = normalize_vote_options(options, kind="delete_log")
+        options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
         return await self._repository.create_delete_log_session(
             author_account_id=author_account_id,
             pass_threshold=pass_threshold,
@@ -123,35 +124,40 @@ class VoteService:
             options=options,
         )
 
-    async def start_generic_vote(
+    async def create_generic_poll(
         self,
         *,
         author_account_id: int,
-        guild_id: int,
         question: str,
         visibility: VoteVisibility,
-        deadline: Instant,
+        duration_seconds: int,
         options: Sequence[VoteOption],
+        guild_id: int | None = None,
+        now: Instant | None = None,
     ) -> int:
-        """Create a generic poll with arbitrary stable choices."""
+        """Create a generic poll independently of where it will be shown.
+
+        Creation takes a duration rather than a deadline, and takes no channel at all:
+        the card is a `discord_posts` row that the reconciler adopts afterwards, so a
+        Discord outage after this returns loses a message, not a poll.
+        """
         if not question.strip():
             msg = "Poll question cannot be empty."
             raise InvalidVoteConfigurationError(msg)
-        now = Instant.now()
-        if deadline < now.add(seconds=59) or deadline > now.add(hours=24 * 30, minutes=1):
+        if not MIN_POLL_DURATION_SECONDS <= duration_seconds <= MAX_POLL_DURATION_SECONDS:
             msg = "Poll duration must be between 1 minute and 30 days."
-            raise InvalidVoteConfigurationError(msg)
-        options = normalize_vote_options(options, kind="generic")
-        if any(option.guild_id not in (None, guild_id) for option in options):
+            raise InvalidVoteConfigurationError(msg, context={"duration_seconds": duration_seconds})
+        options = normalize_vote_options(options, kind=VoteKind.GENERIC)
+        if guild_id is not None and any(option.guild_id not in (None, guild_id) for option in options):
             msg = "Poll options must belong to the poll guild."
             raise InvalidVoteConfigurationError(msg)
         return await self._repository.create_generic_session(
             author_account_id=author_account_id,
-            guild_id=guild_id,
             question=question.strip(),
             visibility=visibility,
-            deadline=deadline,
+            deadline=(now or Instant.now()).add(seconds=duration_seconds),
             options=options,
+            guild_id=guild_id,
         )
 
     async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
@@ -160,7 +166,7 @@ class VoteService:
     async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return await self._repository.get_by_id(vote_session_id)
 
-    async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
+    async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         return await self._repository.list_open(kind)
 
     async def cast_vote_by_session(
@@ -172,35 +178,32 @@ class VoteService:
         """Cast a vote using transport-neutral session and option identifiers."""
         snapshot = await self._repository.get_by_id(vote_session_id)
         if snapshot is None:
-            return CastVoteResult(session=None, rejection="not_found")
+            return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
         message = next((item for item in snapshot.messages if item.guild_id == actor.guild_id), None)
         if message is None:
-            return CastVoteResult(session=snapshot, rejection="wrong_guild")
-        option = next(
-            (item for item in snapshot.options_for_guild(message.guild_id) if item.identifier == option_id),
-            None,
-        )
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
+        option = snapshot.option_by_id(option_id, message.guild_id)
         if option is None:
-            return CastVoteResult(session=snapshot, rejection="invalid_option")
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
         return await self.cast_vote(message.id, actor, option.emoji)
 
     async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
-            return CastVoteResult(session=None, rejection="not_found")
-        if snapshot.status != "open":
-            return CastVoteResult(session=snapshot, rejection="closed")
+            return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
+        if not snapshot.is_open:
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
         message = next((item for item in snapshot.messages if item.id == message_id), None)
         message_guild_id = message.guild_id if message is not None else actor.guild_id
         if actor.guild_id and message_guild_id and actor.guild_id != message_guild_id:
-            return CastVoteResult(session=snapshot, rejection="wrong_guild")
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
 
-        option = next((item for item in snapshot.options_for_guild(message_guild_id) if item.emoji == emoji), None)
+        option = snapshot.option_by_emoji(emoji, message_guild_id)
         if option is None:
-            return CastVoteResult(session=snapshot, rejection="invalid_option")
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
         weight = await self._policy.calculate(actor, snapshot, emoji)
         if weight is None:
-            return CastVoteResult(session=snapshot, rejection="not_eligible")
+            return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
         if not isfinite(weight) or weight <= 0:
             msg = "Vote policies must return a positive finite weight."
             raise InvalidVoteConfigurationError(msg)
@@ -219,14 +222,14 @@ class VoteService:
             actor.account_id,
             actor.discord_id,
             actor.guild_id or message_guild_id,
-            option.identifier or option.emoji,
+            option.id,
             emoji,
             weight,
             refreshed,
         )
         if mutation is None:
             latest = await self._repository.get_by_message(message_id)
-            rejection: VoteRejection = "closed" if latest is not None else "not_found"
+            rejection = VoteRejection.CLOSED if latest is not None else VoteRejection.NOT_FOUND
             return CastVoteResult(session=latest, rejection=rejection)
         return CastVoteResult(
             session=mutation.session,
@@ -259,15 +262,14 @@ class VoteService:
         """Close a generic poll when requested by its creator or guild staff."""
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
-            return CastVoteResult(None, "not_found")
-        if snapshot.kind != "generic" or snapshot.poll is None or snapshot.poll.guild_id != actor.guild_id:
-            return CastVoteResult(snapshot, "wrong_guild")
-        if actor.account_id != snapshot.author_account_id and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
-            return CastVoteResult(snapshot, "not_authorized")
+            return CastVoteResult(None, VoteRejection.NOT_FOUND)
+        rejection = snapshot.can_close(actor)
+        if rejection is not None:
+            return CastVoteResult(snapshot, rejection)
         await self.refresh(message_id)
         mutation = await self._repository.close(message_id)
         if mutation is None:
-            return CastVoteResult(snapshot, "closed")
+            return CastVoteResult(snapshot, VoteRejection.CLOSED)
         return CastVoteResult(mutation.session, just_closed=mutation.just_closed)
 
     async def close_due(self, now: Instant | None = None) -> Sequence[VoteSessionSnapshot]:
@@ -291,11 +293,11 @@ class VoteService:
                 closed.append(mutation.session)
         return closed
 
-    async def emoji_preset(self, guild_id: int, kind: VoteKindLiteral) -> EmojiPreset:
+    async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
         preset = await self._repository.get_emoji_preset(guild_id, kind)
         if preset is not None:
             return preset
-        if kind == "generic":
+        if kind is VoteKind.GENERIC:
             options = tuple(
                 VoteOption(emoji, VoteChoice.GENERIC, identifier=str(index), guild_id=guild_id, label=f"Option {index}")
                 for index, emoji in enumerate(DEFAULT_GENERIC_EMOJIS, 1)
@@ -313,26 +315,26 @@ class VoteService:
             )
         return EmojiPreset(guild_id, kind, options)
 
-    async def set_emoji_preset(self, guild_id: int, kind: VoteKindLiteral, options: Sequence[VoteOption]) -> None:
+    async def set_emoji_preset(self, guild_id: int, kind: VoteKind, options: Sequence[VoteOption]) -> None:
         await self._repository.set_emoji_preset(EmojiPreset(guild_id, kind, normalize_vote_options(options, kind=kind)))
 
-    async def get_role_weights(self, guild_id: int, kind: VoteKindLiteral) -> Sequence[RoleWeight]:
+    async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
         return await self._repository.get_role_weights(guild_id, kind)
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
         await self._repository.set_role_weight(weight)
         await self._refresh_kind(weight.guild_id, weight.kind)
 
-    async def remove_role_weight(self, guild_id: int, kind: VoteKindLiteral, role_id: int) -> None:
+    async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
         await self._repository.remove_role_weight(guild_id, kind, role_id)
         await self._refresh_kind(guild_id, kind)
 
-    async def reset_configuration(self, guild_id: int, kind: VoteKindLiteral | None = None) -> None:
+    async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
         await self._repository.reset_configuration(guild_id, kind)
-        for current_kind in (kind,) if kind is not None else ("build", "delete_log", "generic"):
+        for current_kind in (kind,) if kind is not None else tuple(VoteKind):
             await self._refresh_kind(guild_id, current_kind)
 
-    async def _refresh_kind(self, guild_id: int, kind: VoteKindLiteral) -> None:
+    async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
         for snapshot in await self.list_open(kind):
             if any(message.guild_id == guild_id for message in snapshot.messages):
                 await self.refresh(snapshot.messages[0].id)

@@ -5,8 +5,9 @@ from unittest.mock import AsyncMock
 from whenever import Instant
 
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
-from squid.voting.domain import VoteSessionResultLiteral, VoteSessionSnapshot, VoteTarget
+from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
+from tests.helpers.voting import build_snapshot
 
 
 def _event() -> DomainEvent:
@@ -19,25 +20,22 @@ def _event() -> DomainEvent:
     )
 
 
-def _snapshot(result: VoteSessionResultLiteral) -> VoteSessionSnapshot:
-    return VoteSessionSnapshot(
+def _snapshot(result: VoteSessionResult) -> VoteSessionSnapshot:
+    return build_snapshot(
         id=7,
         author_account_id=1,
-        kind="build",
-        status="closed",
+        status=VoteStatus.CLOSED,
         result=result,
         pass_threshold=1,
-        fail_threshold=1,
-        votes={},
+        fail_threshold=-1,
         messages=(),
-        options=(),
-        target=VoteTarget(build_id=42),
+        target=BuildVoteTarget(42),
     )
 
 
 async def test_apply_build_vote_outcome_is_transport_neutral() -> None:
     votes = AsyncMock()
-    votes.get_session_by_id.return_value = _snapshot("approved")
+    votes.get_session_by_id.return_value = _snapshot(VoteSessionResult.APPROVED)
     builds = AsyncMock()
     handler = ApplyBuildVoteOutcomeHandler(votes, builds)
 

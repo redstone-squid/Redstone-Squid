@@ -16,17 +16,18 @@ from squid.voting.domain import (
     VoteActor,
     VoteChange,
     VoteChoice,
-    VoteKindLiteral,
+    VoteKind,
     VoteMessage,
     VoteOption,
+    VoteRejection,
     VoteSelection,
-    VoteSessionResultLiteral,
+    VoteSessionResult,
     VoteSessionSnapshot,
     VoteStatus,
-    VoteTarget,
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
+from tests.helpers.voting import build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -34,24 +35,12 @@ DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
 
 def snapshot(
     *,
-    kind: VoteKindLiteral = "build",
-    status: VoteStatus = "open",
-    result: VoteSessionResultLiteral = "pending",
+    kind: VoteKind = VoteKind.BUILD,
+    status: VoteStatus = VoteStatus.OPEN,
+    result: VoteSessionResult = VoteSessionResult.PENDING,
     votes: dict[int, float] | None = None,
 ) -> VoteSessionSnapshot:
-    return VoteSessionSnapshot(
-        id=12,
-        author_account_id=7,
-        kind=kind,
-        status=status,
-        result=result,
-        pass_threshold=3,
-        fail_threshold=-3,
-        votes=votes or {},
-        messages=(VoteMessage(100, 200, 10),),
-        options=DEFAULT_VOTE_OPTIONS,
-        target=VoteTarget(build_id=42),
-    )
+    return build_snapshot(kind=kind, status=status, result=result, votes=votes)
 
 
 class FakeVoteRepository:
@@ -61,6 +50,7 @@ class FakeVoteRepository:
         self.mutation: StoredVoteMutation | None = None
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
+        self.generic_create_calls: list[tuple[int, str, VoteVisibility, Instant, int | None]] = []
 
     async def get_or_create_build_submission_session(
         self,
@@ -81,12 +71,13 @@ class FakeVoteRepository:
         self,
         *,
         author_account_id: int,
-        guild_id: int,
         question: str,
         visibility: VoteVisibility,
         deadline: Instant,
         options: Sequence[VoteOption],
+        guild_id: int | None = None,
     ) -> int:
+        self.generic_create_calls.append((author_account_id, question, visibility, deadline, guild_id))
         return 26
 
     async def create_build_session(
@@ -126,7 +117,7 @@ class FakeVoteRepository:
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return self.session
 
-    async def list_open(self, kind: VoteKindLiteral) -> Sequence[VoteSessionSnapshot]:
+    async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         return [] if self.session is None else [self.session]
 
     async def cast_vote(
@@ -157,27 +148,27 @@ class FakeVoteRepository:
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
         return []
 
-    async def get_emoji_preset(self, guild_id: int, kind: VoteKindLiteral) -> EmojiPreset | None:
+    async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
         return None
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
         pass
 
-    async def get_role_weights(self, guild_id: int, kind: VoteKindLiteral) -> Sequence[RoleWeight]:
+    async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
         return []
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
         pass
 
-    async def remove_role_weight(self, guild_id: int, kind: VoteKindLiteral, role_id: int) -> None:
+    async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
         pass
 
-    async def reset_configuration(self, guild_id: int, kind: VoteKindLiteral | None = None) -> None:
+    async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
         pass
 
 
 class MissingActorResolver:
-    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> None:
+    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> None:
         del account_id, discord_id, guild_id, kind
         return
 
@@ -304,7 +295,7 @@ async def test_cast_vote_by_session_rejects_missing_session() -> None:
 
     result = await service.cast_vote_by_session(404, VoteActor(7, 70, guild_id=10), "approve")
 
-    assert result.rejection == "not_found"
+    assert result.rejection is VoteRejection.NOT_FOUND
     assert result.session is None
 
 
@@ -314,7 +305,7 @@ async def test_cast_vote_by_session_rejects_guild_without_message() -> None:
 
     result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=999), "approve")
 
-    assert result.rejection == "wrong_guild"
+    assert result.rejection is VoteRejection.WRONG_GUILD
     assert repository.cast_calls == []
 
 
@@ -324,12 +315,12 @@ async def test_cast_vote_by_session_rejects_unknown_option_identifier() -> None:
 
     result = await service.cast_vote_by_session(12, VoteActor(7, 70, guild_id=10), "missing")
 
-    assert result.rejection == "invalid_option"
+    assert result.rejection is VoteRejection.INVALID_OPTION
     assert repository.cast_calls == []
 
 
 async def test_delete_log_vote_requires_the_delete_log_capability() -> None:
-    repository = FakeVoteRepository(snapshot(kind="delete_log"))
+    repository = FakeVoteRepository(snapshot(kind=VoteKind.DELETE_LOG))
     service = VoteService(repository)
 
     result = await service.cast_vote(
@@ -338,12 +329,12 @@ async def test_delete_log_vote_requires_the_delete_log_capability() -> None:
         "👍",
     )
 
-    assert result.rejection == "not_eligible"
+    assert result.rejection is VoteRejection.NOT_ELIGIBLE
     assert repository.cast_calls == []
 
 
 async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_applies() -> None:
-    initial = snapshot(kind="delete_log")
+    initial = snapshot(kind=VoteKind.DELETE_LOG)
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
         session=initial,
@@ -364,7 +355,7 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
 
 
 async def test_closed_vote_is_rejected_before_mutation() -> None:
-    repository = FakeVoteRepository(snapshot(status="closed", result="approved"))
+    repository = FakeVoteRepository(snapshot(status=VoteStatus.CLOSED, result=VoteSessionResult.APPROVED))
     service = VoteService(repository)
 
     result = await service.cast_vote(
@@ -373,13 +364,13 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
         "👍",
     )
 
-    assert result.rejection == "closed"
+    assert result.rejection is VoteRejection.CLOSED
     assert repository.cast_calls == []
 
 
 async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
     initial = snapshot(votes={2: 2.0})
-    closed = replace(initial, status="closed", result="approved", votes={2: 2.0, 7: 1.0})
+    closed = replace(initial, status=VoteStatus.CLOSED, result=VoteSessionResult.APPROVED, votes={2: 2.0, 7: 1.0})
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
         session=closed,
@@ -410,7 +401,7 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
 
     async def get_after_mutation(message_id: int) -> VoteSessionSnapshot:
         if repository.cast_calls:
-            return replace(initial, status="closed", result="denied")
+            return replace(initial, status=VoteStatus.CLOSED, result=VoteSessionResult.DENIED)
         return initial
 
     repository.get_by_message = get_after_mutation  # type: ignore[method-assign]
@@ -420,7 +411,7 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
         "👎",
     )
 
-    assert result.rejection == "closed"
+    assert result.rejection is VoteRejection.CLOSED
     assert not result.just_closed
 
 
@@ -459,7 +450,7 @@ async def test_unconfigured_emoji_is_rejected_without_mutation() -> None:
         "🤷",
     )
 
-    assert result.rejection == "invalid_option"
+    assert result.rejection is VoteRejection.INVALID_OPTION
     assert repository.cast_calls == []
 
 
@@ -495,3 +486,77 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
 def test_vote_option_rejects_non_positive_or_non_finite_multiplier(multiplier: float) -> None:
     with pytest.raises(InvalidVoteConfigurationError, match="finite and greater than zero"):
         VoteOption("👍", VoteChoice.APPROVE, multiplier)
+
+
+async def test_poll_creation_needs_no_guild_and_no_publication_target() -> None:
+    """A poll is a database row before it is a Discord message."""
+    repository = FakeVoteRepository(None)
+    service = VoteService(repository)
+    options = (
+        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
+        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
+    )
+
+    session_id = await service.create_generic_poll(
+        author_account_id=7,
+        question="  Which one?  ",
+        visibility=VoteVisibility.ANONYMOUS_LIVE,
+        duration_seconds=3600,
+        options=options,
+    )
+
+    assert session_id == 26
+    author, question, visibility, _deadline, guild_id = repository.generic_create_calls[0]
+    assert (author, question, visibility, guild_id) == (7, "Which one?", VoteVisibility.ANONYMOUS_LIVE, None)
+
+
+@pytest.mark.parametrize("duration_seconds", [59, 30 * 86400 + 1])
+async def test_poll_creation_rejects_durations_outside_the_supported_range(duration_seconds: int) -> None:
+    service = VoteService(FakeVoteRepository(None))
+
+    with pytest.raises(InvalidVoteConfigurationError, match="between 1 minute and 30 days"):
+        await service.create_generic_poll(
+            author_account_id=7,
+            question="Which one?",
+            visibility=VoteVisibility.ANONYMOUS_LIVE,
+            duration_seconds=duration_seconds,
+            options=(
+                VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
+                VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
+            ),
+        )
+
+
+async def test_poll_creation_rejects_an_empty_question() -> None:
+    service = VoteService(FakeVoteRepository(None))
+
+    with pytest.raises(InvalidVoteConfigurationError, match="question cannot be empty"):
+        await service.create_generic_poll(
+            author_account_id=7,
+            question="   ",
+            visibility=VoteVisibility.ANONYMOUS_LIVE,
+            duration_seconds=3600,
+            options=(
+                VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
+                VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
+            ),
+        )
+
+
+async def test_closing_a_poll_requires_the_creator_or_the_close_any_capability() -> None:
+    poll = poll_snapshot(id=12, author_account_id=7, guild_id=10, messages=(VoteMessage(100, 200, 10),))
+    repository = FakeVoteRepository(poll)
+    repository.mutation = StoredVoteMutation(
+        session=replace(poll, status=VoteStatus.CLOSED, result=VoteSessionResult.CANCELLED),
+        previous_weight=None,
+        current_weight=None,
+        just_closed=True,
+    )
+    service = VoteService(repository)
+
+    stranger = await service.close(100, VoteActor(8, 80, guild_id=10))
+    creator = await service.close(100, VoteActor(7, 70, guild_id=10))
+
+    assert stranger.rejection is VoteRejection.NOT_AUTHORIZED
+    assert creator.accepted
+    assert creator.just_closed

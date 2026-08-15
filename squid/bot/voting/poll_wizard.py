@@ -1,22 +1,57 @@
-"""Ephemeral modal workflow for composing generic polls."""
+"""Component-driven wizard for composing and publishing generic polls."""
 
 import re
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast, override
 
 import discord
-from whenever import Instant
 
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.utils.components import edit_interaction_layout, no_mentions, text_layout
-from squid.voting.domain import VoteOption, VoteVisibility
+from squid.voting.domain import (
+    MAX_POLL_DURATION_SECONDS,
+    MIN_POLL_DURATION_SECONDS,
+    VoteChoice,
+    VoteOption,
+    VoteVisibility,
+)
 from squid.voting.errors import InvalidVoteConfigurationError
 
 if TYPE_CHECKING:
-    from squid.bot.voting.vote import VoteCog
+    from squid.bot.voting.publisher import PollPublisher
 
 _DURATION = re.compile(r"^(\d+)\s*([mhd])$", re.IGNORECASE)
+_DURATION_UNITS = {"m": 60, "h": 3600, "d": 86400}
+
+DURATION_PRESETS: tuple[tuple[str, int], ...] = (
+    ("1 hour", 3600),
+    ("6 hours", 6 * 3600),
+    ("12 hours", 12 * 3600),
+    ("24 hours", 24 * 3600),
+    ("3 days", 3 * 86400),
+    ("7 days", 7 * 86400),
+)
+CUSTOM_DURATION = "custom"
+
+VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, str, str], ...] = (
+    (
+        VoteVisibility.ANONYMOUS_LIVE,
+        "Live Anonymous",
+        "Running totals are public; who voted for what is not.",
+    ),
+    (
+        VoteVisibility.VISIBLE_LIVE,
+        "Live Public",
+        "Reactions stay on the message, so every ballot is attributable.",
+    ),
+    (
+        VoteVisibility.ANONYMOUS_HIDDEN,
+        "Hidden until Close",
+        "No totals at all until the poll closes.",
+    ),
+)
 
 
 def parse_poll_duration(value: str) -> int:
@@ -25,92 +60,236 @@ def parse_poll_duration(value: str) -> int:
     if match is None:
         msg = "Duration must look like `30m`, `12h`, or `7d`."
         raise InvalidVoteConfigurationError(msg)
-    amount = int(match.group(1))
-    multiplier = {"m": 60, "h": 3600, "d": 86400}[match.group(2).lower()]
-    seconds = amount * multiplier
-    if not 60 <= seconds <= 30 * 86400:
+    seconds = int(match.group(1)) * _DURATION_UNITS[match.group(2).lower()]
+    if not MIN_POLL_DURATION_SECONDS <= seconds <= MAX_POLL_DURATION_SECONDS:
         msg = "Poll duration must be between 1 minute and 30 days."
         raise InvalidVoteConfigurationError(msg)
     return seconds
 
 
+def format_duration(seconds: int) -> str:
+    """Render a duration the way the presets are labelled."""
+    for label, preset in DURATION_PRESETS:
+        if preset == seconds:
+            return label
+    if seconds % 86400 == 0:
+        return f"{seconds // 86400} days"
+    if seconds % 3600 == 0:
+        return f"{seconds // 3600} hours"
+    return f"{seconds // 60} minutes"
+
+
+def parse_option_lines(
+    lines: Sequence[str],
+    *,
+    guild_id: int,
+    palette: Sequence[VoteOption],
+    emoji_is_usable: Callable[[str], bool] = lambda _emoji: True,
+) -> tuple[VoteOption, ...]:
+    """Validate `emoji | label` lines, filling missing aliases from the guild palette.
+
+    Pure apart from the injected emoji check, so the parsing rules are testable
+    without a Discord client.
+    """
+    cleaned = [line.strip() for line in lines if line.strip()]
+    if not 2 <= len(cleaned) <= 10:
+        msg = "Enter between 2 and 10 option lines."
+        raise InvalidVoteConfigurationError(msg)
+    options: list[VoteOption] = []
+    for index, line in enumerate(cleaned):
+        if "|" in line:
+            emoji, label = (part.strip() for part in line.split("|", 1))
+        else:
+            if index >= len(palette):
+                msg = "The configured generic emoji palette does not have enough entries for these options."
+                raise InvalidVoteConfigurationError(msg)
+            emoji, label = palette[index].emoji, line
+        if not emoji or not label:
+            msg = "Each option needs a non-empty emoji and label."
+            raise InvalidVoteConfigurationError(msg)
+        if not emoji_is_usable(emoji):
+            msg = f"The custom emoji {emoji} is not accessible to this bot."
+            raise InvalidVoteConfigurationError(msg)
+        options.append(
+            VoteOption(
+                emoji,
+                VoteChoice.GENERIC,
+                identifier=str(index + 1),
+                guild_id=guild_id,
+                label=label,
+                position=index,
+            )
+        )
+    if len({option.emoji for option in options}) != len(options):
+        msg = "Poll option emojis must be unique."
+        raise InvalidVoteConfigurationError(msg)
+    return tuple(options)
+
+
 @dataclass(frozen=True, slots=True)
 class PollDraft:
+    """The wizard's editable state between the modal and publication."""
+
     question: str
-    duration: str
-    options: str
-    visibility: VoteVisibility
+    options_text: str
+    visibility: VoteVisibility = VoteVisibility.ANONYMOUS_LIVE
+    duration_seconds: int = 24 * 3600
+
+    @property
+    def option_lines(self) -> tuple[str, ...]:
+        return tuple(self.options_text.splitlines())
 
 
 class PollModal(ErrorHandledModal):
-    """Collect and validate the editable poll fields."""
+    """Collect the free-text half of a poll: its question and its option lines."""
 
-    def __init__(self, cog: "VoteCog", draft: PollDraft | None = None):
+    def __init__(self, publisher: "PollPublisher", draft: PollDraft | None = None):
         super().__init__(title="Create a poll")
-        self.cog = cog
+        self.publisher = publisher
+        self.draft = draft
         self.question = discord.ui.TextInput(default=draft.question if draft else "", max_length=300)
-        self.duration = discord.ui.TextInput(default=draft.duration if draft else "24h", max_length=8)
         self.options = discord.ui.TextInput(
-            default=draft.options if draft else "",
+            default=draft.options_text if draft else "",
             style=discord.TextStyle.paragraph,
             placeholder="emoji | label (emoji may be omitted)",
             min_length=3,
             max_length=1000,
         )
-        self.visibility = discord.ui.TextInput(
-            default=draft.visibility if draft else "anonymous_live",
-            placeholder="anonymous_live, visible_live, or anonymous_hidden",
-            max_length=24,
-        )
         self.add_item(discord.ui.Label(text="Question", component=self.question))
-        self.add_item(discord.ui.Label(text="Duration", component=self.duration))
         self.add_item(discord.ui.Label(text="Options (one per line)", component=self.options))
-        self.add_item(discord.ui.Label(text="Visibility", component=self.visibility))
 
     @override
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        visibility = self.visibility.value.strip()
-        if visibility not in ("anonymous_live", "visible_live", "anonymous_hidden"):
-            await interaction.response.send_message("Invalid visibility.", ephemeral=True)
+        if interaction.guild is None:
+            await interaction.response.send_message("Polls can only be created in a server.", ephemeral=True)
             return
+        base = self.draft or PollDraft(question="", options_text="")
+        draft = replace(
+            base,
+            question=self.question.value.strip(),
+            options_text=self.options.value.strip(),
+        )
         try:
-            parse_poll_duration(self.duration.value)
-            draft = PollDraft(
-                self.question.value.strip(),
-                self.duration.value.strip(),
-                self.options.value.strip(),
-                visibility,
-            )
-            options = await self.cog.parse_poll_options(interaction, draft.options)
+            options = await self.publisher.resolve_options(interaction.guild.id, draft.option_lines)
         except InvalidVoteConfigurationError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
-        confirmation = PollConfirmation(self.cog, interaction.user.id, draft, options)
-        await interaction.response.send_message(
-            view=confirmation,
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
-        )
+        confirmation = PollConfirmation(self.publisher, interaction.user.id, draft, options)
+        await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
         confirmation.bind_message(await interaction.original_response())
 
 
+class CustomDurationModal(ErrorHandledModal):
+    """Accept a duration outside the presets."""
+
+    def __init__(self, confirmation: "PollConfirmation"):
+        super().__init__(title="Custom poll duration")
+        self.confirmation = confirmation
+        self.duration = discord.ui.TextInput(default="24h", max_length=8, placeholder="30m, 12h, 7d")
+        self.add_item(discord.ui.Label(text="Duration", component=self.duration))
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        try:
+            seconds = parse_poll_duration(self.duration.value)
+        except InvalidVoteConfigurationError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+            return
+        await self.confirmation.set_duration(interaction, seconds)
+
+
+class VisibilitySelect(discord.ui.Select["PollConfirmation"]):
+    """Choose how much of an open poll is disclosed."""
+
+    def __init__(self, confirmation: "PollConfirmation") -> None:
+        self.confirmation = confirmation
+        super().__init__(
+            placeholder="Who can see what, and when",
+            options=[
+                discord.SelectOption(label=label, value=value.value, description=description)
+                for value, label, description in VISIBILITY_CHOICES
+            ],
+        )
+        self.mark_selected(confirmation.draft.visibility)
+
+    def mark_selected(self, visibility: VoteVisibility) -> None:
+        for option in self.options:
+            option.default = option.value == visibility.value
+
+    @override
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.confirmation.set_visibility(interaction, VoteVisibility(self.values[0]))
+
+
+class DurationSelect(discord.ui.Select["PollConfirmation"]):
+    """Choose how long a poll stays open, with an escape hatch for odd durations."""
+
+    def __init__(self, confirmation: "PollConfirmation") -> None:
+        self.confirmation = confirmation
+        super().__init__(
+            placeholder="How long the poll stays open",
+            options=[
+                *(discord.SelectOption(label=label, value=str(seconds)) for label, seconds in DURATION_PRESETS),
+                discord.SelectOption(label="Custom…", value=CUSTOM_DURATION),
+            ],
+        )
+        self.mark_selected(confirmation.draft.duration_seconds)
+
+    def mark_selected(self, seconds: int) -> None:
+        for option in self.options:
+            option.default = option.value == str(seconds)
+
+    @override
+    async def callback(self, interaction: discord.Interaction) -> None:
+        chosen = self.values[0]
+        if chosen == CUSTOM_DURATION:
+            await interaction.response.send_modal(CustomDurationModal(self.confirmation))  # pyrefly: ignore[no-matching-overload]
+            return
+        await self.confirmation.set_duration(interaction, int(chosen))
+
+
 class PollConfirmation(ExpiringLayoutView):
-    """Preview controls that publish, edit, or cancel a poll draft."""
+    """Preview the draft and collect visibility and duration before publishing."""
 
-    actions = discord.ui.ActionRow()
+    controls = discord.ui.ActionRow()
 
-    def __init__(self, cog: "VoteCog", owner_id: int, draft: PollDraft, options: tuple[VoteOption, ...]):
+    def __init__(
+        self,
+        publisher: "PollPublisher",
+        owner_id: int,
+        draft: PollDraft,
+        options: tuple[VoteOption, ...],
+    ):
         super().__init__(timeout=900)
-        self.cog = cog
+        self.publisher = publisher
         self.owner_id = owner_id
         self.draft = draft
         self.options = options
         self.published = False
-        controls = self.actions
+        self.visibility_select = VisibilitySelect(self)
+        self.duration_select = DurationSelect(self)
+        self._render()
+
+    def _render(self) -> None:
+        """Rebuild the ephemeral preview so the selects show their current state."""
+        controls = self.controls
         self.clear_items()
-        preview = "\n".join([f"## {draft.question}", *(f"{item.emoji} {item.label}" for item in options)])
+        preview = "\n".join(
+            [
+                f"## {self.draft.question}",
+                *(f"{option.emoji} {option.label}" for option in self.options),
+                "",
+                f"**Visibility:** {self._visibility_label()}",
+                f"**Closes after:** {format_duration(self.draft.duration_seconds)}",
+            ]
+        )
         self.add_item(discord.ui.TextDisplay(preview))
+        self.add_item(discord.ui.ActionRow(self.visibility_select))
+        self.add_item(discord.ui.ActionRow(self.duration_select))
         self.add_item(controls)
+
+    def _visibility_label(self) -> str:
+        return next(label for value, label, _ in VISIBILITY_CHOICES if value is self.draft.visibility)
 
     @override
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -119,8 +298,23 @@ class PollConfirmation(ExpiringLayoutView):
         await interaction.response.send_message("This poll draft belongs to another member.", ephemeral=True)
         return False
 
-    @actions.button(label="Publish", style=discord.ButtonStyle.success)
+    async def set_visibility(self, interaction: discord.Interaction, visibility: VoteVisibility) -> None:
+        """Apply a disclosure mode chosen from the select."""
+        self.draft = replace(self.draft, visibility=visibility)
+        self.visibility_select.mark_selected(visibility)
+        self._render()
+        await edit_interaction_layout(interaction, self)
+
+    async def set_duration(self, interaction: discord.Interaction, seconds: int) -> None:
+        """Apply a duration chosen from a preset or typed into the custom modal."""
+        self.draft = replace(self.draft, duration_seconds=seconds)
+        self.duration_select.mark_selected(seconds)
+        self._render()
+        await edit_interaction_layout(interaction, self)
+
+    @controls.button(label="Publish", style=discord.ButtonStyle.success)
     async def publish(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
+        del button
         if self.published:
             await interaction.response.send_message("This poll has already been published.", ephemeral=True)
             return
@@ -128,33 +322,32 @@ class PollConfirmation(ExpiringLayoutView):
             await interaction.response.send_message("Polls can only be published in a server.", ephemeral=True)
             return
         self.published = True
-        author = await self.cog.bot.services.accounts.get_or_create_account(interaction.user.id)
-        assert author.id is not None
-        session_id = await self.cog.vote_service.start_generic_vote(
-            author_account_id=author.id,
-            guild_id=interaction.guild.id,
-            question=self.draft.question,
-            visibility=self.draft.visibility,
-            deadline=Instant.now().add(seconds=parse_poll_duration(self.draft.duration)),
-            options=self.options,
-        )
         await interaction.response.defer(ephemeral=True)
-        channel = cast(GuildMessageable, interaction.channel)
-        # The poll goes where the author ran the command, so publication is explicit;
-        # the reconciler owns the card from the moment it is handed over.
-        message = await channel.send(view=text_layout("Publishing poll…"), allowed_mentions=no_mentions())
-        await self.cog.bot.post_reconciler.adopt(message, "vote_session", str(session_id), "vote_card")
-        await self.cog.bot.refresh_posts("vote_session", str(session_id))
+        try:
+            message = await self.publisher.create_and_publish(
+                author_discord_id=interaction.user.id,
+                channel=cast(GuildMessageable, interaction.channel),
+                question=self.draft.question,
+                visibility=self.draft.visibility,
+                duration_seconds=self.draft.duration_seconds,
+                options=self.options,
+            )
+        except InvalidVoteConfigurationError as error:
+            self.published = False
+            await interaction.edit_original_response(view=text_layout(str(error)), allowed_mentions=no_mentions())
+            return
         await interaction.edit_original_response(
             view=text_layout(f"Published: {message.jump_url}"), allowed_mentions=no_mentions()
         )
         self.stop()
 
-    @actions.button(label="Edit", style=discord.ButtonStyle.secondary)
+    @controls.button(label="Edit", style=discord.ButtonStyle.secondary)
     async def edit(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
-        await interaction.response.send_modal(PollModal(self.cog, self.draft))
+        del button
+        await interaction.response.send_modal(PollModal(self.publisher, self.draft))  # pyrefly: ignore[no-matching-overload]
 
-    @actions.button(label="Cancel", style=discord.ButtonStyle.danger)
+    @controls.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
+        del button
         self.stop()
         await edit_interaction_layout(interaction, text_layout("Poll cancelled."))

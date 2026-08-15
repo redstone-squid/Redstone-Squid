@@ -8,6 +8,7 @@ import discord
 
 from squid.builds.domain import Status
 from squid.events import DomainEvent, UnsupportedEventVersionError
+from squid.voting.domain import DeleteLogVoteTarget, VoteSessionResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -57,15 +58,12 @@ class DeleteVotedMessageHandler:
 
     async def handle(self, event: DomainEvent) -> None:
         snapshot = await self.bot.services.votes.get_session_by_id(event.aggregate_id)
-        if snapshot is None or snapshot.kind != "delete_log" or snapshot.status != "closed":
+        if snapshot is None or snapshot.is_open or snapshot.result is not VoteSessionResult.APPROVED:
             return
-        if snapshot.result != "approved":
+        target = snapshot.target
+        if not isinstance(target, DeleteLogVoteTarget):
             return
-        channel_id = snapshot.target.channel_id
-        message_id = snapshot.target.message_id
-        if channel_id is None or message_id is None:
-            return
-        message = await self.bot.get_or_fetch_message(channel_id, message_id)
+        message = await self.bot.get_or_fetch_message(target.channel_id, target.message_id)
         if message is None:
             return
         # An already-deleted target is the expected state on redelivery.
