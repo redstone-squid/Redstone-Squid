@@ -1,10 +1,11 @@
 """Classification of Discord attachments before anything is downloaded.
 
-Discord reports `content_type=None` for `.litematic` files, which is why the submission flow
-used to raise a bare `AssertionError` on them and why the message-scraping listener silently
-dropped them. The rules here replace both: the **extension is the primary signal** and the
-content type is advisory, because the one thing Discord will not tell us is exactly the thing
-we care about.
+Discord derives an attachment's `content_type` from what the uploading client sent, and no
+client maps these extensions to anything, so a schematic arrives as `content_type=None` or
+`application/octet-stream`. Both were observed in production, where the submission flow raised
+a bare `AssertionError` on them and the message-scraping listener silently dropped them. The
+rules here replace both: the **extension is the primary signal** and the content type is
+advisory, because the one thing Discord will not tell us is exactly the thing we care about.
 
 Nothing here reads the file. Size is checked against the attachment metadata first, so an
 oversized upload costs us no bandwidth at all, and the real content check happens afterwards
