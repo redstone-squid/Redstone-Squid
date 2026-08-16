@@ -280,6 +280,18 @@ ACCOUNT_SELF_READ = _b.node(
     default=Default.ALLOW,
     tags=(Tag.READONLY,),
 )
+ACCOUNT_IDENTITY_REFRESH = _b.node(
+    "account.identity.refresh",
+    NodeScope.GLOBAL,
+    _("Re-read your linked Minecraft name after a rename."),
+    default=Default.ALLOW,
+)
+ACCOUNT_IDENTITY_REFRESH_ANY = _b.node(
+    "account.identity.refresh_any",
+    NodeScope.GLOBAL,
+    _("Re-read another user's linked Minecraft name."),
+    tags=(Tag.MODERATION,),
+)
 
 PERM_GRANT_GLOBAL = _b.node(
     "perm.grant.global",
