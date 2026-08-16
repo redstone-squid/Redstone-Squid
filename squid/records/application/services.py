@@ -158,18 +158,18 @@ class RecordComputationService:
         limit: int = 20,
     ) -> QueueProcessSummary:
         """Claim queued scopes, rebuild them, and acknowledge only on success."""
-        kinds = tuple(await self._runs.claim_recompute_kinds(limit=limit))
-        if not kinds:
+        lease = await self._runs.claim_recompute_kinds(limit=limit)
+        if not lease:
             return QueueProcessSummary(kinds=(), rebuild=None)
         if current_version_id is None:
             current_version_id = await self._runs.active_current_version_id()
         try:
-            summary = await self.rebuild(current_version_id=current_version_id, kinds=kinds)
+            summary = await self.rebuild(current_version_id=current_version_id, kinds=lease.kinds)
         except Exception as error:
-            await self._runs.fail_recompute(kinds, str(error))
+            await self._runs.fail_recompute(lease, str(error))
             raise
-        await self._runs.complete_recompute(kinds)
-        return QueueProcessSummary(kinds=kinds, rebuild=summary)
+        await self._runs.complete_recompute(lease)
+        return QueueProcessSummary(kinds=lease.kinds, rebuild=summary)
 
     def _eager_competitions(
         self,
