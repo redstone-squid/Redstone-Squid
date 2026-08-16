@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import Index, Text
+from sqlalchemy import Boolean, Index, Text, false, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
@@ -20,6 +20,9 @@ class ErrorReport(Base, kw_only=True):
         Index("error_reports_correlation_id_idx", "correlation_id"),
         Index("error_reports_expires_at_idx", "expires_at"),
         Index("error_reports_occurred_at_idx", "occurred_at"),
+        # Partial: the listing that filters on it wants only the true rows, and they are the
+        # rare ones. A full index would be mostly `false` entries nothing ever reads.
+        Index("error_reports_work_lost_idx", "occurred_at", postgresql_where=text("work_lost")),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4)
@@ -52,3 +55,5 @@ class ErrorReport(Base, kw_only=True):
     """Redacted diagnostic context. Never contains stable Discord account identifiers."""
     log_tail: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default_factory=list)
     """What the process logged under this correlation ID before failing, oldest first."""
+    work_lost: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false(), default=False)
+    """Whether this failure permanently abandoned work, as a dead-lettered job does."""

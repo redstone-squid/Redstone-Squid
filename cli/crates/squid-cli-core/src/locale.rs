@@ -242,6 +242,10 @@ impl Locale {
                 "no stored errors within the retention window"
             }
             (Self::ZhCn, MessageKey::ErrorListEmpty) => "保留期内没有已存储的错误",
+            (Self::En, MessageKey::ErrorWorkLost) => {
+                "this job was abandoned; nothing will retry it"
+            }
+            (Self::ZhCn, MessageKey::ErrorWorkLost) => "此任务已被放弃；不会再重试",
             (Self::En, MessageKey::ErrorLogTailHeading) => "log tail:",
             (Self::ZhCn, MessageKey::ErrorLogTailHeading) => "日志尾部：",
             (Self::En, MessageKey::ErrorReferenceAmbiguous) => {
@@ -507,6 +511,7 @@ pub enum MessageKey {
     DraftListEmpty,
     ErrorListEmpty,
     ErrorLogTailHeading,
+    ErrorWorkLost,
     ErrorReferenceAmbiguous,
     InvalidErrorReference,
     DraftCreated,
