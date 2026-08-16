@@ -12,7 +12,7 @@ from testcontainers.postgres import PostgresContainer
 
 from alembic import command
 from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
-from squid.worker.queue_health import QUEUE_HEALTH_SQL
+from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
 DYNAMIC_VOTING_REVISION = "4c9e7a2b1d63"
@@ -170,14 +170,14 @@ def test_migrations_create_schema_without_drift(
                     ")"
                 )
             ).scalar_one()
-            queue_health_before = {row.queue: row for row in connection.execute(text(QUEUE_HEALTH_SQL)).mappings()}
+            queue_health_before = {row.queue: row for row in connection.execute(QUEUE_HEALTH_STATEMENT).mappings()}
             connection.execute(
                 text(
                     "INSERT INTO discord_sync_queue (resource_kind, source_key, claimed_at) "
                     "VALUES ('vote_session', 'expired-health-claim', now() - interval '6 minutes')"
                 )
             )
-            queue_health_after = {row.queue: row for row in connection.execute(text(QUEUE_HEALTH_SQL)).mappings()}
+            queue_health_after = {row.queue: row for row in connection.execute(QUEUE_HEALTH_STATEMENT).mappings()}
             connection.execute(text("INSERT INTO server_settings (server_id) VALUES (999)"))
             # A post records only the generation it was rendered at; what it *should*
             # show lives on the queue row, so staleness is a join rather than a desired
