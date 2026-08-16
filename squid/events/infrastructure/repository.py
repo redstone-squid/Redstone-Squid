@@ -1,11 +1,44 @@
 """PostgreSQL domain-event delivery adapter."""
 
-from sqlalchemy import ColumnElement, delete, func, or_, select, update
+from sqlalchemy import ColumnElement, delete, func, join, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.events.application import DomainEvent, DomainEventDelivery
-from squid.events.infrastructure.models import DomainEventDeliveryRecord, DomainEventRecord
-from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
+from squid.events.infrastructure.models import DomainEventConsumer, DomainEventDeliveryRecord, DomainEventRecord
+from squid.persistence.queue import VISIBILITY_TIMEOUT, QueueHealthShape, QueueSpec, retry_delay
+
+DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(
+    name="domain_events",
+    model=DomainEventDeliveryRecord,
+    key=(DomainEventDeliveryRecord.event_id, DomainEventDeliveryRecord.consumer),
+    available_at=DomainEventDeliveryRecord.available_at,
+    claimed_at=DomainEventDeliveryRecord.claimed_at,
+    claim_token=DomainEventDeliveryRecord.claim_token,
+    attempts=DomainEventDeliveryRecord.attempts,
+    last_error=DomainEventDeliveryRecord.last_error,
+    dead_at=DomainEventDeliveryRecord.dead_at,
+    claim_count=DomainEventDeliveryRecord.claim_count,
+    health=QueueHealthShape(
+        # Deliveries are counted per registered consumer through an outer join, so a
+        # consumer with no outstanding rows reports zero rather than disappearing
+        # from the metric entirely.
+        label=literal("domain_events.").concat(DomainEventConsumer.name),
+        source=join(
+            DomainEventConsumer,
+            DomainEventDeliveryRecord,
+            DomainEventDeliveryRecord.consumer == DomainEventConsumer.name,
+            isouter=True,
+        ),
+        group_by=(DomainEventConsumer.name,),
+        counted=DomainEventDeliveryRecord.event_id,
+    ),
+)
+"""The queue the shared protocol was modelled on.
+
+It converts with no new configuration knobs beyond `claim_count`, which it already
+had, and the four-field health shape below -- which exists because this is the one
+queue whose gauges are keyed by something other than the table.
+"""
 
 
 class PostgresDomainEventRepository:
