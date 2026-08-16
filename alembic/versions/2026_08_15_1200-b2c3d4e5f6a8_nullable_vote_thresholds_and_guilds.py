@@ -46,9 +46,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "vote_sessions_kind_check", "vote_sessions", "kind = ANY (ARRAY['build', 'delete_log', 'generic'])"
     )
-    op.create_check_constraint(
-        "vote_sessions_status_check", "vote_sessions", "status = ANY (ARRAY['open', 'closed'])"
-    )
+    op.create_check_constraint("vote_sessions_status_check", "vote_sessions", "status = ANY (ARRAY['open', 'closed'])")
 
     op.alter_column("generic_vote_sessions", "guild_id", existing_type=sa.BigInteger(), nullable=True)
 
@@ -59,7 +57,9 @@ def downgrade() -> None:
     Guild-less polls have no guild to invent, so they are removed rather than
     silently reassigned to an unrelated server.
     """
-    op.execute("DELETE FROM vote_sessions WHERE id IN (SELECT vote_session_id FROM generic_vote_sessions WHERE guild_id IS NULL)")
+    op.execute(
+        "DELETE FROM vote_sessions WHERE id IN (SELECT vote_session_id FROM generic_vote_sessions WHERE guild_id IS NULL)"
+    )
     op.alter_column("generic_vote_sessions", "guild_id", existing_type=sa.BigInteger(), nullable=False)
 
     op.drop_constraint("vote_sessions_status_check", "vote_sessions", type_="check")
