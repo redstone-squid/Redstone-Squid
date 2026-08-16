@@ -593,7 +593,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
     def summary_text(self) -> str:
         start = 5 * (self.page - 1)
         page_items = self.items[start : start + 5]
-        summaries = [f"{'•' if item.modified else '○'} {item.summary}" for item in page_items]
+        # Both markers are circles from the same family so only the fill differs; U+2022 BULLET
+        # renders smaller and lower than U+25CB, which made a changed field look less prominent.
+        summaries = [f"{'●' if item.modified else '○'} {item.summary}" for item in page_items]
         if self.validation_error:
             summaries.insert(
                 0, t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
