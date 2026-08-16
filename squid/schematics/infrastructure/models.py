@@ -198,7 +198,17 @@ class BuildSchematic(Base, kw_only=True):
     published_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     withdrawn_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
-    uploaded_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    uploaded_by_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey(
+            "accounts.id",
+            name="build_schematics_uploaded_by_account_id_fkey",
+            ondelete="SET NULL",
+        ),
+        default=None,
+    )
+    """Who supplied the file, beside `rights_attested_by_account_id` so the table
+    carries one attribution style rather than two."""
     analyzed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

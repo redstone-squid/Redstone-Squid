@@ -8,6 +8,7 @@ import discord
 from squid.bot.submission.attachments import classify_attachment
 from squid.bot.submission.media import MediaMirror
 from squid.bot.submission.message_context import assemble_bundle
+from squid.bot.utils.accounts import account_id_for
 from squid.builds.domain import Build, BuildCategory
 from squid.core.errors import SquidError
 from squid.runtime import BotServices
@@ -43,7 +44,7 @@ async def ingest_message_bundle(
 
     media_urls: dict[str, list[str]] = {"image": [], "video": []}
     pending_schematics: list[tuple[IngestRequest, IngestedSchematic]] = []
-    uploader_id = primary[0].author.id
+    uploader_account_id = await account_id_for(services.accounts, primary[0].author)
     for message in primary:
         for attachment in message.attachments:
             try:
@@ -60,7 +61,9 @@ async def ingest_message_bundle(
             if classified.kind == "schematic":
                 if not services.schematics.available:
                     continue
-                request = IngestRequest(data=data, filename=classified.filename, uploaded_by_discord_id=uploader_id)
+                request = IngestRequest(
+                    data=data, filename=classified.filename, uploaded_by_account_id=uploader_account_id
+                )
                 try:
                     pending_schematics.append((request, await services.schematics.ingest(request)))
                 except SquidError:
@@ -95,7 +98,7 @@ async def ingest_message_bundle(
             except SquidError:
                 logger.warning("Could not check an inferred schematic for duplicates", exc_info=True)
 
-        await services.builds.submit(build, submitter_id=uploader_id, ai_generated=True)
+        await services.builds.submit(build, submitter_id=primary[0].author.id, ai_generated=True)
         assert build.id is not None
         builds.append(build)
         for index, (request, ingested) in enumerate(pending_schematics):
