@@ -48,10 +48,13 @@
 
 ## Observability
 
-- [ ] Add a Discord command and API endpoint to retrieve a logged error by its reference/correlation ID.
-  - Currently the reference shown to users (`squid/bot/errors.py`, `squid/api/errors.py`) is only a `correlation_id()`
-    for log-grepping; nothing persists errors in a queryable store, and the Discord and API paths track separate
-    reference schemes.
+- [x] Add a Discord command and API endpoint to retrieve a logged error by its reference/correlation ID.
+  - `squid/diagnostics/` stores every captured failure in `error_reports` with the traceback, the redacted
+    context, and the log lines the process emitted under the same correlation ID. `/error <reference>`,
+    `GET /v1/diagnostics/errors/{reference}`, and `squid errors show` all resolve it, gated on
+    `diagnostics.error.read`.
+  - The two paths no longer track separate reference schemes: `correlation_reference()` shortens to 12
+    characters, which is already the width of the untraced fallback, and lookup accepts either width.
 - [ ] Integrate Sentry (or wire up a real log/trace backend) instead of the current no-op `debug` exporter in
   `deploy/otel-collector.yaml`.
 
