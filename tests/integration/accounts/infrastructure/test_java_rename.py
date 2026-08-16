@@ -64,7 +64,7 @@ def repository(
     return AccountRepository(async_session_factory, "pepper")
 
 
-async def _linked_account(repository: AccountRepository, discord_id: int = 1, *, username: str = "OldName"):
+async def _linked_account_id(repository: AccountRepository, discord_id: int = 1, *, username: str = "OldName") -> int:
     account = await repository.create(
         consent=CONSENT,
         identities=(
@@ -73,7 +73,7 @@ async def _linked_account(repository: AccountRepository, discord_id: int = 1, *,
         ),
     )
     assert account.id is not None
-    return account
+    return account.id
 
 
 async def _add_alias(session_factory: async_sessionmaker[AsyncSession], name: str) -> int:
@@ -85,9 +85,9 @@ async def _add_alias(session_factory: async_sessionmaker[AsyncSession], name: st
 
 
 async def test_unchanged_name_reports_no_rename(repository: AccountRepository) -> None:
-    account = await _linked_account(repository, username="Steve")
+    account_id = await _linked_account_id(repository, username="Steve")
 
-    refresh = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="Steve")
+    refresh = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="Steve")
 
     assert refresh.renamed is False
     assert refresh.previous_name == "Steve"
@@ -100,30 +100,30 @@ async def test_rename_creates_and_claims_an_uncredited_name(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The old behaviour left a renamed user with no credit until someone credited the new name."""
-    account = await _linked_account(repository, username="OldName")
+    account_id = await _linked_account_id(repository, username="OldName")
 
-    refresh = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName")
+    refresh = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName")
 
     assert refresh.renamed is True
     assert refresh.previous_name == "OldName"
     assert refresh.claimed_alias is not None
     assert refresh.claimed_alias.name == "NewName"
     assert refresh.claimed_alias.claim_method is ClaimMethod.VERIFIED_IGN
-    assert refresh.claimed_alias.account_id == account.id
+    assert refresh.claimed_alias.account_id == account_id
     async with async_session_factory() as session:
         stored = await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "NewName"))
         assert stored is not None
-        assert stored.account_id == account.id
+        assert stored.account_id == account_id
 
 
 async def test_rename_claims_an_existing_unclaimed_name(
     repository: AccountRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account = await _linked_account(repository, username="OldName")
+    account_id = await _linked_account_id(repository, username="OldName")
     alias_id = await _add_alias(async_session_factory, "NewName")
 
-    refresh = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName")
+    refresh = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName")
 
     assert refresh.claimed_alias is not None
     assert refresh.claimed_alias.id == alias_id
@@ -135,11 +135,11 @@ async def test_rename_retains_credit_under_the_previous_name(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """A rename does not retract credit for work published under the old name."""
-    account = await _linked_account(repository, username="OldName")
+    account_id = await _linked_account_id(repository, username="OldName")
     await _add_alias(async_session_factory, "OldName")
-    await repository.claim_unclaimed_alias(account_id=account.id, name="OldName", method=ClaimMethod.VERIFIED_IGN)
+    await repository.claim_unclaimed_alias(account_id=account_id, name="OldName", method=ClaimMethod.VERIFIED_IGN)
 
-    refresh = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName")
+    refresh = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName")
 
     assert refresh.retained_alias_names == ("OldName",)
     assert refresh.claimed_alias is not None
@@ -151,13 +151,13 @@ async def test_rename_into_a_held_name_opens_a_claim_and_transfers_nothing(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """The case that used to be silent: someone else already owns the new name."""
-    account = await _linked_account(repository, discord_id=1, username="OldName")
+    account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
     holder = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
     assert holder.id is not None
     await _add_alias(async_session_factory, "Contested")
     await repository.claim_unclaimed_alias(account_id=holder.id, name="Contested", method=ClaimMethod.VERIFIED_IGN)
 
-    refresh = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="Contested")
+    refresh = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="Contested")
 
     assert refresh.is_contested is True
     assert refresh.claimed_alias is None
@@ -172,14 +172,14 @@ async def test_repeated_refresh_into_a_held_name_reuses_one_claim(
     repository: AccountRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account = await _linked_account(repository, discord_id=1, username="OldName")
+    account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
     holder = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
     assert holder.id is not None
     await _add_alias(async_session_factory, "Contested")
     await repository.claim_unclaimed_alias(account_id=holder.id, name="Contested", method=ClaimMethod.VERIFIED_IGN)
 
-    first = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="Contested")
-    second = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="Contested")
+    first = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="Contested")
+    second = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="Contested")
 
     assert first.opened_claim is not None
     assert second.opened_claim is not None
@@ -189,10 +189,10 @@ async def test_repeated_refresh_into_a_held_name_reuses_one_claim(
 
 
 async def test_refresh_is_idempotent(repository: AccountRepository) -> None:
-    account = await _linked_account(repository, username="OldName")
+    account_id = await _linked_account_id(repository, username="OldName")
 
-    first = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName")
-    second = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName")
+    first = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName")
+    second = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName")
 
     assert first.claimed_alias is not None
     assert second.claimed_alias is not None
@@ -204,11 +204,11 @@ async def test_concurrent_refresh_produces_one_claim(
     repository: AccountRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account = await _linked_account(repository, username="OldName")
+    account_id = await _linked_account_id(repository, username="OldName")
 
     results = await asyncio.gather(
-        repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName"),
-        repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName"),
+        repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName"),
+        repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName"),
     )
 
     claimed = {result.claimed_alias.id for result in results if result.claimed_alias is not None}
@@ -222,14 +222,14 @@ async def test_refresh_stores_the_new_display_name(
     repository: AccountRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account = await _linked_account(repository, username="OldName")
+    account_id = await _linked_account_id(repository, username="OldName")
 
-    await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="NewName")
+    await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName")
 
     async with async_session_factory() as session:
         identity = await session.scalar(
             select(AccountIdentity).where(
-                AccountIdentity.account_id == account.id,
+                AccountIdentity.account_id == account_id,
                 AccountIdentity.provider == IdentityProvider.JAVA,
             )
         )
@@ -238,11 +238,11 @@ async def test_refresh_stores_the_new_display_name(
 
 
 async def test_refresh_of_an_unlinked_uuid_is_rejected(repository: AccountRepository) -> None:
-    account = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),))
-    assert account.id is not None
+    unlinked = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),))
+    assert unlinked.id is not None
 
     with pytest.raises(MinecraftAccountNotFoundError):
-        await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="Whoever")
+        await repository.refresh_java_identity(account_id=unlinked.id, java_uuid=JAVA_UUID, username="Whoever")
 
 
 async def test_approving_a_contested_claim_needs_reassign(
@@ -250,14 +250,14 @@ async def test_approving_a_contested_claim_needs_reassign(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Staff can move a credit, but only by saying so."""
-    account = await _linked_account(repository, discord_id=1, username="OldName")
+    account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
     holder = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),))
     staff = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(3),))
     assert holder.id is not None
     assert staff.id is not None
     await _add_alias(async_session_factory, "Contested")
     await repository.claim_unclaimed_alias(account_id=holder.id, name="Contested", method=ClaimMethod.VERIFIED_IGN)
-    refresh = await repository.refresh_java_identity(account_id=account.id, java_uuid=JAVA_UUID, username="Contested")
+    refresh = await repository.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="Contested")
     assert refresh.opened_claim is not None
 
     with pytest.raises(AliasAlreadyClaimedError):
@@ -278,7 +278,7 @@ async def test_approving_a_contested_claim_needs_reassign(
     async with async_session_factory() as session:
         alias = await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "Contested"))
         assert alias is not None
-        assert alias.account_id == account.id
+        assert alias.account_id == account_id
         assert alias.claim_method == ClaimMethod.STAFF_APPROVED
 
 
