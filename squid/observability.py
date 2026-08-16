@@ -4,7 +4,7 @@ import logging
 import os
 import threading
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from typing import TYPE_CHECKING, Any, override
@@ -258,7 +258,7 @@ def correlation_id() -> str:
 
 
 @contextmanager
-def correlation_scope() -> Iterator[str]:
+def correlation_scope() -> Generator[str]:
     """Bind one correlation ID for the duration of a unit of work, and yield it.
 
     Re-entrant on purpose: a nested scope keeps the outer binding rather than minting a second
@@ -288,7 +288,7 @@ def correlation_reference(correlation_id: str) -> str:
 
 
 @contextmanager
-def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None) -> Iterator[TraceSpan]:
+def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None) -> Generator[TraceSpan]:
     """Start an application-edge span, or yield a no-op facade without the extra."""
     if _telemetry_active_pid != os.getpid():
         yield TraceSpan()
@@ -331,7 +331,7 @@ def extracted_trace_span(
     name: str,
     carrier: Mapping[str, Any],
     attributes: Mapping[str, SpanAttribute] | None = None,
-) -> Iterator[TraceSpan]:
+) -> Generator[TraceSpan]:
     """Extract a parent context and start a child span, tolerating absent propagation."""
     if _telemetry_active_pid != os.getpid():
         yield TraceSpan()

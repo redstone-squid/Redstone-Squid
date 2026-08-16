@@ -6,7 +6,7 @@ removed. That made mapping a page O(rows) queries. These tests pin the fixed
 cost so the batching cannot silently regress into an N+1.
 """
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 import pytest
@@ -26,7 +26,7 @@ _EXPECTED_PAGE_QUERIES = 7
 
 
 @contextmanager
-def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Iterator[list[str]]:
+def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
     """Record every statement executed on the factory's engine."""
     statements: list[str] = []
     engine = session_factory.kw["bind"].sync_engine
