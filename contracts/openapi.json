@@ -1573,7 +1573,7 @@
           "builds"
         ],
         "summary": "Edit Build",
-        "description": "Edit an owned pending build, or any build as a global administrator.",
+        "description": "Edit an owned pending build, or any build with `build.submission.edit`.",
         "operationId": "builds_update",
         "security": [
           {
@@ -1865,7 +1865,7 @@
           "builds"
         ],
         "summary": "Get Build",
-        "description": "Return one confirmed public build.",
+        "description": "Return one confirmed public build.\n\nA pending build answers 404, not 403: a submission's existence is private\nuntil it is confirmed, so \"not published\" and \"not there\" have to be\nindistinguishable to a caller without `build.submission.view_pending`.",
         "operationId": "builds_get",
         "security": [
           {}
@@ -1930,7 +1930,7 @@
                 }
               }
             },
-            "description": "Not Found",
+            "description": "No confirmed build with this identifier. A pending build answers 404 as well.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -8653,7 +8653,7 @@
                 }
               }
             },
-            "description": "Not Found",
+            "description": "No confirmed build with this identifier. A pending build answers 404 as well.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
@@ -15759,6 +15759,7 @@
           "BUILD_REVISION_REQUIRED",
           "CLAIM_NOT_FOUND",
           "CREATOR_ALIAS_NOT_FOUND",
+          "CREATOR_NOT_FOUND",
           "CONFIGURATION_ERROR",
           "CONSENT_REQUIRED",
           "DATA_INTEGRITY_ERROR",
@@ -15782,6 +15783,7 @@
           "NOT_FOUND",
           "PERSISTENCE_ERROR",
           "RATE_LIMITED",
+          "RECORD_NOT_FOUND",
           "RESTRICTION_NOT_FOUND",
           "SCHEMATIC_INVALID",
           "SCHEMATIC_NOT_FOUND",
@@ -15790,9 +15792,11 @@
           "SCHEMATIC_TIMEOUT",
           "SCHEMATIC_TOO_LARGE",
           "SCHEMATIC_WORKER_CRASHED",
+          "TAG_NOT_FOUND",
           "UNAUTHORIZED",
           "VALIDATION_ERROR",
-          "VERSION_CATALOG_UNAVAILABLE"
+          "VERSION_CATALOG_UNAVAILABLE",
+          "VOTE_SESSION_NOT_FOUND"
         ],
         "title": "ErrorCode",
         "description": "Stable machine-readable application error codes."

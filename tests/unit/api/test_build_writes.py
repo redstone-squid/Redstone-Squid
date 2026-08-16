@@ -10,9 +10,10 @@ from fastapi import Response
 from pydantic import ValidationError
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.security import Principal
+from squid.api.security import Principal, subject_for
 from squid.api.v1.builds import edit_build, submit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, DoorSubmission
+from squid.builds.application import BuildEditor
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
 from squid.core.errors import AuthorizationError
@@ -73,77 +74,55 @@ async def test_submit_gates_new_accounts_on_current_consent() -> None:
     assert error.value.public_context == {"consent_url": "/v1/users/me/consent"}
 
 
-class EditLease:
-    def __init__(self, build: Build) -> None:
-        self.build = build
-        self.commit = AsyncMock(return_value=build)
-
-    async def __aenter__(self) -> EditLease:
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        return None
-
-
 @pytest.mark.asyncio
-async def test_edit_checks_ownership_while_lease_is_held() -> None:
-    lease = EditLease(persisted_build(submitter_id=999))
-    services = cast(
-        ApiServices,
-        SimpleNamespace(
-            builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
-            permissions=SimpleNamespace(allows=AsyncMock(return_value=False)),
-        ),
-    )
-
-    with pytest.raises(AuthorizationError):
-        await edit_build(
-            42,
-            BuildPatch(extra_user_info="changed"),
-            Response(),
-            services.builds,
-            services.permissions,
-            ACCOUNT,
-            '"build-42-r1"',
-        )
-
-    lease.commit.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_global_administrator_can_edit_confirmed_build() -> None:
-    build = persisted_build(submitter_id=999, status=Status.CONFIRMED)
-    lease = EditLease(build)
-    services = cast(
-        ApiServices,
-        SimpleNamespace(
-            builds=SimpleNamespace(edit=lambda *_args, **_kwargs: lease),
-            permissions=SimpleNamespace(allows=AsyncMock(return_value=True)),
-        ),
-    )
+async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
+    """Who may edit is a build policy, not a transport one: the route validates
+    the request, names the caller, and calls one method."""
+    build = persisted_build()
+    apply_edit = AsyncMock(return_value=build)
+    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(apply_edit=apply_edit)))
 
     http_response = Response()
     response = await edit_build(
         42,
-        BuildPatch(extra_user_info=None),
+        BuildPatch(extra_user_info="changed"),
         http_response,
         services.builds,
-        services.permissions,
         ACCOUNT,
         '"build-42-r1"',
     )
 
     assert response.id == 42
     assert http_response.headers["etag"] == '"build-42-r1"'
-    lease.commit.assert_awaited_once_with()
+    call = apply_edit.await_args
+    assert call is not None
+    actor, build_id, patch = call.args
+    assert actor == BuildEditor(subject=subject_for(ACCOUNT), discord_id=123)
+    assert build_id == 42
+    assert patch.extra_user_info == "changed"
+    assert call.kwargs == {"expected_revision": 1}
+
+
+@pytest.mark.asyncio
+async def test_edit_surfaces_the_service_authorization_refusal() -> None:
+    apply_edit = AsyncMock(side_effect=AuthorizationError)
+    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(apply_edit=apply_edit)))
+
+    with pytest.raises(AuthorizationError):
+        await edit_build(42, BuildPatch(), Response(), services.builds, ACCOUNT, '"build-42-r1"')
 
 
 @pytest.mark.asyncio
 async def test_edit_requires_an_if_match_revision() -> None:
-    builds = cast(Any, SimpleNamespace())
+    """Checked before the service is reached: a blind overwrite is a bad request,
+    not an authorization question."""
+    apply_edit = AsyncMock()
+    builds = cast(Any, SimpleNamespace(apply_edit=apply_edit))
 
     with pytest.raises(BuildRevisionRequiredError):
-        await edit_build(42, BuildPatch(), Response(), builds, cast(Any, None), ACCOUNT)
+        await edit_build(42, BuildPatch(), Response(), builds, ACCOUNT)
+
+    apply_edit.assert_not_awaited()
 
 
 def test_door_patch_flattens_onto_the_application_patch_names() -> None:

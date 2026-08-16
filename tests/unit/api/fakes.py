@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
+from squid.builds.errors import BuildNotFoundError
 from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
 from squid.core.pagination import Page
@@ -109,6 +110,9 @@ empty result but reaches production code as the wrong type and 500s.
 class MockBuildQueries:
     async def get(self, _build_id: int):
         return None
+
+    async def get_public(self, build_id: int):
+        raise BuildNotFoundError(build_id)
 
     async def get_many(self, _build_ids: list[int]):
         return []

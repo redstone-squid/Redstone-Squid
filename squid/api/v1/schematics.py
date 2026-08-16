@@ -8,8 +8,6 @@ from squid.api.dependencies import BuildQueries, Schematics
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
 from squid.api.v1.schemas.schematics import SchematicSummary
-from squid.builds.domain import Status
-from squid.builds.errors import BuildNotFoundError
 from squid.core.pagination import offset_page
 
 router = APIRouter(tags=["schematics"])
@@ -18,7 +16,13 @@ router = APIRouter(tags=["schematics"])
 @router.get(
     "/builds/{build_id}/schematics",
     response_model=Page[SchematicSummary],
-    responses=responses(400, 404, 422, 503),
+    responses=responses(
+        400,
+        404,
+        422,
+        503,
+        describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
+    ),
 )
 async def list_build_schematics(
     build_id: int,
@@ -28,9 +32,7 @@ async def list_build_schematics(
     offset: OffsetParam = None,
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a confirmed build."""
-    build = await build_queries.get(build_id)
-    if build is None or build.submission_status is not Status.CONFIRMED:
-        raise BuildNotFoundError(build_id)
+    await build_queries.get_public(build_id)
     stored = await schematics.list_public_for_build(build_id)
     page = offset_page(stored, offset=offset or 0, page_size=page_size)
     return render_page(page, SchematicSummary.from_domain)
@@ -51,9 +53,7 @@ async def get_schematic_content(
     schematics: Schematics,
 ) -> Response:
     """Download explicitly published sanitized bytes from a confirmed build."""
-    build = await build_queries.get(build_id)
-    if build is None or build.submission_status is not Status.CONFIRMED:
-        raise BuildNotFoundError(build_id)
+    await build_queries.get_public(build_id)
     content, stored = await schematics.public_content(build_id, schematic_id)
     publication = stored.publication
     assert publication.license is not None

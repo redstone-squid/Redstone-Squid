@@ -72,13 +72,21 @@ _PINNED_REASON_PHRASES = {
 }
 
 
-def responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
-    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata."""
+def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict[int | str, dict[str, Any]]:
+    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata.
+
+    `describe` replaces a status's reason phrase where the generic one hides
+    something a client has to know -- most often that a 404 also covers a
+    resource the caller may not see.
+    """
+    described = describe or {}
     return {
         status: {
             "model": ProblemDetail,
             "content": {PROBLEM_DETAIL_MEDIA_TYPE: {"schema": {"$ref": "#/components/schemas/ProblemDetail"}}},
-            "description": _PINNED_REASON_PHRASES.get(HTTPStatus(status), HTTPStatus(status).phrase),
+            "description": described.get(
+                status, _PINNED_REASON_PHRASES.get(HTTPStatus(status), HTTPStatus(status).phrase)
+            ),
         }
         for status in statuses
     }

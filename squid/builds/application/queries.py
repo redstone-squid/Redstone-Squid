@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol, get_args
 
 from squid.builds.domain import Build, Status
+from squid.builds.errors import BuildNotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 
 
@@ -100,6 +101,23 @@ class BuildQueryService:
 
     async def get(self, build_id: int) -> Build | None:
         return await self._builds.get_by_id(build_id)
+
+    async def get_public(self, build_id: int) -> Build:
+        """Return a build the public catalogue may show, or raise `BuildNotFoundError`.
+
+        One rule, one place. Four routes each wrote `build is None or
+        build.submission_status is not Status.CONFIRMED`, which meant the
+        definition of "public" lived in the transport layer in four copies.
+
+        A pending build raises the same error as a missing one on purpose: the
+        two are indistinguishable to a caller without
+        `build.submission.view_pending`, which is what keeps a submission's
+        existence private until it is confirmed.
+        """
+        build = await self._builds.get_by_id(build_id)
+        if build is None or build.submission_status is not Status.CONFIRMED:
+            raise BuildNotFoundError(build_id)
+        return build
 
     async def pending(self) -> Sequence[Build]:
         return await self._builds.get_pending()
