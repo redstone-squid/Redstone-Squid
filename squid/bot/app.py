@@ -41,7 +41,12 @@ from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import configure_observability, correlation_scope
 from squid.posts.domain import ResourceKind
-from squid.runtime import BackgroundTaskSupervisor, BotServices, start_permission_epoch_watch
+from squid.runtime import (
+    BackgroundTaskSupervisor,
+    BotServices,
+    start_log_capture,
+    start_permission_epoch_watch,
+)
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -311,6 +316,12 @@ async def main(
                 bot,
                 ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port),
             ):
+                start_log_capture(
+                    bot.background_tasks,
+                    runtime.services.error_reports,
+                    enabled=resolved_config.diagnostics.capture_logged_errors,
+                    capacity=resolved_config.diagnostics.log_capture_queue,
+                )
                 await bot.start(resolved_config.discord.token.get_secret_value())
     finally:
         observability.shutdown()

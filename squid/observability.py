@@ -135,6 +135,20 @@ class CorrelatedLogBuffer(logging.Handler):
         finally:
             self.release()
 
+    def snapshot(self, correlation: str) -> tuple[str, ...]:
+        """Read a correlation's buffered lines without consuming them.
+
+        Log-driven capture uses this rather than `drain`: one run can log several failures, and
+        the first of them must not take the context away from the rest, or from a later explicit
+        capture on the same correlation.
+        """
+        self.acquire()
+        try:
+            buffer = self._buffers.get(correlation)
+            return tuple(buffer) if buffer is not None else ()
+        finally:
+            self.release()
+
     def drain(self, correlation: str) -> tuple[str, ...]:
         """Take and forget everything buffered under `correlation`.
 
