@@ -1,8 +1,7 @@
 """Durable schematic render projection tests."""
 
+import uuid
 from typing import Any, cast
-
-from whenever import Instant
 
 from squid.artifacts import ArtifactMetadata
 from squid.schematics.application import ClaimedRenderJob
@@ -69,7 +68,7 @@ class FakeArtifacts:
 
 
 async def test_fresh_render_is_published_and_projected_onto_build() -> None:
-    job = ClaimedRenderJob(7, 0, Instant.now())
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     schematics = FakeSchematics(PreparedRender(3, RECIPE_HASH, 768, 768, png=PNG))
     artifacts = FakeArtifacts()
@@ -92,7 +91,7 @@ async def test_fresh_render_is_published_and_projected_onto_build() -> None:
 
 
 async def test_render_failure_is_released_for_retry() -> None:
-    job = ClaimedRenderJob(7, 0, Instant.now())
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     error = RuntimeError("renderer unavailable")
     projector = SchematicRenderProjector(
@@ -110,7 +109,7 @@ async def test_render_failure_is_released_for_retry() -> None:
 
 
 async def test_replaced_primary_cannot_publish_its_completed_render() -> None:
-    job = ClaimedRenderJob(7, 0, Instant.now())
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     schematics = FakeSchematics(PreparedRender(3, RECIPE_HASH, 768, 768, png=PNG), current=False)
     projector = SchematicRenderProjector(
@@ -128,7 +127,7 @@ async def test_replaced_primary_cannot_publish_its_completed_render() -> None:
 
 
 async def test_cached_render_is_rechecked_before_projection() -> None:
-    job = ClaimedRenderJob(7, 0, Instant.now())
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     cached_url = f"https://api.example/v1/schematic-renders/{RECIPE_HASH}/content"
     prepared = PreparedRender(3, RECIPE_HASH, 768, 768, cached_url=cached_url)
@@ -151,7 +150,7 @@ async def test_cached_render_is_rechecked_before_projection() -> None:
 
 
 async def test_disabled_rendering_leaves_durable_intents_unclaimed() -> None:
-    job = ClaimedRenderJob(7, 0, Instant.now())
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     projector = SchematicRenderProjector(
         cast(Any, jobs),

@@ -1,11 +1,10 @@
 """Application service for durable Discord reconciliation work."""
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
-
-from whenever import Instant
 
 from squid.posts.domain import ResourceKind as PostResourceKind
 
@@ -62,7 +61,8 @@ class ReconciliationJob:
     action: ReconciliationAction
     generation: int
     attempts: int
-    claimed_at: Instant
+    claim_token: uuid.UUID
+    """The database-minted fence this worker's acknowledgement must still match."""
 
 
 class ReconciliationQueue(Protocol):
