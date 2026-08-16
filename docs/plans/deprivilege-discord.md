@@ -341,7 +341,7 @@ format authority.
 Tests — new `tests/unit/accounts/test_identity_subjects.py`: per-provider accept and reject, Java
 UUID normalization (uppercase and unhyphenated input round-trip to canonical), and a loop over
 `IdentityProvider` asserting every member has an arm, so a new member without one fails at runtime
-as well as under basedpyright.
+as well as under the type checker.
 
 ### M2 — `auth: route browser login through a provider adapter` (three commits)
 
@@ -563,7 +563,8 @@ full suite to CI.
 - `uv run pytest tests/unit/<context> --no-cov` for the touched context.
 - Any milestone with a migration: `uv run alembic heads` must print exactly one, and
   `uv run pytest tests/integration/test_alembic_migrations.py --no-cov`.
-- `git diff --check`; formatting, linting, and basedpyright over changed files only.
+- `git diff --check`; formatting and linting over changed files, then `just typecheck` (pyrefly,
+  which is project-wide -- read only the errors in files this milestone touched).
 
 **The four assertions that prove the goal was met.** Each is a test that fails on `master` today:
 
