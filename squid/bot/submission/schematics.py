@@ -30,6 +30,7 @@ from squid.schematics.application import (
     summarise_losses,
 )
 from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
+from squid.schematics.errors import AmbiguousSimulationInputError
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -173,7 +174,13 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 ctx, t(locale, _("Input position must contain three integers, for example `12 5 -3`.")), ephemeral=True
             )
             return
-        result = await self.schematics.measure_timing(build_id, input_position=position)
+        try:
+            result = await self.schematics.measure_timing(build_id, input_position=position)
+        except AmbiguousSimulationInputError as error:
+            # The generic error handler would show the refusal without ever naming what to
+            # choose between, leaving the moderator to guess coordinates out of a binary file.
+            await _say(ctx, _describe_input_refusal(error, locale=locale), ephemeral=True)
+            return
         await _say(ctx, _describe_timing(result, locale=locale), ephemeral=True)
 
     @autocompletes(build_id="builds")
@@ -282,6 +289,32 @@ def _parse_position(value: str | None) -> Vector3 | None:
     if len(parts) != 3:
         return None
     return parts
+
+
+_CANDIDATE_LIMIT = 20
+"""How many candidate coordinates are worth listing. A schematic with more controls than this
+is one the moderator has to narrow down by looking at the build, not by reading a wall of
+coordinates that would not fit in a Discord message anyway."""
+
+
+def _describe_input_refusal(error: AmbiguousSimulationInputError, *, locale: str | None) -> str:
+    """Say why the simulator refused, then list the inputs it would accept."""
+    lines = [
+        t(locale, _("### Simulation input not resolved")),
+        error.localized_public_detail(locale),
+    ]
+    if error.candidates:
+        lines.append(t(locale, _("**Inputs found in this schematic**:")))
+        lines.extend(f"- `{x} {y} {z}`" for x, y, z in error.candidates[:_CANDIDATE_LIMIT])
+        if len(error.candidates) > _CANDIDATE_LIMIT:
+            lines.append(
+                t(
+                    locale,
+                    _("-# …and {count} more not listed."),
+                    count=len(error.candidates) - _CANDIDATE_LIMIT,
+                )
+            )
+    return "\n".join(lines)
 
 
 def _describe_timing(result: SimulationResult, *, locale: str | None) -> str:
