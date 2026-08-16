@@ -1,7 +1,13 @@
 # De-privileging Discord in the account system
 
-> **Status.** Not started. Amend this document in place as building it proves parts of it wrong,
-> calling out the amendments where they occur rather than silently applying them.
+> **Status.** Done. Every milestone landed; the amendments building it forced are recorded
+> inline below, each marked **Amended in build**.
+>
+> Discord is now one `IdentityProvider` among several, reached through an OAuth adapter.
+> Every account-scoped write is keyed on `account_id`, and `Caller.discord_id` no longer
+> exists. Adding a real second provider costs an enum line, a `for_provider` arm, an
+> adapter class, three flat config fields, one `PROVIDER_FACTORIES` entry, and one
+> `OAuthConfig._GROUPS` entry.
 
 > **Amended for [PR #183 review plan 11](pr-183-review/11-api-auth-records-sync.md), which landed
 > between this document being written and being started.** Nothing here changed in substance; the
@@ -308,6 +314,12 @@ Each is one commit unless noted.
 
 ### M0 — `alembic: linearize the two heads that fork at b1c2d3e4f5a7`
 
+> **Amended in build: already done, the other way.** By the time this started, revision
+> `c6d7e8f9a0b1` had landed with `down_revision = ("b2c3d4e5f6a8", "e5f6a7b8c9d2")` — the
+> merge node this section argued against, chosen by whoever hit the fork first. `alembic
+> heads` prints one head, which is all the milestone was a prerequisite for, so nothing
+> was re-pointed. The tradeoff stands as written for the next fork.
+
 **Prerequisite; nothing else can add a migration.** `b2c3d4e5f6a8` (nullable vote thresholds) and
 `e5f6a7b8c9d2` (fold creator names) both point at `b1c2d3e4f5a7`, nothing points at either, and
 `tests/integration/test_alembic_migrations.py` upgrades to `"head"`, which raises on multiple heads.
@@ -332,6 +344,19 @@ UUID normalization (uppercase and unhyphenated input round-trip to canonical), a
 as well as under basedpyright.
 
 ### M2 — `auth: route browser login through a provider adapter` (three commits)
+
+> **Amended in build: M2a must land after M3, or browser writes break.** Deleting
+> `WebSessionIdentity.discord_id` leaves `Caller.discord_id` `None` for every browser
+> session, and until M3 rekeys them the write gates still read
+> `caller.discord_id is None` — so a logged-in browser user would silently lose the
+> ability to submit, edit, and vote for as long as the two milestones were apart. The
+> sequencing graph below does not capture this. Built in the order
+> M1 → M4 → M5 → M7 → M8 → M9 → M3 → M6 → M2 → M10 → M11.
+>
+> **Amended in build: M2a is contract-neutral, and its route keeps the literal paths.**
+> The adapter and the templated path are separable if M2a's routes call
+> `authorize_url("discord", …)` against the unchanged `/v1/auth/discord`, which is what
+> was done — so `contracts/openapi.json` moves in M2b alone, exactly once.
 
 **M2a — extract the adapter.** New `squid/auth/domain/oauth.py` and
 `squid/auth/application/providers.py`. `OAuthState` gains `provider`; `WebSessionIdentity.discord_id`
@@ -464,6 +489,12 @@ rather than two.
 
 ### M9 — `builds: own submissions by account`
 
+> **Amended in build: M7 must land before M9.** `_setup_tag_assignments` writes
+> `created_by_discord_id=build.submitter_id`. Once M9 makes `submitter_id` derived
+> read-only state, that is `None` for a build being created, so every tag assignment on a
+> new build would lose its attribution until M7 lands `created_by_account_id`. Doing M7
+> first lets M9 write `created_by_account_id=build.submitter_account_id` directly.
+
 No migration. `BuildService.submit(*, submitter_account_id, …)`; `DoorSubmissionInput` field
 renamed; the ownership test inside `BuildService.apply_edit` becomes
 `submitter_account_id == actor.subject.account_id`, and `BuildEditor.discord_id` goes with it;
@@ -489,8 +520,8 @@ except `squid/api/v1/schemas/me.py`.
 
 ### M11 — `docs: record that Discord is one provider among several`
 
-Update this document's status block. Comment `.env.example:46-49` with the flat-per-provider
-convention and why (`env_nested_max_split=1`).
+Update this document's status block. Comment `.env.example`'s OAuth group with the
+flat-per-provider convention and why (`env_nested_max_split=1`).
 
 ## Sequencing
 
@@ -541,6 +572,22 @@ full suite to CI.
 2. A CLI caller (`account_id` set, no `discord_id`) submits a build and casts a vote (M3).
 3. An account with no Discord identity links *and* unlinks a Minecraft account (M4).
 4. `grep -rn "caller.discord_id" squid/` returns nothing, enforced by the architecture test (M10).
+
+> **Amended in build: what the build actually found.** Three defects surfaced that the
+> plan did not anticipate, all of them pre-existing and none of them caused by this work.
+> `assign_showcase` raised on every call against a real database, twice over — its
+> `value_type` read back as `str` from a bare `Text` column while `_split_value` compared
+> with `is`, and it bound `updated_at` as a stdlib datetime under an `InstantUTC`
+> decorator that does that conversion itself. Both are fixed in M7, which is where the
+> first integration test of that path lives. Separately, `web/src/generated/*` was already
+> ~284 lines stale against the committed contract, so M2b's regeneration picks up that
+> backlog as well as its own change.
+>
+> Three test failures predate this work and remain: two in
+> `tests/integration/test_alembic_migrations.py` (column-comment drift across 13 columns,
+> and a `principal`/`caller` column rename) and one threshold-constraint case in
+> `tests/integration/voting/`. `tests/integration/fuzz/` needs BuildKit and does not run
+> locally. All confirmed by stashing.
 
 **End to end, after M9**
 

@@ -27,7 +27,20 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("build_schematics", sa.Column("uploaded_by_account_id", sa.Integer(), nullable=True))
+    # The comment mirrors the model's attribute docstring: `Base` turns those into column
+    # comments, so omitting it here is schema drift the autogenerate check catches.
+    op.add_column(
+        "build_schematics",
+        sa.Column(
+            "uploaded_by_account_id",
+            sa.Integer(),
+            nullable=True,
+            comment=(
+                "Who supplied the file, beside `rights_attested_by_account_id` so the table\n"
+                "carries one attribution style rather than two."
+            ),
+        ),
+    )
     op.create_foreign_key(
         "build_schematics_uploaded_by_account_id_fkey",
         "build_schematics",
