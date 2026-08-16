@@ -291,7 +291,7 @@ class RulesTitleFormatter:
         return _formatted(title_tokens, subtitle_tokens, diagnostics)
 
     def format_record(self, record_class: str, category: FormattedTitle) -> FormattedTitle:
-        record_name = str(record_class).replace("_", " ").title()
+        record_name = record_class.replace("_", " ").title()
         record_token = _fixed_token(record_name, TitleSection.RECORD_CLASS)
         category_tokens = category.title_tokens or (_fixed_token(category.title, TitleSection.FIXED_NOUN),)
         title_tokens = (record_token, *category_tokens)
