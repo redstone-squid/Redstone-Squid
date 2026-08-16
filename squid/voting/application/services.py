@@ -220,7 +220,6 @@ class VoteService:
         mutation = await self._repository.cast_vote(
             message_id,
             actor.account_id,
-            actor.discord_id,
             actor.guild_id or message_guild_id,
             option.id,
             emoji,
@@ -350,7 +349,6 @@ class VoteService:
             actor = replacing if replacing is not None and replacing.account_id == selection.account_id else None
             actor = actor or await self._actor_resolver.resolve(
                 selection.account_id,
-                selection.discord_id,
                 selection.guild_id,
                 snapshot.kind,
             )

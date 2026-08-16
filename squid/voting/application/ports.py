@@ -27,13 +27,13 @@ class VoteWeightPolicy(Protocol):
 class VoteActorResolver(Protocol):
     """Resolve current member facts for refresh operations."""
 
-    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
 
 
 class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
     """Resolve membership for an interactive transport and surface dependency failure."""
 
-    async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
+    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
 
     async def aclose(self) -> None: ...
 
@@ -96,7 +96,6 @@ class VoteRepository(Protocol):
         self,
         message_id: int,
         account_id: int,
-        discord_id: int,
         guild_id: int,
         option_id: str,
         emoji: str,
