@@ -21,8 +21,67 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changed parts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows }}
+      python: ${{ steps.filter.outputs.python }}
+      cli: ${{ steps.filter.outputs.cli }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Filter changed paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            workflows:
+              - '.github/workflows/**'
+            python:
+              - 'squid/**'
+              - 'tests/**'
+              - 'scripts/**'
+              - 'contracts/**'
+              - 'alembic/**'
+              - 'schema/**'
+              - 'minecraft/**'
+              - 'locales/**'
+              - 'reference/**'
+              - 'requirements/**'
+              - 'supabase/**'
+              - 'deploy/**'
+              - 'app.py'
+              - 'babel.cfg'
+              - 'alembic.ini'
+              - 'prek.toml'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - '.gitattributes'
+              - 'Dockerfile'
+              - 'Dockerfile.api-fuzz'
+              - 'compose.yml'
+              - '.github/workflows/ci.yml'
+            cli:
+              - 'cli/**'
+              - '.github/workflows/ci.yml'
+            web:
+              - 'web/**'
+              - '.github/workflows/ci.yml'
+
   actions-security:
     name: Actions security
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.workflows == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,6 +96,10 @@ jobs:
 
   quality:
     name: Quality
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -93,6 +156,10 @@ jobs:
 
   dependency-security:
     name: Dependency security
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -137,6 +204,10 @@ jobs:
 
   cli-quality:
     name: CLI quality (Rust 1.85)
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.cli == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -168,6 +239,10 @@ jobs:
 
   web-quality:
     name: Catalogue quality
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -232,7 +307,8 @@ jobs:
 
   web-e2e-pr:
     name: Catalogue PR browser (${{ matrix.project }})
-    if: github.event_name == 'pull_request'
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -270,10 +346,11 @@ jobs:
 
   web-e2e-full:
     name: Catalogue full browser (${{ matrix.project }})
+    needs: changes
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master' && needs.changes.outputs.web == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -317,7 +394,9 @@ jobs:
 
   deploy:
     name: Deploy
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: >-
+      always() && !cancelled() && !contains(needs.*.result, 'failure') &&
+      github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [actions-security, cli-quality, dependency-security, quality, unit, integration, web-quality, web-e2e-full]
     permissions: {}
     uses: ./.github/workflows/cd.yml
@@ -329,6 +408,10 @@ jobs:
 
   unit:
     name: Unit and architecture (Python ${{ matrix.python-version }})
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -375,6 +458,10 @@ jobs:
 
   integration:
     name: PostgreSQL integration
+    needs: changes
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.python == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
