@@ -145,7 +145,7 @@ def test_tag_and_version_collections_use_page_envelope(
             "record_operator": None,
             "canonical_unit": None,
             "display_unit": None,
-            "numeric_quantum": None,
+            "numeric_step": None,
         }
     ]
     assert tags.json()["total"] == 1

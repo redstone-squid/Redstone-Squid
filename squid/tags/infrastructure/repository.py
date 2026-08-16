@@ -55,7 +55,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             record_operator=None,
             canonical_unit_key=None,
             default_display_unit_key=None,
-            numeric_quantum=None,
+            numeric_step=None,
             render_template="{name}" if value_type is TagValueType.NONE else "{name}: {value}{unit}",
             default_display_order=0,
             moderation_status=TagModerationStatus.PENDING,
