@@ -31,6 +31,7 @@
 *.txt      text
 *.sql      text
 schema_dump.sql linguist-generated=true
+web/openapi.json linguist-generated=true
 *.po       text diff=po
 *.epub     diff=astextplain
 
