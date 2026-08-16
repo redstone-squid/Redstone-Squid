@@ -4,6 +4,7 @@ import logging
 
 from squid.artifacts import ArtifactStore
 from squid.schematics.application import SchematicRenderJobService, SchematicService
+from squid.schematics.application.queries import CachedRender, FreshRender, SkippedRender
 
 logger = logging.getLogger(__name__)
 
@@ -44,21 +45,32 @@ class SchematicRenderProjector:
             await self._jobs.complete(job)
 
     async def _project(self, build_id: int) -> None:
-        prepared = await self._schematics.prepare_render(build_id)
-        if prepared is None:
-            return
-        url = prepared.cached_url
-        if url is not None:
-            await self._schematics.project_render(prepared)
-            return
+        """Carry out whatever the service decided, letting only retryable failures escape.
+
+        A `SkippedRender` is a permanent verdict for this build's recipe, so returning
+        normally lets `process_batch` acknowledge the job instead of burning its attempts on
+        a build that will never render.
+        """
+        match await self._schematics.prepare_render(build_id):
+            case SkippedRender(reason=reason):
+                logger.info(
+                    "Skipped a schematic render projection",
+                    extra={"squid.build.id": build_id, "squid.schematic.render_skip_reason": reason.value},
+                )
+            case CachedRender() as cached:
+                await self._schematics.project_render(cached)
+            case FreshRender() as fresh:
+                await self._publish(fresh)
+
+    async def _publish(self, render: FreshRender) -> None:
+        """Upload a fresh preview and project the URL it is now reachable at."""
         if self._public_base_url is None:
             msg = "Schematic rendering requires a public API base URL."
             raise RuntimeError(msg)
-        assert prepared.png is not None
-        object_key = f"schematic-renders/{prepared.recipe_hash[:2]}/{prepared.recipe_hash}.png"
-        metadata = await self._artifacts.put(object_key, prepared.png, content_type="image/png")
-        if metadata.byte_size != len(prepared.png):
+        object_key = f"schematic-renders/{render.recipe_hash[:2]}/{render.recipe_hash}.png"
+        metadata = await self._artifacts.put(object_key, render.png, content_type="image/png")
+        if metadata.byte_size != len(render.png):
             msg = "Object storage did not confirm the rendered preview size."
             raise RuntimeError(msg)
-        url = f"{self._public_base_url}/v1/schematic-renders/{prepared.recipe_hash}/content"
-        await self._schematics.record_render(prepared, url, object_key)
+        url = f"{self._public_base_url}/v1/schematic-renders/{render.recipe_hash}/content"
+        await self._schematics.record_render(render, url, object_key)
