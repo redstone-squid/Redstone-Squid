@@ -11,9 +11,11 @@ from fastapi.testclient import TestClient
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CreatorAlias, CreatorProfile
 from squid.api.dependencies import get_services
+from squid.builds.application import BuildQueryService
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.runtime import ApiServices
-from squid.schematics.application import SchematicService
-from squid.schematics.errors import SchematicNotFoundError
+from squid.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
+from squid.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
 from squid.tags.application import TagService
 from squid.tags.domain import (
     TagAuthority,
@@ -89,6 +91,40 @@ class SchematicFake(SchematicService):
         if recipe_hash != RENDER_RECIPE_HASH:
             raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
         return b"\x89PNG\r\n\x1a\npreview"
+
+
+class RefusingRenderFake(SchematicService):
+    """A build whose attachment can never be previewed, whatever the camera does."""
+
+    def __init__(self) -> None:
+        pass
+
+    @override
+    def render_recipe(self, **_overrides: object) -> RenderRequest:  # type: ignore[override]
+        return RenderRequest()
+
+    @override
+    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+        reason = RenderSkipReason.OVER_VOLUME_BUDGET
+        raise SchematicRenderRefusedError(reason.value, reason.description)
+
+
+class ConfirmedBuildFake(BuildQueryService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def get_public(self, build_id: int) -> Build:
+        return DoorBuild(
+            id=build_id,
+            submitter_account_id=1,
+            submission_status=Status.CONFIRMED,
+            versions=["1.21"],
+            door_width=2,
+            door_height=2,
+            patterns=["Regular"],
+            orientation="Door",
+        )
 
 
 class VoteFake(VoteService):
@@ -183,6 +219,35 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockD
         "id": "22222222-2222-2222-2222-222222222222",
         "aliases": ["Builder", "OldBuilder"],
     }
+
+
+def test_an_unpreviewable_build_answers_409_with_the_reason(
+    app_factory: tuple[FastAPI, MockDatabaseManager],
+) -> None:
+    """A refusal is about the build's state, so it is a conflict rather than a 404 or a 500."""
+    app, _database = app_factory
+    _override(app, build_queries=ConfirmedBuildFake(), schematics=RefusingRenderFake())
+
+    with TestClient(app) as client:
+        response = client.get("/v1/builds/7/schematics/render")
+
+    assert response.status_code == 409
+    assert response.headers["content-type"].startswith("application/problem+json")
+    body = response.json()
+    assert body["code"] == "SCHEMATIC_RENDER_REFUSED"
+    assert body["context"] == {"reason": "over_volume_budget"}
+
+
+def test_a_render_rejects_a_camera_outside_the_supported_range(
+    app_factory: tuple[FastAPI, MockDatabaseManager],
+) -> None:
+    app, _database = app_factory
+    _override(app, build_queries=ConfirmedBuildFake(), schematics=RefusingRenderFake())
+
+    with TestClient(app) as client:
+        response = client.get("/v1/builds/7/schematics/render", params={"pitch": 120})
+
+    assert response.status_code == 422
 
 
 def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:

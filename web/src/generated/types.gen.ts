@@ -1178,7 +1178,7 @@ export type DraftSummaryResponse = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
  * ErrorReportDetail
@@ -5899,6 +5899,71 @@ export type BuildSchematicContentGetResponses = {
 };
 
 export type BuildSchematicContentGetResponse = BuildSchematicContentGetResponses[keyof BuildSchematicContentGetResponses];
+
+export type BuildSchematicRenderGetData = {
+    body?: never;
+    path: {
+        /**
+         * Build Id
+         */
+        build_id: number;
+    };
+    query?: {
+        /**
+         * Width
+         */
+        width?: number | null;
+        /**
+         * Height
+         */
+        height?: number | null;
+        /**
+         * Yaw
+         */
+        yaw?: number | null;
+        /**
+         * Pitch
+         */
+        pitch?: number | null;
+        /**
+         * Zoom
+         */
+        zoom?: number | null;
+    };
+    url: '/v1/builds/{build_id}/schematics/render';
+};
+
+export type BuildSchematicRenderGetErrors = {
+    /**
+     * No confirmed build with this identifier, or it has no schematic attached.
+     */
+    404: ProblemDetail;
+    /**
+     * The attached schematic will never be previewed; `context.reason` says why.
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Previews are not configured on this instance, or the renderer is unavailable.
+     */
+    503: ProblemDetail;
+};
+
+export type BuildSchematicRenderGetError = BuildSchematicRenderGetErrors[keyof BuildSchematicRenderGetErrors];
+
+export type BuildSchematicRenderGetResponses = {
+    /**
+     * Rendered schematic preview
+     */
+    200: unknown;
+};
 
 export type SchematicRenderContentGetData = {
     body?: never;
