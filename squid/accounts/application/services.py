@@ -43,26 +43,24 @@ class AccountService:
         self._minecraft_username_lookup = minecraft_username_lookup
         self._verification_code_factory = verification_code_factory
 
-    async def get_account(self, discord_id: int) -> Account | None:
-        """Return the account holding *discord_id*, or ``None``."""
-        return await self._repository.get_by_discord_id(discord_id)
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        """Return the account holding one canonical provider subject, or ``None``."""
+        return await self._repository.get_by_identity(provider, subject)
 
     async def get_account_by_id(self, account_id: int) -> Account | None:
         """Return an account by its internal identifier."""
         return await self._repository.get_by_id(account_id)
 
-    async def get_or_create_account(self, discord_id: int) -> Account:
-        """Resolve the account established by a Discord OAuth or gateway identity."""
-        return await self._repository.get_or_create_discord(discord_id)
+    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+        """Resolve the account established by a verified external identity, creating it if absent.
 
-    async def grant_current_consent(self, discord_id: int) -> Account:
-        """Record acceptance of the current privacy notice for a Discord-identified caller."""
-        account = await self._repository.get_by_discord_id(discord_id)
-        if account is None or account.id is None:
-            raise AccountNotFoundError(discord_id=discord_id)
-        return await self._repository.update_consent(account.id, AccountConsent.grant_current())
+        Every caller holds evidence of the *provider* subject it passes — an OAuth exchange, a
+        gateway event — which is what makes creating an account here legitimate. Nothing that
+        merely observes a subject may use this; see `AccountIdCache`'s never-create rule.
+        """
+        return await self._repository.get_or_create_identity(provider, subject)
 
-    async def grant_current_consent_for_account(self, account_id: int) -> Account:
+    async def grant_current_consent(self, account_id: int) -> Account:
         """Record consent for any authenticated caller, however they proved their identity."""
         return await self._repository.update_consent(account_id, AccountConsent.grant_current())
 
@@ -92,11 +90,11 @@ class AccountService:
         return await self._repository.get_creator_profile(public_id)
 
     async def link_minecraft_account(
-        self, discord_id: int, code: str, *, consent: AccountConsent
+        self, account_id: int, code: str, *, consent: AccountConsent
     ) -> CreatorAlias | None:
-        """Attach a verified Java identity using a valid one-time code."""
+        """Attach a verified Java identity to an existing account using a valid one-time code."""
         result = await self._repository.consume_code_and_link_account(
-            discord_id=discord_id,
+            account_id=account_id,
             code=code,
             consent=consent,
         )
@@ -104,14 +102,14 @@ class AccountService:
             raise InvalidVerificationCodeError
         if result.conflicting_java_uuid is not None:
             raise AccountAlreadyLinkedError(
-                discord_id=discord_id,
+                account_id=account_id,
                 minecraft_uuid=result.conflicting_java_uuid,
             )
         return result.claimed_alias
 
-    async def unlink_minecraft_account(self, discord_id: int) -> bool:
-        """Unlink every Java identity from the Discord-linked account."""
-        return await self._repository.unlink_java_identity(discord_id)
+    async def unlink_minecraft_account(self, account_id: int) -> bool:
+        """Unlink every Java identity from an account."""
+        return await self._repository.unlink_java_identity(account_id)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Re-read the linked Java name from Mojang and reconcile the creator credit.
@@ -145,13 +143,13 @@ class AccountService:
             username=username,
         )
 
-    async def request_alias_claim(self, discord_id: int, name: str) -> AliasClaim:
+    async def request_alias_claim(self, account_id: int, name: str) -> AliasClaim:
         """Open a staff-reviewed request to be credited under a creator name."""
-        account = await self._repository.get_by_discord_id(discord_id)
+        account = await self._repository.get_by_id(account_id)
         if account is None or account.id is None:
-            raise AccountNotFoundError(discord_id=discord_id)
+            raise AccountNotFoundError(account_id)
         if account.needs_consent_refresh:
-            raise ConsentRequiredError(discord_id)
+            raise ConsentRequiredError(account_id=account_id)
         return await self._repository.request_claim(name=name, account_id=account.id)
 
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
