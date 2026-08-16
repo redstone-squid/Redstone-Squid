@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 import pytest
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.artifacts.infrastructure import LocalArtifactStore
@@ -132,7 +132,7 @@ async def test_stale_workers_cannot_complete_a_reclaimed_job(
         await session.execute(
             update(SchematicJob)
             .where(SchematicJob.id == job_id)
-            .values(claimed_at=first.claimed_at.subtract(minutes=6))
+            .values(claimed_at=text("now() - interval '6 minutes'"))
         )
     second = (await repository.claim(limit=1))[0]
 

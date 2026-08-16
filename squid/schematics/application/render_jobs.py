@@ -1,10 +1,9 @@
 """Durable build-render enrichment coordination."""
 
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
-
-from whenever import Instant
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,7 +12,8 @@ class ClaimedRenderJob:
 
     build_id: int
     attempts: int
-    claimed_at: Instant
+    claim_token: uuid.UUID
+    """The database-minted fence this worker's acknowledgement must still match."""
 
 
 class SchematicRenderJobRepository(Protocol):
