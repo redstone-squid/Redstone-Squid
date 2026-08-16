@@ -15,7 +15,7 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.artifacts import ArtifactStore
 from squid.auth.application import ApiKeyService
-from squid.auth.application.web import DiscordOAuthService
+from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.cli_auth import CliAuthorizationService
 from squid.community.application import RedstonerService, WelcomeRelayService
@@ -64,7 +64,7 @@ class ApiServices:
 
     builds: BuildService
     api_keys: ApiKeyService | None
-    web_auth: DiscordOAuthService | None
+    web_auth: WebSessionService | None
     cli_authorization: CliAuthorizationService | None
     idempotency: IdempotencyService
     notifications: NotificationService

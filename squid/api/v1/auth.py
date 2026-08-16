@@ -1,4 +1,4 @@
-"""Discord OAuth2 browser-session routes."""
+"""Browser OAuth2 and session routes."""
 
 import secrets
 from typing import Annotated
@@ -14,6 +14,10 @@ from squid.api.v1.schemas.auth import CsrfTokenResponse
 from squid.core.errors import AuthenticationError, ValidationError
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+DISCORD = "discord"
+"""The one provider slug these paths are hardcoded to. The follow-up commit templates
+the path segment; this one only moves the exchange behind an adapter."""
 
 
 @router.get("/csrf", response_model=CsrfTokenResponse, responses=responses(401, 503))
@@ -37,7 +41,7 @@ async def discord_authorize(
     if web_auth is None:
         raise AuthenticationError
     _validate_redirect(request, redirect_to)
-    return RedirectResponse(await web_auth.authorize_url(redirect_to))
+    return RedirectResponse(await web_auth.authorize_url(DISCORD, redirect_to))
 
 
 @router.get("/discord/callback", response_class=RedirectResponse, responses=responses(400, 401, 503))
@@ -51,6 +55,7 @@ async def discord_callback(
     if web_auth is None:
         raise AuthenticationError
     token, redirect_to = await web_auth.callback(
+        DISCORD,
         code,
         state,
         user_agent=request.headers.get("User-Agent"),

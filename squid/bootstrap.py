@@ -7,13 +7,16 @@ from contextlib import AsyncExitStack
 from functools import cached_property, partial
 from importlib import resources
 
+import httpx
+
 from squid.accounts.application import AccountService
 from squid.accounts.infrastructure.mojang import MojangClient
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.artifacts import ArtifactStore
 from squid.artifacts.infrastructure import create_artifact_store
 from squid.auth.application import ApiKeyService
-from squid.auth.application.web import DiscordOAuthService
+from squid.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
+from squid.auth.application.web import WebSessionService
 from squid.auth.infrastructure import PostgresApiKeyRepository, PostgresWebSessionRepository
 from squid.builds.application import (
     BuildEmbeddingService,
@@ -561,18 +564,33 @@ class _ServiceGraph:
         )
 
     @cached_property
-    def web_auth(self) -> DiscordOAuthService | None:
+    def web_auth(self) -> WebSessionService | None:
+        """Browser login over every provider this deployment has credentials for.
+
+        The httpx client is owned here rather than by the service, so adding a second
+        provider shares one connection pool instead of opening a second.
+        """
         if self.config.oauth is None or self.config.session_pepper is None:
             return None
-        service = DiscordOAuthService(
+        clients = self.config.oauth.clients()
+        if not clients:
+            return None
+        http = httpx.AsyncClient(timeout=10)
+        self.resources.push_async_callback(http.aclose)
+        providers: dict[str, OAuthProvider] = {}
+        for provider, credentials in clients.items():
+            factory = PROVIDER_FACTORIES.get(provider)
+            if factory is None:
+                continue
+            adapter = factory(credentials, http, upstreams=self.config.upstream_http)
+            providers[adapter.slug] = adapter
+        return WebSessionService(
             PostgresWebSessionRepository(self.db.async_session),
             self.accounts,
-            self.config.oauth,
+            providers,
+            self.config.oauth.session_ttl_hours,
             self.config.session_pepper.get_secret_value(),
-            upstreams=self.config.upstream_http,
         )
-        self.resources.push_async_callback(service.aclose)
-        return service
 
     @cached_property
     def cli_authorization(self) -> CliAuthorizationService | None:
