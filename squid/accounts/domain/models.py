@@ -3,6 +3,7 @@
 # ruff: noqa: RUF002  Confusable and compatibility characters are the subject
 # matter here: they are the inputs whose folding this file exists to pin.
 
+import re
 import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
@@ -11,6 +12,10 @@ from uuid import UUID
 from whenever import Instant
 
 CURRENT_CONSENT_VERSION = "2026-08-04"
+
+_POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
+"""ASCII decimal without a leading zero. Deliberately not `str.isdigit`, which accepts
+non-ASCII digits such as U+0661 that `int()` then happily parses into a different string."""
 
 CONSENT_CUTOFF = "2026-08-04T00:00:00+00:00"
 """Accounts created before this instant predate consent receipts and are grandfathered."""
@@ -56,12 +61,46 @@ class AccountIdentity:
     id: int | None = None
 
     @classmethod
+    def for_provider(
+        cls,
+        provider: IdentityProvider,
+        subject: str,
+        *,
+        display_name: str | None = None,
+        verified_at: Instant | None = None,
+    ) -> AccountIdentity:
+        """Build an identity in *provider*'s canonical subject form.
+
+        This is the only authority on subject format; the database carries no format
+        constraint. The `match` is exhaustive by construction, so adding a member to
+        `IdentityProvider` is a type error here until its subject format is stated — which
+        is the reason the enum stays closed.
+        """
+        match provider:
+            case IdentityProvider.DISCORD:
+                if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
+                    msg = f"Discord identity subjects must be positive signed 64-bit integers, got {subject!r}."
+                    raise ValueError(msg)
+                return cls(provider, subject, display_name, verified_at)
+            case IdentityProvider.BEDROCK:
+                if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
+                    msg = f"Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}."
+                    raise ValueError(msg)
+                return cls(provider, subject, display_name, verified_at)
+            case IdentityProvider.JAVA:
+                # `UUID` also lowercases and hyphenates, so an uppercase or bare-hex
+                # subject from an external API normalizes rather than being rejected.
+                try:
+                    canonical = str(UUID(subject))
+                except ValueError as error:
+                    msg = f"Java identity subjects must be UUIDs, got {subject!r}."
+                    raise ValueError(msg) from error
+                return cls(provider, canonical, display_name, verified_at)
+
+    @classmethod
     def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> AccountIdentity:
         """Create a canonical Discord identity."""
-        if discord_id <= 0:
-            msg = "Discord identity subjects must be positive integers."
-            raise ValueError(msg)
-        return cls(IdentityProvider.DISCORD, str(discord_id), verified_at=verified_at)
+        return cls.for_provider(IdentityProvider.DISCORD, str(discord_id), verified_at=verified_at)
 
     @classmethod
     def java(
@@ -72,7 +111,9 @@ class AccountIdentity:
         verified_at: Instant | None = None,
     ) -> AccountIdentity:
         """Create a canonical Java Edition identity."""
-        return cls(IdentityProvider.JAVA, str(minecraft_uuid), username, verified_at)
+        return cls.for_provider(
+            IdentityProvider.JAVA, str(minecraft_uuid), display_name=username, verified_at=verified_at
+        )
 
     @classmethod
     def bedrock(
@@ -83,10 +124,7 @@ class AccountIdentity:
         verified_at: Instant | None = None,
     ) -> AccountIdentity:
         """Create a canonical Bedrock identity from an unsigned XUID."""
-        if not 0 < xuid < 2**64:
-            msg = "Bedrock XUIDs must be unsigned 64-bit integers."
-            raise ValueError(msg)
-        return cls(IdentityProvider.BEDROCK, str(xuid), gamertag, verified_at)
+        return cls.for_provider(IdentityProvider.BEDROCK, str(xuid), display_name=gamertag, verified_at=verified_at)
 
     @property
     def discord_id(self) -> int | None:
