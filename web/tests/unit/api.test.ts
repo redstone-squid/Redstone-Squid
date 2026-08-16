@@ -214,17 +214,18 @@ describe("typed catalogue reads", () => {
 });
 
 describe("problem response mapping", () => {
-  it("preserves localized RFC 9457 detail and reference IDs", async () => {
+  it("preserves localized RFC 9457 detail and the Request-Id reference", async () => {
     fetchMock.mockResolvedValueOnce(
-      jsonResponse(
-        {
+      new Response(
+        JSON.stringify({
           title: "未找到作品",
           status: 404,
           detail: "此作品不存在或未公开。",
-          error_id: "error-123",
+        }),
+        {
+          status: 404,
+          headers: { "Content-Type": "application/problem+json", "Request-Id": "error-123" },
         },
-        404,
-        "application/problem+json",
       ),
     );
     const error = await fetchBuild("zh-CN", 404).catch((caught: unknown) => caught);
@@ -232,7 +233,7 @@ describe("problem response mapping", () => {
     expect(error).toMatchObject({
       status: 404,
       message: "此作品不存在或未公开。",
-      problem: { error_id: "error-123" },
+      requestId: "error-123",
     });
   });
 

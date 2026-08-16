@@ -1960,10 +1960,6 @@ export type ProblemDetail = {
     context?: {
         [key: string]: JsonValue;
     } | null;
-    /**
-     * Error Id
-     */
-    error_id?: string | null;
 };
 
 /**
