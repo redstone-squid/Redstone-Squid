@@ -51,7 +51,6 @@ async def page_ids(
 ) -> Sequence[int]:
     builds = await repository.list_page(
         statuses=_CONFIRMED,
-        submitter_id=None,
         submitter_account_id=None,
         sort=BuildListSort(),
         offset=selector.offset,
@@ -97,7 +96,7 @@ async def test_the_total_matches_what_paging_actually_returns(
     await seed(migrated_session_factory, 5)
     repository = BuildRepository(migrated_session_factory)
 
-    total = await repository.count(statuses=_CONFIRMED, submitter_id=None, submitter_account_id=None)
+    total = await repository.count(statuses=_CONFIRMED, submitter_account_id=None)
     walked: list[int] = []
     selector = FIRST_PAGE
     while True:

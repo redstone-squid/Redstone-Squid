@@ -204,7 +204,7 @@ def build_service(
 def existing_build() -> DoorBuild:
     return DoorBuild(
         id=42,
-        submitter_id=1,
+        submitter_account_id=1,
         submission_status=Status.PENDING,
         miscellaneous_restrictions=["Locational", "Directional with fixes", "Other"],
         extra_info={
@@ -366,7 +366,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
     repository = FakeBuildRepository()
     service = build_service(repository)
     submission = DoorSubmissionInput(
-        submitter_id=123,
+        submitter_account_id=123,
         door_size=(2, 3, None),
         build_size=(8, 9, 10),
         restrictions=("Seamless",),
@@ -380,7 +380,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
     assert isinstance(build, DoorBuild)
     assert build.category is BuildCategory.DOOR
     assert build.submission_status is Status.PENDING
-    assert build.submitter_id == 123
+    assert build.submitter_account_id == 123
     assert build.door_dimensions == (2, 3, None)
     assert build.dimensions == (8, 9, 10)
     assert build.wiring_placement_restrictions == ["Seamless"]
@@ -417,7 +417,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     )
 
     assert build.submitter_account_id == 17
-    assert build.submitter_id is None
+    assert build.submitter_discord_id is None
     assert build.source_submission_draft_id == draft_id
     assert build.display_name == "Workshop prototype"
     assert build.category is BuildCategory.OTHER
@@ -504,11 +504,13 @@ class TestAuthorizedEditing:
     """The edit policy the HTTP route used to hold.
 
     It lived in the transport layer, reading the leased build's status and
-    submitter there, so the bot's two edit paths could not reuse it.
+    submitter there, so the bot's two edit paths could not reuse it. Ownership is
+    now the account comparison it always meant, rather than a snowflake one made
+    while a perfectly good account id sat one attribute away.
     """
 
-    OWNER = BuildEditor(subject=Subject(account_id=1), discord_id=1)
-    STRANGER = BuildEditor(subject=Subject(account_id=2), discord_id=2)
+    OWNER = BuildEditor(subject=Subject(account_id=1))
+    STRANGER = BuildEditor(subject=Subject(account_id=2))
 
     @staticmethod
     def _permissions(*held: str) -> PermissionService:

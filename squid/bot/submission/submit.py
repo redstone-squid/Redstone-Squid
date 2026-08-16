@@ -59,10 +59,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     class SubmitDoorFlags(commands.FlagConverter):
         """Parameters for the `/build submit-full` command."""
 
-        def to_submission(self, submitter_id: int) -> DoorSubmissionInput:
+        def to_submission(self, submitter_account_id: int) -> DoorSubmissionInput:
             """Convert Discord flags to the submission input the service accepts."""
             return DoorSubmissionInput(
-                submitter_id=submitter_id,
+                submitter_account_id=submitter_account_id,
                 door_size=self.door_size,
                 pattern=tuple(self.pattern),
                 door_type=self.door_type,
@@ -123,7 +123,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale = await resolve_locale(ctx, self.bot.services.settings)
 
             async with RunningMessage(followup, locale=locale) as message:
-                build = await self.builds.submit_door(flags.to_submission(ctx.author.id))
+                submitter_account_id = await account_id_for(self.bot.services.accounts, ctx.author)
+                build = await self.builds.submit_door(flags.to_submission(submitter_account_id))
                 build_handler = self.bot.for_build(build)
                 await followup.send(
                     view=StaticLayout(
@@ -243,7 +244,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         build = draft.finalize()
         self._note_dimension_mismatch(build, analyses)
         await self._note_schematic_duplicates(build, analyses)
-        await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
+        await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
         await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
 
         preview = StaticLayout(

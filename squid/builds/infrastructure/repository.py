@@ -16,8 +16,8 @@ from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider, fold_creator_name
-from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
+from squid.accounts.domain import fold_creator_name
+from squid.accounts.infrastructure.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
 from squid.builds.domain import (
     Build,
@@ -53,18 +53,12 @@ def _page_filter[S: Select[Any]](
     statement: S,
     *,
     statuses: frozenset[Status],
-    submitter_id: int | None,
     submitter_account_id: int | None,
 ) -> S:
     """Apply the status and submitter visibility policy shared by page and count queries."""
     statement = statement.where(SQLBuild.submission_status.in_(statuses))
     if submitter_account_id is not None:
         statement = statement.where(SQLBuild.submitter_account_id == submitter_account_id)
-    elif submitter_id is not None:
-        statement = statement.join(AccountIdentity, AccountIdentity.account_id == SQLBuild.submitter_account_id).where(
-            AccountIdentity.provider == IdentityProvider.DISCORD,
-            AccountIdentity.subject == str(submitter_id),
-        )
     return statement
 
 
@@ -153,7 +147,6 @@ class BuildRepository:
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         offset: int = 0,
@@ -176,7 +169,6 @@ class BuildRepository:
             statement = _page_filter(
                 select(SQLBuild),
                 statuses=statuses,
-                submitter_id=submitter_id,
                 submitter_account_id=submitter_account_id,
             )
             reverse = before_id is not None
@@ -203,7 +195,6 @@ class BuildRepository:
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None = None,
         submitter_account_id: int | None = None,
     ) -> int:
         """Count the builds a listing can display under a visibility policy."""
@@ -211,10 +202,9 @@ class BuildRepository:
             return 0
         async with self._session_factory() as session:
             statement = _page_filter(
-                # Distinct guards against row multiplication from the identity join.
-                select(func.count(func.distinct(SQLBuild.id))).select_from(SQLBuild),
+                # No DISTINCT: the identity join that could multiply rows is gone.
+                select(func.count()).select_from(SQLBuild),
                 statuses=statuses,
-                submitter_id=submitter_id,
                 submitter_account_id=submitter_account_id,
             )
             return await session.scalar(statement) or 0
@@ -266,8 +256,8 @@ class BuildRepository:
         if build.submission_status is None:
             msg = "Submission status must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
-        if build.submitter_account_id is None and build.submitter_id is None:
-            msg = "Submitter account ID or Discord ID must be set for existing builds."
+        if build.submitter_account_id is None:
+            msg = "Submitter account ID must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
 
         async with self._session_factory() as session:
@@ -369,20 +359,23 @@ class BuildRepository:
             setattr(sql_build, name, value)
 
     async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
-        """Resolve legacy Discord ownership only when no canonical account ID was supplied."""
-        if build.submitter_account_id is not None:
-            account_exists = await session.scalar(select(Account.id).where(Account.id == build.submitter_account_id))
-            if account_exists is None:
-                msg = "Submitter account does not exist."
-                raise InvalidStateError(
-                    msg,
-                    context={"resource": "build", "submitter_account_id": build.submitter_account_id},
-                )
-            return build.submitter_account_id
-        if build.submitter_id is None:
-            msg = "Submitter account ID or Discord ID must be set for new builds."
+        """Check that the supplied owning account exists.
+
+        This used to mint an account from a snowflake when none was supplied -- the last
+        identity-creating path outside the accounts context, reached from a persistence
+        layer with no evidence anybody had asked to be remembered. Callers now resolve an
+        account before submitting.
+        """
+        if build.submitter_account_id is None:
+            msg = "Submitter account ID must be set for new builds."
             raise InvalidStateError(msg, context={"resource": "build"})
-        build.submitter_account_id = await self._get_or_create_account(session, build.submitter_id)
+        account_exists = await session.scalar(select(Account.id).where(Account.id == build.submitter_account_id))
+        if account_exists is None:
+            msg = "Submitter account does not exist."
+            raise InvalidStateError(
+                msg,
+                context={"resource": "build", "submitter_account_id": build.submitter_account_id},
+            )
         return build.submitter_account_id
 
     async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: SQLBuild) -> None:
@@ -452,50 +445,6 @@ class BuildRepository:
                     created_by_account_id=build.submitter_account_id,
                 )
             )
-
-    @staticmethod
-    async def _get_or_create_account(session: AsyncSession, discord_id: int) -> int:
-        """Return the account ID for *discord_id*, creating an account if needed.
-
-        A submitter-only row holds nothing beyond the Discord snowflake the bot
-        already needs for ownership checks, so it carries no consent receipt;
-        the receipt covers the Minecraft link, which such a row does not have.
-        """
-        subject = str(discord_id)
-        account_id = await session.scalar(
-            select(AccountIdentity.account_id).where(
-                AccountIdentity.provider == IdentityProvider.DISCORD,
-                AccountIdentity.subject == subject,
-            )
-        )
-        if account_id is not None:
-            return account_id
-        candidate = Account()
-        session.add(candidate)
-        await session.flush()
-        account_id = await session.scalar(
-            pg_insert(AccountIdentity)
-            .values(
-                account_id=candidate.id,
-                provider=IdentityProvider.DISCORD,
-                subject=subject,
-                verified_at=Instant.now(),
-            )
-            .on_conflict_do_nothing(index_elements=[AccountIdentity.provider, AccountIdentity.subject])
-            .returning(AccountIdentity.account_id)
-        )
-        if account_id is not None:
-            return account_id
-        await session.delete(candidate)
-        await session.flush()
-        return (
-            await session.execute(
-                select(AccountIdentity.account_id).where(
-                    AccountIdentity.provider == IdentityProvider.DISCORD,
-                    AccountIdentity.subject == subject,
-                )
-            )
-        ).scalar_one()
 
     @staticmethod
     async def _get_or_create_aliases(session: AsyncSession, igns: list[str]) -> list[int]:

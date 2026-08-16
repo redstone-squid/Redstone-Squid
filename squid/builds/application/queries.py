@@ -50,7 +50,6 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None,
         submitter_account_id: int | None,
         sort: BuildListSort,
         offset: int,
@@ -63,7 +62,6 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None,
         submitter_account_id: int | None,
     ) -> int: ...
 
@@ -130,7 +128,6 @@ class BuildQueryService:
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None = None,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
@@ -139,7 +136,6 @@ class BuildQueryService:
         """Return one page of authoritative builds in display order under a visibility policy."""
         rows = await self._builds.list_page(
             statuses=statuses,
-            submitter_id=submitter_id,
             submitter_account_id=submitter_account_id,
             sort=sort,
             offset=selector.offset,
@@ -150,7 +146,6 @@ class BuildQueryService:
         )
         total = await self._builds.count(
             statuses=statuses,
-            submitter_id=submitter_id,
             submitter_account_id=submitter_account_id,
         )
         return keyset_page(
