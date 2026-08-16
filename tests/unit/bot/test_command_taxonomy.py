@@ -46,6 +46,15 @@ UNGATED_COMMANDS = frozenset(
         "patterns",
         "patterns list",
         "patterns search",
+        # Anyone in a guild may open a poll, so `poll create` needs no node. Closing and
+        # refreshing one are authorized against the session rather than the caller: both
+        # run `VoteSessionSnapshot.can_close`, which admits the poll's author as well as
+        # holders of `vote.poll.close_any`. A node on the command could not express "or
+        # you opened this one", and would lock authors out of their own polls.
+        "poll",
+        "poll close",
+        "poll create",
+        "poll refresh",
         "restrictions",
         "restrictions search",
         "search",
@@ -56,9 +65,7 @@ UNGATED_COMMANDS = frozenset(
         "version list",
         "vote",
         "vote poll",
-        "vote close",
         "vote delete",
-        "vote refresh",
     }
 )
 """Commands that legitimately declare no permission node: the public ones.
@@ -127,6 +134,10 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "test",
         "whoami",
     ),
+    # Polls got their own top-level group in `509406c2`, because a poll is not a vote on
+    # a build: it stands alone, has no submission behind it, and is closed by whoever
+    # opened it. `vote poll` survives only as a deprecated alias for `poll create`.
+    "poll": ("close", "create", "refresh"),
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias", "search"),
     "role": (
@@ -175,7 +186,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
-    "vote": ("close", "delete", "poll", "refresh"),
+    "vote": ("delete", "poll"),
 }
 
 
