@@ -169,7 +169,7 @@ def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
     if caller.account_id is None or caller.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
     if caller.consent_pending:
-        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id)
+        raise ConsentRequiredError(account_id=caller.account_id)
     if caller.kind == "account":
         origin = SubmissionOrigin.WEB
     elif caller.kind == "cli":

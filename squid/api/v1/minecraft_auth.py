@@ -175,7 +175,7 @@ async def current_account_id(caller: Annotated[Caller, Depends(current_caller)])
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     if caller.consent_pending:
-        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id)
+        raise ConsentRequiredError(account_id=caller.account_id)
     return caller.account_id
 
 

@@ -56,10 +56,12 @@ async def cast_vote(
     caller: UserVoter,
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
-    if caller.kind != "account" or caller.account_id is None or caller.discord_id is None:
+    # Keyed on `account_id` alone: the `kind` test was redundant with it, and the
+    # `discord_id` test refused a CLI device that holds a perfectly good account.
+    if caller.account_id is None:
         raise AuthenticationError
     if caller.consent_pending:
-        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id).with_context(
+        raise ConsentRequiredError(account_id=caller.account_id).with_context(
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )

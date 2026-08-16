@@ -24,24 +24,18 @@ class InvalidAccountError(ValidationError):
 
 def _identity_context(
     account_id: int | None,
-    discord_id: int | None,
     provider: IdentityProvider | None,
     subject: str | None,
 ) -> dict[str, JSONValue]:
     """Describe whichever identity the caller was known by.
 
-    `discord_id` is the Discord spelling of `(provider, subject)` and is kept because the
-    Discord entry points genuinely have one. Everything else names the provider explicitly,
-    so an error raised for a CLI device or a Minecraft player says which namespace it means
-    rather than implying Discord by omission.
+    Every namespace is named explicitly, so an error raised for a CLI device or a
+    Minecraft player says which one it means rather than implying Discord by omission.
     """
     context: dict[str, JSONValue] = {}
     if account_id is not None:
         context["account_id"] = account_id
-    if discord_id is not None:
-        context["provider"] = IdentityProvider.DISCORD
-        context["subject"] = str(discord_id)
-    elif provider is not None and subject is not None:
+    if provider is not None and subject is not None:
         context["provider"] = provider
         context["subject"] = subject
     return context
@@ -58,15 +52,13 @@ class AccountNotFoundError(NotFoundError):
         self,
         account_id: int | None = None,
         *,
-        discord_id: int | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
+        super().__init__(context=_identity_context(account_id, provider, subject))
         self.account_id = account_id
-        self.discord_id = discord_id
-        self.provider = IdentityProvider.DISCORD if discord_id is not None else provider
-        self.subject = str(discord_id) if discord_id is not None else subject
+        self.provider = provider
+        self.subject = subject
 
 
 class InvalidMergeProofError(ValidationError):
@@ -89,9 +81,9 @@ class InvalidVerificationCodeError(ValidationError):
 
 
 class AccountAlreadyLinkedError(ConflictError):
-    """A Discord account is linked to a different Minecraft account."""
+    """An account is already linked to a different Minecraft account."""
 
-    default_message = _("This Discord account is already linked to a different Minecraft account.")
+    default_message = _("Your account is already linked to a different Minecraft account.")
     default_title = _("Account already linked")
     default_code = ErrorCode.ACCOUNT_ALREADY_LINKED
     default_resource = "account"
@@ -101,15 +93,13 @@ class AccountAlreadyLinkedError(ConflictError):
         self,
         *,
         minecraft_uuid: UUID,
-        discord_id: int | None = None,
         account_id: int | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        context = _identity_context(account_id, discord_id, provider, subject)
+        context = _identity_context(account_id, provider, subject)
         context["minecraft_uuid"] = str(minecraft_uuid)
         super().__init__(context=context)
-        self.discord_id = discord_id
         self.account_id = account_id
         self.minecraft_uuid = minecraft_uuid
 
@@ -125,14 +115,12 @@ class ConsentRequiredError(ValidationError):
 
     def __init__(
         self,
-        discord_id: int | None = None,
         *,
         account_id: int | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
-        self.discord_id = discord_id
+        super().__init__(context=_identity_context(account_id, provider, subject))
         self.account_id = account_id
 
 
