@@ -215,10 +215,16 @@ async def _require_pending_view(permissions: PermissionService, caller: Caller) 
 
 
 def _require_consented_user(caller: Caller) -> None:
-    if caller.kind != "account" or caller.discord_id is None or caller.account_id is None:
+    """Require an authenticated account that has accepted the current notice.
+
+    Keyed on `account_id` alone. The `kind` test was redundant with it, and the
+    `discord_id` test refused a CLI device and a Minecraft player who each held a
+    perfectly good account -- for a snowflake that no write on this path ever used.
+    """
+    if caller.account_id is None:
         raise AuthenticationError
     if caller.consent_pending:
-        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id).with_context(
+        raise ConsentRequiredError(account_id=caller.account_id).with_context(
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )
