@@ -442,7 +442,7 @@ Discord bot, and schematic worker now have optional per-process OpenTelemetry in
 traces propagate into schematic workers, structured logs carry trace/span IDs, and API problem
 details reuse the active trace ID for `X-Error-ID`. OTLP traces and the focused operational metrics
 can be sent through the optional Collector in `compose.yml` without coupling the application to a
-backend. See `docs/plans/observability.md` for the implemented phases and remaining deployment
+backend. See `docs/plans/completed/observability.md` for the implemented phases and remaining deployment
 decisions.
 
 This removes observability as a sequencing dependency for the REST API. It does not complete a

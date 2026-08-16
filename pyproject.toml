@@ -126,7 +126,7 @@ exclude-newer-package = { nucleation = "2026-08-16T00:00:00Z" }
 # special-cases target.environment == Android specifically because it knows the glibc trick
 # (resolving CPython C-API symbols from the already-running process without an explicit NEEDED
 # entry) doesn't work on bionic. Same failure mode as nucleation's Python3_SABI_LIBRARY bug
-# (see docs/plans/nucleation-android-build.md), different cause: the modules fail to import
+# (see docs/plans/completed/nucleation-android-build.md), different cause: the modules fail to import
 # with "dlopen failed: cannot locate symbol PyLong_Type" (jsonschema-rs: _Py_TrueStruct).
 #
 # `-lpython3` genuinely reaches the final linker invocation -- confirmed by capturing the
@@ -155,7 +155,7 @@ orjson = { ANDROID_API_LEVEL = "24" }
 pydantic-core = { ANDROID_API_LEVEL = "24" }
 prek = { ANDROID_API_LEVEL = "24" }
 # Three upstream build bugs block the sdist on Termux/Android; see
-# docs/plans/nucleation-android-build.md for full repro details. Each can be dropped once a
+# docs/plans/completed/nucleation-android-build.md for full repro details. Each can be dropped once a
 # fixed release lands:
 #
 # 1. https://github.com/Schem-at/Nucleation/issues/38 -- The wheel's default feature set is

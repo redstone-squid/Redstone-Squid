@@ -17,7 +17,7 @@ an `already_posted` channel set in the confirmed-build handler, a blake2b nonce 
 the review session, and a `posted_message_id` column on the starboard entry. None of
 them agreed on what to do when a post went missing.
 
-It also lost data. `docs/plans/backfill-message-inference.md` recorded that a
+It also lost data. `docs/plans/completed/backfill-message-inference.md` recorded that a
 build-log bundle could only be tracked to its first inferred build, and inference was
 concatenating every message's text into one row's content.
 
