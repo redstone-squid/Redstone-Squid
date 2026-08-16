@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.events.application import DomainEventDelivery
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
-from squid.sync.application import SyncJob
+from squid.sync.application import ReconciliationJob
 from squid.sync.infrastructure.repository import PostgresDiscordSyncQueue
 
 _CREATE_SCHEMA = """
@@ -177,7 +177,7 @@ async def test_failing_at_the_attempt_ceiling_dead_letters_the_row(
     await _seed_sync_job(async_session_factory)
     queue = PostgresDiscordSyncQueue(async_session_factory)
     (job,) = await queue.claim(limit=10)
-    ceiling_job = SyncJob(
+    ceiling_job = ReconciliationJob(
         id=job.id,
         resource_kind=job.resource_kind,
         source_key=job.source_key,
