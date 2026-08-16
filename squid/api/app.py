@@ -25,7 +25,13 @@ from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_confi
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
 from squid.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
-from squid.runtime import ApiServices, ApplicationRuntime, BackgroundTaskSupervisor, start_permission_epoch_watch
+from squid.runtime import (
+    ApiServices,
+    ApplicationRuntime,
+    BackgroundTaskSupervisor,
+    start_log_capture,
+    start_permission_epoch_watch,
+)
 
 RuntimeFactory = Callable[[RuntimeConfig], ApplicationRuntime[ApiServices]]
 ConfigFactory = Callable[[], ApiProcessConfig]
@@ -105,6 +111,12 @@ def create_api_app(
                 async with supervisor.running():
                     app.state.background_tasks = supervisor
                     start_permission_epoch_watch(supervisor, runtime.services.permission_epoch)
+                    start_log_capture(
+                        supervisor,
+                        runtime.services.error_reports,
+                        enabled=resolved_config.diagnostics.capture_logged_errors,
+                        capacity=resolved_config.diagnostics.log_capture_queue,
+                    )
                     yield
         finally:
             await limiter.aclose()
