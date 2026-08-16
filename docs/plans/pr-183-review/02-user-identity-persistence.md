@@ -58,6 +58,27 @@ Nothing normalizes an *account* name; accounts have no name column, and `account
 presentational and never compared. Creator aliases are the only normalized thing, and normalization is genuinely
 required there: it is what makes a build crediting `Bob` and one crediting `bob` the same creator.
 
+### Which folding wins, and why not both
+
+The two foldings are **incomparable** — they disagree about *what collides*, in both directions:
+
+| pair | SQL `lower(btrim())` collides | Python `NFKC + casefold` collides |
+|---|---|---|
+| `Strasse` / `Straße` | no | yes |
+| `I` / `İ` | yes | no |
+| `ΣΣ` / `Σς` | no | yes |
+
+So keeping one column of each is not a hedge. With both unique, the table rejects the union of both collision sets;
+with one decorative, that column groups creators differently from the one defining identity, and any SQL consumer
+joining on it silently disagrees with the application about who a creator is — the same class of bug, relocated.
+
+The application wins the tie, and the portability argument runs opposite to intuition. `pg_database.datcollversion`
+is the host's **glibc version**: Postgres tracks it because a libc upgrade changes `lower()` and invalidates indexes
+built on it. The SQL column is pinned to an OS upgraded outside our control, whereas `NFKC` and `casefold` are
+Unicode-standard operations with equivalents in Rust, Go, and Java, pinned to a CPython version we choose. Casefold
+is also simply the better fold: it is the Unicode operation *for* caseless matching, correctly unifying `ΣΣ`/`Σς`
+where `lower` does not, and NFKC-then-strip catches NBSP and ideographic space before trimming.
+
 ### Rename behavior exists only as a side effect of relinking
 
 `consume_code_and_link_account` (`squid/accounts/infrastructure/repository.py:362`) overwrites `display_name` and
@@ -96,24 +117,29 @@ throughout, and `AccountAlreadyLinkedError.__init__` takes `discord_id` position
 
 ## Subplans
 
-1. **One definition of creator-name normalization**
-   - Add `normalized_creator_name(value)` to `squid/accounts/infrastructure/models.py`, returning
-     `func.lower(func.btrim(value))`, and define the generated column from that same function so one expression
-     serves both. Confirm the emitted DDL still matches `lower(btrim(name))` so no migration is needed; if it does
-     not, keep the literal string and add an architecture test asserting the two agree.
-   - Delete `normalize_ign` from the domain and its re-export in `squid/accounts/domain/__init__.py`.
-   - Convert every comparison to `CreatorAlias.normalized_name == normalized_creator_name(name)`:
-     `get_alias_by_name`, `claim_unclaimed_alias`, `request_claim`, and the alias update inside
-     `consume_code_and_link_account`.
-   - In `_get_or_create_aliases`, use the expression for the lookup and the fallback re-select, and dedup by
-     resolved alias id rather than by a Python-normalized string. This removes the `NoResultFound` crash path.
-   - In `SuggestionRepository.creators`, replace `casefold()` with a `LIKE` against the expression, escaping `%`,
-     `_`, and `\` in the Python query first — LIKE syntax is a separate concern from normalization, and the current
-     code does not escape them either.
-   - *Risk with a stated fallback:* `creator_aliases_normalized_name_prefix_idx` (`text_pattern_ops`) needs a prefix
-     the planner can fold. `lower(btrim($1)) || '%'` is immutable over a parameter and should fold under a custom
-     plan, but this must be confirmed by `EXPLAIN`. If the index drops out of the plan, keep Python normalization on
-     this path only and document why: a wrong autocomplete prefix costs a missed suggestion, never a wrong credit.
+1. **One folding, owned by the application and written by the ORM**
+   - Replace `normalize_ign` with `fold_creator_name(name)` in `squid/accounts/domain/models.py`:
+     `unicodedata.normalize("NFKC", name).strip().casefold()`. Update the re-export in
+     `squid/accounts/domain/__init__.py`.
+   - `creator_aliases.normalized_name` stops being generated and becomes a plain `NOT NULL` column carrying an
+     `insert_default` derived from `name`, so no insert path can skip it — this fires for ORM flushes, Core
+     `insert()`, `pg_insert(...).on_conflict_do_nothing`, and executemany alike. Keep the unique constraint and the
+     `text_pattern_ops` prefix index untouched.
+   - A column-level `onupdate` cannot be used: it fires for every UPDATE of the row, including the claim updates that
+     never mention `name`, where the callable has no parameter to read. Use a `before_update` ORM event conditional
+     on the `name` attribute actually being dirty.
+   - Add `CheckConstraint("normalized_name = btrim(normalized_name) AND normalized_name !~ '[A-Z]'")`. Both
+     conditions hold for any casefold output, so there is no false-positive risk, and together they catch a raw SQL
+     write that stored the display spelling verbatim.
+   - Migration off head `b1c2d3e4f5a7`: `ALTER COLUMN normalized_name DROP EXPRESSION` degenerates the column in
+     place, keeping its data and every index built on it, then re-fold existing rows through Python and add the
+     check. The downgrade restores the generated column and is allowed to fail loudly, since names that casefold
+     together cannot both survive the regenerated unique index.
+   - Convert the six comparison sites to `fold_creator_name(...)`, including `SuggestionRepository.creators`, which
+     drops its third `casefold()` variant.
+   - *This direction also removes a risk the SQL one carried.* Folding in Python keeps the typeahead predicate a
+     plain `normalized_name LIKE 'prefix%'`, which the planner can bound directly; a SQL-side fold would have made it
+     `LIKE lower(btrim($1)) || '%'`, whose index usage depended on the planner folding the prefix first.
 
 2. **One atomic Java rename reconcile**
    - Add an `IdentityRefresh` domain value reporting the previous and current name, the alias claimed, the alias
@@ -174,15 +200,32 @@ throughout, and `AccountAlreadyLinkedError.__init__` takes `discord_id` position
 ### Normalization
 
 ```python
-def normalized_creator_name(value: ColumnElement[str] | str) -> ColumnElement[str]:
-    """The SQL Postgres uses for `creator_aliases.normalized_name`.
+def fold_creator_name(name: str) -> str:
+    """Return the comparison form of a creator name.
 
-    Comparisons must go through this rather than normalizing in Python: `str.lower()` and
-    Postgres `lower()` disagree (`ΣΣ` → `σς` vs `σσ`, `İ` → `i̇` vs `i`), and `str.strip()`
-    removes Unicode whitespace `btrim()` keeps. Computing the value on both sides made an
-    alias unreachable and crashed a repeat submission crediting the same name.
+    NFKC first, so compatibility forms unify and NBSP or ideographic space become U+0020
+    before trimming; then strip; then casefold, the Unicode operation for caseless matching
+    that `str.lower()` is not — `lower` leaves `ΣΣ` as `σς` while casefold gives `σσ`.
+
+    This is the only definition of the value, and it is deliberately not reproduced in SQL.
     """
-    return func.lower(func.btrim(value))
+    return unicodedata.normalize("NFKC", name).strip().casefold()
+```
+
+The stored column derives from it without any caller's help:
+
+```python
+def _fold_from_name(context: DefaultExecutionContext) -> str:
+    return fold_creator_name(context.get_current_parameters()["name"])
+
+normalized_name: Mapped[str] = mapped_column(
+    Text, nullable=False, insert_default=_fold_from_name, init=False
+)
+
+@event.listens_for(CreatorAlias, "before_update")
+def _refold_on_name_change(_mapper, _connection, target: CreatorAlias) -> None:
+    if get_history(target, "name").has_changes():
+        target.normalized_name = fold_creator_name(target.name)
 ```
 
 ### Rename outcome
@@ -208,12 +251,20 @@ class IdentityRefresh:
 
 ### Tests
 
-- **Normalization equivalence** (`tests/integration/accounts/`, hypothesis): the value the generated column stores
-  equals `SELECT lower(btrim(:x))` for generated text plus the curated set `ΣΣ`, `İ`, `Straße`, ` Foo `,
-  `\tFoo\t`. This pins the invariant the Python implementation could not hold.
-- **Crash regression**: a build crediting `ΣΣ` twice resolves to one alias id instead of raising `NoResultFound`.
-  This test fails on current `HEAD`.
-- **Round trip**: `get_alias_by_name("ΣΣ")` finds the alias a build crediting `ΣΣ` created.
+- **Golden corpus** (`tests/unit/accounts/test_creator_name_folding.py`): the exact fold of the curated set. Nothing
+  in the database can check the fold, so a CPython upgrade that changes casefolding has to fail here instead of
+  silently regrouping creators. Do not pin `unicodedata.unidata_version`: `requires-python` spans 3.12 and 3.13,
+  which ship Unicode 15.0.0 and 15.1.0 respectively, and the corpus is stable across both.
+- **The ORM writes the fold** (`tests/integration/accounts/`): ORM flush, `pg_insert(...).on_conflict_do_nothing`,
+  and executemany all store the folded value; `before_update` re-folds a corrected display spelling; and the check
+  constraint rejects a raw `INSERT` that stored the name verbatim.
+- **Crash regression**: a build crediting the same folding-sensitive name *twice* resolves to one alias instead of
+  raising `NoResultFound`. The repeat matters — two *different* spellings do not reproduce it, because Postgres
+  folds them apart and the insert never conflicts. Verified failing before the fix.
+- **Collision semantics**: the two sigma spellings are one creator and reachable by either; dotted capital I and
+  ASCII I stay two.
+- **Typeahead** (`tests/integration/suggestions/`): prefix matching across case and compatibility forms, `%`/`_`
+  escaped rather than honoured, and an `EXPLAIN` assertion that the `text_pattern_ops` prefix index is still chosen.
 - **Rename matrix** (integration): unchanged name; new name unclaimed; new name absent (row created and claimed);
   new name held by another account (no transfer, pending claim opened, old aliases retained); relinking the same
   UUID twice; concurrent refresh of one account yielding one winner and no duplicate claim rows.
@@ -228,31 +279,20 @@ class IdentityRefresh:
 
 ### Before merging
 
-Confirm the prefix index survives the expression rewrite:
+`alembic heads` must show the single new revision. The migration degenerates the generated column in place
+(`ALTER COLUMN ... DROP EXPRESSION`) rather than dropping it, so the unique constraint and the prefix index survive
+untouched and only the stored values are rewritten.
 
-```sql
-EXPLAIN (ANALYZE, BUFFERS) SELECT name, account_id FROM creator_aliases
-WHERE normalized_name LIKE lower(btrim($1)) || '%' ORDER BY normalized_name LIMIT 25;
-```
-
-Size the exposure against production, and confirm nothing already stored is unreachable:
-
-```sql
-SELECT count(*) AS total,
-       count(*) FILTER (WHERE name ~ '[^\x20-\x7E]') AS non_ascii,
-       count(*) FILTER (WHERE name <> btrim(name))   AS untrimmed
-FROM creator_aliases;
-```
-
-No Alembic migration is expected; `alembic heads` should be unchanged.
+There is no deployment yet, so there is no production data to survey; the re-fold pass in the migration is written
+correctly regardless, since it is the same pass a later Unicode change would need.
 
 ## Disposition
 
 | Thread | Disposition |
 |---|---|
-| 3765927329 — duplicating info | **Fix.** The duplication is not merely redundant: the two computations disagree and crash a repeat submission. One SQL expression now serves both the generated column and every comparison. |
+| 3765927329 — duplicating info | **Fix.** The duplication is not merely redundant: the two computations disagree, in both directions, and crash a repeat submission. `fold_creator_name` is now the only definition, written into the column by an ORM default so no insert path can skip it. |
 | 3766109224 — handle name change | **Fix.** `refresh_java_identity` gives the rename an explicit atomic policy — refresh on link and on demand, retain old claimed aliases, create and claim an unheld new name, never transfer a held one. Background Mojang polling stays deferred. |
-| 3766114978 — too many normalize functions | **Fix.** Resolved by deletion rather than by a utils module: `normalize_ign` and the `casefold()` variant both go, leaving one SQL definition. |
+| 3766114978 — too many normalize functions | **Fix.** Resolved by deletion rather than by a utils module: `normalize_ign`, the SQL generated column, and the suggestions `casefold()` variant collapse into one `fold_creator_name`. |
 | 3766128577 — row upgrade | **Already fixed.** `account_identities` plus `accounts.public_creator_id` superseded it, and `squid/users` is gone from git. Verify and close. |
 | 3766140695 — excessive mappings | **Retain, with cleanup.** Explicit mapping stays; SQLAlchemy cannot populate frozen domain dataclasses without coupling the domain to persistence. The actionable part — per-row queries — is fixed by `get_many` and by removing the `refresh` loop. |
 | 3766202899 — outside Discord | **Fix.** Errors carry `(provider, subject)`, services gain `account_id`-keyed cores, and `me.py` stops rejecting non-Discord principals that hold an `account_id`. |
@@ -261,7 +301,7 @@ No Alembic migration is expected; `alembic heads` should be unchanged.
 
 ## Delivery
 
-1. `accounts: compare creator names in SQL` — subplan 1, with the `ΣΣ` regression test.
+1. `accounts: fold creator names in one place` — subplan 1, with the migration, golden corpus, and crash regression.
 2. `accounts: reconcile Java renames in one operation` — subplan 2.
 3. `accounts: refresh linked Java identities on demand` — subplan 3.
 4. `accounts: name errors by provider and subject` — subplan 4.

@@ -7,7 +7,6 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
-    Computed,
     ForeignKey,
     Identity,
     Index,
@@ -15,15 +14,32 @@ from sqlalchemy import (
     SmallInteger,
     Text,
     UniqueConstraint,
+    event,
     func,
     text,
 )
+from sqlalchemy.engine.default import DefaultExecutionContext
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm.attributes import get_history
 from whenever import Instant
 
-from squid.accounts.domain import ClaimMethod, ClaimStatus, IdentityProvider
+from squid.accounts.domain import ClaimMethod, ClaimStatus, IdentityProvider, fold_creator_name
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
+
+
+def _fold_from_name(context: DefaultExecutionContext) -> str:
+    """Derive `normalized_name` from the `name` being inserted.
+
+    Attached to the column rather than left to callers so that no insert path can skip it:
+    this fires for ORM flushes, Core `insert()`, `pg_insert(...).on_conflict_do_nothing`,
+    and executemany alike.
+
+    Insert only. A column-level `onupdate` would fire for every UPDATE of the row, including
+    the claim updates that touch only `account_id`, where `name` is not among the parameters
+    at all. `_refold_on_name_change` handles the update side precisely instead.
+    """
+    return fold_creator_name(context.get_current_parameters()["name"])
 
 
 class Account(Base):
@@ -112,6 +128,14 @@ class CreatorAlias(Base):
             postgresql_ops={"normalized_name": "text_pattern_ops"},
         ),
         CheckConstraint(
+            # The application owns the folding (`fold_creator_name`), which Postgres cannot
+            # reproduce. These two conditions hold for any casefold output, so they never
+            # reject a legitimately folded name, but they do catch a raw SQL write that
+            # stored the display spelling verbatim.
+            "normalized_name = btrim(normalized_name) AND normalized_name !~ '[A-Z]'",
+            name="creator_aliases_normalized_name_folded",
+        ),
+        CheckConstraint(
             "(account_id IS NULL) = (claimed_at IS NULL)",
             name="creator_aliases_claim_complete",
         ),
@@ -126,7 +150,12 @@ class CreatorAlias(Base):
     )
     id: Mapped[int] = mapped_column(primary_key=True, init=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    normalized_name: Mapped[str] = mapped_column(Text, Computed("lower(btrim(name))", persisted=True), init=False)
+    normalized_name: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        insert_default=_fold_from_name,
+        init=False,
+    )
     account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="creator_aliases_account_id_fkey", ondelete="SET NULL"),
@@ -137,6 +166,18 @@ class CreatorAlias(Base):
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+
+@event.listens_for(CreatorAlias, "before_update")
+def _refold_on_name_change(_mapper: object, _connection: object, target: CreatorAlias) -> None:
+    """Recompute the fold when, and only when, a display spelling is corrected.
+
+    The claim paths update `account_id` and friends without touching `name`, so this has to
+    be conditional on the attribute actually being dirty rather than a blanket column
+    `onupdate`.
+    """
+    if get_history(target, "name").has_changes():
+        target.normalized_name = fold_creator_name(target.name)
 
 
 class CreatorAliasClaim(Base):
