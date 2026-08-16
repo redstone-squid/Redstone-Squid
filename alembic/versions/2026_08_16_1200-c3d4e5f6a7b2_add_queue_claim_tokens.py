@@ -30,12 +30,8 @@ which is the pre-existing correct behaviour. The one artifact is that old code's
 `enqueued_at`-based backoff leaves `available_at` in the past, so a new worker
 retries such a row immediately -- a latency effect confined to one deploy window.
 
-This also merges the two heads the branch had accumulated (`b2c3d4e5f6a8` and
-`c9d2e3f4a5b6`), which were unreachable by `alembic upgrade head` and broke every
-test that migrates a database.
-
 Revision ID: c3d4e5f6a7b2
-Revises: b2c3d4e5f6a8, c9d2e3f4a5b6
+Revises: c9d2e3f4a5b6
 Create Date: 2026-08-16 12:00:00.000000+00:00
 """
 
@@ -52,7 +48,7 @@ from alembic import op
 from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
 
 revision: str = "c3d4e5f6a7b2"
-down_revision: str | Sequence[str] | None = ("b2c3d4e5f6a8", "c9d2e3f4a5b6")
+down_revision: str | Sequence[str] | None = "c9d2e3f4a5b6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -164,7 +160,7 @@ def upgrade() -> None:
 
     # Table-comment drift this branch accumulated while it had two heads: with
     # `alembic upgrade head` ambiguous, `alembic check` could not run at all, so three
-    # docstring edits never reached the database. Merging the heads re-exposes them.
+    # docstring edits never reached the database. They are carried over here.
     for table, (new_comment, old_comment) in _TABLE_COMMENT_DRIFT.items():
         op.create_table_comment(table, new_comment, existing_comment=old_comment)
 
