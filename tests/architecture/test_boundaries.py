@@ -254,13 +254,12 @@ def test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            named = (
-                (isinstance(node, ast.Name) and node.id == "discord_id")
-                or (isinstance(node, ast.Attribute) and node.attr == "discord_id")
-                or (isinstance(node, ast.keyword) and node.arg == "discord_id")
-                or (isinstance(node, ast.arg) and node.arg == "discord_id")
-            )
-            if named:
-                offenders.append(f"{path}:{node.lineno}")
+            match node:
+                case ast.Name(id="discord_id") | ast.Attribute(attr="discord_id"):
+                    offenders.append(f"{path}:{node.lineno}")
+                case ast.keyword(arg="discord_id") | ast.arg(arg="discord_id"):
+                    offenders.append(f"{path}:{node.lineno}")
+                case _:
+                    pass
 
     assert offenders == [], f"squid/api/ must not name discord_id outside {allowed}: {offenders}"
