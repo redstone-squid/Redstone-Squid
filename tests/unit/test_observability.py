@@ -204,6 +204,19 @@ def test_correlation_reference_shortens_a_trace_id_and_leaves_the_fallback_alone
     assert observability.correlation_reference(fallback) == fallback
 
 
+def test_correlation_scope_is_reentrant_and_unbinds(mocker: MockerFixture) -> None:
+    """A hybrid command opens both the tree's scope and the prefix path's, and must get one ID."""
+    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+
+    with observability.correlation_scope() as outer:
+        with observability.correlation_scope() as inner:
+            assert inner == outer
+        # The nested scope must not have unbound the outer one on the way out.
+        assert observability.correlation_id() == outer
+
+    assert observability.correlation_id() != outer
+
+
 def test_correlated_log_buffer_keeps_the_most_recent_records_per_correlation() -> None:
     buffer = observability.CorrelatedLogBuffer(max_records=2)
     buffer.setFormatter(logging.Formatter("%(message)s"))

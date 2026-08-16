@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Self, override
+from typing import Any, Self, override
 
 import discord
 from discord import Webhook
@@ -39,7 +39,7 @@ from squid.config import (
 )
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
-from squid.observability import configure_observability
+from squid.observability import configure_observability, correlation_scope
 from squid.posts.domain import ResourceKind
 from squid.runtime import BackgroundTaskSupervisor, BotServices, start_permission_epoch_watch
 
@@ -112,6 +112,18 @@ class RedstoneSquid(Bot):
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
         return self.is_ready() and self.background_tasks.is_healthy(CRITICAL_BOT_JOBS, max_age_seconds=60)
+
+    @override
+    async def invoke(self, ctx: commands.Context[Any]) -> None:
+        """Run a prefix command under one correlation ID, error dispatch included.
+
+        `Bot.invoke` dispatches `on_command_error` itself, so the scope has to wrap it rather than
+        the callback alone -- otherwise the handler that presents the error would see no binding
+        and mint a second ID unrelated to the log lines the command produced. A hybrid command
+        reaching here from the application command tree keeps the ID that tree already bound.
+        """
+        with correlation_scope():
+            await super().invoke(ctx)
 
     @override
     async def close(self) -> None:

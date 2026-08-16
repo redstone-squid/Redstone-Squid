@@ -13,7 +13,13 @@ from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, 
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, SquidError
 from squid.core.i18n import _, translate
-from squid.observability import correlation_id, record_current_exception, trace_span
+from squid.observability import (
+    correlation_id,
+    correlation_reference,
+    correlation_scope,
+    record_current_exception,
+    trace_span,
+)
 from squid.permissions.domain import CATALOGUE
 
 logger = logging.getLogger(__name__)
@@ -29,6 +35,12 @@ class ErrorPresentation:
     title: str
     detail: str
     error_id: str | None = None
+    reference: str | None = None
+    """The shortened form of `error_id` shown to the user, who has to retype it.
+
+    Both are kept because they index the same report: logs and the stored record carry the full
+    ID, while a moderator looking one up will be quoting whatever the card showed.
+    """
 
     def to_layout(self) -> StaticLayout:
         """Build the Components V2 layout for this presentation."""
@@ -189,10 +201,12 @@ def build_error_presentation(error: BaseException, locale: str | None = None) ->
         )
 
     error_id = correlation_id()
+    reference = correlation_reference(error_id)
     return ErrorPresentation(
         translate(locale, _("Something went wrong")),
-        translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=error_id),
+        translate(locale, _("An unexpected error occurred. Reference: `{error_id}`"), error_id=reference),
         error_id,
+        reference,
     )
 
 
@@ -211,9 +225,12 @@ async def _handle_discord_error(
     presentation = build_error_presentation(original, locale)
     if presentation.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
+        # Both widths are logged: a backend that cannot do prefix queries still resolves whichever
+        # one the reporter quoted by exact match.
         logger.error(
-            "Discord failure [error_id=%s surface=%s context=%r application_context=%r]",
+            "Discord failure [error_id=%s error_ref=%s surface=%s context=%r application_context=%r]",
             presentation.error_id,
+            presentation.reference,
             surface,
             _safe_log_context(context),
             application_context,
@@ -330,7 +347,10 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             attributes["squid.guild.id"] = interaction.guild_id
         if interaction.channel_id is not None:
             attributes["squid.channel.id"] = interaction.channel_id
-        with trace_span(f"discord.command {command_name}", attributes) as span:
+        # The correlation scope opens inside the span so it adopts the trace id when one exists.
+        # Binding here rather than at presentation time is what lets an error report carry the log
+        # lines the command produced before it failed.
+        with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
             if interaction.command_failed:
                 span.set_error()
