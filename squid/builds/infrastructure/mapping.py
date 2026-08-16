@@ -236,7 +236,7 @@ class BuildMapper:
             source_submission_draft_id=sql_build.source_submission_draft_id,
             sponsor=_sponsor(sql_build),
             submitter_account_id=sql_build.submitter_account_id,
-            submitter_id=submitter_discord_id,
+            submitter_discord_id=submitter_discord_id,
             completion_time=sql_build.completion_time,
             completion_at=sql_build.completion_at,
             completion_evidence=sql_build.completion_evidence,

@@ -201,7 +201,7 @@ class SearchCog[
                     # ID - Title
                     # by Creators - submitted by Submitter
                     desc.append(
-                        f"**{sub.id}** - {sub.title}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_id}_"
+                        f"**{sub.id}** - {sub.title}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_discord_id}_"
                     )
                 desc = "\n\n".join(desc)
 

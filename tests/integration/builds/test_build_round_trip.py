@@ -22,10 +22,10 @@ from typing import Any
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.infrastructure.models import Account, CreatorAlias
+from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -40,6 +40,7 @@ from squid.builds.domain import (
 )
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
+from squid.core.errors import InvalidStateError
 from squid.settings.infrastructure.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.models import TagAlias, TagApplicability, TagDefinition
@@ -275,6 +276,36 @@ async def test_round_trip_is_identity_for_known_taxonomy(
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
     _assert_round_trip(build, loaded)
+
+
+async def test_persisting_a_build_creates_no_account(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The repository used to mint an account from a snowflake when none was supplied.
+
+    That was the last identity-creating path outside the accounts context, and it ran
+    from a persistence layer with no evidence anybody had asked to be remembered.
+    """
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    async with migrated_session_factory() as session:
+        before = await session.scalar(select(func.count()).select_from(Account))
+
+    await _resolve_and_save(migrated_session_factory, repository, _make_build(BuildCategory.DOOR, account_id))
+
+    async with migrated_session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Account)) == before
+        assert await session.scalar(select(func.count()).select_from(AccountIdentity)) == 0
+
+
+async def test_persisting_a_build_for_an_unknown_account_is_refused(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+
+    with pytest.raises(InvalidStateError):
+        await _resolve_and_save(migrated_session_factory, repository, _make_build(BuildCategory.DOOR, 999_999))
 
 
 @pytest.mark.parametrize("category", list(BuildCategory), ids=lambda category: category.value)

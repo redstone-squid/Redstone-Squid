@@ -32,7 +32,7 @@ class Fakes(NamedTuple):
 def indexed_build(build_id: int = 42) -> Build:
     return DoorBuild(
         id=build_id,
-        submitter_id=123,
+        submitter_account_id=123,
         submission_status=Status.CONFIRMED,
         versions=["1.21"],
         door_width=2,

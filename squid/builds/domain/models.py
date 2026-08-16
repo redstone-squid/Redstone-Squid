@@ -360,9 +360,13 @@ class Build(StagedMedia, StagedTaxonomy):
     source_submission_draft_id: uuid.UUID | None = None
     sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
     submitter_account_id: int | None = None
-    # Discord entry points retain the snowflake for compatibility. Internal ownership uses
-    # ``submitter_account_id`` and does not require this provider identity to exist.
-    submitter_id: int | None = None
+    submitter_discord_id: int | None = None
+    """Read-only derived state, filled on load for Discord rendering.
+
+    Ownership is `submitter_account_id` and nothing reads this to decide anything.
+    Named for the provider so it stops sitting ambiguously beside the account id -- that
+    ambiguity is what let the edit ownership test compare a snowflake to a snowflake
+    while a perfectly good account id sat one attribute away."""
     completion_time: str | None = None
     completion_at: Instant | None = None
     completion_evidence: str | None = None
@@ -554,7 +558,6 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
     source_submission_draft_id: uuid.UUID | None = None
     sponsor: PublicSponsor | None = None
     submitter_account_id: int | None = None
-    submitter_id: int | None = None
     completion_time: str | None = None
     completion_at: Instant | None = None
     completion_evidence: str | None = None
@@ -623,7 +626,6 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
             "source_submission_draft_id": self.source_submission_draft_id,
             "sponsor": self.sponsor,
             "submitter_account_id": self.submitter_account_id,
-            "submitter_id": self.submitter_id,
             "completion_time": self.completion_time,
             "completion_at": self.completion_at,
             "completion_evidence": self.completion_evidence,

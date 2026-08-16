@@ -98,7 +98,7 @@ async def ingest_message_bundle(
             except SquidError:
                 logger.warning("Could not check an inferred schematic for duplicates", exc_info=True)
 
-        await services.builds.submit(build, submitter_id=primary[0].author.id, ai_generated=True)
+        await services.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=True)
         assert build.id is not None
         builds.append(build)
         for index, (request, ingested) in enumerate(pending_schematics):

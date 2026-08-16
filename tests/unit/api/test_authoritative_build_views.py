@@ -46,7 +46,7 @@ def awaited_kwargs(mock: AsyncMock) -> Mapping[str, Any]:
 def persisted_build(build_id: int, status: Status = Status.PENDING) -> Build:
     return DoorBuild(
         id=build_id,
-        submitter_id=123,
+        submitter_account_id=123,
         submission_status=status,
         versions=["1.21"],
         door_width=2,

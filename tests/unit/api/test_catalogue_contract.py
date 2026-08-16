@@ -27,7 +27,7 @@ from squid.tags.domain import (
 def catalogue_build(build_id: int, **changes: Any) -> Build:
     values: dict[str, Any] = {
         "id": build_id,
-        "submitter_id": 123,
+        "submitter_account_id": 123,
         "submission_status": Status.CONFIRMED,
         "versions": ["Java 1.21.5"],
         "version_spec": ">=1.21",
@@ -201,7 +201,7 @@ def test_detail_details_are_keyed_by_the_build_category() -> None:
     extender = BuildDetail.from_domain(
         ExtenderBuild(
             id=2,
-            submitter_id=1,
+            submitter_account_id=1,
             submission_status=Status.CONFIRMED,
             orientation="Upward",
             extension_length=6,
@@ -211,6 +211,6 @@ def test_detail_details_are_keyed_by_the_build_category() -> None:
     assert extender.details.category == "Extender"
     assert extender.details.extension_length == 6
 
-    utility = BuildDetail.from_domain(UtilityBuild(id=3, submitter_id=1, submission_status=Status.CONFIRMED))
+    utility = BuildDetail.from_domain(UtilityBuild(id=3, submitter_account_id=1, submission_status=Status.CONFIRMED))
     assert isinstance(utility.details, GeneralDetails)
     assert utility.details.category == "Utility"
