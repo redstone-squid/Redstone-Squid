@@ -22,7 +22,7 @@ from squid.api.pagination import (
 )
 from squid.api.security import Principal, principal_allows, requires, subject_for
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
-from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds, parse_sort
+from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
     BUILD_SORT_FIELDS,
     BuildEditor,
@@ -40,7 +40,7 @@ from squid.builds.errors import (
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
-from squid.search.domain import SearchMode, SearchRequest, SearchScope
+from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
 router = APIRouter(prefix="/builds", tags=["builds"])
 UserWriter = Annotated[Principal, Depends(requires(BUILD_SUBMISSION_CREATE))]
@@ -169,7 +169,7 @@ async def list_builds(
                 mode=SearchMode.LEXICAL,
                 page_size=page_size,
                 offset=selector.offset,
-                sort=parse_sort(sort),
+                sort=SearchSort.parse(sort),
                 visible_statuses=PUBLIC_SEARCH_STATUSES,
             )
         )

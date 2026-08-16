@@ -1,7 +1,23 @@
 """Voting context errors."""
 
-from squid.core.errors import ConfigurationError, ErrorCode, ServiceUnavailableError
+from squid.core.errors import ConfigurationError, ErrorCode, NotFoundError, ServiceUnavailableError
 from squid.core.i18n import _
+
+
+class VoteSessionNotFoundError(NotFoundError):
+    """No vote session exists for the requested identifier."""
+
+    default_message = _("Vote session not found.")
+    default_title = _("Vote session not found")
+    default_code = ErrorCode.VOTE_SESSION_NOT_FOUND
+    default_resource = "vote_session"
+
+    def __init__(self, vote_session_id: int) -> None:
+        super().__init__(
+            context={"vote_session_id": vote_session_id},
+            public_context={"vote_session_id": vote_session_id},
+        )
+        self.vote_session_id = vote_session_id
 
 
 class InvalidVoteConfigurationError(ConfigurationError):
