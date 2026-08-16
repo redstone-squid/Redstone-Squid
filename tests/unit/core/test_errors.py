@@ -21,6 +21,16 @@ def test_error_separates_backend_and_public_details() -> None:
     assert error.public_detail() == "Build dimensions are invalid. Enter width, height, and depth."
 
 
+def test_a_listed_message_keeps_the_developer_action_on_its_own_line() -> None:
+    """Configuration failures render one finding per line; the action is not a list item."""
+    error = InvalidBuildError(
+        "Two dimensions are invalid:\n  - width\n  - depth",
+        developer_action="Inspect the parsed dimensions.",
+    )
+
+    assert str(error).splitlines()[-1] == "Inspect the parsed dimensions."
+
+
 def test_with_context_mutates_exception_without_changing_type() -> None:
     error = BuildNotFoundError(42)
 
