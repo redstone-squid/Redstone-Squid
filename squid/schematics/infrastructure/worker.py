@@ -34,7 +34,7 @@ import os
 import signal
 import sys
 from collections import deque
-from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
+from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping, Sequence
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import Any, Self, cast
@@ -117,8 +117,11 @@ class _StderrPump:
         await self.finished.wait()
 
 
-type _SpawnPump = Callable[[Callable[[], Awaitable[None]]], None]
-"""How a worker hands a pump to whoever owns its lifetime — see `SchematicWorkerPool.running`."""
+type _PumpBody = Callable[[], Coroutine[Any, Any, None]]
+type _SpawnPump = Callable[[_PumpBody], None]
+"""How a worker hands a pump to whoever owns its lifetime — see `SchematicWorkerPool.running`.
+
+A `Coroutine` rather than an `Awaitable` because that is what `TaskGroup.start_soon` accepts."""
 
 
 class _Worker:
@@ -435,7 +438,7 @@ class SchematicWorkerPool:
                 await self.aclose()
                 self._pumps = None
 
-    def _spawn_pump(self, pump: Callable[[], Awaitable[None]]) -> None:
+    def _spawn_pump(self, pump: _PumpBody) -> None:
         if self._pumps is None:
             msg = "The schematic worker pool must be entered with `running()` before it serves requests."
             raise RuntimeError(msg)
