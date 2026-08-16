@@ -15,7 +15,7 @@ x-app: &app
     - ${SQUID_ENV_FILE:-.env}
   environment: *app-environment
   volumes:
-    - ./logs:/var/log/app
+    - squid-logs:/var/log/app
     - squid-objects:/var/lib/app/objects
   depends_on:
     db:
@@ -167,8 +167,9 @@ services:
       - "127.0.0.1:13133:13133"
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
-      - ./logs:/var/log/app:ro
+      - squid-logs:/var/log/app:ro
 
 volumes:
   squid-objects:
   squid-pgdata:
+  squid-logs:
