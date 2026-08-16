@@ -143,3 +143,59 @@ def test_trace_context_filter_preserves_propagated_child_ids(mocker: MockerFixtu
 
     assert vars(record)["trace_id"] == "c" * 32
     assert vars(record)["span_id"] == "d" * 16
+
+
+def test_bound_correlation_id_wins_and_resets(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+
+    token = observability.bind_correlation_id("request-scoped-id")
+    try:
+        assert observability.correlation_id() == "request-scoped-id"
+    finally:
+        observability.unbind_correlation_id(token)
+
+    # After unbinding, the untraced fallback resumes producing 12-hex-char ids.
+    fallback = observability.correlation_id()
+    assert len(fallback) == 12
+    assert set(fallback) <= set("0123456789abcdef")
+
+
+def test_trace_context_filter_stamps_bound_request_id(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_context", return_value=None)
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
+
+    token = observability.bind_correlation_id("bound-request-id")
+    try:
+        observability.TraceContextFilter().filter(record)
+    finally:
+        observability.unbind_correlation_id(token)
+
+    assert vars(record)["request_id"] == "bound-request-id"
+
+
+def test_trace_context_filter_preserves_preset_request_id(mocker: MockerFixture) -> None:
+    mocker.patch.object(observability, "_current_trace_context", return_value=None)
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
+    vars(record)["request_id"] = "already-set"
+
+    token = observability.bind_correlation_id("bound-request-id")
+    try:
+        observability.TraceContextFilter().filter(record)
+    finally:
+        observability.unbind_correlation_id(token)
+
+    assert vars(record)["request_id"] == "already-set"
+
+
+def test_install_trace_context_log_filter_is_idempotent() -> None:
+    handler = logging.NullHandler()
+    handler.set_name("squid-test-idempotent-handler")
+    logging.getLogger().addHandler(handler)
+    try:
+        observability.install_trace_context_log_filter()
+        observability.install_trace_context_log_filter()
+
+        trace_filters = [f for f in handler.filters if isinstance(f, observability.TraceContextFilter)]
+        assert len(trace_filters) == 1
+    finally:
+        logging.getLogger().removeHandler(handler)
