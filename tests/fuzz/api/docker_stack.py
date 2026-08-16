@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import docker
+import docker.errors
 from docker.models.containers import Container
 from docker.models.images import Image
 from docker.models.networks import Network
