@@ -1,4 +1,4 @@
-"""Translation from normalized submissions into provider-neutral builds."""
+"""Translation from normalized submissions into account-keyed builds."""
 
 from collections.abc import Mapping
 from dataclasses import replace

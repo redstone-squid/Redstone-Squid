@@ -307,7 +307,7 @@ async def test_submitters_see_their_own_builds_in_every_status() -> None:
 
 
 @pytest.mark.asyncio
-async def test_provider_neutral_submitter_can_list_builds_without_discord() -> None:
+async def test_an_account_submitter_can_list_builds_without_discord() -> None:
     graph = fakes(builds=[persisted_build(5)])
     minecraft_only = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 

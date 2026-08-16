@@ -1,4 +1,4 @@
-"""SQLAlchemy provider-neutral account repository."""
+"""SQLAlchemy account repository, keyed by account rather than by identity provider."""
 
 import hashlib
 import uuid
@@ -744,7 +744,7 @@ class AccountRepository:
             "UPDATE submission_draft_changes SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
             "UPDATE build_schematics SET rights_attested_by_account_id = :survivor "
             "WHERE rights_attested_by_account_id = :absorbed",
-            # Keep installation IDs and credential hashes stable; only their provider-neutral owner changes.
+            # Keep installation IDs and credential hashes stable; only the owning account changes.
             "UPDATE minecraft_paper_installations SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
             "UPDATE minecraft_player_challenges SET approved_by_account_id = :survivor "
             "WHERE approved_by_account_id = :absorbed",

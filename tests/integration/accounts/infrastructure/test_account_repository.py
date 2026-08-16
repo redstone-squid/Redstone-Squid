@@ -1,4 +1,4 @@
-"""Integration coverage for provider-neutral accounts and creator alias claiming."""
+"""Integration coverage for account-keyed identities and creator alias claiming."""
 
 import asyncio
 from collections.abc import AsyncGenerator

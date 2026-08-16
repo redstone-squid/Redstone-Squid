@@ -14956,7 +14956,7 @@
           "boolean"
         ],
         "title": "ControlKind",
-        "description": "Small renderer-neutral set of supported form controls."
+        "description": "The small set of controls every client knows how to draw."
       },
       "CreatorAliasDetail": {
         "properties": {

@@ -1,4 +1,4 @@
-"""Transport-neutral search requests and results."""
+"""Search requests and results, built the same way by the bot and the API."""
 
 from dataclasses import dataclass, field
 from datetime import datetime

@@ -407,7 +407,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     draft_id = UUID("11111111-1111-1111-1111-111111111111")
 
     build = await service.submit_for_account(
-        OtherBuild(description="A transport-neutral submission"),
+        OtherBuild(description="A submission with no chat client attached"),
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
         display_name="  Workshop prototype  ",

@@ -1,4 +1,4 @@
-"""Framework-neutral application services and process runtime."""
+"""Application services and process runtime, defined without reference to a web framework."""
 
 import logging
 import time
@@ -121,7 +121,7 @@ class BotServices:
 
 @dataclass(frozen=True, slots=True)
 class WorkerServices:
-    """Capabilities exposed to transport-neutral background jobs."""
+    """Capabilities exposed to background jobs, which serve no request."""
 
     builds: BuildService
     artifacts: ArtifactStore

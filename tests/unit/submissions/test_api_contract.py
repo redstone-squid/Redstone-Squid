@@ -1,4 +1,4 @@
-"""Isolated tests for the renderer-neutral submission HTTP contract."""
+"""Isolated tests for the submission HTTP contract, which no client has to draw one way."""
 
 from dataclasses import replace
 from uuid import UUID, uuid4

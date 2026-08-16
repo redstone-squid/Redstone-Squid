@@ -1,4 +1,4 @@
-"""Framework-neutral reaction weighting values."""
+"""Reaction weighting values, holding no Discord library objects."""
 
 from dataclasses import dataclass
 from math import isfinite
@@ -6,7 +6,7 @@ from math import isfinite
 
 @dataclass(frozen=True, slots=True)
 class ReactionActor:
-    """Framework-neutral member facts used to authorize and weight a reaction."""
+    """The member facts that authorize and weight a reaction, as plain values."""
 
     user_id: int
     guild_id: int = 0

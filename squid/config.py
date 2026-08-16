@@ -924,7 +924,7 @@ class _ProcessSettings(BaseSettings):
 
     @property
     def runtime(self) -> RuntimeConfig:
-        """Return the resolved framework-neutral runtime settings."""
+        """Return the runtime settings, already resolved and free of any web framework."""
         return RuntimeConfig(
             database=self.database,
             openai=self.openai,

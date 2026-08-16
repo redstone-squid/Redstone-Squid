@@ -29,7 +29,7 @@ class CanonicalMinecraftVersions(Protocol):
 
 
 class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
-    """Project approved tags and canonical versions into renderer-neutral choices."""
+    """Project approved tags and canonical versions into choices any client can draw."""
 
     def __init__(self, tags: ApprovedTagDefinitions, versions: CanonicalMinecraftVersions) -> None:
         self._tags = tags

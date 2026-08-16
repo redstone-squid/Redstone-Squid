@@ -1,4 +1,4 @@
-"""Starboard orchestration over framework-neutral ports."""
+"""Starboard orchestration over ports that name no framework."""
 
 from dataclasses import dataclass, replace
 from math import isfinite

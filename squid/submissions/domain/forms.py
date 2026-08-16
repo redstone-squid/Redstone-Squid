@@ -1,4 +1,4 @@
-"""Transport-neutral submission form definitions and validation."""
+"""Submission form definitions and validation, drawn however the client chooses."""
 
 import re
 from collections.abc import Iterable, Mapping, Sequence
@@ -21,7 +21,7 @@ class SubmissionOrigin(StrEnum):
 
 
 class ControlKind(StrEnum):
-    """Small renderer-neutral set of supported form controls."""
+    """The small set of controls every client knows how to draw."""
 
     TEXT = "text"
     NUMBER = "number"

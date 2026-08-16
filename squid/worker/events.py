@@ -1,4 +1,4 @@
-"""Transport-neutral domain-event handlers owned by the worker process."""
+"""Domain-event handlers owned by the worker process, which serves no request."""
 
 import logging
 from typing import Protocol
@@ -32,7 +32,7 @@ class BuildStatusWriter(Protocol):
 
 
 class CoreEventHandler(Protocol):
-    """Handle one transport-neutral domain event idempotently."""
+    """Handle one domain event idempotently, whatever produced it."""
 
     async def handle(self, event: DomainEvent) -> None: ...
 

@@ -1,4 +1,4 @@
-"""Public provider-neutral account domain API."""
+"""Public account domain API: one account, many identities."""
 
 from squid.accounts.domain.models import (
     CONSENT_CUTOFF,

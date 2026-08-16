@@ -15,7 +15,7 @@ from squid.suggestions.domain import SourceKind
 
 
 class SuggestionFormOptionCatalog(FormOptionCatalog):
-    """Project registered enumerable sources into renderer-neutral form choices."""
+    """Project registered enumerable sources into choices any client can draw."""
 
     def __init__(self, suggestions: SuggestionService) -> None:
         self._suggestions = suggestions

@@ -150,7 +150,7 @@ class BuildService:
         display_name: str | None,
         ai_generated: bool,
     ) -> Build:
-        """Finalize one synchronized draft under a provider-neutral account.
+        """Finalize one synchronized draft under an account, whatever identity it linked.
 
         The draft UUID is both persisted for audit and used as the retry key. A later
         finalization attempt returns the already-created build without requiring any
