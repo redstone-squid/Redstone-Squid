@@ -6,7 +6,7 @@ import dataclasses
 import hashlib
 import json
 import logging
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass
 
 from squid.core.errors import DataIntegrityError, SquidError
@@ -594,7 +594,7 @@ class SchematicService:
         *,
         operation: str,
         stored: StoredSchematic | None = None,
-    ) -> Iterator[None]:
+    ) -> Generator[None]:
         """Quarantine a file that kills a worker, so the next request refuses it outright.
 
         Analysis, rendering, and simulation all have to do this, and all three used to spell

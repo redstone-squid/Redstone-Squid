@@ -1,7 +1,7 @@
 """Build application service tests."""
 
 import asyncio
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
 from typing import Literal, cast
 from unittest.mock import AsyncMock
@@ -71,7 +71,7 @@ class FakeBuildLocks:
         self.clean_stale = AsyncMock()
 
     @asynccontextmanager
-    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncIterator[None]:
+    async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
         if not await self.acquire(build_id, blocking=True, timeout=timeout):
             raise BuildBusyError(build_id)
         try:
