@@ -30,11 +30,27 @@ pytestmark = [pytest.mark.schematic, pytest.mark.asyncio]
 
 @pytest.fixture
 async def pool() -> AsyncIterator[SchematicWorkerPool]:
+    """Hold the pool's pump lifetime in a task that spans setup and teardown.
+
+    pytest-asyncio runs a fixture's setup and its finalization in two different tasks, and an
+    anyio task group can only be exited by the task that entered it. So the lifetime belongs to
+    an owner task here, the same way it belongs to `main()` in the worker process.
+    """
     worker_pool = SchematicWorkerPool(SchematicConfig(workers=1, restart_backoff_seconds=0.05))
+    running, finished = asyncio.Event(), asyncio.Event()
+
+    async def own() -> None:
+        async with worker_pool.running():
+            running.set()
+            await finished.wait()
+
+    owner = asyncio.create_task(own())
+    await running.wait()
     try:
         yield worker_pool
     finally:
-        await worker_pool.aclose()
+        finished.set()
+        await owner
 
 
 async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWorkerPool) -> None:
@@ -237,15 +253,13 @@ async def test_an_operation_past_its_deadline_is_killed_rather_than_left_running
             workers=1, parse_timeout_seconds=0.001, convert_timeout_seconds=30, restart_backoff_seconds=0.05
         )
     )
-    try:
+    async with pool.running():
         with pytest.raises(SchematicTimeoutError):
             await pool.analyze(slow_schematic, limits=SchematicLimits(), with_lattice=True)
 
         # A fresh worker is spawned, so an operation with a workable deadline still succeeds.
         converted, _ = await pool.convert(slow_schematic, target=SchematicFormat.SPONGE_SCHEM)
         assert converted
-    finally:
-        await pool.aclose()
 
 
 async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_forever(
@@ -260,7 +274,7 @@ async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_for
             max_restarts_per_window=2,
         )
     )
-    try:
+    async with pool.running():
         with caplog.at_level(logging.ERROR, logger="squid.schematics.infrastructure.worker"):
             for _ in range(2):
                 with pytest.raises(SchematicTimeoutError):
@@ -271,5 +285,3 @@ async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_for
 
         # Operators without an OTel exporter must still see the outage in the logs.
         assert [record.getMessage() for record in caplog.records if "circuit breaker opened" in record.getMessage()]
-    finally:
-        await pool.aclose()

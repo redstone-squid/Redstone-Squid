@@ -5,7 +5,7 @@ import contextlib
 import logging
 import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from whenever import Instant
 
@@ -312,10 +312,13 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 loop.add_signal_handler(process_signal, stop.set)
 
     try:
-        async with create_worker_runtime(resolved_config.runtime) as runtime:
+        async with create_worker_runtime(resolved_config.runtime) as runtime, AsyncExitStack() as analyzers:
             schematic_config = resolved_config.runtime.schematics
             if schematic_config.enabled and engine_installed():
-                native_analyzer = SchematicWorkerPool(schematic_config)
+                # `running()` owns the workers' stderr pumps, and an anyio task group can only
+                # be exited by the task that entered it -- this one.
+                pool = SchematicWorkerPool(schematic_config)
+                native_analyzer = await analyzers.enter_async_context(pool.running())
             else:
                 native_analyzer = NullSchematicAnalyzer("The worker does not have the schematic engine installed.")
             schematic_jobs = SchematicJobRunner(
@@ -355,7 +358,10 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                         await stop.wait()
                 finally:
                     await worker.close()
-                    await native_analyzer.aclose()
+                    # The pool's own `running()` closes it; only the null analyzer, which owns
+                    # no task group and so is not on the stack, still needs closing here.
+                    if not isinstance(native_analyzer, SchematicWorkerPool):
+                        await native_analyzer.aclose()
     finally:
         observability.shutdown()
 
