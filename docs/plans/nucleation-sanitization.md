@@ -51,7 +51,12 @@ and the item compound (`id`, `tag`, `Count` swap):
 This is upstream of the sanitizer — it reproduces with no transform applied — but it defeats two clauses of the
 policy contract below: `apply_transform` over identical input bytes yields differing artifacts, and sanitizing an
 already-sanitized artifact does not reproduce it, so **sanitize-twice idempotence fails**. It equally defeats any
-content-addressed dedup or storage key derived from serialized bytes. Not yet reported upstream as of 2026-08-17.
+content-addressed dedup or storage key derived from serialized bytes. Reported upstream as
+[Schem-at/Nucleation#39](https://github.com/Schem-at/Nucleation/issues/39).
+
+Note that the core's own audit disagrees: `verification.idempotence` in `metadata.transformation_history` reports
+`passed` for the very run whose output bytes differ, so it appears to compare in-memory structures rather than
+serialized output. **Do not use that field as evidence the contract holds** — check the bytes.
 
 Separately, litematic embeds wall-clock `TimeCreated`/`TimeModified` in its metadata, so litematic bytes are never
 reproducible by construction. Content-address the Sponge artifact or a fingerprint, never `to_litematic_b64()`.
