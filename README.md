@@ -59,6 +59,11 @@ The complete deployment requires `SQUID_DATABASE_URL`, `SQUID_VERIFICATION_CODE_
 variables take precedence over `.env`. Discord OAuth,
 REST voting, OpenAI, embedding, Catbox, and Google settings are documented in `.env.example`.
 
+The pepper settings key the digests stored for API keys, web sessions, CLI authorization secrets, and
+Minecraft credentials. Each is a deployment key that never reaches the database, so rotating one
+invalidates every credential it protects. `docs/credential-hashing.md` documents the construction and
+why it is a keyed SHA-256 rather than a password KDF.
+
 The API encrypts retained idempotency responses with AES-256-GCM. Generate key values with
 `openssl rand -base64 32`; configure the resulting JSON keyring in `SQUID_API_IDEMPOTENCY_KEYS` and select the key
 used for new responses with `SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID`. To rotate, add the new key, deploy it as active,
