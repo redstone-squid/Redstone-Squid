@@ -5,6 +5,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.auth.domain import ApiKey
+from squid.permissions.domain import Pattern
 
 
 class ApiKeyRepository(Protocol):
@@ -16,7 +17,7 @@ class ApiKeyRepository(Protocol):
         key_id: str,
         secret_hash: bytes,
         label: str,
-        scopes: frozenset[str],
+        scopes: frozenset[Pattern],
         owner_account_id: int | None,
         created_by_account_id: int | None,
         expires_at: Instant | None,
