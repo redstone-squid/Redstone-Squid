@@ -1,11 +1,13 @@
 """Read models returned by the schematic store."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
 from whenever import Instant
 
 from squid.core.errors import JSONValue
+from squid.core.i18n import _
 from squid.schematics.domain.models import (
     SchematicAnalysis,
     SchematicFormat,
@@ -122,18 +124,79 @@ class StoredRender:
     byte_size: int
 
 
+class RenderSkipReason(StrEnum):
+    """Why a build will never get a preview under the current recipe.
+
+    Every member is a *permanent* outcome for this recipe: the durable render queue
+    acknowledges it rather than retrying, and a moderator can be told what happened.
+    Operational failures — a dead worker, an unreachable resource pack, a renderer that
+    returns something that is not a PNG — stay exceptions so the queue retries them.
+    """
+
+    RENDERING_DISABLED = "rendering_disabled"
+    NO_PRIMARY_SCHEMATIC = "no_primary_schematic"
+    NOT_SANITIZED = "not_sanitized"
+    POISONED_FILE = "poisoned_file"
+    OVER_BLOCK_BUDGET = "over_block_budget"
+    OVER_VOLUME_BUDGET = "over_volume_budget"
+    MISSING_FILE = "missing_file"
+
+    @property
+    def description(self) -> str:
+        """A translatable sentence a moderator can be shown verbatim.
+
+        Deliberately says nothing about the engine, the adapter, or the cap's value: the
+        numbers are deployment configuration, and the engine's own vocabulary is not
+        something a moderator can act on.
+        """
+        return _RENDER_SKIP_DESCRIPTIONS[self]
+
+
+_RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, str] = {
+    RenderSkipReason.RENDERING_DISABLED: _("Schematic previews are not enabled on this instance."),
+    RenderSkipReason.NO_PRIMARY_SCHEMATIC: _("This build has no primary schematic to preview."),
+    RenderSkipReason.NOT_SANITIZED: _("This schematic has not been sanitized, so it is never rendered."),
+    RenderSkipReason.POISONED_FILE: _("This schematic file already crashed the engine on this instance."),
+    RenderSkipReason.OVER_BLOCK_BUDGET: _("This schematic has too many blocks to preview."),
+    RenderSkipReason.OVER_VOLUME_BUDGET: _("This schematic is too large to preview."),
+    RenderSkipReason.MISSING_FILE: _("The stored schematic file is missing, so it cannot be previewed."),
+}
+
+
 @dataclass(frozen=True, slots=True)
-class PreparedRender:
-    """A cached URL or fresh PNG awaiting upload by the transport layer."""
+class FreshRender:
+    """A newly rendered preview awaiting upload by the transport layer."""
 
     schematic_id: int
     recipe_hash: str
     width: int
     height: int
-    png: bytes | None = None
-    cached_url: str | None = None
+    png: bytes
 
-    def __post_init__(self) -> None:
-        if (self.png is None) == (self.cached_url is None):
-            msg = "A prepared render must contain exactly one of png and cached_url."
-            raise ValueError(msg)
+
+@dataclass(frozen=True, slots=True)
+class CachedRender:
+    """A recipe-matched preview already in object storage, awaiting projection."""
+
+    schematic_id: int
+    recipe_hash: str
+    width: int
+    height: int
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class SkippedRender:
+    """A build the renderer will not produce a preview for, and why."""
+
+    reason: RenderSkipReason
+
+
+type RenderPreparation = FreshRender | CachedRender | SkippedRender
+"""What `SchematicService.prepare_render` decided.
+
+Three explicit states rather than `PreparedRender | None`: the old shape collapsed "disabled",
+"no attachment", "unsanitized", "poisoned", "over budget", "file gone", "already rendered", and
+"just rendered" into one value, so neither the durable worker nor a moderator-facing surface
+could tell a permanent skip from an absent attachment.
+"""
