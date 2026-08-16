@@ -247,7 +247,15 @@ class IdentityRefresh:
     @property
     def renamed(self) -> bool:
         return self.previous_name is not None and self.previous_name != self.current_name
+
+    @property
+    def is_contested(self) -> bool:
+        return self.contested_alias is not None
 ```
+
+`VerificationLinkResult` carries the whole `refresh` alongside the `claimed_alias` the original
+link flow needed, and `AliasClaim` grows an optional `claimant` that `pending_claims(with_claimants=True)`
+fills from one batched load — the shape plan 01's claimant presentation needs.
 
 ### Tests
 
@@ -282,6 +290,11 @@ class IdentityRefresh:
 `alembic heads` must show the single new revision. The migration degenerates the generated column in place
 (`ALTER COLUMN ... DROP EXPRESSION`) rather than dropping it, so the unique constraint and the prefix index survive
 untouched and only the stored values are rewritten.
+
+Both directions are already covered: `test_migrations_create_schema_without_drift` walks head down past this
+revision and back up, running `alembic check` at each end, so no separate round-trip test is needed. The downgrade
+is deliberately allowed to fail on data where two names collide under casefold but not under `lower(btrim(...))`;
+there is no correct automatic answer, and failing beats silently discarding a creator credit.
 
 There is no deployment yet, so there is no production data to survey; the re-fold pass in the migration is written
 correctly regardless, since it is the same pass a later Unicode change would need.
