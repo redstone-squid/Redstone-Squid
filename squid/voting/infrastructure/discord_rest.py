@@ -27,6 +27,12 @@ supported expression of the bound the hand-rolled limiter used to enforce with a
 type Clock = Callable[[], float]
 
 
+class VoterDiscordIdLookup(Protocol):
+    """The account-to-snowflake read this adapter needs to reach Discord at all."""
+
+    async def discord_id_for(self, account_id: int) -> int | None: ...
+
+
 class DiscordMemberClient(Protocol):
     """The two operations this adapter needs from a Discord HTTP client.
 
@@ -93,6 +99,7 @@ class DiscordRestActorResolver:
         bot_token: str,
         *,
         capabilities: ActorCapabilityResolver | None = None,
+        discord_ids: VoterDiscordIdLookup | None = None,
         http: DiscordMemberClient | None = None,
         cache_ttl_seconds: float = 300,
         clock: Clock = monotonic,
@@ -100,6 +107,7 @@ class DiscordRestActorResolver:
     ) -> None:
         self._token = bot_token
         self._capabilities = capabilities
+        self._discord_ids = discord_ids
         self._http = http
         self._owns_http = http is None
         self._closed = False
@@ -109,9 +117,14 @@ class DiscordRestActorResolver:
         self._clock = clock
         self._cache: dict[tuple[int, int], tuple[float, VoteActor | None]] = {}
 
-    async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Return current member facts, raising when Discord cannot answer reliably."""
         del kind  # Every kind's nodes resolve together, so one load answers all of them.
+        discord_id = await self._discord_id(account_id)
+        if discord_id is None:
+            # No Discord identity means no guild membership and so no role weight, which
+            # existing callers already read as "not a member".
+            return None
         cache_key = (guild_id, discord_id)
         cached = self._cache.get(cache_key)
         now = self._clock()
@@ -123,10 +136,10 @@ class DiscordRestActorResolver:
         self._cache[cache_key] = (now + self._cache_ttl_seconds, actor)
         return actor
 
-    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Resolve refresh facts, retaining cached vote weight on any failure."""
         try:
-            return await self.member(account_id, discord_id, guild_id, kind)
+            return await self.member(account_id, guild_id, kind)
         except Exception:
             logger.warning(
                 "Could not refresh Discord membership facts for vote session",
@@ -141,6 +154,17 @@ class DiscordRestActorResolver:
         if self._owns_http and self._http is not None:
             http, self._http = self._http, None
             await http.close()
+
+    async def _discord_id(self, account_id: int) -> int | None:
+        """The snowflake behind a voting account.
+
+        Not covered by the `(guild_id, discord_id)` member cache, which is keyed on the
+        answer rather than the question, so a refresh costs one query per uncached actor.
+        Measured rather than pre-optimized: see the commit that introduced this.
+        """
+        if self._discord_ids is None:
+            return None
+        return await self._discord_ids.discord_id_for(account_id)
 
     async def _client(self) -> DiscordMemberClient:
         """Return the logged-in client, opening the session on first use.

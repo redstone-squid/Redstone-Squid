@@ -110,7 +110,6 @@ class VoteSelection:
     """A voter's raw selection and its last successfully calculated weight."""
 
     account_id: int
-    discord_id: int
     guild_id: int
     option_id: str
     emoji: str

@@ -127,6 +127,7 @@ from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.versions.application.services import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from squid.voting.application import VoteService
+from squid.voting.infrastructure.accounts import PostgresVoterDiscordIdLookup
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.voting.infrastructure.repository import VoteRepository
 from squid.worker.queue_health import PostgresQueueHealthMonitor
@@ -517,6 +518,7 @@ class _ServiceGraph:
         resolver = DiscordRestActorResolver(
             self.config.discord_bot_token.get_secret_value(),
             capabilities=self.permissions,
+            discord_ids=PostgresVoterDiscordIdLookup(self.db.async_session),
             api_url=str(self.config.upstream_http.discord_api_url),
         )
         self.resources.push_async_callback(resolver.aclose)

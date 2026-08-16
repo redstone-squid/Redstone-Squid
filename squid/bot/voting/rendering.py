@@ -5,6 +5,7 @@ Rendering used to be a method that also fetched and edited its own messages, whi
 why every session had to track the messages it had sent.
 """
 
+from collections.abc import Mapping
 from textwrap import dedent
 
 import discord
@@ -100,13 +101,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> Sta
     )
 
 
-def render_generic_poll(snapshot: VoteSessionSnapshot) -> StaticLayout:
+def render_generic_poll(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> StaticLayout:
     """Render a user-created poll, honouring its visibility setting."""
-    return text_layout(generic_poll_text(snapshot))
+    return text_layout(generic_poll_text(snapshot, voter_discord_ids))
 
 
-def generic_poll_text(snapshot: VoteSessionSnapshot) -> str:
-    """The body of a generic poll card."""
+def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:
+    """The body of a generic poll card.
+
+    *voter_discord_ids* maps a voting account to the snowflake to mention it by. A
+    ballot records an account, not a snowflake, so the Discord spelling is supplied by
+    the caller that can look it up; an account with no Discord identity is simply not
+    mentioned.
+    """
     poll = snapshot.poll
     assert poll is not None
     closed = snapshot.status == "closed"
@@ -123,7 +130,12 @@ def generic_poll_text(snapshot: VoteSessionSnapshot) -> str:
                 f" — {raw.get(option.identifier or '', 0)} votes, {weighted.get(option.identifier or '', 0):g} weighted"
             )
         if poll.visibility == "visible_live" and show_totals:
-            voters = [f"<@{vote.discord_id}>" for vote in snapshot.selections if vote.option_id == option.identifier]
+            voters = [
+                f"<@{discord_id}>"
+                for vote in snapshot.selections
+                if vote.option_id == option.identifier
+                and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+            ]
             if voters:
                 line += f" ({', '.join(voters)})"
         lines.append(line)

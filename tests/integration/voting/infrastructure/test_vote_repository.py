@@ -273,9 +273,9 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
 ) -> None:
     _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
 
-    inserted = await repository.cast_vote(message_id, 7, 70, GUILD_ID, "approve", "👍", 1.0)
-    replaced = await repository.cast_vote(message_id, 7, 70, GUILD_ID, "deny", "👎", 1.0)
-    removed = await repository.cast_vote(message_id, 7, 70, GUILD_ID, "deny", "👎", 1.0)
+    inserted = await repository.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0)
+    replaced = await repository.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0)
+    removed = await repository.cast_vote(message_id, 7, GUILD_ID, "deny", "👎", 1.0)
 
     assert inserted is not None
     assert (inserted.previous_weight, inserted.current_weight) == (None, 1.0)
@@ -299,7 +299,7 @@ async def test_cast_vote_closes_at_either_threshold(
     _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
 
     option_id, emoji = ("approve", "👍") if desired_weight > 0 else ("deny", "👎")
-    mutation = await repository.cast_vote(message_id, 7, 70, GUILD_ID, option_id, emoji, abs(desired_weight))
+    mutation = await repository.cast_vote(message_id, 7, GUILD_ID, option_id, emoji, abs(desired_weight))
 
     assert mutation is not None
     assert mutation.just_closed
@@ -315,8 +315,8 @@ async def test_concurrent_votes_report_exactly_one_closure(
     _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-10)
 
     results = await asyncio.gather(
-        repository.cast_vote(message_id, 7, 70, GUILD_ID, "approve", "👍", 1.0),
-        repository.cast_vote(message_id, 8, 80, GUILD_ID, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0),
+        repository.cast_vote(message_id, 8, GUILD_ID, "approve", "👍", 1.0),
     )
 
     mutations = [result for result in results if isinstance(result, StoredVoteMutation)]
@@ -348,8 +348,8 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     )
     assert message_id is not None
 
-    await repository.cast_vote(message_id, 7, 70, GUILD_ID, "one", "1️⃣", 3)
-    await repository.cast_vote(message_id, 8, 80, GUILD_ID, "two", "2️⃣", 1)
+    await repository.cast_vote(message_id, 7, GUILD_ID, "one", "1️⃣", 3)
+    await repository.cast_vote(message_id, 8, GUILD_ID, "two", "2️⃣", 1)
     snapshot = await repository.get_by_message(message_id)
 
     assert snapshot is not None
