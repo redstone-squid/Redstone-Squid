@@ -3,9 +3,27 @@
 > **Status.** Not started. Amend this document in place as building it proves parts of it wrong,
 > calling out the amendments where they occur rather than silently applying them.
 
+> **Amended for [PR #183 review plan 11](pr-183-review/11-api-auth-records-sync.md), which landed
+> between this document being written and being started.** Nothing here changed in substance; the
+> ground under it moved in three ways.
+>
+> - `Principal` is now `Caller`, `principal_allows` is `caller_allows`, and every `principal:`
+>   parameter is `caller:`. `Caller.discord_id` is still the field M10 deletes.
+> - **M3 and M9 shrink.** Plan 11 moved build edit authority out of the route into
+>   `BuildService.apply_edit`, which takes a `BuildEditor(subject, discord_id)`. So the second
+>   `assert principal.discord_id is not None` M3 planned to delete is already gone, and the
+>   ownership comparison M9 rewrites now lives in the service rather than at `builds.py:126` —
+>   which is where M9 wanted it anyway, and it arrives already reusable by the bot's two edit
+>   paths. `_require_consented_user` still rejects a Discord-less caller, so the milestone's
+>   substance is untouched.
+> - "provider-neutral" is no longer used as a term of art anywhere in `squid/`; the prose here says
+>   what it meant instead. The two migration filenames keep the word.
+>
+> Line references throughout were re-checked against `97af8d81`.
+
 ## Context
 
-The account *model* is already provider-neutral. Migration `d6f7a8b9c0d1`
+The account *model* already treats every identity provider alike. Migration `d6f7a8b9c0d1`
 (`2026_08_11_1200-..._cut_over_provider_neutral_accounts.py`) renamed `users` → `accounts`,
 introduced `account_identities(account_id, provider, subject, …)` with three symmetric providers,
 and left `accounts` with no provider column at all. Four auth mechanisms — API keys, CLI device
@@ -20,20 +38,20 @@ or as the parameter a method is keyed on. Four things are broken today as a dire
   `NOT NULL`, `WebSessionIdentity.discord_id` is non-optional, and
   `WebSessionRepository.create_session` requires one. A second web login is unimplementable
   without touching the schema.
-- **CLI and Minecraft principals cannot submit, edit, or vote**, despite holding a valid
-  `account_id`. `squid/api/v1/builds.py:219` and `squid/api/v1/votes.py:63` both reject on
-  `principal.kind != "account" or principal.discord_id is None`, and `builds.py:72,119` then
-  `assert principal.discord_id is not None`.
+- **CLI and Minecraft callers cannot submit, edit, or vote**, despite holding a valid
+  `account_id`. `squid/api/v1/builds.py:219` and `squid/api/v1/votes.py:59` both reject on
+  `caller.kind != "account" or caller.discord_id is None`, and `builds.py:68` then
+  `assert caller.discord_id is not None`.
 - **Redeeming a Minecraft verification code mints a Discord identity as a side effect**
   (`squid/accounts/infrastructure/repository.py:466-472`), so a Minecraft-only user cannot link at
   all — and `unlink_java_identity(discord_id)` looks the account up *by Discord identity* to remove
   a *Java* identity, so a Discord-less account can never unlink either.
 - **A proposer's Discord snowflake is published in the API.** `tags` stable keys are
   `f"user_{discord_id}_{hex}"` (`squid/tags/application/services.py:71`) and are returned verbatim
-  as `BuildTag.key` (`squid/api/v1/schemas/builds.py:240`).
+  as `BuildTag.key` (`squid/api/v1/schemas/builds.py:191`).
 
 The goal is that Discord becomes one `IdentityProvider` among several, reached through an OAuth
-adapter; every account-scoped write is keyed on `account_id`; and `Principal.discord_id` ceases to
+adapter; every account-scoped write is keyed on `account_id`; and `Caller.discord_id` ceases to
 exist. Adding a real second provider afterwards costs an enum line, a `for_provider` arm, an
 adapter class, three flat config fields, and one four-line migration.
 
@@ -247,9 +265,9 @@ Two questions hide behind one config key.
 *"May this caller read staff inbox items?"* is per-caller, called only from
 `squid/api/v1/notifications.py:143,166`. Delete `can_view_staff` from the service and repository and
 compute it in the route with machinery already imported there:
-`await principal_allows(permissions, principal, BUILD_SUBMISSION_VIEW_PENDING)`. Staff
+`await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING)`. Staff
 notifications are *about* pending submissions — exactly what `_staff_role_ids`'s docstring already
-names as the intended refinement. This adds no service dependency, is provider-neutral, and is
+names as the intended refinement. This adds no service dependency, names no provider, and is
 credential-bounded, so a leaked API key without the node cannot read staff items. That last
 property is new and strictly better than today.
 
@@ -271,17 +289,17 @@ the existing `/role assign`.
   `BuildSummary`, and `contracts/openapi.json` — so the API contract does not move.
   `Build.submitter_id` survives as read-only derived state for bot rendering
   (`squid/bot/submission/search.py:204`); rename it to `submitter_discord_id` so it stops sitting
-  ambiguously beside `submitter_account_id`. That ambiguity is precisely what let
-  `api/v1/builds.py:126` compare a snowflake to a snowflake while a perfectly good account id sat
-  one attribute away.
+  ambiguously beside `submitter_account_id`. That ambiguity is precisely what let the edit
+  ownership test compare a snowflake to a snowflake while a perfectly good account id sat one
+  attribute away — a test that now lives in `BuildService.apply_edit` rather than in the route.
 - **Tags stable key** → `f"user_{uuid4().hex}"`. It is never parsed — the only literal comparison
   (`squid/records/infrastructure/repository.py:781,814`) is against an official key — so the format
   is free. Rewrite existing rows in the migration; leaving them leaves snowflakes published.
-- **`Principal.discord_id`**: delete it. After the milestones below every reader is gone, and since
+- **`Caller.discord_id`**: delete it. After the milestones below every reader is gone, and since
   `subject_for` hardcodes `guild_id=None`, an HTTP caller can never act on a Discord fact anyway —
-  so a snowflake on the principal is an identifier with no legitimate HTTP use. Keeping it "as an
-  optional convenience" is exactly the affordance that produced two `assert principal.discord_id is
-  not None` in one file. `UserMe.discord_id` in the *response* stays: it is read off the account's
+  so a snowflake on the caller is an identifier with no legitimate HTTP use. Keeping it "as an
+  optional convenience" is exactly the affordance that produced an `assert caller.discord_id is
+  not None` on a submission path that has an `account_id` in hand. `UserMe.discord_id` in the *response* stays: it is read off the account's
   identities (`squid/api/v1/schemas/me.py:28`), which is the correct pattern.
 
 ## Milestones
@@ -391,10 +409,12 @@ actor. Measure before batching, and note it in the commit rather than pre-optimi
 
 *Sequenced after M5* so `votes.py` is rewritten once, not twice.
 
-`_require_consented_user` (`builds.py:219`) and the vote gate (`votes.py:63`) drop **both** the
+`_require_consented_user` (`builds.py:219`) and the vote gate (`votes.py:59`) drop **both** the
 `kind` and the `discord_id` tests, keying on `account_id is None`. Dropping only `discord_id`
-achieves nothing observable, since `kind != "account"` rejects CLI and Minecraft principals one
-line earlier. Delete both `assert principal.discord_id is not None`. Use the
+achieves nothing observable, since `kind != "account"` rejects CLI and Minecraft callers one
+line earlier. Delete the surviving `assert caller.discord_id is not None` (`builds.py:68`); the
+edit path's twin went when `BuildService.apply_edit` took over ownership, and `BuildEditor`
+already accepts `discord_id=None`. Use the
 `ConsentRequiredError(account_id=…)` keyword form across `minecraft_auth.py`, `submissions.py`, and
 `cli_auth.py`.
 
@@ -403,7 +423,7 @@ line earlier. Delete both `assert principal.discord_id is not None`. Use the
 `AccountAlreadyLinkedError` drops it too, and its user-facing string is reworded off "This Discord
 account…" since it is raised for any provider conflict.
 
-Tests: `tests/unit/api/test_build_writes.py` and `test_vote_writes.py` gain a CLI principal
+Tests: `tests/unit/api/test_build_writes.py` and `test_vote_writes.py` gain a CLI caller
 (`kind="cli"`, `account_id` set, no `discord_id`) that can submit and vote; keep the anonymous
 rejection cases. `tests/unit/accounts/test_errors.py` gains a Java-provider conflict asserting
 `provider="java"` rather than an implied Discord.
@@ -445,7 +465,8 @@ rather than two.
 ### M9 — `builds: own submissions by account`
 
 No migration. `BuildService.submit(*, submitter_account_id, …)`; `DoorSubmissionInput` field
-renamed; `builds.py:126` ownership becomes `submitter_account_id == principal.account_id`;
+renamed; the ownership test inside `BuildService.apply_edit` becomes
+`submitter_account_id == actor.subject.account_id`, and `BuildEditor.discord_id` goes with it;
 `_resolve_submitter_account_id` collapses to an existence check and `_get_or_create_account`
 (`squid/builds/infrastructure/repository.py:457-472`) is **deleted** — the last snowflake→account
 minting path outside the accounts context. `_page_filter`/`list_page`/`count` lose the
@@ -456,16 +477,17 @@ Trailing commit: rename `Build.submitter_id` → `submitter_discord_id` (6 sites
 
 Strongest available test: persisting a build no longer creates an account as a side effect.
 
-### M10 — `api: drop the Discord snowflake from the HTTP principal`
+### M10 — `api: drop the Discord snowflake from the HTTP caller`
 
-Delete `Principal.discord_id` (`squid/api/security.py:34`) and its assignment (`:132`);
-`grep -rn "principal.discord_id" squid/` must return nothing. Rewrite
-`tests/unit/api/test_me_routes.py:67` to build `UserMe` from the account's identities rather than
-from the principal — it currently passes for the right reason through the wrong field. Add a
+Delete `Caller.discord_id` (`squid/api/security.py:38`) and its assignment (`:136`);
+`grep -rn "caller.discord_id" squid/` must return nothing. Rewrite
+`test_a_discord_caller_still_reports_its_discord_id` (`tests/unit/api/test_me_routes.py:67`) to
+build `UserMe` from the account's identities rather than from the caller — it currently passes for
+the right reason through the wrong field. Add a
 ratchet in `tests/architecture/test_boundaries.py`: no module under `squid/api/` names `discord_id`
 except `squid/api/v1/schemas/me.py`.
 
-### M11 — `docs: mark the account model provider-neutral`
+### M11 — `docs: record that Discord is one provider among several`
 
 Update this document's status block. Comment `.env.example:46-49` with the flat-per-provider
 convention and why (`env_nested_max_split=1`).
@@ -516,9 +538,9 @@ full suite to CI.
 
 1. A full browser login through `FakeXboxOAuthProvider` lands a `BEDROCK` identity and issues a
    session (M2a) — proves nothing on the session path assumes Discord.
-2. A CLI principal (`account_id` set, no `discord_id`) submits a build and casts a vote (M3).
+2. A CLI caller (`account_id` set, no `discord_id`) submits a build and casts a vote (M3).
 3. An account with no Discord identity links *and* unlinks a Minecraft account (M4).
-4. `grep -rn "principal.discord_id" squid/` returns nothing, enforced by the architecture test (M10).
+4. `grep -rn "caller.discord_id" squid/` returns nothing, enforced by the architecture test (M10).
 
 **End to end, after M9**
 
