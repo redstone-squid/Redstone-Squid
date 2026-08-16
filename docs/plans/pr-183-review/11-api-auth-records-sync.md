@@ -462,11 +462,12 @@ Landed across `9311019d`…`5ac64ea4`. Four things the plan did not anticipate:
   CI's `sdk:check` (`bun run sdk:generate && git diff --exit-code -- src/generated`) is the
   authority; if it disagrees, take its output.
 
-Two pre-existing failures are unrelated to this plan and were not touched:
-`tests/unit/bot/test_command_taxonomy.py` has not been updated for the `/poll` command tree that
-`509406c2` added (plan 9's territory), and
+Three pre-existing failures were unrelated to this plan and are fixed separately in `ce067b25`:
+`tests/unit/bot/test_command_taxonomy.py` had not been updated for the `/poll` command tree that
+`509406c2` added, and
 `tests/unit/api/test_rate_limit.py::test_api_ip_limit_returns_quota_headers_and_retry_after`
-asserts an exact `Retry-After` of 300 and flakes to 298/299 when the suite is slow.
+asserted an exact `Retry-After` of 300 against a real clock, which only holds while both requests
+land inside the same second. `tests/unit/` and `tests/architecture/` are green.
 
 ## Validation
 
