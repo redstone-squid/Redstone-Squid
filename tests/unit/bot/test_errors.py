@@ -95,6 +95,61 @@ async def test_application_command_span_excludes_user_id(mocker: MockerFixture) 
     span.set_error.assert_not_called()
 
 
+class RecordingReports:
+    """Stand-in for the error report service, optionally a failing one."""
+
+    def __init__(self, *, failing: bool = False) -> None:
+        self.calls: list[dict[str, object]] = []
+        self._failing = failing
+
+    async def record(self, error: BaseException, **kwargs: object) -> None:
+        if self._failing:
+            msg = "the database is down"
+            raise RuntimeError(msg)
+        self.calls.append({"error": error, **kwargs})
+
+
+async def test_unexpected_error_is_captured_with_a_redacted_context() -> None:
+    """Persisting is more exposing than logging, so the stored context is the redacted one."""
+    reports = RecordingReports()
+    discord_id = 987654321098765432
+    error = InternalError("database password leaked", context={"discord_id": discord_id, "job_id": 17})
+    harness = make_interaction(user_id=discord_id, guild_id=3, channel_id=4, error_reports=reports)
+
+    with patch("squid.bot.errors.correlation_id", return_value="b" * 32):
+        await handle_interaction_error(harness.interaction, error, surface="command")
+
+    (call,) = reports.calls
+    assert call["correlation_id"] == "b" * 32
+    assert call["reference"] == "b" * 12
+    assert call["surface"] == "command"
+    context = call["context"]
+    assert isinstance(context, dict)
+    assert str(discord_id) not in repr(context)
+    assert context["application_context"] == {"job_id": 17}
+
+
+async def test_a_domain_error_is_not_captured() -> None:
+    """A build that does not exist is explained to the user in full and is not a failure."""
+    reports = RecordingReports()
+    harness = make_interaction(error_reports=reports)
+
+    await handle_interaction_error(harness.interaction, BuildNotFoundError(1), surface="command")
+
+    assert reports.calls == []
+
+
+async def test_a_failing_report_store_still_answers_the_user(caplog: pytest.LogCaptureFixture) -> None:
+    """The handler already owes a response; losing the diagnostic must not cost the reply too."""
+    harness = make_interaction(error_reports=RecordingReports(failing=True))
+
+    with caplog.at_level("ERROR"):
+        await handle_interaction_error(harness.interaction, InternalError("boom"), surface="command")
+
+    harness.send_initial.assert_awaited_once()
+    assert "Could not capture a Discord failure" in caplog.text
+
+
 async def test_application_command_binds_one_correlation_id_for_the_whole_invocation(
     mocker: MockerFixture,
 ) -> None:

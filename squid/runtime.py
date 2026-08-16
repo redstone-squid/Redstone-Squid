@@ -27,7 +27,14 @@ from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNorma
 from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
-from squid.observability import add_counter, record_gauge, record_histogram
+from squid.observability import (
+    add_counter,
+    correlated_log_buffer,
+    correlation_reference,
+    correlation_scope,
+    record_gauge,
+    record_histogram,
+)
 from squid.permissions.application import (
     PermissionAdministrationService,
     PermissionEpochWatcher,
@@ -228,6 +235,15 @@ class BackgroundTaskSupervisor:
         self._handles: set[JobHandle] = set()
         self._closing = False
         self._last_success: dict[str, Instant] = {}
+        self._error_reports: ErrorReportService | None = None
+
+    def capture_failures_into(self, service: ErrorReportService | None) -> None:
+        """Store background job failures, which otherwise only ever reach a log file.
+
+        Set after construction because the supervisor is built before the service graph in every
+        process that owns one, and a job that fails before this is called is still logged.
+        """
+        self._error_reports = service
 
     @asynccontextmanager
     async def running(self) -> AsyncGenerator[Self]:
@@ -342,29 +358,54 @@ class BackgroundTaskSupervisor:
         while True:
             started = time.perf_counter()
             attributes = {"squid.job.name": name}
-            try:
-                await operation()
-            except anyio.get_cancelled_exc_class():
-                raise
-            except Exception:
-                logger.exception("Background job %s failed", name)
-                add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "error"})
-                record_histogram(
-                    "squid.background.job.duration",
-                    time.perf_counter() - started,
-                    attributes={**attributes, "squid.outcome": "error"},
-                )
-            else:
-                succeeded_at = Instant.now()
-                self._last_success[name] = succeeded_at
-                add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "ok"})
-                record_histogram(
-                    "squid.background.job.duration",
-                    time.perf_counter() - started,
-                    attributes={**attributes, "squid.outcome": "ok"},
-                )
-                record_gauge("squid.background.job.last_success", time.time(), attributes=attributes)
+            # One correlation per run, so a failure's stored report carries the lines this run
+            # logged rather than a slice of whatever else the process was doing. The logging call
+            # stays inside the scope; only then does it carry the id the report is filed under.
+            with correlation_scope() as correlation:
+                try:
+                    await operation()
+                except anyio.get_cancelled_exc_class():
+                    raise
+                except Exception as error:
+                    # Captured before logging, so the tail is the run rather than an echo of the
+                    # traceback the report already holds.
+                    await self._capture(error, name=name, correlation=correlation)
+                    logger.exception("Background job %s failed", name, extra={"squid.job.error_id": correlation})
+                    add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "error"})
+                    record_histogram(
+                        "squid.background.job.duration",
+                        time.perf_counter() - started,
+                        attributes={**attributes, "squid.outcome": "error"},
+                    )
+                else:
+                    succeeded_at = Instant.now()
+                    self._last_success[name] = succeeded_at
+                    add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "ok"})
+                    record_histogram(
+                        "squid.background.job.duration",
+                        time.perf_counter() - started,
+                        attributes={**attributes, "squid.outcome": "ok"},
+                    )
+                    record_gauge("squid.background.job.last_success", time.time(), attributes=attributes)
             await anyio.sleep(interval)
+
+    async def _capture(self, error: BaseException, *, name: str, correlation: str) -> None:
+        """Store one background job failure, never letting the attempt kill the loop."""
+        if self._error_reports is None:
+            return
+        try:
+            buffer = correlated_log_buffer()
+            await self._error_reports.record(
+                error,
+                correlation_id=correlation,
+                reference=correlation_reference(correlation),
+                surface="background_job",
+                origin=name,
+                context={"job": name},
+                log_tail=buffer.drain(correlation) if buffer is not None else (),
+            )
+        except Exception:
+            logger.exception("Could not capture a background job failure [job=%s]", name)
 
     async def _run_owned(self, coroutine: Coroutine[Any, Any, None], handle: JobHandle) -> None:
         try:

@@ -101,6 +101,7 @@ def create_api_app(
                 # The API holds its own rule cache, so it needs its own watcher:
                 # a grant made in Discord has to reach HTTP checks too.
                 supervisor = BackgroundTaskSupervisor()
+                supervisor.capture_failures_into(runtime.services.error_reports)
                 async with supervisor.running():
                     app.state.background_tasks = supervisor
                     start_permission_epoch_watch(supervisor, runtime.services.permission_epoch)

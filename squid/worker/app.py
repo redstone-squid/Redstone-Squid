@@ -45,6 +45,7 @@ class DatabaseWorker:
         self._schematic_renders = schematic_renders
         self._schematic_pool = schematic_pool
         self._supervisor = supervisor or BackgroundTaskSupervisor()
+        self._supervisor.capture_failures_into(services.error_reports)
         self._event_lock = asyncio.Lock()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
         notification_handler = MaterializeNotificationHandler(services.notifications)

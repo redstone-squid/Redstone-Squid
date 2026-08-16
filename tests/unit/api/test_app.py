@@ -20,6 +20,7 @@ from tests.unit.api.fakes import (
     TEST_UUID,
     TEST_VERIFICATION_CODE,
     MockDatabaseManager,
+    MockErrorReports,
     build_app,
 )
 
@@ -273,6 +274,45 @@ def test_unhandled_exception_still_carries_request_id(app_factory: tuple[FastAPI
     assert response.status_code == 500
     assert "error_id" not in response.json()
     assert response.headers["Request-Id"] == "b" * 32
+
+
+def test_failures_are_captured_under_the_request_id_the_caller_sees() -> None:
+    """The Request-Id echoed back is the key the stored report is filed under.
+
+    Without that agreement a caller quoting the header they received would resolve nothing, which
+    is the whole point of storing the report.
+    """
+    reports = MockErrorReports()
+    app, _database = build_app(error_reports=reports)
+
+    @app.get("/boom")
+    async def boom() -> None:
+        raise InternalError("Sensitive database detail.")
+
+    @app.get("/unhandled")
+    async def unhandled() -> None:
+        raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as internal_client:
+        internal_client.get("/boom", headers={"Request-Id": "c" * 32})
+        internal_client.get("/unhandled", headers={"Request-Id": "d" * 32})
+
+    assert [call["correlation_id"] for call in reports.calls] == ["c" * 32, "d" * 32]
+    assert [call["reference"] for call in reports.calls] == ["c" * 12, "d" * 12]
+    assert {call["surface"] for call in reports.calls} == {"http"}
+    assert [call["origin"] for call in reports.calls] == ["GET /boom", "GET /unhandled"]
+
+
+def test_a_validation_failure_is_not_captured() -> None:
+    """A 422 is the caller's mistake, fully explained in the response, and not a stored incident."""
+    reports = MockErrorReports()
+    app, _database = build_app(error_reports=reports)
+
+    with TestClient(app, raise_server_exceptions=False) as internal_client:
+        response = internal_client.get("/v1/builds", params={"page_size": "not-a-number"})
+
+    assert response.status_code == 422
+    assert reports.calls == []
 
 
 def test_build_revision_errors_use_http_preconditions(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
