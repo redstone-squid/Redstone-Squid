@@ -173,7 +173,6 @@ class NotificationDeliveryRecord(Base, kw_only=True):
         ForeignKey("accounts.id", name="notification_deliveries_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     nonce: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
