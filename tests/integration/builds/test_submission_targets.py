@@ -317,8 +317,8 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         )
         await session.execute(
             text(
-                "INSERT INTO schematic_files (sha256, byte_size, source_format, data) "
-                "VALUES ('merge-test-sha', 1, 'schem', decode('00', 'hex'))"
+                "INSERT INTO schematic_files (sha256, byte_size, source_format, object_key) "
+                "VALUES ('merge-test-sha', 1, 'schem', 'merge-test-object-key')"
             )
         )
         await session.execute(
