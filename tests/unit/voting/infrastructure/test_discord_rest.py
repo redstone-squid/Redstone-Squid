@@ -58,7 +58,18 @@ class FakeCapabilities:
         return frozenset({node for node in nodes if node == held})
 
 
+class FakeDiscordIds:
+    """Maps every voting account to `account_id * 7`, so the two ids stay distinguishable."""
+
+    def __init__(self, *, known: bool = True) -> None:
+        self._known = known
+
+    async def discord_id_for(self, account_id: int) -> int | None:
+        return account_id * 7 if self._known else None
+
+
 def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolver:
+    kwargs.setdefault("discord_ids", FakeDiscordIds())
     return DiscordRestActorResolver("token", http=http, **kwargs)
 
 
@@ -68,7 +79,7 @@ async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
     http = StubHTTPClient({"roles": ["11", "22"]})
     resolver = resolver_for(http, capabilities=FakeCapabilities())
 
-    actor = await resolver.member(1, 7, 10, VoteKind.BUILD)
+    actor = await resolver.member(1, 10, VoteKind.BUILD)
 
     assert actor is not None
     assert actor.account_id == 1
@@ -79,21 +90,30 @@ async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
     assert http.calls == [(10, 7)]
 
 
+async def test_an_account_without_a_discord_identity_is_not_a_member() -> None:
+    """Not an error: a non-Discord account has no guild membership and so no role weight."""
+    http = StubHTTPClient({"roles": ["11"]})
+    resolver = resolver_for(http, discord_ids=FakeDiscordIds(known=False))
+
+    assert await resolver.member(1, 10, VoteKind.BUILD) is None
+    assert http.calls == []
+
+
 @pytest.mark.parametrize(("kind", "status"), [(Forbidden, 403), (NotFound, 404)])
 async def test_member_returns_none_when_member_is_not_accessible(kind: type[HTTPException], status: int) -> None:
     """Not a member, or not visible to this token: a fact, not a failure."""
     http = StubHTTPClient(discord_error(kind, status))
     resolver = resolver_for(http)
 
-    assert await resolver.member(1, 7, 10, VoteKind.GENERIC) is None
+    assert await resolver.member(1, 10, VoteKind.GENERIC) is None
 
 
 async def test_a_negative_result_is_cached_like_a_positive_one() -> None:
     http = StubHTTPClient(discord_error(NotFound, 404))
     resolver = resolver_for(http, clock=lambda: 100.0)
 
-    assert await resolver.member(1, 7, 10, VoteKind.GENERIC) is None
-    assert await resolver.member(1, 7, 10, VoteKind.GENERIC) is None
+    assert await resolver.member(1, 10, VoteKind.GENERIC) is None
+    assert await resolver.member(1, 10, VoteKind.GENERIC) is None
     assert len(http.calls) == 1
 
 
@@ -102,11 +122,11 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
     http = StubHTTPClient({"roles": ["1"]}, {"roles": ["2"]})
     resolver = resolver_for(http, clock=lambda: now[0])
 
-    first = await resolver.member(1, 7, 10, VoteKind.BUILD)
+    first = await resolver.member(1, 10, VoteKind.BUILD)
     now[0] = 399.9
-    cached = await resolver.member(1, 7, 10, VoteKind.GENERIC)
+    cached = await resolver.member(1, 10, VoteKind.GENERIC)
     now[0] = 400.0
-    refreshed = await resolver.member(1, 7, 10, VoteKind.BUILD)
+    refreshed = await resolver.member(1, 10, VoteKind.BUILD)
 
     assert first is not None
     assert first.role_ids == frozenset({1})
@@ -132,14 +152,14 @@ async def test_member_raises_typed_unavailable_error(error: Exception) -> None:
     resolver = resolver_for(StubHTTPClient(error))
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="Discord member lookup failed"):
-        await resolver.member(1, 7, 10, VoteKind.BUILD)
+        await resolver.member(1, 10, VoteKind.BUILD)
 
 
 async def test_resolve_swallows_discord_failure_for_background_refresh() -> None:
     """This is why a vote does not become un-castable when Discord hiccups."""
     resolver = resolver_for(StubHTTPClient(discord_error(HTTPException, 500)))
 
-    assert await resolver.resolve(1, 7, 10, VoteKind.BUILD) is None
+    assert await resolver.resolve(1, 10, VoteKind.BUILD) is None
 
 
 @pytest.mark.parametrize("payload", [{"roles": "11"}, {"roles": ["not-a-snowflake"]}, {}, "not-a-member"])
@@ -147,12 +167,12 @@ async def test_member_rejects_malformed_payload(payload: Any) -> None:
     resolver = resolver_for(StubHTTPClient(payload))
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="malformed"):
-        await resolver.member(1, 7, 10, VoteKind.BUILD)
+        await resolver.member(1, 10, VoteKind.BUILD)
 
 
 async def test_shutdown_closes_an_owned_client_exactly_once() -> None:
     http = StubHTTPClient({"roles": []})
-    resolver = DiscordRestActorResolver("token")
+    resolver = DiscordRestActorResolver("token", discord_ids=FakeDiscordIds())
     resolver._http = http
     resolver._owns_http = True
 
@@ -161,7 +181,7 @@ async def test_shutdown_closes_an_owned_client_exactly_once() -> None:
 
     assert http.closes == 1
     with pytest.raises(DiscordMemberServiceUnavailableError, match="shut down"):
-        await resolver.member(1, 7, 10, VoteKind.BUILD)
+        await resolver.member(1, 10, VoteKind.BUILD)
 
 
 async def test_an_injected_client_is_not_closed_by_the_resolver() -> None:

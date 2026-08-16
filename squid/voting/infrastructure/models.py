@@ -220,7 +220,6 @@ class Vote(Base):
         ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     option_id: Mapped[str] = mapped_column(Text, nullable=False)
     emoji: Mapped[str] = mapped_column(Text, nullable=False)
