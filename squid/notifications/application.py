@@ -65,8 +65,6 @@ class NotificationRepository(Protocol):
 
     async def cleanup(self, *, retention_days: int) -> int: ...
 
-    async def can_view_staff(self, discord_id: int) -> bool: ...
-
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]: ...
 
     async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool: ...
@@ -188,10 +186,6 @@ class NotificationService:
     async def cleanup(self) -> int:
         """Remove inbox and source events older than the configured retention window."""
         return await self._repository.cleanup(retention_days=self._retention_days)
-
-    async def can_view_staff(self, discord_id: int) -> bool:
-        """Recheck owner or global-administrator access at read and delivery time."""
-        return await self._repository.can_view_staff(discord_id)
 
     async def claim_deliveries(self, *, limit: int = 20) -> Sequence[PendingNotificationDelivery]:
         """Claim ready Discord DMs with database-clock UUID fencing tokens."""

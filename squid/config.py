@@ -811,7 +811,6 @@ class NotificationConfig(_FrozenModel):
 
     public_site_url: AnyHttpUrl | None = None
     retention_days: int = Field(default=90, ge=1, le=3650)
-    staff_discord_ids: tuple[int, ...] = (353089661175988224,)
 
     _empty_public_site_url = field_validator("public_site_url", mode="before")(_empty_to_none)
 
