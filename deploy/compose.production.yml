@@ -18,6 +18,9 @@ services:
     restart: "no"
     profiles:
       - migration
+    depends_on:
+      db:
+        condition: service_healthy
     env_file:
       - ${SQUID_ENV_FILE:-.env}
     environment:
