@@ -128,8 +128,10 @@ class PostgresRecordRepository:
                         set_={
                             "reasons": ["ruleset_activation"],
                             "enqueued_at": func.now(),
+                            "available_at": func.now(),
                             "attempts": 0,
                             "locked_at": None,
+                            "claim_token": None,
                             "last_error": None,
                         },
                     )
@@ -502,7 +504,9 @@ class PostgresRecordRepository:
                     set_={
                         "reasons": [reason],
                         "enqueued_at": func.now(),
+                        "available_at": func.now(),
                         "locked_at": None,
+                        "claim_token": None,
                         "last_error": None,
                     },
                 )
