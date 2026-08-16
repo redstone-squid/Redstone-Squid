@@ -383,7 +383,6 @@ async def test_draft_authentication_requires_current_privacy_consent() -> None:
         kind="account",
         subject="account:42",
         account_id=42,
-        discord_id=123,
         consent_pending=True,
     )
 

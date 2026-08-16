@@ -23,7 +23,7 @@ from squid.notifications import (
 )
 from squid.notifications.domain import NotificationKind
 
-ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, discord_id=123, account_id=7)
+ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
 
 async def test_notification_consent_is_independent_and_defaults_channels_off() -> None:

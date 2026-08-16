@@ -24,7 +24,6 @@ def account(subject: str = "account:1") -> Caller:
         kind="account",
         subject=subject,
         nodes=credential_nodes("vote.poll.cast"),
-        discord_id=7,
         account_id=1,
     )
 

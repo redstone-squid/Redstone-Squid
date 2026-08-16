@@ -35,8 +35,16 @@ class Caller:
     subject: str
     nodes: frozenset[Pattern] = field(default_factory=frozenset)
     """Parsed patterns, so authorization matches rather than re-parses per check."""
-    discord_id: int | None = None
     account_id: int | None = None
+    """There is deliberately no `discord_id` beside this.
+
+    `subject_for` hardcodes `guild_id=None`, so an HTTP caller can never act on a
+    Discord fact anyway -- a snowflake here would be an identifier with no legitimate
+    HTTP use. Keeping one "as an optional convenience" is exactly the affordance that
+    produced a `assert ... is not None` on a submission path already holding a perfectly
+    good account id. `UserMe.discord_id` in the *response* stays: it is read off the
+    account's identities, which is the correct pattern.
+    """
     consent_pending: bool = False
     minecraft_origin: Literal["paper", "fabric"] | None = None
     java_uuid: UUID | None = None

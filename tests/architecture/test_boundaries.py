@@ -232,3 +232,35 @@ def test_build_repository_does_not_coordinate_leases() -> None:
 
     assert method_names.isdisjoint({"acquire_lock", "release_lock", "locked", "clean_stale_locks"})
     assert "BuildLockRepository" not in source
+
+
+def test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account() -> None:
+    """No module under `squid/api/` may name `discord_id`, with one exception.
+
+    `squid/api/v1/schemas/me.py` reads it off the authenticated account's identities,
+    which is the correct pattern: it is a *response* field derived from stored identity,
+    not an attribute of the caller. `subject_for` hardcodes `guild_id=None`, so an HTTP
+    caller can never act on a Discord fact anyway -- an identifier here would have no
+    legitimate use, and the one that existed produced an
+    `assert caller.discord_id is not None` on a submission path that had an account id
+    in hand.
+
+    Comments are excluded, so prose explaining the absence does not trip the ratchet.
+    """
+    allowed = Path("squid/api/v1/schemas/me.py")
+    offenders: list[str] = []
+    for path in sorted(Path("squid/api").rglob("*.py")):
+        if path == allowed:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            named = (
+                (isinstance(node, ast.Name) and node.id == "discord_id")
+                or (isinstance(node, ast.Attribute) and node.attr == "discord_id")
+                or (isinstance(node, ast.keyword) and node.arg == "discord_id")
+                or (isinstance(node, ast.arg) and node.arg == "discord_id")
+            )
+            if named:
+                offenders.append(f"{path}:{node.lineno}")
+
+    assert offenders == [], f"squid/api/ must not name discord_id outside {allowed}: {offenders}"
