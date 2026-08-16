@@ -16,7 +16,7 @@ from squid.api.pagination import (
     render_page,
     resolve_selector,
 )
-from squid.api.security import Principal, requires
+from squid.api.security import Caller, requires
 from squid.api.v1.schemas.notifications import (
     InboxNotificationDetail,
     NotificationPreferencesDetail,
@@ -28,13 +28,13 @@ from squid.core.errors import AuthenticationError
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ
 
 router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
-UserPrincipal = Annotated[Principal, Depends(requires(ACCOUNT_SELF_READ))]
+UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
 
 
 @router.get("/preferences", response_model=NotificationPreferencesDetail, responses=responses(401, 403, 503))
-async def get_preferences(notifications: Notifications, principal: UserPrincipal) -> NotificationPreferencesDetail:
+async def get_preferences(notifications: Notifications, caller: UserCaller) -> NotificationPreferencesDetail:
     """Return disabled defaults before the notification notice has been accepted."""
-    return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(principal)))
+    return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(caller)))
 
 
 @router.post(
@@ -46,11 +46,11 @@ async def get_preferences(notifications: Notifications, principal: UserPrincipal
 async def accept_notice(
     request: NotificationPreferenceUpdate,
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
 ) -> NotificationPreferencesDetail:
     """Accept the notification-specific notice and choose initial channels."""
     preferences = await notifications.accept_notice(
-        _account_id(principal),
+        _account_id(caller),
         web_enabled=request.web_enabled,
         dm_enabled=request.dm_enabled,
     )
@@ -66,11 +66,11 @@ async def accept_notice(
 async def update_preferences(
     request: NotificationPreferenceUpdate,
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
 ) -> NotificationPreferencesDetail:
     """Update web and DM channels independently after consent."""
     preferences = await notifications.set_preferences(
-        _account_id(principal),
+        _account_id(caller),
         web_enabled=request.web_enabled,
         dm_enabled=request.dm_enabled,
     )
@@ -84,10 +84,10 @@ async def update_preferences(
 )
 async def list_subscriptions(
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
 ) -> list[NotificationSubscriptionDetail]:
     """List enabled subscriptions owned by the caller."""
-    found = await notifications.subscriptions(_account_id(principal))
+    found = await notifications.subscriptions(_account_id(caller))
     return [NotificationSubscriptionDetail.from_domain(item) for item in found]
 
 
@@ -101,11 +101,11 @@ async def list_subscriptions(
 async def create_subscription(
     request: NotificationSubscriptionCreate,
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
 ) -> NotificationSubscriptionDetail:
     """Subscribe to a public creator, record competition, or structured filter."""
     subscription = await notifications.subscribe(
-        _account_id(principal),
+        _account_id(caller),
         kind=request.kind,
         subject_id=request.subject_id,
         record_filter=None if request.filter is None else request.filter.to_domain(),
@@ -122,25 +122,25 @@ async def create_subscription(
 async def delete_subscription(
     subscription_id: int,
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
 ) -> Response:
     """Remove one caller-owned subscription."""
-    await notifications.unsubscribe(_account_id(principal), subscription_id)
+    await notifications.unsubscribe(_account_id(caller), subscription_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/inbox", response_model=Page[InboxNotificationDetail], responses=responses(400, 401, 403, 503))
 async def list_inbox(
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[InboxNotificationDetail]:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
-    account_id = _account_id(principal)
-    include_staff = bool(principal.discord_id is not None and await notifications.can_view_staff(principal.discord_id))
+    account_id = _account_id(caller)
+    include_staff = bool(caller.discord_id is not None and await notifications.can_view_staff(caller.discord_id))
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await notifications.inbox(
         account_id,
@@ -160,15 +160,15 @@ async def list_inbox(
 async def mark_read(
     notification_id: int,
     notifications: Notifications,
-    principal: UserPrincipal,
+    caller: UserCaller,
 ) -> Response:
     """Mark one visible inbox item as read."""
-    include_staff = bool(principal.discord_id is not None and await notifications.can_view_staff(principal.discord_id))
-    await notifications.mark_read(_account_id(principal), notification_id, include_staff=include_staff)
+    include_staff = bool(caller.discord_id is not None and await notifications.can_view_staff(caller.discord_id))
+    await notifications.mark_read(_account_id(caller), notification_id, include_staff=include_staff)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _account_id(principal: Principal) -> int:
-    if principal.kind != "account" or principal.account_id is None:
+def _account_id(caller: Caller) -> int:
+    if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    return principal.account_id
+    return caller.account_id

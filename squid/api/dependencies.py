@@ -5,7 +5,7 @@ from typing import Annotated, cast
 from fastapi import Depends, Request
 
 from squid.accounts.application import AccountService
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.notifications import NotificationService
@@ -89,7 +89,7 @@ def get_permissions(services: Services) -> PermissionService:
 Permissions = Annotated[PermissionService, Depends(get_permissions)]
 BuildCommands = Annotated[BuildService, Depends(get_builds)]
 BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
-CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
+CurrentCaller = Annotated[Caller, Depends(current_caller)]
 Records = Annotated[RecordService, Depends(get_records)]
 Notifications = Annotated[NotificationService, Depends(get_notifications)]
 Schematics = Annotated[SchematicService, Depends(get_schematics)]

@@ -6,10 +6,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.dependencies import CurrentPrincipal, VoteMembers, Votes
+from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.security import Principal, requires
+from squid.api.security import Caller, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.permissions.domain.catalogue import VOTE_POLL_CAST
@@ -17,7 +17,7 @@ from squid.voting.domain import CastVoteResult, VoteRejection
 from squid.voting.errors import VoteSessionNotFoundError
 
 router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
-UserVoter = Annotated[Principal, Depends(requires(VOTE_POLL_CAST))]
+UserVoter = Annotated[Caller, Depends(requires(VOTE_POLL_CAST))]
 
 
 class VoteInput(BaseModel):
@@ -33,13 +33,13 @@ class VoteInput(BaseModel):
 async def get_vote_session(
     vote_session_id: int,
     votes: Votes,
-    principal: CurrentPrincipal,
+    caller: CurrentCaller,
 ) -> VoteSessionDetail:
     """Return aggregate vote state without exposing ballot identities."""
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
-    return VoteSessionDetail.from_domain(session, caller_account_id=principal.account_id)
+    return VoteSessionDetail.from_domain(session, caller_account_id=caller.account_id)
 
 
 @router.post(
@@ -53,13 +53,13 @@ async def cast_vote(
     vote: VoteInput,
     votes: Votes,
     vote_members: VoteMembers,
-    principal: UserVoter,
+    caller: UserVoter,
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
-    if principal.kind != "account" or principal.account_id is None or principal.discord_id is None:
+    if caller.kind != "account" or caller.account_id is None or caller.discord_id is None:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id).with_context(
+    if caller.consent_pending:
+        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id).with_context(
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )
@@ -68,13 +68,13 @@ async def cast_vote(
         raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
         raise AuthorizationError
-    actor = await vote_members.member(principal.account_id, principal.discord_id, vote.guild_id, session.kind)
+    actor = await vote_members.member(caller.account_id, caller.discord_id, vote.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
     result = await votes.cast_vote_by_session(vote_session_id, actor, vote.option_id)
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
-    return VoteSessionDetail.from_domain(result.session, caller_account_id=principal.account_id)
+    return VoteSessionDetail.from_domain(result.session, caller_account_id=caller.account_id)
 
 
 def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:

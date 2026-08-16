@@ -437,7 +437,7 @@ def test_idempotency_encryption_migration_purges_plaintext_replay_rows(
             connection.execute(
                 text(
                     "INSERT INTO idempotency_requests ("
-                    "id, principal, idempotency_key, request_fingerprint, method, route, state, "
+                    "id, caller, idempotency_key, request_fingerprint, method, route, state, "
                     "response_status, response_headers, response_body, completed_at, expires_at"
                     ") VALUES ("
                     "'11111111-1111-1111-1111-111111111111', 'account:1', 'legacy-secret', "

@@ -1,4 +1,8 @@
-"""Renderer-neutral submission form and synchronized-draft routes."""
+"""Submission form and synchronized-draft routes.
+
+The form describes fields and constraints; whether they become a Discord modal,
+an HTML form, or a CLI prompt is the client's decision.
+"""
 
 from dataclasses import dataclass
 from typing import Annotated, Protocol, cast
@@ -10,7 +14,7 @@ from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
@@ -137,10 +141,10 @@ class SubmissionFormRevisionNotFoundError(NotFoundError):
 
 
 async def authenticated_account(
-    principal: Annotated[Principal, Depends(current_principal)],
+    caller: Annotated[Caller, Depends(current_caller)],
 ) -> int:
     """Require a current human or player-bound account for draft access."""
-    return _submission_actor(principal).account_id
+    return _submission_actor(caller).account_id
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,38 +159,38 @@ class AuthenticatedSubmissionActor:
 
 
 async def authenticated_submission_actor(
-    principal: Annotated[Principal, Depends(current_principal)],
+    caller: Annotated[Caller, Depends(current_caller)],
 ) -> AuthenticatedSubmissionActor:
     """Resolve submission provenance without trusting a request-body origin."""
-    return _submission_actor(principal)
+    return _submission_actor(caller)
 
 
-def _submission_actor(principal: Principal) -> AuthenticatedSubmissionActor:
-    if principal.account_id is None or principal.kind not in {"account", "cli", "minecraft_player"}:
+def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
+    if caller.account_id is None or caller.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
-    if principal.kind == "account":
+    if caller.consent_pending:
+        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id)
+    if caller.kind == "account":
         origin = SubmissionOrigin.WEB
-    elif principal.kind == "cli":
-        if principal.cli_device_id is None or principal.cli_session_id is None:
+    elif caller.kind == "cli":
+        if caller.cli_device_id is None or caller.cli_session_id is None:
             raise AuthenticationError
         origin = SubmissionOrigin.CLI
-    elif principal.minecraft_origin is not None:
-        origin = SubmissionOrigin(principal.minecraft_origin)
+    elif caller.minecraft_origin is not None:
+        origin = SubmissionOrigin(caller.minecraft_origin)
     else:
         raise AuthenticationError
-    if principal.kind == "minecraft_player":
-        if principal.java_uuid is None or principal.grant_id is None:
+    if caller.kind == "minecraft_player":
+        if caller.java_uuid is None or caller.grant_id is None:
             raise AuthenticationError
-        if (origin is SubmissionOrigin.PAPER) != (principal.installation_id is not None):
+        if (origin is SubmissionOrigin.PAPER) != (caller.installation_id is not None):
             raise AuthenticationError
     return AuthenticatedSubmissionActor(
-        principal.account_id,
+        caller.account_id,
         origin,
-        java_uuid=principal.java_uuid,
-        installation_id=principal.installation_id,
-        grant_id=principal.grant_id,
+        java_uuid=caller.java_uuid,
+        installation_id=caller.installation_id,
+        grant_id=caller.grant_id,
     )
 
 

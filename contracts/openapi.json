@@ -16205,7 +16205,7 @@
           "categories"
         ],
         "title": "FormManifestResponse",
-        "description": "One immutable renderer-neutral submission form revision."
+        "description": "One immutable submission form revision, drawn however the client chooses."
       },
       "FormOptionSetResponse": {
         "properties": {
@@ -18891,7 +18891,7 @@
           "value"
         ],
         "title": "VisibilityRuleResponse",
-        "description": "A renderer-neutral condition controlling whether a field is shown."
+        "description": "A condition controlling whether a field is shown, evaluated by any client."
       },
       "VoteInput": {
         "properties": {

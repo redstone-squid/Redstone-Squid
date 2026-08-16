@@ -25,7 +25,7 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
     async def reserve(
         self,
         *,
-        principal: str,
+        caller: str,
         key: str,
         fingerprint: bytes,
         method: str,
@@ -34,7 +34,7 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         now: Instant,
     ) -> Reservation:
         del method, route, expires_at, now
-        identity = (principal, key)
+        identity = (caller, key)
         if existing := self.records.get(identity):
             return existing
         request = PendingRequest(uuid4())
@@ -120,12 +120,12 @@ def test_request_without_key_retains_normal_non_idempotent_behavior() -> None:
 
 
 @pytest.mark.asyncio
-async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_principal() -> None:
+async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller() -> None:
     service = IdempotencyService(MemoryIdempotencyRepository())
 
-    async def reserve_for(principal: str) -> PendingRequest | StoredResponse:
+    async def reserve_for(caller: str) -> PendingRequest | StoredResponse:
         return await service.reserve(
-            principal=principal,
+            caller=caller,
             key="concurrent-request",
             fingerprint=b"same-request",
             method="POST",
@@ -135,8 +135,8 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_princip
     first = await reserve_for("account:1")
     with pytest.raises(IdempotencyInProgressError):
         await reserve_for("account:1")
-    other_principal = await reserve_for("account:2")
+    other_caller = await reserve_for("account:2")
 
     assert isinstance(first, PendingRequest)
-    assert isinstance(other_principal, PendingRequest)
-    assert first.request_id != other_principal.request_id
+    assert isinstance(other_caller, PendingRequest)
+    assert first.request_id != other_caller.request_id

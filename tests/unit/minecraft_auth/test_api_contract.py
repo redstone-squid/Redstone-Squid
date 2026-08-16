@@ -13,7 +13,7 @@ from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import register_exception_handlers
-from squid.api.security import ANONYMOUS, Principal, current_principal
+from squid.api.security import ANONYMOUS, Caller, current_caller
 from squid.api.v1.minecraft_auth import (
     current_account_id,
     get_installation_service,
@@ -252,13 +252,13 @@ def app_with_fakes(
             raise AuthenticationError
         return ACCOUNT_ID
 
-    async def principal_dependency() -> Principal:
-        return Principal(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
+    async def caller_dependency() -> Caller:
+        return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
     app.dependency_overrides[get_installation_service] = installation_dependency
     app.dependency_overrides[get_player_authorization_service] = player_dependency
     app.dependency_overrides[current_account_id] = account_dependency
-    app.dependency_overrides[current_principal] = principal_dependency
+    app.dependency_overrides[current_caller] = caller_dependency
     return app
 
 
@@ -416,11 +416,11 @@ async def test_one_time_device_responses_use_server_derived_idempotency_namespac
 
     assert paper.status_code == 201
     assert fabric.status_code == 201
-    assert idempotency.reservations[0]["principal"] == f"minecraft-installation:{INSTALLATION_ID}:1"
-    fabric_principal = idempotency.reservations[1]["principal"]
-    assert isinstance(fabric_principal, str)
-    assert fabric_principal.startswith("minecraft-fabric:")
-    assert "127.0.0.1" not in fabric_principal
+    assert idempotency.reservations[0]["caller"] == f"minecraft-installation:{INSTALLATION_ID}:1"
+    fabric_caller = idempotency.reservations[1]["caller"]
+    assert isinstance(fabric_caller, str)
+    assert fabric_caller.startswith("minecraft-fabric:")
+    assert "127.0.0.1" not in fabric_caller
 
 
 async def test_paper_endpoints_require_both_installation_headers() -> None:
@@ -456,7 +456,7 @@ async def test_authorization_errors_map_to_stable_problem_context_without_secret
 async def test_account_dependency_rejects_services_and_stale_consent() -> None:
     with pytest.raises(AuthenticationError):
         await current_account_id(ANONYMOUS)
-    principal = Principal(
+    caller = Caller(
         kind="account",
         subject="account:42",
         account_id=ACCOUNT_ID,
@@ -465,4 +465,4 @@ async def test_account_dependency_rejects_services_and_stale_consent() -> None:
     )
 
     with pytest.raises(ConsentRequiredError):
-        await current_account_id(principal)
+        await current_account_id(caller)

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.api.security import Principal
+from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote
 from squid.core.errors import AuthenticationError, ValidationError
 from squid.runtime import ApiServices
@@ -19,8 +19,8 @@ def snapshot() -> VoteSessionSnapshot:
     return build_snapshot()
 
 
-def account(subject: str = "account:1") -> Principal:
-    return Principal(
+def account(subject: str = "account:1") -> Caller:
+    return Caller(
         kind="account",
         subject=subject,
         nodes=credential_nodes("vote.poll.cast"),
@@ -55,7 +55,7 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
 
 @pytest.mark.asyncio
 async def test_service_credentials_cannot_cast_ballots() -> None:
-    service = Principal(kind="service", subject="api-key:test", nodes=credential_nodes("vote.poll.cast"))
+    service = Caller(kind="service", subject="api-key:test", nodes=credential_nodes("vote.poll.cast"))
 
     with pytest.raises(AuthenticationError):
         await cast_vote(

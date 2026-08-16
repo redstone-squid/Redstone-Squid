@@ -43,7 +43,7 @@ def _fold_from_name(context: DefaultExecutionContext) -> str:
 
 
 class Account(Base):
-    """An internal principal independent of every external identity provider."""
+    """An internal caller independent of every external identity provider."""
 
     __tablename__ = "accounts"
     __table_args__ = (
