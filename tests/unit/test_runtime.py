@@ -15,7 +15,7 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
     bot = {field.name for field in fields(BotServices)}
     worker = {field.name for field in fields(WorkerServices)}
 
-    assert api.isdisjoint({"build_inference", "discord_sync", "domain_events", "search_embeddings"})
+    assert api.isdisjoint({"build_inference", "discord_reconciliation", "domain_events", "search_embeddings"})
     assert bot.isdisjoint(
         {"api_keys", "web_auth", "cli_authorization", "vote_members", "search_embeddings", "schematic_jobs"}
     )

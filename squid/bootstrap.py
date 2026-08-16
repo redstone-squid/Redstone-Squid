@@ -120,7 +120,7 @@ from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
 from squid.suggestions.infrastructure.catalogue import build_registry as build_suggestion_registry
-from squid.sync import DiscordSyncService
+from squid.sync import DiscordReconciliationService
 from squid.sync.infrastructure import PostgresDiscordSyncQueue
 from squid.tags.application import TagService
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
@@ -659,7 +659,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
-        discord_sync=DiscordSyncService(PostgresDiscordSyncQueue(db.async_session)),
+        discord_reconciliation=DiscordReconciliationService(PostgresDiscordSyncQueue(db.async_session)),
         domain_events=DomainEventService(PostgresDomainEventRepository(db.async_session)),
         notifications=graph.notifications,
         redstoner=RedstonerService(
