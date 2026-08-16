@@ -1,4 +1,4 @@
-"""SQLAlchemy provider-neutral account models."""
+"""SQLAlchemy account models, keyed by account rather than by identity provider."""
 
 import uuid
 

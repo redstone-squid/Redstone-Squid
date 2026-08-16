@@ -1,4 +1,4 @@
-"""Transport-neutral suggestion requests and results.
+"""Suggestion requests and results, answered the same way for the bot and the API.
 
 A suggestion is one candidate completion offered while a user is still typing, on any surface:
 a Discord autocomplete choice, an HTTP typeahead entry, or a Brigadier completion. Every surface

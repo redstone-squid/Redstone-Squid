@@ -175,7 +175,7 @@ class VoteService:
         actor: VoteActor,
         option_id: str,
     ) -> CastVoteResult:
-        """Cast a vote using transport-neutral session and option identifiers."""
+        """Cast a vote using stable session and option identifiers, not Discord ones."""
         snapshot = await self._repository.get_by_id(vote_session_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)

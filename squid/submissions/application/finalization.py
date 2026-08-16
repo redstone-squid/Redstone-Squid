@@ -1,4 +1,4 @@
-"""Durable, transport-neutral submission finalization orchestration."""
+"""Durable submission finalization, driven the same way by the bot and the API."""
 
 import logging
 import re

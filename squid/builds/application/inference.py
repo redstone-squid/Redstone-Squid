@@ -1,4 +1,4 @@
-"""Framework-neutral inference of build submissions from contextual message bundles."""
+"""Infer build submissions from contextual message bundles, naming no chat client."""
 
 import logging
 from collections.abc import Awaitable, Sequence

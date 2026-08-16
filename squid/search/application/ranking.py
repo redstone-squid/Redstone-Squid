@@ -1,4 +1,4 @@
-"""Persistence-neutral ranking helpers."""
+"""Ranking helpers that mention no table, column, or index."""
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence

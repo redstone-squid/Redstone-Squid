@@ -737,7 +737,7 @@ export type CliSessionExchangeRequest = {
 /**
  * ControlKind
  *
- * Small renderer-neutral set of supported form controls.
+ * The small set of controls every client knows how to draw.
  */
 export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
 
