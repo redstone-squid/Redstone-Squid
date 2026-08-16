@@ -305,8 +305,8 @@ Subplans 3 and 4 touch the same module and should land together, ahead of 5, whi
 
 ## Validation
 
-- Focused modules while developing, with `--no-cov`; changed-file Ruff and BasedPyright afterwards,
-  plus `git diff --check`.
+- Focused modules while developing, with `--no-cov`; changed-file Ruff and `just typecheck`
+  (pyrefly) afterwards, plus `git diff --check`.
 - `tests/architecture/test_import_surfaces.py` and `test_boundaries.py` after the
   `squid/api/errors.py` revert.
 - `tests/integration/observability/test_traces.py` needs the observability extra, and the worker
