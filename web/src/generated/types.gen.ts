@@ -1357,7 +1357,7 @@ export type FormFieldResponse = {
 /**
  * FormManifestResponse
  *
- * One immutable renderer-neutral submission form revision.
+ * One immutable submission form revision, drawn however the client chooses.
  */
 export type FormManifestResponse = {
     /**
@@ -2828,7 +2828,7 @@ export type VisibilityOperator = 'equals' | 'not_equals' | 'in';
 /**
  * VisibilityRuleResponse
  *
- * A renderer-neutral condition controlling whether a field is shown.
+ * A condition controlling whether a field is shown, evaluated by any client.
  */
 export type VisibilityRuleResponse = {
     /**

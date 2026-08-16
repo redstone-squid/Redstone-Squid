@@ -114,7 +114,7 @@ class AccountConsent:
 
 @dataclass(frozen=True, slots=True)
 class Account:
-    """One internal principal with any number of verified external identities."""
+    """One internal caller with any number of verified external identities."""
 
     identities: tuple[AccountIdentity, ...] = ()
     consent: AccountConsent | None = None
