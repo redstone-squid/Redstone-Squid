@@ -195,3 +195,20 @@ later), send the confirmation view as a followup instead of via `response.send_m
 replace the final `edit_layout(interaction.message, ...)` with
 `interaction.edit_original_response(view=success, ...)`, which edits the original (possibly
 ephemeral) message through the interaction webhook instead of the bot-token channel endpoint.
+
+## `api` service's host port in `compose.yml` is not changeable
+
+Every other service that publishes a port lets it be overridden via an env var (`db` uses
+`${SQUID_DB_PORT:-5432}`, `pgweb` uses `${SQUID_PGWEB_PORT:-8081}`), but the `api` service's port
+mapping is hardcoded.
+
+**Root cause**
+
+- `api.ports` (`compose.yml:33-34`) is `- "8000:8000"` — a literal, not an interpolated variable —
+  so there's no way to change the host port without editing `compose.yml` directly, which breaks
+  down as soon as port 8000 is already taken on the host.
+
+**Suggested direction**
+
+Follow the same pattern as `db`/`pgweb`: introduce a `SQUID_API_PORT` env var (default `8000`) and
+use it for the host side of the mapping, e.g. `"${SQUID_API_PORT:-8000}:8000"`.
