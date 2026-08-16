@@ -214,6 +214,12 @@ class AliasClaim:
     created_at: Instant
     resolved_at: Instant | None = None
     resolved_by_account_id: int | None = None
+    claimant: "Account | None" = None
+    """The claiming account, when the caller asked for it.
+
+    Present so a staff queue can name a claimant as something better than an internal ID,
+    without every claim read paying for the join.
+    """
 
 
 @dataclass(frozen=True, slots=True)

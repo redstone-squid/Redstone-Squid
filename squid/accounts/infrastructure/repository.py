@@ -77,7 +77,7 @@ def _to_alias(alias: CreatorAliasModel, public_creator_id: uuid.UUID | None = No
     )
 
 
-def _to_claim(claim: CreatorAliasClaimModel, alias_name: str) -> AliasClaim:
+def _to_claim(claim: CreatorAliasClaimModel, alias_name: str, claimant: Account | None = None) -> AliasClaim:
     return AliasClaim(
         id=claim.id,
         alias_id=claim.alias_id,
@@ -87,6 +87,7 @@ def _to_claim(claim: CreatorAliasClaimModel, alias_name: str) -> AliasClaim:
         created_at=claim.created_at,
         resolved_at=claim.resolved_at,
         resolved_by_account_id=claim.resolved_by_account_id,
+        claimant=claimant,
     )
 
 
@@ -113,9 +114,10 @@ class AccountRepository:
             await session.flush()
             rows = [self._identity_model(account.id, identity) for identity in identities]
             session.add_all(rows)
+            # The flush populates `id` from RETURNING, and every other column `_to_identity`
+            # reads was set here, so the per-row refresh this used to do bought one round trip
+            # each for values already in hand.
             await session.flush()
-            for row in rows:
-                await session.refresh(row)
             return _to_account(account, sorted(rows, key=lambda row: (row.provider, row.id)))
 
     async def get_by_id(self, account_id: int) -> Account | None:
@@ -123,6 +125,22 @@ class AccountRepository:
         async with self._session_factory() as session:
             model = await session.get(AccountModel, account_id)
             return None if model is None else await self._load_account(session, model)
+
+    async def get_many(self, account_ids: Sequence[int]) -> dict[int, Account]:
+        """Return several accounts, with their identities, in two queries regardless of count.
+
+        Anything presenting a list of accounts — the staff claim queue, for one — needs this
+        rather than a `get_by_id` per row.
+        """
+        if not account_ids:
+            return {}
+        async with self._session_factory() as session:
+            models = (
+                await session.scalars(
+                    select(AccountModel).where(AccountModel.id.in_(set(account_ids))).order_by(AccountModel.id)
+                )
+            ).all()
+            return await self._load_accounts(session, models)
 
     async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         """Return the account holding one canonical provider subject."""
@@ -323,8 +341,13 @@ class AccountRepository:
             ).one_or_none()
             return None if row is None else _to_claim(row[0], row[1])
 
-    async def pending_claims(self) -> Sequence[AliasClaim]:
-        """List claims awaiting staff review, oldest first."""
+    async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        """List claims awaiting staff review, oldest first.
+
+        *with_claimants* loads every claimant's account in the same two extra queries no
+        matter how long the queue is, which is what presenting a claimant as anything better
+        than an internal account ID needs.
+        """
         async with self._session_factory() as session:
             rows = (
                 await session.execute(
@@ -334,7 +357,17 @@ class AccountRepository:
                     .order_by(CreatorAliasClaimModel.created_at)
                 )
             ).all()
-            return tuple(_to_claim(claim, name) for claim, name in rows)
+            claimants: dict[int, Account] = {}
+            if with_claimants and rows:
+                models = (
+                    await session.scalars(
+                        select(AccountModel)
+                        .where(AccountModel.id.in_({claim.account_id for claim, _ in rows}))
+                        .order_by(AccountModel.id)
+                    )
+                ).all()
+                claimants = await self._load_accounts(session, models)
+            return tuple(_to_claim(claim, name, claimants.get(claim.account_id)) for claim, name in rows)
 
     async def resolve_claim(
         self,
@@ -626,7 +659,10 @@ class AccountRepository:
             provider=identity.provider,
             subject=identity.subject,
             display_name=identity.display_name,
-            verified_at=identity.verified_at or Instant.now(),
+            # Floored to the precision the column actually keeps. `Instant.now()` carries
+            # nanoseconds and `timestamptz` carries microseconds, so an unfloored value would
+            # make the returned object disagree with the row it just wrote, by up to 999ns.
+            verified_at=(identity.verified_at or Instant.now()).round("microsecond", mode="floor"),
         )
 
     @staticmethod
@@ -646,16 +682,33 @@ class AccountRepository:
             statement = statement.with_for_update(of=AccountModel)
         return await session.scalar(statement)
 
+    @classmethod
+    async def _load_account(cls, session: AsyncSession, account: AccountModel) -> Account:
+        loaded = await cls._load_accounts(session, [account])
+        return loaded[account.id]
+
     @staticmethod
-    async def _load_account(session: AsyncSession, account: AccountModel) -> Account:
+    async def _load_accounts(session: AsyncSession, accounts: Sequence[AccountModel]) -> dict[int, Account]:
+        """Load identities for several accounts in one query.
+
+        The mapping stays explicit — the domain objects are frozen dataclasses and must not
+        learn about SQLAlchemy — but the *fetch* does not have to be per row, which is what
+        made any multi-account read an N+1.
+        """
+        if not accounts:
+            return {}
+        account_ids = [account.id for account in accounts]
         identities = (
             await session.scalars(
                 select(AccountIdentityModel)
-                .where(AccountIdentityModel.account_id == account.id)
+                .where(AccountIdentityModel.account_id.in_(account_ids))
                 .order_by(AccountIdentityModel.provider, AccountIdentityModel.id)
             )
         ).all()
-        return _to_account(account, identities)
+        grouped: dict[int, list[AccountIdentityModel]] = {account_id: [] for account_id in account_ids}
+        for identity in identities:
+            grouped[identity.account_id].append(identity)
+        return {account.id: _to_account(account, grouped[account.id]) for account in accounts}
 
     @staticmethod
     async def _merge_references(session: AsyncSession, survivor: int, absorbed: int) -> None:
