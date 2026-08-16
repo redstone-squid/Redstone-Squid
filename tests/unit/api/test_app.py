@@ -1,5 +1,7 @@
 """HTTP API transport tests."""
 
+import re
+
 import httpx
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -211,11 +213,8 @@ async def test_verify_handler_depends_on_accounts_capability(mocker: MockerFixtu
     accounts.generate_verification_code.assert_awaited_once_with(TEST_UUID)
 
 
-def test_internal_error_is_redacted_and_correlated(
-    app_factory: tuple[FastAPI, MockDatabaseManager], mocker: MockerFixture
-) -> None:
+def test_internal_error_is_redacted_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
     app, _database = app_factory
-    mocker.patch("squid.api.errors.correlation_id", return_value="a" * 32)
 
     @app.get("/boom")
     async def boom() -> None:
@@ -226,15 +225,15 @@ def test_internal_error_is_redacted_and_correlated(
         )
 
     with TestClient(app, raise_server_exceptions=False) as internal_client:
-        response = internal_client.get("/boom")
+        response = internal_client.get("/boom", headers={"Request-Id": "a" * 32})
 
     assert response.status_code == 500
     assert response.json()["detail"] == "An internal server error occurred."
     assert response.json()["code"] == ErrorCode.INTERNAL_ERROR
     assert "Sensitive" not in response.text
     assert "secret" not in response.text
-    assert response.json()["error_id"] == response.headers["X-Error-ID"]
-    assert response.json()["error_id"] == "a" * 32
+    assert "error_id" not in response.json()
+    assert response.headers["Request-Id"] == "a" * 32
 
 
 def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
@@ -256,7 +255,28 @@ def test_service_unavailable_is_safe_and_correlated(app_factory: tuple[FastAPI, 
     assert response.json()["resource"] == "minecraft_account"
     assert "sensitive" not in response.text
     assert "secret" not in response.text
-    assert response.json()["error_id"] == response.headers["X-Error-ID"]
+    assert "error_id" not in response.json()
+    assert re.fullmatch(r"[A-Za-z0-9._-]{8,128}", response.headers["Request-Id"])
+
+
+def test_unhandled_exception_still_carries_request_id(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
+    """A bare exception renders in ServerErrorMiddleware, outside the correlation middleware.
+
+    The 500 response must still carry a Request-Id -- proving the exception path's explicit
+    header emission and the middleware's skip-unbind-on-raise both hold.
+    """
+    app, _database = app_factory
+
+    @app.get("/unhandled")
+    async def unhandled() -> None:
+        raise RuntimeError("boom")
+
+    with TestClient(app, raise_server_exceptions=False) as internal_client:
+        response = internal_client.get("/unhandled", headers={"Request-Id": "b" * 32})
+
+    assert response.status_code == 500
+    assert "error_id" not in response.json()
+    assert response.headers["Request-Id"] == "b" * 32
 
 
 def test_build_revision_errors_use_http_preconditions(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:

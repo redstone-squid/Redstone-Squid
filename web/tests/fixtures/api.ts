@@ -156,9 +156,15 @@ function problem(request: Request, status: number, code: string): Response {
     status,
     detail: chinese ? "请检查搜索语法后重试。" : "Check the search syntax and try again.",
     code: code as ProblemDetail["code"],
-    error_id: "fixture-error-001",
   };
-  return json(body, status, "application/problem+json");
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/problem+json",
+      "Cache-Control": "no-store",
+      "Request-Id": "fixture-error-001",
+    },
+  });
 }
 
 function buildPage(url: URL): PageBuildSummary {
