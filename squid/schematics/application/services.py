@@ -401,6 +401,17 @@ class SchematicService:
             png=png,
         )
 
+    def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
+        """Say why this attachment will never be previewed, or `None` if it is eligible.
+
+        Pure and free on purpose. A moderator asking what the bot knows about a build must not
+        set a GPU render going, so this answers from configuration and the stored analysis
+        alone — it cannot report the cache, the resource pack, or the renderer's own health.
+        """
+        if not self._render_enabled:
+            return RenderSkipReason.RENDERING_DISABLED
+        return self._render_skip_reason(stored)
+
     async def _render_resources(self) -> tuple[bytes, str]:
         """Acquire the capability and resource pack a render needs, or refuse operationally."""
         if self._resource_pack is None or not self._available:
