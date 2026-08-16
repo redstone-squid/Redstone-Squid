@@ -35,7 +35,7 @@ from squid.builds.domain import (
 )
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, IntEnumSmallInt
 
 if TYPE_CHECKING:
     from squid.tags.infrastructure.models import BuildTagAssignment
@@ -103,7 +103,7 @@ class Build(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
-    submission_status: Mapped[Status] = mapped_column(SmallInteger, nullable=False)
+    submission_status: Mapped[Status] = mapped_column(IntEnumSmallInt(Status), nullable=False)
     record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text)
     width: Mapped[int | None] = mapped_column(Integer)
     height: Mapped[int | None] = mapped_column(Integer)
@@ -365,4 +365,4 @@ class BuildEditHistory(Base):
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now, init=False
     )
-    version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    version: Mapped[int] = mapped_column(IntEnumSmallInt(Status), nullable=False)
