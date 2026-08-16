@@ -17,26 +17,37 @@ from squid.api.pagination import (
     render_page,
     resolve_selector,
 )
+from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.security import Principal, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
-from squid.api.v1.schemas.me import UserMe
+from squid.api.v1.schemas.me import MinecraftIdentityRefresh, UserMe
 from squid.builds.domain import Status
 from squid.core.errors import AuthenticationError
-from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ
+from squid.permissions.domain.catalogue import (
+    ACCOUNT_IDENTITY_REFRESH,
+    ACCOUNT_IDENTITY_REFRESH_ANY,
+    ACCOUNT_SELF_READ,
+)
 
 router = APIRouter(prefix="/users/me", tags=["users"])
+accounts_router = APIRouter(prefix="/accounts", tags=["users"])
 UserPrincipal = Annotated[Principal, Depends(requires(ACCOUNT_SELF_READ))]
+RefreshPrincipal = Annotated[Principal, Depends(requires(ACCOUNT_IDENTITY_REFRESH))]
 _ALL_STATUSES = frozenset(Status)
 
 
 @router.get("", response_model=UserMe, responses=responses(401, 403, 404, 503))
 async def get_me(accounts: Accounts, principal: UserPrincipal) -> UserMe:
-    """Return the authenticated user's own linked account."""
-    if principal.kind != "account" or principal.discord_id is None:
+    """Return the authenticated user's own linked account.
+
+    Keyed on `account_id`, not `discord_id`: a CLI device and a Minecraft player both carry a
+    perfectly good account and no Discord identity, and used to be refused their own account.
+    """
+    if principal.account_id is None:
         raise AuthenticationError
-    account = await accounts.get_account(principal.discord_id)
+    account = await accounts.get_account_by_id(principal.account_id)
     if account is None:
-        raise AccountNotFoundError(discord_id=principal.discord_id)
+        raise AccountNotFoundError(principal.account_id)
     return UserMe.from_domain(account, consent_pending=principal.consent_pending)
 
 
@@ -48,10 +59,41 @@ async def get_me(accounts: Accounts, principal: UserPrincipal) -> UserMe:
 )
 async def grant_consent(accounts: Accounts, principal: UserPrincipal) -> UserMe:
     """Accept the current privacy notice for future writes."""
-    if principal.kind != "account" or principal.discord_id is None:
+    if principal.account_id is None:
         raise AuthenticationError
-    account = await accounts.grant_current_consent(principal.discord_id)
+    account = await accounts.grant_current_consent_for_account(principal.account_id)
     return UserMe.from_domain(account, consent_pending=False)
+
+
+@router.post(
+    "/minecraft/refresh",
+    response_model=MinecraftIdentityRefresh,
+    responses=responses(401, 403, 404, 409, 503),
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+)
+async def refresh_minecraft_identity(accounts: Accounts, principal: RefreshPrincipal) -> MinecraftIdentityRefresh:
+    """Re-read the caller's linked Minecraft name and reconcile the creator credit.
+
+    Rate limited and idempotency-gated because it reaches Mojang on every call.
+    """
+    if principal.account_id is None:
+        raise AuthenticationError
+    return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(principal.account_id))
+
+
+@accounts_router.post(
+    "/{account_id}/minecraft/refresh",
+    response_model=MinecraftIdentityRefresh,
+    responses=responses(401, 403, 404, 409, 503),
+    dependencies=[
+        Depends(requires(ACCOUNT_IDENTITY_REFRESH_ANY)),
+        Depends(enforce_route_rate_limits),
+        Depends(enforce_request_idempotency),
+    ],
+)
+async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) -> MinecraftIdentityRefresh:
+    """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
+    return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(account_id))
 
 
 @router.get("/builds", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))

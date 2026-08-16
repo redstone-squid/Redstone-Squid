@@ -123,6 +123,20 @@ class ClaimNotFoundError(NotFoundError):
         self.claim_id = claim_id
 
 
+class NoLinkedMinecraftAccountError(NotFoundError):
+    """The account has no Java identity to refresh."""
+
+    default_message = _("You do not have a Minecraft account linked.")
+    default_title = _("No Minecraft account linked")
+    default_code = ErrorCode.MINECRAFT_ACCOUNT_NOT_FOUND
+    default_resource = "account_identity"
+    default_end_user_action = _("Link a Minecraft account first, then try again.")
+
+    def __init__(self, *, account_id: int | None = None) -> None:
+        super().__init__(context={} if account_id is None else {"account_id": account_id})
+        self.account_id = account_id
+
+
 class MinecraftAccountNotFoundError(NotFoundError):
     """A Minecraft UUID does not identify an account."""
 
