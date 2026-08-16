@@ -18,6 +18,18 @@ from squid.config import OAuthConfig, UpstreamHttpConfig
 from squid.core.errors import AuthenticationError, ServiceUnavailableError, ValidationError
 
 
+def hash_web_session_token(pepper: bytes, token: str) -> bytes:
+    """Return the digest stored for an opaque web-session token.
+
+    Exported so test fixtures seeding `web_sessions` reuse the construction
+    instead of re-deriving it. `docs/credential-hashing.md` records why a keyed
+    SHA-256 is right for a `token_urlsafe(32)` secret and why a password KDF is
+    not.
+    """
+    # codeql[py/weak-sensitive-data-hashing]
+    return hmac.digest(pepper, token.encode(), hashlib.sha256)  # 256-bit random session token
+
+
 class WebSessionRepository(Protocol):
     """Persistence required for OAuth state and opaque sessions."""
 
@@ -142,7 +154,7 @@ class DiscordOAuthService:
         await self._repository.revoke(self.hash_token(token), now=self._now())
 
     def hash_token(self, token: str) -> bytes:
-        return hmac.digest(self._pepper, token.encode(), hashlib.sha256)
+        return hash_web_session_token(self._pepper, token)
 
     async def aclose(self) -> None:
         if self._owns_client:

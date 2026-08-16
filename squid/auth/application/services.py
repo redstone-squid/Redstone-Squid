@@ -19,6 +19,20 @@ API_KEY_SECRET_BYTES = 32
 LAST_USED_WRITE_INTERVAL_SECONDS = 60
 
 
+def hash_api_key_secret(pepper: bytes, secret: str) -> bytes:
+    """Return the digest stored for an API-key secret.
+
+    Exported so nothing re-derives the construction by hand; test fixtures that
+    seed `api_keys` rows call this rather than repeating the `hmac.digest` line.
+    See `docs/credential-hashing.md` for why a keyed SHA-256 rather than a
+    password KDF: the secret is 32 CSPRNG bytes, so there is no low-entropy
+    input space for a work factor to protect, and a KDF here would be reachable
+    per-request by anyone who has seen a key ID.
+    """
+    # codeql[py/weak-sensitive-data-hashing]
+    return hmac.digest(pepper, secret.encode(), hashlib.sha256)  # 256-bit random secret, not a password
+
+
 class ApiKeyService:
     """Issue and verify high-entropy service credentials."""
 
@@ -90,7 +104,11 @@ class ApiKeyService:
                 raise AuthorizationError(msg, public_context={"pattern": pattern, "node": missing[0]})
 
     async def authenticate(self, token: str, *, used_ip: str | None = None) -> ApiKey | None:
-        """Return the active key matching *token*, or ``None`` for invalid credentials."""
+        """Return the active key matching *token*, or ``None`` for invalid credentials.
+
+        Revocation and expiry are checked only after the digest matches, so a
+        revoked key and a wrong secret are indistinguishable to the caller.
+        """
         parsed = self._parse_token(token)
         if parsed is None:
             return None
@@ -112,7 +130,7 @@ class ApiKeyService:
 
     def hash_secret(self, secret: str) -> bytes:
         """Return the keyed digest stored for a credential secret."""
-        return hmac.digest(self._pepper, secret.encode(), hashlib.sha256)
+        return hash_api_key_secret(self._pepper, secret)
 
     def _urlsafe_token(self, size: int) -> str:
         return base64.urlsafe_b64encode(self._token_bytes(size)).rstrip(b"=").decode()

@@ -17,6 +17,8 @@ from psycopg2 import sql
 from psycopg2.extensions import connection as PsycopgConnection
 from sqlalchemy import URL
 
+from squid.auth.application.services import hash_api_key_secret
+from squid.auth.application.web import hash_web_session_token
 from tests.fuzz.api.environment import RunIdentity, SeededIds, SyntheticSecrets, UnsafeEnvironmentError
 
 POSTGRES_USER = "postgres"
@@ -317,7 +319,7 @@ class DatabaseController:
                     (
                         (
                             session_id,
-                            hmac.digest(self.secrets.session_pepper.encode(), token.encode(), hashlib.sha256),
+                            hash_web_session_token(self.secrets.session_pepper.encode(), token),
                             account_id,
                             discord_id,
                         )
@@ -330,10 +332,9 @@ class DatabaseController:
                     "VALUES (2001, %s, %s, 'API fuzz service', %s, %s, %s, '2026-08-04T00:00:00Z')",
                     (
                         self.secrets.service_api_key_id,
-                        hmac.digest(
+                        hash_api_key_secret(
                             self.secrets.api_key_pepper.encode(),
-                            self.secrets.service_api_key_secret.encode(),
-                            hashlib.sha256,
+                            self.secrets.service_api_key_secret,
                         ),
                         [
                             "build.submission.read",
