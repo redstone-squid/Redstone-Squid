@@ -19,6 +19,7 @@ from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.cli_auth import CliAuthorizationService
 from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.diagnostics.application import ErrorReportService
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -63,6 +64,7 @@ class ApiServices:
     """Capabilities exposed by the HTTP API process."""
 
     builds: BuildService
+    error_reports: ErrorReportService
     api_keys: ApiKeyService | None
     web_auth: WebSessionService | None
     cli_authorization: CliAuthorizationService | None
@@ -93,6 +95,7 @@ class BotServices:
     """Capabilities exposed to Discord gateway features."""
 
     builds: BuildService
+    error_reports: ErrorReportService
     build_inference: BuildInferenceService
     restrictions: RestrictionService
     build_queries: BuildQueryService
@@ -124,6 +127,7 @@ class WorkerServices:
     """Capabilities exposed to background jobs, which serve no request."""
 
     builds: BuildService
+    error_reports: ErrorReportService
     artifacts: ArtifactStore
     votes: VoteService
     records: RecordComputationService
