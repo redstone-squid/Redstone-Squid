@@ -21,6 +21,7 @@ from squid.accounts.domain import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
+    IdentityRefresh,
     fold_creator_name,
 )
 from squid.accounts.errors import (
@@ -28,6 +29,7 @@ from squid.accounts.errors import (
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
     CreatorAliasNotFoundError,
+    MinecraftAccountNotFoundError,
 )
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
@@ -334,8 +336,21 @@ class AccountRepository:
             ).all()
             return tuple(_to_claim(claim, name) for claim, name in rows)
 
-    async def resolve_claim(self, *, claim_id: int, status: ClaimStatus, resolved_by_account_id: int) -> AliasClaim:
-        """Approve or reject a pending claim."""
+    async def resolve_claim(
+        self,
+        *,
+        claim_id: int,
+        status: ClaimStatus,
+        resolved_by_account_id: int,
+        reassign: bool = False,
+    ) -> AliasClaim:
+        """Approve or reject a pending claim.
+
+        Approving a name that is already credited to someone else is refused unless *reassign*
+        is set. A rename into a contested name opens exactly such a claim, so staff need a way
+        to move the credit — but moving it is a deliberate act, never a side effect of routine
+        approval.
+        """
         async with self._session_factory.begin() as session:
             claim = await session.get(CreatorAliasClaimModel, claim_id, with_for_update=True)
             if claim is None or claim.status != ClaimStatus.PENDING:
@@ -344,7 +359,7 @@ class AccountRepository:
             if alias is None:
                 raise ClaimNotFoundError(claim_id)
             if status is ClaimStatus.APPROVED:
-                if alias.account_id is not None:
+                if alias.account_id is not None and not (reassign and alias.account_id != claim.account_id):
                     raise AliasAlreadyClaimedError(alias.name)
                 alias.account_id = claim.account_id
                 alias.claimed_at = Instant.now()
@@ -413,6 +428,7 @@ class AccountRepository:
                         discord_account.id, AccountIdentity.discord(discord_id, verified_at=Instant.now())
                     )
                 )
+            previous_name = None
             if existing_java is None:
                 session.add(
                     self._identity_model(
@@ -425,30 +441,158 @@ class AccountRepository:
                     )
                 )
             else:
+                previous_name = existing_java.display_name
                 existing_java.display_name = verification_code.username
                 existing_java.verified_at = Instant.now()
             discord_account.consent_version = consent.version
             discord_account.consented_at = consent.granted_at
             verification_code.valid = False
 
-            alias = await session.scalar(
-                update(CreatorAliasModel)
-                .where(
-                    CreatorAliasModel.normalized_name == fold_creator_name(verification_code.username),
-                    CreatorAliasModel.account_id.is_(None),
-                )
-                .values(
-                    account_id=discord_account.id,
-                    claimed_at=Instant.now(),
-                    claim_method=ClaimMethod.VERIFIED_IGN,
-                )
-                .returning(CreatorAliasModel)
+            refresh = await self._reconcile_java_name(
+                session,
+                account=discord_account,
+                java_uuid=verification_code.minecraft_uuid,
+                username=verification_code.username,
+                previous_name=previous_name,
             )
             await session.flush()
             return VerificationLinkResult(
                 account=await self._load_account(session, discord_account),
-                claimed_alias=(None if alias is None else _to_alias(alias, discord_account.public_creator_id)),
+                claimed_alias=refresh.claimed_alias,
+                refresh=refresh,
             )
+
+    async def refresh_java_identity(
+        self,
+        *,
+        account_id: int,
+        java_uuid: uuid.UUID,
+        username: str,
+    ) -> IdentityRefresh:
+        """Record a freshly observed Java name and reconcile the creator credit that follows it.
+
+        Runs the same reconciliation the link path does, so a rename is handled identically
+        whether it is noticed during linking or by an explicit refresh.
+        """
+        async with self._session_factory.begin() as session:
+            account = await session.get(AccountModel, account_id, with_for_update=True)
+            if account is None:
+                raise AccountNotFoundError(account_id)
+            identity = await session.scalar(
+                select(AccountIdentityModel)
+                .where(
+                    AccountIdentityModel.account_id == account_id,
+                    AccountIdentityModel.provider == IdentityProvider.JAVA,
+                    AccountIdentityModel.subject == str(java_uuid),
+                )
+                .with_for_update()
+            )
+            if identity is None:
+                raise MinecraftAccountNotFoundError(java_uuid)
+            previous_name = identity.display_name
+            identity.display_name = username
+            identity.verified_at = Instant.now()
+            return await self._reconcile_java_name(
+                session,
+                account=account,
+                java_uuid=java_uuid,
+                username=username,
+                previous_name=previous_name,
+            )
+
+    @staticmethod
+    async def _reconcile_java_name(
+        session: AsyncSession,
+        *,
+        account: AccountModel,
+        java_uuid: uuid.UUID,
+        username: str,
+        previous_name: str | None,
+    ) -> IdentityRefresh:
+        """Attach the verified name's creator credit, without ever taking one from someone else.
+
+        The four cases are exhaustive by design, so a rename can never fall through into
+        "nothing happened": the name is unknown, free, already ours, or someone else's. Only
+        the last needs a human, and it gets a pending claim rather than a silent no-op.
+
+        Aliases claimed under previous names are deliberately left attached. A rename does not
+        retract the credit for work published under the old name.
+        """
+        folded = fold_creator_name(username)
+        claimed: CreatorAlias | None = None
+        contested: CreatorAlias | None = None
+        opened_claim: AliasClaim | None = None
+
+        alias = await session.scalar(
+            select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == folded).with_for_update()
+        )
+        if alias is None:
+            # No build has credited this name yet. Create it so the public profile shows the
+            # current name rather than lagging until someone happens to credit it.
+            inserted = await session.scalar(
+                insert(CreatorAliasModel)
+                .values(
+                    name=username,
+                    account_id=account.id,
+                    claimed_at=Instant.now(),
+                    claim_method=ClaimMethod.VERIFIED_IGN,
+                )
+                .on_conflict_do_nothing(index_elements=[CreatorAliasModel.normalized_name])
+                .returning(CreatorAliasModel)
+            )
+            alias = inserted or await session.scalar(
+                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == folded).with_for_update()
+            )
+            assert alias is not None
+        if alias.account_id is None:
+            alias.account_id = account.id
+            alias.claimed_at = Instant.now()
+            alias.claim_method = ClaimMethod.VERIFIED_IGN
+            claimed = _to_alias(alias, account.public_creator_id)
+        elif alias.account_id == account.id:
+            claimed = _to_alias(alias, account.public_creator_id)
+        else:
+            # Someone else is credited under this name. Never transfer on a rename; open a
+            # claim so it lands in the staff queue instead of vanishing.
+            contested = _to_alias(alias)
+            claim = await session.scalar(
+                insert(CreatorAliasClaimModel)
+                .values(alias_id=alias.id, account_id=account.id, status=ClaimStatus.PENDING)
+                # `creator_alias_claims_one_pending_per_account` is partial, so the predicate has
+                # to be restated here or Postgres cannot match the conflict to it.
+                .on_conflict_do_nothing(
+                    index_elements=[CreatorAliasClaimModel.alias_id, CreatorAliasClaimModel.account_id],
+                    index_where=text("status = 'pending'"),
+                )
+                .returning(CreatorAliasClaimModel)
+            )
+            claim = claim or await session.scalar(
+                select(CreatorAliasClaimModel).where(
+                    CreatorAliasClaimModel.alias_id == alias.id,
+                    CreatorAliasClaimModel.account_id == account.id,
+                    CreatorAliasClaimModel.status == ClaimStatus.PENDING,
+                )
+            )
+            opened_claim = None if claim is None else _to_claim(claim, alias.name)
+
+        await session.flush()
+        retained = (
+            await session.scalars(
+                select(CreatorAliasModel.name)
+                .where(CreatorAliasModel.account_id == account.id, CreatorAliasModel.normalized_name != folded)
+                .order_by(CreatorAliasModel.normalized_name)
+            )
+        ).all()
+        return IdentityRefresh(
+            account_id=account.id,
+            java_uuid=java_uuid,
+            current_name=username,
+            previous_name=previous_name,
+            claimed_alias=claimed,
+            retained_alias_names=tuple(retained),
+            contested_alias=contested,
+            opened_claim=opened_claim,
+        )
 
     async def replace_verification_code(
         self,
