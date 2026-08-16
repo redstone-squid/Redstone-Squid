@@ -85,8 +85,10 @@ async def test_download_preserves_source_format_and_short_revalidation_cache(sou
     assert response.body == b"original-schematic"
     assert response.headers["content-disposition"].endswith(f'.{source_format.value}"')
     assert response.headers["content-type"] == "application/octet-stream"
-    assert response.headers["x-schematic-license"] == "cc_by_4_0"
+    assert "x-schematic-license" not in response.headers
     assert response.headers["cache-control"] == "public, max-age=300, must-revalidate"
+    # The standard Link header carries the license instead of a bespoke X- header.
+    assert 'rel="license"' in response.headers["link"]
     assert "creativecommons.org/licenses/by/4.0/" in response.headers["link"]
     paths = {getattr(route, "path", None) for route in router.routes}
     assert "/schematics/{sha256}/content" not in paths
