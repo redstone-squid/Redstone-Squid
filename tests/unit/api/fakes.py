@@ -261,9 +261,6 @@ class MockNotifications:
     async def unsubscribe(self, _account_id: int, _subscription_id: int) -> None:
         return None
 
-    async def can_view_staff(self, _discord_id: int) -> bool:
-        return False
-
     async def inbox(self, _account_id: int, **_kwargs: object):
         return ()
 

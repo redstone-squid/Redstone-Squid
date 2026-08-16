@@ -48,11 +48,12 @@ from squid.tags.infrastructure.models import BuildTagAssignment
 def _staff_role_ids():
     """The `global-admin` role's id, as a scalar subquery.
 
-    Staff notification targeting is a set query over every account, so it cannot
-    run the resolver per row. Holding the `global-admin` role is the structural
-    stand-in: the tier backfill wrote exactly these rows, so the audience is
-    unchanged, and a future refinement is to resolve
-    `build.submission.view_pending` per account instead of naming a role here.
+    Staff notification targeting is a set query over every account, so it cannot run the
+    resolver per row; holding the `global-admin` role is the structural stand-in.
+
+    This answers only *whom do we notify*. The other question the config allowlist used
+    to conflate with it -- *may this caller read staff inbox items* -- is per-caller and
+    now resolves `build.submission.view_pending` in the route.
     """
     return select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN.value)
 
@@ -77,14 +78,8 @@ class _RecordGain:
 class PostgresNotificationRepository:
     """Persist opt-ins and project durable events into channel-specific work."""
 
-    def __init__(
-        self,
-        session_factory: async_sessionmaker[AsyncSession],
-        *,
-        staff_discord_ids: Sequence[int] = (),
-    ) -> None:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
-        self._staff_discord_ids = tuple(staff_discord_ids)
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
         async with self._session_factory() as session:
@@ -325,37 +320,28 @@ class PostgresNotificationRepository:
             )
             return int(removed or 0)
 
-    async def can_view_staff(self, discord_id: int) -> bool:
-        if discord_id in self._staff_discord_ids:
-            return True
-        async with self._session_factory() as session:
-            return bool(
-                await session.scalar(
-                    select(
-                        exists()
-                        .where(_is_staff_account(AccountIdentity.account_id))
-                        .where(
-                            AccountIdentity.provider == IdentityProvider.DISCORD,
-                            AccountIdentity.subject == str(discord_id),
-                        )
-                    )
-                )
-            )
-
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
         async with self._session_factory() as session, session.begin():
-            claimable_staff = _is_staff_account(
-                NotificationDeliveryRecord.account_id
-            ) | NotificationDeliveryRecord.discord_id.in_(self._staff_discord_ids)
-            ids = tuple(
+            claimable_staff = _is_staff_account(NotificationDeliveryRecord.account_id)
+            # The DM address is read at claim time rather than copied onto the delivery
+            # row at enqueue time. The write path already made this join to decide
+            # whether to enqueue at all, so the cost moves rather than appearing -- and
+            # the inner join means unlinking Discord suppresses a pending DM, which is
+            # the correct reading of an unlink.
+            candidates = tuple(
                 (
                     await session.execute(
-                        select(NotificationDeliveryRecord.id)
+                        select(NotificationDeliveryRecord.id, AccountIdentity.subject)
                         .join(
                             NotificationProfile,
                             NotificationProfile.account_id == NotificationDeliveryRecord.account_id,
                         )
                         .join(NotificationRecord, NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                        .join(
+                            AccountIdentity,
+                            (AccountIdentity.account_id == NotificationDeliveryRecord.account_id)
+                            & (AccountIdentity.provider == IdentityProvider.DISCORD),
+                        )
                         .where(
                             NotificationDeliveryRecord.available_at <= func.now(),
                             NotificationDeliveryRecord.dead_at.is_(None),
@@ -376,10 +362,12 @@ class PostgresNotificationRepository:
                         .limit(limit)
                         .with_for_update(skip_locked=True, of=NotificationDeliveryRecord)
                     )
-                ).scalars()
+                ).all()
             )
-            if not ids:
+            if not candidates:
                 return ()
+            discord_by_delivery = {delivery_id: int(subject) for delivery_id, subject in candidates}
+            ids = tuple(discord_by_delivery)
             claimed = (
                 await session.execute(
                     update(NotificationDeliveryRecord)
@@ -407,7 +395,7 @@ class PostgresNotificationRepository:
                 PendingNotificationDelivery(
                     id=delivery.id,
                     generation=delivery.generation,
-                    discord_id=delivery.discord_id,
+                    discord_id=discord_by_delivery[delivery.id],
                     nonce=delivery.nonce,
                     claim_token=_claim_token(delivery),
                     attempts=delivery.attempts,
@@ -499,20 +487,7 @@ class PostgresNotificationRepository:
         if build is None or build.submission_status != Status.PENDING:
             return
         staff_account_ids = (
-            await session.execute(
-                select(Account.id)
-                .outerjoin(
-                    AccountIdentity,
-                    (AccountIdentity.account_id == Account.id) & (AccountIdentity.provider == IdentityProvider.DISCORD),
-                )
-                .where(
-                    or_(
-                        _is_staff_account(Account.id),
-                        AccountIdentity.subject.in_(str(value) for value in self._staff_discord_ids),
-                    )
-                )
-                .order_by(Account.id)
-            )
+            await session.execute(select(Account.id).where(_is_staff_account(Account.id)).order_by(Account.id))
         ).scalars()
         for account_id in staff_account_ids:
             await self._insert(
@@ -651,7 +626,7 @@ class PostgresNotificationRepository:
         ).one_or_none()
         if row is None:
             return
-        profile, discord_id = row
+        profile, _discord_subject = row
         notification_id = await session.scalar(
             insert(NotificationRecord)
             .values(
@@ -665,16 +640,13 @@ class PostgresNotificationRepository:
             .on_conflict_do_nothing(index_elements=[NotificationRecord.source_key])
             .returning(NotificationRecord.id)
         )
-        if (
-            notification_id is None
-            or not profile.dm_enabled
-            or profile.dm_suspended_at is not None
-            or discord_id is None
-        ):
+        # The join above already proved a Discord identity exists; the address itself is
+        # read at claim time, so nothing is copied onto the delivery row here.
+        if notification_id is None or not profile.dm_enabled or profile.dm_suspended_at is not None:
             return
         await session.execute(
             insert(NotificationDeliveryRecord)
-            .values(notification_id=notification_id, account_id=account_id, discord_id=int(discord_id))
+            .values(notification_id=notification_id, account_id=account_id)
             .on_conflict_do_nothing(index_elements=[NotificationDeliveryRecord.notification_id])
         )
 

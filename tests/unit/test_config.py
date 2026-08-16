@@ -138,7 +138,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_BUILD_COMMIT_MESSAGE="configuration rewrite",
         SQUID_NOTIFICATION_PUBLIC_SITE_URL="https://catalogue.example/",
         SQUID_NOTIFICATION_RETENTION_DAYS="120",
-        SQUID_NOTIFICATION_STAFF_DISCORD_IDS="[123,456]",
         SQUID_OBSERVABILITY_ENABLED="true",
         SQUID_OBSERVABILITY_ENDPOINT="http://collector.example:4318",
         SQUID_OBSERVABILITY_HEADERS='{"Authorization":"secret-token"}',
@@ -175,7 +174,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     for process_config in (config.bot_process(), config.api_process(), config.worker_process()):
         assert str(process_config.notification.public_site_url) == "https://catalogue.example/"
         assert process_config.notification.retention_days == 120
-        assert process_config.notification.staff_discord_ids == (123, 456)
         assert process_config.observability.enabled is True
         assert str(process_config.observability.endpoint) == "http://collector.example:4318/"
         assert process_config.observability.headers["Authorization"].get_secret_value() == "secret-token"

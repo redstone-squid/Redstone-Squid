@@ -9,7 +9,8 @@ from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.events.infrastructure.models import DomainEventRecord
 from squid.notifications.domain import CURRENT_NOTIFICATION_NOTICE_VERSION, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.infrastructure.models import (
@@ -23,6 +24,7 @@ from squid.persistence.base import Base
 
 _TABLES = [
     Base.metadata.tables["accounts"],
+    Base.metadata.tables["account_identities"],
     # Replaced `global_administrators` when permissions moved to RBAC; the
     # notification repository joins it to find who may be notified.
     Base.metadata.tables["permission_roles"],
@@ -61,6 +63,8 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> i
         account = Account()
         session.add(account)
         await session.flush()
+        # The claim reads the DM address from here rather than from the delivery row.
+        session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject="123"))
         session.add(
             NotificationProfile(
                 account_id=account.id,
@@ -87,11 +91,7 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> i
         )
         session.add(notification)
         await session.flush()
-        delivery = NotificationDeliveryRecord(
-            notification_id=notification.id,
-            account_id=account.id,
-            discord_id=123,
-        )
+        delivery = NotificationDeliveryRecord(notification_id=notification.id, account_id=account.id)
         session.add(delivery)
         await session.flush()
         return delivery.id
