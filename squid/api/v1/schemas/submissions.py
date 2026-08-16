@@ -1,4 +1,8 @@
-"""Renderer-neutral submission form and synchronized-draft schemas."""
+"""Submission form and synchronized-draft schemas.
+
+The form describes fields and constraints; how they are drawn is the client's
+decision.
+"""
 
 from datetime import datetime
 from typing import Annotated, Self
@@ -52,7 +56,7 @@ class ChoiceOptionResponse(StrictSchema):
 
 
 class VisibilityRuleResponse(StrictSchema):
-    """A renderer-neutral condition controlling whether a field is shown."""
+    """A condition controlling whether a field is shown, evaluated by any client."""
 
     field_id: StableIdentifier
     operator: VisibilityOperator
@@ -160,7 +164,7 @@ class CategoryFormResponse(StrictSchema):
 
 
 class FormManifestResponse(StrictSchema):
-    """One immutable renderer-neutral submission form revision."""
+    """One immutable submission form revision, drawn however the client chooses."""
 
     schema_id: str
     revision: int
@@ -249,7 +253,7 @@ class DraftChangeRequest(StrictSchema):
         return self
 
     def to_domain(self) -> DraftChange:
-        """Convert this request to the transport-neutral atomic change."""
+        """Convert this request to the atomic change the application layer applies."""
         return DraftChange(
             base_revision=self.base_revision,
             client_instance_id=self.client_instance_id,

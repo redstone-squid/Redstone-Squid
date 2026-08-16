@@ -20,7 +20,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 
 from squid.api.errors import handle_squid_error
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.config import RateLimitConfig
 from squid.core.errors import RateLimitedError
 from squid.observability import add_counter
@@ -144,7 +144,7 @@ class ApiRateLimitPolicies:
     """Named policies selected by the API transport."""
 
     ip: RateLimitPolicy
-    principal: RateLimitPolicy
+    caller: RateLimitPolicy
     write: RateLimitPolicy
     vote: RateLimitPolicy
     suggest: RateLimitPolicy
@@ -157,7 +157,7 @@ class ApiRateLimitPolicies:
         window = config.window_seconds
         return cls(
             ip=RateLimitPolicy("ip", config.ip_requests, window),
-            principal=RateLimitPolicy("principal", config.principal_requests, window),
+            caller=RateLimitPolicy("principal", config.principal_requests, window),
             write=RateLimitPolicy("write", config.write_requests, window),
             vote=RateLimitPolicy("vote", config.vote_requests, window),
             suggest=RateLimitPolicy("suggest", config.suggest_requests, window),
@@ -408,14 +408,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 async def enforce_route_rate_limits(
     request: Request,
-    principal: Annotated[Principal, Depends(current_principal)],
+    caller: Annotated[Caller, Depends(current_caller)],
 ) -> None:
     """Apply authenticated, mutation, and vote quotas to a matched API route."""
     limiter, policies = _limiter_state(request)
     checks: list[RateLimitRequest] = []
-    identity = principal.subject if principal.kind != "anonymous" else _client_identity(request)
-    if principal.kind != "anonymous":
-        checks.append(RateLimitRequest(policies.principal, identity))
+    identity = caller.subject if caller.kind != "anonymous" else _client_identity(request)
+    if caller.kind != "anonymous":
+        checks.append(RateLimitRequest(policies.caller, identity))
     route = request.scope.get("route")
     route_path = getattr(route, "path", None)
     request_path = request.url.path
@@ -427,7 +427,7 @@ async def enforce_route_rate_limits(
         checks.append(RateLimitRequest(policies.minecraft_challenge_approval, identity))
     elif request.method in _WRITE_METHODS:
         checks.append(RateLimitRequest(policies.write, identity))
-    if principal.kind != "anonymous" and route_path == _VOTE_WRITE_PATH:
+    if caller.kind != "anonymous" and route_path == _VOTE_WRITE_PATH:
         checks.append(RateLimitRequest(policies.vote, identity))
     if route_path == _SUGGEST_PATH:
         # Its own bucket in both directions: one user typing must not exhaust their read quota,

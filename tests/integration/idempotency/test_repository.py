@@ -50,7 +50,7 @@ async def reserve(
     key: str = "build-submission-1",
 ) -> Reservation:
     return await repository.reserve(
-        principal="user:1",
+        caller="user:1",
         key=key,
         fingerprint=b"request-fingerprint",
         method="POST",

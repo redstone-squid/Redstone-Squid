@@ -303,7 +303,7 @@ class CliAuthorizationService:
         return await self._repository.revoke_device(device_id=device_id, account_id=account_id, revoked_at=self._now())
 
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
-        """Revoke the exact session represented by a CLI principal."""
+        """Revoke the exact session represented by a CLI caller."""
         return await self._repository.revoke_session(
             session_id=identity.session_id,
             device_id=identity.device_id,

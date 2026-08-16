@@ -12,7 +12,7 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.api.errors import register_exception_handlers
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.cli_auth import (
     current_browser_account_id,
     current_cli_identity,
@@ -203,13 +203,13 @@ def app_with_fake(
             consent_pending=False,
         )
 
-    async def principal_dependency() -> Principal:
-        return Principal(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
+    async def caller_dependency() -> Caller:
+        return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
     app.dependency_overrides[get_cli_authorization_service] = service_dependency
     app.dependency_overrides[current_browser_account_id] = account_dependency
     app.dependency_overrides[current_cli_identity] = identity_dependency
-    app.dependency_overrides[current_principal] = principal_dependency
+    app.dependency_overrides[current_caller] = caller_dependency
     return app
 
 
@@ -244,9 +244,9 @@ async def test_enrollment_returns_fragment_approval_link_and_no_store() -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.json()["verification_uri_complete"] == f"{VERIFICATION_URI}#code=ABCD-EFGH"
     assert cli.started == (PUBLIC_KEY, CLIENT_INSTANCE_ID, "Test workstation")
-    principal = idempotency.reservations[0]["principal"]
-    assert isinstance(principal, str)
-    assert principal.startswith("cli-anonymous:")
+    caller = idempotency.reservations[0]["caller"]
+    assert isinstance(caller, str)
+    assert caller.startswith("cli-anonymous:")
 
 
 async def test_browser_previews_fingerprint_before_approval() -> None:

@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.api.security import UNBOUNDED, Principal
+from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.notifications import accept_notice, create_subscription, list_inbox
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
 from squid.core.pagination import Page, PageSelector
@@ -22,7 +22,7 @@ from squid.notifications import (
 )
 from squid.notifications.domain import NotificationKind
 
-ACCOUNT = Principal(kind="account", subject="account:7", nodes=UNBOUNDED, discord_id=123, account_id=7)
+ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, discord_id=123, account_id=7)
 
 
 async def test_notification_consent_is_independent_and_defaults_channels_off() -> None:

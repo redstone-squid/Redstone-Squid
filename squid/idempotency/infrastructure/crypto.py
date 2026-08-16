@@ -26,7 +26,7 @@ class ResponseEncryptionMetadata:
     """Stable record and response fields bound to one ciphertext."""
 
     request_id: UUID
-    principal: str
+    caller: str
     idempotency_key: str
     request_fingerprint: bytes
     method: str
@@ -99,7 +99,7 @@ def _associated_data(metadata: ResponseEncryptionMetadata, key_id: str) -> bytes
         _AAD_DOMAIN,
         key_id.encode(),
         metadata.request_id.bytes,
-        metadata.principal.encode(),
+        metadata.caller.encode(),
         metadata.idempotency_key.encode(),
         metadata.request_fingerprint,
         metadata.method.encode(),

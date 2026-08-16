@@ -10,7 +10,7 @@ from fastapi import Response
 from pydantic import ValidationError
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.security import Principal, subject_for
+from squid.api.security import Caller, subject_for
 from squid.api.v1.builds import edit_build, submit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, DoorSubmission
 from squid.builds.application import BuildEditor
@@ -20,7 +20,7 @@ from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
 from tests.unit.api.fakes import credential_nodes
 
-ACCOUNT = Principal(
+ACCOUNT = Caller(
     kind="account",
     subject="account:1",
     nodes=credential_nodes("build.submission.create"),

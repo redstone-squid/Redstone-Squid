@@ -11,7 +11,7 @@ from pydantic import AnyHttpUrl
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     ChallengeApprovalResponse,
@@ -170,13 +170,13 @@ def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
     return verification_uri
 
 
-async def current_account_id(principal: Annotated[Principal, Depends(current_principal)]) -> int:
+async def current_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
     """Require a signed-in human account with current privacy consent."""
-    if principal.kind != "account" or principal.account_id is None:
+    if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
-    return principal.account_id
+    if caller.consent_pending:
+        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id)
+    return caller.account_id
 
 
 Installations = Annotated[PaperInstallationHttpService, Depends(get_installation_service)]
@@ -214,8 +214,8 @@ async def enforce_paper_request_idempotency(
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Partition one-time Paper responses by an authenticated credential generation."""
-    principal = f"minecraft-installation:{installation.id}:{installation.credential_version}"
-    await enforce_request_idempotency_for(request, principal, idempotency_key)
+    caller = f"minecraft-installation:{installation.id}:{installation.credential_version}"
+    await enforce_request_idempotency_for(request, caller, idempotency_key)
 
 
 async def enforce_fabric_request_idempotency(

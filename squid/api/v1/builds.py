@@ -6,7 +6,7 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.dependencies import BuildCommands, BuildQueries, CurrentPrincipal, Permissions, Search
+from squid.api.dependencies import BuildCommands, BuildQueries, CurrentCaller, Permissions, Search
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.pagination import (
@@ -20,7 +20,7 @@ from squid.api.pagination import (
     render_page,
     resolve_selector,
 )
-from squid.api.security import Principal, principal_allows, requires, subject_for
+from squid.api.security import Caller, caller_allows, requires, subject_for
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
@@ -43,7 +43,7 @@ from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SU
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
 router = APIRouter(prefix="/builds", tags=["builds"])
-UserWriter = Annotated[Principal, Depends(requires(BUILD_SUBMISSION_CREATE))]
+UserWriter = Annotated[Caller, Depends(requires(BUILD_SUBMISSION_CREATE))]
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
 
 
@@ -58,17 +58,17 @@ async def submit_build(
     submission: DoorSubmission,
     response: Response,
     builds: BuildCommands,
-    principal: UserWriter,
+    caller: UserWriter,
 ) -> BuildDetail:
     """Submit a door build for Discord moderation."""
-    _require_consented_user(principal)
+    _require_consented_user(caller)
     if submission.category.casefold() != "door":
         msg = "Only door submissions are supported."
         raise InvalidBuildError(msg, public_context={"category": submission.category})
-    assert principal.discord_id is not None
+    assert caller.discord_id is not None
     build = await builds.submit_door(
         DoorSubmissionInput(
-            submitter_id=principal.discord_id,
+            submitter_id=caller.discord_id,
             door_size=submission.door_size,
             pattern=tuple(submission.pattern),
             door_type=submission.door_type,
@@ -104,13 +104,13 @@ async def edit_build(
     changes: BuildPatch,
     response: Response,
     builds: BuildCommands,
-    principal: UserWriter,
+    caller: UserWriter,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
     """Edit an owned pending build, or any build with `build.submission.edit`."""
-    _require_consented_user(principal)
+    _require_consented_user(caller)
     build = await builds.apply_edit(
-        BuildEditor(subject=subject_for(principal), discord_id=principal.discord_id),
+        BuildEditor(subject=subject_for(caller), discord_id=caller.discord_id),
         build_id,
         BuildEditPatch.from_attributes(changes.edit_attributes()),
         expected_revision=_expected_revision(build_id, if_match),
@@ -146,7 +146,7 @@ async def list_builds(
     build_queries: BuildQueries,
     search_service: Search,
     permissions: Permissions,
-    principal: CurrentPrincipal,
+    caller: CurrentCaller,
     q: Annotated[str | None, Query(max_length=1_000)] = None,
     status: BuildStatusFilter | None = None,
     sort: Annotated[str | None, Query(max_length=80)] = None,
@@ -191,7 +191,7 @@ async def list_builds(
     )
     effective = status or BuildStatusFilter.CONFIRMED
     if effective is not BuildStatusFilter.CONFIRMED:
-        await _require_pending_view(permissions, principal)
+        await _require_pending_view(permissions, caller)
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
         submitter_id=None,
@@ -202,24 +202,24 @@ async def list_builds(
     return render_page(page, BuildSummary.from_domain)
 
 
-async def _require_pending_view(permissions: PermissionService, principal: Principal) -> None:
+async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
     """Gate non-public moderation views on the node, credential included.
 
     "A service key never reads unreviewed submissions" used to be a hardcoded
-    branch on the principal kind. It is now an expressible policy: no key is
+    branch on the caller kind. It is now an expressible policy: no key is
     issued `build.submission.view_pending` by default, so a leaked key still
     cannot read them -- and a key that should read them can be given one,
     which the branch made impossible.
     """
-    if not await principal_allows(permissions, principal, BUILD_SUBMISSION_VIEW_PENDING):
-        raise AuthenticationError if principal.kind == "anonymous" else AuthorizationError
+    if not await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING):
+        raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
 
 
-def _require_consented_user(principal: Principal) -> None:
-    if principal.kind != "account" or principal.discord_id is None or principal.account_id is None:
+def _require_consented_user(caller: Caller) -> None:
+    if caller.kind != "account" or caller.discord_id is None or caller.account_id is None:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id).with_context(
+    if caller.consent_pending:
+        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id).with_context(
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )
