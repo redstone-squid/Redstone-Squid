@@ -67,11 +67,13 @@ MAX_ERROR_LENGTH = 4000
 """How much of a failure message is kept, so one exception cannot bloat the row."""
 
 _MAX_DOUBLING = 12
-"""Where `retry_delay_sql` stops doubling.
+"""Where the backoff stops doubling.
 
 `BASE_RETRY_DELAY * 2 ** 12` already exceeds `MAX_RETRY_DELAY`, so clamping the
-exponent cannot change the result -- it only keeps `power()` away from the
-floating-point overflow a runaway attempt count would otherwise reach.
+exponent cannot change the answer. It is what keeps both encodings defined at a
+runaway attempt count: unclamped, the Python one raises `OverflowError` once the
+product leaves `timedelta`'s range, and the SQL one drives `power()` to infinity.
+A queue with `max_attempts=None` can reach those counts.
 """
 
 _ONE_SECOND = literal_column("interval '1 second'", type_=Interval())
@@ -79,7 +81,7 @@ _ONE_SECOND = literal_column("interval '1 second'", type_=Interval())
 
 def retry_delay(attempts: int) -> timedelta:
     """Back off exponentially, capped so even a stuck job still retries hourly."""
-    delay = BASE_RETRY_DELAY * 2 ** (attempts - 1)
+    delay = BASE_RETRY_DELAY * 2 ** min(attempts - 1, _MAX_DOUBLING)
     return min(delay, MAX_RETRY_DELAY)
 
 

@@ -3,7 +3,6 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -36,6 +35,7 @@ from squid.notifications.infrastructure.models import (
 )
 from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.infrastructure.models import PermissionRole, PermissionRoleAssignment
+from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.records.infrastructure.models import (
     RecordCompetition,
     RecordDefinition,
@@ -362,7 +362,7 @@ class PostgresNotificationRepository:
                             NotificationDeliveryRecord.sent_at.is_(None),
                             or_(
                                 NotificationDeliveryRecord.claimed_at.is_(None),
-                                NotificationDeliveryRecord.claimed_at < func.now() - _visibility_timeout(),
+                                NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
                             ),
                             NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
                             NotificationProfile.dm_enabled.is_(True),
@@ -446,7 +446,7 @@ class PostgresNotificationRepository:
                 update(NotificationDeliveryRecord)
                 .where(*_delivery_claim(delivery))
                 .values(
-                    available_at=func.now() + _retry_delay(delivery.attempts),
+                    available_at=func.now() + retry_delay(delivery.attempts),
                     claimed_at=None,
                     claim_token=None,
                     last_error=error[:4000],
@@ -882,14 +882,6 @@ def _exact_value(stored: Decimal | str | bool | None, expected: str | int | floa
         except ArithmeticError:
             return False
     return isinstance(expected, str) and stored == expected
-
-
-def _visibility_timeout() -> timedelta:
-    return timedelta(minutes=5)
-
-
-def _retry_delay(attempts: int) -> timedelta:
-    return min(timedelta(seconds=15 * 2 ** max(attempts - 1, 0)), timedelta(hours=1))
 
 
 def _claim_token(delivery: NotificationDeliveryRecord) -> UUID:
