@@ -191,7 +191,7 @@ def build_service(repository: FakeBuildRepository, locks: FakeBuildLocks | None 
 
 
 @pytest.fixture
-def existing_build() -> Build:
+def existing_build() -> DoorBuild:
     return DoorBuild(
         id=42,
         submitter_id=1,
@@ -204,7 +204,7 @@ def existing_build() -> Build:
     )
 
 
-async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_build: Build) -> None:
+async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
@@ -230,7 +230,7 @@ async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_buil
     locks.release.assert_awaited_once_with(42)
 
 
-async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: Build) -> None:
+async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
@@ -245,7 +245,7 @@ async def test_edit_commit_uses_repository_and_releases_after_save(existing_buil
     assert locks.release.await_count == 1
 
 
-async def test_edit_releases_lock_when_patch_application_fails(existing_build: Build) -> None:
+async def test_edit_releases_lock_when_patch_application_fails(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
@@ -259,7 +259,7 @@ async def test_edit_releases_lock_when_patch_application_fails(existing_build: B
     locks.release.assert_awaited_once_with(42)
 
 
-async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: Build) -> None:
+async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: DoorBuild) -> None:
     """__aexit__ never runs if __aenter__ is cancelled, so __aenter__ must release itself.
 
     Without this, the process-local lease survives forever and every later
@@ -290,7 +290,7 @@ async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: 
     locks.release.assert_awaited_once_with(42)
 
 
-async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> None:
+async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -> None:
     missing_locks = FakeBuildLocks()
     missing_service = build_service(FakeBuildRepository(), missing_locks)
     with pytest.raises(BuildNotFoundError):
@@ -306,7 +306,7 @@ async def test_edit_reports_missing_and_busy_builds(existing_build: Build) -> No
             pass
 
 
-async def test_edit_loads_build_only_after_acquiring_lease(existing_build: Build) -> None:
+async def test_edit_loads_build_only_after_acquiring_lease(existing_build: DoorBuild) -> None:
     locks = FakeBuildLocks()
     repository = FakeBuildRepository(existing_build)
     original_get = repository.get_by_id
@@ -321,7 +321,7 @@ async def test_edit_loads_build_only_after_acquiring_lease(existing_build: Build
         pass
 
 
-async def test_edit_rejects_a_stale_expected_revision(existing_build: Build) -> None:
+async def test_edit_rejects_a_stale_expected_revision(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
 
@@ -334,7 +334,7 @@ async def test_edit_rejects_a_stale_expected_revision(existing_build: Build) -> 
     locks.release.assert_awaited_once_with(42)
 
 
-async def test_status_changes_and_cleanup_use_lock_manager(existing_build: Build) -> None:
+async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)

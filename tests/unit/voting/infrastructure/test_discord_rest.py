@@ -3,6 +3,7 @@ from collections.abc import Callable
 import httpx
 import pytest
 
+from squid.voting.domain import VoteKind
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 from squid.voting.infrastructure.discord_rest import DiscordRestActorResolver
 
@@ -32,7 +33,7 @@ async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("secret-token", capabilities=FakeCapabilities(), client=client)
-        actor = await resolver.member(1, 7, 10, "build")
+        actor = await resolver.member(1, 7, 10, VoteKind.BUILD)
 
     assert actor is not None
     assert actor.account_id == 1
@@ -53,7 +54,7 @@ async def test_member_uses_a_configured_loopback_discord_api() -> None:
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("token", client=client, api_url="http://127.0.0.1:8102/discord/api/")
-        assert await resolver.member(1, 7, 10, "generic") is None
+        assert await resolver.member(1, 7, 10, VoteKind.GENERIC) is None
 
     assert requests[0].url == httpx.URL("http://127.0.0.1:8102/discord/api/guilds/10/members/7")
 
@@ -63,7 +64,7 @@ async def test_member_returns_none_when_member_is_not_accessible(status: int) ->
     async with client_for(lambda _request: httpx.Response(status)) as client:
         resolver = DiscordRestActorResolver("token", client=client)
 
-        assert await resolver.member(1, 7, 10, "generic") is None
+        assert await resolver.member(1, 7, 10, VoteKind.GENERIC) is None
 
 
 async def test_member_caches_successful_lookup_for_five_minutes() -> None:
@@ -77,11 +78,11 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("token", client=client, clock=lambda: now[0])
-        first = await resolver.member(1, 7, 10, "build")
+        first = await resolver.member(1, 7, 10, VoteKind.BUILD)
         now[0] = 399.9
-        cached = await resolver.member(1, 7, 10, "generic")
+        cached = await resolver.member(1, 7, 10, VoteKind.GENERIC)
         now[0] = 400.0
-        refreshed = await resolver.member(1, 7, 10, "build")
+        refreshed = await resolver.member(1, 7, 10, VoteKind.BUILD)
 
     assert first is not None
     assert first.role_ids == frozenset({1})
@@ -107,7 +108,7 @@ async def test_member_honors_one_rate_limit_retry() -> None:
 
     async with client_for(handler) as client:
         resolver = DiscordRestActorResolver("token", client=client, sleep=sleep)
-        actor = await resolver.member(1, 7, 10, "build")
+        actor = await resolver.member(1, 7, 10, VoteKind.BUILD)
 
     assert actor is not None
     assert delays == [0.25]
@@ -125,7 +126,7 @@ async def test_member_raises_typed_unavailable_error(status: int) -> None:
         resolver = DiscordRestActorResolver("token", client=client, sleep=sleep)
 
         with pytest.raises(DiscordMemberServiceUnavailableError):
-            await resolver.member(1, 7, 10, "build")
+            await resolver.member(1, 7, 10, VoteKind.BUILD)
 
 
 async def test_member_maps_transport_failure_to_typed_unavailable_error() -> None:
@@ -136,14 +137,14 @@ async def test_member_maps_transport_failure_to_typed_unavailable_error() -> Non
         resolver = DiscordRestActorResolver("token", client=client)
 
         with pytest.raises(DiscordMemberServiceUnavailableError, match="Discord member lookup failed"):
-            await resolver.member(1, 7, 10, "build")
+            await resolver.member(1, 7, 10, VoteKind.BUILD)
 
 
 async def test_resolve_swallows_discord_failure_for_background_refresh() -> None:
     async with client_for(lambda _request: httpx.Response(500)) as client:
         resolver = DiscordRestActorResolver("token", client=client)
 
-        assert await resolver.resolve(1, 7, 10, "build") is None
+        assert await resolver.resolve(1, 7, 10, VoteKind.BUILD) is None
 
 
 async def test_member_rejects_malformed_role_payload() -> None:
@@ -151,4 +152,4 @@ async def test_member_rejects_malformed_role_payload() -> None:
         resolver = DiscordRestActorResolver("token", client=client)
 
         with pytest.raises(DiscordMemberServiceUnavailableError, match="malformed"):
-            await resolver.member(1, 7, 10, "build")
+            await resolver.member(1, 7, 10, VoteKind.BUILD)

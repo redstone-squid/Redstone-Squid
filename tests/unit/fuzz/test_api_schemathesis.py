@@ -103,7 +103,7 @@ def test_watchdog_returns_before_budget_without_signals() -> None:
     signals: list[tuple[int, signal.Signals]] = []
 
     result = supervise(
-        process, budget_seconds=20, cleanup_grace_seconds=3, signal_group=lambda *args: signals.append(args)
+        process, budget_seconds=20, cleanup_grace_seconds=3, signal_group=lambda pid, sig: signals.append((pid, sig))
     )
 
     assert result == SupervisionResult(returncode=0, timed_out=False, forced_kill=False)
@@ -116,7 +116,7 @@ def test_watchdog_interrupts_then_force_kills_the_process_group() -> None:
     signals: list[tuple[int, signal.Signals]] = []
 
     result = supervise(
-        process, budget_seconds=20, cleanup_grace_seconds=3, signal_group=lambda *args: signals.append(args)
+        process, budget_seconds=20, cleanup_grace_seconds=3, signal_group=lambda pid, sig: signals.append((pid, sig))
     )
 
     assert result == SupervisionResult(returncode=-signal.SIGKILL, timed_out=True, forced_kill=True)

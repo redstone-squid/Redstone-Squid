@@ -188,7 +188,7 @@ def test_user_data_consent_view_discloses_storage_and_actions() -> None:
 
 
 def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:
-    submission = SubmissionModal(display_build, cast(BuildService, object()))
+    submission = SubmissionModal(BuildDraft(), cast(BuildService, object()))
     field = get_text_input(display_build, "width")
     edit = BuildEditView(display_build, cast(BuildService, object()), [field]).get_modal()
 

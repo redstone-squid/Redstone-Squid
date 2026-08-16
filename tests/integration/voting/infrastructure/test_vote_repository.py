@@ -96,7 +96,7 @@ async def referenced_rows(vote_schema: None, async_session_factory: async_sessio
         # `Build.__table__`, not `Build`: the entity is the base of a joined-inheritance
         # hierarchy, so an ORM-level insert targets the polymorphic join rather than a table.
         await session.execute(
-            insert(Build.__table__).values(
+            insert(cast(Table, Build.__table__)).values(
                 id=BUILD_ID,
                 submission_status=Status.PENDING,
                 submitter_account_id=AUTHOR_ACCOUNT_IDS[0],

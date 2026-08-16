@@ -1,6 +1,7 @@
 """Account application service tests."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from uuid import UUID
 
 import pytest
@@ -65,6 +66,56 @@ class FakeAccountRepository:
         self.accounts[self._next_id] = account
         self._next_id += 1
         return account
+
+    async def create(
+        self,
+        *,
+        consent: AccountConsent | None = None,
+        identities: Sequence[AccountIdentity] = (),
+    ) -> Account:
+        account = Account(tuple(identities), consent, self._next_id, NOW, UUID(int=self._next_id))
+        self.accounts[self._next_id] = account
+        self._next_id += 1
+        return account
+
+    async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        return next(
+            (
+                account
+                for account in self.accounts.values()
+                if (identity := account.identity(provider)) is not None and identity.subject == subject
+            ),
+            None,
+        )
+
+    async def unlink_java_identity(self, discord_id: int) -> bool:
+        entry = next(
+            (
+                (account_id, account)
+                for account_id, account in self.accounts.items()
+                if (identity := account.identity(IdentityProvider.DISCORD)) is not None
+                and identity.subject == str(discord_id)
+            ),
+            None,
+        )
+        if entry is None:
+            return False
+        account_id, account = entry
+        if account.identity(IdentityProvider.JAVA) is None:
+            return False
+        remaining = tuple(identity for identity in account.identities if identity.provider is not IdentityProvider.JAVA)
+        self.accounts[account_id] = Account(
+            remaining, account.consent, account.id, account.created_at, account.public_creator_id
+        )
+        return True
+
+    async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
+        alias = await self.get_alias_by_name(name)
+        if alias is None or alias.account_id is not None:
+            return None
+        claimed = replace(alias, account_id=account_id, claimed_at=NOW, claim_method=method)
+        self.aliases[alias.id] = claimed
+        return claimed
 
     async def get_by_discord_id(self, discord_id: int) -> Account | None:
         return next(
