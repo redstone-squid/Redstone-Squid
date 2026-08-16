@@ -6,9 +6,9 @@ import io
 import json
 import logging
 import signal
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import NoReturn, cast
+from typing import Any, NoReturn, cast
 
 import anyio
 import pytest
@@ -36,7 +36,7 @@ from squid.schematics.infrastructure.worker import (
 def unowned_worker(config: SchematicConfig | None = None) -> _Worker:
     """A worker for the tests that drive its pump themselves rather than spawning one."""
 
-    def refuse(_pump: Callable[[], Awaitable[None]]) -> NoReturn:
+    def refuse(_pump: Callable[[], Coroutine[Any, Any, None]]) -> NoReturn:
         raise AssertionError("This test must not spawn an unowned stderr pump.")
 
     return _Worker(config or SchematicConfig(), refuse)
@@ -173,7 +173,11 @@ async def test_terminate_drains_buffered_stderr_before_finishing(mocker: MockerF
     process.wait = mocker.AsyncMock(return_value=0)
     emit = mocker.patch.object(worker_module, "_emit_child_record")
     async with anyio.create_task_group() as pumps:
-        worker = _Worker(SchematicConfig(), pumps.start_soon)
+
+        def spawn(pump: Callable[[], Coroutine[Any, Any, None]]) -> None:
+            pumps.start_soon(pump)
+
+        worker = _Worker(SchematicConfig(), spawn)
         worker._process = process
         worker._start_pump(process)
 
