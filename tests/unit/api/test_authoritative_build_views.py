@@ -26,7 +26,7 @@ SERVICE = Caller(
     subject="api-key:test",
     nodes=credential_nodes("build.submission.read", "build.submission.create"),
 )
-ACCOUNT = Caller(kind="account", subject="account:1", nodes=UNBOUNDED, discord_id=123, account_id=1)
+ACCOUNT = Caller(kind="account", subject="account:1", nodes=UNBOUNDED, account_id=1)
 
 
 class Fakes(NamedTuple):
@@ -326,7 +326,7 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
     else's page still only selects rows this caller may read.
     """
     graph = fakes(builds=[persisted_build(5)])
-    other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, discord_id=456, account_id=2)
+    other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, account_id=2)
 
     await list_my_builds(graph.services.build_queries, other, after_id=9)
 
