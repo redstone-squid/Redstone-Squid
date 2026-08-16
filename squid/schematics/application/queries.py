@@ -192,6 +192,24 @@ class SkippedRender:
     reason: RenderSkipReason
 
 
+@dataclass(frozen=True, slots=True)
+class RenderedSchematic:
+    """A PNG answered to a caller who asked for it and is waiting for it.
+
+    Separate from `FreshRender` because nothing here is on its way to being published: the
+    bytes travel to one Discord message or one HTTP response, and `from_cache` only says
+    whether a GPU was involved, which is what a log line or a header wants to know.
+    """
+
+    build_id: int
+    schematic_id: int
+    recipe_hash: str
+    width: int
+    height: int
+    png: bytes
+    from_cache: bool
+
+
 type RenderPreparation = FreshRender | CachedRender | SkippedRender
 """What `SchematicService.prepare_render` decided.
 

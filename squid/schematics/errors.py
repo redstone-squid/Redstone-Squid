@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 
 from squid.core.errors import (
+    ConflictError,
     ErrorCode,
     InfrastructureError,
     NotFoundError,
@@ -104,6 +105,24 @@ class SchematicSupportUnavailableError(ServiceUnavailableError):
     default_code = ErrorCode.SCHEMATIC_SUPPORT_UNAVAILABLE
     default_resource = "schematic"
     default_developer_action = "Install the optional 'schematics' extra to enable this feature."
+
+
+class SchematicRenderRefusedError(ConflictError):
+    """This attachment will never render under the requested recipe.
+
+    A refusal is about the stored schematic, not about the request: an unsanitized file, one
+    that already crashed the engine, or one past a preview budget answers the same way however
+    the camera is pointed. The reason travels as public context because it is the only thing
+    that tells a caller whether to fix something or to stop asking.
+    """
+
+    default_message = _("This build's schematic cannot be previewed.")
+    default_code = ErrorCode.SCHEMATIC_RENDER_REFUSED
+    default_resource = "schematic"
+
+    def __init__(self, reason: str, description: str) -> None:
+        super().__init__(description, context={"reason": reason}, public_context={"reason": reason})
+        self.reason = reason
 
 
 class SchematicRenderUnavailableError(ServiceUnavailableError):

@@ -7,14 +7,27 @@ from typing import cast
 import pytest
 from whenever import Instant
 
-from squid.api.v1.schematics import get_schematic_content, list_build_schematics, router
+from squid.api.v1.schematics import (
+    get_schematic_content,
+    list_build_schematics,
+    render_build_schematic,
+    router,
+)
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
 from squid.builds.errors import BuildNotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
-from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
+from squid.schematics.application import (
+    RenderedSchematic,
+    RenderRequest,
+    RenderSkipReason,
+    SchematicPublication,
+    SchematicService,
+    StoredSchematic,
+)
 from squid.schematics.application.queries import PublicSchematicDownload
 from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
+from squid.schematics.errors import SchematicRenderRefusedError
 from tests.unit.schematics.fakes import make_analysis
 
 
@@ -70,6 +83,96 @@ class PublicSchematics:
             license=self.stored.publication.license,
             source_format=self.stored.analysis.metrics.source_format,
         )
+
+
+class RenderingSchematics(PublicSchematics):
+    """Answer renders the way the service does: a configured recipe plus caller overrides."""
+
+    def __init__(self, *, refusal: RenderSkipReason | None = None) -> None:
+        super().__init__()
+        self.configured = RenderRequest(width=1024, height=1024)
+        self.rendered: list[RenderRequest] = []
+        self._refusal = refusal
+
+    def render_recipe(
+        self,
+        *,
+        width: int | None = None,
+        height: int | None = None,
+        yaw: float | None = None,
+        pitch: float | None = None,
+        zoom: float | None = None,
+    ) -> RenderRequest:
+        base = self.configured
+        return replace(
+            base,
+            width=base.width if width is None else width,
+            height=base.height if height is None else height,
+            yaw=base.yaw if yaw is None else yaw,
+            pitch=base.pitch if pitch is None else pitch,
+            zoom=base.zoom if zoom is None else zoom,
+        )
+
+    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+        assert build_id == 7
+        if self._refusal is not None:
+            raise SchematicRenderRefusedError(self._refusal.value, self._refusal.description)
+        resolved = request or self.configured
+        self.rendered.append(resolved)
+        return RenderedSchematic(
+            build_id=build_id,
+            schematic_id=self.stored.id,
+            recipe_hash="b" * 64,
+            width=resolved.width,
+            height=resolved.height,
+            png=b"\x89PNG\r\n\x1a\nrendered",
+            from_cache=False,
+        )
+
+
+async def test_a_render_with_no_parameters_asks_for_the_deployment_recipe() -> None:
+    """Omitting every control has to hit the recipe the queue caches, not a route default."""
+    schematics = RenderingSchematics()
+
+    response = await render_build_schematic(
+        7,
+        cast(BuildQueryService, ConfirmedBuilds()),
+        cast(SchematicService, schematics),
+    )
+
+    assert schematics.rendered == [schematics.configured]
+    assert response.body == b"\x89PNG\r\n\x1a\nrendered"
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["etag"] == f'"{"b" * 64}"'
+    assert response.headers["cache-control"] == "public, max-age=300"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
+async def test_a_render_applies_only_the_controls_the_caller_named() -> None:
+    schematics = RenderingSchematics()
+
+    await render_build_schematic(
+        7,
+        cast(BuildQueryService, ConfirmedBuilds()),
+        cast(SchematicService, schematics),
+        yaw=45.0,
+    )
+
+    assert schematics.rendered[0].yaw == 45.0
+    assert schematics.rendered[0].width == schematics.configured.width
+
+
+async def test_a_render_refusal_names_the_reason_in_public_context() -> None:
+    schematics = RenderingSchematics(refusal=RenderSkipReason.OVER_BLOCK_BUDGET)
+
+    with pytest.raises(SchematicRenderRefusedError) as refusal:
+        await render_build_schematic(
+            7,
+            cast(BuildQueryService, ConfirmedBuilds()),
+            cast(SchematicService, schematics),
+        )
+
+    assert refusal.value.public_context == {"reason": "over_block_budget"}
 
 
 async def test_public_metadata_omits_digest_and_original_filename() -> None:

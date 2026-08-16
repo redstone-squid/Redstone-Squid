@@ -31,6 +31,7 @@ from squid.schematics.errors import (
     DecompressionBudgetExceededError,
     InvalidSchematicError,
     SchematicNotFoundError,
+    SchematicRenderRefusedError,
     SchematicRenderUnavailableError,
     SchematicSupportUnavailableError,
     SchematicTooLargeError,
@@ -579,6 +580,84 @@ async def test_a_renderer_that_does_not_return_a_png_is_an_operational_failure()
 
     with pytest.raises(SchematicRenderUnavailableError):
         await schematics.prepare_render(7)
+
+
+async def test_rendering_now_serves_the_recipe_the_queue_already_rendered() -> None:
+    """Asking for the default view must not re-render the preview the build already has."""
+    schematics, analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    prepared = await schematics.prepare_render(7)
+    assert isinstance(prepared, FreshRender)
+    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
+
+    rendered = await schematics.render_now(7)
+
+    assert rendered.png == b"\x89PNG\r\n\x1a\ncached"
+    assert rendered.recipe_hash == prepared.recipe_hash
+    assert rendered.from_cache is True
+    assert len(analyzer.render_calls) == 1
+
+
+async def test_rendering_now_with_a_different_camera_renders_a_different_recipe() -> None:
+    schematics, analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    prepared = await schematics.prepare_render(7)
+    assert isinstance(prepared, FreshRender)
+    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
+
+    rendered = await schematics.render_now(7, request=schematics.render_recipe(yaw=45.0))
+
+    assert rendered.from_cache is False
+    assert rendered.png == analyzer.render_output
+    assert rendered.recipe_hash != prepared.recipe_hash
+    assert analyzer.render_calls[-1][1].yaw == 45.0
+    # The overridden camera keeps everything the deployment configured around it.
+    assert analyzer.render_calls[-1][1].width == prepared.width
+
+
+async def test_rendering_now_refuses_with_the_reason_rather_than_a_blank_image() -> None:
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+
+    with pytest.raises(SchematicRenderRefusedError) as refusal:
+        await schematics.render_now(7)
+
+    assert refusal.value.reason == RenderSkipReason.NOT_SANITIZED.value
+    assert refusal.value.public_context == {"reason": "not_sanitized"}
+    # The sentence a user is shown is the skip reason's own, not a generic conflict message.
+    assert refusal.value.localized_public_detail(None) == RenderSkipReason.NOT_SANITIZED.description
+    assert analyzer.render_calls == []
+
+
+async def test_rendering_now_reports_a_build_with_no_schematic_as_missing() -> None:
+    schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+
+    with pytest.raises(SchematicNotFoundError):
+        await schematics.render_now(404)
+
+
+async def test_rendering_now_is_unavailable_where_previews_are_disabled() -> None:
+    """The refusal is operational, not a fact about the build, so it is not a skip reason."""
+    schematics, analyzer, _ = service(resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+
+    with pytest.raises(SchematicRenderUnavailableError):
+        await schematics.render_now(7)
+    assert analyzer.render_calls == []
 
 
 async def test_measure_timing_persists_evidence_without_editing_a_build() -> None:
