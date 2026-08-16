@@ -11,6 +11,7 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.ui.views import ConfirmationView
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
@@ -57,7 +58,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             )
             return
 
-        claimed = await self.account_service.link_minecraft_account(ctx.author.id, code, consent=consent_view.consent)
+        # The account is created here rather than by the redemption, which is evidence of a
+        # Java subject and of nothing else. This command is reached over the gateway, so it
+        # genuinely holds the Discord identity it is about to mint.
+        account_id = await account_id_for(self.account_service, ctx.author)
+        claimed = await self.account_service.link_minecraft_account(account_id, code, consent=consent_view.consent)
         message = t(locale, _("Your Discord account has been linked with your Minecraft account."))
         if claimed is not None:
             message += "\n" + t(
@@ -76,7 +81,15 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
 
         await view.wait()
         if view.value:
-            if await self.account_service.unlink_minecraft_account(ctx.author.id):
+            # Read rather than get-or-create: someone with no account has nothing to unlink,
+            # and unlinking is no reason to write a row for them.
+            account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+            unlinked = (
+                account is not None
+                and account.id is not None
+                and await self.account_service.unlink_minecraft_account(account.id)
+            )
+            if unlinked:
                 await ctx.send(
                     view=text_layout(
                         t(locale, _("Your Discord account has been unlinked from your Minecraft account."))
@@ -111,9 +124,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             subject = await subject_for(ctx)
             if not await self.bot.services.permissions.allows(subject, ACCOUNT_IDENTITY_REFRESH_ANY):
                 raise PermissionNodeRequired((ACCOUNT_IDENTITY_REFRESH_ANY.name,))
-        account = await self.account_service.get_account(target.id)
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(target.id))
         if account is None or account.id is None:
-            raise AccountNotFoundError(discord_id=target.id)
+            raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(target.id))
 
         refresh = await self.account_service.refresh_java_identity(account.id)
         await ctx.send(
@@ -127,7 +140,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @app_commands.describe(name=app_commands.locale_str(_("A creator name credited on builds you worked on.")))
     async def claim(self, ctx: Context[BotT], *, name: str) -> None:
         """Ask staff to credit you with an older creator name."""
-        claim = await self.account_service.request_alias_claim(ctx.author.id, name)
+        account_id = await account_id_for(self.account_service, ctx.author)
+        claim = await self.account_service.request_alias_claim(account_id, name)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(
@@ -165,9 +179,10 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @requires(ACCOUNT_CLAIM_APPROVE)
     async def approve_claim(self, ctx: Context[BotT], claim_id: int, reassign: bool = False) -> None:
         """Credit a claimant with the creator name they requested."""
-        staff = await self.account_service.get_or_create_account(ctx.author.id)
-        assert staff.id is not None
-        claim = await self.account_service.approve_alias_claim(claim_id, staff_account_id=staff.id, reassign=reassign)
+        staff_account_id = await account_id_for(self.account_service, ctx.author)
+        claim = await self.account_service.approve_alias_claim(
+            claim_id, staff_account_id=staff_account_id, reassign=reassign
+        )
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(t(locale, _("Credited **{name}** to the claimant."), name=claim.alias_name)),
@@ -179,9 +194,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @requires(ACCOUNT_CLAIM_REJECT)
     async def reject_claim(self, ctx: Context[BotT], claim_id: int) -> None:
         """Close a creator credit claim without crediting the claimant."""
-        staff = await self.account_service.get_or_create_account(ctx.author.id)
-        assert staff.id is not None
-        claim = await self.account_service.reject_alias_claim(claim_id, staff_account_id=staff.id)
+        staff_account_id = await account_id_for(self.account_service, ctx.author)
+        claim = await self.account_service.reject_alias_claim(claim_id, staff_account_id=staff_account_id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(t(locale, _("Rejected the claim for **{name}**."), name=claim.alias_name)),
