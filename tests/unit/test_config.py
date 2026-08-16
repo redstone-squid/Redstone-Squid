@@ -14,6 +14,7 @@ from squid.config import (
     load_api_process_config,
     load_application_config,
     load_bot_process_config,
+    load_or_exit,
     load_worker_observability_config,
     load_worker_process_config,
 )
@@ -567,18 +568,25 @@ def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.Mon
 
 
 @pytest.mark.parametrize(
-    ("active_key_id", "keys"),
+    ("active_key_id", "keys", "field"),
     [
-        ("missing", '{"current":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}'),
-        ("current", '{"current":"dG9vLXNob3J0"}'),
-        ("bad key id", '{"bad key id":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}'),
+        ("missing", '{"current":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}', "api"),
+        ("current", '{"current":"dG9vLXNob3J0"}', "api.idempotency_keys"),
+        ("bad key id", '{"bad key id":"MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="}', "api.idempotency_keys"),
     ],
 )
 def test_idempotency_encryption_keyring_is_complete_and_strong(
     monkeypatch: pytest.MonkeyPatch,
     active_key_id: str,
     keys: str,
+    field: str,
 ) -> None:
+    """The exact field matters because the rendered message is derived from it.
+
+    A keyring rejected by the sibling IdempotencyEncryptionConfig used to be reported against
+    that model's own `keys` field, which names no variable an operator can set. Only the
+    membership check spans two settings and so belongs to `api` as a whole.
+    """
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret-long-enough",
@@ -589,7 +597,7 @@ def test_idempotency_encryption_keyring_is_complete_and_strong(
     with pytest.raises(ConfigurationError) as exc_info:
         load_api_process_config()
 
-    assert any(issue["field"].startswith("api") for issue in _issues(exc_info.value))
+    assert any(issue["field"] == field for issue in _issues(exc_info.value))
 
 
 def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -606,10 +614,128 @@ def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPat
     with pytest.raises(ConfigurationError) as exc_info:
         load_application_config()
 
-    rendered_error = f"{exc_info.value} {exc_info.value.context}"
+    rendered_error = f"{exc_info.value} {exc_info.value.backend_detail()} {exc_info.value.context}"
     assert "super-secret-password" not in rendered_error
     assert "not-a-port" not in rendered_error
     assert "very-loud" not in rendered_error
+
+
+def test_configuration_failures_name_the_variables_to_change(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The rendered text is the whole diagnostic an operator gets.
+
+    Nothing renders `context["issues"]`: logging is configured from the settings being loaded,
+    so a boot failure is printed before any handler exists. A count with no names sends the
+    operator to grep the settings model.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_API_PORT="65536",
+        SQUID_LOG_LEVEL="very-loud",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_application_config()
+
+    rendered = exc_info.value.backend_detail()
+    assert "  - SQUID_API_PORT: " in rendered
+    assert "  - SQUID_LOG_LEVEL: " in rendered
+    assert rendered.endswith("Correct the listed SQUID_* settings and restart the process.")
+
+
+def test_a_missing_settings_group_names_its_required_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`SQUID_DATABASE_*: Field required` would not say that the variable is SQUID_DATABASE_URL."""
+    for name in (*BASE_ENVIRONMENT, "SQUID_DISCORD_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    rendered = exc_info.value.backend_detail()
+    assert "  - SQUID_DATABASE_URL: " in rendered
+    assert "  - SQUID_VERIFICATION_CODE_PEPPER: " in rendered
+    assert "  - SQUID_DISCORD_TOKEN: " in rendered
+
+
+def test_a_rendered_failure_never_invents_an_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A name assembled from a validation location can be one no source ever reads.
+
+    Setting an invented variable looks like a fix and is then silently ignored, so a location
+    that maps to no declared key degrades to its group rather than being spelled out.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_IDEMPOTENCY_KEYS='{"test-v1":"not-valid-base64!!"}',
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    rendered = exc_info.value.backend_detail()
+    assert "  - SQUID_API_IDEMPOTENCY_KEYS: Every idempotency key must be valid padded base64." in rendered
+    assert "SQUID_API_KEYS" not in rendered
+
+
+def test_a_rendered_failure_omits_configured_dictionary_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A validation location can end in a key the deployment chose, so only two levels are read.
+
+    `context["issues"]` keeps the full internal path — that is the long-standing structured
+    contract — but the operator-facing text is assembled from declared field names alone.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_IDEMPOTENCY_KEYS='{"a-key-id-naming-an-internal-system": 5}',
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert "a-key-id-naming-an-internal-system" not in exc_info.value.backend_detail()
+
+
+def test_an_unparsable_setting_names_the_group_it_belongs_to(monkeypatch: pytest.MonkeyPatch) -> None:
+    """pydantic-settings fails structured values before validation, with only free text.
+
+    Its message names the field but its cause can quote the input, so the field name is taken
+    from a fixed pattern and accepted only when it matches a declared key.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_IDEMPOTENCY_KEYS="}not-json-and-not-a-secret{",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    rendered = exc_info.value.backend_detail()
+    assert "  - SQUID_API_*: Could not parse the configured value." in rendered
+    assert "not-json-and-not-a-secret" not in rendered
+    assert _issues(exc_info.value) == [
+        {"field": "api", "message": "Could not parse the configured value.", "type": "settings"}
+    ]
+
+
+def test_a_configuration_failure_exits_without_a_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Entrypoints load settings before logging exists, so the report goes to stderr."""
+    _set_environment(monkeypatch, SQUID_API_PORT="65536")
+
+    with pytest.raises(SystemExit) as exit_info:
+        load_or_exit(load_api_process_config)
+
+    assert exit_info.value.code == 1
+    assert "  - SQUID_API_PORT: " in capsys.readouterr().err
+
+
+def test_load_or_exit_returns_a_valid_configuration_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(monkeypatch, SQUID_API_SECRET="api-secret-long-enough", SQUID_API_PORT="9000")
+
+    assert load_or_exit(load_api_process_config).api.port == 9000
 
 
 @pytest.mark.parametrize("port", ["0", "65536", "not-a-port"])

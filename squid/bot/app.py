@@ -35,6 +35,7 @@ from squid.config import (
     CommunityConfig,
     NotificationConfig,
     load_bot_process_config,
+    load_or_exit,
 )
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
@@ -254,7 +255,7 @@ async def main(
     identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
 ) -> None:
     """Main entry point for the bot."""
-    resolved_config = process_config or load_bot_process_config()
+    resolved_config = process_config or load_or_exit(load_bot_process_config)
     queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="bot")
 
