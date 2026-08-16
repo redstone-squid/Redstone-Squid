@@ -20,6 +20,11 @@ Thread 3766207128 (`AliasAlreadyClaimedError` conflict context) belongs to
 [plan 01](01-consent-verification-ux.md) and 3766220759 to [plan 13](13-test-tooling-dispositions.md).
 `squid/users` no longer exists in git, so the provider-neutral rename has already landed.
 
+One item here has no thread of its own. [Plan 11](11-api-auth-records-sync.md) answered
+"lets use something safer than sha256" (3787898986) for API keys by retaining HMAC-SHA-256, and its
+audit of the other peppered-digest sites found one that does not fit that answer: the Java
+verification code. It is an accounts credential, so it is planned here rather than there.
+
 ## Findings
 
 ### Creator-name normalization is computed twice, and the two results disagree
@@ -109,6 +114,25 @@ throughout, and `AccountAlreadyLinkedError.__init__` takes `discord_id` position
 - The explicit `_to_identity` / `_to_account` / `_to_alias` / `_to_claim` mappers are correct and stay. SQLAlchemy
   cannot populate frozen domain dataclasses without coupling the domain to persistence.
 
+### The verification code is the one credential where the digest question has teeth
+
+`generate_verification_code` mints `secrets.randbelow(900_000) + 100_000` (`squid/bootstrap.py:532`) — 900 000
+values, about 19.8 bits — and `hash_verification_code` stores `sha256(pepper || code)`
+(`squid/accounts/infrastructure/repository.py:417-419`), a pepper-prefixed plain digest rather than an HMAC. Every
+other secret in this codebase is 32 random bytes behind `hmac.digest(...)`, which is why plan 11 retains that
+construction and rejects a KDF for API keys. This site is the exception, and the digest is the least of it:
+
+- **The lookup is keyed on the code alone.** `consume_code_and_link_account` selects on `expires > now`, `valid`,
+  and `code = hash(...)` (`repository.py:430-437`); it never mentions the Minecraft UUID the code was issued for.
+  One guess is therefore tested against *every* outstanding code at once, so the chance per attempt is
+  `outstanding / 900 000` rather than `1 / 900 000`.
+- **A hit links someone else's identity to the guesser.** The Discord ID comes from the caller of
+  `/account link <code>` (`squid/bot/verify.py:60`), not from the code, so a successful guess attaches the matched
+  Java account to the attacker's Discord account. That is an identity-takeover primitive, not a nuisance.
+- **Nothing caps attempts.** Codes live ten minutes and are single-use
+  (`squid/accounts/infrastructure/models.py:235-244`), which bounds the window but not the rate; the only limiter
+  on `/account link` is Discord's own command throughput.
+
 ### Already addressed after `5edfd3e`
 
 - The polymorphic row upgrade is superseded by `account_identities` plus stable `accounts.public_creator_id`.
@@ -194,6 +218,21 @@ throughout, and `AccountAlreadyLinkedError.__init__` takes `discord_id` position
    - Give `pending_claims()` an optional batched claimant load so plan 01's claimant presentation does not
      reintroduce an N+1.
    - Retain the explicit mappers and add no relationships.
+
+6. **Verification codes: keyed digest, wider code, capped attempts**
+   - `hash_verification_code` becomes `hmac.digest(pepper, code, hashlib.sha256)`. The pepper is a key, and
+     prefix-SHA-256 is the weaker construction for no saving. No dual-read path and no backfill: codes expire in ten
+     minutes, so a deploy invalidates at most one window, and `/link` reissues.
+   - Widen the code to nine or ten digits (`secrets.randbelow(9 * 10**9) + 10**9` is about 33 bits). **Stay
+     numeric**: `/verify` returns `int` and that endpoint is the one part of this API already on `master`
+     (`git show master:squid/api/app.py`), consumed by the in-game plugin that shows the code to the player. A
+     base32 code like `squid/cli_auth/application.py:75` mints would be stronger still and would change the
+     response type, so it is not worth it here — 33 bits against a ten-minute window is already decisive.
+   - Cap attempts on the consuming side, which is where the guessing happens: count consecutive failures per
+     Discord account, refuse after a small number for a cooling-off period, and log the refusal. The window and
+     single-use flag stay as they are.
+   - Keying the lookup by Minecraft UUID as well as by code is *not* available: the Discord user typing the code
+     knows nothing else, and the code is the whole binding. Entropy and attempt caps are the levers.
 
 ## Interfaces and Tests
 
@@ -284,6 +323,9 @@ fills from one batched load — the shape plan 01's claimant presentation needs.
   `None`.
 - **Bot rendering**: every `IdentityRefresh` branch, plus `MinecraftServiceUnavailableError`, produces a localized
   message.
+- **Verification codes**: a known-answer HMAC digest; a code issued for one Java account cannot be consumed after
+  its expiry or twice; the generated range is the widened one; consecutive wrong codes from one Discord account hit
+  the cap and the next correct code is refused until the cooling-off passes; `/verify` still returns an `int`.
 
 ### Before merging
 
@@ -311,6 +353,7 @@ correctly regardless, since it is the same pass a later Unicode change would nee
 | 3766202899 — outside Discord | **Fix.** Errors carry `(provider, subject)`, services gain `account_id`-keyed cores, and `me.py` stops rejecting non-Discord principals that hold an `account_id`. |
 | 3775414045 — "what a service..." | **Retain, with rationale.** 262 lines of cohesive methods over `PermissionStore` and `SubjectRuleCache`; splitting it would scatter one authorization decision. |
 | 3775418269 — should become a user id | **Already fixed.** `permission_grants` and `permission_role_assignments` key on `subject_account_id`. Verify and close. |
+| — (no thread; carried from 3787898986 via [plan 11](11-api-auth-records-sync.md) §1) | **Fix.** The verification code is the one peppered digest whose input has real entropy pressure: ~19.8 bits, looked up by code alone across every outstanding code, consumed by whoever types it, with no attempt cap. HMAC, a wider numeric code, and a failure cap; the API's `int` response is preserved. |
 
 ## Delivery
 
@@ -319,6 +362,7 @@ correctly regardless, since it is the same pass a later Unicode change would nee
 3. `accounts: refresh linked Java identities on demand` — subplan 3.
 4. `accounts: name errors by provider and subject` — subplan 4.
 5. `accounts: batch identity loads` — subplan 5.
+6. `accounts: harden the verification code` — subplan 6. Independent of 1-5; it can land first.
 
 Replying on GitHub and resolving threads requires separate explicit authorization, per the
 [directory README](README.md).

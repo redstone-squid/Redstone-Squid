@@ -1,9 +1,11 @@
 # Test and tooling review: thread dispositions
 
 Every `tests/` comment `Glinte` left on [PR #183](https://github.com/redstone-squid/Redstone-Squid/pull/183)
-at or before the `5edfd3e` cutoff, with the disposition that closes it. Four dispositions are in
-use, per `README.md`: **fixed** by this work, **already fixed** after `5edfd3e`, **retained** with a
-rationale now recorded in the test, or **deferred** to a named plan.
+at or before the `5edfd3e` cutoff, with the disposition that closes it, plus the one developer-tooling
+thread on a source file that the original cluster split left unassigned (see
+[Tooling](#tooling)). Four dispositions are in use, per `README.md`: **fixed** by this work,
+**already fixed** after `5edfd3e`, **retained** with a rationale now recorded in the test, or
+**deferred** to a named plan.
 
 CodeQL's two bot comments on `tests/` are out of scope: they are not review comments by `Glinte`.
 
@@ -33,6 +35,49 @@ CodeQL's two bot comments on `tests/` are out of scope: they are not review comm
 | 3784077161 | `unit/test_config.py` | "maybe don't duplicate the string" | **Fixed.** The anchored line (`cursor_secret`) was retired in `3605d011`; the same pattern in the API pepper and idempotency key id now reads from `BASE_ENVIRONMENT`. |
 | 3784078799 | `unit/test_config.py` | "bad test" | **Fixed.** The exact set of required config groups churned with every new required setting while proving only that several fields were named. Now asserts the property that matters - errors aggregate rather than stopping at the first - with a lower bound on the groups. |
 | 3788032262 | `unit/api/test_phase2_reads.py` | "subclass properly" | **Fixed.** Five duck-typed fakes now subclass the services they replace with `@override`. This surfaced one fake modelling a contract the service does not have: `render_content` returns `bytes` and raises on an unknown hash. |
+
+## Tooling
+
+One thread lands on a source file rather than on a test, and no plan claimed it in the original
+cluster split. It is developer tooling for migration authoring, so it belongs here.
+
+| # | File | Comment | Disposition |
+|---|---|---|---|
+| 3782845586 | `squid/persistence/alembic_entities.py:20` | "remove this crap" (`if len(_FUNCTION_SQL) != 11 or len(_TRIGGER_SQL) != 23`) | **Fixed by replacing the numbers, not by deleting the check.** The counts become a self-checking totality assertion that never needs bumping. |
+
+The guard is worth keeping in some form. `postgres_entities.sql` *is* the declared set: whatever the
+two regexes fail to parse is absent from `ALEMBIC_UTIL_ENTITIES`, and therefore absent from the
+comparison `alembic-utils` makes during autogenerate. A `CREATE FUNCTION` whose body does not end in
+`$$;` at the start of a line, or a `CREATE TRIGGER` broken across lines, would drop out silently.
+
+What is wrong is the guard's form. Two hand-maintained magic numbers have been bumped across 15
+commits, and two plan documents now instruct the next author to bump them again
+(`docs/plans/rbac.md:301`, `docs/plans/durable-queues.md:64-65`) — a check whose maintenance
+instructions have to be written down in other people's plans is not paying for itself.
+
+The replacement asserts the invariant the numbers were standing in for:
+
+```python
+_KINDS = re.findall(r"^CREATE (\w+)", _ENTITY_SQL, flags=re.MULTILINE)
+if sorted(_KINDS) != sorted(["FUNCTION"] * len(_FUNCTION_SQL) + ["TRIGGER"] * len(_TRIGGER_SQL)):
+    msg = "postgres_entities.sql has a statement alembic_entities.py did not parse"
+    raise RuntimeError(msg)
+```
+
+Every `CREATE` statement in the file must have produced exactly one parsed entity. Nothing to bump
+per migration; it fails precisely when a body regex misses something, and it also catches the
+`CREATE PROCEDURE` case `docs/new-migration.md:20-22` warns `alembic-utils` cannot manage. Extract
+the module body into `_parse_entities(sql)` so a unit test can feed it a deliberately malformed
+statement instead of relying on import order.
+
+`tests/integration/test_alembic_migrations.py:218-222` already compares the parsed triggers against
+the live database (`trigger_names == expected_triggers`), so a missed statement would eventually
+fail there too — but only with Docker and Postgres, whereas the import-time check fails in every
+process the moment the file is edited. Both are worth having.
+
+Two documentation fixes ship with it: delete the bump instructions from the two plans, and correct
+`docs/new-migration.md:13`, which still points at `squid/db/postgres_entities.sql` — a path that has
+not existed since the persistence package was renamed.
 
 ## Not done here
 
