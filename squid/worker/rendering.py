@@ -3,6 +3,7 @@
 import logging
 
 from squid.artifacts import ArtifactStore
+from squid.diagnostics.log_capture import work_lost
 from squid.schematics.application import SchematicRenderJobService, SchematicService
 from squid.schematics.application.queries import CachedRender, FreshRender, SkippedRender
 
@@ -39,7 +40,7 @@ class SchematicRenderProjector:
                 if dead:
                     logger.exception(
                         "Dead-lettered a schematic render projection",
-                        extra={"squid.build.id": job.build_id},
+                        extra={"squid.build.id": job.build_id, **work_lost()},
                     )
                 continue
             await self._jobs.complete(job)

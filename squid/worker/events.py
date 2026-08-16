@@ -3,6 +3,7 @@
 import logging
 from typing import Protocol
 
+from squid.diagnostics.log_capture import work_lost
 from squid.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.notifications import NotificationService
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
@@ -91,6 +92,7 @@ class CoreDomainEventRunner:
                     "squid.event.id": delivery.event.id,
                     "squid.event.type": delivery.event.event_type,
                     "squid.event.schema_version": delivery.event.schema_version,
+                    **work_lost(),
                 },
             )
             return
@@ -102,6 +104,7 @@ class CoreDomainEventRunner:
                     extra={
                         "squid.event.id": delivery.event.id,
                         "squid.event.type": delivery.event.event_type,
+                        **work_lost(),
                     },
                 )
             return

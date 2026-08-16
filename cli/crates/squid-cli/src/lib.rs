@@ -126,7 +126,11 @@ enum ErrorsCommand {
         reference: String,
     },
     /// List the most recent stored failures, newest first.
-    List,
+    List {
+        /// Show only failures that permanently abandoned work, such as a dead-lettered job.
+        #[arg(long)]
+        work_lost: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1368,9 +1372,10 @@ fn run_errors(
     output: &mut impl Write,
 ) -> Result<(), RunError> {
     match command {
-        ErrorsCommand::List => {
-            let response =
-                session.request(|client, token| DiagnosticsApi::new(client).list_errors(token))?;
+        ErrorsCommand::List { work_lost } => {
+            let response = session.request(|client, token| {
+                DiagnosticsApi::new(client).list_errors(work_lost, token)
+            })?;
             response
                 .data
                 .validate()
@@ -1407,7 +1412,8 @@ fn write_error_list(
             for report in &page.items {
                 writeln!(
                     output,
-                    "{}  {}  {}  {}",
+                    "{}{}  {}  {}  {}",
+                    if report.work_lost { "! " } else { "  " },
                     report.reference,
                     sanitize_terminal_text(&report.occurred_at),
                     sanitize_terminal_text(&report.exception_type),
@@ -1439,6 +1445,9 @@ fn write_error_detail(
                     "{}",
                     locale.message(MessageKey::ErrorReferenceAmbiguous)
                 )?;
+            }
+            if report.work_lost {
+                writeln!(output, "{}", locale.message(MessageKey::ErrorWorkLost))?;
             }
             writeln!(output, "reference:      {}", report.reference)?;
             writeln!(output, "correlation_id: {}", report.correlation_id)?;
@@ -2909,7 +2918,7 @@ const fn command_name(command: &Command) -> &'static str {
         },
         Command::Errors { command } => match command {
             ErrorsCommand::Show { .. } => "errors.show",
-            ErrorsCommand::List => "errors.list",
+            ErrorsCommand::List { .. } => "errors.list",
         },
         Command::Submit { .. } => "submit",
         Command::Version => "version",

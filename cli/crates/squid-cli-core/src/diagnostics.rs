@@ -33,6 +33,8 @@ pub struct ErrorReportSummary {
     pub exception_type: String,
     #[serde(default)]
     pub code: Option<String>,
+    #[serde(default)]
+    pub work_lost: bool,
 }
 
 /// One stored failure with everything kept about it.
@@ -47,6 +49,8 @@ pub struct ErrorReportDetail {
     pub exception_type: String,
     #[serde(default)]
     pub code: Option<String>,
+    #[serde(default)]
+    pub work_lost: bool,
     pub message: String,
     pub traceback: String,
     #[serde(default)]
@@ -104,12 +108,14 @@ impl<'a> DiagnosticsApi<'a> {
 
     pub fn list_errors(
         &self,
+        work_lost: bool,
         token: &SecretBytes,
     ) -> Result<ApiResponse<ErrorReportPage>, TransportError> {
-        self.client.send_json(
-            ApiRequest::new(ApiMethod::Get, "/api/v1/diagnostics/errors"),
-            Some(token),
-        )
+        let mut request = ApiRequest::new(ApiMethod::Get, "/api/v1/diagnostics/errors");
+        if work_lost {
+            request = request.with_query_param("work_lost", "true")?;
+        }
+        self.client.send_json(request, Some(token))
     }
 
     pub fn get_error(
@@ -161,6 +167,7 @@ mod tests {
                     origin: None,
                     exception_type: "RuntimeError".to_owned(),
                     code: None,
+                    work_lost: false,
                 })
                 .collect(),
         };

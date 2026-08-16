@@ -357,6 +357,9 @@ export const cliSessionRevoke = <ThrowOnError extends boolean = false>(options?:
  * List Error Reports
  *
  * List the most recent unexpired error reports, newest first.
+ *
+ * Most reports are failures something recovered from, because capture follows the logs. Set
+ * `work_lost` to see only the ones that permanently abandoned work.
  */
 export const diagnosticsErrorsList = <ThrowOnError extends boolean = false>(options?: Options<DiagnosticsErrorsListData, ThrowOnError>): RequestResult<DiagnosticsErrorsListResponses, DiagnosticsErrorsListErrors, ThrowOnError> => (options?.client ?? client).get<DiagnosticsErrorsListResponses, DiagnosticsErrorsListErrors, ThrowOnError>({ url: '/v1/diagnostics/errors', ...options });
 

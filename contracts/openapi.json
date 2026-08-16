@@ -3715,7 +3715,7 @@
           "diagnostics"
         ],
         "summary": "List Error Reports",
-        "description": "List the most recent unexpired error reports, newest first.",
+        "description": "List the most recent unexpired error reports, newest first.\n\nMost reports are failures something recovered from, because capture follows the logs. Set\n`work_lost` to see only the ones that permanently abandoned work.",
         "operationId": "diagnostics_errors_list",
         "security": [
           {}
@@ -3734,6 +3734,18 @@
               "title": "Page Size"
             },
             "description": "Maximum number of items to return."
+          },
+          {
+            "name": "work_lost",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return only failures that permanently abandoned work, such as a dead-lettered job.",
+              "default": false,
+              "title": "Work Lost"
+            },
+            "description": "Return only failures that permanently abandoned work, such as a dead-lettered job."
           }
         ],
         "responses": {
@@ -16425,6 +16437,11 @@
               }
             ]
           },
+          "work_lost": {
+            "type": "boolean",
+            "title": "Work Lost",
+            "default": false
+          },
           "message": {
             "type": "string",
             "title": "Message"
@@ -16510,6 +16527,11 @@
                 "type": "null"
               }
             ]
+          },
+          "work_lost": {
+            "type": "boolean",
+            "title": "Work Lost",
+            "default": false
           }
         },
         "additionalProperties": false,
