@@ -714,7 +714,7 @@ export const recordsGet = <ThrowOnError extends boolean = false>(options: Option
 /**
  * List Records
  *
- * List authoritative active record results.
+ * List authoritative published record results.
  */
 export const recordsList = <ThrowOnError extends boolean = false>(options?: Options<RecordsListData, ThrowOnError>): RequestResult<RecordsListResponses, RecordsListErrors, ThrowOnError> => (options?.client ?? client).get<RecordsListResponses, RecordsListErrors, ThrowOnError>({ url: '/v1/records', ...options });
 

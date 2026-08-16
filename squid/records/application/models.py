@@ -146,8 +146,18 @@ class TitleDiagnosticGap:
 
 
 @dataclass(frozen=True, slots=True)
-class ActiveRecord:
-    """Public read model for one result in an active computation run."""
+class PublishedRecord:
+    """Public read model for one result of the currently published computation run.
+
+    It used to be `ActiveRecord`, which borrows Rails' name for "a domain object
+    that persists itself" to mean something entirely different. It persists
+    nothing and knows nothing about its own storage.
+
+    `record_computation_runs.is_active` keeps the word and is right to: it
+    describes a *run*, and exactly one run per kind and version is the active
+    one. What this type names is a result belonging to that run, which is a
+    different fact about a different thing.
+    """
 
     id: int
     definition_id: int

@@ -8330,7 +8330,7 @@
           "records"
         ],
         "summary": "List Records",
-        "description": "List authoritative active record results.",
+        "description": "List authoritative published record results.",
         "operationId": "records_list",
         "security": [
           {}
@@ -17550,7 +17550,7 @@
           "holder_builds"
         ],
         "title": "RecordDetail",
-        "description": "One active record result with its ordered holder builds."
+        "description": "One published record result with its ordered holder builds."
       },
       "RecordFilterInput": {
         "properties": {
@@ -17797,7 +17797,7 @@
           "computed_at"
         ],
         "title": "RecordSummary",
-        "description": "One active computed record result."
+        "description": "One published computed record result."
       },
       "RendererCapabilities": {
         "properties": {

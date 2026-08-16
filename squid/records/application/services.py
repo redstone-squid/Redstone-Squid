@@ -9,13 +9,13 @@ from itertools import combinations, groupby, product
 
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
-    ActiveRecord,
     CandidateFacet,
     CategoryCompetition,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecord,
     HolderHistoryEntry,
+    PublishedRecord,
     QueueProcessSummary,
     RebuildSummary,
     RecordGap,
@@ -260,9 +260,9 @@ class RecordService:
         """Return active canonical record titles requiring taxonomy review."""
         return await self._runs.list_title_gaps(kind=kind)
 
-    async def get(self, result_id: int) -> ActiveRecord | None:
-        """Return one currently active computed record result."""
-        return await self._runs.get_active_record(result_id)
+    async def get(self, result_id: int) -> PublishedRecord | None:
+        """Return one published computed record result."""
+        return await self._runs.get_published_record(result_id)
 
     async def list_page(
         self,
@@ -270,9 +270,9 @@ class RecordService:
         selector: PageSelector = FIRST_PAGE,
         descending: bool = True,
         page_size: int = 20,
-    ) -> Page[ActiveRecord]:
-        """Return one page of active record results in display order."""
-        rows = await self._runs.list_active_records(
+    ) -> Page[PublishedRecord]:
+        """Return one page of published record results in display order."""
+        rows = await self._runs.list_published_records(
             offset=selector.offset,
             after_id=selector.after_id,
             before_id=selector.before_id,
@@ -284,7 +284,7 @@ class RecordService:
             rows,
             selector=selector,
             page_size=page_size,
-            total=await self._runs.count_active_records(),
+            total=await self._runs.count_published_records(),
             keyset=True,
             id_of=lambda record: record.id,
         )
