@@ -62,13 +62,23 @@ class ProblemDetail(BaseModel):
     context: dict[str, JSONValue] | None = None
 
 
+_PINNED_REASON_PHRASES = {
+    # Python 3.13 renamed 422 from "Unprocessable Entity" to "Unprocessable
+    # Content", so `HTTPStatus.phrase` makes the exported document depend on the
+    # interpreter that generated it. The unit suite runs on 3.12, 3.13 and 3.14,
+    # and the committed-document assertion only catches a forgotten regeneration
+    # if the document is the same on all three.
+    HTTPStatus.UNPROCESSABLE_ENTITY: "Unprocessable Content",
+}
+
+
 def responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
     """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata."""
     return {
         status: {
             "model": ProblemDetail,
             "content": {PROBLEM_DETAIL_MEDIA_TYPE: {"schema": {"$ref": "#/components/schemas/ProblemDetail"}}},
-            "description": HTTPStatus(status).phrase,
+            "description": _PINNED_REASON_PHRASES.get(HTTPStatus(status), HTTPStatus(status).phrase),
         }
         for status in statuses
     }
