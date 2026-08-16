@@ -42,21 +42,16 @@ def _account(*, discord: bool = True) -> Account:
     )
 
 
-def _caller(kind: str = "account", *, discord_id: int | None = 7) -> Caller:
-    return Caller(
-        kind=cast(Any, kind),
-        subject=f"{kind}:1",
-        nodes=UNBOUNDED,
-        discord_id=discord_id,
-        account_id=1,
-    )
+def _caller(kind: str = "account") -> Caller:
+    """A caller carries an account and nothing about how it authenticated."""
+    return Caller(kind=cast(Any, kind), subject=f"{kind}:1", nodes=UNBOUNDED, account_id=1)
 
 
 async def test_a_cli_caller_can_read_its_own_account() -> None:
     """The regression: no Discord identity, but a real account."""
     accounts = SimpleNamespace(get_account_by_id=AsyncMock(return_value=_account(discord=False)))
 
-    response = await get_me(cast(Any, accounts), _caller("cli", discord_id=None))
+    response = await get_me(cast(Any, accounts), _caller("cli"))
 
     accounts.get_account_by_id.assert_awaited_once_with(1)
     assert response.id == 1
@@ -64,12 +59,23 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
     assert response.ign == "Steve"
 
 
-async def test_a_discord_caller_still_reports_its_discord_id() -> None:
+async def test_the_response_reports_the_discord_id_off_the_accounts_identities() -> None:
+    """`UserMe.discord_id` is derived from the loaded account, not from the caller.
+
+    This used to pass for the right reason through the wrong field: the caller carried a
+    snowflake, so an implementation reading it would have passed too. The caller no
+    longer has one, and the same account still reports the same id.
+    """
     accounts = SimpleNamespace(get_account_by_id=AsyncMock(return_value=_account()))
 
     response = await get_me(cast(Any, accounts), _caller())
 
     assert response.discord_id == 7
+    assert (
+        await get_me(
+            cast(Any, SimpleNamespace(get_account_by_id=AsyncMock(return_value=_account(discord=False)))), _caller()
+        )
+    ).discord_id is None
 
 
 async def test_a_caller_without_an_account_is_rejected() -> None:
@@ -83,7 +89,7 @@ async def test_a_caller_without_an_account_is_rejected() -> None:
 async def test_consent_is_granted_by_account_not_discord_id() -> None:
     accounts = SimpleNamespace(grant_current_consent=AsyncMock(return_value=_account(discord=False)))
 
-    response = await grant_consent(cast(Any, accounts), _caller("cli", discord_id=None))
+    response = await grant_consent(cast(Any, accounts), _caller("cli"))
 
     accounts.grant_current_consent.assert_awaited_once_with(1)
     assert response.consent_pending is False

@@ -460,7 +460,6 @@ async def test_account_dependency_rejects_services_and_stale_consent() -> None:
         kind="account",
         subject="account:42",
         account_id=ACCOUNT_ID,
-        discord_id=123,
         consent_pending=True,
     )
 
