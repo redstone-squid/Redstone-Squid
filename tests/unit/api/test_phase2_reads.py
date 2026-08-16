@@ -209,7 +209,7 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
         guild_id=99,
         options=(VoteOption("1", VoteChoice.GENERIC, identifier="red", label="Red"),),
-        selections=(VoteSelection(111, 222, 99, "red", "1", 2.5),),
+        selections=(VoteSelection(111, 99, "red", "1", 2.5),),
     )
     _override(app, votes=VoteFake(session))
 

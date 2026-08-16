@@ -68,7 +68,7 @@ async def cast_vote(
         raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
         raise AuthorizationError
-    actor = await vote_members.member(caller.account_id, caller.discord_id, vote.guild_id, session.kind)
+    actor = await vote_members.member(caller.account_id, vote.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
     result = await votes.cast_vote_by_session(vote_session_id, actor, vote.option_id)

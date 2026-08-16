@@ -51,6 +51,14 @@ class AccountService:
         """Return an account by its internal identifier."""
         return await self._repository.get_by_id(account_id)
 
+    async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
+        """Return several accounts, with their identities, at a fixed query cost.
+
+        Anything rendering a list of account-keyed rows needs this rather than a
+        `get_account_by_id` per row.
+        """
+        return await self._repository.get_many(account_ids)
+
     async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
         """Resolve the account established by a verified external identity, creating it if absent.
 

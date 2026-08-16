@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, final
 
 import discord
 
+from squid.accounts.domain import IdentityProvider
 from squid.bot.posts.renderer import DesiredPost
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
@@ -110,11 +111,26 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
     async def _generic_poll(self, snapshot: VoteSessionSnapshot) -> Sequence[DesiredPost]:
         if snapshot.poll is None:
             return ()
-        layout = render_generic_poll(snapshot)
+        layout = render_generic_poll(snapshot, await self._voter_discord_ids(snapshot))
         return [
             DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", layout=layout)
             for channel_id, guild_id in (await self._published_channels(snapshot)).items()
         ]
+
+    async def _voter_discord_ids(self, snapshot: VoteSessionSnapshot) -> dict[int, int]:
+        """Snowflakes to mention this poll's voters by, only when the card shows them."""
+        poll = snapshot.poll
+        if poll is None or poll.visibility != "visible_live":
+            return {}
+        accounts = await self.bot.services.accounts.get_accounts(
+            [selection.account_id for selection in snapshot.selections]
+        )
+        resolved: dict[int, int] = {}
+        for account_id, account in accounts.items():
+            identity = account.identity(IdentityProvider.DISCORD)
+            if identity is not None and identity.discord_id is not None:
+                resolved[account_id] = identity.discord_id
+        return resolved
 
     async def _published_channels(self, snapshot: VoteSessionSnapshot) -> dict[int, int]:
         """Channels this session already has live posts in, mapped to their guild."""

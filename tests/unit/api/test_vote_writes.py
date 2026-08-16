@@ -48,7 +48,7 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
         account(),
     )
 
-    members.member.assert_awaited_once_with(1, 7, 10, "build")
+    members.member.assert_awaited_once_with(1, 10, "build")
     votes.cast_vote_by_session.assert_awaited_once_with(12, actor, "approve")
     assert response.id == 12
 
