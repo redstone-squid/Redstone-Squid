@@ -81,6 +81,9 @@ dev = [
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
     "schemathesis==4.24.2",
+    "types-docker>=7.1",
+    "types-Markdown>=3.7",
+    "types-psycopg2>=2.9",
     "redstone-squid[schematics,observability]",
 ]
 fuzz = [
