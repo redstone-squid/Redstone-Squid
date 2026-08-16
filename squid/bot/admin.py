@@ -299,9 +299,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @commands.command(name="error", aliases=["e"], hidden=True)
+    # Not `error`: that name now belongs to the stored-error lookup group, which is the command
+    # someone reaches for while holding a reference a user reported.
+    @commands.command(name="raise-error", aliases=["e"], hidden=True)
     @commands.is_owner()
-    async def error(self, ctx: Context[BotT]):
+    async def raise_error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         async with self.bot.get_running_message(ctx, delete_on_exit=True, locale=locale):

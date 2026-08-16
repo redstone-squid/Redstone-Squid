@@ -52,6 +52,34 @@ DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
 DEFAULT_NOTIFICATION_CONFIG = NotificationConfig()
 CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation", "notification-deliveries"})
 
+EXTENSIONS = (
+    "squid.bot.reactions",
+    "squid.bot.messages",
+    "squid.bot.misc_commands",
+    "squid.bot.settings",
+    "squid.bot.submission",
+    "squid.bot.log",
+    "squid.bot.help",
+    "squid.bot.voting.vote",
+    "squid.bot.starboard.cog",
+    "squid.bot.sync",
+    "squid.bot.events",
+    "squid.bot.notifications",
+    "squid.bot.verify",
+    "squid.bot.admin",
+    "squid.bot.diagnostics",
+    "squid.bot.permissions",
+    "squid.bot.give_redstoner",
+    "squid.bot.version_tracking",
+    "squid.bot.welcome_relay",
+)
+"""Every cog the bot loads, in load order.
+
+Module-level rather than local to `setup_hook` so a test can load the real set. A name collision
+between two cogs is only raised when they are registered onto the same bot, which no per-cog test
+does -- it used to surface as the process failing to start.
+"""
+
 
 class RedstoneSquid(Bot):
     def __init__(
@@ -148,27 +176,7 @@ class RedstoneSquid(Bot):
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
 
-        extensions = [
-            "squid.bot.reactions",
-            "squid.bot.messages",
-            "squid.bot.misc_commands",
-            "squid.bot.settings",
-            "squid.bot.submission",
-            "squid.bot.log",
-            "squid.bot.help",
-            "squid.bot.voting.vote",
-            "squid.bot.starboard.cog",
-            "squid.bot.sync",
-            "squid.bot.events",
-            "squid.bot.notifications",
-            "squid.bot.verify",
-            "squid.bot.admin",
-            "squid.bot.diagnostics",
-            "squid.bot.permissions",
-            "squid.bot.give_redstoner",
-            "squid.bot.version_tracking",
-            "squid.bot.welcome_relay",
-        ]
+        extensions = [*EXTENSIONS]
         if self.development_mode:
             extensions.append("jishaku")
 

@@ -1,0 +1,117 @@
+"""Every cog must load onto one bot together.
+
+A command name collision between two cogs is only raised when both are registered on the same
+bot. The per-cog taxonomy tests instantiate each cog alone, so they cannot see one: a duplicate
+name shipped as a `CommandRegistrationError` at process start, with the bot refusing to boot.
+"""
+
+import sys
+from collections.abc import AsyncIterator
+from typing import Any
+from unittest.mock import MagicMock
+
+import discord
+import pytest
+from discord.ext import commands
+
+from squid.bot.app import EXTENSIONS
+from squid.bot.errors import SquidCommandTree
+
+
+class StubBot(commands.Bot):
+    """A real `Bot` with the attributes cog constructors read, and nothing else."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            command_prefix="!",
+            intents=discord.Intents.none(),
+            tree_cls=SquidCommandTree,
+        )
+        self.services = MagicMock()
+        self.reactions = MagicMock()
+        self.background_tasks = MagicMock()
+        self.post_reconciler = MagicMock()
+        self.account_ids = MagicMock()
+        self.build_config = MagicMock()
+        self.community_config = MagicMock()
+        self.catbox = MagicMock()
+        self.media_previews = MagicMock()
+        self.development_mode = False
+        self.owner_server_id = 1
+        self.bot_name = "stub"
+        self.bot_version = "0"
+        self.source_code_url = "https://example.invalid"
+        self.notification_site_url = None
+        self.inference_model = "stub"
+        self.inference_reasoning_effort = "low"
+
+    def __getattr__(self, name: str) -> Any:
+        # Only reached for attributes `Bot` does not define, so a cog reading a bot attribute
+        # this stub has not listed gets a mock rather than turning this into a maintenance chore.
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return MagicMock()
+
+
+@pytest.fixture
+async def loaded_bot() -> AsyncIterator[commands.Bot]:
+    """Load the real extension list, then put `sys.modules` back exactly as it was.
+
+    `load_extension` builds a *fresh* module object and assigns it into `sys.modules`, rather than
+    reusing the already-imported one. Without the restore, every other test in the session that had
+    imported a name from one of these modules keeps a function whose globals belong to the old
+    module object -- so `mock.patch` on the module path silently patches something that function
+    can no longer see, and the real implementation runs instead.
+    """
+    before = dict(sys.modules)
+    bot = StubBot()
+    try:
+        for extension in EXTENSIONS:
+            await bot.load_extension(extension)
+        yield bot
+    finally:
+        for name, module in before.items():
+            if sys.modules.get(name) is not module:
+                sys.modules[name] = module
+
+
+async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> None:
+    assert set(loaded_bot.extensions) == set(EXTENSIONS)
+
+
+async def test_no_two_cogs_claim_the_same_command_name(loaded_bot: commands.Bot) -> None:
+    """The assertion `load_extension` already makes, restated so a failure names the collision."""
+    seen: dict[str, str] = {}
+    collisions: list[str] = []
+    for command in loaded_bot.walk_commands():
+        for name in (
+            command.qualified_name,
+            *(f"{command.full_parent_name} {alias}".strip() for alias in command.aliases),
+        ):
+            owner = type(command.cog).__name__ if command.cog is not None else "?"
+            if name in seen:
+                collisions.append(f"{name!r} claimed by both {seen[name]} and {owner}")
+            seen[name] = owner
+
+    assert not collisions, "; ".join(collisions)
+
+
+async def test_the_error_group_is_the_lookup_command(loaded_bot: commands.Bot) -> None:
+    """`error` belongs to report lookup; the owner's deliberate failure kept its `e` alias.
+
+    Pinned because the two are easy to swap back by accident, and swapping them would make
+    `!error <reference>` raise a test exception at whoever is trying to read a report.
+    """
+    lookup = loaded_bot.get_command("error")
+    raiser = loaded_bot.get_command("raise-error")
+
+    assert lookup is not None
+    assert raiser is not None
+    assert type(lookup.cog).__name__ == "Diagnostics"
+    assert type(raiser.cog).__name__ == "Admin"
+    assert loaded_bot.get_command("e") is raiser
+    assert loaded_bot.get_command("error recent") is not None
+
+
+def test_extension_list_has_no_duplicates() -> None:
+    assert len(EXTENSIONS) == len(set(EXTENSIONS))
