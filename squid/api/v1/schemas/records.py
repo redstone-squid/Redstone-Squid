@@ -1,15 +1,17 @@
 """Public computed-record representations."""
 
 from datetime import datetime
+from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from squid.api.v1.schemas import FromDomain
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.records.application.models import ActiveRecord
 
 
-class RecordSummary(BaseModel):
+class RecordSummary(FromDomain[ActiveRecord]):
     """One active computed record result."""
 
     model_config = ConfigDict(extra="forbid")
@@ -27,7 +29,7 @@ class RecordSummary(BaseModel):
     computed_at: datetime
 
     @classmethod
-    def from_domain(cls, record: ActiveRecord) -> RecordSummary:
+    def from_domain(cls, record: ActiveRecord, /) -> Self:
         return cls(
             id=record.id,
             definition_id=record.definition_id,

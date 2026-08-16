@@ -150,6 +150,21 @@ class CreatorAliasNotFoundError(NotFoundError):
         self.name = name
 
 
+class CreatorNotFoundError(NotFoundError):
+    """No creator profile exists for the requested identifier."""
+
+    default_message = _("Creator not found.")
+    default_title = _("Creator not found")
+    default_code = ErrorCode.CREATOR_NOT_FOUND
+    default_resource = "creator"
+    default_end_user_action = _("Check the creator ID and try again.")
+
+    def __init__(self, creator_id: UUID) -> None:
+        identifier = str(creator_id)
+        super().__init__(context={"creator_id": identifier}, public_context={"creator_id": identifier})
+        self.creator_id = creator_id
+
+
 class AliasAlreadyClaimedError(ConflictError):
     """A creator name is already credited to an account."""
 

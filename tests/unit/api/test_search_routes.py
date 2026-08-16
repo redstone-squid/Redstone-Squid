@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
-from squid.api.v1.search import search, suggest_terms
+from squid.api.v1.search import build_hit_id, search, suggest_terms
 from squid.builds.domain import Build, DoorBuild, Status
+from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
 from squid.runtime import ApiServices
 from squid.search.domain import (
@@ -140,3 +141,13 @@ async def test_suggest_passes_the_caller_limit_through() -> None:
 
     assert result.suggestions == ["piston"]
     graph.suggest.assert_awaited_once_with("pist", limit=3)
+
+
+def test_an_unparsable_projection_key_is_a_server_fault_not_a_bad_request() -> None:
+    """A build projection keyed by something that is not an id means the index is
+    lying about itself. Nothing the caller can send fixes that, so blaming them
+    with a 400 sent them chasing their own query."""
+    with pytest.raises(DataIntegrityError) as raised:
+        build_hit_id("b1")
+
+    assert raised.value.context == {"source_id": "b1"}

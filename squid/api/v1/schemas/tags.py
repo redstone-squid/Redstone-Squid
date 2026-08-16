@@ -1,13 +1,15 @@
 """Public tag-definition representations."""
 
 from decimal import Decimal
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from squid.api.v1.schemas import FromDomain
 from squid.tags.domain import TagDefinition
 
 
-class TagDetail(BaseModel):
+class TagDetail(FromDomain[TagDefinition]):
     """A published tag clients may use in build and search views."""
 
     model_config = ConfigDict(extra="forbid")
@@ -26,7 +28,7 @@ class TagDetail(BaseModel):
     numeric_quantum: Decimal | None
 
     @classmethod
-    def from_domain(cls, definition: TagDefinition) -> TagDetail:
+    def from_domain(cls, definition: TagDefinition, /) -> Self:
         return cls(
             id=definition.id,
             key=definition.stable_key,

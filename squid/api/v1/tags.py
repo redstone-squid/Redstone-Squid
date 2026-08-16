@@ -6,8 +6,8 @@ from squid.api.dependencies import Tags
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
 from squid.api.v1.schemas.tags import TagDetail
-from squid.core.errors import NotFoundError
 from squid.core.pagination import offset_page
+from squid.tags.errors import TagNotFoundError
 
 router = APIRouter(prefix="/tags", tags=["tags"])
 
@@ -29,6 +29,5 @@ async def get_tag(tag_id: int, tags: Tags) -> TagDetail:
     """Return one published tag definition."""
     definition = await tags.public_definition(tag_id)
     if definition is None:
-        msg = "Tag not found."
-        raise NotFoundError(msg, resource="tag", public_context={"tag_id": tag_id})
+        raise TagNotFoundError(tag_id)
     return TagDetail.from_domain(definition)

@@ -19,7 +19,8 @@ from squid.api.pagination import (
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.records import RecordDetail, RecordSummary
 from squid.builds.domain import Status
-from squid.core.errors import DataIntegrityError, NotFoundError
+from squid.core.errors import DataIntegrityError
+from squid.records.errors import RecordNotFoundError
 
 router = APIRouter(prefix="/records", tags=["records"])
 # Result identifiers ascend with computation, so recency needs no separate indexed column.
@@ -31,7 +32,7 @@ async def get_record(record_id: int, records: Records, build_queries: BuildQueri
     """Return one result only while its computation run is active."""
     record = await records.get(record_id)
     if record is None:
-        raise NotFoundError(resource="record", public_context={"record_id": record_id})
+        raise RecordNotFoundError(record_id)
 
     found = await build_queries.get_many(record.holder_build_ids)
     public_builds = {
