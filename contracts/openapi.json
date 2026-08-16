@@ -14453,7 +14453,7 @@
           "unit"
         ],
         "title": "BuildTag",
-        "description": "A public tag assignment without moderation provenance."
+        "description": "A tag on a build, without who applied it or how."
       },
       "CategoryFormResponse": {
         "properties": {
@@ -18550,7 +18550,7 @@
             ],
             "title": "Display Unit"
           },
-          "numeric_quantum": {
+          "numeric_step": {
             "anyOf": [
               {
                 "type": "string",
@@ -18560,7 +18560,7 @@
                 "type": "null"
               }
             ],
-            "title": "Numeric Quantum"
+            "title": "Numeric Step"
           }
         },
         "additionalProperties": false,
@@ -18577,7 +18577,7 @@
           "record_operator",
           "canonical_unit",
           "display_unit",
-          "numeric_quantum"
+          "numeric_step"
         ],
         "title": "TagDetail",
         "description": "A published tag clients may use in build and search views."
