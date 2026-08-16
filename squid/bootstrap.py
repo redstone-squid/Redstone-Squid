@@ -157,7 +157,14 @@ def create_schematic_service(
     *,
     render_capable: bool = False,
 ) -> SchematicService:
-    """Assemble the schematic service over whichever analyzer this process can run."""
+    """Assemble the schematic service over whichever analyzer this process can run.
+
+    `render_capable` says this process may *ask* for renders, not that it performs them: the
+    native work always happens in the worker behind the durable job queue. What it actually
+    buys is the resource pack, which a process must be able to load before it can name a
+    recipe — so the API and the bot carry it for on-demand renders, and the worker for the
+    previews it publishes.
+    """
     analyzer = create_schematic_analyzer(config, jobs, artifacts)
     resource_pack = None
     if render_capable and config.render_enabled:
@@ -626,7 +633,7 @@ class _ServiceGraph:
 
 def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> ApiServices:
     """Create only capabilities used by the HTTP API."""
-    graph = _ServiceGraph(db, config, resources_stack)
+    graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     encryption = config.idempotency_encryption
     if encryption is None:
         msg = "The API runtime requires an idempotency response-encryption keyring."
@@ -666,7 +673,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
 
 def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> BotServices:
     """Create only capabilities used by Discord gateway features."""
-    graph = _ServiceGraph(db, config, resources_stack)
+    graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     return BotServices(
         builds=graph.builds,
         error_reports=graph.error_reports,
