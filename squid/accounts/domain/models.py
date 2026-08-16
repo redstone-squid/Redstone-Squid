@@ -217,6 +217,34 @@ class AliasClaim:
 
 
 @dataclass(frozen=True, slots=True)
+class IdentityRefresh:
+    """Outcome of reconciling a Java identity's display name with its creator credit.
+
+    Every field is filled on every refresh, including one that changed nothing, so callers
+    render one shape rather than inferring what happened from a bare `None`.
+    """
+
+    account_id: int
+    java_uuid: UUID
+    current_name: str
+    previous_name: str | None = None
+    claimed_alias: CreatorAlias | None = None
+    retained_alias_names: tuple[str, ...] = ()
+    contested_alias: CreatorAlias | None = None
+    opened_claim: AliasClaim | None = None
+
+    @property
+    def renamed(self) -> bool:
+        """Whether the verified name differs from the one previously stored."""
+        return self.previous_name is not None and self.previous_name != self.current_name
+
+    @property
+    def is_contested(self) -> bool:
+        """Whether the new name is credited to a different account, pending staff review."""
+        return self.contested_alias is not None
+
+
+@dataclass(frozen=True, slots=True)
 class VerificationCode:
     """A valid verification code returned by persistence."""
 
