@@ -1184,6 +1184,26 @@ during a deploy that was otherwise a no-op for it.
 """
 
 
+_INFRASTRUCTURE_ENVIRONMENT_KEYS = frozenset(
+    {
+        "SQUID_ENV_FILE",
+        "SQUID_APP_IMAGE",
+        "SQUID_WORKER_IMAGE",
+        "SQUID_API_HOST_PORT",
+        "SQUID_DB_PORT",
+        "SQUID_PGWEB_PORT",
+    }
+)
+"""Keys the Compose files interpolate that no process reads as configuration.
+
+They select images, published host ports and the env file itself, so they are resolved by Compose
+before a container exists. The same `.env` is then handed to the containers wholesale via
+`env_file`, which puts them in front of this audit anyway -- and under
+`SQUID_STRICT_UNKNOWN_KEYS` an unknown key is a boot failure, so leaving them out would mean
+publishing the API on a spare host port took the whole stack down.
+"""
+
+
 def _known_environment_keys() -> frozenset[str]:
     """Return the global SQUID key contract shared by every process."""
     keys: set[str] = set()
@@ -1268,7 +1288,7 @@ def _configured_environment_keys() -> set[str]:
 
 def _audit_unknown_environment_keys(*, strict: bool) -> None:
     """Report likely deployment typos while accepting sibling-process keys."""
-    known = _known_environment_keys() | _RETIRED_ENVIRONMENT_KEYS
+    known = _known_environment_keys() | _RETIRED_ENVIRONMENT_KEYS | _INFRASTRUCTURE_ENVIRONMENT_KEYS
     unknown = sorted(name for name in _configured_environment_keys() if name.upper() not in known)
     if not unknown:
         return
