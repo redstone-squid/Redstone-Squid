@@ -13,15 +13,19 @@ save→load is the identity (up to database-generated timestamps), and ``save()`
 itself persists ``build.tags`` verbatim without interpreting the string fields.
 """
 
+# ruff: noqa: RUF001, RUF002  The case-folding regression below is about confusable
+# characters; they are its inputs, not typos.
+
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
 import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.infrastructure.models import Account, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -615,3 +619,30 @@ async def test_round_trip_property(
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
     _assert_round_trip(build, loaded)
+
+
+async def test_repeat_credit_of_a_case_folding_name_resolves_to_one_alias(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Regression: a second build crediting `ΣΣ` used to raise NoResultFound.
+
+    `_get_or_create_aliases` looked the name up by a Python fold, inserted on a miss, and
+    re-selected by that same fold when the insert hit a conflict. While Postgres computed
+    the stored fold itself the two disagreed — Python `lower` gave `σς`, SQL `lower` gave
+    `σσ` — so the insert conflicted on a row the re-select could not see and `.scalar_one()`
+    raised. Both sides now use `fold_creator_name`.
+
+    `Σς` is credited last to pin the other half: the two spellings are one creator, which
+    the retired SQL fold got wrong in the opposite direction by storing them separately.
+    """
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+
+    for spelling in ("ΣΣ", "ΣΣ", "Σς"):
+        build = _make_build(BuildCategory.UTILITY, account_id)
+        build.creators_ign = [spelling]
+        await _resolve_and_save(migrated_session_factory, repository, build)
+
+    async with migrated_session_factory() as session:
+        aliases = list((await session.scalars(select(CreatorAlias.normalized_name))).all())
+    assert aliases == ["σσ"], "the three credits must resolve to exactly one creator"
