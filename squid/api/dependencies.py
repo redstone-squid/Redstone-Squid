@@ -6,7 +6,7 @@ from fastapi import Depends, Request
 
 from squid.accounts.application import AccountService
 from squid.api.security import Caller, current_caller
-from squid.auth.application.web import DiscordOAuthService
+from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildQueryService, BuildService
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
@@ -78,7 +78,7 @@ def get_vote_members(services: Services) -> InteractiveVoteActorResolver | None:
     return services.vote_members
 
 
-def get_web_auth(services: Services) -> DiscordOAuthService | None:
+def get_web_auth(services: Services) -> WebSessionService | None:
     return services.web_auth
 
 
@@ -100,4 +100,4 @@ Accounts = Annotated[AccountService, Depends(get_accounts)]
 Versions = Annotated[VersionService, Depends(get_versions)]
 VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
 Votes = Annotated[VoteService, Depends(get_votes)]
-WebAuth = Annotated[DiscordOAuthService | None, Depends(get_web_auth)]
+WebAuth = Annotated[WebSessionService | None, Depends(get_web_auth)]

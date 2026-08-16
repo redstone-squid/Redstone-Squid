@@ -97,7 +97,6 @@ def test_cookie_authenticated_write_requires_csrf_header(mocker: MockerFixture) 
         return_value=WebSessionIdentity(
             session_id="session",
             account_id=1,
-            discord_id=123,
             consent_pending=False,
         )
     )
@@ -123,7 +122,6 @@ def test_cookie_authenticated_write_rejects_mismatched_csrf_header(mocker: Mocke
         return_value=WebSessionIdentity(
             session_id="session",
             account_id=1,
-            discord_id=123,
             consent_pending=False,
         )
     )
@@ -146,7 +144,6 @@ def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerF
         return_value=WebSessionIdentity(
             session_id="session",
             account_id=1,
-            discord_id=123,
             consent_pending=False,
         )
     )
@@ -169,7 +166,6 @@ def test_cookie_authenticated_frontend_can_fetch_its_no_store_csrf_token(mocker:
         return_value=WebSessionIdentity(
             session_id="session",
             account_id=1,
-            discord_id=123,
             consent_pending=False,
         )
     )

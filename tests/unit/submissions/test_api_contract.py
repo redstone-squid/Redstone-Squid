@@ -9,7 +9,6 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import ANONYMOUS, Caller, current_caller
 from squid.api.v1.schemas.submissions import (
@@ -391,11 +390,9 @@ async def test_draft_authentication_requires_current_privacy_consent() -> None:
     with pytest.raises(ConsentRequiredError) as error:
         await authenticated_account(caller)
 
-    assert error.value.context == {
-        "account_id": 42,
-        "provider": IdentityProvider.DISCORD,
-        "subject": "123",
-    }
+    # The account alone. Nothing implies Discord just because this caller happens to
+    # have arrived over it: the same error is raised for a CLI device.
+    assert error.value.context == {"account_id": 42}
 
 
 async def test_player_grant_derives_minecraft_origin() -> None:
