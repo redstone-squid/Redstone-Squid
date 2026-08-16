@@ -10,6 +10,7 @@ from discord.ext.commands import Context, Greedy
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import requires
@@ -64,7 +65,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             name,
             value_type=value_type,
             query_name=query_name,
-            created_by_discord_id=ctx.author.id,
+            created_by_account_id=await account_id_for(self.bot.services.accounts, ctx.author),
         )
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
@@ -95,7 +96,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             build_id,
             tag_id,
             value,
-            actor_discord_id=ctx.author.id,
+            actor_account_id=await account_id_for(self.bot.services.accounts, ctx.author),
         )
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
