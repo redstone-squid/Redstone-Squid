@@ -148,8 +148,8 @@ def create_api_app(
                 "Idempotency-Key",
                 "If-Match",
                 "CSRF-Token",
-                "X-Squid-Installation-ID",
-                "X-Squid-Installation-Secret",
+                "Squid-Installation-ID",
+                "Squid-Installation-Secret",
             ],
             expose_headers=["ETag", "RateLimit", "RateLimit-Policy", "Request-Id", "Retry-After"],
         )
