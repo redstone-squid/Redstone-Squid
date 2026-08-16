@@ -170,7 +170,7 @@ class DiscordRestActorResolver:
         try:
             http = await self._client()
             return await http.get_member(guild_id, discord_id)
-        except (Forbidden, NotFound):
+        except Forbidden, NotFound:
             # Not a member of the guild, or not visible to this token. Both are
             # "no such voter here", which is a fact rather than a failure.
             return None

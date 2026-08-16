@@ -40,7 +40,7 @@ class SearchSort:
     direction: SortDirection = SortDirection.ASCENDING
 
     @classmethod
-    def parse(cls, value: str | None) -> "SearchSort | None":
+    def parse(cls, value: str | None) -> SearchSort | None:
         """Parse a `-field` or `field` sort expression, or `None` for the default.
 
         The syntax belongs to the domain, not to one transport: the HTTP routes
