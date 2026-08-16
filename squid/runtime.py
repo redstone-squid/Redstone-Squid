@@ -20,6 +20,7 @@ from squid.builds.application import BuildInferenceService, BuildQueryService, B
 from squid.cli_auth import CliAuthorizationService
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.log_capture import captured, install_log_capture
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -181,6 +182,28 @@ class ApplicationRuntime[ServicesT]:
         traceback: TracebackType | None,
     ) -> None:
         await self.close()
+
+
+LOG_CAPTURE_JOB = "error-log-capture"
+"""Name of the job that stores logged exceptions as error reports."""
+
+
+def start_log_capture(
+    supervisor: BackgroundTaskSupervisor,
+    service: ErrorReportService,
+    *,
+    enabled: bool = True,
+    capacity: int = 256,
+) -> None:
+    """Store every logged exception, not only the failures a transport captures itself.
+
+    This is what makes worker failures reachable at all: its queue consumers absorb a failure,
+    dead-letter the job and log it, so nothing reaches the supervisor that would have captured it.
+    """
+    if not enabled:
+        return
+    handler = install_log_capture(capacity=capacity)
+    supervisor.start(handler.run(service), name=LOG_CAPTURE_JOB)
 
 
 def start_permission_epoch_watch(
@@ -370,7 +393,11 @@ class BackgroundTaskSupervisor:
                     # Captured before logging, so the tail is the run rather than an echo of the
                     # traceback the report already holds.
                     await self._capture(error, name=name, correlation=correlation)
-                    logger.exception("Background job %s failed", name, extra={"squid.job.error_id": correlation})
+                    logger.exception(
+                        "Background job %s failed",
+                        name,
+                        extra={"squid.job.error_id": correlation, **captured()},
+                    )
                     add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "error"})
                     record_histogram(
                         "squid.background.job.duration",

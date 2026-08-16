@@ -798,6 +798,15 @@ class DiagnosticsConfig(_FrozenModel):
     buffer entirely, and with it the memory it holds on the logging path."""
     max_traceback_chars: int = Field(default=20000, ge=1000, le=200000)
     """Cap on the stored traceback text, so a runaway recursion cannot write an unbounded row."""
+    capture_logged_errors: bool = True
+    """Store every logged exception, not only the ones a transport captures itself.
+
+    This is what makes worker failures reachable: its queue consumers absorb, dead-letter and log
+    a failure rather than letting it reach the supervisor. Off, the store holds only what the
+    HTTP, Discord, and background-job handlers capture directly."""
+    log_capture_queue: int = Field(default=256, ge=16, le=10000)
+    """Failures held between the logging call and the database write before the oldest are
+    dropped. Dropping is counted and logged rather than silently absorbed."""
 
 
 class LoggingConfig(_FrozenModel):

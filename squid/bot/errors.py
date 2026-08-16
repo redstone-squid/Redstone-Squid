@@ -14,6 +14,7 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
 from squid.core.i18n import _, translate
 from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.log_capture import captured
 from squid.observability import (
     correlated_log_buffer,
     correlation_id,
@@ -301,6 +302,7 @@ async def _handle_discord_error(
             _safe_log_context(context),
             application_context,
             exc_info=original,
+            extra=captured(),
         )
 
     try:
