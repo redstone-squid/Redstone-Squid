@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from whenever import Instant
 
+from squid.permissions.domain import Pattern
+
 
 @dataclass(frozen=True, slots=True)
 class ApiKey:
@@ -13,7 +15,18 @@ class ApiKey:
     key_id: str
     secret_hash: bytes
     label: str
-    scopes: frozenset[str]
+    scopes: frozenset[Pattern]
+    """Permission patterns bounding what this credential may do.
+
+    Parsed, not raw text: a pattern is validated once at the boundary that
+    accepts it, so nothing downstream re-parses per request or discovers a typo
+    by silently matching nothing.
+
+    Stored as `ARRAY(Text)` rather than an enum column because the catalogue is
+    open by construction -- a pattern granted today selects a node registered
+    tomorrow (`squid.permissions.domain.matching`), so an enum would need a
+    migration every time a node is added.
+    """
     owner_account_id: int | None
     created_by_account_id: int | None
     created_at: Instant

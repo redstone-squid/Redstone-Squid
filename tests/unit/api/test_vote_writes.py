@@ -12,6 +12,7 @@ from squid.core.errors import AuthenticationError, ValidationError
 from squid.runtime import ApiServices
 from squid.voting.domain import CastVoteResult, VoteActor, VoteRejection, VoteSessionSnapshot
 from tests.helpers.voting import build_snapshot
+from tests.unit.api.fakes import credential_nodes
 
 
 def snapshot() -> VoteSessionSnapshot:
@@ -22,7 +23,7 @@ def account(subject: str = "account:1") -> Principal:
     return Principal(
         kind="account",
         subject=subject,
-        nodes=frozenset({"vote.poll.cast"}),
+        nodes=credential_nodes("vote.poll.cast"),
         discord_id=7,
         account_id=1,
     )
@@ -54,7 +55,7 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
 
 @pytest.mark.asyncio
 async def test_service_credentials_cannot_cast_ballots() -> None:
-    service = Principal(kind="service", subject="api-key:test", nodes=frozenset({"vote.poll.cast"}))
+    service = Principal(kind="service", subject="api-key:test", nodes=credential_nodes("vote.poll.cast"))
 
     with pytest.raises(AuthenticationError):
         await cast_vote(
