@@ -212,7 +212,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
             scope_guild_id=self._scope(ctx, scope),
         )
         body = _("Removed `{pattern}`.") if removed else _("No such rule; nothing changed.")
-        await self._reply(ctx, _("Permission rule"), str(body).format(pattern=pattern))
+        await self._reply(ctx, _("Permission rule"), body.format(pattern=pattern))
 
     @perm_group.command(name="list")
     @requires(PERM_SUBJECT_INSPECT)
@@ -386,7 +386,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         guild_id = ctx.guild.id if ctx.guild is not None else None
         role = await self.admin.role(slug, guild_id=guild_id)
         await self.admin.add_pattern(actor, role, pattern, mode=mode)
-        await self._reply(ctx, _("Role updated"), str(message).format(pattern=pattern))
+        await self._reply(ctx, _("Role updated"), message.format(pattern=pattern))
 
     @autocompletes(
         slug=suggests("permission_roles", context=guild_context),

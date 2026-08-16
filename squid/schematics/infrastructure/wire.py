@@ -18,7 +18,7 @@ import asyncio
 import dataclasses
 import json
 from collections.abc import Mapping, Sequence
-from typing import Any, Literal, cast
+from typing import Any, Literal, SupportsFloat, SupportsInt, cast
 
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -265,11 +265,13 @@ def _vector(value: object) -> Vector3:
 
 
 def _optional_int(value: object) -> int | None:
-    return None if value is None else int(cast(int, value))
+    # The cast names what the wire is expected to carry; the conversion is what actually enforces
+    # it. Casting straight to `int` would make the conversion look redundant and invite its removal.
+    return None if value is None else int(cast(SupportsInt, value))
 
 
 def _optional_float(value: object) -> float | None:
-    return None if value is None else float(cast(float, value))
+    return None if value is None else float(cast(SupportsFloat, value))
 
 
 def _optional_str(value: object) -> str | None:
