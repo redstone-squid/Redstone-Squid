@@ -459,6 +459,34 @@ async def test_render_is_skipped_when_the_stored_file_has_gone_missing() -> None
     assert analyzer.render_calls == []
 
 
+async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureFixture) -> None:
+    """A moderator asking about a build must not set a render going to get an answer."""
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+    stored = await schematics.primary_for_build(7)
+    assert stored is not None
+
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+        assert schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
+
+    assert analyzer.render_calls == []
+    assert analyzer.capabilities_calls == 0
+    assert caplog.records == []
+
+
+async def test_a_sanitized_schematic_within_budget_has_no_skip_to_explain() -> None:
+    schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    stored = await schematics.primary_for_build(7)
+    assert stored is not None
+
+    assert schematics.explain_render_skip(stored) is None
+
+
 async def test_render_recipe_includes_the_schematic_content_identity() -> None:
     schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
     await schematics.attach(
