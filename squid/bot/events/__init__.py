@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Register the domain-event dispatcher."""
     from squid.bot.events.dispatcher import DomainEventCog
 

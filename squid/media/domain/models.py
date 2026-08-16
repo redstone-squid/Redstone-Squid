@@ -90,7 +90,7 @@ class MediaLimits:
             None,
         )
 
-    def probe_violation(self, kind: MediaKind, probe: "MediaProbe") -> MediaViolation | None:
+    def probe_violation(self, kind: MediaKind, probe: MediaProbe) -> MediaViolation | None:
         """Return a decoded-work violation without using floating-point arithmetic."""
         checks: list[tuple[MediaLimitMeasure, int, int]] = [
             (MediaLimitMeasure.PIXELS_PER_FRAME, probe.pixels_per_frame, self.max_pixels_per_frame)

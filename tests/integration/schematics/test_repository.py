@@ -52,7 +52,7 @@ _TABLES: tuple[Table, ...] = (
 
 
 @pytest.fixture
-async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngine, None]:
+async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngine]:
     async with async_engine.begin() as connection:
         for statement in _SETUP:
             await connection.execute(text(statement))

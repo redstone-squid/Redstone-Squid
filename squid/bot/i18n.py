@@ -11,7 +11,7 @@ from squid.settings.application import SettingsService
 
 
 async def resolve_locale(
-    target: "discord.Interaction[Any] | commands.Context[Any] | discord.Message",
+    target: discord.Interaction[Any] | commands.Context[Any] | discord.Message,
     settings_service: SettingsService,
 ) -> str:
     """Resolve the locale to respond in for an interaction, command, or message.

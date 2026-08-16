@@ -22,12 +22,12 @@ class StaticProvider:
         return self._candidates
 
     @classmethod
-    def of(cls, values: Sequence[str], *, kind: str = "") -> "StaticProvider":
+    def of(cls, values: Sequence[str], *, kind: str = "") -> StaticProvider:
         """Build a provider whose value and label are the same string."""
         return cls(candidate(value, kind=kind) for value in values)
 
     @classmethod
-    def labelled(cls, values: Sequence[tuple[str, str]], *, kind: str = "") -> "StaticProvider":
+    def labelled(cls, values: Sequence[tuple[str, str]], *, kind: str = "") -> StaticProvider:
         """Build a provider from `(value, label)` pairs."""
         return cls(candidate(value, label, kind=kind) for value, label in values)
 

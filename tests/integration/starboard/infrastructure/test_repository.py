@@ -38,7 +38,7 @@ TABLES = cast(
 
 
 @pytest.fixture(autouse=True)
-async def starboard_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def starboard_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         for table in TABLES:
             await connection.run_sync(table.create)

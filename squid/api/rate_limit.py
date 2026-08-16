@@ -153,7 +153,7 @@ class ApiRateLimitPolicies:
     minecraft_challenge_approval: RateLimitPolicy
 
     @classmethod
-    def from_config(cls, config: RateLimitConfig) -> "ApiRateLimitPolicies":
+    def from_config(cls, config: RateLimitConfig) -> ApiRateLimitPolicies:
         window = config.window_seconds
         return cls(
             ip=RateLimitPolicy("ip", config.ip_requests, window),
@@ -329,7 +329,7 @@ class DistributedRateLimiter:
         assert self._redis is not None
         try:
             decision = await self._redis.check(requests)
-        except (RedisError, OSError):
+        except RedisError, OSError:
             if not self._degraded:
                 logger.warning("Redis rate limiting is unavailable; using the process-local fallback")
                 add_counter("squid.api.rate_limit.backend_transitions", attributes={"squid.backend": "local"})

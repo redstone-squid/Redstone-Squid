@@ -47,7 +47,7 @@ class ChoiceOptionResponse(StrictSchema):
     label: str
 
     @classmethod
-    def from_domain(cls, option: ChoiceOption) -> "ChoiceOptionResponse":
+    def from_domain(cls, option: ChoiceOption) -> ChoiceOptionResponse:
         return cls(value=option.value, label=option.label)
 
 
@@ -59,7 +59,7 @@ class VisibilityRuleResponse(StrictSchema):
     value: JsonValue
 
     @classmethod
-    def from_domain(cls, rule: VisibilityRule) -> "VisibilityRuleResponse":
+    def from_domain(cls, rule: VisibilityRule) -> VisibilityRuleResponse:
         return cls(field_id=rule.field_id, operator=rule.operator, value=_json_value(rule.value))
 
 
@@ -75,7 +75,7 @@ class FieldConstraintsResponse(StrictSchema):
     must_equal: JsonValue
 
     @classmethod
-    def from_domain(cls, constraints: FieldConstraints) -> "FieldConstraintsResponse":
+    def from_domain(cls, constraints: FieldConstraints) -> FieldConstraintsResponse:
         return cls(
             minimum=constraints.minimum,
             maximum=constraints.maximum,
@@ -106,7 +106,7 @@ class FormFieldResponse(StrictSchema):
     origins: list[SubmissionOrigin]
 
     @classmethod
-    def from_domain(cls, form_field: FormField) -> "FormFieldResponse":
+    def from_domain(cls, form_field: FormField) -> FormFieldResponse:
         return cls(
             id=form_field.id,
             label=form_field.label,
@@ -135,7 +135,7 @@ class FormSectionResponse(StrictSchema):
     fields: list[FormFieldResponse]
 
     @classmethod
-    def from_domain(cls, section: FormSection) -> "FormSectionResponse":
+    def from_domain(cls, section: FormSection) -> FormSectionResponse:
         return cls(
             id=section.id,
             title=section.title,
@@ -151,7 +151,7 @@ class CategoryFormResponse(StrictSchema):
     sections: list[FormSectionResponse]
 
     @classmethod
-    def from_domain(cls, category: CategoryForm) -> "CategoryFormResponse":
+    def from_domain(cls, category: CategoryForm) -> CategoryFormResponse:
         return cls(
             code=category.code,
             label=category.label,
@@ -170,7 +170,7 @@ class FormManifestResponse(StrictSchema):
     categories: list[CategoryFormResponse]
 
     @classmethod
-    def from_domain(cls, manifest: FormManifest) -> "FormManifestResponse":
+    def from_domain(cls, manifest: FormManifest) -> FormManifestResponse:
         return cls(
             schema_id=manifest.schema_id,
             revision=manifest.revision,
@@ -190,7 +190,7 @@ class FormOptionSetResponse(StrictSchema):
     options: list[ChoiceOptionResponse]
 
     @classmethod
-    def from_domain(cls, option_set: FormOptionSet) -> "FormOptionSetResponse":
+    def from_domain(cls, option_set: FormOptionSet) -> FormOptionSetResponse:
         return cls(
             source=option_set.source,
             category=option_set.category,
@@ -275,7 +275,7 @@ class StoredDraftResponse(StrictSchema):
     source_installation_id: UUID | None = None
 
     @classmethod
-    def from_domain(cls, draft: StoredDraft) -> "StoredDraftResponse":
+    def from_domain(cls, draft: StoredDraft) -> StoredDraftResponse:
         return cls(
             id=draft.snapshot.id,
             schema_id=draft.snapshot.schema_id,
@@ -308,7 +308,7 @@ class DraftSummaryResponse(StrictSchema):
     expires_at: datetime
 
     @classmethod
-    def from_domain(cls, draft: StoredDraft) -> "DraftSummaryResponse":
+    def from_domain(cls, draft: StoredDraft) -> DraftSummaryResponse:
         display_name = draft.snapshot.answers.get("display_name")
         return cls(
             id=draft.snapshot.id,
@@ -331,7 +331,7 @@ class DraftListResponse(StrictSchema):
     drafts: list[DraftSummaryResponse] = Field(max_length=10)
 
     @classmethod
-    def from_domain(cls, drafts: tuple[StoredDraft, ...]) -> "DraftListResponse":
+    def from_domain(cls, drafts: tuple[StoredDraft, ...]) -> DraftListResponse:
         return cls(drafts=[DraftSummaryResponse.from_domain(draft) for draft in drafts])
 
 
@@ -359,7 +359,7 @@ class SubmissionFinalizationResponse(StrictSchema):
     build_id: int | None
 
     @classmethod
-    def from_domain(cls, snapshot: FinalizationJobSnapshot) -> "SubmissionFinalizationResponse":
+    def from_domain(cls, snapshot: FinalizationJobSnapshot) -> SubmissionFinalizationResponse:
         return cls(
             draft_id=snapshot.draft_id,
             draft_revision=snapshot.draft_revision,

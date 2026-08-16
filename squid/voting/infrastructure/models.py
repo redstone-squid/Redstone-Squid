@@ -70,10 +70,10 @@ class VoteSession(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
-    votes: Mapped[list["Vote"]] = relationship(
+    votes: Mapped[list[Vote]] = relationship(
         back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
     )
-    options: Mapped[list["VoteSessionOption"]] = relationship(
+    options: Mapped[list[VoteSessionOption]] = relationship(
         back_populates="vote_session",
         default_factory=list,
         lazy="selectin",

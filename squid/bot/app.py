@@ -171,7 +171,7 @@ class RedstoneSquid(Bot):
         if channel is None:
             try:
                 channel = await self.fetch_channel(channel_id)
-            except (discord.NotFound, discord.Forbidden):
+            except discord.NotFound, discord.Forbidden:
                 return None
         if not isinstance(channel, MessageableChannel):
             logger.warning("Channel %s is not messageable.", channel_id)

@@ -140,7 +140,7 @@ def configure_observability(config: ObservabilityConfig, *, service_name: str) -
         return handle
 
 
-def instrument_api_app(app: "FastAPI", config: ObservabilityConfig) -> None:
+def instrument_api_app(app: FastAPI, config: ObservabilityConfig) -> None:
     """Instrument one FastAPI application when observability is enabled and installed."""
     if not config.enabled:
         return

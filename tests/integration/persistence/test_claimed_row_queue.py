@@ -59,7 +59,7 @@ DROP TABLE IF EXISTS
 
 
 @pytest.fixture(autouse=True)
-async def queue_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def queue_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         for statement in _CREATE_SCHEMA.strip().split(";"):
             if statement.strip():

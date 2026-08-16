@@ -33,7 +33,7 @@ class FormOptionCatalog(Protocol):
         category: str,
         *,
         locale: str | None,
-    ) -> "FormOptionSet": ...
+    ) -> FormOptionSet: ...
 
 
 @dataclass(frozen=True, slots=True)

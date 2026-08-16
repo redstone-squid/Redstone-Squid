@@ -65,6 +65,6 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.service.record_join(member.id, member.name)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(WelcomeRelay(bot))

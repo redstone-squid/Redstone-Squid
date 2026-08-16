@@ -182,7 +182,7 @@ async def current_principal(
                     f"{INSTALLATION_TOKEN_PREFIX}_{parsed_id.hex}_{installation_secret}"
                 )
                 context = await players.authenticate_paper_player(token, installation)
-        except (MinecraftAuthorizationError, ValueError):
+        except MinecraftAuthorizationError, ValueError:
             raise AuthenticationError from None
         return Principal(
             kind="minecraft_player",

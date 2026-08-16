@@ -436,7 +436,7 @@ class MediaNormalizationJobService:
         upload_id = upload.id
         try:
             outcome = await self._repository.enqueue(upload, self._limits)
-        except (MediaLimitExceededError, MediaDraftNotFoundError, MediaDraftStateConflictError):
+        except MediaLimitExceededError, MediaDraftNotFoundError, MediaDraftStateConflictError:
             await self._artifacts.delete(object_key)
             raise
         except MediaUploadConflictError as error:

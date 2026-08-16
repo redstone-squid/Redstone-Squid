@@ -122,7 +122,7 @@ class DraftWebAuth:
     csrf_token: str = field(default=DEFAULT_CSRF_TOKEN, repr=False)
 
     @classmethod
-    def alice(cls, seeded_ids: SeededIds) -> "DraftWebAuth":
+    def alice(cls, seeded_ids: SeededIds) -> DraftWebAuth:
         """Build Alice's web credentials from deterministic seed data."""
         return cls(session_token=seeded_ids.alice_web_session)
 

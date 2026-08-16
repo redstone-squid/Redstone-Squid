@@ -54,7 +54,7 @@ async def ingest_message_bundle(
                     max_bytes=services.schematics.limits.max_upload_bytes,
                 )
                 data = await attachment.read()
-            except (SquidError, discord.HTTPException, OSError):
+            except SquidError, discord.HTTPException, OSError:
                 logger.warning("Could not read inferred attachment %s", attachment.filename, exc_info=True)
                 continue
             if classified.kind == "schematic":

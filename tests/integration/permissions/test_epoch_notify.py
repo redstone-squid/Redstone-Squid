@@ -37,7 +37,7 @@ _ENTITY_NAMES = {"bump_permission_epoch", "permission_grants_bump_epoch"}
 
 
 @pytest.fixture(autouse=True)
-async def epoch_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def epoch_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     """Install the shipped trigger over a minimal production-shaped schema."""
     statements = [
         text(entity.to_sql_statement_create().text)

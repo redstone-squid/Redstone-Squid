@@ -77,7 +77,7 @@ class EditLease:
         self.build = build
         self.commit = AsyncMock(return_value=build)
 
-    async def __aenter__(self) -> "EditLease":
+    async def __aenter__(self) -> EditLease:
         return self
 
     async def __aexit__(self, *_exc: object) -> None:

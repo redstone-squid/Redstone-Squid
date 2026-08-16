@@ -356,5 +356,5 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 raise ValueError(msg)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(StarboardCog(bot))

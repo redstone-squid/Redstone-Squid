@@ -61,7 +61,7 @@ def backfill_database_url(postgres_container: PostgresContainer) -> Iterator[str
 @pytest.fixture
 async def backfilled(
     backfill_database_url: str, monkeypatch: pytest.MonkeyPatch
-) -> AsyncGenerator[tuple[async_sessionmaker, dict[str, int]], None]:
+) -> AsyncGenerator[tuple[async_sessionmaker, dict[str, int]]]:
     """Seed the legacy tiers at the pre-backfill head, then migrate over them."""
     monkeypatch.setenv("SQUID_DATABASE_URL", backfill_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")

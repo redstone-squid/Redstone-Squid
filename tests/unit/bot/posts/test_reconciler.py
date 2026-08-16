@@ -44,7 +44,7 @@ class FakeMessage:
     content: str = ""
     flags: Any = None
 
-    async def edit(self, **kwargs: object) -> "FakeMessage":
+    async def edit(self, **kwargs: object) -> FakeMessage:
         self.edits.append(kwargs.get("view"))
         return self
 

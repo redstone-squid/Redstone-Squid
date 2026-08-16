@@ -22,7 +22,7 @@ class SearchField(BaseModel):
     aliases: list[str]
 
     @classmethod
-    def from_domain(cls, field: FieldDefinition) -> "SearchField":
+    def from_domain(cls, field: FieldDefinition) -> SearchField:
         return cls(
             name=field.name,
             type=field.value_type.value,
@@ -60,7 +60,7 @@ class RecordSearchEntry(BaseModel):
     metrics: dict[str, str | int | float | bool]
 
     @classmethod
-    def from_domain(cls, hit: RecordSearchHit) -> "RecordSearchEntry":
+    def from_domain(cls, hit: RecordSearchHit) -> RecordSearchEntry:
         return cls(
             record_id=_record_id(hit.source_id),
             title=hit.title,
@@ -86,7 +86,7 @@ class MetadataSearchEntry(BaseModel):
     aliases: list[str]
 
     @classmethod
-    def from_domain(cls, hit: MetadataSearchHit) -> "MetadataSearchEntry":
+    def from_domain(cls, hit: MetadataSearchHit) -> MetadataSearchEntry:
         return cls(
             id=hit.source_id,
             title=hit.title,
