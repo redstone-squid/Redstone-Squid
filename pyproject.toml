@@ -109,8 +109,9 @@ packages = []
 
 [tool.uv]
 package = false
-cache-dir = ".cache/uv"
-link-mode = "copy"
+# Only used for termux, don't enable universally.
+# cache-dir = ".cache/uv"
+# link-mode = "copy"
 exclude-newer = "7 days"
 # maturin cannot infer Termux's minimum SDK from its Python platform metadata. These packages
 # build from source on Android, where Termux's current toolchain targets API 24.
