@@ -1,13 +1,41 @@
 """PostgreSQL Discord reconciliation queue adapter."""
 
-from typing import cast
-
 from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
+from squid.core.errors import DataIntegrityError
 from squid.persistence.queue import ClaimedRowQueue
-from squid.sync.application import ResourceKind, SyncAction, SyncJob
+from squid.sync.application import ReconciliationAction, ReconciliationJob, ReconciliationResource
 from squid.sync.infrastructure.models import DiscordSyncQueueItem
+
+
+def _job(row: DiscordSyncQueueItem, claimed_at: Instant) -> ReconciliationJob:
+    """Map a claimed row, refusing values its check constraints should have rejected.
+
+    These two columns used to be `cast()` into their types, so a row that escaped
+    its constraint reached the reconciler looking like a valid job and failed
+    somewhere else entirely. The constraints stay: they are the reason a bad value
+    here is a data-integrity failure rather than a validation error.
+    """
+    try:
+        resource_kind = ReconciliationResource(row.resource_kind)
+        action = ReconciliationAction(row.action)
+    except ValueError as error:
+        msg = "A reconciliation row holds a value its check constraint should have rejected."
+        raise DataIntegrityError(
+            msg,
+            context={"id": row.id, "resource_kind": row.resource_kind, "action": row.action},
+        ) from error
+    return ReconciliationJob(
+        id=row.id,
+        resource_kind=resource_kind,
+        source_key=row.source_key,
+        action=action,
+        generation=row.generation,
+        attempts=row.attempts,
+        claimed_at=claimed_at,
+    )
 
 
 class PostgresDiscordSyncQueue:
@@ -23,7 +51,7 @@ class PostgresDiscordSyncQueue:
             dead_at=DiscordSyncQueueItem.dead_at,
         )
 
-    async def claim(self, *, limit: int) -> tuple[SyncJob, ...]:
+    async def claim(self, *, limit: int) -> tuple[ReconciliationJob, ...]:
         async with self._session_factory() as session:
             rows = tuple(
                 (
@@ -40,23 +68,12 @@ class PostgresDiscordSyncQueue:
                 ).all()
             )
             claimed_at = await self._queue.stamp(rows, session)
-            return tuple(
-                SyncJob(
-                    id=row.id,
-                    resource_kind=cast(ResourceKind, row.resource_kind),
-                    source_key=row.source_key,
-                    action=cast(SyncAction, row.action),
-                    generation=row.generation,
-                    attempts=row.attempts,
-                    claimed_at=claimed_at,
-                )
-                for row in rows
-            )
+            return tuple(_job(row, claimed_at) for row in rows)
 
-    async def complete(self, job: SyncJob) -> bool:
+    async def complete(self, job: ReconciliationJob) -> bool:
         return await self._queue.complete(self._identity(job), job.claimed_at)
 
-    async def fail(self, job: SyncJob, error: str, *, max_attempts: int) -> bool:
+    async def fail(self, job: ReconciliationJob, error: str, *, max_attempts: int) -> bool:
         return await self._queue.fail(
             self._identity(job),
             job.claimed_at,
@@ -66,5 +83,5 @@ class PostgresDiscordSyncQueue:
         )
 
     @staticmethod
-    def _identity(job: SyncJob) -> tuple[ColumnElement[bool], ...]:
+    def _identity(job: ReconciliationJob) -> tuple[ColumnElement[bool], ...]:
         return (DiscordSyncQueueItem.id == job.id,)

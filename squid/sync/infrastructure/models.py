@@ -9,7 +9,23 @@ from squid.persistence.types import InstantUTC
 
 
 class DiscordSyncQueueItem(Base, kw_only=True):
-    """A coalesced request to refresh one Discord-rendered resource."""
+    """A coalesced request to refresh one Discord-rendered resource.
+
+    Not an event queue, despite the shape. Rows are coalesced on
+    `(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO
+    UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where
+    the coalescing actually happens — deleted on acknowledgement, and carry a
+    `generation` compared against a post's applied revision as a staleness token
+    rather than read as an ordering. An event log would be append-only and
+    replayable; this table is neither. A row means "this resource's Discord posts
+    are stale", and re-reading it tells you what the resource should look like
+    now, not what happened to it.
+
+    Discord-specific on purpose: every row exists to repair a Discord post, and
+    the only consumer renders them (`squid/bot/sync/reconciler.py`). The
+    application layer speaks of *reconciliation* rather than *sync* because a
+    sync names a transfer, and nothing here transfers anything.
+    """
 
     __tablename__ = "discord_sync_queue"
     __table_args__ = (

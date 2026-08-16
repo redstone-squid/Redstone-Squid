@@ -46,7 +46,7 @@ from squid.submissions.application import (
     SubmissionFormService,
 )
 from squid.suggestions.application import SuggestionService
-from squid.sync import DiscordSyncService
+from squid.sync import DiscordReconciliationService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -112,7 +112,7 @@ class BotServices:
     accounts: AccountService
     versions: VersionService
     votes: VoteService
-    discord_sync: DiscordSyncService
+    discord_reconciliation: DiscordReconciliationService
     domain_events: DomainEventService
     notifications: NotificationService
     redstoner: RedstonerService
