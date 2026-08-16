@@ -1215,6 +1215,10 @@ export type ErrorReportDetail = {
     exception_type: string;
     code?: ErrorCode | null;
     /**
+     * Work Lost
+     */
+    work_lost?: boolean;
+    /**
      * Message
      */
     message: string;
@@ -1269,6 +1273,10 @@ export type ErrorReportSummary = {
      */
     exception_type: string;
     code?: ErrorCode | null;
+    /**
+     * Work Lost
+     */
+    work_lost?: boolean;
 };
 
 /**
@@ -4258,6 +4266,12 @@ export type DiagnosticsErrorsListData = {
          * Maximum number of items to return.
          */
         page_size?: number;
+        /**
+         * Work Lost
+         *
+         * Return only failures that permanently abandoned work, such as a dead-lettered job.
+         */
+        work_lost?: boolean;
     };
     url: '/v1/diagnostics/errors';
 };

@@ -20,6 +20,7 @@ class ErrorReportSummary(BaseModel):
     origin: str | None = None
     exception_type: str
     code: ErrorCode | None = None
+    work_lost: bool = False
 
     @classmethod
     def from_domain(cls, report: ErrorReport) -> ErrorReportSummary:
@@ -31,6 +32,7 @@ class ErrorReportSummary(BaseModel):
             origin=report.origin,
             exception_type=report.exception_type,
             code=report.error_code,
+            work_lost=report.work_lost,
         )
 
 
@@ -62,6 +64,7 @@ class ErrorReportDetail(ErrorReportSummary):
             origin=report.origin,
             exception_type=report.exception_type,
             code=report.error_code,
+            work_lost=report.work_lost,
             message=report.message,
             traceback=report.traceback,
             context=dict(report.context),

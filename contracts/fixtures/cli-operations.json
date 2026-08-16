@@ -255,7 +255,8 @@
               "surface": "application_command",
               "origin": "records lookup",
               "exception_type": "RuntimeError",
-              "code": null
+              "code": null,
+              "work_lost": false
             }
           ],
           "page": {
@@ -284,6 +285,7 @@
           "origin": "records lookup",
           "exception_type": "RuntimeError",
           "code": null,
+          "work_lost": true,
           "message": "boom",
           "traceback": "Traceback (most recent call last):\n  RuntimeError: boom\n",
           "context": {

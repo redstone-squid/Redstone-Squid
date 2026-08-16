@@ -23,7 +23,7 @@ class ErrorReportRepository(Protocol):
 
     async def count_matching(self, reference: str, *, now: Instant) -> int: ...
 
-    async def list_recent(self, *, limit: int, now: Instant) -> Sequence[ErrorReport]: ...
+    async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]: ...
 
     async def purge_expired(self, *, now: Instant) -> int: ...
 
@@ -63,6 +63,7 @@ class ErrorReportService:
         origin: str | None = None,
         context: Mapping[str, JSONValue] | None = None,
         log_tail: Sequence[str] = (),
+        work_lost: bool = False,
     ) -> None:
         """Store one failure, swallowing anything that goes wrong while storing it."""
         try:
@@ -81,6 +82,7 @@ class ErrorReportService:
                 traceback=self._format_traceback(error),
                 context=dict(context or {}),
                 log_tail=tuple(log_tail),
+                work_lost=work_lost,
             )
             await self._repository.save(report)
         except Exception:
@@ -101,9 +103,14 @@ class ErrorReportService:
         matches = await self._repository.count_matching(normalized, now=now)
         return report, matches
 
-    async def recent(self, *, limit: int = 20) -> Sequence[ErrorReport]:
-        """List the newest unexpired reports, for looking around without a reference."""
-        return await self._repository.list_recent(limit=max(1, limit), now=self._now())
+    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+        """List the newest unexpired reports, for looking around without a reference.
+
+        `work_lost_only` narrows to failures that abandoned work. Following the logs means most
+        reports are failures something recovered from, and those can bury the ones that cost
+        something.
+        """
+        return await self._repository.list_recent(limit=max(1, limit), now=self._now(), work_lost_only=work_lost_only)
 
     async def purge_expired(self) -> int:
         """Delete reports past their retention window."""

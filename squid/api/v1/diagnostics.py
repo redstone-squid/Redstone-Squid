@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 
 from squid.api.dependencies import ErrorReports
 from squid.api.errors import responses
@@ -19,6 +19,11 @@ router = APIRouter(
     dependencies=[Depends(requires(DIAGNOSTICS_ERROR_READ))],
 )
 
+WorkLostParam = Annotated[
+    bool,
+    Query(description="Return only failures that permanently abandoned work, such as a dead-lettered job."),
+]
+
 ReferenceParam = Annotated[
     str,
     Path(
@@ -33,9 +38,14 @@ ReferenceParam = Annotated[
 async def list_error_reports(
     error_reports: ErrorReports,
     page_size: PageSizeParam = 20,
+    work_lost: WorkLostParam = False,
 ) -> Page[ErrorReportSummary]:
-    """List the most recent unexpired error reports, newest first."""
-    reports = await error_reports.recent(limit=page_size)
+    """List the most recent unexpired error reports, newest first.
+
+    Most reports are failures something recovered from, because capture follows the logs. Set
+    `work_lost` to see only the ones that permanently abandoned work.
+    """
+    reports = await error_reports.recent(limit=page_size, work_lost_only=work_lost)
     return render_page(offset_page(reports, offset=0, page_size=page_size), ErrorReportSummary.from_domain)
 
 

@@ -24,6 +24,7 @@ from squid.builds.infrastructure.models import (
     BuildVersion,
 )
 from squid.core.errors import DataIntegrityError
+from squid.diagnostics.log_capture import work_lost
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.infrastructure.models import (
     RecordComputationRun,
@@ -570,6 +571,7 @@ class SearchProjectionWorker:
                         extra={
                             "squid.search.resource_kind": resource_kind,
                             "squid.search.source_key": source_key,
+                            **work_lost(),
                         },
                     )
                 failed += 1

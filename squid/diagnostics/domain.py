@@ -41,6 +41,14 @@ class ErrorReport:
     """Redacted diagnostic context. Never contains stable Discord account identifiers."""
     log_tail: Sequence[str] = ()
     """What the process logged under this correlation ID before the failure, oldest first."""
+    work_lost: bool = False
+    """Whether this failure permanently abandoned work.
+
+    A queue consumer that dead-letters a job has lost it: nothing will retry, and a build's search
+    document or a schematic's render simply never appears. That is a different thing from an
+    exception that was logged and recovered from, and the two are worth telling apart when a
+    hundred reports are competing for attention.
+    """
 
 
 class ErrorReportNotFoundError(NotFoundError):
