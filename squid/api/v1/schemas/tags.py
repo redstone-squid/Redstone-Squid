@@ -26,7 +26,7 @@ class TagDetail(BaseModel):
     numeric_quantum: Decimal | None
 
     @classmethod
-    def from_domain(cls, definition: TagDefinition) -> "TagDetail":
+    def from_domain(cls, definition: TagDefinition) -> TagDetail:
         return cls(
             id=definition.id,
             key=definition.stable_key,

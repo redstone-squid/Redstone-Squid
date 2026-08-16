@@ -27,7 +27,7 @@ class VerificationLinkResult:
     account: Account | None = None
     claimed_alias: CreatorAlias | None = None
     conflicting_java_uuid: UUID | None = None
-    refresh: "IdentityRefresh | None" = None
+    refresh: IdentityRefresh | None = None
     """The full name reconciliation, when the code was consumed.
 
     `claimed_alias` is the one field of it the original link flow needed and is kept for that

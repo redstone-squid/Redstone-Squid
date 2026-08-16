@@ -143,7 +143,7 @@ class PollDraft:
 class PollModal(ErrorHandledModal):
     """Collect the free-text half of a poll: its question and its option lines."""
 
-    def __init__(self, publisher: "PollPublisher", draft: PollDraft | None = None):
+    def __init__(self, publisher: PollPublisher, draft: PollDraft | None = None):
         super().__init__(title="Create a poll")
         self.publisher = publisher
         self.draft = draft
@@ -182,7 +182,7 @@ class PollModal(ErrorHandledModal):
 class CustomDurationModal(ErrorHandledModal):
     """Accept a duration outside the presets."""
 
-    def __init__(self, confirmation: "PollConfirmation"):
+    def __init__(self, confirmation: PollConfirmation):
         super().__init__(title="Custom poll duration")
         self.confirmation = confirmation
         self.duration = discord.ui.TextInput(default="24h", max_length=8, placeholder="30m, 12h, 7d")
@@ -201,7 +201,7 @@ class CustomDurationModal(ErrorHandledModal):
 class VisibilitySelect(discord.ui.Select["PollConfirmation"]):
     """Choose how much of an open poll is disclosed."""
 
-    def __init__(self, confirmation: "PollConfirmation") -> None:
+    def __init__(self, confirmation: PollConfirmation) -> None:
         self.confirmation = confirmation
         super().__init__(
             placeholder="Who can see what, and when",
@@ -224,7 +224,7 @@ class VisibilitySelect(discord.ui.Select["PollConfirmation"]):
 class DurationSelect(discord.ui.Select["PollConfirmation"]):
     """Choose how long a poll stays open, with an escape hatch for odd durations."""
 
-    def __init__(self, confirmation: "PollConfirmation") -> None:
+    def __init__(self, confirmation: PollConfirmation) -> None:
         self.confirmation = confirmation
         super().__init__(
             placeholder="How long the poll stays open",
@@ -255,7 +255,7 @@ class PollConfirmation(ExpiringLayoutView):
 
     def __init__(
         self,
-        publisher: "PollPublisher",
+        publisher: PollPublisher,
         owner_id: int,
         draft: PollDraft,
         options: tuple[VoteOption, ...],
@@ -313,7 +313,7 @@ class PollConfirmation(ExpiringLayoutView):
         await edit_interaction_layout(interaction, self)
 
     @controls.button(label="Publish", style=discord.ButtonStyle.success)
-    async def publish(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
+    async def publish(self, interaction: discord.Interaction, button: discord.ui.Button[PollConfirmation]) -> None:
         del button
         if self.published:
             await interaction.response.send_message("This poll has already been published.", ephemeral=True)
@@ -342,12 +342,12 @@ class PollConfirmation(ExpiringLayoutView):
         self.stop()
 
     @controls.button(label="Edit", style=discord.ButtonStyle.secondary)
-    async def edit(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
+    async def edit(self, interaction: discord.Interaction, button: discord.ui.Button[PollConfirmation]) -> None:
         del button
         await interaction.response.send_modal(PollModal(self.publisher, self.draft))  # pyrefly: ignore[no-matching-overload]
 
     @controls.button(label="Cancel", style=discord.ButtonStyle.danger)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button["PollConfirmation"]) -> None:
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button[PollConfirmation]) -> None:
         del button
         self.stop()
         await edit_interaction_layout(interaction, text_layout("Poll cancelled."))

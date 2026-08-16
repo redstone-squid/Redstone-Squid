@@ -522,6 +522,6 @@ def _render_step(step: TraceStep) -> str:
     )
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(PermissionCog(bot))

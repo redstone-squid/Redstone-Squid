@@ -130,7 +130,7 @@ class ResetHooks:
     resume: AsyncAction
     reset_fakes: AsyncAction
     checksum: Checksum
-    seeded_ids: "SeededIds"
+    seeded_ids: SeededIds
     baseline_checksum: str
 
 
@@ -169,7 +169,7 @@ class SyntheticSecrets:
     service_api_key_secret: str = field(repr=False)
 
     @classmethod
-    def for_identity(cls, identity: RunIdentity) -> "SyntheticSecrets":
+    def for_identity(cls, identity: RunIdentity) -> SyntheticSecrets:
         """Derive domain-separated credentials from the run's random sentinel."""
 
         def derive(label: str, *, size: int = 32) -> str:

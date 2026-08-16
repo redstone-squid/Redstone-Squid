@@ -351,7 +351,7 @@ class SearchCog[
         await ctx.invoke(self.view_build, build_id=build_id)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

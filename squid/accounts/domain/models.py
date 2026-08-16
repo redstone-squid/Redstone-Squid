@@ -56,7 +56,7 @@ class AccountIdentity:
     id: int | None = None
 
     @classmethod
-    def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> "AccountIdentity":
+    def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> AccountIdentity:
         """Create a canonical Discord identity."""
         if discord_id <= 0:
             msg = "Discord identity subjects must be positive integers."
@@ -70,7 +70,7 @@ class AccountIdentity:
         *,
         username: str | None = None,
         verified_at: Instant | None = None,
-    ) -> "AccountIdentity":
+    ) -> AccountIdentity:
         """Create a canonical Java Edition identity."""
         return cls(IdentityProvider.JAVA, str(minecraft_uuid), username, verified_at)
 
@@ -81,7 +81,7 @@ class AccountIdentity:
         *,
         gamertag: str | None = None,
         verified_at: Instant | None = None,
-    ) -> "AccountIdentity":
+    ) -> AccountIdentity:
         """Create a canonical Bedrock identity from an unsigned XUID."""
         if not 0 < xuid < 2**64:
             msg = "Bedrock XUIDs must be unsigned 64-bit integers."
@@ -107,7 +107,7 @@ class AccountConsent:
     granted_at: Instant
 
     @classmethod
-    def grant_current(cls) -> "AccountConsent":
+    def grant_current(cls) -> AccountConsent:
         """Create a receipt for the currently published privacy notice."""
         return cls(version=CURRENT_CONSENT_VERSION, granted_at=Instant.now())
 
@@ -214,7 +214,7 @@ class AliasClaim:
     created_at: Instant
     resolved_at: Instant | None = None
     resolved_by_account_id: int | None = None
-    claimant: "Account | None" = None
+    claimant: Account | None = None
     """The claiming account, when the caller asked for it.
 
     Present so a staff queue can name a claimant as something better than an internal ID,

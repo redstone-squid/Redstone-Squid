@@ -156,7 +156,7 @@ def make_reaction_payload(
 class ReactionBotHarness:
     """A bot stand-in exposing only what reaction dispatch calls, plus its observable fetch."""
 
-    bot: "squid.bot.app.RedstoneSquid"
+    bot: squid.bot.app.RedstoneSquid
     get_or_fetch_message: AsyncMock
 
 

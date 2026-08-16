@@ -26,7 +26,7 @@ class OpenAITextGenerator:
         self._owns_client = owns_client
 
     @classmethod
-    def from_config(cls, config: OpenAIConfig) -> "OpenAITextGenerator":
+    def from_config(cls, config: OpenAIConfig) -> OpenAITextGenerator:
         """Create an adapter from typed process configuration."""
         if not config.api_key:
             logger.warning("No OpenAI API key found; build inference is disabled.")

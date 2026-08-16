@@ -44,13 +44,13 @@ class FakeSession:
         self.execute = AsyncMock()
         self.scalar = AsyncMock(return_value=None)
 
-    async def __aenter__(self) -> "FakeSession":
+    async def __aenter__(self) -> FakeSession:
         return self
 
     async def __aexit__(self, *_args: object) -> None:
         pass
 
-    def begin(self) -> "FakeSession":
+    def begin(self) -> FakeSession:
         return self
 
     def add(self, value: object) -> None:

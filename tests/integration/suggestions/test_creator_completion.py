@@ -27,7 +27,7 @@ _TABLES = [Base.metadata.tables["accounts"], Base.metadata.tables["creator_alias
 
 
 @pytest.fixture
-async def creator_tables(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def creator_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     # `creator_aliases_normalized_name_prefix_idx` is declared on the model, so `create_all`
     # brings it along; the EXPLAIN test below depends on that.
     async with async_engine.begin() as connection:

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 async def ensure_build_review(
-    bot: "squid.bot.app.RedstoneSquid",
+    bot: squid.bot.app.RedstoneSquid,
     build: Build,
     channels: Sequence[GuildMessageable],
 ) -> int:
@@ -59,7 +59,7 @@ async def ensure_build_review(
 
 
 async def start_delete_log_vote(
-    bot: "squid.bot.app.RedstoneSquid",
+    bot: squid.bot.app.RedstoneSquid,
     *,
     author_id: int,
     target_message: discord.Message,

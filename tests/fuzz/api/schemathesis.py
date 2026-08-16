@@ -328,7 +328,7 @@ def read_event_summary(path: Path) -> EventSummary:
                 raise InvalidCampaignArtifactError(msg)
             try:
                 event = json.loads(raw_line)
-            except (UnicodeDecodeError, json.JSONDecodeError):
+            except UnicodeDecodeError, json.JSONDecodeError:
                 msg = "Schemathesis NDJSON contains a malformed event."
                 raise InvalidCampaignArtifactError(msg) from None
             if not isinstance(event, dict) or len(event) != 1:

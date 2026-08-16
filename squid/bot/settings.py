@@ -331,6 +331,6 @@ class VoteEmojiModal(ErrorHandledModal):
         await interaction.response.send_message("Voting emojis updated for new sessions.", ephemeral=True)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(SettingsCog(bot))

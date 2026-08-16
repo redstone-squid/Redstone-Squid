@@ -45,7 +45,7 @@ _TABLES = [
 
 
 @pytest.fixture
-async def account_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngine, None]:
+async def account_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngine]:
     async with async_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:

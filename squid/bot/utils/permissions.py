@@ -87,7 +87,7 @@ def has_manage_server(member: discord.Member) -> bool:
 
 
 async def build_subject(
-    bot: "squid.bot.app.RedstoneSquid",
+    bot: squid.bot.app.RedstoneSquid,
     user: discord.User | discord.Member | discord.abc.User,
     guild_id: int | None,
 ) -> Subject:
@@ -106,7 +106,7 @@ async def build_subject(
     )
 
 
-async def subject_for(ctx: Context["squid.bot.app.RedstoneSquid"]) -> Subject:
+async def subject_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Subject:
     """The caller's subject, resolved once per invocation."""
     memoized = getattr(ctx, SUBJECT_ATTRIBUTE, None)
     if isinstance(memoized, Subject):
@@ -116,13 +116,13 @@ async def subject_for(ctx: Context["squid.bot.app.RedstoneSquid"]) -> Subject:
     return subject
 
 
-async def subject_for_interaction(interaction: discord.Interaction["squid.bot.app.RedstoneSquid"]) -> Subject:
+async def subject_for_interaction(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> Subject:
     """The subject behind a component or modal interaction."""
     return await build_subject(interaction.client, interaction.user, interaction.guild_id)
 
 
 async def allows(
-    interaction: discord.Interaction["squid.bot.app.RedstoneSquid"],
+    interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
     node: PermissionNode | str,
 ) -> bool:
     """Whether the user behind an interaction holds `node`."""
@@ -134,7 +134,7 @@ def requires(
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
     guild_only: bool = False,
-) -> "Check[Context[squid.bot.app.RedstoneSquid]]":
+) -> Check[Context[squid.bot.app.RedstoneSquid]]:
     """Require permission nodes, decided by the permission engine.
 
     `mode="any"` passes when the caller holds one of the nodes, for a command
@@ -147,7 +147,7 @@ def requires(
         raise ValueError(msg)
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
 
-    async def predicate(ctx: Context["squid.bot.app.RedstoneSquid"]) -> bool:
+    async def predicate(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
         if guild_only and ctx.guild is None:
             raise NoPrivateMessage()
         subject = await subject_for(ctx)
@@ -181,7 +181,7 @@ def check_is_home_server():
     applied alongside `requires(...)`.
     """
 
-    async def predicate(ctx: Context["squid.bot.app.RedstoneSquid"]) -> bool:
+    async def predicate(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:
         if ctx.guild is None:
             raise NoPrivateMessage()
         if ctx.bot.owner_server_id is None or ctx.guild.id == ctx.bot.owner_server_id:

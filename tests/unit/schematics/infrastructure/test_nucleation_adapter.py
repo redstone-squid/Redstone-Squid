@@ -17,7 +17,7 @@ class RecordingRenderConfig:
     calls: list[tuple[str, tuple[object, ...]]] = []
 
     @classmethod
-    def create(cls, width: int, height: int) -> "RecordingRenderConfig":
+    def create(cls, width: int, height: int) -> RecordingRenderConfig:
         cls.calls.append(("create", (width, height)))
         return cls()
 

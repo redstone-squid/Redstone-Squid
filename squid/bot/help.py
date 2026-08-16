@@ -135,7 +135,7 @@ class Help(commands.MinimalHelpCommand):
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
 
     @property
-    def _bot(self) -> "squid.bot.app.RedstoneSquid":
+    def _bot(self) -> squid.bot.app.RedstoneSquid:
         # discord.py's HelpCommand.context is generically typed as Context[Bot | AutoShardedBot];
         # the bot is always the concrete RedstoneSquid at runtime.
         return cast("squid.bot.app.RedstoneSquid", self.context.bot)
@@ -277,6 +277,6 @@ class Help(commands.MinimalHelpCommand):
         )
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(HelpCog(bot))

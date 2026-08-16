@@ -53,7 +53,7 @@ class CliEnrollmentResponse(StrictSchema):
         issued: IssuedCliEnrollment,
         *,
         verification_uri: AnyHttpUrl,
-    ) -> "CliEnrollmentResponse":
+    ) -> CliEnrollmentResponse:
         fragment = urlencode({"code": issued.user_code})
         return cls(
             id=issued.enrollment.id,
@@ -84,7 +84,7 @@ class CliEnrollmentApprovalResponse(StrictSchema):
     approved_at: datetime | None
 
     @classmethod
-    def from_domain(cls, enrollment: CliDeviceEnrollment) -> "CliEnrollmentApprovalResponse":
+    def from_domain(cls, enrollment: CliDeviceEnrollment) -> CliEnrollmentApprovalResponse:
         return cls(
             id=enrollment.id,
             client_instance_id=enrollment.client_instance_id,
@@ -147,7 +147,7 @@ class CliDeviceResponse(StrictSchema):
     revoked_at: datetime | None
 
     @classmethod
-    def from_domain(cls, device: CliDevice) -> "CliDeviceResponse":
+    def from_domain(cls, device: CliDevice) -> CliDeviceResponse:
         return cls(
             id=device.id,
             client_instance_id=device.client_instance_id,
@@ -174,7 +174,7 @@ class IssuedCliSessionResponse(StrictSchema):
     expires_at: datetime
 
     @classmethod
-    def from_domain(cls, issued: IssuedCliSession) -> "IssuedCliSessionResponse":
+    def from_domain(cls, issued: IssuedCliSession) -> IssuedCliSessionResponse:
         return cls(
             device=CliDeviceResponse.from_domain(issued.device),
             session_id=issued.session.id,

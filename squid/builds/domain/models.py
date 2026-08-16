@@ -408,7 +408,7 @@ class Build(StagedMedia, StagedTaxonomy):
 
         return format_build_display_title(self, markdown=True)
 
-    def diff[T: Any](self, other: "Build", *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
+    def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """
         Returns the differences between this build and another of the same category.
 

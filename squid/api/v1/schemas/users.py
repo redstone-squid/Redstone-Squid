@@ -17,7 +17,7 @@ class CreatorAliasDetail(BaseModel):
     creator_id: UUID | None
 
     @classmethod
-    def from_domain(cls, alias: CreatorAlias) -> "CreatorAliasDetail":
+    def from_domain(cls, alias: CreatorAlias) -> CreatorAliasDetail:
         return cls(name=alias.name, claimed=alias.is_claimed, creator_id=alias.public_creator_id)
 
 
@@ -30,5 +30,5 @@ class CreatorProfileDetail(BaseModel):
     aliases: list[str]
 
     @classmethod
-    def from_domain(cls, profile: CreatorProfile) -> "CreatorProfileDetail":
+    def from_domain(cls, profile: CreatorProfile) -> CreatorProfileDetail:
         return cls(id=profile.public_id, aliases=list(profile.aliases))

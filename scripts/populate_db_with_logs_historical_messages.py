@@ -34,7 +34,7 @@ class _GroupingMessage:
     reference_id: int | None
 
     @classmethod
-    def from_discord(cls, message: Message) -> "_GroupingMessage":
+    def from_discord(cls, message: Message) -> _GroupingMessage:
         """Expose Discord message facts to the framework-neutral grouper."""
         reference_id = message.reference.message_id if message.reference is not None else None
         return cls(message, message.id, message.author.id, message.created_at, reference_id)
@@ -51,7 +51,7 @@ class ImportSummary:
     ignored: int = 0
     failed: int = 0
 
-    def __add__(self, other: "ImportSummary") -> "ImportSummary":
+    def __add__(self, other: ImportSummary) -> ImportSummary:
         return ImportSummary(
             groups=self.groups + other.groups,
             builds=self.builds + other.builds,

@@ -63,7 +63,7 @@ class SuggestionRegistry:
     _sources: dict[str, SuggestionSource] = field(default_factory=dict)
 
     @classmethod
-    def of(cls, sources: Iterable[SuggestionSource]) -> "SuggestionRegistry":
+    def of(cls, sources: Iterable[SuggestionSource]) -> SuggestionRegistry:
         """Build a registry, rejecting duplicate ids at construction so typos fail at startup."""
         registered: dict[str, SuggestionSource] = {}
         for source in sources:

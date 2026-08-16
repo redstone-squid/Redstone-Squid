@@ -2,7 +2,7 @@
 name = "redstone-squid"
 description = "A bot designed to manage redstone records"
 version = "1.5.7"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -205,7 +205,7 @@ ruff = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
 
 [tool.ruff]
 line-length = 120
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [
@@ -293,7 +293,7 @@ commit_args = ""
 files.glob = "**/config.py,pyproject.toml"
 
 [tool.basedpyright]
-pythonVersion = "3.12"
+pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
 exclude = ["**/node_modules", "**/__pycache__", "**/.*", "scripts/migrations"]
@@ -325,7 +325,7 @@ enableExperimentalFeatures = true  # For `TypeForm` support
 [tool.pyrefly]
 project-includes = ["squid/**/*.py", "tests/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
-python-version = "3.12"
+python-version = "3.14"
 # `observability` is an optional extra (see the dependency group below) that isn't installed in
 # every environment; these imports are already guarded by `try`/`ModuleNotFoundError` at runtime.
 ignore-missing-imports = ["opentelemetry", "opentelemetry.*"]

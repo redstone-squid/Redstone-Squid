@@ -207,7 +207,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         return stored
 
 
-async def _say(ctx: Context["squid.bot.app.RedstoneSquid"], message: str, *, ephemeral: bool = False) -> None:
+async def _say(ctx: Context[squid.bot.app.RedstoneSquid], message: str, *, ephemeral: bool = False) -> None:
     await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
 
 

@@ -27,7 +27,7 @@ class VoteOptionSummary(BaseModel):
     position: int
 
     @classmethod
-    def from_domain(cls, option: VoteOption) -> "VoteOptionSummary":
+    def from_domain(cls, option: VoteOption) -> VoteOptionSummary:
         assert option.identifier is not None
         return cls(id=option.identifier, label=option.label, choice=option.choice.value, position=option.position)
 
@@ -62,7 +62,7 @@ class OwnVoteSelection(BaseModel):
     option_id: str
 
     @classmethod
-    def from_domain(cls, selection: VoteSelection) -> "OwnVoteSelection":
+    def from_domain(cls, selection: VoteSelection) -> OwnVoteSelection:
         return cls(option_id=selection.option_id)
 
 
@@ -84,7 +84,7 @@ class VoteSessionDetail(BaseModel):
     own_selection: OwnVoteSelection | None
 
     @classmethod
-    def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> "VoteSessionDetail":
+    def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> VoteSessionDetail:
         options_by_id: dict[str, VoteOption] = {}
         for option in session.options:
             assert option.identifier is not None
