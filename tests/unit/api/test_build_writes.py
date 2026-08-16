@@ -42,6 +42,27 @@ def persisted_build(*, submitter_account_id: int = 1, status: Status = Status.PE
     )
 
 
+CLI = Caller(
+    kind="cli",
+    subject="account:1",
+    nodes=credential_nodes("build.submission.create"),
+    account_id=1,
+)
+
+
+@pytest.mark.asyncio
+async def test_a_cli_caller_with_no_discord_identity_can_submit() -> None:
+    """Refused before: the gate demanded a snowflake the submission never used."""
+    submit_door = AsyncMock(return_value=persisted_build())
+    services = cast(ApiServices, SimpleNamespace(builds=SimpleNamespace(submit_door=submit_door)))
+
+    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services.builds, CLI)
+
+    assert response.id == 42
+    assert submit_door.await_args is not None
+    assert submit_door.await_args.args[0].submitter_account_id == 1
+
+
 @pytest.mark.asyncio
 async def test_submit_maps_authenticated_identity_and_rejects_other_categories() -> None:
     submit_door = AsyncMock(return_value=persisted_build())
