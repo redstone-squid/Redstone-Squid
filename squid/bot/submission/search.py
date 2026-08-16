@@ -319,11 +319,13 @@ class SearchCog[
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
         """Fallback search when the bot is mentioned and no command is found."""
 
-        assert ctx.command is None, "This listener should only handle non-commands."
-
-        # Only handle CommandNotFound exceptions
+        # This listener is dispatched for every command error in the bot, so scoping it comes
+        # first: anything else arrives with `ctx.command` set, and asserting before this check
+        # raised inside `on_command_error` itself, swallowing the error being reported.
         if not isinstance(exception, commands.CommandNotFound):
             return
+
+        assert ctx.command is None, "This listener should only handle non-commands."
 
         # Only handle messages that mention the bot
         content = ctx.message.content
