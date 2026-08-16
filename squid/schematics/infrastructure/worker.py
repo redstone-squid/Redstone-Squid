@@ -27,15 +27,20 @@ import asyncio
 import base64
 import contextlib
 import dataclasses
+import functools
 import json
 import logging
 import os
 import signal
 import sys
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncGenerator, Awaitable, Callable, Mapping, Sequence
+from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from typing import Any, Self, cast
+
+import anyio
+from anyio.abc import TaskGroup
 
 from squid.config import SchematicConfig
 from squid.core.errors import DomainError, InfrastructureError
@@ -92,13 +97,38 @@ exactly the diagnostics this pipe exists to carry.
 """
 
 
+@dataclasses.dataclass(slots=True)
+class _StderrPump:
+    """A running stderr-draining task, and the handle its worker stops it by.
+
+    The pump outlives no worker: `finished` is set when it reaches end of pipe or is
+    cancelled, so a terminating worker can wait for the last diagnostics out of a dying child
+    without holding a reference to the task object itself.
+    """
+
+    scope: anyio.CancelScope
+    finished: anyio.Event
+
+    async def drain(self, timeout: float) -> None:
+        """Wait for the pipe to reach end of file, then stop the pump either way."""
+        with anyio.move_on_after(timeout):
+            await self.finished.wait()
+        self.scope.cancel()
+        await self.finished.wait()
+
+
+type _SpawnPump = Callable[[Callable[[], Awaitable[None]]], None]
+"""How a worker hands a pump to whoever owns its lifetime — see `SchematicWorkerPool.running`."""
+
+
 class _Worker:
     """One child process and the single request slot that guards it."""
 
-    def __init__(self, config: SchematicConfig) -> None:
+    def __init__(self, config: SchematicConfig, spawn: _SpawnPump) -> None:
         self._config = config
+        self._spawn = spawn
         self._process: asyncio.subprocess.Process | None = None
-        self._stderr_pump: asyncio.Task[None] | None = None
+        self._stderr_pump: _StderrPump | None = None
         self._lock = asyncio.Lock()
         self._next_id = 0
         self._started_once = False
@@ -160,8 +190,23 @@ class _Worker:
             add_counter("squid.schematic.worker.respawns")
             logger.warning("Respawning schematic worker as %s after a failure.", self._process.pid)
         self._started_once = True
-        self._stderr_pump = asyncio.create_task(self._pump_stderr(self._process))
+        self._start_pump(self._process)
         return self._process
+
+    def _start_pump(self, process: asyncio.subprocess.Process) -> _StderrPump:
+        """Hand one pump to whoever owns this worker, keeping the handle to stop it by."""
+        pump = _StderrPump(anyio.CancelScope(), anyio.Event())
+        self._stderr_pump = pump
+        self._spawn(functools.partial(self._run_pump, process, pump))
+        return pump
+
+    async def _run_pump(self, process: asyncio.subprocess.Process, pump: _StderrPump) -> None:
+        """Run one pump inside its own cancel scope, always announcing that it has stopped."""
+        with pump.scope:
+            try:
+                await self._pump_stderr(process)
+            finally:
+                pump.finished.set()
 
     async def _pump_stderr(self, process: asyncio.subprocess.Process) -> None:
         """Forward the child's stderr — including faulthandler tracebacks — into our logs."""
@@ -203,11 +248,8 @@ class _Worker:
         pump, self._stderr_pump = self._stderr_pump, None
         if process is None:
             if pump is not None:
-                pump.cancel()
-                # cancel() only schedules the CancelledError; dropping the last strong
-                # reference before it lands lets the task be collected mid-cancellation.
-                with contextlib.suppress(asyncio.CancelledError):
-                    await pump
+                pump.scope.cancel()
+                await pump.finished.wait()
             return None
 
         if process.returncode is None:
@@ -221,8 +263,7 @@ class _Worker:
         # Drain after the process is gone, never before: on a crash the traceback we care about
         # is still sitting in the pipe at exactly the moment the old code cancelled the pump.
         if pump is not None:
-            with contextlib.suppress(TimeoutError, asyncio.CancelledError):
-                await asyncio.wait_for(pump, 2.0)
+            await pump.drain(2.0)
         if process.returncode is not None:
             logger.log(
                 logging.INFO if process.returncode == 0 else logging.WARNING,
@@ -360,7 +401,7 @@ class SchematicWorkerPool:
 
     def __init__(self, config: SchematicConfig) -> None:
         self._config = config
-        self._workers = [_Worker(config) for _ in range(config.workers)]
+        self._workers = [_Worker(config, self._spawn_pump) for _ in range(config.workers)]
         self._available = asyncio.Semaphore(config.workers)
         self._render_slot = asyncio.Semaphore(1)
         """One GPU, so renders are serialised regardless of how many workers exist."""
@@ -369,6 +410,36 @@ class SchematicWorkerPool:
         self._breaker_was_open = False
         self._waiting = 0
         self._closed = False
+        self._pumps: TaskGroup | None = None
+
+    @asynccontextmanager
+    async def running(self) -> AsyncGenerator[Self]:
+        """Own every stderr pump this pool starts, for as long as the pool serves requests.
+
+        A pump is spawned lazily, from whichever request happened to find its worker dead, so
+        it cannot be owned by its spawner: that task returns while the child is still alive and
+        still writing panics into the pipe. It belongs to the pool instead, and an anyio task
+        group can only be exited by the task that entered it, so the pool's owner has to hold
+        this rather than the pool creating a group on demand.
+        """
+        if self._pumps is not None:
+            msg = "The schematic worker pool is already running."
+            raise RuntimeError(msg)
+        async with anyio.create_task_group() as pumps:
+            self._pumps = pumps
+            try:
+                yield self
+            finally:
+                # Every pump is drained and cancelled by its own worker, so the group is left
+                # with no children and its exit cannot block on a child of a dead process.
+                await self.aclose()
+                self._pumps = None
+
+    def _spawn_pump(self, pump: Callable[[], Awaitable[None]]) -> None:
+        if self._pumps is None:
+            msg = "The schematic worker pool must be entered with `running()` before it serves requests."
+            raise RuntimeError(msg)
+        self._pumps.start_soon(pump)
 
     async def record_health(self) -> None:
         """Publish how saturated the pool is, for the process that owns it to sample.
@@ -469,15 +540,14 @@ class SchematicWorkerPool:
         return _payload(frame)
 
     async def aclose(self) -> None:
-        """Shut every worker down. Safe to call more than once."""
+        """Shut every worker down. Safe to call more than once.
+
+        `gather(return_exceptions=True)` rather than a task group because every worker must be
+        given its chance to die even if an earlier one refuses to: this is the last thing that
+        runs before the process exits, and a leaked child outlives us.
+        """
         self._closed = True
         await asyncio.gather(*(worker.aclose() for worker in self._workers), return_exceptions=True)
-
-    async def __aenter__(self) -> Self:
-        return self
-
-    async def __aexit__(self, *_: object) -> None:
-        await self.aclose()
 
     async def _call(
         self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
