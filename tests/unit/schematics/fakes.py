@@ -172,7 +172,7 @@ class FakeSchematicStore:
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_discord_id: int | None = None,
+        uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))

@@ -21,6 +21,7 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
@@ -205,7 +206,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # Prefilling is safe here: `draft` was constructed empty a few lines above, so there is
         # no human-declared value to overwrite. The modal shows these as editable defaults, and
         # whatever the human submits wins from that point on.
-        analyses = await self._analyse_attachments(pending_schematics, uploader_id=interaction.user.id)
+        uploader_account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        analyses = await self._analyse_attachments(pending_schematics, uploader_account_id=uploader_account_id)
         if analyses:
             measured = analyses[0][1].analysis.metrics.dimensions
             draft.dimensions = (measured.width, measured.height, measured.length)
@@ -242,7 +244,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         self._note_dimension_mismatch(build, analyses)
         await self._note_schematic_duplicates(build, analyses)
         await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
-        await self._record_analyses(build, analyses, uploader_id=interaction.user.id)
+        await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
 
         preview = StaticLayout(
             discord.ui.TextDisplay(
@@ -261,7 +263,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         )
 
     async def _analyse_attachments(
-        self, pending: Sequence[tuple[str, bytes]], *, uploader_id: int
+        self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int
     ) -> list[tuple[IngestRequest, IngestedSchematic]]:
         """Analyze uploaded schematics, dropping any the engine cannot read.
 
@@ -275,7 +277,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
         analysed: list[tuple[IngestRequest, IngestedSchematic]] = []
         for filename, data in pending:
-            request = IngestRequest(data=data, filename=filename, uploaded_by_discord_id=uploader_id)
+            request = IngestRequest(data=data, filename=filename, uploaded_by_account_id=uploader_account_id)
             try:
                 analysed.append((request, await schematics.ingest(request)))
             except SquidError:
@@ -283,7 +285,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         return analysed
 
     async def _record_analyses(
-        self, build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]], *, uploader_id: int
+        self, build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]], *, uploader_account_id: int
     ) -> None:
         """Persist the analyses now that the build has an id. The first upload is primary."""
         if build.id is None or not analyses:

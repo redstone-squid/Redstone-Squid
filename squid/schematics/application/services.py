@@ -185,7 +185,7 @@ class SchematicService:
             ingested.analysis,
             primary=primary,
             original_filename=request.filename,
-            uploaded_by_discord_id=request.uploaded_by_discord_id,
+            uploaded_by_account_id=request.uploaded_by_account_id,
             publication=publication,
         )
 

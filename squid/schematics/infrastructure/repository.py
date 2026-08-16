@@ -102,7 +102,7 @@ class SchematicRepository:
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_discord_id: int | None = None,
+        uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
     ) -> int:
         """Attach an analysis to a build, replacing any earlier analysis of the same file.
@@ -115,7 +115,7 @@ class SchematicRepository:
             "file_sha256": sha256,
             "is_primary": primary,
             "original_filename": original_filename,
-            "uploaded_by_discord_id": uploaded_by_discord_id,
+            "uploaded_by_account_id": uploaded_by_account_id,
             **to_row_values(analysis),
         }
         if publication is not None:

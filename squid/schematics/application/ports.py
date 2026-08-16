@@ -88,7 +88,7 @@ class SchematicStore(Protocol):
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_discord_id: int | None = None,
+        uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
     ) -> int: ...
 
