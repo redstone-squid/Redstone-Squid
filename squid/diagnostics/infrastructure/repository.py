@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import cast, override
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, true
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -38,6 +38,7 @@ class PostgresErrorReportRepository(ErrorReportRepository):
                     traceback=report.traceback,
                     context=dict(report.context),
                     log_tail=list(report.log_tail),
+                    work_lost=report.work_lost,
                 )
             )
 
@@ -63,11 +64,12 @@ class PostgresErrorReportRepository(ErrorReportRepository):
         return total or 0
 
     @override
-    async def list_recent(self, *, limit: int, now: Instant) -> Sequence[ErrorReport]:
+    async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         async with self._session_factory() as session:
             rows = await session.scalars(
                 select(ErrorReportRow)
                 .where(ErrorReportRow.expires_at > now)
+                .where(ErrorReportRow.work_lost if work_lost_only else true())
                 .order_by(ErrorReportRow.occurred_at.desc())
                 .limit(limit)
             )
@@ -120,4 +122,5 @@ def _to_domain(row: ErrorReportRow) -> ErrorReport:
         traceback=row.traceback,
         context=cast(dict[str, JSONValue], row.context),
         log_tail=list(row.log_tail),
+        work_lost=row.work_lost,
     )

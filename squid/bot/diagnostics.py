@@ -56,12 +56,18 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @error_group.command(name="recent")
     @requires(DIAGNOSTICS_ERROR_READ)
-    async def recent_errors(self, ctx: Context[BotT]) -> None:
-        """List the most recent stored errors, newest first."""
-        reports = await self.error_reports.recent(limit=RECENT_LIMIT)
+    async def recent_errors(self, ctx: Context[BotT], work_lost: bool = False) -> None:
+        """List the most recent stored errors, newest first.
+
+        Set work_lost to see only failures that permanently abandoned work, such as a
+        dead-lettered job, rather than every exception something recovered from.
+        """
+        reports = await self.error_reports.recent(limit=RECENT_LIMIT, work_lost_only=work_lost)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         body = "\n".join(
-            f"`{report.reference}` — {report.exception_type} in {report.origin or report.surface}" for report in reports
+            f"{':warning: ' if report.work_lost else ''}`{report.reference}` — "
+            f"{report.exception_type} in {report.origin or report.surface}"
+            for report in reports
         )
         await ctx.send(
             view=info_layout(
@@ -80,6 +86,13 @@ def _summary_fields(report: ErrorReport, matches: int, locale: str | None) -> li
         CardField(t(locale, _("Exception")), report.exception_type),
         CardField(t(locale, _("Full ID")), f"`{report.correlation_id}`"),
     ]
+    if report.work_lost:
+        fields.append(
+            CardField(
+                t(locale, _("Work lost")),
+                t(locale, _("This job was abandoned; nothing will retry it.")),
+            )
+        )
     if matches > 1:
         # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
         # would have a moderator confidently reading the wrong incident.
@@ -109,6 +122,7 @@ def _attachment(report: ErrorReport) -> File:
         f"origin: {report.origin or '-'}",
         f"exception: {report.exception_type}",
         f"code: {report.error_code.value if report.error_code else '-'}",
+        f"work_lost: {report.work_lost}",
         f"message: {report.message}",
         f"context: {dict(report.context)}",
         "",

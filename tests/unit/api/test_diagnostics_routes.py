@@ -42,8 +42,10 @@ class StubErrorReports:
             raise ErrorReportNotFoundError(context={"reference": reference})
         return self._report, self._matches
 
-    async def recent(self, *, limit: int) -> list[ErrorReport]:
-        return [self._report] if self._report is not None else []
+    async def recent(self, *, limit: int, work_lost_only: bool = False) -> list[ErrorReport]:
+        if self._report is None or (work_lost_only and not self._report.work_lost):
+            return []
+        return [self._report]
 
 
 # The bootstrap secret carries only the nodes a deployment names, so reading reports has to be
