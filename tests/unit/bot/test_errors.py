@@ -19,6 +19,7 @@ from squid.bot.errors import (
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
+from squid.observability import correlation_id
 from tests.helpers.discord import make_interaction, make_message
 
 
@@ -43,9 +44,12 @@ def test_unexpected_error_presentation_redacts_diagnostic_detail() -> None:
         presentation = build_error_presentation(InternalError("database password leaked"))
 
     assert "database password leaked" not in presentation.detail
-    assert presentation.error_id is not None
     assert presentation.error_id == "b" * 32
-    assert presentation.error_id in presentation.detail
+    # The card shows the short reference, since the user has to retype it; the full id stays on
+    # the log line and the stored report.
+    assert presentation.reference == "b" * 12
+    assert presentation.detail.count("b" * 12) == 1
+    assert "b" * 13 not in presentation.detail
 
 
 @pytest.mark.parametrize(
@@ -89,6 +93,37 @@ async def test_application_command_span_excludes_user_id(mocker: MockerFixture) 
     }
     assert all("user" not in name for name in attributes)
     span.set_error.assert_not_called()
+
+
+async def test_application_command_binds_one_correlation_id_for_the_whole_invocation(
+    mocker: MockerFixture,
+) -> None:
+    """Log lines a command emits before failing must share the ID its error card shows.
+
+    Before this binding the ID was minted at presentation time, so nothing the command had
+    already logged carried it and the reference resolved to a traceback with no context.
+    """
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock()
+    interaction.type = discord.InteractionType.application_command
+    interaction.data = {"name": "settings"}
+    interaction.guild_id = None
+    interaction.channel_id = None
+    interaction.command_failed = False
+
+    seen: list[str] = []
+
+    async def record_bound(_tree: object, _interaction: object) -> None:
+        seen.append(correlation_id())
+
+    mocker.patch.object(app_commands.CommandTree, "_call", new=record_bound)
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+    outside = correlation_id()
+
+    assert len(seen) == 1
+    assert seen[0] != outside, "the binding must not leak past the invocation"
 
 
 async def test_application_command_failure_marks_span(mocker: MockerFixture) -> None:
@@ -204,8 +239,8 @@ async def test_unexpected_error_log_excludes_discord_account_identifiers() -> No
     log_error.assert_called_once()
     log_call = log_error.call_args
     assert log_call is not None
-    assert log_call.args[3] == {"command": None, "guild_id": 3, "channel_id": 4}
-    assert log_call.args[4] == {
+    assert log_call.args[4] == {"command": None, "guild_id": 3, "channel_id": 4}
+    assert log_call.args[5] == {
         "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
         "attempts": [{"job_id": 17}],
     }

@@ -243,6 +243,26 @@ def correlation_id() -> str:
     return trace_id if trace_id is not None else uuid4().hex[:12]
 
 
+@contextmanager
+def correlation_scope() -> Iterator[str]:
+    """Bind one correlation ID for the duration of a unit of work, and yield it.
+
+    Re-entrant on purpose: a nested scope keeps the outer binding rather than minting a second
+    ID. A hybrid command arrives through the application command tree and is then invoked through
+    the prefix path, so both scopes open around the same invocation and must agree.
+    """
+    existing = _bound_correlation_id.get()
+    if existing is not None:
+        yield existing
+        return
+    resolved = correlation_id()
+    token = bind_correlation_id(resolved)
+    try:
+        yield resolved
+    finally:
+        unbind_correlation_id(token)
+
+
 def correlation_reference(correlation_id: str) -> str:
     """Shorten a correlation ID for display without changing what is stored or sent.
 
@@ -503,6 +523,7 @@ __all__ = [
     "correlated_log_buffer",
     "correlation_id",
     "correlation_reference",
+    "correlation_scope",
     "extracted_trace_span",
     "inject_trace_context",
     "install_trace_context_log_filter",
