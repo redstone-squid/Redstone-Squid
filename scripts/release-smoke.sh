@@ -23,7 +23,6 @@ readonly DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:${DATABASE_PORT}
 readonly -a COMMON_ENV=(
     --env "SQUID_DATABASE_URL=$DATABASE_URL"
     --env SQUID_VERIFICATION_CODE_PEPPER=release-smoke-verification
-    --env SQUID_CURSOR_SECRET=release-smoke-cursor-secret
     --env SQUID_SCHEMATIC_ENABLED=false
 )
 
