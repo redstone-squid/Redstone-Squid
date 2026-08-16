@@ -449,7 +449,7 @@ class BuildRepository:
                     display_order=assignment.display_order,
                     evidence=assignment.evidence,
                     provenance=assignment.provenance,
-                    created_by_discord_id=build.submitter_id,
+                    created_by_account_id=build.submitter_account_id,
                 )
             )
 

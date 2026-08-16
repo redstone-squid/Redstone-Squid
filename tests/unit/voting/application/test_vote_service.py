@@ -46,7 +46,7 @@ def snapshot(
 class FakeVoteRepository:
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
-        self.cast_calls: list[tuple[int, int, int, int, str, str, float, dict[int, float] | None]] = []
+        self.cast_calls: list[tuple[int, int, int, str, str, float, dict[int, float] | None]] = []
         self.mutation: StoredVoteMutation | None = None
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []

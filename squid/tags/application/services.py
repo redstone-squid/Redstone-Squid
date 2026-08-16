@@ -22,7 +22,7 @@ class TagDefinitionRepository(Protocol):
         normalized_name: str,
         value_type: TagValueType,
         query_name: str | None,
-        created_by_discord_id: int,
+        created_by_account_id: int,
     ) -> TagDefinition: ...
 
     async def pending(self) -> Sequence[TagDefinition]: ...
@@ -39,7 +39,7 @@ class TagDefinitionRepository(Protocol):
         build_id: int,
         tag_id: int,
         value: TagValue,
-        actor_discord_id: int,
+        actor_account_id: int,
     ) -> bool: ...
 
 
@@ -55,7 +55,7 @@ class TagService:
         *,
         value_type: TagValueType,
         query_name: str | None,
-        created_by_discord_id: int,
+        created_by_account_id: int,
     ) -> TagDefinition:
         normalized_name = " ".join(display_name.casefold().split())
         if not 1 <= len(normalized_name) <= 80:
@@ -68,12 +68,15 @@ class TagService:
             msg = "query names must start with a letter and contain only lowercase letters, digits, or underscores"
             raise ValueError(msg)
         return await self._repository.create_showcase(
-            stable_key=f"user_{created_by_discord_id}_{uuid4().hex}",
+            # No submitter identity in the key. It is never parsed -- the only literal
+            # comparison anywhere is against an official key -- so publishing a proposer
+            # in `BuildTag.key` bought nothing and leaked who proposed a tag.
+            stable_key=f"user_{uuid4().hex}",
             display_name=" ".join(display_name.split()),
             normalized_name=normalized_name,
             value_type=value_type,
             query_name=normalized_query,
-            created_by_discord_id=created_by_discord_id,
+            created_by_account_id=created_by_account_id,
         )
 
     async def pending(self) -> Sequence[TagDefinition]:
@@ -109,7 +112,7 @@ class TagService:
         tag_id: int,
         raw_value: str | None,
         *,
-        actor_discord_id: int,
+        actor_account_id: int,
     ) -> TagDefinition:
         """Attach an approved showcase tag to a build submitted by the caller."""
         definition = await self._repository.get(tag_id)
@@ -126,7 +129,7 @@ class TagService:
             build_id=build_id,
             tag_id=tag_id,
             value=value,
-            actor_discord_id=actor_discord_id,
+            actor_account_id=actor_account_id,
         )
         if not assigned:
             msg = "the build does not exist or was not submitted by you"

@@ -1,5 +1,6 @@
 """Tag governance service tests."""
 
+import re
 from dataclasses import replace
 from decimal import Decimal
 
@@ -28,9 +29,11 @@ class FakeRepository:
         normalized_name: str,
         value_type: TagValueType,
         query_name: str | None,
-        created_by_discord_id: int,
+        created_by_account_id: int,
     ) -> TagDefinition:
-        assert stable_key.startswith(f"user_{created_by_discord_id}_")
+        # The key carries no proposer at all: it is published verbatim as `BuildTag.key`,
+        # and the old `user_{discord_id}_{hex}` form leaked a snowflake into the API.
+        assert re.fullmatch(r"user_[0-9a-f]{32}", stable_key), stable_key
         self.definition = TagDefinition(
             id=1,
             stable_key=stable_key,
@@ -66,10 +69,10 @@ class FakeRepository:
         build_id: int,
         tag_id: int,
         value: TagValue,
-        actor_discord_id: int,
+        actor_account_id: int,
     ) -> bool:
         assert (build_id, tag_id, value) == (10, 1, Decimal("0.4"))
-        return actor_discord_id == 42
+        return actor_account_id == 42
 
 
 @pytest.mark.asyncio
@@ -81,7 +84,7 @@ async def test_user_can_propose_only_showcase_definition_for_review() -> None:
         "  Closing   Showcase ",
         value_type=TagValueType.NUMERIC,
         query_name="CLOSING_SHOWCASE",
-        created_by_discord_id=42,
+        created_by_account_id=42,
     )
 
     assert tag.display_name == "Closing Showcase"
@@ -98,7 +101,7 @@ async def test_staff_moderation_retains_definition_identity() -> None:
         "Compact",
         value_type=TagValueType.NONE,
         query_name=None,
-        created_by_discord_id=42,
+        created_by_account_id=42,
     )
 
     approved = await service.approve(proposed.id)
@@ -116,7 +119,7 @@ async def test_public_queries_only_return_approved_definitions() -> None:
         "Compact",
         value_type=TagValueType.NONE,
         query_name=None,
-        created_by_discord_id=42,
+        created_by_account_id=42,
     )
 
     assert await service.public_definitions() == ()
@@ -134,7 +137,7 @@ async def test_invalid_public_query_name_is_rejected_before_persistence() -> Non
             "Compact",
             value_type=TagValueType.NONE,
             query_name="not-valid!",
-            created_by_discord_id=42,
+            created_by_account_id=42,
         )
 
 
@@ -146,10 +149,10 @@ async def test_submitter_can_attach_approved_typed_showcase_tag() -> None:
         "Closing showcase",
         value_type=TagValueType.NUMERIC,
         query_name="closing_showcase",
-        created_by_discord_id=42,
+        created_by_account_id=42,
     )
     await service.approve(proposed.id)
 
-    assigned = await service.assign_showcase(10, proposed.id, "0.4", actor_discord_id=42)
+    assigned = await service.assign_showcase(10, proposed.id, "0.4", actor_account_id=42)
 
     assert assigned.id == proposed.id
