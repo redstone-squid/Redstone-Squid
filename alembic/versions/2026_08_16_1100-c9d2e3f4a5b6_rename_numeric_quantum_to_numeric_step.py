@@ -13,7 +13,7 @@ automatically, but not their names, so `tag_definitions_numeric_quantum_check` i
 explicitly. The other two constraint names do not mention the column and are left alone.
 
 Revision ID: c9d2e3f4a5b6
-Revises: e5f6a7b8c9d2
+Revises: c6d7e8f9a0b1
 Create Date: 2026-08-16 11:00:00+00:00
 """
 
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "c9d2e3f4a5b6"
-down_revision: str | Sequence[str] | None = "e5f6a7b8c9d2"
+down_revision: str | Sequence[str] | None = "c6d7e8f9a0b1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
