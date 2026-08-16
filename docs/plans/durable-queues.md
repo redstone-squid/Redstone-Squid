@@ -1,12 +1,20 @@
 # Durable work queues
 
-> **Status.** Design agreed 2026-08-15, not yet implemented. The findings below are verified
-> in-tree, not hypothetical: defects 1-5 and 7 are live today, and both bugs in the
-> `record_recompute_queue` audit are active data-correctness faults independent of whether any of
-> this ships. **Defect 6 was fixed in flight by revision `c2d3e4f5a6b1`** (uncommitted at the time
-> of writing) and is retained below as the worked example of the hazard, not as outstanding work.
-> Amend this document in place as commits land, calling out where building it proved part of it
-> wrong rather than silently rewriting.
+> **Status.** PR 1 implemented 2026-08-16 (commits `8381ddd0`..`a5363e8a`). PR 2 —
+> `enforce_queue_claim_tokens` — is still outstanding and must not merge until PR 1 is deployed
+> everywhere. The findings below were verified in-tree, not hypothetical: defects 1-5 and 7 were
+> live, and both bugs in the `record_recompute_queue` audit were active data-correctness faults.
+> **Defect 6 was fixed in flight by revision `c2d3e4f5a6b1`** and is retained below as the worked
+> example of the hazard, not as outstanding work.
+>
+> **What building it proved wrong** — see [Corrections](#corrections-from-implementation) for
+> detail:
+> 1. The branch had **two Alembic heads**, so `alembic upgrade head` was ambiguous and every test
+>    that migrates a database errored. Revision 1 merges them.
+> 2. The column-comment mechanism this document relies on **does not work**, and never has.
+> 3. There are **thirteen** enqueue sites, not nine.
+> 4. Commits 2 and 3 cannot be separated.
+> 5. `retry_delay` had a latent `OverflowError`.
 
 ## Context
 
@@ -353,6 +361,23 @@ Each commit compiles, keeps `just test` green, and leaves `alembic check` clean.
 
 **PR 2**, after PR 1 is deployed — 9. `persistence: require a claim token whenever a row is claimed`.
 
+**As landed**, commits 2 and 3 are one commit (they cannot compile apart — see Corrections), so PR 1
+is eight commits rather than nine:
+
+| | Commit | |
+| --- | --- | --- |
+| 1 | `8381ddd0` | `persistence: give the work queues a claim token and a retry clock` |
+| 2+3 | `a569c304` | `persistence: claim through a database-minted fencing token` |
+| 4 | `ed1cc6d2` | `search: fence projection acknowledgement inside the caller's session` |
+| 5 | `087c1839` | `records: fence the recompute lease on its claim tokens` |
+| 6 | `7d6fdd2b` | `worker: generate the queue-health query from the queue specs` |
+| 7 | `9ac344a7` | `notifications: use the shared visibility timeout and backoff` |
+| 8 | `a5363e8a` | `events: claim deliveries through the shared protocol` |
+
+Commit 8 was the falsification test and it **passed**: `domain_event_deliveries` converted using
+only fields the other six specs already use, plus `claim_count`, for which it already had a column.
+The abstraction is the right shape.
+
 ## Testing
 
 `tests/integration/persistence/test_claimed_row_queue.py` needs two structural fixes before new
@@ -396,6 +421,103 @@ Per `AGENTS.md`: iterate with
 then finish with `just db-check`, `uv run pytest tests/unit tests/architecture`,
 `just test-integration`, `uv run alembic heads`, `git diff --check`, and BasedPyright over the
 changed packages.
+
+## Corrections from implementation
+
+Recorded 2026-08-16, after PR 1 landed. Each of these contradicts something asserted above; the
+original text is left in place so the disagreement is visible.
+
+### The branch had two Alembic heads
+
+`b2c3d4e5f6a8` (from `509406c2`) and `c9d2e3f4a5b6` (from `b82991e8`) both descended from
+`b1c2d3e4f5a7`. `alembic upgrade head` was therefore ambiguous, which broke **every** test using
+`migrated_session_factory` and made `just db-check` impossible to run. Revision 1 chains off both.
+
+Two consequences. The plan's "chain off the current head, which was `c2d3e4f5a6b1`" was already
+stale by two revisions — the instruction to confirm with `alembic heads` rather than assume was
+the right one and worth keeping. And because `alembic check` had been unrunnable, three table
+comments had drifted from their models unnoticed (`accounts`, `discord_sync_queue`,
+`vote_sessions`, from the `Principal`→`Caller` and reconciliation-queue renames earlier on this
+branch). Revision 1 repairs them, because it is what makes the check runnable again.
+
+### Column comments never worked
+
+> "New column attribute docstrings must be mirrored by `comment=` in the migration, because
+> `squid/persistence/base.py` turns them into column comments that `alembic check` compares."
+
+The premise is false. `squid/persistence/base.py:47` reads `getattr(column, "column", None)` off an
+`InstrumentedAttribute`, which has no `.column` attribute, so the guard silently skips every
+column. No attribute docstring in this codebase has ever become a database comment — including
+`discord_sync_queue.generation`, which predates this work.
+
+The new columns therefore ship **without** `comment=`, matching every other column in the schema.
+The docstrings stay, because they document the code. Fixing the mechanism is a real but separate
+change: it would give a comment to every documented column at once and need its own migration.
+
+### There are thirteen enqueue sites, not nine
+
+> "Four PL/pgSQL functions ... and five Python upserts."
+
+Five PL/pgSQL functions, and thirteen insert statements. `enqueue_starboard_sync` writes
+`discord_sync_queue` from three branches, and `enqueue_discord_sync` has a second insert for the
+vote sessions that embed a changed build. Locating them by name rather than by line was right;
+counting the functions rather than the inserts was not, because one function can enqueue several
+times.
+
+### Commits 2 and 3 cannot be separated
+
+> "The old `stamp`/`complete`/`fail` remain temporarily so nothing breaks."
+
+They cannot. The new `complete` and `fail` take the same names on the same class and differ only in
+that the second argument is a `uuid.UUID` rather than an `Instant`. The intermediate commit would
+not have compiled. They landed as one commit, `a569c304`.
+
+### `QueueSpec` is a plain class, not a frozen dataclass
+
+Its value is that columns travel as `InstrumentedAttribute` so a wrong one fails to typecheck. A
+dataclass field holding a descriptor is read back through `__get__`, so `spec.claimed_at` typed as
+`Instant | None` — which loses exactly the checking the spec exists to provide, and produced 15
+type errors. A plain `__init__` keeps the declared type on both the construction and the read.
+`QueueHealthShape` stayed a dataclass; its fields are `SQLColumnExpression`, not descriptors.
+
+### `retry_delay` could raise instead of backing off
+
+Writing the test that pins `retry_delay(0) == 7.5s` found that `BASE_RETRY_DELAY * 2 **
+(attempts - 1)` is computed before the cap, so a large enough attempt count raised `OverflowError`
+out of the worker's release path. Reachable on `record_recompute_queue`, which runs with
+`max_attempts=None`. Both encodings now clamp the exponent at `_MAX_DOUBLING`.
+
+### Testing, as built
+
+The two `SearchProjectionStore` unit tests could not survive the change — they drove a mocked
+session and asserted on mutated ORM attributes, and acknowledgement is now a fenced `UPDATE`. They
+moved to `tests/integration/search/test_projection_queue.py`. New files:
+`tests/integration/events/test_delivery_queue.py` (the four moved domain-event cases),
+`tests/integration/records/test_recompute_lease.py`,
+`tests/integration/observability/test_queue_health.py`, and
+`tests/unit/persistence/test_queue_backoff.py`.
+
+`tests/integration/records/test_recompute_lease.py` needs an autouse fixture that empties
+`record_recompute_queue`: migrations seed a door and an extender rebuild, which otherwise ride
+along in every claim.
+
+**Left failing, and not caused by this work.** After PR 1: `tests/unit` and `tests/architecture`
+are 1916 passed / 1 skipped; `tests/integration` is 309 passed / 3 failed. All three failures are
+pre-existing on this branch and none touches a file these commits changed.
+
+- `test_idempotency_encryption_migration_purges_plaintext_replay_rows` — its raw `INSERT` names an
+  `idempotency_requests.caller` column that does not exist at the historical revision it upgrades
+  to. Fallout from the `Principal`→`Caller` rename in `c59db12d`; it fails identically with these
+  commits stashed.
+- `test_the_schema_rejects_kind_threshold_combinations_the_domain_forbids[build-None-None]` — the
+  hand-written `vote_schema` fixture in that file has not kept up with `b2c3d4e5f6a8`, which made
+  the vote thresholds nullable, so the constraint under test no longer exists in the fixture's DDL.
+  Another instance of the hand-written-DDL problem the queue test was moved off.
+- `test_disposable_api_stack_resets_every_mutable_store_and_cleans_up`.
+
+Worth noting that the first two were *invisible* before this work: with two heads, the migration
+test file and everything else using `migrated_session_factory` errored during setup rather than
+running.
 
 ## Open questions
 
