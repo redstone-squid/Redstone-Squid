@@ -65,7 +65,6 @@ async def get_schematic_content(
             "Content-Disposition": f'attachment; filename="build-{build_id}-schematic-{schematic_id}.schem"',
             "Link": f'<{publication.license.uri}>; rel="license"',
             "X-Content-Type-Options": "nosniff",
-            "X-Schematic-License": publication.license.value,
         },
     )
 
