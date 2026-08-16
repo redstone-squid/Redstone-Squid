@@ -102,6 +102,18 @@ def test_every_operation_has_stable_cli_and_security_metadata() -> None:
     assert len(command_paths) == len(set(command_paths))
 
 
+def test_every_operation_response_declares_the_request_id_header() -> None:
+    document = _app.openapi()
+    assert document["components"]["headers"]["RequestId"]["schema"]["pattern"] == "^[A-Za-z0-9._-]{8,128}$"
+
+    for contract in OPERATIONS:
+        operation = document["paths"][contract.path][contract.method]
+        for status_code, response in operation["responses"].items():
+            assert response["headers"]["Request-Id"] == {"$ref": "#/components/headers/RequestId"}, (
+                f"{contract.method.upper()} {contract.path} {status_code} lacks the Request-Id header"
+            )
+
+
 def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
     document = _app.openapi()
     schemes = document["components"]["securitySchemes"]
