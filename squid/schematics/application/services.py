@@ -7,7 +7,8 @@ import logging
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from squid.core.errors import SquidError
+from squid.core.errors import DataIntegrityError, SquidError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
@@ -19,6 +20,7 @@ from squid.schematics.application.queries import (
     DuplicateCandidate,
     DuplicateTier,
     PreparedRender,
+    PublicSchematicDownload,
     SchematicPublication,
     StoredRender,
     StoredSchematic,
@@ -198,7 +200,33 @@ class SchematicService:
             if schematic.publication.is_public_downloadable
         ]
 
-    async def public_content(self, build_id: int, schematic_id: int) -> tuple[bytes, StoredSchematic]:
+    async def list_public_page(
+        self,
+        build_id: int,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 50,
+    ) -> Page[StoredSchematic]:
+        """Return one page of a build's publicly downloadable attachments.
+
+        Paging belongs here rather than in the route, which was the last list
+        endpoint slicing its own results after builds, records, and notifications
+        moved theirs into their services.
+
+        Slicing in memory is deliberate for now: a single build's attachment
+        count is small and bounded in practice, and the store port has no
+        offset/limit. The trigger to change that is one build's attachments no
+        longer fitting comfortably in one query -- then `list_for_build` gains
+        `offset`/`limit` and a count, and this body changes without the route
+        noticing.
+        """
+        return offset_page(
+            await self.list_public_for_build(build_id),
+            offset=selector.offset,
+            page_size=page_size,
+        )
+
+    async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
         """Return canonical bytes only through an attachment's explicit publication policy."""
         stored = await self._store.get_for_build(build_id, schematic_id)
         if stored is None or not stored.publication.is_public_downloadable:
@@ -206,7 +234,18 @@ class SchematicService:
         content = await self._store.get_file(stored.file_sha256)
         if content is None:
             raise SchematicNotFoundError
-        return content, stored
+        license_ = stored.publication.license
+        if license_ is None:
+            # `SchematicPublication` rejects a public attachment without a license, so a
+            # row reaching here means persistence bypassed the domain constructor.
+            msg = "A publicly downloadable schematic carries no license."
+            raise DataIntegrityError(msg, context={"build_id": build_id, "schematic_id": schematic_id})
+        return PublicSchematicDownload(
+            content=content,
+            schematic=stored,
+            license=license_,
+            source_format=stored.analysis.metrics.source_format,
+        )
 
     async def primary_for_build(self, build_id: int) -> StoredSchematic | None:
         return await self._store.get_primary(build_id)

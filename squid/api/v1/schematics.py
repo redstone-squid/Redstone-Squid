@@ -6,9 +6,8 @@ from fastapi import APIRouter, Path, Response
 
 from squid.api.dependencies import BuildQueries, Schematics
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
+from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page, resolve_selector
 from squid.api.v1.schemas.schematics import SchematicSummary
-from squid.core.pagination import offset_page
 
 router = APIRouter(tags=["schematics"])
 
@@ -33,8 +32,10 @@ async def list_build_schematics(
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a confirmed build."""
     await build_queries.get_public(build_id)
-    stored = await schematics.list_public_for_build(build_id)
-    page = offset_page(stored, offset=offset or 0, page_size=page_size)
+    # Attachment order has no identifier sequence worth anchoring to, so this listing is
+    # offset-only, like the ranked build search.
+    selector = resolve_selector(offset=offset, after_id=None, before_id=None, keyset_allowed=False)
+    page = await schematics.list_public_page(build_id, selector=selector, page_size=page_size)
     return render_page(page, SchematicSummary.from_domain)
 
 
@@ -54,16 +55,18 @@ async def get_schematic_content(
 ) -> Response:
     """Download explicitly published sanitized bytes from a confirmed build."""
     await build_queries.get_public(build_id)
-    content, stored = await schematics.public_content(build_id, schematic_id)
-    publication = stored.publication
-    assert publication.license is not None
+    download = await schematics.public_download(build_id, schematic_id)
+    # The stem stays server-generated so no user-supplied filename reaches a response
+    # header; only the extension follows the stored container, which used to be `.schem`
+    # for all five formats.
+    filename = f"build-{build_id}-schematic-{schematic_id}.{download.source_format.value}"
     return Response(
-        content=content,
+        content=download.content,
         media_type="application/octet-stream",
         headers={
             "Cache-Control": "public, max-age=300, must-revalidate",
-            "Content-Disposition": f'attachment; filename="build-{build_id}-schematic-{schematic_id}.schem"',
-            "Link": f'<{publication.license.uri}>; rel="license"',
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Link": f'<{download.license.uri}>; rel="license"',
             "X-Content-Type-Options": "nosniff",
         },
     )

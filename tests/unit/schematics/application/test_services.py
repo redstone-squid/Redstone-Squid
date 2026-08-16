@@ -157,16 +157,19 @@ async def test_public_content_requires_the_build_attachment_and_complete_publica
         publication=sanitized_publication(public=True),
     )
 
-    content, stored = await schematics.public_content(7, public_id)
+    download = await schematics.public_download(7, public_id)
 
-    assert content == b"stored"
-    assert stored.publication.license is SchematicLicense.CC_BY_4_0
+    assert download.content == b"stored"
+    # Carried on the result rather than asserted in the route: the domain already
+    # guarantees a public attachment has a license.
+    assert download.license is SchematicLicense.CC_BY_4_0
+    assert download.source_format is make_analysis().metrics.source_format
     with pytest.raises(SchematicNotFoundError):
-        await schematics.public_content(8, public_id)
+        await schematics.public_download(8, public_id)
 
     private_id = await store.record_analysis(7, digest, make_analysis(), primary=False)
     with pytest.raises(SchematicNotFoundError):
-        await schematics.public_content(7, private_id)
+        await schematics.public_download(7, private_id)
 
 
 async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
@@ -194,6 +197,9 @@ async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
     )
 
     assert [item.id for item in await schematics.list_public_for_build(7)] == [1]
+    page = await schematics.list_public_page(7)
+    assert [item.id for item in page.items] == [1]
+    assert page.total == 1
 
 
 async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer() -> None:

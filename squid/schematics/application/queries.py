@@ -8,6 +8,7 @@ from whenever import Instant
 from squid.core.errors import JSONValue
 from squid.schematics.domain.models import (
     SchematicAnalysis,
+    SchematicFormat,
     SchematicLicense,
     SchematicVisibility,
     SimulationResult,
@@ -79,6 +80,23 @@ class StoredSchematic:
     analysis: SchematicAnalysis
     publication: SchematicPublication = SchematicPublication()
     simulation_evidence: SimulationResult | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PublicSchematicDownload:
+    """Sanitized bytes plus everything a download response must state.
+
+    The route used to receive `(content, stored)` and then `assert
+    publication.license is not None` to satisfy the type checker -- restating an
+    invariant `SchematicPublication` already enforces, in a layer where
+    assertions are enabled only by convention. Carrying the license and the
+    stored container format here means the response has no facts left to derive.
+    """
+
+    content: bytes
+    schematic: StoredSchematic
+    license: SchematicLicense
+    source_format: SchematicFormat
 
 
 @dataclass(frozen=True, slots=True)
