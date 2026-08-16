@@ -306,10 +306,7 @@ class _ServiceGraph:
     @cached_property
     def notifications(self) -> NotificationService:
         return NotificationService(
-            PostgresNotificationRepository(
-                self.db.async_session,
-                staff_discord_ids=self.config.notifications.staff_discord_ids,
-            ),
+            PostgresNotificationRepository(self.db.async_session),
             retention_days=self.config.notifications.retention_days,
         )
 
