@@ -3,11 +3,12 @@
 import hashlib
 import json
 import logging
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from sqlalchemy import case, delete, func, literal_column, or_, select, text
+from sqlalchemy import case, delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -23,6 +24,7 @@ from squid.builds.infrastructure.models import (
     BuildVersion,
 )
 from squid.core.errors import DataIntegrityError
+from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.infrastructure.models import (
     RecordComputationRun,
     RecordDefinition,
@@ -41,6 +43,19 @@ from squid.versions.infrastructure.models import Version
 
 logger = logging.getLogger(__name__)
 PROJECTION_MAX_ATTEMPTS = 5
+
+SEARCH_PROJECTION_QUEUE_SPEC = QueueSpec(
+    name="search_projections",
+    model=SearchProjectionQueueItem,
+    key=(SearchProjectionQueueItem.id,),
+    available_at=SearchProjectionQueueItem.available_at,
+    enqueued_at=SearchProjectionQueueItem.enqueued_at,
+    claimed_at=SearchProjectionQueueItem.locked_at,
+    claim_token=SearchProjectionQueueItem.claim_token,
+    attempts=SearchProjectionQueueItem.attempts,
+    last_error=SearchProjectionQueueItem.last_error,
+    dead_at=SearchProjectionQueueItem.dead_at,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,55 +86,60 @@ class SearchProjectionStore:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        # No session factory: every call passes this store's session, so the claim
+        # and both acknowledgements join the projector's unit of work rather than
+        # committing underneath it.
+        self._queue = ClaimedRowQueue(SEARCH_PROJECTION_QUEUE_SPEC)
 
     async def claim(self, *, limit: int = 50) -> tuple[SearchProjectionQueueItem, ...]:
         """Lock and mark the oldest available queue items for this worker."""
-        items = tuple(
-            (
-                await self._session.scalars(
-                    select(SearchProjectionQueueItem)
-                    .where(
-                        SearchProjectionQueueItem.dead_at.is_(None),
-                        or_(
-                            SearchProjectionQueueItem.locked_at.is_(None),
-                            SearchProjectionQueueItem.locked_at < func.now() - text("interval '5 minutes'"),
-                        ),
-                    )
-                    .order_by(SearchProjectionQueueItem.enqueued_at, SearchProjectionQueueItem.id)
-                    .limit(limit)
-                    .with_for_update(skip_locked=True)
-                )
-            ).all()
-        )
-        now = Instant.now()
-        for item in items:
-            item.locked_at = now
-        await self._session.flush()
-        return items
+        return await self._queue.claim(limit=limit, session=self._session)
 
-    async def complete(self, item: SearchProjectionQueueItem) -> None:
-        """Remove a successfully processed queue item."""
-        await self._session.delete(item)
+    async def complete(self, item_id: int, claim_token: uuid.UUID) -> bool:
+        """Remove a processed queue item, if this worker still owns it.
+
+        This used to be a bare `session.delete(item)` with no fence at all. It
+        relied on holding the row lock for the whole unit of work, but the reclaim
+        predicate hands the row to a second worker after the visibility timeout
+        regardless, and then both of them delete it.
+        """
+        outcome = await self._queue.complete(
+            (SearchProjectionQueueItem.id == item_id,),
+            claim_token,
+            session=self._session,
+        )
+        return outcome.applied
 
     async def retry(
         self,
-        item: SearchProjectionQueueItem,
+        item_id: int,
+        claim_token: uuid.UUID,
+        attempts: int,
         error: Exception,
         *,
         max_attempts: int = PROJECTION_MAX_ATTEMPTS,
     ) -> bool:
-        """Release failed work or retain it as a dead letter after exhaustion."""
+        """Release failed work or retain it as a dead letter after exhaustion.
+
+        The shared backoff comes with the shared fence. Without it a permanently
+        failing projection re-ran on every poll until it exhausted its attempts.
+        """
         if max_attempts < 1:
             msg = "Projection max_attempts must be positive."
             raise ValueError(msg)
-        item.attempts += 1
-        item.locked_at = None
-        item.last_error = str(error)[:4000]
-        dead_lettered = item.attempts >= max_attempts
-        if dead_lettered:
-            item.dead_at = Instant.now()
-        await self._session.flush()
-        return dead_lettered
+        outcome = await self._queue.fail(
+            (SearchProjectionQueueItem.id == item_id,),
+            claim_token,
+            attempts=attempts,
+            error=str(error),
+            max_attempts=max_attempts,
+            session=self._session,
+        )
+        return outcome.dead_lettered
+
+    def token_of(self, item: SearchProjectionQueueItem) -> uuid.UUID:
+        """Read the fence off a row this store just claimed."""
+        return self._queue.token_of(item)
 
     async def delete_document(self, resource_kind: str, source_key: str) -> None:
         """Delete a projected resource and its cascading facets/embedding work."""
@@ -522,31 +542,36 @@ class SearchProjectionWorker:
         succeeded = 0
         failed = 0
         for item in await self._store.claim(limit=limit):
+            # Read everything the acknowledgement needs before entering the
+            # savepoint: rolling one back expires the attributes touched inside it,
+            # and reloading them would need the very session that just failed.
             item_id = item.id
+            token = self._store.token_of(item)
+            attempts = item.attempts
+            resource_kind = item.resource_kind
+            source_key = item.source_key
             try:
                 async with self._session.begin_nested():
                     if item.action == "delete":
-                        await self._store.delete_document(item.resource_kind, item.source_key)
+                        await self._store.delete_document(resource_kind, source_key)
                     else:
-                        projection = await self._loader.load(item.resource_kind, item.source_key)
+                        projection = await self._loader.load(resource_kind, source_key)
                         if projection is None:
-                            await self._store.delete_document(item.resource_kind, item.source_key)
+                            await self._store.delete_document(resource_kind, source_key)
                         else:
                             await self._store.replace(projection)
-                    await self._store.complete(item)
+                    await self._store.complete(item_id, token)
                 succeeded += 1
             except Exception as error:
-                retry_item = await self._session.get(SearchProjectionQueueItem, item_id)
-                if retry_item is not None:
-                    dead_lettered = await self._store.retry(retry_item, error)
-                    if dead_lettered:
-                        logger.exception(
-                            "Dead-lettered a search projection after repeated failures",
-                            extra={
-                                "squid.search.resource_kind": retry_item.resource_kind,
-                                "squid.search.source_key": retry_item.source_key,
-                            },
-                        )
+                dead_lettered = await self._store.retry(item_id, token, attempts, error)
+                if dead_lettered:
+                    logger.exception(
+                        "Dead-lettered a search projection after repeated failures",
+                        extra={
+                            "squid.search.resource_kind": resource_kind,
+                            "squid.search.source_key": source_key,
+                        },
+                    )
                 failed += 1
         return succeeded, failed
 
