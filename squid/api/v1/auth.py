@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
-from squid.api.dependencies import CurrentPrincipal, WebAuth
+from squid.api.dependencies import CurrentCaller, WebAuth
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.v1.schemas.auth import CsrfTokenResponse
@@ -17,10 +17,10 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 @router.get("/csrf", response_model=CsrfTokenResponse, responses=responses(401, 503))
-async def csrf_token(request: Request, response: Response, principal: CurrentPrincipal) -> CsrfTokenResponse:
+async def csrf_token(request: Request, response: Response, caller: CurrentCaller) -> CsrfTokenResponse:
     """Return the session-bound write token to a credentialed CORS frontend."""
     token = request.cookies.get("squid_csrf")
-    if principal.kind != "account" or token is None or not 16 <= len(token) <= 128:
+    if caller.kind != "account" or token is None or not 16 <= len(token) <= 128:
         raise AuthenticationError
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
@@ -77,10 +77,10 @@ async def discord_callback(
     responses=responses(401, 403, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
 )
-async def logout(request: Request, web_auth: WebAuth, principal: CurrentPrincipal) -> Response:
+async def logout(request: Request, web_auth: WebAuth, caller: CurrentCaller) -> Response:
     """Revoke the current browser session and clear its cookies."""
     token = request.cookies.get("__Host-squid_session")
-    if principal.kind != "account" or token is None or web_auth is None:
+    if caller.kind != "account" or token is None or web_auth is None:
         raise AuthenticationError
     await web_auth.logout(token)
     response = Response(status_code=204)

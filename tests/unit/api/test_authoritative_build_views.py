@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from squid.api.pagination import PageAnchor
-from squid.api.security import ANONYMOUS, UNBOUNDED, Principal
+from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.builds import list_builds
 from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
@@ -21,12 +21,12 @@ from tests.unit.api.fakes import credential_nodes
 
 # A realistic key: the scopes a service credential is actually issued, which do
 # not include the moderation views.
-SERVICE = Principal(
+SERVICE = Caller(
     kind="service",
     subject="api-key:test",
     nodes=credential_nodes("build.submission.read", "build.submission.create"),
 )
-ACCOUNT = Principal(kind="account", subject="account:1", nodes=UNBOUNDED, discord_id=123, account_id=1)
+ACCOUNT = Caller(kind="account", subject="account:1", nodes=UNBOUNDED, discord_id=123, account_id=1)
 
 
 class Fakes(NamedTuple):
@@ -136,7 +136,7 @@ async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions
 async def test_a_key_carrying_the_node_is_still_bounded_by_its_owner() -> None:
     """AWS's permissions-boundary rule: revoking the owner defangs the key."""
     graph = fakes(is_admin=False)
-    owned = Principal(kind="service", subject="api-key:owned", nodes=UNBOUNDED, account_id=1)
+    owned = Caller(kind="service", subject="api-key:owned", nodes=UNBOUNDED, account_id=1)
 
     with pytest.raises(AuthorizationError):
         await list_builds(
@@ -309,7 +309,7 @@ async def test_submitters_see_their_own_builds_in_every_status() -> None:
 @pytest.mark.asyncio
 async def test_provider_neutral_submitter_can_list_builds_without_discord() -> None:
     graph = fakes(builds=[persisted_build(5)])
-    minecraft_only = Principal(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
+    minecraft_only = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
     page = await list_my_builds(graph.services.build_queries, minecraft_only)
 
@@ -326,7 +326,7 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
     else's page still only selects rows this caller may read.
     """
     graph = fakes(builds=[persisted_build(5)])
-    other = Principal(kind="account", subject="account:2", nodes=UNBOUNDED, discord_id=456, account_id=2)
+    other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, discord_id=456, account_id=2)
 
     await list_my_builds(graph.services.build_queries, other, after_id=9)
 

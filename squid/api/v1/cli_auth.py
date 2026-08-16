@@ -11,7 +11,7 @@ from pydantic import AnyHttpUrl
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.cli_auth import (
     CliDeviceListResponse,
     CliDeviceResponse,
@@ -132,29 +132,29 @@ def get_cli_verification_uri(request: Request) -> AnyHttpUrl:
     return verification_uri
 
 
-async def current_browser_account_id(principal: Annotated[Principal, Depends(current_principal)]) -> int:
+async def current_browser_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
     """Require a signed-in browser account with current privacy consent."""
-    if principal.kind != "account" or principal.account_id is None:
+    if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
-    return principal.account_id
+    if caller.consent_pending:
+        raise ConsentRequiredError(caller.discord_id, account_id=caller.account_id)
+    return caller.account_id
 
 
-async def current_cli_identity(principal: Annotated[Principal, Depends(current_principal)]) -> CliIdentity:
+async def current_cli_identity(caller: Annotated[Caller, Depends(current_caller)]) -> CliIdentity:
     """Require an authenticated CLI session with its exact device provenance."""
     if (
-        principal.kind != "cli"
-        or principal.account_id is None
-        or principal.cli_device_id is None
-        or principal.cli_session_id is None
+        caller.kind != "cli"
+        or caller.account_id is None
+        or caller.cli_device_id is None
+        or caller.cli_session_id is None
     ):
         raise AuthenticationError
     return CliIdentity(
-        account_id=principal.account_id,
-        device_id=principal.cli_device_id,
-        session_id=principal.cli_session_id,
-        consent_pending=principal.consent_pending,
+        account_id=caller.account_id,
+        device_id=caller.cli_device_id,
+        session_id=caller.cli_session_id,
+        consent_pending=caller.consent_pending,
     )
 
 

@@ -256,7 +256,7 @@ class MockNotifications:
         return ()
 
     async def subscribe(self, _account_id: int, **_kwargs: object):
-        raise AssertionError("service principals cannot create notification subscriptions")
+        raise AssertionError("service callers cannot create notification subscriptions")
 
     async def unsubscribe(self, _account_id: int, _subscription_id: int) -> None:
         return None

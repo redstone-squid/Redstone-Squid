@@ -35,7 +35,7 @@ class SuggestionAuthorizer(Protocol):
     """Decide whether the caller behind a request holds a permission node.
 
     Passed per call rather than held by the service because each transport resolves a subject
-    differently: the bot from an interaction, the API from an authenticated principal.
+    differently: the bot from an interaction, the API from an authenticated caller.
     """
 
     async def allows(self, node: str) -> bool: ...

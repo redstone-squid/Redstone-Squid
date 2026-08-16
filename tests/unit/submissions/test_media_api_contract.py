@@ -14,7 +14,7 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.api.errors import register_exception_handlers
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.submission_media import DraftMediaListResponse, DraftMediaResponse
 from squid.api.v1.submission_media import (
     get_media_jobs,
@@ -184,13 +184,13 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> FastAPI:
     async def account_dependency() -> int:
         return ACCOUNT_ID
 
-    async def principal_dependency() -> Principal:
-        return Principal(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
+    async def caller_dependency() -> Caller:
+        return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
     app.dependency_overrides[get_media_jobs] = media_dependency
     app.dependency_overrides[get_submission_drafts] = draft_dependency
     app.dependency_overrides[authenticated_account] = account_dependency
-    app.dependency_overrides[current_principal] = principal_dependency
+    app.dependency_overrides[current_caller] = caller_dependency
     return app
 
 
