@@ -1,6 +1,8 @@
 """Ports used by record application services."""
 
+import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
 from squid.records.application.models import (
@@ -12,6 +14,23 @@ from squid.records.application.models import (
     TitleDiagnosticGap,
 )
 from squid.records.domain import BuildKind
+
+
+@dataclass(frozen=True, slots=True)
+class RecomputeLease:
+    """A set of recompute scopes leased together by one worker.
+
+    The kinds are what gets rebuilt; the tokens are what the acknowledgement is
+    fenced on. Carrying the tokens is what distinguishes the rows this worker
+    leased from rows enqueued while it was running, which acknowledging by kind
+    alone silently destroyed.
+    """
+
+    kinds: tuple[BuildKind, ...]
+    claim_tokens: tuple[uuid.UUID, ...]
+
+    def __bool__(self) -> bool:
+        return bool(self.kinds)
 
 
 class RecordCandidateRepository(Protocol):
@@ -53,8 +72,8 @@ class RecordRunRepository(Protocol):
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None: ...
 
-    async def claim_recompute_kinds(self, *, limit: int) -> Sequence[BuildKind]: ...
+    async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease: ...
 
-    async def complete_recompute(self, kinds: Sequence[BuildKind]) -> None: ...
+    async def complete_recompute(self, lease: RecomputeLease) -> None: ...
 
-    async def fail_recompute(self, kinds: Sequence[BuildKind], error: str) -> None: ...
+    async def fail_recompute(self, lease: RecomputeLease, error: str) -> None: ...

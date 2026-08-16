@@ -1,3 +1,4 @@
+import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -14,6 +15,7 @@ from squid.records.application.models import (
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
+from squid.records.application.ports import RecomputeLease
 from squid.records.application.services import RecordComputationService, RecordService
 from squid.records.domain import (
     BuildKind,
@@ -94,14 +96,15 @@ class FakeRuns:
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
         self.queued = (*self.queued, kind)
 
-    async def claim_recompute_kinds(self, *, limit: int) -> Sequence[BuildKind]:
-        return self.queued[:limit]
+    async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
+        kinds = self.queued[:limit]
+        return RecomputeLease(kinds=kinds, claim_tokens=tuple(uuid.uuid4() for _ in kinds))
 
-    async def complete_recompute(self, kinds: Sequence[BuildKind]) -> None:
-        self.completed = tuple(kinds)
+    async def complete_recompute(self, lease: RecomputeLease) -> None:
+        self.completed = lease.kinds
 
-    async def fail_recompute(self, kinds: Sequence[BuildKind], error: str) -> None:
-        self.failed = (tuple(kinds), error)
+    async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
+        self.failed = (lease.kinds, error)
 
 
 def _door(
