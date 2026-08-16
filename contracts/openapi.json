@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Redstone Squid API",
-    "description": "Versioned public API for the Redstone Squid build catalog.",
+    "description": "Versioned public API for the Redstone Squid build catalog. Every response carries a Request-Id header for correlation; send Request-Id or a W3C traceparent to have it propagated.",
     "version": "1.0.0"
   },
   "paths": {
@@ -23,6 +23,11 @@
                   "type": "object",
                   "title": "Response Live Livez Get"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -54,6 +59,11 @@
                   "title": "Response Ready Readyz Get"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           }
         },
@@ -83,6 +93,11 @@
                   "type": "object",
                   "title": "Response Ready Health Get"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -159,6 +174,11 @@
                   "title": "Response Get Verification Code V1 Verify Post"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "401": {
@@ -174,7 +194,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -189,7 +214,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -204,7 +234,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -219,7 +254,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -234,7 +274,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -249,7 +294,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -264,7 +314,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -335,6 +390,11 @@
                   "title": "Response Get Verification Code Verify Post"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "401": {
@@ -350,7 +410,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -365,7 +430,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -380,7 +450,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -395,7 +470,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -410,7 +490,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -425,7 +510,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -440,7 +530,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -469,6 +564,11 @@
                   "$ref": "#/components/schemas/CsrfTokenResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -483,6 +583,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -499,6 +604,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "503": {
@@ -513,6 +623,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -559,7 +674,12 @@
         ],
         "responses": {
           "307": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -574,7 +694,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -589,7 +714,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -604,7 +734,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -613,6 +748,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -659,7 +799,12 @@
         ],
         "responses": {
           "307": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -674,7 +819,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -689,7 +839,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -704,7 +859,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -719,7 +879,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -728,6 +893,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -776,7 +946,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -791,7 +966,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -806,7 +986,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -821,7 +1006,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -836,7 +1026,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -851,7 +1046,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -860,6 +1060,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -925,6 +1130,11 @@
                   "$ref": "#/components/schemas/BuildDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -940,7 +1150,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -955,7 +1170,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -970,7 +1190,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -985,7 +1210,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -1000,7 +1230,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -1015,7 +1250,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -1030,7 +1270,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -1189,6 +1434,11 @@
                   "$ref": "#/components/schemas/Page_BuildSummary_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1204,7 +1454,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -1219,7 +1474,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -1234,7 +1494,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -1249,7 +1514,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -1264,7 +1534,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -1279,7 +1554,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -1368,6 +1648,11 @@
                   "$ref": "#/components/schemas/BuildDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1383,7 +1668,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -1398,7 +1688,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -1413,7 +1708,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -1428,7 +1728,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -1443,7 +1748,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -1458,7 +1768,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "412": {
             "content": {
@@ -1473,7 +1788,12 @@
                 }
               }
             },
-            "description": "Precondition Failed"
+            "description": "Precondition Failed",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -1488,7 +1808,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "428": {
             "content": {
@@ -1503,7 +1828,12 @@
                 }
               }
             },
-            "description": "Precondition Required"
+            "description": "Precondition Required",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -1518,7 +1848,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -1555,6 +1890,11 @@
                   "$ref": "#/components/schemas/BuildDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1570,7 +1910,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -1585,7 +1930,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -1600,7 +1950,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -1615,7 +1970,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -1640,6 +2000,11 @@
                   "$ref": "#/components/schemas/ApiCapabilities"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1654,6 +2019,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -1719,6 +2089,11 @@
                   "$ref": "#/components/schemas/CliEnrollmentResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1734,7 +2109,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -1749,7 +2129,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -1764,7 +2149,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -1779,7 +2169,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -1794,7 +2189,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -1860,6 +2260,11 @@
                   "$ref": "#/components/schemas/IssuedCliSessionResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1875,7 +2280,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -1890,7 +2300,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -1905,7 +2320,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -1920,7 +2340,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -1935,7 +2360,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -1979,6 +2409,11 @@
                   "$ref": "#/components/schemas/CliEnrollmentApprovalResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -1994,7 +2429,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -2009,7 +2449,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -2024,7 +2469,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -2039,7 +2489,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -2054,7 +2509,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -2069,7 +2529,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -2084,7 +2549,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -2146,6 +2616,11 @@
                   "$ref": "#/components/schemas/CliEnrollmentApprovalResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -2161,7 +2636,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -2176,7 +2656,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -2191,7 +2676,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -2206,7 +2696,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -2221,7 +2716,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -2236,7 +2736,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -2251,7 +2756,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -2312,6 +2822,11 @@
                   "$ref": "#/components/schemas/CliSessionChallengeResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -2327,7 +2842,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -2342,7 +2862,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -2357,7 +2882,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -2372,7 +2902,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -2387,7 +2922,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -2402,7 +2942,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -2463,6 +3008,11 @@
                   "$ref": "#/components/schemas/IssuedCliSessionResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -2478,7 +3028,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -2493,7 +3048,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -2508,7 +3068,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -2523,7 +3088,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -2538,7 +3108,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -2553,7 +3128,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -2578,6 +3158,11 @@
                   "$ref": "#/components/schemas/CliDeviceListResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -2592,6 +3177,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -2608,6 +3198,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "401": {
@@ -2622,6 +3217,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -2638,6 +3238,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "503": {
@@ -2652,6 +3257,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -2715,7 +3325,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -2730,7 +3345,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -2745,7 +3365,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -2760,7 +3385,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -2775,7 +3405,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -2790,7 +3425,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -2805,7 +3445,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -2820,7 +3465,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -2866,7 +3516,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -2881,7 +3536,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -2896,7 +3556,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -2911,7 +3576,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -2926,7 +3596,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -2941,7 +3616,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -2950,6 +3630,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -2981,6 +3666,11 @@
                   "$ref": "#/components/schemas/UserMe"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -2995,6 +3685,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -3011,6 +3706,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "403": {
@@ -3025,6 +3725,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -3041,6 +3746,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "503": {
@@ -3055,6 +3765,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -3115,6 +3830,11 @@
                   "$ref": "#/components/schemas/UserMe"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -3130,7 +3850,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -3145,7 +3870,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -3160,7 +3890,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -3175,7 +3910,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -3190,7 +3930,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -3205,7 +3950,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -3214,6 +3964,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -3335,6 +4090,11 @@
                   "$ref": "#/components/schemas/Page_BuildSummary_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -3350,7 +4110,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -3365,7 +4130,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -3380,7 +4150,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -3395,7 +4170,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -3410,7 +4190,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -3425,7 +4210,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -3489,6 +4279,11 @@
                   "$ref": "#/components/schemas/IssuedInstallationResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -3504,7 +4299,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -3519,7 +4319,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -3534,7 +4339,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -3549,7 +4359,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -3564,7 +4379,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -3579,7 +4399,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -3607,6 +4432,11 @@
                   "$ref": "#/components/schemas/InstallationListResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -3622,7 +4452,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -3637,7 +4472,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -3652,7 +4492,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -3667,7 +4512,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -3682,7 +4532,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -3746,6 +4601,11 @@
                   "$ref": "#/components/schemas/IssuedInstallationResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -3761,7 +4621,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -3776,7 +4641,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -3791,7 +4661,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -3806,7 +4681,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -3821,7 +4701,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -3836,7 +4721,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -3851,7 +4741,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -3925,6 +4820,11 @@
                   "$ref": "#/components/schemas/InstallationResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -3940,7 +4840,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -3955,7 +4860,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -3970,7 +4880,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -3985,7 +4900,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -4000,7 +4920,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4015,7 +4940,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -4030,7 +4960,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -4087,7 +5022,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -4102,7 +5042,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -4117,7 +5062,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -4132,7 +5082,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -4147,7 +5102,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -4162,7 +5122,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4177,7 +5142,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -4192,7 +5162,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -4288,6 +5263,11 @@
                   "$ref": "#/components/schemas/ChallengeCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -4303,7 +5283,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -4318,7 +5303,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -4333,7 +5323,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -4348,7 +5343,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4363,7 +5363,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -4378,7 +5383,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -4474,6 +5484,11 @@
                   "$ref": "#/components/schemas/IssuedPlayerGrantResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -4489,7 +5504,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -4504,7 +5524,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -4519,7 +5544,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -4534,7 +5564,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4549,7 +5584,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -4564,7 +5604,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -4625,6 +5670,11 @@
                   "$ref": "#/components/schemas/ChallengeCreateResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -4640,7 +5690,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -4655,7 +5710,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -4670,7 +5730,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4685,7 +5750,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -4700,7 +5770,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -4761,6 +5836,11 @@
                   "$ref": "#/components/schemas/IssuedPlayerGrantResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -4776,7 +5856,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -4791,7 +5876,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -4806,7 +5896,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4821,7 +5916,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -4836,7 +5936,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -4900,6 +6005,11 @@
                   "$ref": "#/components/schemas/ChallengeApprovalResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -4915,7 +6025,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -4930,7 +6045,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -4945,7 +6065,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -4960,7 +6085,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -4975,7 +6105,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -4990,7 +6125,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5005,7 +6145,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -5062,7 +6207,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -5077,7 +6227,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -5092,7 +6247,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5107,7 +6267,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5122,7 +6287,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -5137,7 +6307,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -5152,7 +6327,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5167,7 +6347,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -5197,6 +6382,11 @@
                   "$ref": "#/components/schemas/NotificationPreferencesDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -5212,7 +6402,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5227,7 +6422,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5242,7 +6442,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5257,7 +6462,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -5319,6 +6529,11 @@
                   "$ref": "#/components/schemas/NotificationPreferencesDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -5334,7 +6549,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5349,7 +6569,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5364,7 +6589,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -5379,7 +6609,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5394,7 +6629,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5403,6 +6643,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -5468,6 +6713,11 @@
                   "$ref": "#/components/schemas/NotificationPreferencesDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -5483,7 +6733,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5498,7 +6753,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5513,7 +6773,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -5528,7 +6793,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5543,7 +6813,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5552,6 +6827,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -5587,6 +6867,11 @@
                   "title": "Response List Subscriptions V1 Users Me Notifications Subscriptions Get"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -5602,7 +6887,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5617,7 +6907,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5632,7 +6927,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5647,7 +6947,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -5709,6 +7014,11 @@
                   "$ref": "#/components/schemas/NotificationSubscriptionDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -5724,7 +7034,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5739,7 +7054,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5754,7 +7074,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -5769,7 +7094,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -5784,7 +7114,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -5799,7 +7134,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5814,7 +7154,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -5870,7 +7215,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -5885,7 +7235,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -5900,7 +7255,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -5915,7 +7275,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -5930,7 +7295,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -5945,7 +7315,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -5960,7 +7335,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -5969,6 +7349,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -6074,6 +7459,11 @@
                   "$ref": "#/components/schemas/Page_InboxNotificationDetail_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -6089,7 +7479,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -6104,7 +7499,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -6119,7 +7519,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -6134,7 +7539,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6149,7 +7559,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6158,6 +7573,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -6215,7 +7635,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -6230,7 +7655,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -6245,7 +7675,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -6260,7 +7695,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -6275,7 +7715,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -6290,7 +7735,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6305,7 +7755,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -6314,6 +7769,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -6354,6 +7814,11 @@
                   "$ref": "#/components/schemas/RecordDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -6369,7 +7834,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -6384,7 +7854,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -6399,7 +7874,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "500": {
             "content": {
@@ -6414,7 +7894,12 @@
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Internal Server Error",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6429,7 +7914,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -6548,6 +8038,11 @@
                   "$ref": "#/components/schemas/Page_RecordSummary_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -6563,7 +8058,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -6578,7 +8078,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -6593,7 +8098,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6608,7 +8118,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -6681,6 +8196,11 @@
                   "$ref": "#/components/schemas/Page_SchematicSummary_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -6696,7 +8216,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -6711,7 +8236,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -6726,7 +8256,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -6741,7 +8276,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6756,7 +8296,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -6801,6 +8346,11 @@
             "description": "Stored schematic content",
             "content": {
               "application/octet-stream": {}
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -6816,7 +8366,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -6831,7 +8386,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -6846,7 +8406,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6861,7 +8426,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -6897,6 +8467,11 @@
             "description": "Generated schematic preview",
             "content": {
               "image/png": {}
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -6912,7 +8487,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -6927,7 +8507,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -6942,7 +8527,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -6957,7 +8547,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -6986,6 +8581,11 @@
                   "title": "Response List Search Fields V1 Search Fields Get"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7001,6 +8601,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "503": {
@@ -7015,6 +8620,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -7071,6 +8681,11 @@
                   "$ref": "#/components/schemas/SearchSuggestions"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7086,7 +8701,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -7101,7 +8721,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -7116,7 +8741,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7131,7 +8761,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -7231,6 +8866,11 @@
                   "$ref": "#/components/schemas/Page_Annotated_Union_BuildSearchResult__RecordSearchResult__MetadataSearchResult___FieldInfo_annotation_NoneType__required_True__discriminator__resource_kind____"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7246,7 +8886,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -7261,7 +8906,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -7276,7 +8926,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7291,7 +8946,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -7350,6 +9010,11 @@
                   "$ref": "#/components/schemas/DraftListResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7365,7 +9030,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -7380,7 +9050,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -7395,7 +9070,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7410,7 +9090,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -7419,6 +9104,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -7519,6 +9209,11 @@
                   "draft_id": "$response.body#/id"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7534,7 +9229,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -7549,7 +9249,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -7564,7 +9269,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -7579,7 +9289,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -7594,7 +9309,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -7609,7 +9329,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7624,7 +9349,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -7680,6 +9410,11 @@
                   "$ref": "#/components/schemas/FormManifestResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7695,7 +9430,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7710,7 +9450,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -7719,6 +9464,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -7791,6 +9541,11 @@
                   "$ref": "#/components/schemas/FormManifestResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7806,7 +9561,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -7821,7 +9581,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -7836,7 +9601,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7851,7 +9621,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -7922,6 +9697,11 @@
                   "$ref": "#/components/schemas/FormOptionSetResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -7937,7 +9717,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -7952,7 +9737,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -7967,7 +9757,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -7982,7 +9777,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -7997,7 +9797,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -8066,6 +9871,11 @@
                   "$ref": "#/components/schemas/StoredDraftResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -8081,7 +9891,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -8096,7 +9911,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -8111,7 +9931,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -8126,7 +9951,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -8141,7 +9971,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -8156,7 +9991,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -8231,6 +10071,11 @@
                 },
                 "description": "Use-after-free check for a deleted draft identifier."
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -8246,7 +10091,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -8261,7 +10111,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -8276,7 +10131,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -8291,7 +10151,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -8306,7 +10171,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -8321,7 +10191,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -8420,6 +10295,11 @@
                   "draft_id": "$response.body#/draft/id"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -8435,7 +10315,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -8450,7 +10335,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -8465,7 +10355,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -8480,7 +10375,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -8495,7 +10395,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -8510,7 +10415,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -8525,7 +10435,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -8540,7 +10455,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -8629,6 +10549,11 @@
                   "draft_id": "$response.body#/draft_id"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -8644,7 +10569,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -8659,7 +10589,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -8674,7 +10609,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -8689,7 +10629,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -8704,7 +10649,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -8719,7 +10669,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -8734,7 +10689,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -8749,7 +10709,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -8821,6 +10786,11 @@
                   "$ref": "#/components/schemas/SubmissionFinalizationResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -8836,7 +10806,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -8851,7 +10826,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -8866,7 +10846,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -8881,7 +10866,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -8896,7 +10886,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -8911,7 +10906,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -9004,6 +11004,11 @@
                   "$ref": "#/components/schemas/DraftMediaResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -9019,7 +11024,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -9034,7 +11044,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -9049,7 +11064,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -9064,7 +11084,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -9079,7 +11104,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -9094,7 +11124,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -9109,7 +11144,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -9124,7 +11164,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "requestBody": {
@@ -9194,6 +11239,11 @@
                   "$ref": "#/components/schemas/DraftMediaListResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -9209,7 +11259,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -9224,7 +11279,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -9239,7 +11299,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -9254,7 +11319,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -9269,7 +11339,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -9284,7 +11359,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -9299,7 +11379,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -9362,6 +11447,11 @@
                   "$ref": "#/components/schemas/DraftMediaResponse"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -9377,7 +11467,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -9392,7 +11487,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -9407,7 +11507,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -9422,7 +11527,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -9437,7 +11547,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -9452,7 +11567,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -9467,7 +11587,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -9543,7 +11668,12 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "429": {
             "content": {
@@ -9558,7 +11688,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -9573,7 +11708,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -9588,7 +11728,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -9603,7 +11748,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -9618,7 +11768,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -9633,7 +11788,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -9648,7 +11808,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -9682,6 +11847,11 @@
                   "title": "Response List Sources V1 Suggest Get"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -9697,6 +11867,11 @@
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "503": {
@@ -9711,6 +11886,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -9811,6 +11991,11 @@
                   "$ref": "#/components/schemas/SuggestionPage"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -9826,7 +12011,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -9841,7 +12031,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -9856,7 +12051,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -9871,7 +12071,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -9935,6 +12140,11 @@
                   "$ref": "#/components/schemas/Page_TagDetail_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -9950,7 +12160,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -9965,7 +12180,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -9980,7 +12200,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -9995,7 +12220,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -10034,6 +12264,11 @@
                   "$ref": "#/components/schemas/TagDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -10049,7 +12284,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -10064,7 +12304,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -10079,7 +12324,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -10094,7 +12344,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -10135,6 +12390,11 @@
                   "$ref": "#/components/schemas/CreatorAliasDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -10150,7 +12410,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -10165,7 +12430,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -10180,7 +12450,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -10195,7 +12470,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -10235,6 +12515,11 @@
                   "$ref": "#/components/schemas/CreatorProfileDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -10250,7 +12535,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -10265,7 +12555,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -10280,7 +12575,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -10295,7 +12595,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -10359,6 +12664,11 @@
                   "$ref": "#/components/schemas/Page_VersionDetail_"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -10374,7 +12684,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -10389,7 +12704,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -10404,7 +12724,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -10419,7 +12744,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -10467,6 +12797,11 @@
                   "$ref": "#/components/schemas/VoteSessionDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -10482,7 +12817,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -10497,7 +12837,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "content": {
@@ -10512,7 +12857,12 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -10527,7 +12877,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           }
         },
         "x-squid-cli": {
@@ -10600,6 +12955,11 @@
                   "$ref": "#/components/schemas/VoteSessionDetail"
                 }
               }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
             }
           },
           "429": {
@@ -10615,7 +12975,12 @@
                 }
               }
             },
-            "description": "Too Many Requests"
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "400": {
             "content": {
@@ -10630,7 +12995,12 @@
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "401": {
             "content": {
@@ -10645,7 +13015,12 @@
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "403": {
             "content": {
@@ -10660,7 +13035,12 @@
                 }
               }
             },
-            "description": "Forbidden"
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "404": {
             "content": {
@@ -10675,7 +13055,12 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "409": {
             "content": {
@@ -10690,7 +13075,12 @@
                 }
               }
             },
-            "description": "Conflict"
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "503": {
             "content": {
@@ -10705,7 +13095,12 @@
                 }
               }
             },
-            "description": "Service Unavailable"
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -10714,6 +13109,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           }
@@ -16038,6 +18438,16 @@
         "title": "VoteInput",
         "description": "A stable option selection in one Discord guild."
       },
+      "VoteKind": {
+        "type": "string",
+        "enum": [
+          "build",
+          "delete_log",
+          "generic"
+        ],
+        "title": "VoteKind",
+        "description": "What a vote session decides, and therefore how it closes."
+      },
       "VoteOptionSummary": {
         "properties": {
           "id": {
@@ -16082,8 +18492,7 @@
             "title": "Question"
           },
           "visibility": {
-            "type": "string",
-            "title": "Visibility"
+            "$ref": "#/components/schemas/VoteVisibility"
           },
           "deadline": {
             "type": "string",
@@ -16108,23 +18517,34 @@
             "title": "Id"
           },
           "kind": {
-            "type": "string",
-            "title": "Kind"
+            "$ref": "#/components/schemas/VoteKind"
           },
           "status": {
-            "type": "string",
-            "title": "Status"
+            "$ref": "#/components/schemas/VoteStatus"
           },
           "result": {
-            "type": "string",
-            "title": "Result"
+            "$ref": "#/components/schemas/VoteSessionResult"
           },
           "pass_threshold": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Pass Threshold"
           },
           "fail_threshold": {
-            "type": "integer",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Fail Threshold"
           },
           "build_id": {
@@ -16194,6 +18614,26 @@
         "title": "VoteSessionDetail",
         "description": "A vote session with aggregate-only ballot data."
       },
+      "VoteSessionResult": {
+        "type": "string",
+        "enum": [
+          "approved",
+          "denied",
+          "cancelled",
+          "pending"
+        ],
+        "title": "VoteSessionResult",
+        "description": "The decision a closed session reached."
+      },
+      "VoteStatus": {
+        "type": "string",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "VoteStatus",
+        "description": "Whether a session still accepts ballots."
+      },
       "VoteTallies": {
         "properties": {
           "raw": {
@@ -16234,6 +18674,16 @@
         ],
         "title": "VoteTallies",
         "description": "Aggregate results which cannot identify individual voters."
+      },
+      "VoteVisibility": {
+        "type": "string",
+        "enum": [
+          "anonymous_live",
+          "visible_live",
+          "anonymous_hidden"
+        ],
+        "title": "VoteVisibility",
+        "description": "How much of a generic poll's state is disclosed while it is open."
       }
     },
     "securitySchemes": {
@@ -16271,6 +18721,15 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-Squid-Installation-Secret"
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "Correlation id for this request; an echo of a valid inbound Request-Id when supplied.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{8,128}$"
+        }
       }
     }
   },

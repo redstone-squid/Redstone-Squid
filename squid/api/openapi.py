@@ -377,12 +377,19 @@ def _postprocess(document: dict[str, Any]) -> None:
         "PaperInstallationId": {"type": "apiKey", "in": "header", "name": "X-Squid-Installation-ID"},
         "PaperInstallationSecret": {"type": "apiKey", "in": "header", "name": "X-Squid-Installation-Secret"},
     }
+    components["headers"] = {
+        "RequestId": {
+            "description": "Correlation id for this request; an echo of a valid inbound Request-Id when supplied.",
+            "schema": {"type": "string", "pattern": "^[A-Za-z0-9._-]{8,128}$"},
+        }
+    }
     for contract in OPERATIONS:
         operation = document["paths"][contract.path][contract.method]
         operation["operationId"] = contract.operation_id
         operation["security"] = _security(contract)
         operation["x-squid-cli"] = _cli_metadata(contract)
         _install_response_links(operation, contract)
+        _install_request_id_header(operation)
         if scopes := _SCOPES.get(contract.operation_id):
             operation["x-required-api-scopes"] = list(scopes)
 
@@ -430,6 +437,12 @@ def _install_response_links(operation: dict[str, Any], contract: OperationContra
             continue
         response = operation["responses"][status_code]
         response["links"] = links
+
+
+def _install_request_id_header(operation: dict[str, Any]) -> None:
+    """Declare the Request-Id correlation header the middleware emits on every response."""
+    for response in operation["responses"].values():
+        response.setdefault("headers", {})["Request-Id"] = {"$ref": "#/components/headers/RequestId"}
 
 
 def validate_operation_manifest() -> None:
