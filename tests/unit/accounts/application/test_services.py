@@ -171,7 +171,8 @@ class FakeAccountRepository:
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         return self.claims.get(claim_id)
 
-    async def pending_claims(self) -> Sequence[AliasClaim]:
+    async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        self.claimants_requested = with_claimants
         return tuple(claim for claim in self.claims.values() if claim.status is ClaimStatus.PENDING)
 
     async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh:

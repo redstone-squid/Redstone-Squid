@@ -154,9 +154,13 @@ class AccountService:
             raise ConsentRequiredError(discord_id)
         return await self._repository.request_claim(name=name, account_id=account.id)
 
-    async def pending_alias_claims(self) -> Sequence[AliasClaim]:
-        """List creator credit claims awaiting staff review."""
-        return await self._repository.pending_claims()
+    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        """List creator credit claims awaiting staff review.
+
+        *with_claimants* loads each claimant's account for presentation, at a fixed cost
+        rather than one query per claim.
+        """
+        return await self._repository.pending_claims(with_claimants=with_claimants)
 
     async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
         """Credit the claimant with the alias and close the request.

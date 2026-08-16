@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-from squid.accounts.domain import IdentityRefresh
+from squid.accounts.domain import AliasClaim, IdentityProvider, IdentityRefresh
 from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
@@ -146,9 +146,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @requires(ACCOUNT_CLAIM_LIST)
     async def pending_claims(self, ctx: Context[BotT]) -> None:
         """List creator credit claims awaiting review."""
-        claims = await self.account_service.pending_alias_claims()
+        claims = await self.account_service.pending_alias_claims(with_claimants=True)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        body = "\n".join(f"**#{claim.id}** {claim.alias_name} (account {claim.account_id})" for claim in claims)
+        body = "\n".join(f"**#{claim.id}** {claim.alias_name} ({_claimant(claim)})" for claim in claims)
         await ctx.send(
             view=text_layout(body or t(locale, _("No creator credit claims are awaiting review."))),
             ephemeral=ctx.interaction is not None,
@@ -187,6 +187,22 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             view=text_layout(t(locale, _("Rejected the claim for **{name}**."), name=claim.alias_name)),
             allowed_mentions=no_mentions(),
         )
+
+
+def _claimant(claim: AliasClaim) -> str:
+    """Name a claimant by the most recognisable identity loaded for them.
+
+    Plan 01 replaces this with a fuller presentation; the batched load is here so that work
+    does not have to reintroduce a query per claim to do it.
+    """
+    if claim.claimant is not None:
+        discord = claim.claimant.identity(IdentityProvider.DISCORD)
+        if discord is not None and discord.discord_id is not None:
+            return f"<@{discord.discord_id}>"
+        java = claim.claimant.identity(IdentityProvider.JAVA)
+        if java is not None and java.display_name is not None:
+            return java.display_name
+    return f"account {claim.account_id}"
 
 
 def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
