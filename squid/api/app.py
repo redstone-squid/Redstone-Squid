@@ -147,7 +147,7 @@ def create_api_app(
                 "Content-Type",
                 "Idempotency-Key",
                 "If-Match",
-                "X-CSRF-Token",
+                "CSRF-Token",
                 "X-Squid-Installation-ID",
                 "X-Squid-Installation-Secret",
             ],

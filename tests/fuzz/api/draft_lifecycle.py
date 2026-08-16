@@ -134,7 +134,7 @@ class DraftWebAuth:
     @property
     def write_headers(self) -> dict[str, str]:
         """Return write headers required by the API security dependency."""
-        return {"X-CSRF-Token": self.csrf_token}
+        return {"CSRF-Token": self.csrf_token}
 
 
 @dataclass(frozen=True, slots=True)
