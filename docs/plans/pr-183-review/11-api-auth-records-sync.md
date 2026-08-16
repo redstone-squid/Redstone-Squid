@@ -79,7 +79,8 @@ What remains is real:
   statements in `squid/persistence/postgres_entities.sql`, which is where the coalescing actually
   happens — and the only consumer renders Discord posts (`squid/bot/sync/reconciler.py:53`). Discord
   specificity is therefore correct at the table and wrong nowhere — but `SyncJob`, `SyncAction`, and
-  `DiscordSyncService` name a transfer, not a reconciliation. The `assert` comment points at the real defect underneath the name:
+  `DiscordSyncService` name a transfer, not a reconciliation. The `assert` comment points at the
+  real defect underneath the name:
   `squid/sync/infrastructure/repository.py:46,48` `cast()`s two text columns into `Literal` types,
   so a row that violated its check constraint would flow into the reconciler as a valid job and fail
   somewhere else entirely.
@@ -146,11 +147,11 @@ What remains is real:
      it (inline suppression behaviour differs between the default setup and the advanced workflow in
      `.github/workflows/codeql.yml`), dismiss alert 7 as "used in tests"/"won't fix" and link the
      written rationale in the dismissal comment.
-   - Out of cluster, worth one line to plan 2: `AccountRepository.hash_verification_code`
-     (`squid/accounts/infrastructure/repository.py:419`) is the one place the reviewer's instinct
-     bites. A six-digit code is ~19.8 bits, and it is hashed with pepper-prefixed plain SHA-256
-     rather than HMAC. The fix there is HMAC plus attempt caps, not a KDF — the code lives ten
-     minutes and is single-use.
+   - Out of cluster, and now owned by [plan 2](02-user-identity-persistence.md) subplan 6:
+     `AccountRepository.hash_verification_code` (`squid/accounts/infrastructure/repository.py:419`)
+     is the one place the reviewer's instinct bites. A six-digit code is ~19.8 bits, hashed with
+     pepper-prefixed plain SHA-256 rather than HMAC, and looked up by code alone across every
+     outstanding code. The fix there is HMAC, a wider code, and attempt caps — not a KDF.
 
 2. **Make permission patterns a validated value everywhere they are stored**
    - Parse at every boundary that accepts a pattern: `ApiKeyService.issue` (unconditionally, not
@@ -398,6 +399,7 @@ async def apply_edit(
 | # | Thread | Comment | Disposition |
 |---|---|---|---|
 | 3787898986 | `squid/auth/application/services.py:115` | "lets use something safer than sha256" | **Retained, documented.** 256-bit random secrets, peppered HMAC, constant-time compare; a KDF defends entropy that does not exist here and adds per-request work reachable by anyone holding a key ID. Rationale written at the call site and in the deployment docs. |
+| — | `squid/accounts/infrastructure/repository.py:419` | (no thread; found auditing 3787898986) | **Handed to [plan 2](02-user-identity-persistence.md) §6.** The verification code is the one peppered digest with real entropy pressure, and it is an accounts credential, not an API one. |
 | — | `tests/fuzz/api/database.py:335` (CodeQL alert 7) | `py/weak-sensitive-data-hashing` | **Fix by reuse, then suppress.** The fixture calls `hash_secret` instead of re-deriving it; the surviving site carries an inline suppression, with UI dismissal as the fallback. Bot comment, post-cutoff, tracked here because it is the same question. |
 | 3784699433 | `squid/auth/application/ports.py:19` | "lieral or enum" | **Fix, as neither.** Scopes become `frozenset[Pattern]`. The catalogue is open by design, so a `Literal` or enum would need a migration per registered node. |
 | 3787903592 | `squid/auth/infrastructure/models.py:29` | "enum? normalize it?" | **Fix.** Normalized (parsed, de-duplicated, sorted) on write; unparsable stored rows raise `DataIntegrityError` on read. Column stays `ARRAY(Text)`, with the reason in the docstring. |
