@@ -2,7 +2,15 @@
 
 from uuid import UUID
 
-from squid.core.errors import ConflictError, ErrorCode, NotFoundError, ServiceUnavailableError, ValidationError
+from squid.accounts.domain import IdentityProvider
+from squid.core.errors import (
+    ConflictError,
+    ErrorCode,
+    JSONValue,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from squid.core.i18n import _
 
 
@@ -14,6 +22,31 @@ class InvalidAccountError(ValidationError):
     default_resource = "account"
 
 
+def _identity_context(
+    account_id: int | None,
+    discord_id: int | None,
+    provider: "IdentityProvider | None",
+    subject: str | None,
+) -> dict[str, JSONValue]:
+    """Describe whichever identity the caller was known by.
+
+    `discord_id` is the Discord spelling of `(provider, subject)` and is kept because the
+    Discord entry points genuinely have one. Everything else names the provider explicitly,
+    so an error raised for a CLI device or a Minecraft player says which namespace it means
+    rather than implying Discord by omission.
+    """
+    context: dict[str, JSONValue] = {}
+    if account_id is not None:
+        context["account_id"] = account_id
+    if discord_id is not None:
+        context["provider"] = IdentityProvider.DISCORD
+        context["subject"] = str(discord_id)
+    elif provider is not None and subject is not None:
+        context["provider"] = provider
+        context["subject"] = subject
+    return context
+
+
 class AccountNotFoundError(NotFoundError):
     """An application account could not be found."""
 
@@ -21,11 +54,19 @@ class AccountNotFoundError(NotFoundError):
     default_code = ErrorCode.ACCOUNT_NOT_FOUND
     default_resource = "account"
 
-    def __init__(self, account_id: int | None = None, *, discord_id: int | None = None) -> None:
-        context = {"account_id": account_id} if account_id is not None else {"discord_id": discord_id}
-        super().__init__(context=context)
+    def __init__(
+        self,
+        account_id: int | None = None,
+        *,
+        discord_id: int | None = None,
+        provider: "IdentityProvider | None" = None,
+        subject: str | None = None,
+    ) -> None:
+        super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
         self.account_id = account_id
         self.discord_id = discord_id
+        self.provider = IdentityProvider.DISCORD if discord_id is not None else provider
+        self.subject = str(discord_id) if discord_id is not None else subject
 
 
 class InvalidMergeProofError(ValidationError):
@@ -56,9 +97,20 @@ class AccountAlreadyLinkedError(ConflictError):
     default_resource = "account"
     default_end_user_action = _("Unlink the current account before linking a new one.")
 
-    def __init__(self, discord_id: int, minecraft_uuid: UUID) -> None:
-        super().__init__(context={"discord_id": discord_id, "minecraft_uuid": str(minecraft_uuid)})
+    def __init__(
+        self,
+        *,
+        minecraft_uuid: UUID,
+        discord_id: int | None = None,
+        account_id: int | None = None,
+        provider: "IdentityProvider | None" = None,
+        subject: str | None = None,
+    ) -> None:
+        context = _identity_context(account_id, discord_id, provider, subject)
+        context["minecraft_uuid"] = str(minecraft_uuid)
+        super().__init__(context=context)
         self.discord_id = discord_id
+        self.account_id = account_id
         self.minecraft_uuid = minecraft_uuid
 
 
@@ -71,13 +123,15 @@ class ConsentRequiredError(ValidationError):
     default_resource = "account"
     default_end_user_action = _("Review and accept the current privacy notice, then try again.")
 
-    def __init__(self, discord_id: int | None = None, *, account_id: int | None = None) -> None:
-        context: dict[str, int] = {}
-        if discord_id is not None:
-            context["discord_id"] = discord_id
-        if account_id is not None:
-            context["account_id"] = account_id
-        super().__init__(context=context)
+    def __init__(
+        self,
+        discord_id: int | None = None,
+        *,
+        account_id: int | None = None,
+        provider: "IdentityProvider | None" = None,
+        subject: str | None = None,
+    ) -> None:
+        super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
         self.discord_id = discord_id
         self.account_id = account_id
 
