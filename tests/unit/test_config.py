@@ -588,6 +588,27 @@ def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(monkeypat
     assert load_bot_process_config().database is not None
 
 
+def test_compose_only_keys_in_the_shared_dotenv_do_not_block_boot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compose interpolates these, then hands the same `.env` to every container via `env_file`.
+
+    So they reach this audit even though no process reads them, and under strict mode that made
+    moving the API's published host port off a taken 8000 fail the whole stack at boot.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_STRICT_UNKNOWN_KEYS="true",
+        SQUID_API_HOST_PORT="8001",
+        SQUID_DB_PORT="5433",
+        SQUID_PGWEB_PORT="8081",
+        SQUID_ENV_FILE=".env",
+        SQUID_APP_IMAGE="ghcr.io/example/app:latest",
+        SQUID_WORKER_IMAGE="ghcr.io/example/worker:latest",
+    )
+
+    assert load_bot_process_config().database is not None
+
+
 def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret-long-enough", SQUID_API_KEY_PEPPER="too-short")
 
