@@ -29,8 +29,9 @@ from squid.schematics.application import (
     StoredSchematic,
     summarise_losses,
 )
+from squid.schematics.application.commands import MIN_RENDER_EXTENT
 from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
-from squid.schematics.errors import AmbiguousSimulationInputError
+from squid.schematics.errors import AmbiguousSimulationInputError, SchematicRenderRefusedError
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -110,6 +111,44 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         data, _losses = await self.schematics.convert(build_id, ConvertRequest(target_format=file_format))
         await ctx.send(
             file=discord.File(io.BytesIO(data), filename=f"build-{build_id}.{WRITABLE_EXTENSIONS[file_format]}"),
+            allowed_mentions=no_mentions(),
+        )
+
+    @autocompletes(build_id="builds")
+    @schematic_group.command(name="render")  # type: ignore
+    @app_commands.describe(
+        build_id=app_commands.locale_str(_("The submission ID whose schematic to render.")),
+        yaw=app_commands.locale_str(_("Camera yaw in degrees. Omit for the default view.")),
+        pitch=app_commands.locale_str(_("Camera pitch in degrees. Omit for the default view.")),
+        size=app_commands.locale_str(_("Image width and height in pixels.")),
+    )
+    async def schematic_render(
+        self,
+        ctx: Context[BotT],
+        build_id: int,
+        yaw: app_commands.Range[float, -360.0, 360.0] | None = None,
+        pitch: app_commands.Range[float, -90.0, 90.0] | None = None,
+        size: app_commands.Range[int, MIN_RENDER_EXTENT, 1536] | None = None,
+    ) -> None:
+        """Render the build's schematic and post the image."""
+        await ctx.defer()
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale)
+        if stored is None:
+            return
+        try:
+            rendered = await self.schematics.render_now(
+                build_id,
+                request=self.schematics.render_recipe(width=size, height=size, yaw=yaw, pitch=pitch),
+            )
+        except SchematicRenderRefusedError as error:
+            # A refusal names a fact about the file — unsanitized, too big, already fatal to
+            # the engine — that the user can neither retry away nor act on, so it is a
+            # sentence rather than an error card telling them to report it.
+            await _say(ctx, error.localized_public_detail(locale))
+            return
+        await ctx.send(
+            file=discord.File(io.BytesIO(rendered.png), filename=f"build-{build_id}-render.png"),
             allowed_mentions=no_mentions(),
         )
 
