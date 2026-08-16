@@ -25,6 +25,10 @@ UNGATED_COMMANDS = frozenset(
         "account",
         "account claim",
         "account link",
+        # Refreshing your own Minecraft name is default-allow, so the command declares no
+        # node. Its `user:` form checks `account.identity.refresh_any` inline instead, which
+        # a decorator could not express without gating the self case too.
+        "account refresh",
         "account unlink",
         "build",
         "build queue",
@@ -85,7 +89,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # takes a documented entry point away with no failing test, and a command added
     # without a plan ships to every guild. Neither shows up in a behavioural test,
     # because the behaviour of a command nobody calls is nothing.
-    "account": ("approve-claim", "claim", "claims", "link", "reject-claim", "unlink"),
+    "account": ("approve-claim", "claim", "claims", "link", "refresh", "reject-claim", "unlink"),
     "admin": (
         "records-gaps",
         "records-lookup",

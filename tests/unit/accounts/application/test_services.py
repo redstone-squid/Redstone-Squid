@@ -21,6 +21,7 @@ from squid.accounts.domain import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
+    IdentityRefresh,
     RecentAccountProof,
     fold_creator_name,
 )
@@ -32,6 +33,7 @@ from squid.accounts.errors import (
     InvalidMergeProofError,
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
+    NoLinkedMinecraftAccountError,
 )
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -50,6 +52,7 @@ class FakeAccountRepository:
         self.link_result = VerificationLinkResult()
         self.created_code: tuple[UUID, str, str] | None = None
         self.merge_result: AccountMerge | None = None
+        self.refreshed: tuple[int, UUID, str] | None = None
         self._next_id = 1
 
     def seed_account(
@@ -171,7 +174,24 @@ class FakeAccountRepository:
     async def pending_claims(self) -> Sequence[AliasClaim]:
         return tuple(claim for claim in self.claims.values() if claim.status is ClaimStatus.PENDING)
 
-    async def resolve_claim(self, *, claim_id: int, status: ClaimStatus, resolved_by_account_id: int) -> AliasClaim:
+    async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh:
+        self.refreshed = (account_id, java_uuid, username)
+        return IdentityRefresh(
+            account_id=account_id,
+            java_uuid=java_uuid,
+            current_name=username,
+            previous_name="Player",
+        )
+
+    async def resolve_claim(
+        self,
+        *,
+        claim_id: int,
+        status: ClaimStatus,
+        resolved_by_account_id: int,
+        reassign: bool = False,
+    ) -> AliasClaim:
+        self.reassign_requested = reassign
         claim = self.claims[claim_id]
         resolved = AliasClaim(
             claim.id,
@@ -302,3 +322,48 @@ async def test_code_generation_validates_java_identity() -> None:
 
     with pytest.raises(MinecraftAccountNotFoundError):
         await service(FakeAccountRepository(), None).generate_verification_code(JAVA_UUID)
+
+
+async def test_refresh_looks_up_the_current_name_and_delegates() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+
+    refresh = await service(repository, "RenamedPlayer").refresh_java_identity(account.id)
+
+    assert repository.refreshed == (account.id, JAVA_UUID, "RenamedPlayer")
+    assert refresh.renamed is True
+    assert refresh.previous_name == "Player"
+    assert refresh.current_name == "RenamedPlayer"
+
+
+async def test_refresh_without_a_linked_java_identity_is_rejected() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT)
+    assert account.id is not None
+
+    with pytest.raises(NoLinkedMinecraftAccountError):
+        await service(repository).refresh_java_identity(account.id)
+
+
+async def test_refresh_of_a_uuid_mojang_no_longer_knows_is_rejected() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+
+    with pytest.raises(MinecraftAccountNotFoundError):
+        await service(repository, None).refresh_java_identity(account.id)
+
+
+async def test_refresh_of_an_unknown_account_is_rejected() -> None:
+    with pytest.raises(AccountNotFoundError):
+        await service(FakeAccountRepository()).refresh_java_identity(999)
+
+
+async def test_refresh_can_name_which_java_identity_to_refresh() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+
+    with pytest.raises(NoLinkedMinecraftAccountError):
+        await service(repository).refresh_java_identity(account.id, java_uuid=OTHER_JAVA_UUID)
