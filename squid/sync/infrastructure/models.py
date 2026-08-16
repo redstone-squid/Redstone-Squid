@@ -1,6 +1,9 @@
 """SQLAlchemy model for durable Discord reconciliation work."""
 
+import uuid
+
 from sqlalchemy import BigInteger, CheckConstraint, Identity, Index, Integer, Text, UniqueConstraint, func, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -37,7 +40,7 @@ class DiscordSyncQueueItem(Base, kw_only=True):
         UniqueConstraint("resource_kind", "source_key", name="discord_sync_queue_resource_key"),
         Index(
             "discord_sync_queue_ready_idx",
-            "enqueued_at",
+            "available_at",
             postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
         ),
     )
@@ -49,7 +52,21 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    """When this row next becomes claimable, and the only column backoff writes.
+
+    Kept separate from `enqueued_at` so a repeatedly failing row keeps its place in
+    FIFO order and still reports its true age to the queue-health gauges.
+    """
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """The database-minted fencing token handed to the worker that claimed this row.
+
+    Nullable for now so code from the previous release, which stamps only
+    `claimed_at`, can keep draining the queue across a deploy window.
+    """
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     generation: Mapped[int] = mapped_column(
         BigInteger,

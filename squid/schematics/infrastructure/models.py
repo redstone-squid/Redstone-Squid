@@ -1,5 +1,7 @@
 """SQLAlchemy schematic storage models."""
 
+import uuid
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -13,7 +15,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -236,7 +238,7 @@ class SchematicRenderQueueItem(Base, kw_only=True):
     __table_args__ = (
         Index(
             "schematic_render_queue_ready_idx",
-            "enqueued_at",
+            "available_at",
             postgresql_where=text("claimed_at IS NULL AND dead_at IS NULL"),
         ),
     )
@@ -249,7 +251,13 @@ class SchematicRenderQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    """When this row next becomes claimable, and the only column backoff writes."""
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """The database-minted fencing token handed to the worker that claimed this row."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
@@ -287,6 +295,8 @@ class SchematicJob(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """The database-minted fencing token handed to the worker that claimed this row."""
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

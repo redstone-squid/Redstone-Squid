@@ -112,11 +112,13 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             await session.execute(
                 text(
                     """
-                    INSERT INTO search_projection_queue (resource_kind, source_key, action, enqueued_at)
-                    VALUES ('metadata', :source_key, :action, now())
+                    INSERT INTO search_projection_queue
+                        (resource_kind, source_key, action, enqueued_at, available_at)
+                    VALUES ('metadata', :source_key, :action, now(), now())
                     ON CONFLICT (resource_kind, source_key) DO UPDATE
                     SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-                        attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL
+                        available_at = EXCLUDED.available_at, attempts = 0,
+                        locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL
                     """
                 ),
                 {

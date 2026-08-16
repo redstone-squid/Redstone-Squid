@@ -160,7 +160,9 @@ class SchematicRepository:
                         index_elements=[SchematicRenderQueueItem.build_id],
                         set_={
                             "enqueued_at": func.now(),
+                            "available_at": func.now(),
                             "claimed_at": None,
+                            "claim_token": None,
                             "dead_at": None,
                             "attempts": 0,
                             "last_error": None,

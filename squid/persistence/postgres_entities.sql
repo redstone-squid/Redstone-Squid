@@ -96,24 +96,28 @@ BEGIN
         SELECT lower(category) INTO target_kind FROM public.builds WHERE id = target_build_id;
     END IF;
 
-    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-    VALUES ('build', target_build_id::text, target_action, now())
+    INSERT INTO public.search_projection_queue
+        (resource_kind, source_key, action, enqueued_at, available_at)
+    VALUES ('build', target_build_id::text, target_action, now(), now())
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
         attempts = 0,
         locked_at = NULL,
+        claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
 
     IF target_kind IN ('door', 'extender') THEN
         INSERT INTO public.record_recompute_queue
-            (scope_key, build_kind, build_id, reasons, enqueued_at)
+            (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
         VALUES (
             target_kind,
             target_kind,
             CASE WHEN TG_TABLE_NAME = 'builds' AND TG_OP = 'DELETE' THEN NULL ELSE target_build_id END,
             '["source_change"]'::jsonb,
+            now(),
             now()
         )
         ON CONFLICT (scope_key) DO UPDATE
@@ -125,8 +129,10 @@ BEGIN
                 ) AS reason
             ),
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             attempts = 0,
             locked_at = NULL,
+            claim_token = NULL,
             last_error = NULL;
     END IF;
     RETURN NULL;
@@ -156,60 +162,73 @@ BEGIN
         target_action := 'delete';
     END IF;
 
-    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now())
+    INSERT INTO public.search_projection_queue
+        (resource_kind, source_key, action, enqueued_at, available_at)
+    VALUES ('metadata', target_kind || ':' || target_id::text, target_action, now(), now())
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
         attempts = 0,
         locked_at = NULL,
+        claim_token = NULL,
         dead_at = NULL,
         last_error = NULL;
 
     IF TG_TABLE_NAME IN ('tag_definitions', 'tag_aliases') THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', assignment.build_id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'build', assignment.build_id::text, 'upsert', now(), now()
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert',
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             attempts = 0,
             locked_at = NULL,
+            claim_token = NULL,
             dead_at = NULL,
             last_error = NULL;
 
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'build', assignment.build_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.build_tag_assignments assignment
         WHERE assignment.tag_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action,
             generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             claimed_at = NULL,
+            claim_token = NULL,
             dead_at = NULL,
             attempts = 0,
             last_error = NULL;
     ELSIF TG_TABLE_NAME = 'creator_aliases' THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', bc.build_id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'build', bc.build_id::text, 'upsert', now(), now()
         FROM public.build_creators bc
         WHERE bc.alias_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'versions' THEN
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'build', bv.build_id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'build', bv.build_id::text, 'upsert', now(), now()
         FROM public.build_versions bv
         WHERE bv.version_id = target_id
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -223,31 +242,38 @@ DECLARE
 BEGIN
     IF TG_TABLE_NAME = 'record_results' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
         VALUES (
             'record',
             'result:' || target_result_id::text,
             CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END,
+            now(),
             now()
         )
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSIF TG_TABLE_NAME = 'record_result_holders' THEN
         target_result_id := CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END;
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now())
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        VALUES ('record', 'result:' || target_result_id::text, 'upsert', now(), now())
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     ELSE
-        INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at)
-        SELECT 'record', 'result:' || rr.id::text, 'upsert', now()
+        INSERT INTO public.search_projection_queue
+            (resource_kind, source_key, action, enqueued_at, available_at)
+        SELECT 'record', 'result:' || rr.id::text, 'upsert', now(), now()
         FROM public.record_results rr
         WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET action = 'upsert', enqueued_at = EXCLUDED.enqueued_at,
-            attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            attempts = 0, locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL;
     END IF;
     RETURN NULL;
 END;
@@ -284,16 +310,19 @@ BEGIN
     -- and could name a revision below one already applied. Sequences are exempt from
     -- rollback, which is exactly what a staleness token needs.
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        (resource_kind, source_key, action, generation, enqueued_at, available_at,
+         claimed_at, claim_token, dead_at, attempts, last_error)
     VALUES (
         target_kind, target_key::text, target_action,
-        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
     )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action,
         generation = EXCLUDED.generation,
         enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
         claimed_at = NULL,
+        claim_token = NULL,
         dead_at = NULL,
         attempts = 0,
         last_error = NULL;
@@ -303,16 +332,19 @@ BEGIN
     -- the sessions have to be enqueued in their own right.
     IF target_kind = 'build' AND target_action = 'refresh' THEN
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'vote_session', bvs.vote_session_id::text, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.build_vote_sessions bvs
         WHERE bvs.build_id = target_key
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET generation = EXCLUDED.generation,
             enqueued_at = EXCLUDED.enqueued_at,
+            available_at = EXCLUDED.available_at,
             claimed_at = NULL,
+            claim_token = NULL,
             dead_at = NULL,
             attempts = 0,
             last_error = NULL;
@@ -330,30 +362,34 @@ BEGIN
     IF TG_TABLE_NAME = 'starboards' THEN
         -- A configuration change restyles or re-thresholds every entry on the board.
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.starboard_entries e
         WHERE e.starboard_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
         RETURN NULL;
     END IF;
 
     IF TG_TABLE_NAME = 'starboard_origin_messages' THEN
         target_key := NULL;
         INSERT INTO public.discord_sync_queue
-            (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+            (resource_kind, source_key, action, generation, enqueued_at, available_at,
+             claimed_at, claim_token, dead_at, attempts, last_error)
         SELECT
             'starboard_entry', e.starboard_id || ':' || e.origin_message_id, 'refresh',
-            nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+            nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
         FROM public.starboard_entries e
         WHERE e.origin_message_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END
         ON CONFLICT (resource_kind, source_key) DO UPDATE
         SET generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-            claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+            available_at = EXCLUDED.available_at,
+            claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
         RETURN NULL;
     END IF;
 
@@ -363,14 +399,16 @@ BEGIN
         target_key := NEW.starboard_id || ':' || NEW.origin_message_id;
     END IF;
     INSERT INTO public.discord_sync_queue
-        (resource_kind, source_key, action, generation, enqueued_at, claimed_at, dead_at, attempts, last_error)
+        (resource_kind, source_key, action, generation, enqueued_at, available_at,
+         claimed_at, claim_token, dead_at, attempts, last_error)
     VALUES (
         'starboard_entry', target_key, CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'refresh' END,
-        nextval('public.discord_sync_generation_seq'), now(), NULL, NULL, 0, NULL
+        nextval('public.discord_sync_generation_seq'), now(), now(), NULL, NULL, NULL, 0, NULL
     )
     ON CONFLICT (resource_kind, source_key) DO UPDATE
     SET action = EXCLUDED.action, generation = EXCLUDED.generation, enqueued_at = EXCLUDED.enqueued_at,
-        claimed_at = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
+        available_at = EXCLUDED.available_at,
+        claimed_at = NULL, claim_token = NULL, dead_at = NULL, attempts = 0, last_error = NULL;
     RETURN NULL;
 END;
 $$;

@@ -214,8 +214,10 @@ class SearchProjectionStore:
                 document_id=document_id,
                 source_hash=source_hash,
                 enqueued_at=func.now(),
+                available_at=func.now(),
                 attempts=0,
                 locked_at=None,
+                claim_token=None,
                 dead_at=None,
                 last_error=None,
             )
@@ -225,8 +227,10 @@ class SearchProjectionStore:
                     set_={
                         "source_hash": embedding_statement.excluded.source_hash,
                         "enqueued_at": func.now(),
+                        "available_at": func.now(),
                         "attempts": 0,
                         "locked_at": None,
+                        "claim_token": None,
                         "dead_at": None,
                         "last_error": None,
                     },
