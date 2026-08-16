@@ -128,11 +128,8 @@ class Build(Base, kw_only=True):
         nullable=False,
     )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
-    embedding: Mapped[list[float] | None] = mapped_column(
-        VECTOR(EMBEDDING_DIMENSION),
-        comment="Application-owned semantic vector stored in the authoritative build row.",
-        default=None,
-    )
+    embedding: Mapped[list[float] | None] = mapped_column(VECTOR(EMBEDDING_DIMENSION), default=None)
+    """Application-owned semantic vector stored in the authoritative build row."""
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     lock_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     lock_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
