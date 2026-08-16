@@ -2,6 +2,7 @@
 
 pub mod auth;
 pub mod credential;
+pub mod diagnostics;
 pub mod encrypted_state;
 pub mod exit;
 pub mod form;
