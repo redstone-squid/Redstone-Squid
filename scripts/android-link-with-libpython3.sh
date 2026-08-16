@@ -33,6 +33,6 @@
 #
 # Wire this in per-package via CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER in
 # pyproject.toml's [tool.uv.extra-build-variables] -- see the cryptography and
-# jsonschema-rs entries there, and docs/plans/nucleation-android-build.md for
+# jsonschema-rs entries there, and docs/plans/completed/nucleation-android-build.md for
 # the parallel nucleation (CMake, not cargo) version of this same failure mode.
 exec cc "$@" -Wl,--no-as-needed -lpython3 -Wl,--as-needed
