@@ -271,6 +271,11 @@ def configure_api_logging(config: LoggingConfig) -> None:
             service_name="redstone-squid-api",
         )
     )
+    # Stamp trace/request-id correlation onto records even when the observability extra is absent,
+    # so the API's RequestContextMiddleware id reaches log lines without OpenTelemetry configured.
+    from squid.observability import install_trace_context_log_filter
+
+    install_trace_context_log_filter()
 
 
 def configure_service_worker_logging(config: LoggingConfig) -> None:
