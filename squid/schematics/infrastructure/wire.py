@@ -43,7 +43,12 @@ MAX_FRAME_BYTES = 256 * 1024 * 1024
 nonsensical buffer before we notice."""
 
 type Operation = Literal["capabilities", "analyze", "convert", "compare", "render", "simulate", "autostack"]
-type ErrorKind = Literal["invalid", "too_large", "unavailable", "internal"]
+type ErrorKind = Literal["invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"]
+"""How the child classifies a failure so the supervisor can rebuild a typed exception.
+
+Deliberately a small closed set rather than a class name: the child's free-form message is
+not shown to users, so anything a caller must actually be told has to be carried by a kind
+the supervisor knows how to reconstruct."""
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

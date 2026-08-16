@@ -37,7 +37,11 @@ from squid.schematics.domain.models import (
     SchematicFormat,
     SchematicLimits,
 )
-from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError
+from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
+    InvalidSchematicError,
+    SchematicTooLargeError,
+)
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import ErrorKind, Frame
 
@@ -226,6 +230,11 @@ def _error_payload(exc: Exception) -> Mapping[str, Any]:
     if isinstance(exc, SchematicTooLargeError):
         kind = "too_large"
         context = {"actual": exc.actual, "limit": exc.limit, "measure": exc.measure}
+    elif isinstance(exc, AmbiguousSimulationInputError):
+        # Checked before its `InvalidSchematicError` base, so the candidate coordinates the
+        # caller needs survive the pipe instead of collapsing into a generic rejection.
+        kind = "ambiguous_simulation_input"
+        context = {"candidates": [list(candidate) for candidate in exc.candidates], "rejected": exc.rejected}
     elif isinstance(exc, InvalidSchematicError):
         kind = "invalid"
         context = dict(exc.context)
