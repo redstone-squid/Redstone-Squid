@@ -19,7 +19,7 @@ from squid.bot.utils.components import (
     card_layout,
     text_layout,
 )
-from squid.voting.domain import VoteChoice, VoteSessionSnapshot
+from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
 
 def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: int | None = None) -> str:
@@ -62,19 +62,22 @@ def render_build_review(
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> StaticLayout:
     """Render the card asking whether a logged message should be deleted."""
-    match snapshot.result if snapshot.status == "closed" else "pending":
-        case "pending":
+    # Compare enum members rather than their string values: `status == "closed"` is true at
+    # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
+    # then treats every branch below `pending` as unreachable.
+    match snapshot.result if snapshot.status is VoteStatus.CLOSED else VoteSessionResult.PENDING:
+        case VoteSessionResult.PENDING:
             title = "Vote to Delete Log"
             action = (
                 f"React with {primary_emoji(snapshot, VoteChoice.APPROVE)} to upvote or "
                 f"{primary_emoji(snapshot, VoteChoice.DENY)} to downvote."
             )
             accent_colour = DISCORD_YELLOW
-        case "approved":
+        case VoteSessionResult.APPROVED:
             title = "Vote to Delete Log: Passed"
             action = ""
             accent_colour = DISCORD_GREEN
-        case "denied":
+        case VoteSessionResult.DENIED:
             title = "Vote to Delete Log: Failed"
             action = ""
             accent_colour = DISCORD_RED
