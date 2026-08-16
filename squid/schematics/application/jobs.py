@@ -1,5 +1,6 @@
 """Durable schematic job contracts shared by clients and the worker."""
 
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
@@ -27,7 +28,8 @@ class ClaimedSchematicJob:
     params: Mapping[str, Any]
     input_keys: tuple[str, ...]
     attempts: int
-    claimed_at: Instant
+    claim_token: uuid.UUID
+    """The database-minted fence this worker's acknowledgement must still match."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,14 +3,27 @@
 from collections.abc import Sequence
 from typing import Any, cast
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.persistence.queue import ClaimedRowQueue
+from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.search.application.embeddings import SearchEmbeddingJob, SearchEmbeddingModel
 from squid.search.infrastructure.models import SearchDocument, SearchEmbeddingQueueItem
 from squid.search.infrastructure.repository import SemanticCandidate
+
+SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
+    name="search_embeddings",
+    model=SearchEmbeddingQueueItem,
+    key=(SearchEmbeddingQueueItem.document_id,),
+    available_at=SearchEmbeddingQueueItem.available_at,
+    enqueued_at=SearchEmbeddingQueueItem.enqueued_at,
+    claimed_at=SearchEmbeddingQueueItem.locked_at,
+    claim_token=SearchEmbeddingQueueItem.claim_token,
+    attempts=SearchEmbeddingQueueItem.attempts,
+    last_error=SearchEmbeddingQueueItem.last_error,
+    dead_at=SearchEmbeddingQueueItem.dead_at,
+)
 
 
 class PostgresSearchEmbeddingQueue:
@@ -18,55 +31,40 @@ class PostgresSearchEmbeddingQueue:
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
-        self._queue = ClaimedRowQueue(
-            session_factory,
-            SearchEmbeddingQueueItem,
-            ready_at=SearchEmbeddingQueueItem.enqueued_at,
-            claimed_at=SearchEmbeddingQueueItem.locked_at,
-            dead_at=SearchEmbeddingQueueItem.dead_at,
-        )
+        self._queue = ClaimedRowQueue(SEARCH_EMBEDDING_QUEUE_SPEC, session_factory)
 
     async def claim(self, *, limit: int) -> Sequence[SearchEmbeddingJob]:
+        rows = await self._queue.claim(limit=limit)
+        if not rows:
+            return ()
+        # The document text is not on the queue row, so it is read after the claim
+        # rather than joined into it. A document cannot change underneath the job:
+        # `source_hash` is part of the fence, and any edit re-enqueues a new hash.
         async with self._session_factory() as session:
-            rows = (
-                await session.execute(
-                    select(SearchEmbeddingQueueItem, SearchDocument)
-                    .join(SearchDocument, SearchDocument.id == SearchEmbeddingQueueItem.document_id)
-                    .where(
-                        SearchEmbeddingQueueItem.enqueued_at <= func.now(),
-                        self._queue.reclaimable(),
+            documents = {
+                document.id: document
+                for document in (
+                    await session.scalars(
+                        select(SearchDocument).where(SearchDocument.id.in_([row.document_id for row in rows]))
                     )
-                    .order_by(SearchEmbeddingQueueItem.enqueued_at, SearchEmbeddingQueueItem.document_id)
-                    .limit(limit)
-                    .with_for_update(skip_locked=True, of=SearchEmbeddingQueueItem)
-                )
-            ).all()
-            queue_rows = tuple(row[0] for row in rows)
-            claimed_at = await self._queue.stamp(queue_rows, session)
+                ).all()
+            }
         return tuple(
             SearchEmbeddingJob(
-                document_id=queue_row.document_id,
-                source_hash=queue_row.source_hash,
+                document_id=row.document_id,
+                source_hash=row.source_hash,
                 text=_embedding_text(document),
-                attempts=queue_row.attempts,
-                claimed_at=claimed_at,
+                attempts=row.attempts,
+                claim_token=self._queue.token_of(row),
             )
-            for queue_row, document in rows
+            for row in rows
+            if (document := documents.get(row.document_id)) is not None
         )
 
     async def complete(self, job: SearchEmbeddingJob, embedding: list[float], model: str) -> bool:
         async with self._session_factory.begin() as session:
-            owned = await session.scalar(
-                select(SearchEmbeddingQueueItem.document_id)
-                .where(
-                    SearchEmbeddingQueueItem.document_id == job.document_id,
-                    SearchEmbeddingQueueItem.source_hash == job.source_hash,
-                    SearchEmbeddingQueueItem.locked_at == job.claimed_at,
-                )
-                .with_for_update()
-            )
-            if owned is None:
-                return False
+            # The vector write and the acknowledgement have to agree, so both run
+            # under this transaction and the document write gates the delete.
             updated = cast(
                 CursorResult[Any],
                 await session.execute(
@@ -76,26 +74,28 @@ class PostgresSearchEmbeddingQueue:
                 ),
             )
             if not updated.rowcount:
+                await session.rollback()
                 return False
-            await session.execute(
-                delete(SearchEmbeddingQueueItem).where(
-                    SearchEmbeddingQueueItem.document_id == job.document_id,
-                    SearchEmbeddingQueueItem.source_hash == job.source_hash,
-                    SearchEmbeddingQueueItem.locked_at == job.claimed_at,
-                )
-            )
-        return True
+            outcome = await self._queue.complete(self._identity(job), job.claim_token, session=session)
+            if not outcome.applied:
+                await session.rollback()
+            return outcome.applied
 
     async def fail(self, job: SearchEmbeddingJob, error: str, *, max_attempts: int) -> bool:
-        return await self._queue.fail(
-            (
-                SearchEmbeddingQueueItem.document_id == job.document_id,
-                SearchEmbeddingQueueItem.source_hash == job.source_hash,
-            ),
-            job.claimed_at,
+        outcome = await self._queue.fail(
+            self._identity(job),
+            job.claim_token,
             attempts=job.attempts,
             error=error,
             max_attempts=max_attempts,
+        )
+        return outcome.dead_lettered
+
+    @staticmethod
+    def _identity(job: SearchEmbeddingJob) -> tuple[ColumnElement[bool], ...]:
+        return (
+            SearchEmbeddingQueueItem.document_id == job.document_id,
+            SearchEmbeddingQueueItem.source_hash == job.source_hash,
         )
 
 

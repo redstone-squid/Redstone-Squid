@@ -4,9 +4,8 @@ What each resource renders is covered in `tests/unit/bot/posts/test_reconciler.p
 this is only about claiming, acknowledging, and dead-lettering.
 """
 
+import uuid
 from unittest.mock import AsyncMock, Mock
-
-from whenever import Instant
 
 from squid.bot.sync.reconciler import ReconciliationCog
 from squid.sync import ReconciliationAction, ReconciliationJob, ReconciliationResource
@@ -25,7 +24,7 @@ def _job(
         action=action,
         generation=generation,
         attempts=0,
-        claimed_at=Instant.now(),
+        claim_token=uuid.uuid4(),
     )
 
 
