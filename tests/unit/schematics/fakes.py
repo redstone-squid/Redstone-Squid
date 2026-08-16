@@ -82,9 +82,11 @@ class FakeSchematicAnalyzer:
             trustworthy=True,
         )
         self.comparisons: dict[bytes, SchematicComparison] = {}
+        self.capabilities_calls = 0
         self.closed = False
 
     async def capabilities(self) -> AnalyzerCapabilities:
+        self.capabilities_calls += 1
         return AnalyzerCapabilities(
             available=True,
             analyzer_version=self.analysis.analyzer_version,
