@@ -5,7 +5,12 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 ### Code Style
 - **Formatting**: 120-character lines and Python 3.14 target
 - **Documentation**: Google-style docstrings with type information
-- **Type Safety**: Full type hints with BasedPyright for static analysis. Use your best judgement for when to `# type: ignore` and when to fix the typing issue.
+- **Type Safety**: Full type hints. **Pyrefly is the type checker for local development** — run it
+  with `just typecheck` (`uv run --locked pyrefly check --config pyproject.toml`); it is also a
+  pre-push hook in `prek.toml`. BasedPyright still runs in CI at `--level=warning` and is not
+  installed locally, so `# pyright: ignore[...]` comments already in the tree stay meaningful; write
+  new suppressions as `# type: ignore` or `# pyrefly: ignore` unless the finding is BasedPyright's
+  alone. Use your best judgement for when to suppress and when to fix the typing issue.
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 - Do not `from __future__ import annotations` and do not quote forward references in type hints — Python 3.14 defers annotation evaluation by default (PEP 649/749), so plain unquoted names work everywhere.
 - Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
@@ -37,9 +42,12 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
   `--no-cov` for these iterative runs when coverage reporting is enabled by default.
 - After the final edit, run the focused tests once more together with cheap relevant checks such
   as `alembic heads` and `git diff --check`.
-- Run formatting, linting, and BasedPyright only over changed files or affected packages. If
-  verified commit hooks already enforce formatting or linting, let the hooks perform those checks;
-  do not assume hooks exist without confirming it.
+- Run formatting and linting only over changed files or affected packages. If verified commit hooks
+  already enforce formatting or linting, let the hooks perform those checks; do not assume hooks
+  exist without confirming it.
+- Type-check with `just typecheck`. Pyrefly is configured project-wide in `[tool.pyrefly]`, so it
+  has no changed-file mode: run it once and read only the errors in files you touched. The tree is
+  not at zero errors, so compare against a pre-change run before claiming one is yours.
 - Defer the full test suite to CI unless the change affects central behavior with a broad or
   uncertain blast radius, CI is unavailable, or the user explicitly requests a full local run.
 - Do not rerun an unchanged check after it has passed unless a subsequent edit could affect its
