@@ -1181,6 +1181,97 @@ export type DraftSummaryResponse = {
 export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
+ * ErrorReportDetail
+ *
+ * One stored failure with everything kept about it.
+ *
+ * Only reachable with `diagnostics.error.read`: the message and traceback are the unredacted
+ * internals that every other surface deliberately withholds from the user who triggered them.
+ */
+export type ErrorReportDetail = {
+    /**
+     * Reference
+     */
+    reference: string;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Surface
+     */
+    surface: string;
+    /**
+     * Origin
+     */
+    origin?: string | null;
+    /**
+     * Exception Type
+     */
+    exception_type: string;
+    code?: ErrorCode | null;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Traceback
+     */
+    traceback: string;
+    /**
+     * Context
+     */
+    context?: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Log Tail
+     */
+    log_tail?: Array<string>;
+    /**
+     * Matching References
+     */
+    matching_references?: number;
+};
+
+/**
+ * ErrorReportSummary
+ *
+ * One stored failure, without its traceback or logs.
+ */
+export type ErrorReportSummary = {
+    /**
+     * Reference
+     */
+    reference: string;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Surface
+     */
+    surface: string;
+    /**
+     * Origin
+     */
+    origin?: string | null;
+    /**
+     * Exception Type
+     */
+    exception_type: string;
+    code?: ErrorCode | null;
+};
+
+/**
  * ExtenderDetails
  *
  * Facts owned by piston extenders.
@@ -1851,6 +1942,22 @@ export type PageBuildSummary = {
      * Items
      */
     items: Array<BuildSummary>;
+    /**
+     * Total
+     */
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[ErrorReportSummary]
+ */
+export type PageErrorReportSummary = {
+    /**
+     * Items
+     */
+    items: Array<ErrorReportSummary>;
     /**
      * Total
      */
@@ -4140,6 +4247,98 @@ export type CliSessionRevokeResponses = {
 };
 
 export type CliSessionRevokeResponse = CliSessionRevokeResponses[keyof CliSessionRevokeResponses];
+
+export type DiagnosticsErrorsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page Size
+         *
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/diagnostics/errors';
+};
+
+export type DiagnosticsErrorsListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type DiagnosticsErrorsListError = DiagnosticsErrorsListErrors[keyof DiagnosticsErrorsListErrors];
+
+export type DiagnosticsErrorsListResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageErrorReportSummary;
+};
+
+export type DiagnosticsErrorsListResponse = DiagnosticsErrorsListResponses[keyof DiagnosticsErrorsListResponses];
+
+export type DiagnosticsErrorGetData = {
+    body?: never;
+    path: {
+        /**
+         * Reference
+         *
+         * The short reference a user was shown, or the full correlation ID from a Request-Id header.
+         */
+        reference: string;
+    };
+    query?: never;
+    url: '/v1/diagnostics/errors/{reference}';
+};
+
+export type DiagnosticsErrorGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * No stored report matches the reference, or it has passed its retention window.
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type DiagnosticsErrorGetError = DiagnosticsErrorGetErrors[keyof DiagnosticsErrorGetErrors];
+
+export type DiagnosticsErrorGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ErrorReportDetail;
+};
+
+export type DiagnosticsErrorGetResponse = DiagnosticsErrorGetResponses[keyof DiagnosticsErrorGetResponses];
 
 export type AccountGetData = {
     body?: never;
