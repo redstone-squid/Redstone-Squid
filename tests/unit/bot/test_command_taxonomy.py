@@ -6,6 +6,7 @@ from typing import Any, cast
 from discord.ext.commands import Command, HybridCommand, HybridGroup
 
 from squid.bot.admin import Admin
+from squid.bot.diagnostics import Diagnostics
 from squid.bot.give_redstoner import GiveRedstoner
 from squid.bot.misc_commands import Miscellaneous
 from squid.bot.permissions import PermissionCog
@@ -77,6 +78,7 @@ shipped without a gate fails CI instead of shipping open.
 PUBLIC_COGS = (
     SearchCog,
     Admin,
+    Diagnostics,
     RecordCog,
     VoteCog,
     VerifyCog,
@@ -104,6 +106,8 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "records-title-issues",
     ),
     "archive": (),
+    # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
+    "error": ("recent",),
     "build": (
         "approve",
         "debug",
@@ -274,6 +278,10 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     starboard = StarboardCog.__new__(StarboardCog)
     assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
     assert _nodes(starboard.__cog_commands__, "starboard recount") == {"starboard.board.recount"}
+
+    diagnostics = Diagnostics.__new__(Diagnostics)
+    assert _nodes(diagnostics.__cog_commands__, "error") == {"diagnostics.error.read"}
+    assert _nodes(diagnostics.__cog_commands__, "error recent") == {"diagnostics.error.read"}
 
     admin = Admin.__new__(Admin)
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
