@@ -103,9 +103,12 @@ class SquidError(Exception):
     def backend_detail(self) -> str:
         """Return diagnostic (English) text suitable for logs."""
         message = self._rendered_message()
-        if self.developer_action:
-            return f"{message} {self.developer_action}"
-        return message
+        if not self.developer_action:
+            return message
+        # A multi-line message is a rendered list of findings, so the action gets its own
+        # line rather than being glued to the end of the last item.
+        separator = "\n" if "\n" in message else " "
+        return f"{message}{separator}{self.developer_action}"
 
     def public_detail(self) -> str:
         """Return safe, untranslated (English) text suitable for users and API clients."""
