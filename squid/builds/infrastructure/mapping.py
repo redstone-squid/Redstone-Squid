@@ -266,7 +266,7 @@ class BuildMapper:
             ),
             canonical_unit=definition.canonical_unit_key,
             default_display_unit=definition.default_display_unit_key,
-            numeric_quantum=definition.numeric_quantum,
+            numeric_step=definition.numeric_step,
             render_template=definition.render_template,
             default_display_order=definition.default_display_order,
             moderation_status=TagModerationStatus(definition.moderation_status),

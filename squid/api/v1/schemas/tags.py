@@ -25,7 +25,7 @@ class TagDetail(FromDomain[TagDefinition]):
     record_operator: str | None
     canonical_unit: str | None
     display_unit: str | None
-    numeric_quantum: Decimal | None
+    numeric_step: Decimal | None
 
     @classmethod
     def from_domain(cls, definition: TagDefinition, /) -> Self:
@@ -41,5 +41,5 @@ class TagDetail(FromDomain[TagDefinition]):
             record_operator=definition.record_operator.value if definition.record_operator is not None else None,
             canonical_unit=definition.canonical_unit,
             display_unit=definition.default_display_unit,
-            numeric_quantum=definition.numeric_quantum,
+            numeric_step=definition.numeric_step,
         )
