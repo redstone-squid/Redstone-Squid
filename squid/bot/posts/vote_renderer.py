@@ -10,7 +10,7 @@ from squid.bot.posts.renderer import DesiredPost
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
 from squid.posts.domain import ResourceKind
-from squid.voting.domain import VoteSessionSnapshot
+from squid.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -65,10 +65,11 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
                 logger.warning("Failed to add a vote reaction", exc_info=outcome)
 
     async def _build_review(self, snapshot: VoteSessionSnapshot) -> Sequence[DesiredPost]:
-        if snapshot.target.build_id is None:
+        target = snapshot.target
+        if not isinstance(target, BuildVoteTarget):
             logger.warning("A build review session has no build", extra={"squid.vote_session.id": snapshot.id})
             return ()
-        build = await self.bot.services.build_queries.get(snapshot.target.build_id)
+        build = await self.bot.services.build_queries.get(target.build_id)
         if build is None:
             return ()
 
@@ -97,7 +98,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
     async def _delete_log(self, snapshot: VoteSessionSnapshot) -> Sequence[DesiredPost]:
         target = snapshot.target
         content = ""
-        if target.channel_id is not None and target.message_id is not None:
+        if isinstance(target, DeleteLogVoteTarget):
             message = await self.bot.get_or_fetch_message(target.channel_id, target.message_id)
             content = "" if message is None else message.content
         layout = render_delete_log(snapshot, content)
