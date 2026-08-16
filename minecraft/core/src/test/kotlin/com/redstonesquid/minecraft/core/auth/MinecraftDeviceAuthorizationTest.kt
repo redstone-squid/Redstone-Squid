@@ -50,8 +50,8 @@ class MinecraftDeviceAuthorizationTest {
             transport.requests.map { it.pathAndQuery },
         )
         transport.requests.forEach { request ->
-            assertEquals(installationId.toString(), request.headers["X-Squid-Installation-ID"])
-            assertEquals(installationSecret, request.headers["X-Squid-Installation-Secret"])
+            assertEquals(installationId.toString(), request.headers["Squid-Installation-ID"])
+            assertEquals(installationSecret, request.headers["Squid-Installation-Secret"])
             assertFalse("account" in checkNotNull(request.body))
             assertFalse("origin" in request.body)
             assertFalse(installationSecret in request.toString())

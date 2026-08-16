@@ -4529,13 +4529,13 @@ export type PaperChallengeStartData = {
          */
         'Idempotency-Key'?: string | null;
         /**
-         * X-Squid-Installation-Id
+         * Squid-Installation-Id
          */
-        'X-Squid-Installation-ID'?: string | null;
+        'Squid-Installation-ID'?: string | null;
         /**
-         * X-Squid-Installation-Secret
+         * Squid-Installation-Secret
          */
-        'X-Squid-Installation-Secret'?: string | null;
+        'Squid-Installation-Secret'?: string | null;
     };
     path?: never;
     query?: never;
@@ -4590,13 +4590,13 @@ export type PaperChallengeExchangeData = {
          */
         'Idempotency-Key'?: string | null;
         /**
-         * X-Squid-Installation-Id
+         * Squid-Installation-Id
          */
-        'X-Squid-Installation-ID'?: string | null;
+        'Squid-Installation-ID'?: string | null;
         /**
-         * X-Squid-Installation-Secret
+         * Squid-Installation-Secret
          */
-        'X-Squid-Installation-Secret'?: string | null;
+        'Squid-Installation-Secret'?: string | null;
     };
     path?: never;
     query?: never;

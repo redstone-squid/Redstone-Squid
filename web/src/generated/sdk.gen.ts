@@ -486,7 +486,7 @@ export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(op
  * Start player authorization bound to the authenticated Paper credential generation.
  */
 export const paperChallengeStart = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeStartData, ThrowOnError>): RequestResult<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError>({
-    security: [{ name: 'X-Squid-Installation-ID', type: 'apiKey' }, { name: 'X-Squid-Installation-Secret', type: 'apiKey' }],
+    security: [{ name: 'Squid-Installation-ID', type: 'apiKey' }, { name: 'Squid-Installation-Secret', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/challenges',
     ...options,
     headers: {
@@ -501,7 +501,7 @@ export const paperChallengeStart = <ThrowOnError extends boolean = false>(option
  * Exchange one approved Paper challenge on the same authenticated installation.
  */
 export const paperChallengeExchange = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeExchangeData, ThrowOnError>): RequestResult<PaperChallengeExchangeResponses, PaperChallengeExchangeErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeExchangeResponses, PaperChallengeExchangeErrors, ThrowOnError>({
-    security: [{ name: 'X-Squid-Installation-ID', type: 'apiKey' }, { name: 'X-Squid-Installation-Secret', type: 'apiKey' }],
+    security: [{ name: 'Squid-Installation-ID', type: 'apiKey' }, { name: 'Squid-Installation-Secret', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/challenges/exchange',
     ...options,
     headers: {

@@ -168,8 +168,8 @@ async def current_principal(
         if players is None:
             raise AuthenticationError
         try:
-            installation_id = request.headers.get("X-Squid-Installation-ID")
-            installation_secret = request.headers.get("X-Squid-Installation-Secret")
+            installation_id = request.headers.get("Squid-Installation-ID")
+            installation_secret = request.headers.get("Squid-Installation-Secret")
             if installation_id is None and installation_secret is None:
                 context = await players.authenticate_fabric_player(token)
             else:
