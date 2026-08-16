@@ -94,7 +94,6 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
     with _counting(migrated_session_factory) as statements:
         builds = await repository.list_page(
             statuses=frozenset({Status.PENDING}),
-            submitter_id=None,
             submitter_account_id=None,
             after_id=None,
             limit=50,
@@ -122,7 +121,7 @@ async def test_get_many_batches_cross_context_loads(
     assert [build.id for build in builds] == build_ids
     assert [build.creators_ign for build in builds] == [[f"Builder {index}"] for index in range(5)]
     assert all(build.versions == ["Java 1.21.0"] for build in builds)
-    assert all(build.submitter_id == 123456789 for build in builds)
+    assert all(build.submitter_discord_id == 123456789 for build in builds)
     assert len(statements) == _EXPECTED_PAGE_QUERIES, "\n".join(statements)
 
 

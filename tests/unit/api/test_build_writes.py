@@ -29,10 +29,10 @@ ACCOUNT = Caller(
 )
 
 
-def persisted_build(*, submitter_id: int = 123, status: Status = Status.PENDING) -> Build:
+def persisted_build(*, submitter_account_id: int = 1, status: Status = Status.PENDING) -> Build:
     return DoorBuild(
         id=42,
-        submitter_id=submitter_id,
+        submitter_account_id=submitter_account_id,
         submission_status=status,
         versions=["1.21"],
         door_width=2,
@@ -53,7 +53,7 @@ async def test_submit_maps_authenticated_identity_and_rejects_other_categories()
     assert response.id == 42
     assert submit_door.await_args is not None
     submission = submit_door.await_args.args[0]
-    assert submission.submitter_id == 123
+    assert submission.submitter_account_id == 1
     assert not submission.ai_generated
     assert http_response.headers["etag"] == '"build-42-r1"'
 
@@ -97,7 +97,7 @@ async def test_edit_hands_the_authorization_decision_to_the_service() -> None:
     call = apply_edit.await_args
     assert call is not None
     actor, build_id, patch = call.args
-    assert actor == BuildEditor(subject=subject_for(ACCOUNT), discord_id=123)
+    assert actor == BuildEditor(subject=subject_for(ACCOUNT))
     assert build_id == 42
     assert patch.extra_user_info == "changed"
     assert call.kwargs == {"expected_revision": 1}

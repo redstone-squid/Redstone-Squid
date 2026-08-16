@@ -28,13 +28,12 @@ from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 class BuildEditor:
     """Who is editing a build, in the terms the edit policy asks about.
 
-    Two facts and no transport: the permission subject behind the caller, and the
-    Discord id ownership is recorded against. An HTTP request, a slash command,
+    One fact and no transport: the permission subject behind the caller, which already
+    carries the account ownership is recorded against. An HTTP request, a slash command,
     and a modal submission all reduce to this.
     """
 
     subject: Subject
-    discord_id: int | None = None
 
 
 class BuildService:
@@ -72,7 +71,7 @@ class BuildService:
 
     async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
         build = DoorBuild(
-            submitter_id=submission.submitter_id,
+            submitter_account_id=submission.submitter_account_id,
             ai_generated=submission.ai_generated,
             submission_status=Status.PENDING,
             version_spec=submission.works_in,
@@ -128,14 +127,13 @@ class BuildService:
         build.classify_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
         return build
 
-    async def submit(self, build: Build, *, submitter_id: int, ai_generated: bool) -> Build:
-        """Apply legacy Discord submission metadata and persist an already prepared build.
+    async def submit(self, build: Build, *, submitter_account_id: int, ai_generated: bool) -> Build:
+        """Apply submission metadata and persist an already prepared build.
 
         The build's category is a fact of its type; callers construct the right
         subclass (or finalize a :class:`BuildDraft`) before submitting.
         """
-        build.submitter_account_id = None
-        build.submitter_id = submitter_id
+        build.submitter_account_id = submitter_account_id
         build.ai_generated = ai_generated
         build.submission_status = Status.PENDING
         await self._persist(build)
@@ -172,7 +170,6 @@ class BuildService:
                 )
             return existing
         build.submitter_account_id = submitter_account_id
-        build.submitter_id = None
         build.source_submission_draft_id = source_submission_draft_id
         build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
         build.ai_generated = ai_generated
@@ -225,8 +222,8 @@ class BuildService:
         async with self.edit(build_id, patch, blocking=False, expected_revision=expected_revision) as lease:
             owns = (
                 lease.build.submission_status is Status.PENDING
-                and actor.discord_id is not None
-                and lease.build.submitter_id == actor.discord_id
+                and actor.subject.account_id is not None
+                and lease.build.submitter_account_id == actor.subject.account_id
             )
             if not owns and not await self._permissions.allows(actor.subject, BUILD_SUBMISSION_EDIT):
                 raise AuthorizationError

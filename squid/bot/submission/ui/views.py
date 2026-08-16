@@ -412,7 +412,6 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
             await edit_interaction_layout(interaction, self)
             return
         await interaction.response.defer()
-        self.build.submitter_id = interaction.user.id
         self.value = True
         self.stop()
 
@@ -499,7 +498,17 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         was made rather than from a hardcoded comparison -- and a DM, which used
         to be refused outright, is fine for someone who holds the node.
         """
-        if self.build.submission_status is Status.PENDING and self.build.submitter_id == interaction.user.id:
+        # Compares accounts, not snowflakes: ownership is `submitter_account_id`, and
+        # `submitter_discord_id` is derived state that is absent on a freshly submitted
+        # build. Read-only resolution, so opening an edit view never mints an account.
+        actor_account_id = await interaction.client.account_ids.resolve(
+            interaction.client.services.accounts, interaction.user.id
+        )
+        if (
+            self.build.submission_status is Status.PENDING
+            and actor_account_id is not None
+            and self.build.submitter_account_id == actor_account_id
+        ):
             return True
         return await allows(interaction, BUILD_SUBMISSION_EDIT)
 
