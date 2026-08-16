@@ -50,9 +50,11 @@ from squid.schematics.domain.models import (
     SchematicFormat,
     SchematicLimits,
     SimulationResult,
+    Vector3,
     VersionLossEntry,
 )
 from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
     SchematicTimeoutError,
@@ -572,6 +574,11 @@ def _translate(error: Mapping[str, Any], operation: str) -> Exception:
             limit=int(context.get("limit", 0)),
             measure=str(context.get("measure", "size")),
         )
+    if kind == "ambiguous_simulation_input":
+        return AmbiguousSimulationInputError(
+            candidates=_vectors(context.get("candidates")),
+            rejected=_vector(context.get("rejected")),
+        ).with_context(context={"operation": operation})
     if kind == "invalid":
         return InvalidSchematicError(context={**context, "operation": operation})
     if kind == "unavailable":
@@ -581,3 +588,24 @@ def _translate(error: Mapping[str, Any], operation: str) -> Exception:
         resource="schematic",
         context={**context, "operation": operation},
     )
+
+
+def _vector(value: object) -> Vector3 | None:
+    """Read one integer triple out of a child's error context, rejecting anything else.
+
+    The child is our own code, but it is still a separate process writing JSON into a pipe;
+    nothing here may assume the shape it claims to have sent.
+    """
+    if not isinstance(value, list) or len(value) != 3:
+        return None
+    try:
+        x, y, z = (int(axis) for axis in cast(list[Any], value))
+    except TypeError, ValueError:
+        return None
+    return (x, y, z)
+
+
+def _vectors(value: object) -> tuple[Vector3, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(vector for raw in cast(list[Any], value) if (vector := _vector(raw)) is not None)
