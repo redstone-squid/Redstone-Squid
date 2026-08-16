@@ -62,7 +62,7 @@ class MemoryArtifacts:
         self.content_types: dict[str, str] = {}
 
     async def put(self, key: str, data: bytes, *, content_type: str) -> ArtifactMetadata:
-        self.objects[key] = bytes(data)
+        self.objects[key] = data
         self.content_types[key] = content_type
         return ArtifactMetadata(len(data), hashlib.sha256(data).hexdigest())
 

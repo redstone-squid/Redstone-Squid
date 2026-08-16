@@ -1315,8 +1315,8 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
             issues.append(
                 {
                     "field": location,
-                    "message": str(error["msg"]),
-                    "type": str(error["type"]),
+                    "message": error["msg"],
+                    "type": error["type"],
                 }
             )
     else:

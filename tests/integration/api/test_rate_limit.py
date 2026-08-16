@@ -19,7 +19,7 @@ def redis_container() -> Generator[RedisContainer]:
 @pytest.fixture
 async def redis_clients(redis_container: RedisContainer) -> AsyncGenerator[tuple[Redis, Redis]]:
     host = redis_container.get_container_host_ip()
-    port = int(redis_container.get_exposed_port(redis_container.port))
+    port = redis_container.get_exposed_port(redis_container.port)
     first = Redis(host=host, port=port)
     second = Redis(host=host, port=port)
     await first.flushdb()
