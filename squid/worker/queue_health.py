@@ -146,7 +146,7 @@ class PostgresQueueHealthMonitor:
 
 
 def emit_queue_health(snapshot: QueueHealthSnapshot) -> None:
-    """Export one queue snapshot through vendor-neutral OpenTelemetry gauges."""
+    """Export one queue snapshot through OpenTelemetry gauges any collector can read."""
     attributes = {"squid.queue.name": snapshot.queue}
     record_gauge("squid.queue.ready", snapshot.ready, attributes=attributes)
     record_gauge("squid.queue.in_flight", snapshot.in_flight, attributes=attributes)

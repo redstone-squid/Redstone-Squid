@@ -1,4 +1,4 @@
-"""Framework-neutral application queries for builds."""
+"""Application queries for builds, shared by the bot, the API, and the worker."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass

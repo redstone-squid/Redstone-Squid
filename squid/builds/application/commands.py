@@ -11,7 +11,7 @@ type Dimensions = tuple[int | None, int | None, int | None]
 class DoorSubmissionInput:
     """Input for legacy Discord door submission entry points.
 
-    Provider-neutral synchronized submissions use ``BuildService.submit_for_account``.
+    Submissions that arrive against an account use ``BuildService.submit_for_account``.
     """
 
     # Discord snowflake retained at this transport boundary for the existing bot/API flow.

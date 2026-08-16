@@ -1,4 +1,4 @@
-"""Provider-neutral account application ports."""
+"""Account application ports, keyed by account rather than by identity provider."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass

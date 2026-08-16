@@ -1,4 +1,4 @@
-"""Transport- and tool-neutral media values and resource budgets."""
+"""Media values and resource budgets, naming neither a caller nor an encoder."""
 
 from dataclasses import dataclass
 from enum import StrEnum

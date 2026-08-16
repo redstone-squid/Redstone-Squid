@@ -1,4 +1,4 @@
-"""Composition root for framework-neutral application services."""
+"""Composition root: wires adapters into services that name no framework themselves."""
 
 import logging
 import secrets
@@ -681,7 +681,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
 def create_worker_services(
     db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack
 ) -> WorkerServices:
-    """Create only capabilities used by transport-neutral background jobs."""
+    """Create only capabilities used by background jobs, which serve no request."""
     graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     idempotency = IdempotencyService(PostgresIdempotencyRepository(db.async_session))
     return WorkerServices(

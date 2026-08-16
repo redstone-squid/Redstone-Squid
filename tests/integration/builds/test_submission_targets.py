@@ -1,4 +1,4 @@
-"""PostgreSQL coverage for provider-neutral synchronized build targets."""
+"""PostgreSQL coverage for account-keyed synchronized build targets."""
 
 import uuid
 from dataclasses import replace

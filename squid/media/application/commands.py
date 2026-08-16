@@ -1,4 +1,4 @@
-"""Transport-neutral requests for media normalization."""
+"""Media normalization requests, built the same way by the bot, the API, and the worker."""
 
 from dataclasses import dataclass
 from pathlib import Path

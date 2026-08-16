@@ -100,7 +100,7 @@ class VoteOption:
 
     @property
     def id(self) -> str:
-        """The stable transport-neutral identifier, which `__post_init__` always fills."""
+        """The stable identifier, independent of Discord, which `__post_init__` always fills."""
         assert self.identifier is not None
         return self.identifier
 

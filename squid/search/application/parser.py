@@ -90,7 +90,7 @@ class SearchQueryParser:
         self._index = 0
 
     def parse(self, source: str) -> SearchQuery:
-        """Parse source into a persistence-neutral syntax tree."""
+        """Parse source into a syntax tree that mentions no table or column."""
         if len(source) > self._max_length:
             _fail(f"query exceeds {self._max_length} characters", self._max_length)
         self._tokens = self._tokenize(source)

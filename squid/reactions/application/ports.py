@@ -13,7 +13,7 @@ class WeightPolicy(Protocol):
 
 
 class ActorResolver(Protocol):
-    """Resolve current framework-neutral member facts."""
+    """Resolve current member facts as plain values, not library objects."""
 
     async def resolve(self, user_id: int, guild_id: int, scope: WeightScope) -> ReactionActor | None: ...
 

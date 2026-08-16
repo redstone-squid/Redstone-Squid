@@ -1,4 +1,4 @@
-"""Provider-neutral account application services."""
+"""Account application services: one account may hold Discord and Java identities alike."""
 
 from collections.abc import Awaitable, Callable, Sequence
 from uuid import UUID
