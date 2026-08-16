@@ -108,8 +108,8 @@ class QueueHealthShape:
 
     label: ColumnElement[str]
     source: FromClause
-    group_by: tuple[ColumnElement[Any], ...] = ()
-    counted: ColumnElement[Any] | None = None
+    group_by: tuple[SQLColumnExpression[Any], ...] = ()
+    counted: SQLColumnExpression[Any] | None = None
 
 
 class QueueSpec[ModelT]:
