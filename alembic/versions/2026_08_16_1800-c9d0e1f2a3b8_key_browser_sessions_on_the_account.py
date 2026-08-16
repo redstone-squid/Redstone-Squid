@@ -34,7 +34,15 @@ def upgrade() -> None:
     # the only adapter that existed, and nothing should default a provider from here on.
     op.add_column(
         "oauth_states",
-        sa.Column("provider", sa.Text(), nullable=False, server_default=sa.text("'discord'")),
+        sa.Column(
+            "provider",
+            sa.Text(),
+            nullable=False,
+            server_default=sa.text("'discord'"),
+            # Mirrors the model's attribute docstring, which `Base` turns into a column
+            # comment; omitting it here is drift the autogenerate check catches.
+            comment="The namespace this state was minted for; the callback refuses a mismatch.",
+        ),
     )
     op.alter_column("oauth_states", "provider", server_default=None)
 
