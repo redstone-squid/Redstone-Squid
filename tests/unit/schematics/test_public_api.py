@@ -10,6 +10,7 @@ from whenever import Instant
 from squid.api.v1.schematics import get_schematic_content, list_build_schematics, router
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
+from squid.builds.errors import BuildNotFoundError
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
 from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import make_analysis
@@ -27,8 +28,10 @@ def _public_publication() -> SchematicPublication:
 
 
 class ConfirmedBuilds:
-    async def get(self, build_id: int) -> object | None:
-        return SimpleNamespace(submission_status=Status.CONFIRMED) if build_id == 7 else None
+    async def get_public(self, build_id: int) -> object:
+        if build_id != 7:
+            raise BuildNotFoundError(build_id)
+        return SimpleNamespace(submission_status=Status.CONFIRMED)
 
 
 class PublicSchematics:
