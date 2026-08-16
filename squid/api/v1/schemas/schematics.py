@@ -1,12 +1,15 @@
 """Public schematic metadata representations."""
 
-from pydantic import BaseModel, ConfigDict
+from typing import Self
 
+from pydantic import ConfigDict
+
+from squid.api.v1.schemas import FromDomain
 from squid.schematics.application.queries import StoredSchematic
 from squid.schematics.domain import SchematicDimensions
 
 
-class SchematicSize(BaseModel):
+class SchematicSize(FromDomain[SchematicDimensions]):
     """A schematic bounding-box size."""
 
     model_config = ConfigDict(extra="forbid")
@@ -16,11 +19,11 @@ class SchematicSize(BaseModel):
     depth: int
 
     @classmethod
-    def from_domain(cls, dimensions: SchematicDimensions) -> SchematicSize:
+    def from_domain(cls, dimensions: SchematicDimensions, /) -> Self:
         return cls(width=dimensions.width, height=dimensions.height, depth=dimensions.length)
 
 
-class SchematicSummary(BaseModel):
+class SchematicSummary(FromDomain[StoredSchematic]):
     """Allowlisted analysis metadata for one stored build schematic."""
 
     model_config = ConfigDict(extra="forbid")
@@ -43,7 +46,7 @@ class SchematicSummary(BaseModel):
     download_url: str
 
     @classmethod
-    def from_domain(cls, schematic: StoredSchematic) -> SchematicSummary:
+    def from_domain(cls, schematic: StoredSchematic, /) -> Self:
         analysis = schematic.analysis
         metrics = analysis.metrics
         license = schematic.publication.license

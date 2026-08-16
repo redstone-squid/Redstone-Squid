@@ -11,9 +11,10 @@ from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.security import Principal, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
-from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.permissions.domain.catalogue import VOTE_POLL_CAST
 from squid.voting.domain import CastVoteResult, VoteRejection
+from squid.voting.errors import VoteSessionNotFoundError
 
 router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
 UserVoter = Annotated[Principal, Depends(requires(VOTE_POLL_CAST))]
@@ -37,12 +38,7 @@ async def get_vote_session(
     """Return aggregate vote state without exposing ballot identities."""
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
-        msg = "Vote session not found."
-        raise NotFoundError(
-            msg,
-            resource="vote_session",
-            public_context={"vote_session_id": vote_session_id},
-        )
+        raise VoteSessionNotFoundError(vote_session_id)
     return VoteSessionDetail.from_domain(session, caller_account_id=principal.account_id)
 
 
@@ -69,7 +65,7 @@ async def cast_vote(
         )
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
-        raise _vote_not_found(vote_session_id)
+        raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
         raise AuthorizationError
     actor = await vote_members.member(principal.account_id, principal.discord_id, vote.guild_id, session.kind)
@@ -86,7 +82,7 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
         case None:
             return
         case VoteRejection.NOT_FOUND:
-            raise _vote_not_found(vote_session_id)
+            raise VoteSessionNotFoundError(vote_session_id)
         case VoteRejection.CLOSED:
             msg = "The vote session is closed."
             raise ConflictError(msg, resource="vote_session")
@@ -95,12 +91,3 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
             raise ValidationError(msg, resource="vote")
         case VoteRejection.WRONG_GUILD | VoteRejection.NOT_ELIGIBLE | VoteRejection.NOT_AUTHORIZED:
             raise AuthorizationError
-
-
-def _vote_not_found(vote_session_id: int) -> NotFoundError:
-    msg = "Vote session not found."
-    return NotFoundError(
-        msg,
-        resource="vote_session",
-        public_context={"vote_session_id": vote_session_id},
-    )

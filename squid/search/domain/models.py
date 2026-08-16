@@ -5,7 +5,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Literal, TypeAlias
 
-from squid.core.errors import ValidationError
+from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 
 
@@ -38,6 +38,23 @@ class SearchSort:
 
     field: str
     direction: SortDirection = SortDirection.ASCENDING
+
+    @classmethod
+    def parse(cls, value: str | None) -> "SearchSort | None":
+        """Parse a `-field` or `field` sort expression, or `None` for the default.
+
+        The syntax belongs to the domain, not to one transport: the HTTP routes
+        and the bot's search command have to agree on what `-submission_time`
+        means, and they can only do that by parsing it in one place.
+        """
+        if value is None:
+            return None
+        direction = SortDirection.DESCENDING if value.startswith("-") else SortDirection.ASCENDING
+        field = value.removeprefix("-")
+        if not field:
+            msg = "sort field is required"
+            raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
+        return cls(field, direction)
 
 
 @dataclass(frozen=True, slots=True)

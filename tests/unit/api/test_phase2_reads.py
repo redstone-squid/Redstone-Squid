@@ -222,3 +222,48 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     assert payload["options"] == [{"id": "red", "label": "Red", "choice": "generic", "position": 0}]
     assert "111" not in response.text
     assert "author_id" not in response.text
+
+
+class TestTypedNotFound:
+    """Each missing resource names itself, rather than sharing one bare
+    `NotFoundError` carrying a `resource=` string.
+
+    The default app's fakes miss on every lookup, which is exactly the case
+    under test.
+    """
+
+    def test_a_missing_tag_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get("/v1/tags/404")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "TAG_NOT_FOUND"
+        assert problem["resource"] == "tag"
+        assert problem["context"] == {"tag_id": 404}
+
+    def test_a_missing_vote_session_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get("/v1/vote-sessions/1234")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "VOTE_SESSION_NOT_FOUND"
+        assert problem["resource"] == "vote_session"
+        assert problem["context"] == {"vote_session_id": 1234}
+
+    def test_a_missing_creator_profile_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get(f"/v1/creators/{CREATOR_PUBLIC_ID}")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "CREATOR_NOT_FOUND"
+        assert problem["resource"] == "creator"
+        assert problem["context"] == {"creator_id": str(CREATOR_PUBLIC_ID)}
+
+    def test_a_missing_record_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get("/v1/records/77")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "RECORD_NOT_FOUND"
+        assert problem["resource"] == "record"
+        assert problem["context"] == {"record_id": 77}
