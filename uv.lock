@@ -3410,7 +3410,7 @@ dev = [
     { name = "hypothesis", specifier = ">=6.0.0" },
     { name = "pip-tools", specifier = ">=7.4.1" },
     { name = "prek", specifier = ">=0.2.28" },
-    { name = "pyrefly", specifier = ">=0.44.0" },
+    { name = "pyrefly", specifier = ">=1.2.0" },
     { name = "pytest", specifier = ">=8.3.5" },
     { name = "pytest-archon", specifier = ">=0.0.6" },
     { name = "pytest-asyncio", specifier = ">=1.0.0" },

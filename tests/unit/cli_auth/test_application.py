@@ -31,6 +31,7 @@ class FakeConsentReader:
         self.current = current
 
     async def has_current_consent(self, account_id: int) -> bool:
+        del account_id
         return self.current
 
 

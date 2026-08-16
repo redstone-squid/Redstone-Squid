@@ -50,7 +50,7 @@ class BuildService:
         """Return every build inferred from one Discord message, newest bundle included."""
         return await self._repository.list_ids_for_source_message(message_id)
 
-    async def submit_door(self, submission: DoorSubmissionInput) -> Build:
+    async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
         build = DoorBuild(
             submitter_id=submission.submitter_id,
             ai_generated=submission.ai_generated,
