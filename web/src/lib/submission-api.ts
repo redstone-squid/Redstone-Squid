@@ -44,17 +44,19 @@ export class SubmissionApiError extends Error {
   readonly problem: ProblemDetail | undefined;
   readonly kind: SubmissionFailureKind;
   readonly networkFailure: boolean;
+  readonly requestId: string | null;
 
   constructor(
     status: number,
     problem?: ProblemDetail,
-    options?: ErrorOptions & { networkFailure?: boolean },
+    options?: ErrorOptions & { networkFailure?: boolean; requestId?: string | null },
   ) {
     super(problem?.detail ?? problem?.title ?? "The submission service did not answer.", options);
     this.name = "SubmissionApiError";
     this.status = status;
     this.problem = problem;
     this.networkFailure = options?.networkFailure ?? false;
+    this.requestId = options?.requestId ?? null;
     this.kind =
       status === 401
         ? "authentication"
@@ -112,6 +114,7 @@ function apiError(result: { error?: unknown; response?: Response }): SubmissionA
   return new SubmissionApiError(result.response?.status ?? problem?.status ?? 503, problem, {
     cause: result.error,
     networkFailure,
+    requestId: result.response?.headers.get("Request-Id") ?? null,
   });
 }
 

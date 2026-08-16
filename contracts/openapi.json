@@ -16940,17 +16940,6 @@
               }
             ],
             "title": "Context"
-          },
-          "error_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Error Id"
           }
         },
         "additionalProperties": false,

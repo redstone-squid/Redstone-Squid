@@ -31,12 +31,18 @@ type ApiResult<T> = { data: T | undefined; error?: unknown; response?: Response 
 export class CatalogueApiError extends Error {
   readonly status: number;
   readonly problem: ProblemDetail | undefined;
+  readonly requestId: string | null;
 
-  constructor(status: number, problem?: ProblemDetail, options?: ErrorOptions) {
+  constructor(
+    status: number,
+    problem?: ProblemDetail,
+    options?: ErrorOptions & { requestId?: string | null },
+  ) {
     super(problem?.detail ?? problem?.title ?? "Catalogue API request failed.", options);
     this.name = "CatalogueApiError";
     this.status = status;
     this.problem = problem;
+    this.requestId = options?.requestId ?? null;
   }
 }
 
@@ -49,7 +55,9 @@ function isProblemDetail(value: unknown): value is ProblemDetail {
 function unwrap<T>(result: ApiResult<T>): T {
   if (result.data !== undefined) return result.data;
   const problem = isProblemDetail(result.error) ? result.error : undefined;
-  throw new CatalogueApiError(result.response?.status ?? problem?.status ?? 503, problem);
+  throw new CatalogueApiError(result.response?.status ?? problem?.status ?? 503, problem, {
+    requestId: result.response?.headers.get("Request-Id") ?? null,
+  });
 }
 
 function timedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
