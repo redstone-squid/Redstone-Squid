@@ -137,7 +137,10 @@ class TagDefinition(Base, kw_only=True):
     render_template: Mapped[str] = mapped_column(Text, nullable=False, default="{name}")
     default_display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
     moderation_status: Mapped[TagModerationStatus] = mapped_column(Text, nullable=False)
-    created_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    created_by_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="tag_definitions_created_by_account_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
@@ -260,7 +263,10 @@ class BuildTagAssignment(Base, kw_only=True):
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     evidence: Mapped[str | None] = mapped_column(Text, default=None)
     provenance: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")
-    created_by_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    created_by_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="build_tag_assignments_created_by_account_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
