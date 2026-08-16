@@ -784,6 +784,19 @@ class LogConfig(_FrozenModel):
     _validate_root_level = field_validator("root_level")(_validate_log_level)
 
 
+class DiagnosticsConfig(_FrozenModel):
+    """Retention and size limits for stored error reports."""
+
+    retention_hours: int = Field(default=168, ge=1, le=8760)
+    """How long a stored error report stays queryable. A week covers the gap between a user
+    hitting an error and a moderator getting around to asking about it."""
+    log_tail_records: int = Field(default=50, ge=0, le=1000)
+    """Log records buffered per correlation ID and attached to a report. Zero disables the
+    buffer entirely, and with it the memory it holds on the logging path."""
+    max_traceback_chars: int = Field(default=20000, ge=1000, le=200000)
+    """Cap on the stored traceback text, so a runaway recursion cannot write an unbounded row."""
+
+
 class LoggingConfig(_FrozenModel):
     """Resolved logging settings for one process."""
 
@@ -792,6 +805,8 @@ class LoggingConfig(_FrozenModel):
     directory: Path
     log_file: str | None
     access_log_file: str | None
+    tail_records: int = 0
+    """Records the correlated log buffer keeps per correlation ID; zero leaves it uninstalled."""
 
 
 class ObservabilityConfig(_FrozenModel):
@@ -935,6 +950,7 @@ class _ProcessSettings(BaseSettings):
     upstream_http: UpstreamHttpConfig = UpstreamHttpConfig()
     log: LogConfig = LogConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
+    diagnostics: DiagnosticsConfig = DiagnosticsConfig()
     strict_unknown_keys: bool = False
     """Reject unknown ``SQUID_*`` names instead of logging and ignoring them."""
 
@@ -997,6 +1013,7 @@ class BotProcessConfig(_ProcessSettings):
             directory=self.log.directory,
             log_file=self.bot.log_file,
             access_log_file=None,
+            tail_records=self.diagnostics.log_tail_records,
         )
 
 
@@ -1029,6 +1046,7 @@ class ApiProcessConfig(_ProcessSettings):
             directory=self.log.directory,
             log_file=self.api.log_file,
             access_log_file=self.api.access_log_file,
+            tail_records=self.diagnostics.log_tail_records,
         )
 
 
@@ -1045,6 +1063,7 @@ class WorkerProcessConfig(_ProcessSettings):
             directory=self.log.directory,
             log_file=self.worker.log_file,
             access_log_file=None,
+            tail_records=self.diagnostics.log_tail_records,
         )
 
 
@@ -1402,6 +1421,7 @@ __all__ = [
     "CatboxConfig",
     "CommunityConfig",
     "DatabaseConfig",
+    "DiagnosticsConfig",
     "EmbeddingConfig",
     "GoogleConfig",
     "IdempotencyEncryptionConfig",

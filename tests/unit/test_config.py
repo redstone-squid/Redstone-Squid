@@ -409,6 +409,37 @@ def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
     assert config.duplicate_total_timeout_seconds == 12
 
 
+def test_diagnostics_settings_load_from_flat_environment_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_DIAGNOSTICS_RETENTION_HOURS="24",
+        SQUID_DIAGNOSTICS_LOG_TAIL_RECORDS="7",
+        SQUID_DIAGNOSTICS_MAX_TRACEBACK_CHARS="5000",
+    )
+
+    config = load_bot_process_config()
+
+    assert config.diagnostics.retention_hours == 24
+    assert config.diagnostics.max_traceback_chars == 5000
+    # The logging projection carries the tail size, since the buffer is a logging handler.
+    assert config.logging.tail_records == 7
+
+
+def test_diagnostics_retention_rejects_a_zero_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zero retention would store every report and immediately make it unreadable."""
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_DIAGNOSTICS_RETENTION_HOURS="0",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "diagnostics.retention_hours" for issue in _issues(exc_info.value))
+
+
 def test_schematic_render_settings_load_from_flat_environment_names(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
