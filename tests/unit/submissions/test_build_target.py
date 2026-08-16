@@ -170,7 +170,7 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
     assert result.target_key == TARGET_KEY
     assert arguments["submitter_account_id"] == 17
     assert arguments["source_submission_draft_id"] == DRAFT_ID
-    assert build.submitter_id is None
+    assert build.submitter_discord_id is None
     assert build.category is build_category
     assert build.display_name == "Workshop prototype"
     assert build.dimensions == (8, 9, 10)

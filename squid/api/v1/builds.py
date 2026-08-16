@@ -65,10 +65,10 @@ async def submit_build(
     if submission.category.casefold() != "door":
         msg = "Only door submissions are supported."
         raise InvalidBuildError(msg, public_context={"category": submission.category})
-    assert caller.discord_id is not None
+    assert caller.account_id is not None  # `_require_consented_user` rejects a caller without one
     build = await builds.submit_door(
         DoorSubmissionInput(
-            submitter_id=caller.discord_id,
+            submitter_account_id=caller.account_id,
             door_size=submission.door_size,
             pattern=tuple(submission.pattern),
             door_type=submission.door_type,
@@ -110,7 +110,7 @@ async def edit_build(
     """Edit an owned pending build, or any build with `build.submission.edit`."""
     _require_consented_user(caller)
     build = await builds.apply_edit(
-        BuildEditor(subject=subject_for(caller), discord_id=caller.discord_id),
+        BuildEditor(subject=subject_for(caller)),
         build_id,
         BuildEditPatch.from_attributes(changes.edit_attributes()),
         expected_revision=_expected_revision(build_id, if_match),
@@ -194,7 +194,6 @@ async def list_builds(
         await _require_pending_view(permissions, caller)
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
-        submitter_id=None,
         sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
         selector=selector,
         page_size=page_size,
