@@ -43,5 +43,5 @@ deleting coverage.
   coverage of a named product invariant.
 - Run architecture tests after fixture/import-surface changes and `alembic heads` plus migration
   integration tests after migration-harness changes.
-- Run changed-file Ruff and BasedPyright checks and `git diff --check` before each reviewable
-  commit.
+- Run changed-file Ruff, `just typecheck` (pyrefly), and `git diff --check` before each
+  reviewable commit.

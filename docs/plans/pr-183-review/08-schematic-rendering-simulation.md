@@ -77,3 +77,6 @@ sweep hidden inside this one.
   1977 passed.
 - Changed-file Ruff via the commit hooks, plus `git diff --check`. No persistence structure changes,
   so no `alembic heads` run.
+- `just typecheck`: 17 errors, all in `tests/*/accounts/` and `tests/unit/persistence/` from
+  `ee0d2ec1`, none in files this plan touched. The two it did find here are fixed in `8f715f74`:
+  `TaskGroup.start_soon` wants a callable returning a `Coroutine`, not an `Awaitable`.
