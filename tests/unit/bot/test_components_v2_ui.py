@@ -207,6 +207,18 @@ def test_submission_requires_only_type_and_opening_size() -> None:
     assert form.is_ready is True
 
 
+def test_change_markers_differ_only_by_fill(display_build: Build) -> None:
+    """A changed field must read as more prominent, which a smaller BULLET glyph undid."""
+    unchanged = get_text_input(display_build, "width")
+    changed = get_text_input(display_build, "height")
+    changed.modified = True
+    view = BuildEditView(display_build, cast(BuildService, object()), [unchanged, changed])
+
+    markers = [line[0] for line in view.summary_text().splitlines()]
+
+    assert markers == ["○", "●"]
+
+
 def test_optional_edit_field_is_not_marked_required(display_build: Build) -> None:
     field = get_text_input(display_build, "version_spec")
 
