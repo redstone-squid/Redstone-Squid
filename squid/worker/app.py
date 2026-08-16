@@ -14,7 +14,7 @@ from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_w
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
-from squid.runtime import BackgroundTaskSupervisor, WorkerServices
+from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
@@ -173,6 +173,11 @@ class DatabaseWorker:
             interval=self._config.keepalive_interval_seconds,
             run_immediately=False,
         )
+
+    @property
+    def supervisor(self) -> BackgroundTaskSupervisor:
+        """The task group owner, so `main` can attach process-level jobs to it."""
+        return self._supervisor
 
     async def close(self) -> None:
         """Stop and await every worker job before application resources close."""
@@ -368,6 +373,12 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
             # task, so it is held here rather than inside DatabaseWorker.
             async with worker.running():
                 worker.start()
+                start_log_capture(
+                    worker.supervisor,
+                    runtime.services.error_reports,
+                    enabled=resolved_config.diagnostics.capture_logged_errors,
+                    capacity=resolved_config.diagnostics.log_capture_queue,
+                )
                 try:
                     async with ProcessHealthServer(worker_ready, port=resolved_config.worker.health_port):
                         await stop.wait()

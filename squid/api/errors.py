@@ -26,6 +26,7 @@ from squid.core.errors import (
     ValidationError,
 )
 from squid.core.i18n import _, translate
+from squid.diagnostics.log_capture import captured
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,7 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
         exc.code,
         exc.context,
         exc_info=exc,
+        extra=captured(),
     )
     service_unavailable = isinstance(exc, ServiceUnavailableError)
     return _problem_response(
@@ -277,7 +279,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     locale = locale_for_request(request)
     request_id = correlation_id()
     await _capture(request, exc, request_id)
-    logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc)
+    logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc, extra=captured())
     return _problem_response(
         ProblemDetail(
             title=translate(locale, _("Internal server error")),
