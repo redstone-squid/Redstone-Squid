@@ -52,7 +52,7 @@ export const verificationCreate = <ThrowOnError extends boolean = false>(options
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -80,7 +80,7 @@ export const verificationCreateCompatibility = <ThrowOnError extends boolean = f
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -134,7 +134,7 @@ export const browserSessionRevoke = <ThrowOnError extends boolean = false>(optio
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/auth/logout',
     ...options
 });
@@ -172,7 +172,7 @@ export const buildsCreate = <ThrowOnError extends boolean = false>(options: Opti
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/builds',
     ...options,
     headers: {
@@ -198,7 +198,7 @@ export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Opti
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/builds/{build_id}',
     ...options,
     headers: {
@@ -267,7 +267,7 @@ export const cliEnrollmentApprove = <ThrowOnError extends boolean = false>(optio
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/cli/auth/enrollments/approval',
     ...options,
     headers: {
@@ -329,7 +329,7 @@ export const cliDeviceRevoke = <ThrowOnError extends boolean = false>(options: O
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/cli/auth/devices/{device_id}',
     ...options
 });
@@ -374,7 +374,7 @@ export const accountConsentGrant = <ThrowOnError extends boolean = false>(option
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/consent',
     ...options
 });
@@ -422,7 +422,7 @@ export const paperInstallationCreate = <ThrowOnError extends boolean = false>(op
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations',
     ...options,
     headers: {
@@ -441,7 +441,7 @@ export const paperInstallationRotate = <ThrowOnError extends boolean = false>(op
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}/rotate',
     ...options
 });
@@ -456,7 +456,7 @@ export const paperInstallationProfileUpdate = <ThrowOnError extends boolean = fa
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}/profile',
     ...options,
     headers: {
@@ -475,7 +475,7 @@ export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(op
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}',
     ...options
 });
@@ -548,7 +548,7 @@ export const minecraftChallengeApprove = <ThrowOnError extends boolean = false>(
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/challenges/approval',
     ...options,
     headers: {
@@ -567,7 +567,7 @@ export const minecraftGrantRevoke = <ThrowOnError extends boolean = false>(optio
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/grants/{grant_id}',
     ...options
 });
@@ -597,7 +597,7 @@ export const notificationPreferencesUpdate = <ThrowOnError extends boolean = fal
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/preferences',
     ...options,
     headers: {
@@ -616,7 +616,7 @@ export const notificationConsentGrant = <ThrowOnError extends boolean = false>(o
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/consent',
     ...options,
     headers: {
@@ -650,7 +650,7 @@ export const notificationSubscriptionCreate = <ThrowOnError extends boolean = fa
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/subscriptions',
     ...options,
     headers: {
@@ -669,7 +669,7 @@ export const notificationSubscriptionDelete = <ThrowOnError extends boolean = fa
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/subscriptions/{subscription_id}',
     ...options
 });
@@ -699,7 +699,7 @@ export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/inbox/{notification_id}/read',
     ...options
 });
@@ -799,7 +799,7 @@ export const submissionDraftCreate = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -852,7 +852,7 @@ export const submissionDraftDelete = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -907,7 +907,7 @@ export const submissionDraftChange = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -966,7 +966,7 @@ export const submissionFinalizationStart = <ThrowOnError extends boolean = false
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -995,7 +995,7 @@ export const submissionMediaUpload = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -1054,7 +1054,7 @@ export const submissionMediaDiscard = <ThrowOnError extends boolean = false>(opt
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -1183,7 +1183,7 @@ export const voteCast = <ThrowOnError extends boolean = false>(options: Options<
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/vote-sessions/{vote_session_id}/votes',
     ...options,
     headers: {

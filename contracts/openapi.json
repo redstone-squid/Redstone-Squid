@@ -18689,7 +18689,7 @@
       "CsrfToken": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-CSRF-Token"
+        "name": "CSRF-Token"
       },
       "DeviceSession": {
         "type": "http",
