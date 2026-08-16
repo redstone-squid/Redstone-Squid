@@ -3,9 +3,17 @@
 import uuid
 from typing import Any, cast
 
+import pytest
+
 from squid.artifacts import ArtifactMetadata
 from squid.schematics.application import ClaimedRenderJob
-from squid.schematics.application.queries import PreparedRender
+from squid.schematics.application.queries import (
+    CachedRender,
+    FreshRender,
+    RenderPreparation,
+    RenderSkipReason,
+    SkippedRender,
+)
 from squid.worker.rendering import SchematicRenderProjector
 
 PNG = b"\x89PNG\r\n\x1a\npreview"
@@ -31,30 +39,29 @@ class FakeJobs:
 
 
 class FakeSchematics:
-    def __init__(self, prepared: PreparedRender | Exception, *, current: bool = True) -> None:
+    def __init__(self, prepared: RenderPreparation | Exception, *, current: bool = True) -> None:
         self.prepared = prepared
         self.current = current
-        self.recorded: list[tuple[PreparedRender, str, str]] = []
-        self.projected: list[PreparedRender] = []
+        self.recorded: list[tuple[FreshRender, str, str]] = []
+        self.projected: list[CachedRender] = []
         self.published_urls: list[str] = []
 
-    async def prepare_render(self, _build_id: int) -> PreparedRender | None:
+    async def prepare_render(self, _build_id: int) -> RenderPreparation:
         if isinstance(self.prepared, Exception):
             raise self.prepared
         return self.prepared
 
-    async def record_render(self, render: PreparedRender, url: str, object_key: str) -> object | None:
+    async def record_render(self, render: FreshRender, url: str, object_key: str) -> object | None:
         self.recorded.append((render, url, object_key))
         if not self.current:
             return None
         self.published_urls[:] = [url]
         return object()
 
-    async def project_render(self, render: PreparedRender) -> bool:
+    async def project_render(self, render: CachedRender) -> bool:
         self.projected.append(render)
         if self.current:
-            assert render.cached_url is not None
-            self.published_urls[:] = [render.cached_url]
+            self.published_urls[:] = [render.url]
         return self.current
 
 
@@ -70,7 +77,7 @@ class FakeArtifacts:
 async def test_fresh_render_is_published_and_projected_onto_build() -> None:
     job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
-    schematics = FakeSchematics(PreparedRender(3, RECIPE_HASH, 768, 768, png=PNG))
+    schematics = FakeSchematics(FreshRender(3, RECIPE_HASH, 768, 768, PNG))
     artifacts = FakeArtifacts()
     projector = SchematicRenderProjector(
         cast(Any, jobs),
@@ -111,7 +118,7 @@ async def test_render_failure_is_released_for_retry() -> None:
 async def test_replaced_primary_cannot_publish_its_completed_render() -> None:
     job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
-    schematics = FakeSchematics(PreparedRender(3, RECIPE_HASH, 768, 768, png=PNG), current=False)
+    schematics = FakeSchematics(FreshRender(3, RECIPE_HASH, 768, 768, PNG), current=False)
     projector = SchematicRenderProjector(
         cast(Any, jobs),
         cast(Any, schematics),
@@ -130,7 +137,7 @@ async def test_cached_render_is_rechecked_before_projection() -> None:
     job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     cached_url = f"https://api.example/v1/schematic-renders/{RECIPE_HASH}/content"
-    prepared = PreparedRender(3, RECIPE_HASH, 768, 768, cached_url=cached_url)
+    prepared = CachedRender(3, RECIPE_HASH, 768, 768, cached_url)
     schematics = FakeSchematics(prepared, current=False)
     artifacts = FakeArtifacts()
     projector = SchematicRenderProjector(
@@ -147,6 +154,30 @@ async def test_cached_render_is_rechecked_before_projection() -> None:
     assert schematics.published_urls == []
     assert artifacts.puts == []
     assert jobs.completed == [job]
+
+
+@pytest.mark.parametrize("reason", list(RenderSkipReason))
+async def test_a_permanent_skip_acknowledges_the_intent_instead_of_retrying(reason: RenderSkipReason) -> None:
+    """Retrying a build that will never render only burns the job's attempts."""
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
+    jobs = FakeJobs(job)
+    schematics = FakeSchematics(SkippedRender(reason))
+    artifacts = FakeArtifacts()
+    projector = SchematicRenderProjector(
+        cast(Any, jobs),
+        cast(Any, schematics),
+        cast(Any, artifacts),
+        "https://api.example",
+        enabled=True,
+    )
+
+    await projector.process_batch()
+
+    assert artifacts.puts == []
+    assert schematics.recorded == []
+    assert schematics.projected == []
+    assert jobs.completed == [job]
+    assert jobs.failed == []
 
 
 async def test_disabled_rendering_leaves_durable_intents_unclaimed() -> None:
