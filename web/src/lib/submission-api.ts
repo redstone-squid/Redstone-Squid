@@ -145,6 +145,19 @@ function mutationHeaders(csrf: string, idempotencyKey?: string): Record<string, 
   };
 }
 
+/**
+ * Where to send a browser to log in.
+ *
+ * `/v1/auth/{provider}` is templated server-side, and `"discord"` is one instance of the
+ * template rather than a special case -- adding a second provider is a caller passing a
+ * different slug, not another URL builder. This used to be three identical copies.
+ */
+function signInUrl(config: RuntimeConfig, returnTo: string, provider = "discord"): string {
+  const url = new URL(`${config.apiBaseUrl}/v1/auth/${provider}`);
+  url.searchParams.set("redirect_to", returnTo);
+  return url.toString();
+}
+
 function requestId(): string {
   return crypto.randomUUID();
 }
@@ -335,11 +348,7 @@ export function createSubmissionApi(
           path: { draft_id: draftId },
         }),
       ),
-    signInUrl: (returnTo) => {
-      const url = new URL(`${config.apiBaseUrl}/v1/auth/discord`);
-      url.searchParams.set("redirect_to", returnTo);
-      return url.toString();
-    },
+    signInUrl: (returnTo) => signInUrl(config, returnTo),
   };
 }
 
@@ -369,11 +378,7 @@ export function createMinecraftLinkApi(
         return await request();
       }
     },
-    signInUrl: (returnTo) => {
-      const url = new URL(`${config.apiBaseUrl}/v1/auth/discord`);
-      url.searchParams.set("redirect_to", returnTo);
-      return url.toString();
-    },
+    signInUrl: (returnTo) => signInUrl(config, returnTo),
   };
 }
 
@@ -410,11 +415,7 @@ export function createCliLinkApi(
         return await request();
       }
     },
-    signInUrl: (returnTo) => {
-      const url = new URL(`${config.apiBaseUrl}/v1/auth/discord`);
-      url.searchParams.set("redirect_to", returnTo);
-      return url.toString();
-    },
+    signInUrl: (returnTo) => signInUrl(config, returnTo),
   };
 }
 
