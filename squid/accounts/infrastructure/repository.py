@@ -43,6 +43,17 @@ from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
 
 
+def _now() -> Instant:
+    """The current instant at the precision `timestamptz` actually keeps.
+
+    `Instant.now()` carries nanoseconds and the column carries microseconds, so an unfloored
+    value makes an object built from it disagree with the row it was just written to. Every
+    timestamp this module stores goes through here, so an in-memory value and its persisted
+    form are the same value.
+    """
+    return Instant.now().round("microsecond", mode="floor")
+
+
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
     return AccountIdentity(
         id=model.id,
@@ -173,7 +184,7 @@ class AccountRepository:
                     account_id=candidate.id,
                     provider=identity.provider,
                     subject=identity.subject,
-                    verified_at=Instant.now(),
+                    verified_at=_now(),
                 )
                 .on_conflict_do_nothing(index_elements=[AccountIdentityModel.provider, AccountIdentityModel.subject])
                 .returning(AccountIdentityModel.id)
@@ -297,7 +308,7 @@ class AccountRepository:
                     CreatorAliasModel.normalized_name == fold_creator_name(name),
                     CreatorAliasModel.account_id.is_(None),
                 )
-                .values(account_id=account_id, claimed_at=Instant.now(), claim_method=method)
+                .values(account_id=account_id, claimed_at=_now(), claim_method=method)
                 .returning(CreatorAliasModel)
             )
             public_id = await session.scalar(
@@ -395,10 +406,10 @@ class AccountRepository:
                 if alias.account_id is not None and not (reassign and alias.account_id != claim.account_id):
                     raise AliasAlreadyClaimedError(alias.name)
                 alias.account_id = claim.account_id
-                alias.claimed_at = Instant.now()
+                alias.claimed_at = _now()
                 alias.claim_method = ClaimMethod.STAFF_APPROVED
             claim.status = status
-            claim.resolved_at = Instant.now()
+            claim.resolved_at = _now()
             claim.resolved_by_account_id = resolved_by_account_id
             await session.flush()
             return _to_claim(claim, alias.name)
@@ -457,9 +468,7 @@ class AccountRepository:
                 session.add(discord_account)
                 await session.flush()
                 session.add(
-                    self._identity_model(
-                        discord_account.id, AccountIdentity.discord(discord_id, verified_at=Instant.now())
-                    )
+                    self._identity_model(discord_account.id, AccountIdentity.discord(discord_id, verified_at=_now()))
                 )
             previous_name = None
             if existing_java is None:
@@ -469,14 +478,14 @@ class AccountRepository:
                         AccountIdentity.java(
                             verification_code.minecraft_uuid,
                             username=verification_code.username,
-                            verified_at=Instant.now(),
+                            verified_at=_now(),
                         ),
                     )
                 )
             else:
                 previous_name = existing_java.display_name
                 existing_java.display_name = verification_code.username
-                existing_java.verified_at = Instant.now()
+                existing_java.verified_at = _now()
             discord_account.consent_version = consent.version
             discord_account.consented_at = consent.granted_at
             verification_code.valid = False
@@ -524,7 +533,7 @@ class AccountRepository:
                 raise MinecraftAccountNotFoundError(java_uuid)
             previous_name = identity.display_name
             identity.display_name = username
-            identity.verified_at = Instant.now()
+            identity.verified_at = _now()
             return await self._reconcile_java_name(
                 session,
                 account=account,
@@ -567,7 +576,7 @@ class AccountRepository:
                 .values(
                     name=username,
                     account_id=account.id,
-                    claimed_at=Instant.now(),
+                    claimed_at=_now(),
                     claim_method=ClaimMethod.VERIFIED_IGN,
                 )
                 .on_conflict_do_nothing(index_elements=[CreatorAliasModel.normalized_name])
@@ -579,7 +588,7 @@ class AccountRepository:
             assert alias is not None
         if alias.account_id is None:
             alias.account_id = account.id
-            alias.claimed_at = Instant.now()
+            alias.claimed_at = _now()
             alias.claim_method = ClaimMethod.VERIFIED_IGN
             claimed = _to_alias(alias, account.public_creator_id)
         elif alias.account_id == account.id:
@@ -659,10 +668,7 @@ class AccountRepository:
             provider=identity.provider,
             subject=identity.subject,
             display_name=identity.display_name,
-            # Floored to the precision the column actually keeps. `Instant.now()` carries
-            # nanoseconds and `timestamptz` carries microseconds, so an unfloored value would
-            # make the returned object disagree with the row it just wrote, by up to 999ns.
-            verified_at=(identity.verified_at or Instant.now()).round("microsecond", mode="floor"),
+            verified_at=identity.verified_at or _now(),
         )
 
     @staticmethod
@@ -845,7 +851,7 @@ async def _canonicalize_finalization_job_owners(
             )
         ).all()
     )
-    rewritten_at = Instant.now()
+    rewritten_at = _now()
     for job in jobs:
         payload = job.payload
         if not isinstance(payload, dict):
