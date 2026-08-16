@@ -133,7 +133,7 @@ def test_cookie_authenticated_write_rejects_mismatched_csrf_header(mocker: Mocke
     with TestClient(app, base_url="https://testserver") as session_client:
         session_client.cookies.set("__Host-squid_session", "session-token")
         session_client.cookies.set("squid_csrf", "csrf-token")
-        response = session_client.post("/v1/auth/logout", headers={"X-CSRF-Token": "wrong-token"})
+        response = session_client.post("/v1/auth/logout", headers={"CSRF-Token": "wrong-token"})
 
     assert database.closed
     assert response.status_code == 403
@@ -156,7 +156,7 @@ def test_cookie_authenticated_write_accepts_matching_csrf_header(mocker: MockerF
     with TestClient(app, base_url="https://testserver") as session_client:
         session_client.cookies.set("__Host-squid_session", "session-token")
         session_client.cookies.set("squid_csrf", "csrf-token")
-        response = session_client.post("/v1/auth/logout", headers={"X-CSRF-Token": "csrf-token"})
+        response = session_client.post("/v1/auth/logout", headers={"CSRF-Token": "csrf-token"})
 
     assert database.closed
     assert response.status_code == 204

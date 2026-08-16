@@ -140,7 +140,7 @@ function csrfToken(cookie = typeof document === "undefined" ? "" : document.cook
 
 function mutationHeaders(csrf: string, idempotencyKey?: string): Record<string, string> {
   return {
-    "X-CSRF-Token": csrf,
+    "CSRF-Token": csrf,
     ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
   };
 }

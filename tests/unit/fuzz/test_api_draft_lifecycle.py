@@ -101,7 +101,7 @@ def test_alice_web_auth_uses_seeded_session_and_double_submit_csrf() -> None:
     auth = DraftWebAuth.alice(seeded_ids())
 
     assert auth.cookies == {"__Host-squid_session": "alice-session", "squid_csrf": DEFAULT_CSRF_TOKEN}
-    assert auth.write_headers == {"X-CSRF-Token": DEFAULT_CSRF_TOKEN}
+    assert auth.write_headers == {"CSRF-Token": DEFAULT_CSRF_TOKEN}
     assert "alice-session" not in repr(auth)
 
 

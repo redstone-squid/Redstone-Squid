@@ -371,7 +371,7 @@ def _postprocess(document: dict[str, Any]) -> None:
     components["securitySchemes"] = {
         "ApiCredential": {"type": "apiKey", "in": "header", "name": "Authorization"},
         "WebSession": {"type": "apiKey", "in": "cookie", "name": "__Host-squid_session"},
-        "CsrfToken": {"type": "apiKey", "in": "header", "name": "X-CSRF-Token"},
+        "CsrfToken": {"type": "apiKey", "in": "header", "name": "CSRF-Token"},
         "DeviceSession": {"type": "http", "scheme": "bearer", "bearerFormat": "Squid CLI session"},
         "MinecraftPlayer": {"type": "http", "scheme": "bearer", "bearerFormat": "Squid player grant"},
         "PaperInstallationId": {"type": "apiKey", "in": "header", "name": "X-Squid-Installation-ID"},

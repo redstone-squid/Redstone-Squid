@@ -121,7 +121,7 @@ async def current_principal(
             raise AuthenticationError
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             csrf_cookie = request.cookies.get("squid_csrf")
-            csrf_header = request.headers.get("X-CSRF-Token")
+            csrf_header = request.headers.get("CSRF-Token")
             if csrf_cookie is None or csrf_header is None or not hmac.compare_digest(csrf_cookie, csrf_header):
                 raise AuthorizationError
         return Principal(
