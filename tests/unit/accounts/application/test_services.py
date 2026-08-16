@@ -113,6 +113,11 @@ class FakeAccountRepository:
     async def get_by_id(self, account_id: int) -> Account | None:
         return self.accounts.get(account_id)
 
+    async def get_many(self, account_ids: Sequence[int]) -> dict[int, Account]:
+        return {
+            account_id: account for account_id in account_ids if (account := self.accounts.get(account_id)) is not None
+        }
+
     async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
         return await self.get_by_identity(provider, subject) or self.seed_account(int(subject), provider=provider)
 
