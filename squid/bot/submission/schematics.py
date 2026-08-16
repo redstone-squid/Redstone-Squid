@@ -22,7 +22,13 @@ from squid.bot.utils.permissions import requires
 from squid.builds.application import BuildService
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DETECT_LATTICE, BUILD_SCHEMATIC_MEASURE_TIMING
-from squid.schematics.application import ConvertRequest, SchematicService, StoredSchematic, summarise_losses
+from squid.schematics.application import (
+    ConvertRequest,
+    RenderSkipReason,
+    SchematicService,
+    StoredSchematic,
+    summarise_losses,
+)
 from squid.schematics.domain.models import AutostackLattice, SchematicFormat, SimulationResult, Vector3
 
 if TYPE_CHECKING:
@@ -65,7 +71,11 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         if stored is None:
             return
         await ctx.send(
-            view=StaticLayout(discord.ui.TextDisplay(_describe(stored, locale=locale))),
+            view=StaticLayout(
+                discord.ui.TextDisplay(
+                    _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
+                )
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -211,7 +221,7 @@ async def _say(ctx: Context[squid.bot.app.RedstoneSquid], message: str, *, ephem
     await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
 
 
-def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
+def _describe(stored: StoredSchematic, *, locale: str | None, render_skip: RenderSkipReason | None = None) -> str:
     """Render the analysis as a readable card body."""
     metrics = stored.analysis.metrics
     dimensions = metrics.dimensions
@@ -245,6 +255,10 @@ def _describe(stored: StoredSchematic, *, locale: str | None) -> str:
     if metrics.signs:
         joined = " / ".join(sign.text.replace("\n", " ") for sign in metrics.signs[:5])
         lines.append(t(locale, _("**Signs**: {text}"), text=joined))
+    if render_skip is not None:
+        # "There is no preview" is otherwise indistinguishable from "the preview has not been
+        # generated yet", and the two call for completely different responses from a moderator.
+        lines.append(t(locale, _("**No preview**: {reason}"), reason=t(locale, render_skip.description)))
     # Stated on the card because the two numbers are easy to confuse and one of them decides
     # official records: cumulative volume has hallway, frame, and hitbox exceptions that no
     # static read of a file can apply.
