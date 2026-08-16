@@ -340,7 +340,7 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
     __tablename__ = "record_recompute_queue"
     __table_args__ = (
         UniqueConstraint("scope_key", name="record_recompute_queue_scope_key_key"),
-        Index("record_recompute_queue_ready_idx", "enqueued_at", postgresql_where=text("locked_at IS NULL")),
+        Index("record_recompute_queue_ready_idx", "available_at", postgresql_where=text("locked_at IS NULL")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -357,8 +357,18 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+    available_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    """When this row next becomes claimable, and the only column backoff writes."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    """The database-minted fencing token handed to the worker that leased this scope.
+
+    Scopes are leased in batches and acknowledged as a set, so the token is what
+    tells a finishing worker's acknowledgement from work enqueued during its run.
+    """
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
