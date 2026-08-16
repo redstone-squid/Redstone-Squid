@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from tests.fuzz.api.environment import CONTROL_NONCE_ENV, FAKE_BIND_HOST_ENV, FAKE_PORT_ENV
 
-CONTROL_HEADER = "X-Squid-Fuzz-Nonce"
+CONTROL_HEADER = "Squid-Fuzz-Nonce"
 
 MINECRAFT_ALICE = "00000000-0000-0000-0000-000000000101"
 DISCORD_ALICE = 1001
