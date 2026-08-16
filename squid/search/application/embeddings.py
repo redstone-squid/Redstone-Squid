@@ -1,12 +1,12 @@
 """Durable search-embedding application coordination."""
 
 import asyncio
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 import anyio
-from whenever import Instant
 
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
 """Backstop for one embedding call, sized above the OpenAI adapter's own budget.
@@ -33,7 +33,8 @@ class SearchEmbeddingJob:
     source_hash: str
     text: str
     attempts: int
-    claimed_at: Instant
+    claim_token: uuid.UUID
+    """The database-minted fence this worker's acknowledgement must still match."""
 
 
 class SearchEmbeddingQueue(Protocol):

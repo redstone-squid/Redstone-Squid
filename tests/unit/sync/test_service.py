@@ -1,9 +1,9 @@
 """Discord reconciliation application service tests."""
 
+import uuid
 from unittest.mock import AsyncMock
 
 import pytest
-from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
 from squid.sync import (
@@ -15,7 +15,7 @@ from squid.sync import (
 from squid.sync.infrastructure.models import DiscordSyncQueueItem
 from squid.sync.infrastructure.repository import _job as map_row
 
-CLAIMED_AT = Instant.from_utc(2026, 8, 5)
+CLAIM_TOKEN = uuid.UUID("00000000-0000-4000-8000-000000000001")
 
 
 def _job() -> ReconciliationJob:
@@ -26,7 +26,7 @@ def _job() -> ReconciliationJob:
         ReconciliationAction.REFRESH,
         1,
         0,
-        CLAIMED_AT,
+        CLAIM_TOKEN,
     )
 
 
@@ -70,12 +70,12 @@ class TestRowMapping:
         return row
 
     def test_a_valid_row_becomes_a_typed_job(self) -> None:
-        job = map_row(self._row(action="delete"), CLAIMED_AT)
+        job = map_row(self._row(action="delete"), CLAIM_TOKEN)
 
         assert job.resource_kind is ReconciliationResource.BUILD
         assert job.action is ReconciliationAction.DELETE
         assert job.generation == 9
-        assert job.claimed_at == CLAIMED_AT
+        assert job.claim_token == CLAIM_TOKEN
 
     @pytest.mark.parametrize(
         ("resource_kind", "action"),
@@ -85,7 +85,7 @@ class TestRowMapping:
         """A cast let such a row reach the reconciler looking valid and fail
         somewhere else entirely."""
         with pytest.raises(DataIntegrityError) as raised:
-            map_row(self._row(resource_kind=resource_kind, action=action), CLAIMED_AT)
+            map_row(self._row(resource_kind=resource_kind, action=action), CLAIM_TOKEN)
 
         assert raised.value.context["id"] == 1
 
