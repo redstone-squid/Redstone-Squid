@@ -12,7 +12,7 @@ from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, ExtenderDetails, GeneralDetails
 from squid.builds.domain import Build, DoorBuild, ExtenderBuild, MediaTypeLiteral, Status, UtilityBuild
 from squid.core.errors import DataIntegrityError
-from squid.records.application.models import ActiveRecord
+from squid.records.application.models import PublishedRecord
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
@@ -54,8 +54,8 @@ def catalogue_build(build_id: int, **changes: Any) -> Build:
     return build
 
 
-def active_record(*holder_build_ids: int) -> ActiveRecord:
-    return ActiveRecord(
+def published_record(*holder_build_ids: int) -> PublishedRecord:
+    return PublishedRecord(
         id=7,
         definition_id=3,
         competition_id=UUID("22222222-2222-2222-2222-222222222222"),
@@ -160,7 +160,7 @@ def test_build_detail_exposes_only_the_immutable_public_sponsor_projection() -> 
 
 @pytest.mark.asyncio
 async def test_record_detail_hydrates_holders_in_record_order() -> None:
-    record = active_record(41, 42)
+    record = published_record(41, 42)
     records = SimpleNamespace(get=AsyncMock(return_value=record))
     build_queries = SimpleNamespace(get_many=AsyncMock(return_value=[catalogue_build(42), catalogue_build(41)]))
 
@@ -180,7 +180,7 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
     ],
 )
 async def test_record_detail_rejects_unavailable_or_non_public_holders(available: list[Build]) -> None:
-    records = SimpleNamespace(get=AsyncMock(return_value=active_record(41, 42)))
+    records = SimpleNamespace(get=AsyncMock(return_value=published_record(41, 42)))
     build_queries = SimpleNamespace(get_many=AsyncMock(return_value=available))
 
     with pytest.raises(DataIntegrityError) as exc_info:
