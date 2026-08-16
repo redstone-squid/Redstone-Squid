@@ -54,6 +54,31 @@ async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -
 
 
 @pytest.mark.asyncio
+async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
+    """Refused before: the gate demanded a snowflake nothing on this path used."""
+    session = snapshot()
+    actor = VoteActor(1, 7, guild_id=10, role_ids=frozenset({99}))
+    votes = SimpleNamespace(
+        get_session_by_id=AsyncMock(return_value=session),
+        cast_vote_by_session=AsyncMock(return_value=CastVoteResult(session)),
+    )
+    members = SimpleNamespace(member=AsyncMock(return_value=actor))
+    cli = Caller(
+        kind="cli",
+        subject="account:1",
+        nodes=credential_nodes("vote.poll.cast"),
+        account_id=1,
+    )
+
+    response = await cast_vote(
+        12, VoteInput(guild_id=10, option_id="approve"), cast(Any, votes), cast(Any, members), cli
+    )
+
+    assert response.id == 12
+    votes.cast_vote_by_session.assert_awaited_once_with(12, actor, "approve")
+
+
+@pytest.mark.asyncio
 async def test_service_credentials_cannot_cast_ballots() -> None:
     service = Caller(kind="service", subject="api-key:test", nodes=credential_nodes("vote.poll.cast"))
 
