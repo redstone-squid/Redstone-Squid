@@ -20,6 +20,7 @@ async def test_worker_schedules_and_invokes_bounded_draft_expiry() -> None:
         record_queue_health=AsyncMock(),
         purge_idempotency=AsyncMock(return_value=0),
         expire_submission_drafts=AsyncMock(return_value=2),
+        error_reports=Mock(),
     )
     supervisor = Mock()
     worker = DatabaseWorker(
