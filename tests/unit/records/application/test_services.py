@@ -5,10 +5,10 @@ from decimal import Decimal
 import pytest
 
 from squid.records.application.models import (
-    ActiveRecord,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
+    PublishedRecord,
     RecordGap,
     RecordLookupRequest,
     RecordSourceCandidate,
@@ -43,7 +43,7 @@ class FakeRuns:
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
         self.current_version_id: int | None = None
-        self.active_records: dict[int, ActiveRecord] = {}
+        self.published_records: dict[int, PublishedRecord] = {}
 
     async def active_ruleset_id(self) -> int:
         return 7
@@ -61,10 +61,10 @@ class FakeRuns:
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         return self.title_gap_rows
 
-    async def get_active_record(self, result_id: int) -> ActiveRecord | None:
-        return self.active_records.get(result_id)
+    async def get_published_record(self, result_id: int) -> PublishedRecord | None:
+        return self.published_records.get(result_id)
 
-    async def list_active_records(
+    async def list_published_records(
         self,
         *,
         offset: int = 0,
@@ -72,17 +72,17 @@ class FakeRuns:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-    ) -> Sequence[ActiveRecord]:
-        ordered = sorted(self.active_records, reverse=descending)
+    ) -> Sequence[PublishedRecord]:
+        ordered = sorted(self.published_records, reverse=descending)
         if before_id is not None:
             kept = [rid for rid in ordered if (rid > before_id if descending else rid < before_id)]
-            return tuple(self.active_records[rid] for rid in kept[-limit:])
+            return tuple(self.published_records[rid] for rid in kept[-limit:])
         if after_id is not None:
             ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
-        return tuple(self.active_records[rid] for rid in ordered[offset : offset + limit])
+        return tuple(self.published_records[rid] for rid in ordered[offset : offset + limit])
 
-    async def count_active_records(self) -> int:
-        return len(self.active_records)
+    async def count_published_records(self) -> int:
+        return len(self.published_records)
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
