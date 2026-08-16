@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
 from squid.records.infrastructure.models import RecordCompetition, RecordDefinition
 from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
@@ -232,11 +233,12 @@ class PostgresSuggestionRepository:
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
         """Return credited creator names and whether each has been claimed by an account."""
         statement = select(CreatorAlias.name, CreatorAlias.account_id)
-        terms = query.strip().casefold()
+        # Folded the same way the stored column is, so a prefix typed in any case or
+        # compatibility form matches. Anchored on `normalized_name`, which the unique index
+        # and the `text_pattern_ops` prefix index are both built on.
+        terms = fold_creator_name(query)
         if terms:
-            # Anchored on the generated `normalized_name` column, which is what the unique index
-            # is built on, so a prefix match can use it.
-            statement = statement.where(CreatorAlias.normalized_name.startswith(terms))
+            statement = statement.where(CreatorAlias.normalized_name.startswith(terms, autoescape=True))
         statement = statement.order_by(CreatorAlias.normalized_name).limit(limit)
         async with self._session_factory() as session:
             return [(row.name, row.account_id is not None) for row in (await session.execute(statement)).all()]

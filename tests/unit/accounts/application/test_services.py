@@ -22,7 +22,7 @@ from squid.accounts.domain import (
     CreatorProfile,
     IdentityProvider,
     RecentAccountProof,
-    normalize_ign,
+    fold_creator_name,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
@@ -151,7 +151,8 @@ class FakeAccountRepository:
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         return next(
-            (alias for alias in self.aliases.values() if normalize_ign(alias.name) == normalize_ign(name)), None
+            (alias for alias in self.aliases.values() if fold_creator_name(alias.name) == fold_creator_name(name)),
+            None,
         )
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:

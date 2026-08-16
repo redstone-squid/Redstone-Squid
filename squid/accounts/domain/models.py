@@ -1,5 +1,9 @@
 """Provider-neutral account domain values."""
 
+# ruff: noqa: RUF002  Confusable and compatibility characters are the subject
+# matter here: they are the inputs whose folding this file exists to pin.
+
+import unicodedata
 from dataclasses import dataclass
 from enum import StrEnum
 from uuid import UUID
@@ -15,9 +19,22 @@ MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 """Maximum age of an identity proof accepted for a self-service account merge."""
 
 
-def normalize_ign(name: str) -> str:
-    """Return the comparison form of a Minecraft name."""
-    return name.strip().lower()
+def fold_creator_name(name: str) -> str:
+    """Return the comparison form of a creator name.
+
+    NFKC first, so compatibility forms unify and NBSP or ideographic space become U+0020
+    before trimming; then strip; then casefold, which is the Unicode operation for caseless
+    matching that ``str.lower()`` is not — ``lower`` leaves ``ΣΣ`` as ``σς`` while casefold
+    gives ``σσ``.
+
+    This is the only definition of the value, and it is deliberately not reproduced in SQL.
+    Postgres ``lower()`` depends on the database's glibc collation (see
+    ``pg_database.datcollversion``), and the two foldings disagree about *what collides* in
+    both directions: ``Straße``/``Strasse`` collide here but not in SQL, ``I``/``İ`` collide
+    in SQL but not here. A second SQL-side column would therefore be a second, conflicting
+    notion of creator identity rather than a hedge against this one.
+    """
+    return unicodedata.normalize("NFKC", name).strip().casefold()
 
 
 class IdentityProvider(StrEnum):

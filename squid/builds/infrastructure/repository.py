@@ -16,7 +16,7 @@ from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider, normalize_ign
+from squid.accounts.domain import IdentityProvider, fold_creator_name
 from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
 from squid.builds.domain import (
@@ -502,20 +502,21 @@ class BuildRepository:
         """Return the creator alias IDs for *igns*, creating missing names.
 
         Names are matched case-insensitively via the ``normalized_name``
-        generated column, so ``Foo`` and ``foo`` share one credit. The insert
-        relies on that column's unique constraint rather than a read-then-write,
-        so two submissions naming the same creator cannot race.
+        column, so ``Foo`` and ``foo`` share one credit. The insert relies on
+        that column's unique constraint rather than a read-then-write, so two
+        submissions naming the same creator cannot race. The column is written
+        from ``name`` by a column default, so it is never set here.
         """
         alias_ids: list[int] = []
         seen: set[str] = set()
         for ign in igns:
             name = ign.strip()
-            normalized = normalize_ign(name)
-            if not normalized or normalized in seen:
+            folded = fold_creator_name(name)
+            if not folded or folded in seen:
                 continue
-            seen.add(normalized)
+            seen.add(folded)
 
-            alias_id = await session.scalar(select(CreatorAlias.id).where(CreatorAlias.normalized_name == normalized))
+            alias_id = await session.scalar(select(CreatorAlias.id).where(CreatorAlias.normalized_name == folded))
             if alias_id is None:
                 result = await session.execute(
                     pg_insert(CreatorAlias)
@@ -525,8 +526,9 @@ class BuildRepository:
                 )
                 alias_id = result.scalar_one_or_none()
             if alias_id is None:
+                # Lost the insert race against a concurrent submission naming the same creator.
                 alias_id = (
-                    await session.execute(select(CreatorAlias.id).where(CreatorAlias.normalized_name == normalized))
+                    await session.execute(select(CreatorAlias.id).where(CreatorAlias.normalized_name == folded))
                 ).scalar_one()
             alias_ids.append(alias_id)
 

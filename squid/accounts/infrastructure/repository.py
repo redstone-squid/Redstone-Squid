@@ -21,7 +21,7 @@ from squid.accounts.domain import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
-    normalize_ign,
+    fold_creator_name,
 )
 from squid.accounts.errors import (
     AccountNotFoundError,
@@ -240,7 +240,7 @@ class AccountRepository:
                 await session.execute(
                     select(CreatorAliasModel, AccountModel.public_creator_id)
                     .outerjoin(AccountModel, AccountModel.id == CreatorAliasModel.account_id)
-                    .where(CreatorAliasModel.normalized_name == normalize_ign(name))
+                    .where(CreatorAliasModel.normalized_name == fold_creator_name(name))
                 )
             ).one_or_none()
             return None if row is None else _to_alias(row[0], row[1])
@@ -274,7 +274,7 @@ class AccountRepository:
             alias = await session.scalar(
                 update(CreatorAliasModel)
                 .where(
-                    CreatorAliasModel.normalized_name == normalize_ign(name),
+                    CreatorAliasModel.normalized_name == fold_creator_name(name),
                     CreatorAliasModel.account_id.is_(None),
                 )
                 .values(account_id=account_id, claimed_at=Instant.now(), claim_method=method)
@@ -289,7 +289,7 @@ class AccountRepository:
         """Open a pending alias claim, reusing an existing matching request."""
         async with self._session_factory.begin() as session:
             alias = await session.scalar(
-                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == normalize_ign(name))
+                select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == fold_creator_name(name))
             )
             if alias is None:
                 raise CreatorAliasNotFoundError(name)
@@ -434,7 +434,7 @@ class AccountRepository:
             alias = await session.scalar(
                 update(CreatorAliasModel)
                 .where(
-                    CreatorAliasModel.normalized_name == normalize_ign(verification_code.username),
+                    CreatorAliasModel.normalized_name == fold_creator_name(verification_code.username),
                     CreatorAliasModel.account_id.is_(None),
                 )
                 .values(
