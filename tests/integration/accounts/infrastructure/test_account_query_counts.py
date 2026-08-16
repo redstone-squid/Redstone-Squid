@@ -16,7 +16,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import CreatorAlias
 from squid.accounts.infrastructure.repository import AccountRepository
@@ -204,3 +204,29 @@ async def test_create_returns_exactly_what_it_persisted(
     assert created.id is not None
 
     assert await repository.get_by_id(created.id) == created
+
+
+async def test_claim_timestamps_survive_a_reload_unchanged(
+    repository: AccountRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Same invariant as above, for every timestamp this repository writes.
+
+    `_now()` floors to microseconds because `timestamptz` does; without it a claim returned
+    from the write path carries nanoseconds the row does not have.
+    """
+    async with async_session_factory.begin() as session:
+        session.add(CreatorAlias(name="Name"))
+    account = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(1),))
+    assert account.id is not None
+
+    claimed = await repository.claim_unclaimed_alias(
+        account_id=account.id,
+        name="Name",
+        method=ClaimMethod.VERIFIED_IGN,
+    )
+    assert claimed is not None
+
+    reloaded = await repository.get_alias_by_name("Name")
+    assert reloaded is not None
+    assert reloaded.claimed_at == claimed.claimed_at
