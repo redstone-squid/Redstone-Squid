@@ -213,11 +213,28 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             measured = analyses[0][1].analysis.metrics.dimensions
             draft.dimensions = (measured.width, measured.height, measured.length)
 
+        submitted: Build | None = None
+
+        async def persist_draft() -> None:
+            """Commit the draft from inside the form's submit button.
+
+            Anything raised here leaves the workspace message alive and clickable, so the user
+            retries from the draft they already filled in instead of rerunning the command.
+            """
+            nonlocal submitted
+            build = draft.finalize()
+            self._note_dimension_mismatch(build, analyses)
+            await self._note_schematic_duplicates(build, analyses)
+            await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
+            await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
+            submitted = build
+
         view = BuildSubmissionForm(
             draft,
             self.builds,
             author_id=interaction.user.id,
             locale=locale,
+            on_submit=persist_draft,
         )
         workspace_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
             view=view,
@@ -241,11 +258,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             )
             return
 
-        build = draft.finalize()
-        self._note_dimension_mismatch(build, analyses)
-        await self._note_schematic_duplicates(build, analyses)
-        await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
-        await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
+        assert submitted is not None, "The form only reports success once the build is persisted."
+        build = submitted
 
         preview = StaticLayout(
             discord.ui.TextDisplay(

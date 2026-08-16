@@ -1,8 +1,9 @@
 """Models and views for discord interactions."""
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast, override
 
@@ -36,6 +37,7 @@ from squid.bot.utils.components import (
     edit_interaction_layout,
     error_layout,
     no_mentions,
+    text_layout,
 )
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
@@ -295,7 +297,13 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
 
 
 class BuildSubmissionForm(ErrorHandledLayoutView):
-    """A private, resumable workspace for a minimal build submission."""
+    """A private, resumable workspace for a minimal build submission.
+
+    `on_submit` performs the actual submission from inside the button callback, so a
+    failure can leave the form standing for a retry. Without it the view merely records
+    the choice in `value` and stops, leaving the caller to submit after `wait()` — which
+    is fine for a caller that has nothing that can fail.
+    """
 
     actions = discord.ui.ActionRow()
 
@@ -307,6 +315,7 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         author_id: int | None = None,
         locale: str | None = None,
         timeout: float | None = 300.0,
+        on_submit: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         super().__init__(timeout=timeout)
         build.submission_status = Status.PENDING
@@ -317,8 +326,10 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         self.builds = builds
         self.author_id = author_id
         self.locale = locale
+        self.on_submit = on_submit
         self.validation_error: str | None = None
         self.value: bool | None = None
+        self._submitting = False
         self.edit_basics.label = t(locale, _("Edit basics"))
         self.edit_details.label = t(locale, _("Add links & details"))
         self.submit.label = t(locale, _("Submit for review"))
@@ -410,7 +421,34 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
             self.render()
             await edit_interaction_layout(interaction, self)
             return
+        if self._submitting:
+            await interaction.response.send_message(
+                view=text_layout(t(self.locale, _("This build is still being submitted. Give it a moment."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
         await interaction.response.defer()
+        if self.on_submit is not None:
+            self._submitting = True
+            try:
+                await self.on_submit()
+            except Exception:
+                # Never stop the view here: this message and its filled-in draft are the only
+                # way back, so the form has to survive the failure and stay clickable. The
+                # exception still reaches the view's error handler, which reports it beside
+                # the form as its own card.
+                self.validation_error = t(
+                    self.locale,
+                    _("Submitting failed and nothing was saved. Press “Submit for review” to try again."),
+                )
+                self.render()
+                with contextlib.suppress(discord.HTTPException):
+                    await interaction.edit_original_response(view=self, allowed_mentions=no_mentions())
+                raise
+            finally:
+                self._submitting = False
         self.value = True
         self.stop()
 
