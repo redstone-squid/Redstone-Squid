@@ -6,7 +6,7 @@ from typing import Literal
 import pytest
 from whenever import Instant
 
-from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService
+from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
 from squid.auth.domain import ApiKey
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
@@ -157,6 +157,33 @@ async def test_unexpired_key_remains_active() -> None:
 def test_empty_pepper_is_rejected() -> None:
     with pytest.raises(ValueError, match="must not be empty"):
         ApiKeyService(FakeApiKeyRepository(), "")
+
+
+class TestDigestConstruction:
+    """The stored digest is HMAC-SHA-256 keyed by the deployment pepper.
+
+    See `docs/credential-hashing.md` for why that is the right primitive for a
+    256-bit random secret, and why a password KDF is not.
+    """
+
+    def test_a_known_answer_pins_the_construction(self) -> None:
+        """A change of primitive, key order, or encoding invalidates every
+        stored digest, so it should fail here rather than in production."""
+        expected = bytes.fromhex("e85a71116346fb122fbf70bda5503f9d4afd28fd940c40b651ed37784439ed7b")
+
+        assert service(FakeApiKeyRepository()).hash_secret("a-known-secret") == expected
+        assert hash_api_key_secret(b"test-api-key-pepper", "a-known-secret") == expected
+
+    @pytest.mark.asyncio
+    async def test_a_rotated_pepper_stops_authenticating_old_tokens(self) -> None:
+        """The pepper is a key, not a salt: rotating it revokes every credential
+        it protected, which is the property that makes leaking the table safe."""
+        repository = FakeApiKeyRepository()
+        issued = await service(repository).issue(label="CI", scopes={"account.verify.relay"})
+        rotated = ApiKeyService(repository, "a-different-pepper", now=lambda: NOW)
+
+        assert await rotated.authenticate(issued.token) is None
+        assert repository.touches == []
 
 
 class TestIssuanceBoundary:
