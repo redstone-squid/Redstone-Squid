@@ -14,7 +14,7 @@ DEFAULT_LOG_LEVEL = "INFO"
 """Default log level for application loggers when SQUID_LOG_LEVEL is not set."""
 
 DEFAULT_ROOT_LOG_LEVEL = "WARNING"
-"""Default root log level when SQUID_ROOT_LOG_LEVEL is not set."""
+"""Default root log level when SQUID_LOG_ROOT_LEVEL is not set."""
 
 DEFAULT_LOG_DIR_NAME = "logs"
 """Default directory used when SQUID_LOG_DIRECTORY is not set."""
