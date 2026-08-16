@@ -19,12 +19,19 @@ from squid.media.domain import MediaLimits
 from squid.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.notifications import NotificationPreferences
 from squid.permissions.application import PermissionService, SubjectRecords
+from squid.permissions.domain import Pattern
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
 from squid.submissions.application import FormOptionSet, build_submission_manifest
 from squid.suggestions.application import SuggestionRegistry, SuggestionService
+
+
+def credential_nodes(*raw: str) -> frozenset[Pattern]:
+    """Build the parsed patterns a credential carries, as the real boundaries do."""
+    return frozenset(Pattern.parse(pattern) for pattern in raw)
+
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")

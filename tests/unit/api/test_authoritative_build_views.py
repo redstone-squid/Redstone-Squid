@@ -17,13 +17,14 @@ from squid.builds.domain import Build, DoorBuild, Status
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import FIRST_PAGE, Page, keyset_page
 from squid.runtime import ApiServices
+from tests.unit.api.fakes import credential_nodes
 
 # A realistic key: the scopes a service credential is actually issued, which do
 # not include the moderation views.
 SERVICE = Principal(
     kind="service",
     subject="api-key:test",
-    nodes=frozenset({"build.submission.read", "build.submission.create"}),
+    nodes=credential_nodes("build.submission.read", "build.submission.create"),
 )
 ACCOUNT = Principal(kind="account", subject="account:1", nodes=UNBOUNDED, discord_id=123, account_id=1)
 

@@ -29,7 +29,8 @@ class Principal:
 
     kind: Literal["anonymous", "service", "account", "cli", "minecraft_player"]
     subject: str
-    nodes: frozenset[str] = field(default_factory=frozenset)
+    nodes: frozenset[Pattern] = field(default_factory=frozenset)
+    """Parsed patterns, so authorization matches rather than re-parses per check."""
     discord_id: int | None = None
     account_id: int | None = None
     consent_pending: bool = False
@@ -41,7 +42,7 @@ class Principal:
     cli_session_id: UUID | None = None
 
 
-UNBOUNDED = frozenset({"**"})
+UNBOUNDED = frozenset({Pattern.parse("**")})
 """A credential that is not itself narrowed; its holder's own authority decides."""
 
 ANONYMOUS = Principal(kind="anonymous", subject="anonymous", nodes=UNBOUNDED)
@@ -93,7 +94,7 @@ async def principal_allows(
 
 def credential_allows(principal: Principal, node: PermissionNode) -> bool:
     """Whether the credential itself carries `node`, before its owner is consulted."""
-    return any(Pattern.parse(pattern).matches(node) for pattern in principal.nodes)
+    return any(pattern.matches(node) for pattern in principal.nodes)
 
 
 def subject_for(principal: Principal) -> Subject:
@@ -142,7 +143,7 @@ async def current_principal(
         return Principal(
             kind="service",
             subject="legacy-bootstrap",
-            nodes=frozenset(config.api.secret_nodes),
+            nodes=config.api.secret_patterns,
         )
     token = authorization.removeprefix("Bearer ")
     if token.startswith(f"{CLI_SESSION_TOKEN_PREFIX}_"):
@@ -204,6 +205,6 @@ async def current_principal(
     return Principal(
         kind="service",
         subject=f"api-key:{key.key_id}",
-        nodes=frozenset(key.scopes),
+        nodes=key.scopes,
         account_id=key.owner_account_id,
     )

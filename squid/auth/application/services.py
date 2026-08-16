@@ -12,7 +12,7 @@ from squid.auth.application.ports import ApiKeyRepository
 from squid.auth.domain import ApiKey, IssuedApiKey
 from squid.core.errors import AuthorizationError
 from squid.permissions.application.services import PermissionService
-from squid.permissions.domain import CATALOGUE, Subject
+from squid.permissions.domain import CATALOGUE, Pattern, Subject
 
 API_KEY_PREFIX = "sq"
 API_KEY_SECRET_BYTES = 32
@@ -58,7 +58,7 @@ class ApiKeyService:
         self,
         *,
         label: str,
-        scopes: Iterable[str],
+        scopes: Iterable[str | Pattern],
         owner_account_id: int | None = None,
         created_by_account_id: int | None = None,
         expires_at: Instant | None = None,
@@ -69,8 +69,13 @@ class ApiKeyService:
         permissions-boundary rule, and enforcing it here as well as at request
         time means an over-broad key cannot be *created* and then quietly wait
         for its owner to be promoted.
+
+        Raises `InvalidPatternError` for a malformed pattern. Parsing happens
+        before the boundary check rather than inside it, because the boundary
+        check is skipped on the CLI bootstrap path -- which is how
+        `buildsubmission.raed` used to reach the database and match nothing.
         """
-        requested = frozenset(scopes)
+        requested = frozenset(pattern if isinstance(pattern, Pattern) else Pattern.parse(pattern) for pattern in scopes)
         await self._reject_beyond_owner_authority(requested, owner_account_id)
         key_id = self._urlsafe_token(12)
         secret = self._urlsafe_token(API_KEY_SECRET_BYTES)
@@ -85,7 +90,7 @@ class ApiKeyService:
         )
         return IssuedApiKey(key=key, token=f"{API_KEY_PREFIX}_{key_id}_{secret}")
 
-    async def _reject_beyond_owner_authority(self, patterns: frozenset[str], owner_account_id: int | None) -> None:
+    async def _reject_beyond_owner_authority(self, patterns: frozenset[Pattern], owner_account_id: int | None) -> None:
         """Refuse patterns reaching nodes the owner does not hold.
 
         Skipped when no permission service is wired in, which is the CLI
@@ -101,7 +106,7 @@ class ApiKeyService:
             held = await self._permissions.capabilities(subject, reached)
             if missing := sorted(reached - held):
                 msg = f"{missing[0]} is outside your authority; you cannot grant what you do not hold."
-                raise AuthorizationError(msg, public_context={"pattern": pattern, "node": missing[0]})
+                raise AuthorizationError(msg, public_context={"pattern": pattern.raw, "node": missing[0]})
 
     async def authenticate(self, token: str, *, used_ip: str | None = None) -> ApiKey | None:
         """Return the active key matching *token*, or ``None`` for invalid credentials.

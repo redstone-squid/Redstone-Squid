@@ -23,7 +23,7 @@ from squid.accounts.domain import (
     CreatorAlias,
     IdentityRefresh,
 )
-from squid.api.security import Principal
+from squid.api.security import UNBOUNDED, Principal
 from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
 from squid.core.errors import AuthenticationError
 
@@ -46,7 +46,7 @@ def _principal(kind: str = "account", *, discord_id: int | None = 7) -> Principa
     return Principal(
         kind=cast(Any, kind),
         subject=f"{kind}:1",
-        nodes=frozenset({"**"}),
+        nodes=UNBOUNDED,
         discord_id=discord_id,
         account_id=1,
     )

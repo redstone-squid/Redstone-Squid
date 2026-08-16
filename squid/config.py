@@ -9,9 +9,10 @@ import re
 import sys
 from collections.abc import Callable, Mapping
 from difflib import get_close_matches
+from functools import cached_property
 from ipaddress import ip_network
 from pathlib import Path
-from typing import Any, Literal, Self, cast, override
+from typing import TYPE_CHECKING, Any, Literal, Self, cast, override
 from urllib.parse import urlsplit
 
 from google.oauth2.service_account import Credentials
@@ -32,6 +33,9 @@ from pydantic_settings.sources import PydanticBaseSettingsSource
 from sqlalchemy import make_url
 
 from squid.core.errors import ConfigurationError
+
+if TYPE_CHECKING:
+    from squid.permissions.domain import Pattern
 
 logger = logging.getLogger(__name__)
 EMBEDDING_DIMENSION = 1536
@@ -365,6 +369,9 @@ class ApiConfig(_FrozenModel):
     narrow it. Deployments that still need it for writes list the nodes here
     explicitly; the default is what an anonymous caller already has, so leaving
     it unset makes the secret useless rather than dangerous.
+
+    Validated as patterns at load, so a typo fails startup rather than quietly
+    matching nothing. Read `secret_patterns` at request time.
     """
 
     _empty_log_file = field_validator("log_file", "access_log_file", mode="before")(_empty_to_none)
@@ -384,6 +391,28 @@ class ApiConfig(_FrozenModel):
             msg = "Must not be empty."
             raise ValueError(msg)
         return value
+
+    @field_validator("secret_nodes")
+    @classmethod
+    def _require_parsable_secret_nodes(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        # Imported here rather than at module scope: `squid.permissions` reaches
+        # `squid.observability`, which reads `ObservabilityConfig` from this module.
+        from squid.permissions.domain import InvalidPatternError, Pattern
+
+        for raw in value:
+            try:
+                Pattern.parse(raw)
+            except InvalidPatternError as error:
+                msg = f"{raw!r} is not a valid permission pattern."
+                raise ValueError(msg) from error
+        return value
+
+    @cached_property
+    def secret_patterns(self) -> "frozenset[Pattern]":
+        """`secret_nodes` parsed once, for matching without re-parsing per request."""
+        from squid.permissions.domain import Pattern
+
+        return frozenset(Pattern.parse(raw) for raw in self.secret_nodes)
 
     @field_validator("key_pepper", "session_pepper")
     @classmethod

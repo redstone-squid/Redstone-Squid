@@ -11,8 +11,13 @@ from squid.auth.domain import ApiKey
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import GrantRecord, SubjectRecords
+from squid.permissions.domain import InvalidPatternError, Pattern
 
 NOW = Instant.from_utc(2026, 8, 8, 12)
+
+
+def nodes(*raw: str) -> frozenset[Pattern]:
+    return frozenset(Pattern.parse(pattern) for pattern in raw)
 
 
 class FakeApiKeyRepository:
@@ -27,7 +32,7 @@ class FakeApiKeyRepository:
         key_id: str,
         secret_hash: bytes,
         label: str,
-        scopes: frozenset[str],
+        scopes: frozenset[Pattern],
         owner_account_id: int | None,
         created_by_account_id: int | None,
         expires_at: Instant | None,
@@ -80,7 +85,7 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
     secret = issued.token.split("_", 2)[2]
     assert issued.key.secret_hash == service(repository).hash_secret(secret)
     assert secret.encode() not in issued.key.secret_hash
-    assert issued.key.scopes == frozenset({"account.verify.relay", "build.submission.create"})
+    assert issued.key.scopes == nodes("account.verify.relay", "build.submission.create")
     assert issued.key.owner_account_id == 4
     assert issued.key.created_by_account_id == 7
 
@@ -186,6 +191,32 @@ class TestDigestConstruction:
         assert repository.touches == []
 
 
+class TestScopeValidation:
+    """Scopes are parsed patterns, not free strings, from issuance onward."""
+
+    @pytest.mark.asyncio
+    async def test_a_malformed_pattern_is_rejected_without_a_permission_service(self) -> None:
+        """The owner-authority check is skipped on the CLI bootstrap path, so it
+        cannot be the thing that catches a typo: `buildsubmission.raed` used to
+        persist happily and then match nothing."""
+        repository = FakeApiKeyRepository()
+
+        with pytest.raises(InvalidPatternError):
+            await service(repository).issue(label="CI", scopes={"buildsubmission.raed."})
+
+        assert repository.keys == {}
+
+    @pytest.mark.asyncio
+    async def test_equivalent_patterns_are_stored_once(self) -> None:
+        """Parsing strips before de-duplicating, so surrounding whitespace does
+        not smuggle a second copy of one pattern into the array."""
+        repository = FakeApiKeyRepository()
+
+        issued = await service(repository).issue(label="CI", scopes=["build.**", " build.** ", "build.**"])
+
+        assert issued.key.scopes == nodes("build.**")
+
+
 class TestIssuanceBoundary:
     """A key may never carry authority its owner does not hold."""
 
@@ -209,7 +240,7 @@ class TestIssuanceBoundary:
 
         issued = await api_keys.issue(label="CI", scopes={"build.submission.create"}, owner_account_id=4)
 
-        assert issued.key.scopes == frozenset({"build.submission.create"})
+        assert issued.key.scopes == nodes("build.submission.create")
 
     async def test_a_pattern_beyond_the_owner_is_refused(self) -> None:
         """Enforced at issue time as well as at request time, so an over-broad key
@@ -230,4 +261,4 @@ class TestIssuanceBoundary:
 
         issued = await api_keys.issue(label="CI", scopes={"bot.tree.sync"})
 
-        assert issued.key.scopes == frozenset({"bot.tree.sync"})
+        assert issued.key.scopes == nodes("bot.tree.sync")

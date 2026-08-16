@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from fastapi import Response
 
-from squid.api.security import Principal
+from squid.api.security import UNBOUNDED, Principal
 from squid.api.v1.suggest import list_sources, suggest
 from squid.core.errors import NotFoundError
 from squid.suggestions.application import (
@@ -74,7 +74,7 @@ def request_for(*, allowed: bool = False) -> Any:
 def principal(*, anonymous: bool = True) -> Principal:
     if anonymous:
         return Principal(kind="anonymous", subject="anonymous")
-    return Principal(kind="account", subject="account:1", nodes=frozenset({"**"}), account_id=1)
+    return Principal(kind="account", subject="account:1", nodes=UNBOUNDED, account_id=1)
 
 
 async def test_a_source_returns_ranked_items() -> None:

@@ -20,6 +20,7 @@ from squid.config import (
 )
 from squid.core.errors import ConfigurationError
 from squid.media.application.jobs import MEDIA_ARTIFACT_PUBLICATION_LEASE
+from squid.permissions.domain import Pattern
 
 BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",
@@ -565,6 +566,33 @@ def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.Mon
         load_api_process_config()
 
     assert any(issue["field"] == "api.key_pepper" for issue in _issues(exc_info.value))
+
+
+def test_a_malformed_bootstrap_secret_node_fails_configuration_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The column downstream is free text, so a typo here would otherwise become
+    a credential that authenticates and then silently authorizes nothing."""
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_SECRET_NODES='["build.re*.read"]',
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"] == "api.secret_nodes" for issue in _issues(exc_info.value))
+
+
+def test_bootstrap_secret_nodes_are_parsed_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_SECRET_NODES='["account.verify.relay"]',
+    )
+
+    config = load_api_process_config()
+
+    assert config.api.secret_patterns == {Pattern.parse("account.verify.relay")}
 
 
 @pytest.mark.parametrize(

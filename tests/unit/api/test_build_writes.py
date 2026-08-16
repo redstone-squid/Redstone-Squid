@@ -17,11 +17,12 @@ from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
 from squid.core.errors import AuthorizationError
 from squid.runtime import ApiServices
+from tests.unit.api.fakes import credential_nodes
 
 ACCOUNT = Principal(
     kind="account",
     subject="account:1",
-    nodes=frozenset({"build.submission.create"}),
+    nodes=credential_nodes("build.submission.create"),
     discord_id=123,
     account_id=1,
 )
