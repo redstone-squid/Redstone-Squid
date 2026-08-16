@@ -1990,7 +1990,7 @@ export type ProtocolInterval = {
 /**
  * RecordDetail
  *
- * One active record result with its ordered holder builds.
+ * One published record result with its ordered holder builds.
  */
 export type RecordDetail = {
     /**
@@ -2136,7 +2136,7 @@ export type RecordSearchResult = {
 /**
  * RecordSummary
  *
- * One active computed record result.
+ * One published computed record result.
  */
 export type RecordSummary = {
     /**

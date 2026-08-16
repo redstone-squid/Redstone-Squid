@@ -40,7 +40,7 @@ async def get_record(record_id: int, records: Records, build_queries: BuildQueri
     }
     unavailable_ids = [build_id for build_id in record.holder_build_ids if build_id not in public_builds]
     if unavailable_ids:
-        msg = "An active record references holder builds that are unavailable to the public catalogue."
+        msg = "A published record references holder builds that are unavailable to the public catalogue."
         raise DataIntegrityError(
             msg,
             context={"record_id": record.id, "unavailable_holder_build_ids": unavailable_ids},
@@ -62,7 +62,7 @@ async def list_records(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[RecordSummary]:
-    """List authoritative active record results."""
+    """List authoritative published record results."""
     _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, descending=descending, page_size=page_size)

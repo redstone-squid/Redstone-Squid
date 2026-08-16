@@ -19,11 +19,11 @@ from whenever import Instant
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Door, Extender
 from squid.records.application.models import (
-    ActiveRecord,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecord,
+    PublishedRecord,
     RecordGap,
     RecordSourceCandidate,
     TitleDiagnosticGap,
@@ -313,12 +313,12 @@ class PostgresRecordRepository:
                 for definition in definitions
             )
 
-    async def get_active_record(self, result_id: int) -> ActiveRecord | None:
-        """Return an active result by its public result identifier."""
+    async def get_published_record(self, result_id: int) -> PublishedRecord | None:
+        """Return a published result by its public result identifier."""
         records = await self._active_records(result_id=result_id, limit=1)
         return records[0] if records else None
 
-    async def list_active_records(
+    async def list_published_records(
         self,
         *,
         offset: int,
@@ -326,8 +326,8 @@ class PostgresRecordRepository:
         before_id: int | None,
         descending: bool,
         limit: int,
-    ) -> Sequence[ActiveRecord]:
-        """List one page of active results in display order.
+    ) -> Sequence[PublishedRecord]:
+        """List one page of published results in display order.
 
         ID anchors page relative to the display order; a `before_id` page is fetched in reversed
         order and restored in memory, leaving its overfetched row at the front for the caller.
@@ -341,8 +341,8 @@ class PostgresRecordRepository:
             limit=limit,
         )
 
-    async def count_active_records(self) -> int:
-        """Count active results across the currently active computation runs."""
+    async def count_published_records(self) -> int:
+        """Count the results belonging to the currently active computation runs."""
         async with self._session_factory() as session:
             statement = (
                 select(func.count())
@@ -361,7 +361,7 @@ class PostgresRecordRepository:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-    ) -> tuple[ActiveRecord, ...]:
+    ) -> tuple[PublishedRecord, ...]:
         async with self._session_factory() as session:
             statement = (
                 select(RecordResult, RecordDefinition)
@@ -402,7 +402,7 @@ class PostgresRecordRepository:
             for holder_result_id, build_id in holder_rows:
                 holders.setdefault(holder_result_id, []).append(build_id)
             return tuple(
-                ActiveRecord(
+                PublishedRecord(
                     id=result.id,
                     definition_id=definition.id,
                     competition_id=definition.competition_id,

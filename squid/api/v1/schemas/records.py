@@ -8,11 +8,11 @@ from pydantic import ConfigDict
 
 from squid.api.v1.schemas import FromDomain
 from squid.api.v1.schemas.builds import BuildSummary
-from squid.records.application.models import ActiveRecord
+from squid.records.application.models import PublishedRecord
 
 
-class RecordSummary(FromDomain[ActiveRecord]):
-    """One active computed record result."""
+class RecordSummary(FromDomain[PublishedRecord]):
+    """One published computed record result."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -29,7 +29,7 @@ class RecordSummary(FromDomain[ActiveRecord]):
     computed_at: datetime
 
     @classmethod
-    def from_domain(cls, record: ActiveRecord, /) -> Self:
+    def from_domain(cls, record: PublishedRecord, /) -> Self:
         return cls(
             id=record.id,
             definition_id=record.definition_id,
@@ -46,6 +46,6 @@ class RecordSummary(FromDomain[ActiveRecord]):
 
 
 class RecordDetail(RecordSummary):
-    """One active record result with its ordered holder builds."""
+    """One published record result with its ordered holder builds."""
 
     holder_builds: list[BuildSummary]
