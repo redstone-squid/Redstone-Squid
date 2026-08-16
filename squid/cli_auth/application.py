@@ -82,8 +82,14 @@ class CliSecretCodec:
         return normalized if len(normalized) == 8 else ""
 
     def digest(self, purpose: CliSecretPurpose, secret: str) -> bytes:
-        """Return a purpose-separated keyed SHA-256 digest."""
-        return hmac.digest(self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256")
+        """Return a purpose-separated keyed SHA-256 digest.
+
+        See `docs/credential-hashing.md`: the inputs are `token_urlsafe(32)`
+        secrets, so keyed SHA-256 is the right primitive and a password KDF
+        would only add per-request work an unauthenticated caller can trigger.
+        """
+        # codeql[py/weak-sensitive-data-hashing]
+        return hmac.digest(self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256")  # 256-bit random secret
 
     @staticmethod
     def session_token(session_id: UUID, secret: str) -> str:

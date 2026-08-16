@@ -23,7 +23,11 @@ class ApiKey(Base):
     key_id: Mapped[str] = mapped_column(Text, nullable=False)
     """Public lookup portion of the API token."""
     secret_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    """HMAC-SHA256 digest of the unrecoverable token secret."""
+    """HMAC-SHA256 digest of the unrecoverable token secret.
+
+    Keyed by a deployment pepper that never reaches this database; see
+    `docs/credential-hashing.md`.
+    """
     label: Mapped[str] = mapped_column(Text, nullable=False)
     """Human-readable description of the credential's owner or purpose."""
     scopes: Mapped[list[str]] = mapped_column(
