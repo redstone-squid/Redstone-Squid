@@ -408,7 +408,7 @@ class ApiConfig(_FrozenModel):
         return value
 
     @cached_property
-    def secret_patterns(self) -> "frozenset[Pattern]":
+    def secret_patterns(self) -> frozenset[Pattern]:
         """`secret_nodes` parsed once, for matching without re-parsing per request."""
         from squid.permissions.domain import Pattern
 
