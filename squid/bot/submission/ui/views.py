@@ -34,7 +34,6 @@ from squid.bot.utils.components import (
     StaticLayout,
     card_container,
     edit_interaction_layout,
-    edit_layout,
     error_layout,
     no_mentions,
 )
@@ -656,8 +655,16 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
             t(self.locale, _("## Review changes\n{changes}\n\nApply these changes?"), changes=changes),
             locale=self.locale,
         )
-        await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
-        confirmation_message = await interaction.original_response()
+        # Deferring as an update keeps this interaction's original response pointing at the
+        # workspace message, so the result can be rendered into it once the prompt is answered.
+        # The confirmation goes out as a followup because the response slot is spent on the defer.
+        await interaction.response.defer()
+        confirmation_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
+            view=confirmation,
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+            wait=True,
+        )
         await confirmation.wait()
         await confirmation_message.delete()
         if confirmation.value is not True:
@@ -676,8 +683,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
             discord.ui.TextDisplay(t(self.locale, _("## Changes saved"))),
             await self.get_handler(interaction).render_container(),
         )
-        if interaction.message is not None:
-            await edit_layout(interaction.message, success, allowed_mentions=no_mentions())
+        # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
+        # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
+        await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
 
 
 class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]):
