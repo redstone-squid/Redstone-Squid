@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from squid.accounts.domain import IdentityProvider
 from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
@@ -32,9 +33,13 @@ def test_with_context_mutates_exception_without_changing_type() -> None:
 
 
 def test_context_and_public_context_are_separate() -> None:
-    error = AccountAlreadyLinkedError(123, MINECRAFT_UUID)
+    error = AccountAlreadyLinkedError(discord_id=123, minecraft_uuid=MINECRAFT_UUID)
 
-    assert error.context == {"discord_id": 123, "minecraft_uuid": str(MINECRAFT_UUID)}
+    assert error.context == {
+        "provider": IdentityProvider.DISCORD,
+        "subject": "123",
+        "minecraft_uuid": str(MINECRAFT_UUID),
+    }
     assert error.public_context == {}
     assert str(MINECRAFT_UUID) not in error.public_detail()
 
