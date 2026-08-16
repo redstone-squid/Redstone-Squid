@@ -56,11 +56,9 @@ class VoteSession(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     status: Mapped[VoteStatus] = mapped_column(StrEnumText(VoteStatus), nullable=False)
     result: Mapped[VoteSessionResult] = mapped_column(
-        StrEnumText(VoteSessionResult),
-        nullable=False,
-        server_default=text("'pending'::text"),
-        comment="The result of the vote session.",
+        StrEnumText(VoteSessionResult), nullable=False, server_default=text("'pending'::text")
     )
+    """The result of the vote session."""
     author_account_id: Mapped[int] = mapped_column(
         ForeignKey("accounts.id", name="vote_sessions_author_account_id_fkey", ondelete="RESTRICT"),
         nullable=False,
