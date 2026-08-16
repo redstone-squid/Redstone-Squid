@@ -46,6 +46,15 @@
   - Autocomplete completes the base key, and restrictions are picked by name while still submitting IDs.
 - [ ] Add integration tests for record recomputation triggers, queue retries, advisory locking, and atomic activation.
 
+## Observability
+
+- [ ] Add a Discord command and API endpoint to retrieve a logged error by its reference/correlation ID.
+  - Currently the reference shown to users (`squid/bot/errors.py`, `squid/api/errors.py`) is only a `correlation_id()`
+    for log-grepping; nothing persists errors in a queryable store, and the Discord and API paths track separate
+    reference schemes.
+- [ ] Integrate Sentry (or wire up a real log/trace backend) instead of the current no-op `debug` exporter in
+  `deploy/otel-collector.yaml`.
+
 ## Migration and cleanup
 
 - [ ] Remove legacy smallest-door tables, columns, functions, and triggers after the new projections have run in production.
