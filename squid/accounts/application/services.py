@@ -103,7 +103,10 @@ class AccountService:
         if result.account is None:
             raise InvalidVerificationCodeError
         if result.conflicting_java_uuid is not None:
-            raise AccountAlreadyLinkedError(discord_id, result.conflicting_java_uuid)
+            raise AccountAlreadyLinkedError(
+                discord_id=discord_id,
+                minecraft_uuid=result.conflicting_java_uuid,
+            )
         return result.claimed_alias
 
     async def unlink_minecraft_account(self, discord_id: int) -> bool:

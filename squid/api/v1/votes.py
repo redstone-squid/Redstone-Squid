@@ -63,7 +63,7 @@ async def cast_vote(
     if principal.kind != "account" or principal.account_id is None or principal.discord_id is None:
         raise AuthenticationError
     if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id).with_context(
+        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id).with_context(
             public_context={"consent_url": "/v1/users/me/consent"},
             end_user_action="Accept the current privacy notice and retry.",
         )
