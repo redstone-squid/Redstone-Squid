@@ -27,6 +27,9 @@ from squid.accounts.domain import ClaimMethod, ClaimStatus, IdentityProvider, fo
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
+_PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
+"""Generated from the enum so the CHECK cannot drift from the domain."""
+
 
 def _fold_from_name(context: DefaultExecutionContext) -> str:
     """Derive `normalized_name` from the `name` being inserted.
@@ -68,18 +71,11 @@ class AccountIdentity(Base):
     __tablename__ = "account_identities"
     __table_args__ = (
         UniqueConstraint("provider", "subject", name="account_identities_provider_subject_key"),
-        CheckConstraint(
-            "provider IN ('discord', 'java', 'bedrock')",
-            name="account_identities_provider_check",
-        ),
+        # Membership only. `AccountIdentity.for_provider` is the authority on subject
+        # *format*, so that adding a provider states its format in one exhaustive `match`
+        # rather than in a SQL predicate a migration has to keep in step.
+        CheckConstraint(f"provider IN ({_PROVIDER_VALUES})", name="account_identities_provider_check"),
         CheckConstraint("subject = btrim(subject) AND subject <> ''", name="account_identities_subject_check"),
-        CheckConstraint(
-            "(provider <> 'discord' OR subject ~ '^[1-9][0-9]*$') AND "
-            "(provider <> 'bedrock' OR subject ~ '^[1-9][0-9]*$') AND "
-            "(provider <> 'java' OR subject ~ "
-            "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')",
-            name="account_identities_subject_format_check",
-        ),
         Index("account_identities_account_provider_idx", "account_id", "provider"),
     )
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
