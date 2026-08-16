@@ -278,6 +278,35 @@ async def test_round_trip_is_identity_for_known_taxonomy(
     _assert_round_trip(build, loaded)
 
 
+async def test_loaded_status_is_a_status_member(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """A loaded build's status must be the enum member, not the integer behind it.
+
+    The round trip above cannot catch this: `Status` is an `IntEnum`, so a bare `0`
+    read back from the `SmallInteger` column compares equal to `Status.PENDING` and
+    every field-for-field assertion passes. The callers that broke are the ones that
+    ask for something only a member has -- `.name` in the search projection, and the
+    `is Status.CONFIRMED` identity checks guarding the public catalogue.
+    """
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+
+    build = _make_build(BuildCategory.DOOR, account_id)
+    await _resolve_and_save(migrated_session_factory, repository, build)
+    assert build.id is not None
+
+    loaded = await repository.get_by_id(build.id)
+    assert loaded is not None
+    assert loaded.submission_status is Status.PENDING
+    assert loaded.submission_status.name == "PENDING"
+
+    await repository.confirm(loaded)
+    reloaded = await repository.get_by_id(build.id)
+    assert reloaded is not None
+    assert reloaded.submission_status is Status.CONFIRMED
+
+
 async def test_persisting_a_build_creates_no_account(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

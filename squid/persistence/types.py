@@ -1,15 +1,15 @@
 """SQLAlchemy types for application persistence."""
 
 from datetime import UTC, datetime
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from typing import override
 
-from sqlalchemy import DateTime, Text
+from sqlalchemy import DateTime, SmallInteger, Text
 from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
-__all__ = ["InstantUTC", "StrEnumText"]
+__all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText"]
 
 
 class InstantUTC(TypeDecorator[Instant]):
@@ -71,6 +71,41 @@ class StrEnumText[EnumT: StrEnum](TypeDecorator[EnumT]):
 
     @override
     def process_result_value(self, value: str | None, dialect: Dialect) -> EnumT | None:
+        if value is None:
+            return None
+        return self._enum_type(value)
+
+
+class IntEnumSmallInt[EnumT: IntEnum](TypeDecorator[EnumT]):
+    """Store an `IntEnum` as a small integer while exposing the member to the ORM.
+
+    A bare `SmallInteger` column annotated `Mapped[SomeIntEnum]` reads back as a plain
+    `int`: the explicit column type wins over the annotation, and nothing coerces. With
+    an `IntEnum` that failure is close to silent, because every comparison against a
+    member still comes out right; only member-only attributes like `.name` blow up, and
+    only in whichever caller happens to want one. This type makes the annotation true.
+    """
+
+    impl = SmallInteger
+    cache_ok = True
+
+    def __init__(self, enum_type: type[EnumT]) -> None:
+        super().__init__()
+        self._enum_type = enum_type
+
+    @property
+    @override
+    def python_type(self) -> type[EnumT]:
+        return self._enum_type
+
+    @override
+    def process_bind_param(self, value: EnumT | int | None, dialect: Dialect) -> int | None:
+        if value is None:
+            return None
+        return self._enum_type(value).value
+
+    @override
+    def process_result_value(self, value: int | None, dialect: Dialect) -> EnumT | None:
         if value is None:
             return None
         return self._enum_type(value)
