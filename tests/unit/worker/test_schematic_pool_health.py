@@ -25,6 +25,7 @@ def _services() -> SimpleNamespace:
         record_queue_health=AsyncMock(),
         purge_idempotency=AsyncMock(return_value=0),
         expire_submission_drafts=AsyncMock(return_value=0),
+        error_reports=Mock(),
     )
 
 

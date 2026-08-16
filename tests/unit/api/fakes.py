@@ -145,6 +145,16 @@ class MockVersions:
         return []
 
 
+class MockErrorReports:
+    """Records what the exception handlers captured, without a database."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def record(self, error: BaseException, **kwargs: object) -> None:
+        self.calls.append({"error": error, **kwargs})
+
+
 class MockSchematics:
     async def list_for_build(self, _build_id: int):
         return []
@@ -303,6 +313,7 @@ def build_app(
     cli_authorization: object | None = None,
     idempotency: object | None = None,
     accounts: object | None = None,
+    error_reports: object | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -336,6 +347,7 @@ def build_app(
             media_jobs=MockMediaJobs(),
             minecraft_installations=MockMinecraftInstallations(),
             minecraft_player_authorization=MockMinecraftPlayerAuthorization(),
+            error_reports=error_reports or MockErrorReports(),
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())

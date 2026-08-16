@@ -50,8 +50,18 @@ class FakeRepository:
         ]
 
 
-def build_service(repository: FakeRepository, **kwargs: object) -> ErrorReportService:
-    return ErrorReportService(repository, now=lambda: FROZEN, **kwargs)  # pyright: ignore[reportArgumentType]
+def build_service(
+    repository: FakeRepository,
+    *,
+    retention_hours: int = 168,
+    max_traceback_chars: int = 20000,
+) -> ErrorReportService:
+    return ErrorReportService(
+        repository,
+        retention_hours=retention_hours,
+        max_traceback_chars=max_traceback_chars,
+        now=lambda: FROZEN,
+    )
 
 
 def _throw(error: Exception) -> None:

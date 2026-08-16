@@ -21,6 +21,7 @@ async def test_worker_schedules_media_cleanup_when_normalization_is_disabled() -
         record_queue_health=AsyncMock(),
         purge_idempotency=AsyncMock(return_value=0),
         expire_submission_drafts=AsyncMock(return_value=0),
+        error_reports=Mock(),
     )
     supervisor = Mock()
     worker = DatabaseWorker(

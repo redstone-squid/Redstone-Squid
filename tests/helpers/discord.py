@@ -26,15 +26,23 @@ def make_interaction(
     user_id: int = 1,
     guild_id: int | None = None,
     channel_id: int = 2,
+    error_reports: object | None = None,
 ) -> InteractionHarness:
-    """Create the minimal interaction contract used by shared error handling."""
+    """Create the minimal interaction contract used by shared error handling.
+
+    The client is present but carries no services by default: a real interaction always has one,
+    and the error handler reads the error report store off it. Pass `error_reports` to assert
+    that a failure was captured.
+    """
     send_initial = AsyncMock()
     send_followup = AsyncMock()
+    services = SimpleNamespace(error_reports=error_reports) if error_reports is not None else None
     interaction = cast(
         discord.Interaction[discord.Client],
         SimpleNamespace(
             response=SimpleNamespace(is_done=lambda: response_done, send_message=send_initial),
             followup=SimpleNamespace(send=send_followup),
+            client=SimpleNamespace(services=services),
             command=None,
             user=SimpleNamespace(id=user_id),
             guild_id=guild_id,

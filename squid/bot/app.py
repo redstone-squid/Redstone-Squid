@@ -17,7 +17,7 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import SquidCommandTree
+from squid.bot.errors import SquidCommandTree, set_error_reporter
 from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
@@ -137,6 +137,11 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
+        # Progress-message failures are handled from a `Messageable` that does not expose the
+        # client, so the store has to be reachable without one. Registered here rather than in
+        # `__init__` so merely constructing a bot in a test does not install a live service.
+        set_error_reporter(self.services.error_reports)
+        self.background_tasks.capture_failures_into(self.services.error_reports)
         await self.tree.set_translator(SquidAppCommandTranslator())
         # Not a cog: every command's permission check reads through the cache this
         # watcher keeps honest, so it runs before any extension loads rather than
