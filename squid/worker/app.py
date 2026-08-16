@@ -162,6 +162,11 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
+            self._cleanup_error_reports,
+            name="error-report-retention",
+            interval=max(maintenance_interval, 300),
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
@@ -296,6 +301,15 @@ class DatabaseWorker:
             logger.info(
                 "Expired inactive submission drafts",
                 extra={"squid.submissions.drafts_expired": expired},
+            )
+
+    async def _cleanup_error_reports(self) -> None:
+        with trace_span("squid.worker.error_report_retention", {"squid.surface": "background_loop"}):
+            deleted = await self._services.error_reports.purge_expired()
+        if deleted:
+            logger.info(
+                "Expired error reports removed",
+                extra={"squid.diagnostics.deleted": deleted},
             )
 
 

@@ -37,6 +37,8 @@ from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
 from squid.config import RuntimeConfig, SchematicConfig
+from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.events.infrastructure.repository import PostgresDomainEventRepository
@@ -604,6 +606,14 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def error_reports(self) -> ErrorReportService:
+        return ErrorReportService(
+            PostgresErrorReportRepository(self.db.async_session),
+            retention_hours=self.config.diagnostics.retention_hours,
+            max_traceback_chars=self.config.diagnostics.max_traceback_chars,
+        )
+
+    @cached_property
     def api_keys(self) -> ApiKeyService | None:
         if self.config.api_key_pepper is None:
             return None
@@ -627,6 +637,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     )
     return ApiServices(
         builds=graph.builds,
+        error_reports=graph.error_reports,
         api_keys=graph.api_keys,
         web_auth=graph.web_auth,
         cli_authorization=graph.cli_authorization,
@@ -658,6 +669,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     graph = _ServiceGraph(db, config, resources_stack)
     return BotServices(
         builds=graph.builds,
+        error_reports=graph.error_reports,
         build_inference=graph.build_inference,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
@@ -703,6 +715,7 @@ def create_worker_services(
     idempotency = IdempotencyService(PostgresIdempotencyRepository(db.async_session))
     return WorkerServices(
         builds=graph.builds,
+        error_reports=graph.error_reports,
         artifacts=graph.artifacts,
         votes=graph.votes,
         records=graph.record_computation,
