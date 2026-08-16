@@ -896,6 +896,7 @@ class RuntimeConfig(_FrozenModel):
     idempotency_encryption: IdempotencyEncryptionConfig | None = None
     oauth: OAuthConfig | None = None
     upstream_http: UpstreamHttpConfig = UpstreamHttpConfig()
+    diagnostics: DiagnosticsConfig = DiagnosticsConfig()
 
 
 class _FilteredEnvironmentSource(PydanticBaseSettingsSource):
@@ -992,6 +993,7 @@ class _ProcessSettings(BaseSettings):
             notifications=self.notification,
             verification_code_pepper=self.verification.code_pepper,
             upstream_http=self.upstream_http,
+            diagnostics=self.diagnostics,
         )
 
 
