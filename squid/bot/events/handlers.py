@@ -31,7 +31,7 @@ class PostSubmittedBuildHandler:
 
     _SCHEMA_VERSIONS = frozenset({1, 2})
 
-    def __init__(self, bot: "squid.bot.app.RedstoneSquid") -> None:
+    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self.bot = bot
 
     async def handle(self, event: DomainEvent) -> None:
@@ -53,7 +53,7 @@ class PostSubmittedBuildHandler:
 class DeleteVotedMessageHandler:
     """Delete the message a closed delete-log vote approved removing."""
 
-    def __init__(self, bot: "squid.bot.app.RedstoneSquid") -> None:
+    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self.bot = bot
 
     async def handle(self, event: DomainEvent) -> None:
@@ -71,7 +71,7 @@ class DeleteVotedMessageHandler:
             await message.delete()
 
 
-def build_handler_registry(bot: "squid.bot.app.RedstoneSquid") -> dict[str, tuple[DomainEventHandler, ...]]:
+def build_handler_registry(bot: squid.bot.app.RedstoneSquid) -> dict[str, tuple[DomainEventHandler, ...]]:
     """Map each handled event type to the handlers that react to it."""
     return {
         "build.submitted": (PostSubmittedBuildHandler(bot),),

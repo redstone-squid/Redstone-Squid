@@ -109,7 +109,7 @@ async def resolve_reply_chain(
         else:
             try:
                 parent = await current.channel.fetch_message(parent_id)
-            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            except discord.NotFound, discord.Forbidden, discord.HTTPException:
                 parent = None
             cache[parent_id] = parent
         if parent is None:
@@ -163,7 +163,7 @@ async def collect_images(
                     data = (await extract_first_frame(video_data)).getvalue()
                     content_type = "image/png"
                     origin = "video_frame"
-            except (discord.HTTPException, OSError, RuntimeError):
+            except discord.HTTPException, OSError, RuntimeError:
                 logger.warning("Could not read inference image %s", attachment.filename, exc_info=True)
                 continue
             if total_bytes + len(data) > max_bytes:

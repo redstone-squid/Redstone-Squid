@@ -125,7 +125,7 @@ class _Worker:
                 exit_code = await self._terminate()
                 _record_worker_failure(exit_code, reason="timeout")
                 raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
-            except (FrameStreamClosed, ConnectionResetError, BrokenPipeError):
+            except FrameStreamClosed, ConnectionResetError, BrokenPipeError:
                 exit_code = await self._terminate()
                 _record_worker_failure(exit_code, reason="crash")
                 raise SchematicWorkerCrashedError(operation=operation, exit_code=exit_code) from None
@@ -530,7 +530,7 @@ class SchematicWorkerPool:
             worker = self._idle.popleft()
             try:
                 frame = await worker.request(operation, params, payloads, remaining)
-            except (SchematicWorkerCrashedError, SchematicTimeoutError):
+            except SchematicWorkerCrashedError, SchematicTimeoutError:
                 loop_time = asyncio.get_running_loop().time()
                 self._breaker.record_failure(loop_time)
                 self._note_breaker_state(loop_time)

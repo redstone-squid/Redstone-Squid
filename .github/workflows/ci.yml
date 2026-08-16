@@ -108,7 +108,7 @@ jobs:
     permissions:
       contents: read
     env:
-      UV_PYTHON: "3.12"
+      UV_PYTHON: "3.14"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,7 +118,7 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -145,7 +145,7 @@ jobs:
         run: uv run --locked ruff check --extend-select I
 
       - name: Check formatting
-        run: uv run --locked ruff format --target-version py312 --check
+        run: uv run --locked ruff format --target-version py314 --check
 
       - name: Check repository files
         run: uv run --locked prek run --all-files
@@ -168,7 +168,7 @@ jobs:
     permissions:
       contents: read
     env:
-      UV_PYTHON: "3.12"
+      UV_PYTHON: "3.14"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -178,7 +178,7 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
           cache-dependency-glob: uv.lock
 
@@ -463,7 +463,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.12", "3.13", "3.14"]
+        python-version: ["3.14"]
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
@@ -511,7 +511,7 @@ jobs:
     permissions:
       contents: read
     env:
-      UV_PYTHON: "3.12"
+      UV_PYTHON: "3.14"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -521,7 +521,7 @@ jobs:
         uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           version: ${{ env.UV_VERSION }}
-          python-version: "3.12"
+          python-version: "3.14"
           enable-cache: true
           cache-dependency-glob: uv.lock
 

@@ -11,13 +11,13 @@ from squid.api.rate_limit import RateLimitPolicy, RateLimitRequest, RedisSliding
 
 
 @pytest.fixture(scope="module")
-def redis_container() -> Generator[RedisContainer, None, None]:
+def redis_container() -> Generator[RedisContainer]:
     with RedisContainer("redis:8.8.0-alpine") as container:
         yield container
 
 
 @pytest.fixture
-async def redis_clients(redis_container: RedisContainer) -> AsyncGenerator[tuple[Redis, Redis], None]:
+async def redis_clients(redis_container: RedisContainer) -> AsyncGenerator[tuple[Redis, Redis]]:
     host = redis_container.get_container_host_ip()
     port = int(redis_container.get_exposed_port(redis_container.port))
     first = Redis(host=host, port=port)

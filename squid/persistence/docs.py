@@ -49,7 +49,7 @@ def extract_attribute_docstrings(cls: type[Any]) -> dict[str, str]:
     """
     try:
         source = inspect.getsource(cls)
-    except (OSError, TypeError):
+    except OSError, TypeError:
         return {}
 
     tree = ast.parse(textwrap.dedent(source))

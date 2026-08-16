@@ -185,15 +185,15 @@ class VoteVerdict:
     direction: StarboardDirection | None = None
 
     @classmethod
-    def accept(cls, direction: StarboardDirection) -> "VoteVerdict":
+    def accept(cls, direction: StarboardDirection) -> VoteVerdict:
         return cls("accept", direction)
 
     @classmethod
-    def ignore(cls) -> "VoteVerdict":
+    def ignore(cls) -> VoteVerdict:
         return cls("ignore")
 
     @classmethod
-    def remove_reaction(cls) -> "VoteVerdict":
+    def remove_reaction(cls) -> VoteVerdict:
         return cls("remove_reaction")
 
 

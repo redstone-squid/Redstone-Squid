@@ -173,7 +173,7 @@ class ApplicationRuntime[ServicesT]:
 
 
 def start_permission_epoch_watch(
-    supervisor: "BackgroundTaskSupervisor",
+    supervisor: BackgroundTaskSupervisor,
     watcher: PermissionEpochWatcher,
 ) -> None:
     """Start one process's permission-cache invalidation jobs.

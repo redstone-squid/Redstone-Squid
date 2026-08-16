@@ -44,7 +44,7 @@ compile:
 
 lint:
     {{python}} -m ruff check --extend-select I --fix --exit-zero
-    {{python}} -m ruff format --target-version py312
+    {{python}} -m ruff format --target-version py314
 
 typecheck:
     uv run --locked pyrefly check --config pyproject.toml

@@ -24,7 +24,7 @@ _TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["searc
 
 
 @pytest.fixture
-async def search_tables(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def search_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))

@@ -110,7 +110,7 @@ def base_and_sane_many_to_many_models():
         __tablename__ = "many_to_many_test_1"
         id: Mapped[int] = mapped_column(Integer, primary_key=True)
         name: Mapped[str] = mapped_column(String(50), nullable=False)
-        model2s: Mapped[list["ManyToManyModel2"]] = relationship(
+        model2s: Mapped[list[ManyToManyModel2]] = relationship(
             "ManyToManyModel2", secondary="many_to_many_association", back_populates="model1s"
         )
 
@@ -139,7 +139,7 @@ def ini_settings() -> dict[str, str]:
 
 
 @pytest.fixture
-def db_engine(ini_settings: dict[str, str]) -> Generator[Engine, None, None]:
+def db_engine(ini_settings: dict[str, str]) -> Generator[Engine]:
     """Fixture providing a database engine."""
     engine = engine_from_config(ini_settings, "sqlalchemy.")
     yield engine
@@ -147,7 +147,7 @@ def db_engine(ini_settings: dict[str, str]) -> Generator[Engine, None, None]:
 
 
 @pytest.fixture
-def db_session(db_engine: Engine) -> Generator[Session, None, None]:
+def db_session(db_engine: Engine) -> Generator[Session]:
     """Fixture providing a database session."""
     Session = sessionmaker(bind=db_engine)
     session = Session()
@@ -156,7 +156,7 @@ def db_session(db_engine: Engine) -> Generator[Session, None, None]:
 
 
 @contextlib.contextmanager
-def fresh_schema(engine: Engine, base: type[DeclarativeBase]) -> Generator[None, None, None]:
+def fresh_schema(engine: Engine, base: type[DeclarativeBase]) -> Generator[None]:
     """Create all tables for `base` on `engine`, dropping any pre-existing ones first and after."""
     with contextlib.suppress(NoSuchTableError):
         base.metadata.drop_all(engine)

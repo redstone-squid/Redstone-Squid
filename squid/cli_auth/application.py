@@ -400,7 +400,7 @@ def _verify_signature(public_key: bytes, signature: bytes, message: bytes) -> No
         raise InvalidCliDeviceProofError
     try:
         Ed25519PublicKey.from_public_bytes(public_key).verify(signature, message)
-    except (InvalidSignature, ValueError):
+    except InvalidSignature, ValueError:
         raise InvalidCliDeviceProofError from None
 
 

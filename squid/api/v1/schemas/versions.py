@@ -17,7 +17,7 @@ class VersionDetail(BaseModel):
     display_name: str
 
     @classmethod
-    def from_domain(cls, version: MinecraftVersion) -> "VersionDetail":
+    def from_domain(cls, version: MinecraftVersion) -> VersionDetail:
         return cls(
             edition=version.edition,
             major=version.major,

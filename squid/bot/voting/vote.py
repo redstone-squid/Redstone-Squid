@@ -291,7 +291,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if member is None:
             try:
                 member = await guild.fetch_member(discord_id)
-            except (discord.NotFound, discord.Forbidden):
+            except discord.NotFound, discord.Forbidden:
                 return None
         return await self._actor(member, kind, account_id=account_id)
 
@@ -318,6 +318,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VoteCog(bot))

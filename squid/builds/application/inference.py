@@ -104,7 +104,7 @@ class BuildInferenceInput:
         timestamp: str = "",
         attachment_summary: str = "",
         images: Sequence[InlineImage] = (),
-    ) -> "BuildInferenceInput":
+    ) -> BuildInferenceInput:
         """Create the common one-primary-message form used by simple callers."""
         message = ContextMessage(
             message_id=message_id,

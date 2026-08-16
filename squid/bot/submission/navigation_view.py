@@ -41,8 +41,8 @@ def disable_view_controls(view: discord.ui.LayoutView) -> None:
 
 
 async def resolve_parent[ClientT: discord.Client](
-    parent: "BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT]",
-) -> "BaseNavigableView[ClientT]":
+    parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT],
+) -> BaseNavigableView[ClientT]:
     """Resolves the parent view."""
     if callable(parent):
         return await maybe_coroutine(parent)
@@ -62,7 +62,7 @@ class BaseNavigableView[ClientT: discord.Client](ErrorHandledLayoutView, abc.ABC
     def __init__(
         self,
         /,
-        parent: "BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None" = None,
+        parent: BaseNavigableView[ClientT] | MaybeAwaitableBaseNavigableViewFunc[ClientT] | None = None,
         timeout: float | None = 180,
     ) -> None:
         """
@@ -75,7 +75,7 @@ class BaseNavigableView[ClientT: discord.Client](ErrorHandledLayoutView, abc.ABC
         self.parent: Final = parent
         super().__init__(timeout=timeout)
 
-    def __init_subclass__(cls: "type[BaseNavigableView[Any]]") -> None:
+    def __init_subclass__(cls: type[BaseNavigableView[Any]]) -> None:
         """Wrap the init method of the child view to add the "Stop", "Go Home", and "Go Back" buttons."""
         cls.__init__ = BaseNavigableView._wrap_init(cls.__init__)
         return super().__init_subclass__()
@@ -107,7 +107,7 @@ class BaseNavigableView[ClientT: discord.Client](ErrorHandledLayoutView, abc.ABC
         self._navigation_row = row
         super().add_item(row)
 
-    async def find_home(self) -> "BaseNavigableView[ClientT] | None":
+    async def find_home(self) -> BaseNavigableView[ClientT] | None:
         """Finds the home parent from a view."""
         if self.parent is None:
             return None

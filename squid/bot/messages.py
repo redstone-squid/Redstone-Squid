@@ -41,5 +41,5 @@ class MessageFactCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             await self.bot.services.messages.mark_deleted(message_id)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid") -> None:
+async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(MessageFactCog(bot))

@@ -16,7 +16,7 @@ from alembic import command
 
 
 @pytest.fixture(scope="session")
-def postgres_container() -> Generator[PostgresContainer, None, None]:
+def postgres_container() -> Generator[PostgresContainer]:
     """Run one PostgreSQL container for the integration-test session."""
     previous_ryuk_setting = testcontainers_config.ryuk_disabled
     if sys.platform == "win32":
@@ -29,7 +29,7 @@ def postgres_container() -> Generator[PostgresContainer, None, None]:
 
 
 @pytest.fixture
-async def async_engine(postgres_container: PostgresContainer) -> AsyncGenerator[AsyncEngine, None]:
+async def async_engine(postgres_container: PostgresContainer) -> AsyncGenerator[AsyncEngine]:
     """Create an async engine on the current pytest event loop."""
     url = postgres_container.get_connection_url(driver="asyncpg")
     engine = create_async_engine(url)

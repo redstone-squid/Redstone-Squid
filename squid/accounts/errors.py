@@ -25,7 +25,7 @@ class InvalidAccountError(ValidationError):
 def _identity_context(
     account_id: int | None,
     discord_id: int | None,
-    provider: "IdentityProvider | None",
+    provider: IdentityProvider | None,
     subject: str | None,
 ) -> dict[str, JSONValue]:
     """Describe whichever identity the caller was known by.
@@ -59,7 +59,7 @@ class AccountNotFoundError(NotFoundError):
         account_id: int | None = None,
         *,
         discord_id: int | None = None,
-        provider: "IdentityProvider | None" = None,
+        provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
         super().__init__(context=_identity_context(account_id, discord_id, provider, subject))
@@ -103,7 +103,7 @@ class AccountAlreadyLinkedError(ConflictError):
         minecraft_uuid: UUID,
         discord_id: int | None = None,
         account_id: int | None = None,
-        provider: "IdentityProvider | None" = None,
+        provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
         context = _identity_context(account_id, discord_id, provider, subject)
@@ -128,7 +128,7 @@ class ConsentRequiredError(ValidationError):
         discord_id: int | None = None,
         *,
         account_id: int | None = None,
-        provider: "IdentityProvider | None" = None,
+        provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
         super().__init__(context=_identity_context(account_id, discord_id, provider, subject))

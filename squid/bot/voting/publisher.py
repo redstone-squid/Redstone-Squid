@@ -38,7 +38,7 @@ class PollPublisher(Protocol):
 class DiscordPollPublisher:
     """Publish polls into Discord channels on behalf of the wizard."""
 
-    def __init__(self, bot: "squid.bot.app.RedstoneSquid") -> None:
+    def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self._bot = bot
 
     async def palette(self, guild_id: int) -> tuple[VoteOption, ...]:
@@ -93,7 +93,7 @@ class DiscordPollPublisher:
         return message
 
 
-def _emoji_is_usable(bot: "squid.bot.app.RedstoneSquid", guild_id: int, emoji: str) -> bool:
+def _emoji_is_usable(bot: squid.bot.app.RedstoneSquid, guild_id: int, emoji: str) -> bool:
     """Whether the bot may react with `emoji` in `guild_id`."""
     parsed = discord.PartialEmoji.from_str(emoji)
     if not parsed.is_custom_emoji():

@@ -19,7 +19,7 @@ class UserMe(BaseModel):
     consent_pending: bool
 
     @classmethod
-    def from_domain(cls, account: Account, *, consent_pending: bool) -> "UserMe":
+    def from_domain(cls, account: Account, *, consent_pending: bool) -> UserMe:
         discord = account.identity(IdentityProvider.DISCORD)
         java = account.identity(IdentityProvider.JAVA)
         assert account.id is not None
@@ -52,7 +52,7 @@ class MinecraftIdentityRefresh(BaseModel):
     """The staff review opened for a contested name."""
 
     @classmethod
-    def from_domain(cls, refresh: IdentityRefresh) -> "MinecraftIdentityRefresh":
+    def from_domain(cls, refresh: IdentityRefresh) -> MinecraftIdentityRefresh:
         return cls(
             minecraft_uuid=str(refresh.java_uuid),
             ign=refresh.current_name,

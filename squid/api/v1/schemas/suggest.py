@@ -27,7 +27,7 @@ class SuggestionItem(BaseModel):
     kind: str
 
     @classmethod
-    def from_domain(cls, suggestion: Suggestion) -> "SuggestionItem":
+    def from_domain(cls, suggestion: Suggestion) -> SuggestionItem:
         return cls(
             value=suggestion.value,
             label=suggestion.label,
@@ -45,7 +45,7 @@ class SuggestionReplacement(BaseModel):
     end: int
 
     @classmethod
-    def from_domain(cls, span: ReplacementSpan) -> "SuggestionReplacement":
+    def from_domain(cls, span: ReplacementSpan) -> SuggestionReplacement:
         return cls(start=span.start, end=span.end)
 
 
@@ -64,7 +64,7 @@ class SuggestionPage(BaseModel):
     items: list[SuggestionItem]
 
     @classmethod
-    def from_domain(cls, source: str, result: SuggestionResult) -> "SuggestionPage":
+    def from_domain(cls, source: str, result: SuggestionResult) -> SuggestionPage:
         return cls(
             source=source,
             revision=result.revision,
@@ -87,7 +87,7 @@ class SuggestionSourceInfo(BaseModel):
     """True when the source is gated or scoped, so an anonymous caller gets nothing."""
 
     @classmethod
-    def from_domain(cls, source: SuggestionSource) -> "SuggestionSourceInfo":
+    def from_domain(cls, source: SuggestionSource) -> SuggestionSourceInfo:
         return cls(
             id=source.id,
             kind=source.kind,

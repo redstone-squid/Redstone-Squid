@@ -47,7 +47,7 @@ class DatabaseCredentials:
     observer_password: str = field(repr=False)
 
     @classmethod
-    def generate(cls) -> "DatabaseCredentials":
+    def generate(cls) -> DatabaseCredentials:
         """Generate coordinator-owned passwords independent of container-visible identity."""
         return cls(
             administrator_password=secrets.token_urlsafe(32),

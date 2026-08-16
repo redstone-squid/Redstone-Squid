@@ -308,6 +308,6 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             raise ValueError(msg)
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Admin(bot))

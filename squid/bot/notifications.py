@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class NotificationCog(commands.GroupCog, group_name="notifications", group_description="Manage notification opt-ins"):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
-    def __init__(self, bot: "RedstoneSquid") -> None:
+    def __init__(self, bot: RedstoneSquid) -> None:
         self.bot = bot
         self._delivery_task: JobHandle | None = None
 
@@ -201,5 +201,5 @@ def _subscription_target(subscription: NotificationSubscription) -> str:
     return str(subscription.record_filter.as_dict()) if subscription.record_filter is not None else ""
 
 
-async def setup(bot: "RedstoneSquid") -> None:
+async def setup(bot: RedstoneSquid) -> None:
     await bot.add_cog(NotificationCog(bot))

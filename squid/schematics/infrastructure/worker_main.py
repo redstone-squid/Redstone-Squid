@@ -110,7 +110,7 @@ def _current_address_space_bytes() -> int:
     try:
         with open("/proc/self/statm", "rb") as handle:
             size_pages = int(handle.readline().split()[0])
-    except (OSError, ValueError, IndexError):  # pragma: no cover - non-Linux POSIX has no /proc
+    except OSError, ValueError, IndexError:  # pragma: no cover - non-Linux POSIX has no /proc
         return 0
     return size_pages * resource.getpagesize()
 
@@ -122,7 +122,7 @@ def _set_limit(which: int, soft: int) -> None:
         _, hard = resource.getrlimit(which)
         ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)
         resource.setrlimit(which, (ceiling, hard))
-    except (OSError, ValueError):  # pragma: no cover - depends on host policy
+    except OSError, ValueError:  # pragma: no cover - depends on host policy
         logger.warning("Could not apply resource limit %s.", which, exc_info=True)
 
 

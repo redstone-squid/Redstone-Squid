@@ -28,7 +28,7 @@ _TABLE = Base.metadata.tables["schematic_jobs"]
 
 
 @pytest.fixture
-async def schematic_job_table(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def schematic_job_table(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all, tables=[_TABLE])
     try:

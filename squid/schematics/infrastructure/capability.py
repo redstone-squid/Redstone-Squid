@@ -35,7 +35,7 @@ def engine_installed() -> bool:
     """
     try:
         return importlib.util.find_spec(ENGINE_MODULE) is not None
-    except (ImportError, ValueError):
+    except ImportError, ValueError:
         # A shadowed or half-installed distribution can leave find_spec raising rather than
         # returning None; treat that as "not usable" instead of taking the bot down.
         return False

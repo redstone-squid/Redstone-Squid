@@ -89,7 +89,7 @@ def suggests(
     return autocomplete
 
 
-def autocompletes(**params: "str | AutocompleteCallback") -> Callable[[Any], Any]:
+def autocompletes(**params: str | AutocompleteCallback) -> Callable[[Any], Any]:
     """Attach suggestion sources to several parameters of one command.
 
     Applied above the command decorator, so it receives the built command:
@@ -116,7 +116,7 @@ def autocompletes(**params: "str | AutocompleteCallback") -> Callable[[Any], Any
 class _InteractionAuthorizer:
     """Answer permission questions for the user behind an autocomplete interaction."""
 
-    def __init__(self, interaction: "discord.Interaction[squid.bot.app.RedstoneSquid]") -> None:
+    def __init__(self, interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
         self._interaction = interaction
 
     async def allows(self, node: str) -> bool:

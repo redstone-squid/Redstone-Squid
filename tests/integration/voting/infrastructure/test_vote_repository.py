@@ -60,7 +60,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
 
 
 @pytest.fixture(autouse=True)
-async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def vote_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     """Create the voting tables from the models rather than from a hand-written copy.
 
     The DDL this replaces had to be edited by hand every time a voting column changed,
