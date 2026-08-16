@@ -179,8 +179,12 @@ class Dimensions(BaseModel):
     depth: int | None
 
 
+# The internal `build_tag_assignments.provenance` column keeps its name for now:
+# renaming it reaches the tags repository, the builds mapping, the taxonomy
+# backfill, and a migration, for a word no client ever sees. `source` is the
+# replacement if the ban is meant repo-wide, and that is its own commit.
 class BuildTag(BaseModel):
-    """A public tag assignment without moderation provenance."""
+    """A tag on a build, without who applied it or how."""
 
     model_config = ConfigDict(extra="forbid")
 

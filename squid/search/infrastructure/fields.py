@@ -65,5 +65,5 @@ def _field_definition(
         storage_name=f"tag:{definition.id}",
         supports_sort=True,
         unit_scales=unit_scales,
-        numeric_quantum=definition.numeric_quantum,
+        numeric_step=definition.numeric_step,
     )

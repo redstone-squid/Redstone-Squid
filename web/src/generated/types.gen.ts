@@ -380,7 +380,7 @@ export type BuildSummary = {
 /**
  * BuildTag
  *
- * A public tag assignment without moderation provenance.
+ * A tag on a build, without who applied it or how.
  */
 export type BuildTag = {
     /**
@@ -2645,7 +2645,7 @@ export type TagDetail = {
     /**
      * Numeric Quantum
      */
-    numeric_quantum: string | null;
+    numeric_step: string | null;
 };
 
 /**

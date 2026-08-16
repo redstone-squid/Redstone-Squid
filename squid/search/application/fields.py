@@ -30,7 +30,7 @@ class FieldDefinition:
     storage_name: str | None = None
     supports_sort: bool = False
     unit_scales: tuple[tuple[str, Decimal], ...] = ()
-    numeric_quantum: Decimal | None = None
+    numeric_step: Decimal | None = None
 
 
 class FieldRegistry:
@@ -145,7 +145,7 @@ def _coerce_decimal(raw: str, field: FieldDefinition) -> Decimal:
             value = Decimal(normalized)
     if not value.is_finite():
         raise ValueError
-    if field.numeric_quantum is not None and value % field.numeric_quantum != 0:
-        msg = f"{field.name} must align to increments of {field.numeric_quantum}"
+    if field.numeric_step is not None and value % field.numeric_step != 0:
+        msg = f"{field.name} must align to increments of {field.numeric_step}"
         raise ValueError(msg)
     return value
