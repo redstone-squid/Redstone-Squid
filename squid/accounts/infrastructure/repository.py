@@ -163,13 +163,9 @@ class AccountRepository:
             )
             return None if model is None else await self._load_account(session, model)
 
-    async def get_by_discord_id(self, discord_id: int) -> Account | None:
-        """Return the account holding *discord_id*."""
-        return await self.get_by_identity(IdentityProvider.DISCORD, str(discord_id))
-
-    async def get_or_create_discord(self, discord_id: int) -> Account:
-        """Resolve a Discord identity, atomically creating its account when absent."""
-        identity = AccountIdentity.discord(discord_id)
+    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+        """Resolve one external identity, atomically creating its account when absent."""
+        identity = AccountIdentity.for_provider(provider, subject)
         async with self._session_factory.begin() as session:
             existing = await self._find_account(session, identity.provider, identity.subject)
             if existing is not None:
@@ -208,16 +204,13 @@ class AccountRepository:
             await session.flush()
             return await self._load_account(session, model)
 
-    async def unlink_java_identity(self, discord_id: int) -> bool:
-        """Remove Java identities from the account holding a Discord identity."""
+    async def unlink_java_identity(self, account_id: int) -> bool:
+        """Remove every Java identity from one account."""
         async with self._session_factory.begin() as session:
-            account = await self._find_account(session, IdentityProvider.DISCORD, str(discord_id))
-            if account is None:
-                return False
             removed = await session.execute(
                 delete(AccountIdentityModel)
                 .where(
-                    AccountIdentityModel.account_id == account.id,
+                    AccountIdentityModel.account_id == account_id,
                     AccountIdentityModel.provider == IdentityProvider.JAVA,
                 )
                 .returning(AccountIdentityModel.id)
@@ -421,11 +414,17 @@ class AccountRepository:
     async def consume_code_and_link_account(
         self,
         *,
-        discord_id: int,
+        account_id: int,
         code: str,
         consent: AccountConsent,
     ) -> VerificationLinkResult:
-        """Consume one code and attach its Java identity atomically."""
+        """Consume one code and attach its Java identity to *account_id* atomically.
+
+        The account must already exist. Redeeming a code is evidence of a *Java* subject and
+        of nothing else, so this path no longer mints an identity in any other namespace;
+        whoever holds evidence of the caller's own provider creates the account before
+        calling. That is what lets a Minecraft-only or CLI-only caller link at all.
+        """
         async with self._session_factory.begin() as session:
             verification_code = await session.scalar(
                 select(VerificationCodeModel)
@@ -439,42 +438,33 @@ class AccountRepository:
             if verification_code is None:
                 return VerificationLinkResult()
 
-            discord_account = await self._find_account(
-                session, IdentityProvider.DISCORD, str(discord_id), for_update=True
-            )
+            account = await session.get(AccountModel, account_id, with_for_update=True)
+            if account is None:
+                raise AccountNotFoundError(account_id)
             java_subject = str(verification_code.minecraft_uuid)
             java_holder = await self._find_account(session, IdentityProvider.JAVA, java_subject, for_update=True)
-            existing_java = None
-            if discord_account is not None:
-                existing_java = await session.scalar(
-                    select(AccountIdentityModel).where(
-                        AccountIdentityModel.account_id == discord_account.id,
-                        AccountIdentityModel.provider == IdentityProvider.JAVA,
-                    )
+            existing_java = await session.scalar(
+                select(AccountIdentityModel).where(
+                    AccountIdentityModel.account_id == account.id,
+                    AccountIdentityModel.provider == IdentityProvider.JAVA,
                 )
-                if existing_java is not None and existing_java.subject != java_subject:
-                    return VerificationLinkResult(
-                        account=await self._load_account(session, discord_account),
-                        conflicting_java_uuid=uuid.UUID(existing_java.subject),
-                    )
-            if java_holder is not None and (discord_account is None or java_holder.id != discord_account.id):
+            )
+            if existing_java is not None and existing_java.subject != java_subject:
                 return VerificationLinkResult(
-                    account=None if discord_account is None else await self._load_account(session, discord_account),
+                    account=await self._load_account(session, account),
+                    conflicting_java_uuid=uuid.UUID(existing_java.subject),
+                )
+            if java_holder is not None and java_holder.id != account.id:
+                return VerificationLinkResult(
+                    account=await self._load_account(session, account),
                     conflicting_java_uuid=verification_code.minecraft_uuid,
                 )
 
-            if discord_account is None:
-                discord_account = AccountModel()
-                session.add(discord_account)
-                await session.flush()
-                session.add(
-                    self._identity_model(discord_account.id, AccountIdentity.discord(discord_id, verified_at=_now()))
-                )
             previous_name = None
             if existing_java is None:
                 session.add(
                     self._identity_model(
-                        discord_account.id,
+                        account.id,
                         AccountIdentity.java(
                             verification_code.minecraft_uuid,
                             username=verification_code.username,
@@ -486,20 +476,20 @@ class AccountRepository:
                 previous_name = existing_java.display_name
                 existing_java.display_name = verification_code.username
                 existing_java.verified_at = _now()
-            discord_account.consent_version = consent.version
-            discord_account.consented_at = consent.granted_at
+            account.consent_version = consent.version
+            account.consented_at = consent.granted_at
             verification_code.valid = False
 
             refresh = await self._reconcile_java_name(
                 session,
-                account=discord_account,
+                account=account,
                 java_uuid=verification_code.minecraft_uuid,
                 username=verification_code.username,
                 previous_name=previous_name,
             )
             await session.flush()
             return VerificationLinkResult(
-                account=await self._load_account(session, discord_account),
+                account=await self._load_account(session, account),
                 claimed_alias=refresh.claimed_alias,
                 refresh=refresh,
             )

@@ -9,6 +9,7 @@ import pytest
 from discord.ext.commands import Context
 
 from squid.accounts.application import AccountService
+from squid.accounts.domain import IdentityProvider
 from squid.bot.app import RedstoneSquid
 from squid.bot.utils.permissions import (
     AccountIdCache,
@@ -31,9 +32,10 @@ class FakeAccountService:
     def __init__(self) -> None:
         self.lookups = 0
 
-    async def get_account(self, discord_id: int) -> SimpleNamespace:
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> SimpleNamespace:
+        assert provider is IdentityProvider.DISCORD
         self.lookups += 1
-        return SimpleNamespace(id=discord_id)
+        return SimpleNamespace(id=int(subject))
 
 
 class FakePermissionStore:

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.accounts import account_id_for
 from squid.builds.domain import Build, Status
 from squid.voting.domain import VoteKind, VoteOption
 
@@ -76,10 +77,9 @@ async def start_delete_log_vote(
         raise ValueError(msg)
 
     options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
-    author = await bot.services.accounts.get_or_create_account(author_id)
-    assert author.id is not None
+    author_account_id = await account_id_for(bot.services.accounts, author_id)
     session_id = await bot.services.votes.start_delete_log_vote(
-        author_account_id=author.id,
+        author_account_id=author_account_id,
         pass_threshold=3,
         fail_threshold=-3,
         message_id=target_message.id,

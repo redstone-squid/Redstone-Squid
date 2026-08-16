@@ -10,6 +10,7 @@ from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import build_subject
 from squid.bot.voting.poll_wizard import PollModal
@@ -271,9 +272,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
         )
         if account_id is None:
-            account = await self.bot.services.accounts.get_or_create_account(member.id)
-            assert account.id is not None
-            account_id = account.id
+            account_id = await account_id_for(self.bot.services.accounts, member)
         return VoteActor(
             account_id,
             member.id,

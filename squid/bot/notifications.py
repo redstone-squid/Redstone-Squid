@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.notifications import (
     NotificationSubscription,
@@ -46,9 +47,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 
     @app_commands.command(name="status", description="Show your notification consent and channels")
     async def status(self, interaction: discord.Interaction) -> None:
-        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
-        assert account.id is not None
-        preferences = await self.bot.services.notifications.preferences(account.id)
+        account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        preferences = await self.bot.services.notifications.preferences(account_id)
         await interaction.response.send_message(
             "Notification notice: "
             f"{'accepted' if preferences.has_current_consent else 'not accepted'}\n"
@@ -60,16 +60,14 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
 
     @app_commands.command(name="consent", description="Accept the notification notice and choose channels")
     async def consent(self, interaction: discord.Interaction, web: bool = False, dm: bool = False) -> None:
-        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
-        assert account.id is not None
-        await self.bot.services.notifications.accept_notice(account.id, web_enabled=web, dm_enabled=dm)
+        account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        await self.bot.services.notifications.accept_notice(account_id, web_enabled=web, dm_enabled=dm)
         await interaction.response.send_message("Notification preferences saved.", ephemeral=True)
 
     @app_commands.command(name="channels", description="Change web and Discord DM channels")
     async def channels(self, interaction: discord.Interaction, web: bool, dm: bool) -> None:
-        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
-        assert account.id is not None
-        await self.bot.services.notifications.set_preferences(account.id, web_enabled=web, dm_enabled=dm)
+        account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        await self.bot.services.notifications.set_preferences(account_id, web_enabled=web, dm_enabled=dm)
         await interaction.response.send_message("Notification channels updated.", ephemeral=True)
 
     @autocompletes(creator_id="creator_profiles")
@@ -166,9 +164,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
                 await self.bot.services.notifications.complete_delivery(delivery)
 
     async def _account_id(self, interaction: discord.Interaction) -> int:
-        account = await self.bot.services.accounts.get_or_create_account(interaction.user.id)
-        assert account.id is not None
-        return account.id
+        return await account_id_for(self.bot.services.accounts, interaction.user)
 
 
 def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:

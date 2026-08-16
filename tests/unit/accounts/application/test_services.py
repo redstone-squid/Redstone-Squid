@@ -57,12 +57,13 @@ class FakeAccountRepository:
 
     def seed_account(
         self,
-        discord_id: int,
+        subject: int,
         *,
+        provider: IdentityProvider = IdentityProvider.DISCORD,
         consent: AccountConsent | None = None,
         java_uuid: UUID | None = None,
     ) -> Account:
-        identities = [AccountIdentity.discord(discord_id, verified_at=NOW)]
+        identities = [AccountIdentity.for_provider(provider, str(subject), verified_at=NOW)]
         if java_uuid is not None:
             identities.append(AccountIdentity.java(java_uuid, username="Player", verified_at=NOW))
         account = Account(tuple(identities), consent, self._next_id, NOW, UUID(int=self._next_id))
@@ -91,20 +92,9 @@ class FakeAccountRepository:
             None,
         )
 
-    async def unlink_java_identity(self, discord_id: int) -> bool:
-        entry = next(
-            (
-                (account_id, account)
-                for account_id, account in self.accounts.items()
-                if (identity := account.identity(IdentityProvider.DISCORD)) is not None
-                and identity.subject == str(discord_id)
-            ),
-            None,
-        )
-        if entry is None:
-            return False
-        account_id, account = entry
-        if account.identity(IdentityProvider.JAVA) is None:
+    async def unlink_java_identity(self, account_id: int) -> bool:
+        account = self.accounts.get(account_id)
+        if account is None or account.identity(IdentityProvider.JAVA) is None:
             return False
         remaining = tuple(identity for identity in account.identities if identity.provider is not IdentityProvider.JAVA)
         self.accounts[account_id] = Account(
@@ -120,22 +110,11 @@ class FakeAccountRepository:
         self.aliases[alias.id] = claimed
         return claimed
 
-    async def get_by_discord_id(self, discord_id: int) -> Account | None:
-        return next(
-            (
-                account
-                for account in self.accounts.values()
-                if (identity := account.identity(IdentityProvider.DISCORD)) is not None
-                and identity.subject == str(discord_id)
-            ),
-            None,
-        )
-
     async def get_by_id(self, account_id: int) -> Account | None:
         return self.accounts.get(account_id)
 
-    async def get_or_create_discord(self, discord_id: int) -> Account:
-        return await self.get_by_discord_id(discord_id) or self.seed_account(discord_id)
+    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+        return await self.get_by_identity(provider, subject) or self.seed_account(int(subject), provider=provider)
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
         account = self.accounts[account_id]
@@ -144,8 +123,10 @@ class FakeAccountRepository:
         return updated
 
     async def consume_code_and_link_account(
-        self, *, discord_id: int, code: str, consent: AccountConsent
+        self, *, account_id: int, code: str, consent: AccountConsent
     ) -> VerificationLinkResult:
+        if account_id not in self.accounts:
+            raise AccountNotFoundError(account_id)
         return self.link_result
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge:
@@ -233,7 +214,7 @@ def test_identity_factories_use_canonical_provider_subjects() -> None:
 async def test_discord_login_creates_an_account_without_making_discord_primary() -> None:
     repository = FakeAccountRepository()
 
-    account = await service(repository).get_or_create_account(123)
+    account = await service(repository).get_or_create_identity(IdentityProvider.DISCORD, "123")
 
     assert account.identity(IdentityProvider.DISCORD) == AccountIdentity.discord(123, verified_at=NOW)
     assert account.identity(IdentityProvider.JAVA) is None
@@ -241,29 +222,26 @@ async def test_discord_login_creates_an_account_without_making_discord_primary()
 
 async def test_grant_current_consent_updates_the_internal_account() -> None:
     repository = FakeAccountRepository()
-    repository.seed_account(123)
+    seeded = repository.seed_account(123)
+    assert seeded.id is not None
 
-    account = await service(repository).grant_current_consent(123)
+    account = await service(repository).grant_current_consent(seeded.id)
 
     assert account.consent is not None
     assert account.consent.version == CURRENT_CONSENT_VERSION
 
 
-async def test_consent_requires_an_existing_account() -> None:
-    with pytest.raises(AccountNotFoundError):
-        await service(FakeAccountRepository()).grant_current_consent(123)
-
-
 async def test_link_rejects_an_invalid_or_conflicting_java_identity() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
     linked = service(repository)
     with pytest.raises(InvalidVerificationCodeError):
-        await linked.link_minecraft_account(123, "bad", consent=CONSENT)
+        await linked.link_minecraft_account(account.id, "bad", consent=CONSENT)
 
     repository.link_result = VerificationLinkResult(account=account, conflicting_java_uuid=OTHER_JAVA_UUID)
     with pytest.raises(AccountAlreadyLinkedError):
-        await linked.link_minecraft_account(123, "valid", consent=CONSENT)
+        await linked.link_minecraft_account(account.id, "valid", consent=CONSENT)
 
 
 async def test_link_returns_the_automatically_claimed_alias() -> None:
@@ -271,24 +249,27 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
     account = repository.seed_account(123, consent=CONSENT, java_uuid=JAVA_UUID)
     alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
     repository.link_result = VerificationLinkResult(account=account, claimed_alias=alias)
+    assert account.id is not None
 
-    assert await service(repository).link_minecraft_account(123, "valid", consent=CONSENT) == alias
+    assert await service(repository).link_minecraft_account(account.id, "valid", consent=CONSENT) == alias
 
 
 async def test_alias_claim_requires_current_consent() -> None:
     repository = FakeAccountRepository()
-    repository.seed_account(123)
+    seeded = repository.seed_account(123)
+    assert seeded.id is not None
     repository.aliases[1] = CreatorAlias(1, "OldName")
 
     with pytest.raises(ConsentRequiredError):
-        await service(repository).request_alias_claim(123, "OldName")
+        await service(repository).request_alias_claim(seeded.id, "OldName")
 
 
 async def test_staff_resolution_records_the_staff_account() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
     repository.aliases[1] = CreatorAlias(1, "OldName")
-    claim = await service(repository).request_alias_claim(123, "OldName")
+    claim = await service(repository).request_alias_claim(account.id, "OldName")
 
     resolved = await service(repository).approve_alias_claim(claim.id, staff_account_id=99)
 
@@ -368,3 +349,32 @@ async def test_refresh_can_name_which_java_identity_to_refresh() -> None:
 
     with pytest.raises(NoLinkedMinecraftAccountError):
         await service(repository).refresh_java_identity(account.id, java_uuid=OTHER_JAVA_UUID)
+
+
+async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> None:
+    """The point of the rekeying: a Bedrock-only caller is a first-class linker.
+
+    Both halves were unreachable before -- linking looked the account up by Discord
+    identity and minted one when absent, and unlinking looked it up by Discord identity
+    and gave up when there was none.
+    """
+    repository = FakeAccountRepository()
+    account = repository.seed_account(555, provider=IdentityProvider.BEDROCK, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+    assert account.identity(IdentityProvider.DISCORD) is None
+    alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
+    repository.link_result = VerificationLinkResult(account=account, claimed_alias=alias)
+    accounts = service(repository)
+
+    assert await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT) == alias
+    assert await accounts.unlink_minecraft_account(account.id) is True
+    assert repository.accounts[account.id].identity(IdentityProvider.JAVA) is None
+
+
+async def test_linking_against_a_missing_account_does_not_create_one() -> None:
+    repository = FakeAccountRepository()
+
+    with pytest.raises(AccountNotFoundError):
+        await service(repository).link_minecraft_account(999, "valid", consent=CONSENT)
+
+    assert repository.accounts == {}

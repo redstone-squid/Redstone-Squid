@@ -14,6 +14,7 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import build_subject, requires, subject_for
@@ -69,9 +70,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         return ctx.guild.id
 
     async def _account_id(self, user: discord.User | discord.Member) -> int:
-        account = await self.bot.services.accounts.get_or_create_account(user.id)
-        assert account.id is not None
-        return account.id
+        return await account_id_for(self.bot.services.accounts, user)
 
     async def _reply(self, ctx: Context[BotT], title: str, body: str) -> None:
         locale = await resolve_locale(ctx, self.bot.services.settings)

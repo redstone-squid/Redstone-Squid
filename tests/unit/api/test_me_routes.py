@@ -81,11 +81,11 @@ async def test_a_caller_without_an_account_is_rejected() -> None:
 
 
 async def test_consent_is_granted_by_account_not_discord_id() -> None:
-    accounts = SimpleNamespace(grant_current_consent_for_account=AsyncMock(return_value=_account(discord=False)))
+    accounts = SimpleNamespace(grant_current_consent=AsyncMock(return_value=_account(discord=False)))
 
     response = await grant_consent(cast(Any, accounts), _caller("cli", discord_id=None))
 
-    accounts.grant_current_consent_for_account.assert_awaited_once_with(1)
+    accounts.grant_current_consent.assert_awaited_once_with(1)
     assert response.consent_pending is False
 
 
