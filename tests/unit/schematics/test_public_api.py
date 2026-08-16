@@ -11,7 +11,9 @@ from squid.api.v1.schematics import get_schematic_content, list_build_schematics
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
 from squid.builds.errors import BuildNotFoundError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
+from squid.schematics.application.queries import PublicSchematicDownload
 from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import make_analysis
 
@@ -46,12 +48,25 @@ class PublicSchematics:
             publication=_public_publication(),
         )
 
-    async def list_public_for_build(self, build_id: int) -> list[StoredSchematic]:
-        return [self.stored] if build_id == 7 else []
+    async def list_public_page(
+        self,
+        build_id: int,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 50,
+    ) -> Page[StoredSchematic]:
+        items = [self.stored] if build_id == 7 else []
+        return offset_page(items, offset=selector.offset, page_size=page_size)
 
-    async def public_content(self, build_id: int, schematic_id: int) -> tuple[bytes, StoredSchematic]:
+    async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
         assert (build_id, schematic_id) == (7, 3)
-        return b"original-schematic", self.stored
+        assert self.stored.publication.license is not None
+        return PublicSchematicDownload(
+            content=b"original-schematic",
+            schematic=self.stored,
+            license=self.stored.publication.license,
+            source_format=self.stored.analysis.metrics.source_format,
+        )
 
 
 async def test_public_metadata_omits_digest_and_original_filename() -> None:
@@ -63,6 +78,7 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
         offset=None,
     )
 
+    assert page.total == 1
     item = page.items[0].model_dump(mode="json")
     assert "sha256" not in item
     assert "filename" not in item
@@ -101,3 +117,25 @@ def test_legacy_record_is_not_public_without_a_distribution_grant() -> None:
     legacy = SchematicPublication()
 
     assert legacy.is_public_downloadable is False
+
+
+@pytest.mark.parametrize("source_format", list(SchematicFormat))
+async def test_each_stored_format_downloads_under_its_own_extension(source_format: SchematicFormat) -> None:
+    """The extension follows the container the analysis recorded, so a `.litematic`
+    stops arriving named `.schem`. The stem stays server-generated."""
+    schematics = PublicSchematics()
+    analysis = schematics.stored.analysis
+    schematics.stored = replace(
+        schematics.stored,
+        analysis=replace(analysis, metrics=replace(analysis.metrics, source_format=source_format)),
+    )
+
+    response = await get_schematic_content(
+        7,
+        3,
+        cast(BuildQueryService, ConfirmedBuilds()),
+        cast(SchematicService, schematics),
+    )
+
+    expected = f'attachment; filename="build-7-schematic-3.{source_format.value}"'
+    assert response.headers["content-disposition"] == expected
