@@ -271,6 +271,7 @@ class _ServiceGraph:
             self.version_service,
             self.embedding_service,
             OfficialTagResolver(self.db.async_session),
+            permissions=self.permissions,
         )
 
     @cached_property

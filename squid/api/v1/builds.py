@@ -25,25 +25,21 @@ from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilt
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds, parse_sort
 from squid.builds.application import (
     BUILD_SORT_FIELDS,
+    BuildEditor,
     BuildEditPatch,
     BuildListSort,
     BuildSortField,
     DoorSubmissionInput,
 )
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Build
 from squid.builds.errors import (
-    BuildNotFoundError,
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
     InvalidBuildError,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.permissions.application import PermissionService
-from squid.permissions.domain.catalogue import (
-    BUILD_SUBMISSION_CREATE,
-    BUILD_SUBMISSION_EDIT,
-    BUILD_SUBMISSION_VIEW_PENDING,
-)
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
 from squid.search.domain import SearchMode, SearchRequest, SearchScope
 
 router = APIRouter(prefix="/builds", tags=["builds"])
@@ -108,35 +104,39 @@ async def edit_build(
     changes: BuildPatch,
     response: Response,
     builds: BuildCommands,
-    permissions: Permissions,
     principal: UserWriter,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
-    """Edit an owned pending build, or any build as a global administrator."""
+    """Edit an owned pending build, or any build with `build.submission.edit`."""
     _require_consented_user(principal)
-    expected_revision = _expected_revision(build_id, if_match)
-    patch = BuildEditPatch.from_attributes(changes.edit_attributes())
-    assert principal.discord_id is not None
-    async with builds.edit(
+    build = await builds.apply_edit(
+        BuildEditor(subject=subject_for(principal), discord_id=principal.discord_id),
         build_id,
-        patch,
-        blocking=False,
-        expected_revision=expected_revision,
-    ) as lease:
-        is_owner = lease.build.submission_status is Status.PENDING and lease.build.submitter_id == principal.discord_id
-        if not is_owner and not await permissions.allows(subject_for(principal), BUILD_SUBMISSION_EDIT):
-            raise AuthorizationError
-        build = await lease.commit()
+        BuildEditPatch.from_attributes(changes.edit_attributes()),
+        expected_revision=_expected_revision(build_id, if_match),
+    )
     _set_build_etag(response, build)
     return BuildDetail.from_domain(build)
 
 
-@router.get("/{build_id}", response_model=BuildDetail, responses=responses(404, 422, 503))
+@router.get(
+    "/{build_id}",
+    response_model=BuildDetail,
+    responses=responses(
+        404,
+        422,
+        503,
+        describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
+    ),
+)
 async def get_build(build_id: int, response: Response, build_queries: BuildQueries) -> BuildDetail:
-    """Return one confirmed public build."""
-    build = await build_queries.get(build_id)
-    if build is None or build.submission_status is not Status.CONFIRMED:
-        raise BuildNotFoundError(build_id)
+    """Return one confirmed public build.
+
+    A pending build answers 404, not 403: a submission's existence is private
+    until it is confirmed, so "not published" and "not there" have to be
+    indistinguishable to a caller without `build.submission.view_pending`.
+    """
+    build = await build_queries.get_public(build_id)
     _set_build_etag(response, build)
     return BuildDetail.from_domain(build)
 
