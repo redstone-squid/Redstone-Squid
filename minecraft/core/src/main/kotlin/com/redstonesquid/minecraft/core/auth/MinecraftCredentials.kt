@@ -24,8 +24,8 @@ public class PaperInstallationCredential(
     }
 
     internal fun headers(): Map<String, String> = mapOf(
-        "X-Squid-Installation-ID" to installationId.toString(),
-        "X-Squid-Installation-Secret" to secret,
+        "Squid-Installation-ID" to installationId.toString(),
+        "Squid-Installation-Secret" to secret,
     )
 
     override fun toString(): String =

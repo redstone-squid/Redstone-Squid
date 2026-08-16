@@ -5212,7 +5212,7 @@
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           },
           {
-            "name": "X-Squid-Installation-ID",
+            "name": "Squid-Installation-ID",
             "in": "header",
             "required": false,
             "schema": {
@@ -5224,11 +5224,11 @@
                   "type": "null"
                 }
               ],
-              "title": "X-Squid-Installation-Id"
+              "title": "Squid-Installation-Id"
             }
           },
           {
-            "name": "X-Squid-Installation-Secret",
+            "name": "Squid-Installation-Secret",
             "in": "header",
             "required": false,
             "schema": {
@@ -5240,7 +5240,7 @@
                   "type": "null"
                 }
               ],
-              "title": "X-Squid-Installation-Secret"
+              "title": "Squid-Installation-Secret"
             }
           }
         ],
@@ -5433,7 +5433,7 @@
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           },
           {
-            "name": "X-Squid-Installation-ID",
+            "name": "Squid-Installation-ID",
             "in": "header",
             "required": false,
             "schema": {
@@ -5445,11 +5445,11 @@
                   "type": "null"
                 }
               ],
-              "title": "X-Squid-Installation-Id"
+              "title": "Squid-Installation-Id"
             }
           },
           {
-            "name": "X-Squid-Installation-Secret",
+            "name": "Squid-Installation-Secret",
             "in": "header",
             "required": false,
             "schema": {
@@ -5461,7 +5461,7 @@
                   "type": "null"
                 }
               ],
-              "title": "X-Squid-Installation-Secret"
+              "title": "Squid-Installation-Secret"
             }
           }
         ],
@@ -18704,12 +18704,12 @@
       "PaperInstallationId": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-Squid-Installation-ID"
+        "name": "Squid-Installation-ID"
       },
       "PaperInstallationSecret": {
         "type": "apiKey",
         "in": "header",
-        "name": "X-Squid-Installation-Secret"
+        "name": "Squid-Installation-Secret"
       }
     },
     "headers": {

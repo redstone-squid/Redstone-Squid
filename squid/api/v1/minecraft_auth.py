@@ -182,8 +182,8 @@ async def current_account_id(principal: Annotated[Principal, Depends(current_pri
 Installations = Annotated[PaperInstallationHttpService, Depends(get_installation_service)]
 PlayerAuthorization = Annotated[PlayerAuthorizationHttpService, Depends(get_player_authorization_service)]
 AccountId = Annotated[int, Depends(current_account_id)]
-InstallationIdHeader = Annotated[str | None, Header(alias="X-Squid-Installation-ID")]
-InstallationSecretHeader = Annotated[str | None, Header(alias="X-Squid-Installation-Secret")]
+InstallationIdHeader = Annotated[str | None, Header(alias="Squid-Installation-ID")]
+InstallationSecretHeader = Annotated[str | None, Header(alias="Squid-Installation-Secret")]
 VerificationUri = Annotated[AnyHttpUrl, Depends(get_minecraft_verification_uri)]
 
 

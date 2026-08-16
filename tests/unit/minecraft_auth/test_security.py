@@ -108,8 +108,8 @@ async def test_paper_player_token_requires_and_authenticates_both_installation_h
         players,
         installations,
         headers=(
-            (b"x-squid-installation-id", str(INSTALLATION_ID).encode()),
-            (b"x-squid-installation-secret", INSTALLATION_SECRET.encode()),
+            (b"squid-installation-id", str(INSTALLATION_ID).encode()),
+            (b"squid-installation-secret", INSTALLATION_SECRET.encode()),
         ),
     )
 
@@ -124,10 +124,10 @@ async def test_paper_player_token_requires_and_authenticates_both_installation_h
 @pytest.mark.parametrize(
     "headers",
     [
-        ((b"x-squid-installation-id", str(INSTALLATION_ID).encode()),),
+        ((b"squid-installation-id", str(INSTALLATION_ID).encode()),),
         (
-            (b"x-squid-installation-id", str(INSTALLATION_ID).encode()),
-            (b"x-squid-installation-secret", b"s" * 513),
+            (b"squid-installation-id", str(INSTALLATION_ID).encode()),
+            (b"squid-installation-secret", b"s" * 513),
         ),
     ],
 )
