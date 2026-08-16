@@ -1,4 +1,4 @@
-"""Transport-neutral pagination: how a page is addressed, and how one is assembled.
+"""Pagination: how a page is addressed, and how one is assembled.
 
 Pagination is transparent: every value a caller needs to reach an adjacent page is a plain
 identifier or offset it could also have supplied by hand. A page addresses its neighbours in the

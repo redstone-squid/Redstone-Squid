@@ -1,4 +1,4 @@
-"""Shared transport-neutral application errors."""
+"""Application errors, shaped for HTTP, Discord, and the CLI alike."""
 
 from collections.abc import Mapping, Sequence
 from enum import StrEnum

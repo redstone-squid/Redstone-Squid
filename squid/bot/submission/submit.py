@@ -59,7 +59,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """Parameters for the `/build submit-full` command."""
 
         def to_submission(self, submitter_id: int) -> DoorSubmissionInput:
-            """Convert Discord flags to framework-neutral submission input."""
+            """Convert Discord flags to the submission input the service accepts."""
             return DoorSubmissionInput(
                 submitter_id=submitter_id,
                 door_size=self.door_size,

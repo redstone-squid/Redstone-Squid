@@ -4,7 +4,7 @@ from pathlib import Path
 from pytest_archon import archrule
 
 
-def test_exception_model_is_transport_neutral() -> None:
+def test_exception_model_imports_no_transport() -> None:
     (
         archrule("application exceptions stay independent from transport adapters")
         .match("squid.core.errors")
@@ -15,7 +15,7 @@ def test_exception_model_is_transport_neutral() -> None:
     )
 
 
-def test_i18n_core_is_transport_neutral() -> None:
+def test_i18n_core_imports_no_transport() -> None:
     (
         archrule("translation lookup stays independent from transport adapters")
         .match("squid.core.i18n")

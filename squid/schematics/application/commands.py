@@ -1,4 +1,4 @@
-"""Transport-neutral request objects for schematic operations."""
+"""Schematic request objects, built the same way by the bot, the API, and the worker."""
 
 from dataclasses import dataclass
 from typing import Literal

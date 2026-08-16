@@ -136,7 +136,7 @@ def test_openapi_declares_submission_draft_producer_links() -> None:
         assert link["parameters"] == {"draft_id": expected.draft_id_expression}
 
 
-def test_cli_command_operations_have_language_neutral_fixtures() -> None:
+def test_cli_command_operations_have_untranslated_fixtures() -> None:
     fixture_path = OPENAPI_DOCUMENT.parent / "fixtures" / "cli-operations.json"
     fixtures = json.loads(fixture_path.read_text(encoding="utf-8"))
     commands = {contract.operation_id for contract in OPERATIONS if contract.classification == "command"}

@@ -1,4 +1,4 @@
-"""Provider-neutral account domain values."""
+"""Account domain values: one account, many identities."""
 
 # ruff: noqa: RUF002  Confusable and compatibility characters are the subject
 # matter here: they are the inputs whose folding this file exists to pin.
