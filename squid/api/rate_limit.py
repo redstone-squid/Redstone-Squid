@@ -31,6 +31,7 @@ _KEY_PREFIX = "{squid-rate-limit}:v1"
 _WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _VOTE_WRITE_PATH = "/v1/vote-sessions/{vote_session_id}/votes"
 _SUGGEST_PATH = "/v1/suggest/{source}"
+_RENDER_PATH = "/v1/builds/{build_id}/schematics/render"
 _MINECRAFT_CHALLENGE_START_PATHS = frozenset(
     {
         "/v1/minecraft/auth/paper/challenges",
@@ -148,6 +149,7 @@ class ApiRateLimitPolicies:
     write: RateLimitPolicy
     vote: RateLimitPolicy
     suggest: RateLimitPolicy
+    render: RateLimitPolicy
     minecraft_challenge_start: RateLimitPolicy
     minecraft_challenge_exchange: RateLimitPolicy
     minecraft_challenge_approval: RateLimitPolicy
@@ -161,6 +163,7 @@ class ApiRateLimitPolicies:
             write=RateLimitPolicy("write", config.write_requests, window),
             vote=RateLimitPolicy("vote", config.vote_requests, window),
             suggest=RateLimitPolicy("suggest", config.suggest_requests, window),
+            render=RateLimitPolicy("render", config.render_requests, window),
             minecraft_challenge_start=RateLimitPolicy(
                 "minecraft-challenge-start",
                 config.minecraft_challenge_start_requests,
@@ -433,6 +436,10 @@ async def enforce_route_rate_limits(
         # Its own bucket in both directions: one user typing must not exhaust their read quota,
         # and a client that forgets to debounce must not exhaust everyone else's.
         checks.append(RateLimitRequest(policies.suggest, identity))
+    if route_path == _RENDER_PATH:
+        # A read by HTTP method, but each miss occupies the native engine for seconds, so it
+        # is metered like a write rather than like the listing next to it.
+        checks.append(RateLimitRequest(policies.render, identity))
     if not checks:
         return
 
