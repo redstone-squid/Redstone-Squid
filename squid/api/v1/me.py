@@ -61,7 +61,7 @@ async def grant_consent(accounts: Accounts, caller: UserCaller) -> UserMe:
     """Accept the current privacy notice for future writes."""
     if caller.account_id is None:
         raise AuthenticationError
-    account = await accounts.grant_current_consent_for_account(caller.account_id)
+    account = await accounts.grant_current_consent(caller.account_id)
     return UserMe.from_domain(account, consent_pending=False)
 
 

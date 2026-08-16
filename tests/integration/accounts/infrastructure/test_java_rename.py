@@ -289,7 +289,9 @@ async def test_linking_reconciles_the_same_way_a_refresh_does(
     """The point of sharing `_reconcile_java_name`: linking a renamed account claims the new name."""
     await repository.replace_verification_code(minecraft_uuid=JAVA_UUID, code="123456", username="FreshName")
 
-    result = await repository.consume_code_and_link_account(discord_id=1, code="123456", consent=CONSENT)
+    account = await repository.get_or_create_identity(IdentityProvider.DISCORD, "1")
+    assert account.id is not None
+    result = await repository.consume_code_and_link_account(account_id=account.id, code="123456", consent=CONSENT)
 
     assert result.account is not None
     assert result.refresh is not None

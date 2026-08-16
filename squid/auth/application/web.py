@@ -12,7 +12,7 @@ import httpx
 from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import CONSENT_CUTOFF
+from squid.accounts.domain import CONSENT_CUTOFF, IdentityProvider
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
 from squid.config import OAuthConfig, UpstreamHttpConfig
 from squid.core.errors import AuthenticationError, ServiceUnavailableError, ValidationError
@@ -135,7 +135,7 @@ class DiscordOAuthService:
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as error:
             msg = "Discord OAuth exchange failed."
             raise ServiceUnavailableError(msg, resource="discord") from error
-        account = await self._accounts.get_or_create_account(discord_id)
+        account = await self._accounts.get_or_create_identity(IdentityProvider.DISCORD, str(discord_id))
         assert account.id is not None
         token = secrets.token_urlsafe(32)
         await self._repository.create_session(
