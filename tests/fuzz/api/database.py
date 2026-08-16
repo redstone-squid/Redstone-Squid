@@ -234,21 +234,13 @@ class DatabaseController:
             administrator_web_session=self.secrets.administrator_web_session,
             service_api_token=self.secrets.service_api_token,
         )
+        # A session is keyed on its account alone; the Discord identity it was
+        # established through lives in `account_identities`, if it exists at all.
         web_sessions = (
-            ("00000000-0000-0000-0000-000000002001", ids.alice_web_session, ALICE_ACCOUNT_ID, 1001),
-            ("00000000-0000-0000-0000-000000002002", ids.bob_web_session, BOB_ACCOUNT_ID, 1002),
-            (
-                "00000000-0000-0000-0000-000000002003",
-                ids.consent_pending_web_session,
-                CONSENT_PENDING_ACCOUNT_ID,
-                1003,
-            ),
-            (
-                "00000000-0000-0000-0000-000000002004",
-                ids.administrator_web_session,
-                ADMINISTRATOR_ACCOUNT_ID,
-                1004,
-            ),
+            ("00000000-0000-0000-0000-000000002001", ids.alice_web_session, ALICE_ACCOUNT_ID),
+            ("00000000-0000-0000-0000-000000002002", ids.bob_web_session, BOB_ACCOUNT_ID),
+            ("00000000-0000-0000-0000-000000002003", ids.consent_pending_web_session, CONSENT_PENDING_ACCOUNT_ID),
+            ("00000000-0000-0000-0000-000000002004", ids.administrator_web_session, ADMINISTRATOR_ACCOUNT_ID),
         )
         with self._connect_role(
             self.identity.migrator_role,
@@ -313,17 +305,16 @@ class DatabaseController:
                 )
                 cursor.executemany(
                     "INSERT INTO web_sessions "
-                    "(id, token_hash, account_id, discord_id, created_at, expires_at, last_seen_at, user_agent) "
-                    "VALUES (%s, %s, %s, %s, '2026-08-04T00:00:00Z', '2100-01-01T00:00:00Z', "
+                    "(id, token_hash, account_id, created_at, expires_at, last_seen_at, user_agent) "
+                    "VALUES (%s, %s, %s, '2026-08-04T00:00:00Z', '2100-01-01T00:00:00Z', "
                     "'2026-08-04T00:00:00Z', 'api-fuzzer')",
                     (
                         (
                             session_id,
                             hash_web_session_token(self.secrets.session_pepper.encode(), token),
                             account_id,
-                            discord_id,
                         )
-                        for session_id, token, account_id, discord_id in web_sessions
+                        for session_id, token, account_id in web_sessions
                     ),
                 )
                 cursor.execute(
@@ -370,7 +361,7 @@ class DatabaseController:
             "FROM permission_role_assignments assignment "
             "JOIN permission_roles roles ON roles.id = assignment.role_id "
             "ORDER BY assignment.subject_account_id, roles.builtin_key",
-            "SELECT id::text, account_id, discord_id FROM web_sessions ORDER BY id",
+            "SELECT id::text, account_id FROM web_sessions ORDER BY id",
             "SELECT key_id, scopes, owner_account_id FROM api_keys ORDER BY key_id",
             "SELECT (SELECT count(*) FROM verification_codes), "
             "(SELECT count(*) FROM submission_drafts), (SELECT count(*) FROM idempotency_requests), "

@@ -8,11 +8,12 @@ import os
 import re
 import sys
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from difflib import get_close_matches
 from functools import cached_property
 from ipaddress import ip_network
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Self, cast, override
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, override
 from urllib.parse import urlsplit
 
 from google.oauth2.service_account import Credentials
@@ -32,6 +33,7 @@ from pydantic_settings.exceptions import SettingsError
 from pydantic_settings.sources import PydanticBaseSettingsSource
 from sqlalchemy import make_url
 
+from squid.accounts.domain import IdentityProvider
 from squid.core.errors import ConfigurationError
 
 if TYPE_CHECKING:
@@ -479,24 +481,57 @@ class RateLimitConfig(_FrozenModel):
         return value
 
 
+@dataclass(frozen=True, slots=True)
+class OAuthClientCredentials:
+    """One provider's complete authorization-code client registration."""
+
+    client_id: str
+    client_secret: SecretStr
+    redirect_uri: AnyHttpUrl
+
+
 class OAuthConfig(_FrozenModel):
-    """Discord OAuth2 authorization-code configuration."""
+    """Authorization-code client registrations, one flat group per provider.
+
+    Flat rather than a `dict[str, OAuthClientCredentials]` because `_ProcessSettings` sets
+    `env_nested_max_split=1`: `SQUID_OAUTH_DISCORD_CLIENT_ID` cannot split into
+    `oauth -> discord -> client_id`, so the nested shape is unreachable from the
+    environment. A second provider is three more fields and one `_GROUPS` entry.
+    """
 
     discord_client_id: str | None = None
     discord_client_secret: SecretStr | None = None
     redirect_uri: AnyHttpUrl | None = None
+    """Discord's callback. Named without a provider prefix for compatibility with
+    SQUID_OAUTH_REDIRECT_URI, which is registered in the Discord developer portal."""
     session_ttl_hours: int = Field(default=336, ge=1)
 
     _empty_client_id = field_validator("discord_client_id", mode="before")(_empty_to_none)
     _empty_client_secret = field_validator("discord_client_secret", mode="before")(_empty_to_none)
     _empty_redirect_uri = field_validator("redirect_uri", mode="before")(_empty_to_none)
 
+    _GROUPS: ClassVar[Mapping[IdentityProvider, tuple[str, str, str]]] = {
+        IdentityProvider.DISCORD: ("discord_client_id", "discord_client_secret", "redirect_uri"),
+    }
+
+    def clients(self) -> Mapping[IdentityProvider, OAuthClientCredentials]:
+        """Every provider whose credentials are completely configured."""
+        resolved: dict[IdentityProvider, OAuthClientCredentials] = {}
+        for provider, (id_field, secret_field, redirect_field) in self._GROUPS.items():
+            client_id = getattr(self, id_field)
+            client_secret = getattr(self, secret_field)
+            redirect_uri = getattr(self, redirect_field)
+            if client_id is not None and client_secret is not None and redirect_uri is not None:
+                resolved[provider] = OAuthClientCredentials(client_id, client_secret, redirect_uri)
+        return resolved
+
     @model_validator(mode="after")
     def _require_complete_credentials(self) -> Self:
-        configured = (self.discord_client_id, self.discord_client_secret, self.redirect_uri)
-        if any(value is not None for value in configured) and not all(value is not None for value in configured):
-            msg = "Discord OAuth client ID, secret, and redirect URI must be configured together."
-            raise ValueError(msg)
+        for provider, fields in self._GROUPS.items():
+            configured = [getattr(self, field) for field in fields]
+            if any(value is not None for value in configured) and not all(value is not None for value in configured):
+                msg = f"{provider.value} OAuth client ID, secret, and redirect URI must be configured together."
+                raise ValueError(msg)
         return self
 
 

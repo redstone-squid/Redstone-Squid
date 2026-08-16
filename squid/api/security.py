@@ -133,7 +133,6 @@ async def current_caller(
             kind="account",
             subject=f"account:{identity.account_id}",
             nodes=UNBOUNDED,
-            discord_id=identity.discord_id,
             account_id=identity.account_id,
             consent_pending=identity.consent_pending,
         )

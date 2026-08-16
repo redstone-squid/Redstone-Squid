@@ -2,11 +2,12 @@
 
 import uuid
 
-from sqlalchemy import BigInteger, ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
+from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.accounts.domain import IdentityProvider
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
@@ -25,7 +26,6 @@ class WebSession(Base, kw_only=True):
     account_id: Mapped[int] = mapped_column(
         ForeignKey("accounts.id", name="web_sessions_account_id_fkey", ondelete="CASCADE"), nullable=False
     )
-    discord_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     last_seen_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
@@ -40,6 +40,8 @@ class OAuthStateModel(Base, kw_only=True):
 
     state: Mapped[str] = mapped_column(Text, primary_key=True)
     code_verifier: Mapped[str] = mapped_column(Text, nullable=False)
+    provider: Mapped[IdentityProvider] = mapped_column(Text, nullable=False)
+    """The namespace this state was minted for; the callback refuses a mismatch."""
     redirect_to: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
