@@ -38,7 +38,8 @@ def test_operation_rejects_oversized_and_deep_json_before_copying() -> None:
 
     deeply_nested: object = "value"
     for _ in range(6):
-        deeply_nested = [deeply_nested]
+        wrapped: list[object] = [deeply_nested]
+        deeply_nested = wrapped
     with pytest.raises(ValueError, match="nested too deeply"):
         operation("description", deeply_nested)
 
