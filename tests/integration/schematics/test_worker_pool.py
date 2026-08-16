@@ -16,6 +16,7 @@ from squid.config import SchematicConfig
 from squid.schematics.application.commands import SimulationRequest
 from squid.schematics.domain.models import FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
     SchematicTimeoutError,
@@ -131,6 +132,32 @@ async def test_tick_simulation_prefers_an_insign_input_when_controls_are_ambiguo
     assert result.input_position == (0, 1, 0)
     assert result.input_source == "insign"
     assert result.piston_events > 0
+
+
+async def test_a_named_input_overrides_the_insign_annotation(
+    pool: SchematicWorkerPool, insign_piston_door: bytes
+) -> None:
+    """A moderator naming a coordinate is answering the question the annotation answers.
+
+    Preferring the annotation anyway would time the door's button while reporting a result for
+    the command they ran against the other one.
+    """
+    result = await pool.simulate(insign_piston_door, request=SimulationRequest(input_position=(5, 1, 0)))
+
+    assert result.input_position == (5, 1, 0)
+    assert result.input_source == "manual"
+
+
+async def test_a_named_input_that_is_not_a_control_comes_back_with_the_ones_that_are(
+    pool: SchematicWorkerPool, insign_piston_door: bytes
+) -> None:
+    """The candidates have to survive the worker pipe, or the refusal is unactionable."""
+    with pytest.raises(AmbiguousSimulationInputError) as raised:
+        await pool.simulate(insign_piston_door, request=SimulationRequest(input_position=(2, 1, 0)))
+
+    assert raised.value.rejected == (2, 1, 0)
+    assert raised.value.candidates == ((0, 1, 0), (5, 1, 0))
+    assert raised.value.public_context["input_candidates"] == [[0, 1, 0], [5, 1, 0]]
 
 
 async def test_a_round_trip_through_another_format_preserves_the_build(

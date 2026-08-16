@@ -48,7 +48,11 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
-from squid.schematics.errors import InvalidSchematicError, SchematicTooLargeError
+from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
+    InvalidSchematicError,
+    SchematicTooLargeError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +295,14 @@ def _resolve_simulation_input(
         if position is not None and any(name in state.partition("[")[0] for name in _INPUT_BLOCK_NAMES):
             controls[position] = state
 
+    # A caller who named a coordinate is answering this very question, so their answer is
+    # checked first. Deferring to the annotation or the sole control instead would silently
+    # time a different circuit than the one they asked about.
+    if manual is not None:
+        if manual not in controls:
+            raise AmbiguousSimulationInputError(candidates=controls, rejected=manual)
+        return manual, "manual"
+
     compiled = _json_object(schematic.compile_insign_json(), "Insign annotations")
     annotated = _insign_input_positions(compiled)
     annotated_controls = sorted(position for position in annotated if position in controls)
@@ -298,19 +310,7 @@ def _resolve_simulation_input(
         return annotated_controls[0], "insign"
     if len(controls) == 1:
         return next(iter(controls)), "heuristic"
-    if manual is not None:
-        if manual not in controls:
-            msg = "The manual input coordinate is not a lever or button in this schematic."
-            raise InvalidSchematicError(msg, context={"input_position": manual})
-        return manual, "manual"
-
-    if not controls:
-        msg = "This schematic has no Insign input annotation and no lever or button."
-        action = "Add an @io.* input sign or provide a schematic with an interactable input."
-    else:
-        msg = "This schematic has several possible inputs, so choosing one automatically would be unsafe."
-        action = 'Run the command again with input_position:"x y z".'
-    raise InvalidSchematicError(msg, end_user_action=action)
+    raise AmbiguousSimulationInputError(candidates=controls)
 
 
 def _insign_input_positions(compiled: Mapping[str, Any]) -> set[Vector3]:
