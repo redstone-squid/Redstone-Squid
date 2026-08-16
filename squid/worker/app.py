@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from whenever import Instant
 
 from squid.bootstrap import create_worker_runtime
-from squid.config import WorkerConfig, WorkerProcessConfig, load_worker_process_config
+from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
@@ -301,7 +301,7 @@ class DatabaseWorker:
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
     """Run the worker until a process signal or caller-owned stop event fires."""
-    resolved_config = process_config or load_worker_process_config()
+    resolved_config = process_config or load_or_exit(load_worker_process_config)
     configure_service_worker_logging(resolved_config.logging)
     observability = configure_observability(resolved_config.observability, service_name="worker")
     stop = stop_event or asyncio.Event()

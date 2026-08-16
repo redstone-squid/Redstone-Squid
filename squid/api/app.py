@@ -21,7 +21,7 @@ from squid.api.security import Principal, requires
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
 from squid.bootstrap import create_api_runtime
-from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config
+from squid.config import ApiProcessConfig, RuntimeConfig, load_api_process_config, load_or_exit
 from squid.logging_config import configure_api_logging
 from squid.observability import configure_observability, instrument_api_app
 from squid.permissions.domain.catalogue import ACCOUNT_VERIFY_RELAY
@@ -165,7 +165,7 @@ def main(process_config: ApiProcessConfig | None = None) -> None:
     """Run the FastAPI server."""
     import uvicorn
 
-    resolved_config = process_config or load_api_process_config()
+    resolved_config = process_config or load_or_exit(load_api_process_config)
     configure_api_logging(resolved_config.logging)
     observability = configure_observability(resolved_config.observability, service_name="api")
     try:

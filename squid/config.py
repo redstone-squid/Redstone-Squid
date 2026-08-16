@@ -6,7 +6,8 @@ import json
 import logging
 import os
 import re
-from collections.abc import Mapping
+import sys
+from collections.abc import Callable, Mapping
 from difflib import get_close_matches
 from ipaddress import ip_network
 from pathlib import Path
@@ -275,42 +276,50 @@ class VerificationConfig(_FrozenModel):
         return value
 
 
+_IDEMPOTENCY_KEY_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def _validate_idempotency_key_id(value: str) -> str:
+    if _IDEMPOTENCY_KEY_ID.fullmatch(value) is None:
+        msg = "Must be a 1-64 character identifier containing only letters, digits, dot, underscore, or hyphen."
+        raise ValueError(msg)
+    return value
+
+
+def _validate_idempotency_keys(value: dict[str, SecretStr]) -> dict[str, SecretStr]:
+    for key_id, encoded_key in value.items():
+        if _IDEMPOTENCY_KEY_ID.fullmatch(key_id) is None:
+            msg = "Every key ID must use the same format as the active key ID."
+            raise ValueError(msg)
+        try:
+            key = base64.b64decode(encoded_key.get_secret_value(), validate=True)
+        except (binascii.Error, ValueError) as exc:
+            msg = "Every idempotency key must be valid padded base64."
+            raise ValueError(msg) from exc
+        if len(key) != 32:
+            msg = "Every idempotency key must decode to exactly 32 bytes."
+            raise ValueError(msg)
+    return value
+
+
+def _require_active_idempotency_key(active_key_id: str, keys: Mapping[str, SecretStr]) -> None:
+    if active_key_id not in keys:
+        msg = "The active idempotency key ID must exist in the keyring."
+        raise ValueError(msg)
+
+
 class IdempotencyEncryptionConfig(_FrozenModel):
     """Active and retained AES-256 keys for encrypted API response replay."""
 
     active_key_id: str
     keys: dict[str, SecretStr] = Field(min_length=1, max_length=8)
 
-    @field_validator("active_key_id")
-    @classmethod
-    def _validate_active_key_id(cls, value: str) -> str:
-        if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", value) is None:
-            msg = "Must be a 1-64 character identifier containing only letters, digits, dot, underscore, or hyphen."
-            raise ValueError(msg)
-        return value
-
-    @field_validator("keys")
-    @classmethod
-    def _validate_keys(cls, value: dict[str, SecretStr]) -> dict[str, SecretStr]:
-        for key_id, encoded_key in value.items():
-            if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", key_id) is None:
-                msg = "Every key ID must use the same format as active_key_id."
-                raise ValueError(msg)
-            try:
-                key = base64.b64decode(encoded_key.get_secret_value(), validate=True)
-            except (binascii.Error, ValueError) as exc:
-                msg = "Every idempotency key must be valid padded base64."
-                raise ValueError(msg) from exc
-            if len(key) != 32:
-                msg = "Every idempotency key must decode to exactly 32 bytes."
-                raise ValueError(msg)
-        return value
+    _validate_active_key_id = field_validator("active_key_id")(_validate_idempotency_key_id)
+    _validate_keys = field_validator("keys")(_validate_idempotency_keys)
 
     @model_validator(mode="after")
     def _require_active_key(self) -> Self:
-        if self.active_key_id not in self.keys:
-            msg = "The active idempotency key ID must exist in the keyring."
-            raise ValueError(msg)
+        _require_active_idempotency_key(self.active_key_id, self.keys)
         return self
 
     def decoded_keys(self) -> dict[str, bytes]:
@@ -362,6 +371,12 @@ class ApiConfig(_FrozenModel):
     _empty_bot_token = field_validator("bot_token", mode="before")(_empty_to_none)
     _validate_log_files = field_validator("log_file", "access_log_file")(_validate_relative_log_file)
 
+    # Validating the keyring on this model's own fields, rather than only through the
+    # IdempotencyEncryptionConfig built below, is what keeps a bad key reported against
+    # SQUID_API_IDEMPOTENCY_KEYS instead of the inner model's "keys".
+    _validate_active_key_id = field_validator("idempotency_active_key_id")(_validate_idempotency_key_id)
+    _validate_keys = field_validator("idempotency_keys")(_validate_idempotency_keys)
+
     @field_validator("secret")
     @classmethod
     def _require_secret(cls, value: SecretStr) -> SecretStr:
@@ -380,10 +395,7 @@ class ApiConfig(_FrozenModel):
 
     @model_validator(mode="after")
     def _validate_idempotency_encryption(self) -> Self:
-        IdempotencyEncryptionConfig(
-            active_key_id=self.idempotency_active_key_id,
-            keys=self.idempotency_keys,
-        )
+        _require_active_idempotency_key(self.idempotency_active_key_id, self.idempotency_keys)
         return self
 
     @property
@@ -1088,6 +1100,57 @@ def _known_environment_keys() -> frozenset[str]:
     return frozenset(keys)
 
 
+def _environment_group(field: str) -> tuple[str, tuple[str, ...]] | None:
+    """Return the ``SQUID_`` prefix and required member names of a nested settings group."""
+    model_field = ApplicationConfig.model_fields.get(field)
+    if model_field is None:
+        return None
+    annotation = model_field.annotation
+    if not (isinstance(annotation, type) and issubclass(annotation, BaseModel)):
+        return None
+    prefix = f"SQUID_{field.upper()}"
+    required = tuple(
+        f"{prefix}_{name.upper()}" for name, nested in annotation.model_fields.items() if nested.is_required()
+    )
+    return prefix, required
+
+
+def _setting_name(field: str, issue_type: str) -> str:
+    """Render a validation location as the ``SQUID_*`` name(s) an operator can act on.
+
+    Every character of the result comes from a declared field name. A validation location is
+    not a settings path: its tail can be a configured dictionary key, and a validator that
+    rejects a whole model reports no leaf at all, so neither the raw location nor a name
+    assembled from it can be shown. A variable that does not exist would be set and then
+    silently ignored, which is worse than naming the group.
+    """
+    if field.upper().startswith("SQUID_"):
+        return field  # The unknown-key audit already reports literal variable names.
+    known = _known_environment_keys()
+    top, _, remainder = field.partition(".")
+    if (group := _environment_group(top)) is None:
+        scalar = f"SQUID_{top.upper()}"
+        return scalar if scalar in known else "SQUID_*"
+    prefix, required = group
+    if not remainder:
+        # "SQUID_DATABASE_*: Field required" would not tell anyone that the missing variable
+        # is SQUID_DATABASE_URL, so a missing group names its members instead.
+        return ", ".join(required) if issue_type == "missing" and required else f"{prefix}_*"
+    candidate = f"{prefix}_{remainder.partition('.')[0].upper()}"
+    return candidate if candidate in known else f"{prefix}_*"
+
+
+def _issues_message(summary: str, issues: list[dict[str, str]]) -> str:
+    """Render issues as an operator-readable list beneath `summary`."""
+    lines = [f"{summary}:"]
+    for issue in issues:
+        message = issue["message"].removeprefix("Value error, ")
+        if not message.endswith((".", "?", "!")):
+            message = f"{message}."
+        lines.append(f"  - {_setting_name(issue['field'], issue['type'])}: {message}")
+    return "\n".join(lines)
+
+
 def _configured_environment_keys() -> set[str]:
     """Read configured key names without parsing or retaining their values."""
     names = {name for name in os.environ if name.upper().startswith("SQUID_")}
@@ -1129,7 +1192,7 @@ def _audit_unknown_environment_keys(*, strict: bool) -> None:
             }
             for name in unknown
         ]
-        message = f"Application configuration has {len(issues)} unknown key(s)."
+        message = _issues_message(f"Application configuration has {len(issues)} unknown key(s)", issues)
         raise ConfigurationError(
             message,
             context={
@@ -1161,10 +1224,15 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
                 }
             )
     else:
-        issues = [{"field": "environment", "message": "Could not parse a configured value.", "type": "settings"}]
+        # SettingsError names the field it choked on but nothing else; its message never
+        # carries the value, and its __cause__ (a JSONDecodeError, say) can, so only the
+        # field name is lifted out of it.
+        located = re.search(r'field "([^"]+)"', str(exc))
+        field = located.group(1) if located is not None else "environment"
+        issues = [{"field": field, "message": "Could not parse the configured value.", "type": "settings"}]
 
     return ConfigurationError(
-        f"Application configuration has {len(issues)} error(s).",
+        _issues_message(f"Application configuration has {len(issues)} error(s)", issues),
         context={"issues": cast(list[Mapping[str, Any]], issues)},
         developer_action="Correct the listed SQUID_* settings and restart the process.",
     )
@@ -1177,6 +1245,20 @@ def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT]) -> Con
         raise _configuration_error(exc) from None
     _audit_unknown_environment_keys(strict=config.strict_unknown_keys)
     return config
+
+
+def load_or_exit[ConfigT](loader: Callable[[], ConfigT]) -> ConfigT:
+    """Load a process configuration, reporting a boot failure without a traceback.
+
+    Logging is configured from the very settings being loaded, so the report goes straight to
+    stderr. The guard covers one call and one exception type: a configuration error raised
+    later, by real work, still surfaces with its traceback.
+    """
+    try:
+        return loader()
+    except ConfigurationError as exc:
+        print(exc.backend_detail(), file=sys.stderr)
+        raise SystemExit(1) from None
 
 
 def load_application_config() -> ApplicationConfig:
