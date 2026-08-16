@@ -17,6 +17,7 @@ from squid.logging_config import (
     prepare_log_path,
     resolve_level,
 )
+from squid.observability import CORRELATION_BUFFER_HANDLER
 
 
 class TestResolveLevel:
@@ -111,6 +112,55 @@ class TestBuildLoggingConfig:
         assert root["handlers"] == ["queue"]
         assert loggers["squid"]["handlers"] == ["queue"]
         assert loggers["discord"]["handlers"] == ["queue"]
+
+    def test_omits_the_correlation_buffer_when_no_tail_is_requested(self, tmp_path: Path) -> None:
+        config = build_logging_config(
+            config=LoggingConfig(
+                level="INFO",
+                root_level="WARNING",
+                directory=tmp_path,
+                log_file=None,
+                access_log_file=None,
+            ),
+            named_logger_levels={"squid": "INFO"},
+        )
+
+        handlers = config["handlers"]
+        root = config["root"]
+        assert isinstance(handlers, dict)
+        assert isinstance(root, dict)
+        assert CORRELATION_BUFFER_HANDLER not in handlers
+        assert root["handlers"] == ["console"]
+
+    def test_correlation_buffer_bypasses_the_queue(self, tmp_path: Path) -> None:
+        """The buffer must see records on the emitting thread, not the listener thread.
+
+        An error is captured moments after the lines that explain it. Routed through the queue,
+        those lines could still be in flight when the tail is drained, silently truncating it.
+        """
+        config = build_logging_config(
+            config=LoggingConfig(
+                level="INFO",
+                root_level="WARNING",
+                directory=tmp_path,
+                log_file=None,
+                access_log_file=None,
+            ),
+            named_logger_levels={"squid": "INFO"},
+            use_queue=True,
+            log_tail_records=25,
+        )
+
+        handlers = config["handlers"]
+        loggers = config["loggers"]
+        root = config["root"]
+        assert isinstance(handlers, dict)
+        assert isinstance(loggers, dict)
+        assert isinstance(root, dict)
+        assert handlers[CORRELATION_BUFFER_HANDLER]["max_records"] == 25
+        assert CORRELATION_BUFFER_HANDLER not in handlers["queue"]["handlers"]
+        assert root["handlers"] == ["queue", CORRELATION_BUFFER_HANDLER]
+        assert loggers["squid"]["handlers"] == ["queue", CORRELATION_BUFFER_HANDLER]
 
     def test_uses_json_formatters_outside_development(self, tmp_path: Path) -> None:
         config = build_logging_config(
