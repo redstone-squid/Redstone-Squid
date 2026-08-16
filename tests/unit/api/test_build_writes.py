@@ -24,7 +24,6 @@ ACCOUNT = Caller(
     kind="account",
     subject="account:1",
     nodes=credential_nodes("build.submission.create"),
-    discord_id=123,
     account_id=1,
 )
 
