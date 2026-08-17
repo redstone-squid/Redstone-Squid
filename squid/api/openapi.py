@@ -44,24 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/users/me/notifications/preferences", "notification_preferences_get", "browser-only"),
-    _operation("patch", "/v1/users/me/notifications/preferences", "notification_preferences_update", "browser-only"),
-    _operation("post", "/v1/users/me/notifications/consent", "notification_consent_grant", "browser-only"),
-    _operation("get", "/v1/users/me/notifications/subscriptions", "notification_subscriptions_list", "browser-only"),
-    _operation("post", "/v1/users/me/notifications/subscriptions", "notification_subscription_create", "browser-only"),
-    _operation(
-        "delete",
-        "/v1/users/me/notifications/subscriptions/{subscription_id}",
-        "notification_subscription_delete",
-        "browser-only",
-    ),
-    _operation("get", "/v1/users/me/notifications/inbox", "notification_inbox_list", "browser-only"),
-    _operation(
-        "post",
-        "/v1/users/me/notifications/inbox/{notification_id}/read",
-        "notification_inbox_mark_read",
-        "browser-only",
-    ),
     _operation("get", "/v1/records/{record_id}", "records_get"),
     _operation("get", "/v1/records", "records_list"),
     _operation("get", "/v1/builds/{build_id}/schematics", "build_schematics_list"),
