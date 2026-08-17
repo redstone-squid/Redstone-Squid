@@ -19,7 +19,12 @@ class Message(Base):
 
     __tablename__ = "messages"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    # `autoincrement=False` is what makes the docstring below true of the DDL as well: an
+    # integer primary key is `SERIAL` by default, so without it the model asks for a sequence
+    # the deployed database has never had. Left as a code comment rather than extending the
+    # attribute docstring, because `Base` turns those into column comments and this is a note
+    # about the mapping, not about the column.
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     """The Discord snowflake. Never generated here; the message exists before the row."""
     channel_id: Mapped[int | None] = mapped_column(BigInteger)
     author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
