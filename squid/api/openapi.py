@@ -44,25 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/users/me", "account_get", "browser-only"),
-    _operation("post", "/v1/users/me/consent", "account_consent_grant", "browser-only"),
-    _operation("get", "/v1/users/me/builds", "account_builds_list", "browser-only"),
-    # A CLI command rather than browser-only: a rename is noticed in game, and the caller
-    # reaching for this is as likely to be holding a CLI device credential as a browser session.
-    _operation(
-        "post",
-        "/v1/users/me/minecraft/refresh",
-        "account_minecraft_refresh",
-        "command",
-        command="account.refresh",
-        interaction="direct",
-    ),
-    _operation(
-        "post",
-        "/v1/accounts/{account_id}/minecraft/refresh",
-        "account_minecraft_refresh_for",
-        "browser-only",
-    ),
     _operation("get", "/v1/minecraft/auth/paper/installations", "paper_installations_list", "browser-only"),
     _operation("post", "/v1/minecraft/auth/paper/installations", "paper_installation_create", "browser-only"),
     _operation(
