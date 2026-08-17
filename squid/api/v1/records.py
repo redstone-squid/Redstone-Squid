@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Records
 from squid.api.errors import responses
 from squid.api.pagination import (
@@ -27,7 +28,13 @@ router = APIRouter(prefix="/records", tags=["records"])
 _SORT_FIELDS = frozenset({"id"})
 
 
-@router.get("/{record_id}", response_model=RecordDetail, responses=responses(404, 422, 500, 503))
+@router.get(
+    "/{record_id}",
+    response_model=RecordDetail,
+    responses=responses(404, 422, 500, 503),
+    operation_id="records_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def get_record(record_id: int, records: Records, build_queries: BuildQueries) -> RecordDetail:
     """Return one result only while its computation run is active."""
     record = await records.get(record_id)
@@ -53,7 +60,13 @@ async def get_record(record_id: int, records: Records, build_queries: BuildQueri
     )
 
 
-@router.get("", response_model=Page[RecordSummary], responses=responses(400, 422, 503))
+@router.get(
+    "",
+    response_model=Page[RecordSummary],
+    responses=responses(400, 422, 503),
+    operation_id="records_list",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def list_records(
     records: Records,
     sort: Annotated[str | None, Query(max_length=80)] = None,
