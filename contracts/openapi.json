@@ -7755,7 +7755,7 @@
                   "items": {
                     "$ref": "#/components/schemas/NotificationSubscriptionDetail"
                   },
-                  "title": "Response List Subscriptions V1 Users Me Notifications Subscriptions Get"
+                  "title": "Response Notification Subscriptions List"
                 }
               }
             },
