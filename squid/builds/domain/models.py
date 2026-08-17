@@ -158,7 +158,7 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
     cls_fields = getattr(cls, "__dataclass_fields__", None)
     if cls_fields is None:
         msg = _("{class_name} is not a dataclass")
-        raise InvalidStateError(msg, message_params={"class_name": cls})
+        raise InvalidStateError(msg, message_params={"class_name": cls.__name__})
 
     params = cls.__dataclass_params__  # type: ignore
     if params.frozen:

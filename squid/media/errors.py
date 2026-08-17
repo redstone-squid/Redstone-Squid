@@ -3,6 +3,8 @@
 from enum import StrEnum
 from uuid import UUID
 
+from whenever import Instant
+
 from squid.core.errors import (
     ConflictError,
     DataIntegrityError,
@@ -182,7 +184,7 @@ class MediaArtifactCleanupInProgressError(ConflictError):
     default_message = _("A normalized media object is being cleaned up.")
     default_resource = "media_artifact"
 
-    def __init__(self, retry_at: object) -> None:
+    def __init__(self, retry_at: Instant) -> None:
         super().__init__()
         self.retry_at = retry_at
 
