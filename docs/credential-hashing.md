@@ -52,11 +52,34 @@ HMAC-SHA-256 costs microseconds, so the same request buys an attacker nothing.
 ## Where entropy *is* the question
 
 The rule above is about high-entropy random secrets. The one peppered digest in this codebase whose
-input is human-sized is the account verification code — six digits, roughly 19.8 bits, looked up by
-code alone. That one needs a wider code, an HMAC rather than a pepper-prefixed plain digest, and
-attempt caps; it is tracked separately in
-[plan 2](plans/pr-183-review/02-user-identity-persistence.md), subplan 6. A KDF is not the answer
-there either, because the code is also short-lived and rate-limitable.
+input is human-sized is the account verification code. It used to be six digits — roughly 19.8 bits —
+stored as `sha256(pepper || code)` and looked up by code alone, with nothing capping the rate.
+
+The lookup is what made that dangerous rather than merely weak. `consume_code_and_link_account`
+matches on the code, the expiry and the `valid` flag, and never on the Minecraft UUID the code was
+issued for, so one guess is tested against *every* outstanding code at once: the chance per attempt
+is `outstanding / space`, not `1 / space`. And the Discord identity comes from whoever typed the
+code, so a hit attaches the matched Java account to the guesser. That is identity takeover, not a
+nuisance.
+
+Three levers, all now applied ([plan 2](plans/pr-183-review/02-user-identity-persistence.md),
+subplan 6):
+
+- **A keyed digest.** `hash_verification_code` is `hmac.digest(pepper, code, sha256)`. The pepper is
+  a key; prefixing was the weaker construction for no saving. No dual-read path and no backfill —
+  codes live ten minutes, so a deploy invalidates at most one window and the in-game `/link`
+  reissues.
+- **A wider code.** `generate_verification_code` mints ten digits, about 33 bits. It stays numeric
+  because `/verify` returns an `int` to the in-game plugin that shows the code to the player; base32
+  would be stronger and would also change that response type.
+- **An attempt cap.** `verification_attempts` counts *consecutive* failures per `(provider, subject)`
+  and refuses redemptions for a cooling-off period once the cap is reached. Keyed on the external
+  identity rather than an account, because the guesser may not have an account yet. A success clears
+  the count, and holding a *correct* code never counts as a failure — otherwise replaying your own
+  successful code would lock out an already-linked user, turning the control into the abuse.
+
+A KDF is still not the answer here: the code is short-lived and now rate-limited, which is what buys
+the margin a work factor would otherwise have to.
 
 ## Static analysis
 

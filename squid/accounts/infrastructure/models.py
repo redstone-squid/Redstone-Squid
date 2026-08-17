@@ -238,3 +238,29 @@ class VerificationCode(Base):
         server_default=text("(now() + '00:10:00'::interval)"),
         default_factory=lambda: Instant.now().add(minutes=10),
     )
+
+
+class VerificationAttempt(Base):
+    """Consecutive failed code redemptions for one external identity.
+
+    Keyed on `(provider, subject)` rather than on an account, because the guesser may not have an
+    account yet: a redemption is the first thing many callers ever do, and creating a row for
+    someone in order to rate-limit them would defeat the point. No foreign key for the same reason.
+
+    The counter is *consecutive*: a success clears it, so an honest user who mistypes twice and then
+    gets it right is never closer to a lockout than someone who never failed.
+    """
+
+    __tablename__ = "verification_attempts"
+    __table_args__ = (
+        CheckConstraint(f"provider IN ({_PROVIDER_VALUES})", name="verification_attempts_provider_valid"),
+        CheckConstraint("consecutive_failures >= 0", name="verification_attempts_failures_non_negative"),
+    )
+
+    provider: Mapped[IdentityProvider] = mapped_column(Text, primary_key=True)
+    subject: Mapped[str] = mapped_column(Text, primary_key=True)
+    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
+    updated_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )

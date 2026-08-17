@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from whenever import Instant
+
 from squid.accounts.domain import (
     Account,
     AccountConsent,
@@ -94,3 +96,11 @@ class AccountRepository(Protocol):
     async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh: ...
 
     async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None: ...
+
+    async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None: ...
+
+    async def record_verification_failure(
+        self, provider: IdentityProvider, subject: str, *, max_failures: int, lockout_seconds: int
+    ) -> Instant | None: ...
+
+    async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None: ...
