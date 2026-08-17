@@ -362,7 +362,24 @@ correctly regardless, since it is the same pass a later Unicode change would nee
 3. `accounts: refresh linked Java identities on demand` — subplan 3.
 4. `accounts: name errors by provider and subject` — subplan 4.
 5. `accounts: batch identity loads` — subplan 5.
-6. `accounts: harden the verification code` — subplan 6. Independent of 1-5; it can land first.
+6. `accounts: harden the verification code` — subplan 6, landed 2026-08-17 in `8498da21`.
 
 Replying on GitHub and resolving threads requires separate explicit authorization, per the
 [directory README](README.md).
+
+## Implementation notes for subplan 6
+
+- **The cap is keyed on `(provider, subject)`, not on an account.** A redemption is the first thing
+  many callers ever do, so the guesser may have no account yet, and creating one in order to
+  rate-limit somebody defeats the point. This also made the guard reusable by
+  [plan 01](01-consent-verification-ux.md) §1, whose code reservation is deliberately anonymous.
+- **Holding a *correct* code is never charged as a failure.** The conflict branches prove the caller
+  had a valid code; charging them would let anyone lock out an already-linked user by replaying that
+  user's own successful code, turning the abuse control into the abuse.
+- **The counter increments in one upsert.** A read-modify-write would let parallel attempts each read
+  the same count and overwrite one another, so the cap could be evaded by not waiting for a reply.
+- **`generate_verification_code` moved out of the bootstrap lambda** into the application layer, so a
+  test can bind to the real factory rather than a copy of it. `/verify` still returns an `int`.
+- **An integration test caught a real bug**: inside `case()` the `locked_until` bind loses its
+  `InstantUTC` adapter and reaches asyncpg as a bare `Instant` it cannot encode.
+- `docs/credential-hashing.md` now records the applied answer rather than pointing here for it.
