@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -29,7 +30,13 @@ class VoteInput(BaseModel):
     option_id: str = Field(min_length=1, max_length=200)
 
 
-@router.get("/{vote_session_id}", response_model=VoteSessionDetail, responses=responses(404, 422, 503))
+@router.get(
+    "/{vote_session_id}",
+    response_model=VoteSessionDetail,
+    responses=responses(404, 422, 503),
+    operation_id="vote_session_get",
+    openapi_extra=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+)
 async def get_vote_session(
     vote_session_id: int,
     votes: Votes,
@@ -47,6 +54,8 @@ async def get_vote_session(
     response_model=VoteSessionDetail,
     responses=responses(400, 401, 403, 404, 409, 429, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="vote_cast",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def cast_vote(
     vote_session_id: int,

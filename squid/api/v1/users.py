@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Path
 
 from squid.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundError
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Accounts
 from squid.api.errors import responses
 from squid.api.v1.schemas.users import CreatorAliasDetail, CreatorProfileDetail
@@ -14,7 +15,13 @@ router = APIRouter(prefix="/creator-aliases", tags=["creator aliases"])
 profiles_router = APIRouter(prefix="/creators", tags=["creator aliases"])
 
 
-@router.get("/{name}", response_model=CreatorAliasDetail, responses=responses(404, 422, 503))
+@router.get(
+    "/{name}",
+    response_model=CreatorAliasDetail,
+    responses=responses(404, 422, 503),
+    operation_id="creator_alias_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def get_creator_alias(
     name: Annotated[str, Path(min_length=1, max_length=64)], accounts: Accounts
 ) -> CreatorAliasDetail:
@@ -25,7 +32,13 @@ async def get_creator_alias(
     return CreatorAliasDetail.from_domain(alias)
 
 
-@profiles_router.get("/{creator_id}", response_model=CreatorProfileDetail, responses=responses(404, 422, 503))
+@profiles_router.get(
+    "/{creator_id}",
+    response_model=CreatorProfileDetail,
+    responses=responses(404, 422, 503),
+    operation_id="creator_profile_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def get_creator_profile(creator_id: UUID, accounts: Accounts) -> CreatorProfileDetail:
     """Return every public alias grouped under a stable creator identity."""
     profile = await accounts.get_creator_profile(creator_id)
