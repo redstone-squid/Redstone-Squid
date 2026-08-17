@@ -9,6 +9,7 @@ from whenever import Instant
 
 from squid.accounts.application import AccountService
 from squid.accounts.application.ports import VerificationLinkResult
+from squid.accounts.application.services import VERIFICATION_MAX_CONSECUTIVE_FAILURES
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     Account,
@@ -34,12 +35,14 @@ from squid.accounts.errors import (
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
+    VerificationAttemptsExhaustedError,
 )
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_JAVA_UUID = UUID("22222222-2222-2222-2222-222222222222")
 NOW = Instant.from_utc(2026, 8, 11, 12)
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, NOW)
+ATTEMPT = (IdentityProvider.DISCORD, "123")
 
 
 class FakeAccountRepository:
@@ -53,6 +56,8 @@ class FakeAccountRepository:
         self.created_code: tuple[UUID, str, str] | None = None
         self.merge_result: AccountMerge | None = None
         self.refreshed: tuple[int, UUID, str] | None = None
+        self.failures: dict[tuple[IdentityProvider, str], int] = {}
+        self.lockouts: dict[tuple[IdentityProvider, str], Instant] = {}
         self._next_id = 1
 
     def seed_account(
@@ -196,6 +201,24 @@ class FakeAccountRepository:
     async def replace_verification_code(self, *, minecraft_uuid: UUID, code: str, username: str) -> None:
         self.created_code = (minecraft_uuid, code, username)
 
+    async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None:
+        return self.lockouts.get((provider, subject))
+
+    async def record_verification_failure(
+        self, provider: IdentityProvider, subject: str, *, max_failures: int, lockout_seconds: int
+    ) -> Instant | None:
+        key = (provider, subject)
+        self.failures[key] = self.failures.get(key, 0) + 1
+        if self.failures[key] < max_failures:
+            return None
+        self.failures[key] = 0
+        self.lockouts[key] = Instant.now().add(seconds=lockout_seconds)
+        return self.lockouts[key]
+
+    async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None:
+        self.failures.pop((provider, subject), None)
+        self.lockouts.pop((provider, subject), None)
+
 
 def username_lookup(username: str | None) -> Callable[[UUID], Awaitable[str | None]]:
     async def lookup(_minecraft_uuid: UUID) -> str | None:
@@ -242,11 +265,11 @@ async def test_link_rejects_an_invalid_or_conflicting_java_identity() -> None:
     assert account.id is not None
     linked = service(repository)
     with pytest.raises(InvalidVerificationCodeError):
-        await linked.link_minecraft_account(account.id, "bad", consent=CONSENT)
+        await linked.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
 
     repository.link_result = VerificationLinkResult(account=account, conflicting_java_uuid=OTHER_JAVA_UUID)
     with pytest.raises(AccountAlreadyLinkedError):
-        await linked.link_minecraft_account(account.id, "valid", consent=CONSENT)
+        await linked.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
 
 
 async def test_link_returns_the_automatically_claimed_alias() -> None:
@@ -256,7 +279,85 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
     repository.link_result = VerificationLinkResult(account=account, claimed_alias=alias)
     assert account.id is not None
 
-    assert await service(repository).link_minecraft_account(account.id, "valid", consent=CONSENT) == alias
+    assert (
+        await service(repository).link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+        == alias
+    )
+
+
+async def test_consecutive_wrong_codes_lock_the_attempting_identity() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    accounts = service(repository)
+
+    for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
+        with pytest.raises(InvalidVerificationCodeError):
+            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+
+    # The cap is now spent, so even a correct code is refused until the wait passes. That is the
+    # point: the guess that succeeds is the one that takes over somebody else's Minecraft account.
+    repository.link_result = VerificationLinkResult(account=account)
+    with pytest.raises(VerificationAttemptsExhaustedError) as caught:
+        await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+    assert caught.value.retry_after > 0
+    assert caught.value.public_context == {"retry_after": caught.value.retry_after}
+
+
+async def test_a_lockout_is_scoped_to_one_identity() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    accounts = service(repository)
+    for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
+        with pytest.raises(InvalidVerificationCodeError):
+            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+
+    # Anyone else is unaffected, so one attacker cannot deny the whole instance.
+    repository.link_result = VerificationLinkResult(account=account)
+    other = (IdentityProvider.DISCORD, "456")
+    assert await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=other) is None
+
+
+async def test_a_success_clears_the_failure_count() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    accounts = service(repository)
+    for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES - 1):
+        with pytest.raises(InvalidVerificationCodeError):
+            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+
+    repository.link_result = VerificationLinkResult(account=account)
+    await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+    assert repository.failures.get(ATTEMPT, 0) == 0
+
+    # Failures are consecutive, so the budget is whole again rather than one attempt from a lockout.
+    repository.link_result = VerificationLinkResult()
+    for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES - 1):
+        with pytest.raises(InvalidVerificationCodeError):
+            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+    assert repository.lockouts == {}
+
+
+async def test_holding_a_correct_code_is_never_charged_as_a_failure() -> None:
+    """A conflict proves the caller had a valid code, so it must not spend their budget.
+
+    Otherwise anyone whose account is already linked could be locked out by replaying their own
+    successful code, turning the abuse control into the abuse.
+    """
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    repository.link_result = VerificationLinkResult(account=account, conflicting_java_uuid=OTHER_JAVA_UUID)
+    accounts = service(repository)
+
+    for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES + 2):
+        with pytest.raises(AccountAlreadyLinkedError):
+            await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+
+    assert repository.failures == {}
+    assert repository.lockouts == {}
 
 
 async def test_alias_claim_requires_current_consent() -> None:
@@ -371,7 +472,7 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     repository.link_result = VerificationLinkResult(account=account, claimed_alias=alias)
     accounts = service(repository)
 
-    assert await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT) == alias
+    assert await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT) == alias
     assert await accounts.unlink_minecraft_account(account.id) is True
     assert repository.accounts[account.id].identity(IdentityProvider.JAVA) is None
 
@@ -380,6 +481,6 @@ async def test_linking_against_a_missing_account_does_not_create_one() -> None:
     repository = FakeAccountRepository()
 
     with pytest.raises(AccountNotFoundError):
-        await service(repository).link_minecraft_account(999, "valid", consent=CONSENT)
+        await service(repository).link_minecraft_account(999, "valid", consent=CONSENT, attempted_by=ATTEMPT)
 
     assert repository.accounts == {}

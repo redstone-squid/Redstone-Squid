@@ -1,7 +1,6 @@
 """Composition root: wires adapters into services that name no framework themselves."""
 
 import logging
-import secrets
 from collections.abc import Callable
 from contextlib import AsyncExitStack
 from functools import cached_property, partial
@@ -10,6 +9,7 @@ from importlib import resources
 import httpx
 
 from squid.accounts.application import AccountService
+from squid.accounts.application.services import generate_verification_code
 from squid.accounts.infrastructure.mojang import MojangClient
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.artifacts import ArtifactStore
@@ -541,7 +541,7 @@ class _ServiceGraph:
         return AccountService(
             AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
             mojang.get_username,
-            lambda: secrets.randbelow(900_000) + 100_000,
+            generate_verification_code,
         )
 
     @cached_property

@@ -1,5 +1,7 @@
 """Account application services: one account may hold Discord and Java identities alike."""
 
+import logging
+import secrets
 from collections.abc import Awaitable, Callable, Sequence
 from uuid import UUID
 
@@ -27,7 +29,37 @@ from squid.accounts.errors import (
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
+    VerificationAttemptsExhaustedError,
 )
+
+logger = logging.getLogger(__name__)
+
+VERIFICATION_MAX_CONSECUTIVE_FAILURES = 5
+"""Wrong codes tolerated in a row before an identity has to wait.
+
+Generous enough that mistyping a ten-digit code is never the problem, and small enough that the
+guessing budget stays far below the code space even across many windows.
+"""
+
+VERIFICATION_LOCKOUT_SECONDS = 15 * 60
+"""Longer than a code lives, so a lockout always outlasts the codes it was protecting."""
+
+VERIFICATION_CODE_DIGITS = 10
+
+
+def generate_verification_code() -> int:
+    """Mint a ten-digit verification code, about 33 bits.
+
+    Six digits was about 19.8 bits, and the redemption looks a code up by code alone across every
+    outstanding code, so the chance per attempt was `outstanding / 900_000` rather than one in
+    900 000 — and a hit links the victim's Minecraft account to the guesser.
+
+    Stays numeric on purpose: `/verify` returns an `int` to the in-game plugin that shows the code
+    to the player, so base32 would be stronger and would also change that response type. Thirty-three
+    bits against a ten-minute window and a capped attempt budget is already decisive.
+    """
+    lower = 10 ** (VERIFICATION_CODE_DIGITS - 1)
+    return secrets.randbelow(9 * lower) + lower
 
 
 class AccountService:
@@ -97,23 +129,73 @@ class AccountService:
         """Return a public creator profile, following permanent merge redirects."""
         return await self._repository.get_creator_profile(public_id)
 
+    async def guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
+        """Refuse a redemption while *attempted_by* is in its cooling-off period.
+
+        Separate from the redemption itself so anything that tests a code — a redemption now, a
+        reservation later — passes through one cap instead of each surface growing its own.
+        """
+        provider, subject = attempted_by
+        locked_until = await self._repository.verification_lockout(provider, subject)
+        if locked_until is not None:
+            retry_after = max(1, round((locked_until - Instant.now()).total("seconds")))
+            # The subject is deliberately not logged: for Discord it is a user ID, which
+            # `_safe_log_context` strips everywhere else. The provider and the wait are what an
+            # operator needs to tell abuse from a confused user.
+            logger.warning(
+                "verification.locked_out",
+                extra={"provider": provider.value, "retry_after": retry_after},
+            )
+            raise VerificationAttemptsExhaustedError(retry_after)
+
     async def link_minecraft_account(
-        self, account_id: int, code: str, *, consent: AccountConsent
+        self,
+        account_id: int,
+        code: str,
+        *,
+        consent: AccountConsent,
+        attempted_by: tuple[IdentityProvider, str],
     ) -> CreatorAlias | None:
-        """Attach a verified Java identity to an existing account using a valid one-time code."""
+        """Attach a verified Java identity to an existing account using a valid one-time code.
+
+        *attempted_by* is the identity being rate-limited, which is not the same thing as
+        *account_id*: the cap has to survive a caller who has no account yet, and it is keyed on the
+        external identity doing the guessing.
+        """
+        await self.guard_verification_attempts(attempted_by)
         result = await self._repository.consume_code_and_link_account(
             account_id=account_id,
             code=code,
             consent=consent,
         )
         if result.account is None:
+            # A wrong code is the only failure that counts: the conflicts below prove the caller
+            # held a *correct* code, so charging them for it would let anyone lock out a user
+            # whose account is already linked.
+            await self._record_verification_failure(attempted_by)
             raise InvalidVerificationCodeError
         if result.conflicting_java_uuid is not None:
             raise AccountAlreadyLinkedError(
                 account_id=account_id,
                 minecraft_uuid=result.conflicting_java_uuid,
             )
+        await self._repository.clear_verification_failures(*attempted_by)
         return result.claimed_alias
+
+    async def _record_verification_failure(self, attempted_by: tuple[IdentityProvider, str]) -> None:
+        """Charge one refused code against an identity's budget and log a resulting lockout."""
+        provider, subject = attempted_by
+        locked_until = await self._repository.record_verification_failure(
+            provider,
+            subject,
+            max_failures=VERIFICATION_MAX_CONSECUTIVE_FAILURES,
+            lockout_seconds=VERIFICATION_LOCKOUT_SECONDS,
+        )
+        if locked_until is not None:
+            logger.warning(
+                "verification.lockout_started",
+                extra={"provider": provider.value, "locked_until": str(locked_until)},
+            )
 
     async def unlink_minecraft_account(self, account_id: int) -> bool:
         """Unlink every Java identity from an account."""

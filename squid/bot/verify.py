@@ -62,7 +62,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         # Java subject and of nothing else. This command is reached over the gateway, so it
         # genuinely holds the Discord identity it is about to mint.
         account_id = await account_id_for(self.account_service, ctx.author)
-        claimed = await self.account_service.link_minecraft_account(account_id, code, consent=consent_view.consent)
+        claimed = await self.account_service.link_minecraft_account(
+            account_id,
+            code,
+            consent=consent_view.consent,
+            attempted_by=(IdentityProvider.DISCORD, str(ctx.author.id)),
+        )
         message = t(locale, _("Your Discord account has been linked with your Minecraft account."))
         if claimed is not None:
             message += "\n" + t(

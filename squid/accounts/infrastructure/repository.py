@@ -1,10 +1,11 @@
 """SQLAlchemy account repository, keyed by account rather than by identity provider."""
 
 import hashlib
+import hmac
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import case, delete, literal, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -36,8 +37,10 @@ from squid.accounts.infrastructure.models import AccountIdentity as AccountIdent
 from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
 from squid.accounts.infrastructure.models import CreatorAliasClaim as CreatorAliasClaimModel
 from squid.accounts.infrastructure.models import PublicCreatorRedirect
+from squid.accounts.infrastructure.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
+from squid.persistence.types import InstantUTC
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
@@ -408,8 +411,88 @@ class AccountRepository:
             return _to_claim(claim, alias.name)
 
     def hash_verification_code(self, code: str) -> str:
-        """Hash a short-lived verification code with the configured pepper."""
-        return hashlib.sha256(f"{self._verification_code_pepper}{code}".encode()).hexdigest()
+        """Return the digest stored for a short-lived verification code.
+
+        Keyed, not prefixed. The pepper is a key, and `sha256(pepper || code)` is the weaker
+        construction for no saving. Unlike every other credential in this codebase the input here is
+        human-sized, so see `docs/credential-hashing.md` for why the answer is still a keyed digest
+        rather than a KDF: the code is short-lived and attempt-capped, which is what buys the safety
+        margin a work factor would otherwise have to.
+
+        No dual-read path and no backfill. Codes expire in ten minutes, so a deploy invalidates at
+        most one window and the in-game `/link` reissues.
+        """
+        # codeql[py/weak-sensitive-data-hashing]
+        return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
+
+    async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None:
+        """Return when an identity's redemption lockout ends, or `None` when it may try."""
+        async with self._session_factory() as session:
+            locked_until = await session.scalar(
+                select(VerificationAttemptModel.locked_until).where(
+                    VerificationAttemptModel.provider == provider,
+                    VerificationAttemptModel.subject == subject,
+                )
+            )
+        return locked_until if locked_until is not None and locked_until > Instant.now() else None
+
+    async def record_verification_failure(
+        self, provider: IdentityProvider, subject: str, *, max_failures: int, lockout_seconds: int
+    ) -> Instant | None:
+        """Count one refused code and return the lockout instant when this failure caused one.
+
+        The increment is a single upsert rather than a read-modify-write, so concurrent guesses
+        cannot each read the same count and overwrite one another — which would have made the cap
+        trivially evadable by sending attempts in parallel.
+        """
+        now = _now()
+        locked_until = now.add(seconds=lockout_seconds)
+        # Reaching the cap resets the count as it starts the cooling-off period, so the window after
+        # a lockout is a fresh budget rather than an instant re-lock on the next single failure.
+        reached_cap = VerificationAttemptModel.consecutive_failures + 1 >= max_failures
+        first_failure_caps = max_failures <= 1
+        # Typed explicitly: inside `case()` the bind is not associated with the column, so it loses
+        # the `InstantUTC` adapter and reaches asyncpg as a bare `Instant` it cannot encode.
+        lockout_bind = literal(locked_until, InstantUTC())
+        statement = (
+            insert(VerificationAttemptModel)
+            .values(
+                provider=provider,
+                subject=subject,
+                consecutive_failures=0 if first_failure_caps else 1,
+                locked_until=lockout_bind if first_failure_caps else None,
+                updated_at=now,
+            )
+            .on_conflict_do_update(
+                index_elements=[VerificationAttemptModel.provider, VerificationAttemptModel.subject],
+                set_={
+                    "consecutive_failures": case(
+                        (reached_cap, 0), else_=VerificationAttemptModel.consecutive_failures + 1
+                    ),
+                    "locked_until": case((reached_cap, lockout_bind), else_=VerificationAttemptModel.locked_until),
+                    "updated_at": now,
+                },
+            )
+            .returning(VerificationAttemptModel.locked_until)
+        )
+        async with self._session_factory.begin() as session:
+            stored_lockout = await session.scalar(statement)
+        # Only report a lockout *this* call started. Comparing for equality rather than for being in
+        # the future distinguishes "I caused this" from "one was already running", which matters both
+        # for the caller's log line and for a race: two attempts crossing the cap together compute
+        # instants a microsecond apart, so exactly one sees its own value survive. Exact comparison is
+        # sound because `_now()` floors to the precision `timestamptz` keeps.
+        return locked_until if stored_lockout == locked_until else None
+
+    async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None:
+        """Forget an identity's failures after a successful redemption."""
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                delete(VerificationAttemptModel).where(
+                    VerificationAttemptModel.provider == provider,
+                    VerificationAttemptModel.subject == subject,
+                )
+            )
 
     async def consume_code_and_link_account(
         self,
