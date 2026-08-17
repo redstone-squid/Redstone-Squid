@@ -297,3 +297,56 @@ class VerificationCode:
 
     minecraft_uuid: UUID
     username: str
+
+
+@dataclass(frozen=True, slots=True)
+class CreditPreview:
+    """The creator credit a link is about to affect."""
+
+    name: str
+    build_count: int
+    held_by_public_creator_id: UUID | None = None
+    """`None` means unclaimed, so agreeing attributes the credit to the caller.
+
+    Set means another creator holds it, and agreeing moves nothing: the reconcile never transfers a
+    held name, it opens a staff claim. The prompt has to say so before the button is pressed.
+    """
+
+    @property
+    def is_contested(self) -> bool:
+        """Whether another creator already holds this name."""
+        return self.held_by_public_creator_id is not None
+
+
+@dataclass(frozen=True, slots=True)
+class LinkPreview:
+    """What redeeming a held code will do, knowable without spending it.
+
+    Everything here is a fact about the *code*, which is what lets the reservation stay anonymous.
+    "You already linked a different Minecraft account" is a fact about the caller instead, so it
+    stays a check at the entry point.
+    """
+
+    java_uuid: UUID
+    username: str
+    credit: CreditPreview | None = None
+    """`None` when no build credits this name yet, so there is nothing to move."""
+
+    java_uuid_held_elsewhere: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class LinkReservation:
+    """A held verification code, plus the one-time token that commits or releases it.
+
+    A reservation exists because the consent prompt has to show what it is asking about, and the
+    only way to learn that used to be to spend the code. Holding it means the previewed facts are
+    the facts that commit, and it gives the attempt cap a write to count rather than a free read.
+
+    The token is the whole authority: nothing here identifies the reserver, so cancelling still
+    stores nothing about them.
+    """
+
+    token: str
+    expires_at: Instant
+    preview: LinkPreview
