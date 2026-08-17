@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from squid.accounts.errors import AccountNotFoundError
+from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -36,7 +37,13 @@ RefreshCaller = Annotated[Caller, Depends(requires(ACCOUNT_IDENTITY_REFRESH))]
 _ALL_STATUSES = frozenset(Status)
 
 
-@router.get("", response_model=UserMe, responses=responses(401, 403, 404, 503))
+@router.get(
+    "",
+    response_model=UserMe,
+    responses=responses(401, 403, 404, 503),
+    operation_id="account_get",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
 async def get_me(accounts: Accounts, caller: UserCaller) -> UserMe:
     """Return the authenticated user's own linked account.
 
@@ -56,6 +63,8 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> UserMe:
     response_model=UserMe,
     responses=responses(401, 403, 404, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="account_consent_grant",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def grant_consent(accounts: Accounts, caller: UserCaller) -> UserMe:
     """Accept the current privacy notice for future writes."""
@@ -70,6 +79,8 @@ async def grant_consent(accounts: Accounts, caller: UserCaller) -> UserMe:
     response_model=MinecraftIdentityRefresh,
     responses=responses(401, 403, 404, 409, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="account_minecraft_refresh",
+    openapi_extra=contract(security=[ANONYMOUS], cli=cli_command("account.refresh", interaction="direct")),
 )
 async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) -> MinecraftIdentityRefresh:
     """Re-read the caller's linked Minecraft name and reconcile the creator credit.
@@ -90,13 +101,21 @@ async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) 
         Depends(enforce_route_rate_limits),
         Depends(enforce_request_idempotency),
     ],
+    operation_id="account_minecraft_refresh_for",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) -> MinecraftIdentityRefresh:
     """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(account_id))
 
 
-@router.get("/builds", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))
+@router.get(
+    "/builds",
+    response_model=Page[BuildSummary],
+    responses=responses(400, 401, 403, 422, 503),
+    operation_id="account_builds_list",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
 async def list_my_builds(
     build_queries: BuildQueries,
     caller: UserCaller,
