@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
+from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import CurrentCaller, WebAuth
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -25,7 +26,13 @@ resource, not a credential failure: "this deployment has no GitHub login" is a f
 # `GET /csrf` -- and swallow it silently, since the request would still succeed, just as
 # a 404 for a provider named "csrf". `/logout` is POST and does not actually collide,
 # but is hoisted with it for symmetry. `tests/unit/api/test_auth_routes.py` pins this.
-@router.get("/csrf", response_model=CsrfTokenResponse, responses=responses(401, 503))
+@router.get(
+    "/csrf",
+    response_model=CsrfTokenResponse,
+    responses=responses(401, 503),
+    operation_id="browser_csrf_get",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
 async def csrf_token(request: Request, response: Response, caller: CurrentCaller) -> CsrfTokenResponse:
     """Return the session-bound write token to a credentialed CORS frontend."""
     token = request.cookies.get("squid_csrf")
@@ -41,6 +48,8 @@ async def csrf_token(request: Request, response: Response, caller: CurrentCaller
     status_code=204,
     responses=responses(401, 403, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="browser_session_revoke",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def logout(request: Request, web_auth: WebAuth, caller: CurrentCaller) -> Response:
     """Revoke the current browser session and clear its cookies."""
@@ -54,7 +63,13 @@ async def logout(request: Request, web_auth: WebAuth, caller: CurrentCaller) -> 
     return response
 
 
-@router.get("/{provider}", response_class=RedirectResponse, responses=responses(400, 404, 503))
+@router.get(
+    "/{provider}",
+    response_class=RedirectResponse,
+    responses=responses(400, 404, 503),
+    operation_id="browser_authorization_start",
+    openapi_extra=contract(security=[ANONYMOUS], cli=browser_only()),
+)
 async def browser_authorization_start(
     request: Request,
     web_auth: WebAuth,
@@ -68,7 +83,13 @@ async def browser_authorization_start(
     return RedirectResponse(await web_auth.authorize_url(provider, redirect_to))
 
 
-@router.get("/{provider}/callback", response_class=RedirectResponse, responses=responses(400, 401, 404, 503))
+@router.get(
+    "/{provider}/callback",
+    response_class=RedirectResponse,
+    responses=responses(400, 401, 404, 503),
+    operation_id="browser_authorization_callback",
+    openapi_extra=contract(security=[ANONYMOUS], cli=browser_only()),
+)
 async def browser_authorization_callback(
     request: Request,
     web_auth: WebAuth,
