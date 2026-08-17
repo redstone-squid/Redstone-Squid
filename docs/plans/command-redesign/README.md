@@ -6,9 +6,10 @@
 ## Why
 
 Dogfooding findings from actually using the bot (2026-08-17). The command surface grew feature
-by feature and it shows: ~90 commands across 19 top-level groups, several of which overlap,
+by feature and it shows: ~108 commands across 19 top-level groups, several of which overlap,
 fight the Discord UI, or demand more typing than the task deserves. Concrete complaints, from
-the person actually using it:
+the person actually using it (a fuller code-level inventory lives in
+[00-audit.md](00-audit.md)):
 
 - **Submission is split across two commands with opposite flaws.** `/build submit` asks for
   four attachments *first* and then hides every typed field behind a modal — and Discord modals
@@ -27,6 +28,13 @@ the person actually using it:
 - **Too many commands overall.** Every subsystem grew its own group (`patterns`,
   `restrictions`, `version`, `tag`, `vote`/`poll`, `admin records-*`, …). Many are
   staff-or-never commands sitting in everyone's command picker.
+
+The audit added the systemic causes behind those complaints, the biggest being: **no command
+sets `default_permissions`, so all ~108 commands appear in every user's picker** and staff
+gates only fire at runtime; ephemerality and i18n are applied inconsistently; five commands
+take pasted message links where a right-click context menu belongs; raw IDs, UUIDs, and
+ranking scores leak into user-facing output; and pagination is reinvented (or skipped) per
+command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 
 ## Principles
 
@@ -47,11 +55,16 @@ the person actually using it:
 
 | # | Plan | Scope | Status |
 |---|------|-------|--------|
+| 0 | [00-audit.md](00-audit.md) | Code-level audit of all 19 groups; cross-cutting defects C1–C7 | **Done** |
 | 1 | [01-build-submit.md](01-build-submit.md) | One `/build submit`: typed fields with autocomplete first, attachments last, workspace kept; `submit-full` removed | **Delivered** |
-| 2 | 02-search.md (todo) | Fold `/restrictions search`, `/patterns search`, `/patterns list` into `/search` scopes or autocomplete; drop raw scores from result lists | Not started |
-| 3 | 03-diagnostics.md (todo) | `/error`: working prefix invocation, expandable/attached full traceback | Not started |
-| 4 | 04-settings.md (todo) | Settings panel: view everything at once, edit several keys per trip | Not started |
-| 5 | 05-condensation.md (todo) | Full-surface audit: merge, hide, or gate the long tail of commands | Not started |
+| 2 | 02-search.md (todo) | Fold `/restrictions search`, `/patterns search`, `/patterns list` into `/search`; drop scores and raw ids from result lists; demote the `mode`/`sort`/`direction` enums | Not started |
+| 3 | 03-diagnostics.md (todo) | `/error`: fix the prefix form (missing `invoke_without_command=True`), make `recent` entries openable in place | Not started |
+| 4 | 04-settings.md (todo) | Settings panel: view everything at once, edit several keys per trip; bring `voting` replies onto i18n/layouts | Not started |
+| 5 | 05-condensation.md (todo) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | Not started |
 
-Phase 5 is deliberately last: merging the long tail is easier once phases 1–4 have established
-the target shapes (typed-options-plus-workspace, single-entry search, panel-style settings).
+The audit also surfaced one item worth doing *before* phase 2: **C1, picker visibility** —
+adding `default_permissions` to the staff groups so non-staff pickers shrink from ~108
+commands to the handful they can run. It is a few lines per group and changes how much of
+phase 5 is even necessary. Phase 5 stays last otherwise: merging the long tail is easier once
+phases 1–4 have established the target shapes (typed-options-plus-workspace, single-entry
+search, panel-style settings).
