@@ -146,13 +146,6 @@ OPERATIONS = (
         features=("submission-media",),
         interaction="direct",
     ),
-    _operation("get", "/v1/tags", "tags_list"),
-    _operation("get", "/v1/tags/{tag_id}", "tags_get"),
-    _operation("get", "/v1/creator-aliases/{name}", "creator_alias_get"),
-    _operation("get", "/v1/creators/{creator_id}", "creator_profile_get"),
-    _operation("get", "/v1/versions", "minecraft_versions_list"),
-    _operation("get", "/v1/vote-sessions/{vote_session_id}", "vote_session_get"),
-    _operation("post", "/v1/vote-sessions/{vote_session_id}/votes", "vote_cast", "browser-only"),
 )
 
 _UNSAFE_METHODS = frozenset({"post", "put", "patch", "delete"})
