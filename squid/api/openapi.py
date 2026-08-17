@@ -44,31 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation(
-        "post",
-        "/v1/cli/auth/enrollments",
-        "cli_enrollment_start",
-        "command",
-        command="auth.login",
-        features=("cli-device-auth",),
-        interaction="browser-continuation",
-    ),
-    _operation("post", "/v1/cli/auth/enrollments/exchange", "cli_enrollment_exchange"),
-    _operation("get", "/v1/cli/auth/enrollments/approval", "cli_enrollment_preview", "browser-only"),
-    _operation("post", "/v1/cli/auth/enrollments/approval", "cli_enrollment_approve", "browser-only"),
-    _operation("post", "/v1/cli/auth/session-challenges", "cli_session_challenge_start"),
-    _operation("post", "/v1/cli/auth/sessions", "cli_session_exchange"),
-    _operation("get", "/v1/cli/auth/devices", "cli_devices_list", "browser-only"),
-    _operation("delete", "/v1/cli/auth/devices/{device_id}", "cli_device_revoke", "browser-only"),
-    _operation(
-        "delete",
-        "/v1/cli/auth/sessions/current",
-        "cli_session_revoke",
-        "command",
-        command="auth.logout",
-        features=("cli-device-auth",),
-        interaction="direct",
-    ),
     _operation("get", "/v1/users/me", "account_get", "browser-only"),
     _operation("post", "/v1/users/me/consent", "account_consent_grant", "browser-only"),
     _operation("get", "/v1/users/me/builds", "account_builds_list", "browser-only"),
