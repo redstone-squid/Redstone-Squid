@@ -6,7 +6,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Protocol
 from uuid import uuid4
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
 from squid.tags.domain import TagDefinition, TagModerationStatus, TagValue, TagValueType
+from squid.tags.errors import TagNotFoundError
 
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -59,14 +62,14 @@ class TagService:
     ) -> TagDefinition:
         normalized_name = " ".join(display_name.casefold().split())
         if not 1 <= len(normalized_name) <= 80:
-            msg = "tag names must contain between 1 and 80 characters"
-            raise ValueError(msg)
+            msg = _("Tag names must contain between 1 and 80 characters.")
+            raise ValidationError(msg)
         normalized_query = query_name.casefold().strip() if query_name is not None else None
         if normalized_query == "":
             normalized_query = None
         if normalized_query is not None and _QUERY_NAME.fullmatch(normalized_query) is None:
-            msg = "query names must start with a letter and contain only lowercase letters, digits, or underscores"
-            raise ValueError(msg)
+            msg = _("query names must start with a letter and contain only lowercase letters, digits, or underscores")
+            raise ValidationError(msg)
         return await self._repository.create_showcase(
             # No submitter identity in the key. It is never parsed -- the only literal
             # comparison anywhere is against an official key -- so publishing a proposer
@@ -122,8 +125,8 @@ class TagService:
             or definition.semantic_kind.value != "showcase"
             or definition.moderation_status is not TagModerationStatus.APPROVED
         ):
-            msg = "an approved user showcase tag is required"
-            raise ValueError(msg)
+            msg = _("An approved user showcase tag is required.")
+            raise ValidationError(msg)
         value = _coerce_assignment_value(definition, raw_value)
         assigned = await self._repository.assign_showcase(
             build_id=build_id,
@@ -132,27 +135,29 @@ class TagService:
             actor_account_id=actor_account_id,
         )
         if not assigned:
-            msg = "the build does not exist or was not submitted by you"
-            raise ValueError(msg)
+            msg = _("The build does not exist or was not submitted by you.")
+            raise ValidationError(msg)
         return definition
 
     async def _set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition:
         definition = await self._repository.set_status(tag_id, status)
         if definition is None:
-            msg = f"tag {tag_id} does not exist"
-            raise ValueError(msg)
+            raise TagNotFoundError(tag_id)
         return definition
 
 
 def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -> TagValue:
     if definition.value_type is TagValueType.NONE:
         if raw_value not in {None, ""}:
-            msg = f"{definition.display_name} does not accept a value"
-            raise ValueError(msg)
+            msg = _("{display_name} does not accept a value.")
+            raise ValidationError(msg, message_params={"display_name": definition.display_name})
         return None
     if raw_value is None or not raw_value.strip():
-        msg = f"{definition.display_name} requires a {definition.value_type.value} value"
-        raise ValueError(msg)
+        msg = _("{display_name} requires a {value_type} value.")
+        raise ValidationError(
+            msg,
+            message_params={"display_name": definition.display_name, "value_type": definition.value_type.value},
+        )
     value = raw_value.strip()
     if definition.value_type is TagValueType.TEXT:
         return value
@@ -162,14 +167,14 @@ def _coerce_assignment_value(definition: TagDefinition, raw_value: str | None) -
             return True
         if normalized in {"false", "no", "0"}:
             return False
-        msg = f"{definition.display_name} expects true or false"
-        raise ValueError(msg)
+        msg = _("{display_name} expects true or false.")
+        raise ValidationError(msg, message_params={"display_name": definition.display_name})
     try:
         numeric = Decimal(value)
     except InvalidOperation as error:
-        msg = f"{definition.display_name} expects a number in its canonical unit"
-        raise ValueError(msg) from error
+        msg = _("{display_name} expects a number in its canonical unit.")
+        raise ValidationError(msg, message_params={"display_name": definition.display_name}) from error
     if not numeric.is_finite():
-        msg = f"{definition.display_name} expects a finite number"
-        raise ValueError(msg)
+        msg = _("{display_name} expects a finite number.")
+        raise ValidationError(msg, message_params={"display_name": definition.display_name})
     return numeric
