@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Never, Protocol, TypeVar, cast
+from typing import Annotated, Protocol, TypeVar, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
@@ -27,16 +27,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeExchangeRequest,
     ServerProfileSchema,
 )
-from squid.core.errors import (
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    NotFoundError,
-    RateLimitedError,
-    ServiceUnavailableError,
-    SquidError,
-    ValidationError,
-)
+from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
 from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
@@ -47,24 +38,9 @@ from squid.minecraft_auth.domain import (
     PlayerAuthorizationChallenge,
     PublicServerProfile,
 )
-from squid.minecraft_auth.errors import (
-    AccountConsentRequiredError,
-    AuthorizationPendingError,
-    ChallengeAlreadyExchangedError,
-    ChallengeApprovalDeniedError,
-    ChallengeExpiredError,
-    InstallationUnavailableError,
-    InvalidChallengeError,
-    InvalidInstallationCredentialError,
-    InvalidPkceError,
-    InvalidPlayerTokenError,
-    MinecraftAuthorizationError,
-    TooManyActiveChallengesError,
-)
 
 _T = TypeVar("_T")
 _NO_STORE = "no-store"
-_RATE_LIMIT_RETRY_SECONDS = 60
 
 
 class PaperInstallationHttpService(Protocol):
@@ -454,33 +430,7 @@ async def revoke_grant(
 
 
 async def _execute(operation: Awaitable[_T]) -> _T:
-    try:
-        return await operation
-    except MinecraftAuthorizationError as error:
-        _raise_transport_error(error)
-
-
-def _raise_transport_error(error: MinecraftAuthorizationError) -> Never:
-    public_context = {"minecraft_auth_code": error.code}
-    mapped: SquidError
-    if isinstance(error, (InvalidInstallationCredentialError, InvalidPlayerTokenError)):
-        mapped = AuthenticationError(str(error), public_context=public_context)
-    elif isinstance(error, InstallationUnavailableError):
-        mapped = NotFoundError(str(error), public_context=public_context)
-    elif isinstance(error, (AccountConsentRequiredError, ChallengeApprovalDeniedError)):
-        mapped = AuthorizationError(str(error), public_context=public_context)
-    elif isinstance(error, TooManyActiveChallengesError):
-        mapped = RateLimitedError(_RATE_LIMIT_RETRY_SECONDS).with_context(public_context=public_context)
-    elif isinstance(error, (InvalidChallengeError, InvalidPkceError)):
-        mapped = ValidationError(str(error), public_context=public_context)
-    elif isinstance(
-        error,
-        (AuthorizationPendingError, ChallengeAlreadyExchangedError, ChallengeExpiredError),
-    ):
-        mapped = ConflictError(str(error), public_context=public_context)
-    else:
-        mapped = ValidationError(public_context=public_context)
-    raise mapped from None
+    return await operation
 
 
 def _prevent_storage(response: Response) -> None:

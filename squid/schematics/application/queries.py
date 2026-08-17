@@ -6,6 +6,7 @@ from typing import Literal
 
 from whenever import Instant
 
+from squid.core.errors import DataIntegrityError
 from squid.core.i18n import _
 from squid.schematics.domain.models import (
     SchematicAnalysis,
@@ -36,8 +37,8 @@ class SchematicPublication:
             and self.rights_attested_by_account_id is not None
         )
         if self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD and not rights_complete:
-            msg = "public schematic downloads require a license and rights attestation"
-            raise ValueError(msg)
+            msg = _("public schematic downloads require a license and rights attestation")
+            raise DataIntegrityError(msg)
 
     @property
     def is_public_downloadable(self) -> bool:

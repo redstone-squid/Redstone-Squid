@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError, ValidationError
+from squid.core.i18n import _
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec, SecretPurpose
 from squid.minecraft_auth.application.ports import AccountIdentityAuthorizer, MinecraftAuthorizationRepository
 from squid.minecraft_auth.domain import (
@@ -183,8 +185,8 @@ class PlayerAuthorizationService:
         max_active_challenges: int = MAX_ACTIVE_CHALLENGES,
     ) -> None:
         if min(challenge_lifetime_seconds, grant_lifetime_seconds, max_active_challenges) <= 0:
-            msg = "Minecraft authorization limits must be positive."
-            raise ValueError(msg)
+            msg = _("Minecraft authorization limits must be positive.")
+            raise InvalidStateError(msg)
         self._repository = repository
         self._accounts = accounts
         self._codec = codec
@@ -435,6 +437,6 @@ class PlayerAuthorizationService:
 def _installation_label(label: str) -> str:
     normalized = label.strip()
     if not normalized or len(normalized) > 80:
-        msg = "Installation label must contain 1 to 80 characters."
-        raise ValueError(msg)
+        msg = _("Installation label must contain 1 to 80 characters.")
+        raise ValidationError(msg)
     return normalized
