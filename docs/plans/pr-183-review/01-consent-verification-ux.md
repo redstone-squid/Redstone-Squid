@@ -389,12 +389,45 @@ migration.
 
 ## Delivery
 
-1. `accounts: let a verification code be held before it is spent` — §1, with the migration and the reservation
-   tests. Lands after plan 02 §6.
-2. `bot: preview the link a consent prompt is asking for` — §2.
-3. `bot: describe link and refresh in the same words` — §3.
-4. `bot: name the claimant wherever a claim is shown` — §4. Independent of 1–3.
-5. `accounts: name the creator holding a contested alias` — §5. Independent of 1–4.
+All five subplans landed 2026-08-17, after plan 02 §6 (`8498da21`):
+
+1. `c4f30e83` `accounts: let a verification code be held before it is spent` — §1, migration `c4e8f2a1b6d3`.
+2. `89304f37` `bot: preview the link a consent prompt is asking for` — §2.
+3. `01423b59` `bot: describe link and refresh in the same words` — §3.
+4. `d2341c80` `bot: name the claimant wherever a claim is shown` — §4.
+5. `f1524d87` `accounts: name the creator holding a contested alias` — §5.
 
 Replying on GitHub and resolving threads requires separate explicit authorization, per the
 [directory README](README.md).
+
+## Implementation notes
+
+Things found while building that the plan did not predict:
+
+- **The reservation had to be anonymous, and that constraint came from the notice itself.** Keying the
+  hold on an account would have minted an account row in order to display a privacy prompt, making
+  "cancelling stores no user account information" false. The token-keyed design is pinned by a test
+  asserting the cancel path writes no `accounts` and no `account_identities` rows.
+- **`link` also needed a distinct headline, not just the shared reconciliation.** Routing it straight
+  through `_refresh_message` would have told a first-time linker "Your Minecraft name is still
+  **Notch**. Nothing changed." The renderer split into a headline plus `_reconciliation_lines`, which
+  is what the two commands actually share.
+- **The build count could not use the `BuildCreator` mapper.** Importing it pulls the whole `Build`
+  relationship graph into the accounts context, so importing the accounts repository would depend on
+  the builds taxonomy being imported first. A lightweight `table("build_creators", column("alias_id"))`
+  reads the one column wanted. The integration test does stand up the real `builds` table, which
+  needs `CREATE EXTENSION vector` because that fixture uses `create_all` rather than the migrations.
+- **`with_context` could not restate a message**, so §5's holder-naming had to assign `self.message`
+  by hand and miss the `args` refresh. It now takes `message`/`message_params`; params merge.
+- **Two sharp edges in message rendering are now pinned by tests.** With no `message_params` at all,
+  `_rendered_message` skips `format` and placeholders reach the user as literal braces; with some
+  params present, a missing one raises at enrichment time. The first predates this work.
+- **An integration test caught a real bug**: inside `case()` the `locked_until` bind loses its
+  `InstantUTC` adapter and reaches asyncpg as a bare `Instant` it cannot encode.
+- **Not done, deliberately.** The `.po` catalogues were ~2940 lines stale tree-wide before this work,
+  so regenerating them was left out rather than burying these diffs; and command descriptions come
+  from docstrings, which the extractor never sees, so every command in the tree is English-only. Both
+  are their own commits.
+- Two latent bugs found in `verification_codes` while adding to it are filed in
+  [`BUGS.md`](../../../BUGS.md): the `SmallInteger` primary key exhausts after 32,767 codes, and the
+  code digest has no index.
