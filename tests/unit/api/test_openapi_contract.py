@@ -5,8 +5,11 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import pytest
+from fastapi import FastAPI
 
 from squid.api.capabilities import API_FEATURES
+from squid.api.contract import ANONYMOUS, contract, transport_only, validate_contract
 from squid.api.errors import ProblemDetail
 from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
@@ -140,6 +143,33 @@ def test_openapi_declares_submission_draft_producer_links() -> None:
 
         assert link["operationId"] == expected.target_operation_id
         assert link["parameters"] == {"draft_id": expected.draft_id_expression}
+
+
+def test_validate_contract_rejects_a_route_without_an_operation_id() -> None:
+    app = FastAPI()
+    app.get("/bare")(lambda: {})
+
+    with pytest.raises(ValueError, match="no explicit operation_id"):
+        validate_contract(app)
+
+
+def test_validate_contract_rejects_a_route_missing_contract_metadata() -> None:
+    app = FastAPI()
+    app.get("/bare", operation_id="bare_get")(lambda: {})
+
+    with pytest.raises(ValueError, match="no declared contract"):
+        validate_contract(app)
+
+
+def test_validate_contract_accepts_a_route_declared_through_contract() -> None:
+    app = FastAPI()
+    app.get(
+        "/bare",
+        operation_id="bare_get",
+        openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+    )(lambda: {})
+
+    validate_contract(app)
 
 
 def test_cli_command_operations_have_untranslated_fixtures() -> None:
