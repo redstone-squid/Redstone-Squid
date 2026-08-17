@@ -1,6 +1,6 @@
 """SQLAlchemy Discord message models."""
 
-from sqlalchemy import BigInteger, ForeignKey, Text, func
+from sqlalchemy import BigInteger, ForeignKey, Index, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -18,6 +18,7 @@ class Message(Base):
     """
 
     __tablename__ = "messages"
+    __table_args__ = (Index("messages_guild_idx", "guild_id"),)
 
     # `autoincrement=False` is what makes the docstring below true of the DDL as well: an
     # integer primary key is `SERIAL` by default, so without it the model asks for a sequence

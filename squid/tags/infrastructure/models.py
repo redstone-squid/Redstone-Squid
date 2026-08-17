@@ -52,6 +52,7 @@ class TagDefinition(Base, kw_only=True):
 
     __tablename__ = "tag_definitions"
     __table_args__ = (
+        Index("tag_definitions_created_by_idx", "created_by_account_id"),
         UniqueConstraint("id", "value_type", name="tag_definitions_id_value_type_key"),
         UniqueConstraint("stable_key", name="tag_definitions_stable_key_key"),
         UniqueConstraint("query_name", name="tag_definitions_query_name_key"),
@@ -204,6 +205,7 @@ class BuildTagAssignment(Base, kw_only=True):
 
     __tablename__ = "build_tag_assignments"
     __table_args__ = (
+        Index("build_tag_assignments_created_by_idx", "created_by_account_id"),
         PrimaryKeyConstraint("build_id", "tag_id"),
         ForeignKeyConstraint(
             ["tag_id", "value_type"],
@@ -284,6 +286,7 @@ class TagRelation(Base, kw_only=True):
 
     __tablename__ = "tag_relations"
     __table_args__ = (
+        Index("tag_relations_target_idx", "target_tag_id"),
         PrimaryKeyConstraint("source_tag_id", "relation_kind", "target_tag_id"),
         CheckConstraint("relation_kind IN ('implies', 'incompatible')", name="tag_relations_kind_check"),
         CheckConstraint("source_tag_id <> target_tag_id", name="tag_relations_distinct_check"),

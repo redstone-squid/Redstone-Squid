@@ -57,6 +57,8 @@ class BuildSchematic(Base, kw_only=True):
 
     __tablename__ = "build_schematics"
     __table_args__ = (
+        Index("build_schematics_uploaded_by_idx", "uploaded_by_account_id"),
+        Index("build_schematics_rights_attested_by_idx", "rights_attested_by_account_id"),
         UniqueConstraint("build_id", "file_sha256", name="build_schematics_build_file_key"),
         # At most one primary schematic per build, while still allowing many secondary ones.
         Index(
