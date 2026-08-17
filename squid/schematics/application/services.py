@@ -448,7 +448,12 @@ class SchematicService:
         """
         self._require_available()
         if not self._render_enabled:
-            raise SchematicRenderUnavailableError
+            msg = "Schematic rendering is disabled on this instance."
+            raise SchematicRenderUnavailableError(
+                msg,
+                developer_action="Set render_enabled (SQUID_SCHEMATIC_RENDER_ENABLED=true) and configure a "
+                "resource pack to enable it.",
+            )
 
         stored = await self._store.get_primary(build_id)
         if stored is None:
@@ -553,7 +558,12 @@ class SchematicService:
                 stored.build_id,
                 extra=_log_fields(stored, "render"),
             )
-            raise SchematicRenderUnavailableError()
+            msg = "The schematic renderer returned an invalid image."
+            raise SchematicRenderUnavailableError(
+                msg,
+                developer_action="This indicates an engine bug rather than a configuration problem; "
+                "check the render worker logs.",
+            )
         return png
 
     def _log_render_skip(self, stored: StoredSchematic, reason: RenderSkipReason) -> None:
