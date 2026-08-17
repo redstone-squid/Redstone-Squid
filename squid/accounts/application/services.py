@@ -18,6 +18,7 @@ from squid.accounts.domain import (
     CreatorProfile,
     IdentityProvider,
     IdentityRefresh,
+    LinkReservation,
     RecentAccountProof,
 )
 from squid.accounts.errors import (
@@ -27,6 +28,7 @@ from squid.accounts.errors import (
     ConsentRequiredError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
+    LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
@@ -45,6 +47,13 @@ VERIFICATION_LOCKOUT_SECONDS = 15 * 60
 """Longer than a code lives, so a lockout always outlasts the codes it was protecting."""
 
 VERIFICATION_CODE_DIGITS = 10
+
+LINK_RESERVATION_TTL_SECONDS = 180
+"""How long a held code waits for its consent prompt to be answered.
+
+Comfortably longer than the prompt's own 120-second timeout, so the view always expires first and
+the user sees a disabled prompt rather than a hold that lapsed underneath a live one.
+"""
 
 
 def generate_verification_code() -> int:
@@ -148,6 +157,34 @@ class AccountService:
             )
             raise VerificationAttemptsExhaustedError(retry_after)
 
+    async def reserve_minecraft_link(
+        self,
+        code: str,
+        *,
+        attempted_by: tuple[IdentityProvider, str],
+        ttl_seconds: int = LINK_RESERVATION_TTL_SECONDS,
+    ) -> LinkReservation:
+        """Hold a code so a consent prompt can say what agreeing to it will do.
+
+        This is where a wrong code now fails — before the notice is read, rather than after it has
+        been agreed to. It is also where the guessing happens, so it is capped like a redemption:
+        without that, reserving would be an uncapped oracle sitting beside a capped one.
+        """
+        await self.guard_verification_attempts(attempted_by)
+        reservation = await self._repository.reserve_verification_code(code, ttl_seconds=ttl_seconds)
+        if reservation is None:
+            await self._record_verification_failure(attempted_by)
+            raise InvalidVerificationCodeError
+        return reservation
+
+    async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
+        """Give a held code back after a declined or abandoned prompt.
+
+        Best-effort by design: if this never runs, `reserved_until` lapses on its own, so a crash
+        costs one prompt's delay rather than a permanently stuck code.
+        """
+        await self._repository.release_verification_code(code, reservation.token)
+
     async def link_minecraft_account(
         self,
         account_id: int,
@@ -155,24 +192,34 @@ class AccountService:
         *,
         consent: AccountConsent,
         attempted_by: tuple[IdentityProvider, str],
+        reservation: LinkReservation | None = None,
     ) -> CreatorAlias | None:
         """Attach a verified Java identity to an existing account using a valid one-time code.
 
         *attempted_by* is the identity being rate-limited, which is not the same thing as
         *account_id*: the cap has to survive a caller who has no account yet, and it is keyed on the
         external identity doing the guessing.
+
+        Passing the *reservation* taken before the consent prompt commits that hold. The guessing was
+        already charged and capped at reservation time, so this path does not charge again — the
+        caller has demonstrably held a valid code since then.
         """
-        await self.guard_verification_attempts(attempted_by)
+        if reservation is None:
+            await self.guard_verification_attempts(attempted_by)
         result = await self._repository.consume_code_and_link_account(
             account_id=account_id,
             code=code,
             consent=consent,
+            reservation_token=None if reservation is None else reservation.token,
         )
+        if result.reservation_expired:
+            raise LinkReservationExpiredError
         if result.account is None:
             # A wrong code is the only failure that counts: the conflicts below prove the caller
             # held a *correct* code, so charging them for it would let anyone lock out a user
             # whose account is already linked.
-            await self._record_verification_failure(attempted_by)
+            if reservation is None:
+                await self._record_verification_failure(attempted_by)
             raise InvalidVerificationCodeError
         if result.conflicting_java_uuid is not None:
             raise AccountAlreadyLinkedError(

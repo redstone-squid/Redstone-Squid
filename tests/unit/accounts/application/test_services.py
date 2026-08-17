@@ -21,8 +21,11 @@ from squid.accounts.domain import (
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreditPreview,
     IdentityProvider,
     IdentityRefresh,
+    LinkPreview,
+    LinkReservation,
     RecentAccountProof,
     fold_creator_name,
 )
@@ -33,6 +36,7 @@ from squid.accounts.errors import (
     ConsentRequiredError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
+    LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
@@ -56,6 +60,9 @@ class FakeAccountRepository:
         self.created_code: tuple[UUID, str, str] | None = None
         self.merge_result: AccountMerge | None = None
         self.refreshed: tuple[int, UUID, str] | None = None
+        self.reservable: dict[str, LinkPreview] = {}
+        self.reservations: set[str] = set()
+        self.consumed_token: str | None = None
         self.failures: dict[tuple[IdentityProvider, str], int] = {}
         self.lockouts: dict[tuple[IdentityProvider, str], Instant] = {}
         self._next_id = 1
@@ -133,11 +140,30 @@ class FakeAccountRepository:
         return updated
 
     async def consume_code_and_link_account(
-        self, *, account_id: int, code: str, consent: AccountConsent
+        self, *, account_id: int, code: str, consent: AccountConsent, reservation_token: str | None = None
     ) -> VerificationLinkResult:
         if account_id not in self.accounts:
             raise AccountNotFoundError(account_id)
+        self.consumed_token = reservation_token
+        if reservation_token is not None and reservation_token not in self.reservations:
+            return VerificationLinkResult(reservation_expired=True)
         return self.link_result
+
+    async def reserve_verification_code(self, code: str, *, ttl_seconds: int) -> LinkReservation | None:
+        if code not in self.reservable:
+            return None
+        token = f"token-for-{code}"
+        self.reservations.add(token)
+        return LinkReservation(
+            token=token,
+            expires_at=NOW.add(seconds=ttl_seconds),
+            preview=self.reservable[code],
+        )
+
+    async def release_verification_code(self, code: str, reservation_token: str) -> bool:
+        held = reservation_token in self.reservations
+        self.reservations.discard(reservation_token)
+        return held
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge:
         assert self.merge_result is not None
@@ -283,6 +309,101 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
         await service(repository).link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
         == alias
     )
+
+
+def _preview(**overrides: object) -> LinkPreview:
+    defaults: dict[str, object] = {"java_uuid": JAVA_UUID, "username": "Player"}
+    return LinkPreview(**(defaults | overrides))  # type: ignore[arg-type]
+
+
+async def test_a_bad_code_fails_at_reservation_before_any_prompt() -> None:
+    """The whole point of reserving first: the code is checked before the notice is read."""
+    repository = FakeAccountRepository()
+
+    with pytest.raises(InvalidVerificationCodeError):
+        await service(repository).reserve_minecraft_link("bad", attempted_by=ATTEMPT)
+
+    # And it costs the guesser a slot, because reserving is where guessing now happens.
+    assert repository.failures[ATTEMPT] == 1
+
+
+async def test_reserving_returns_the_preview_the_prompt_needs() -> None:
+    repository = FakeAccountRepository()
+    credit = CreditPreview(name="Player", build_count=12)
+    repository.reservable["good"] = _preview(credit=credit)
+
+    reservation = await service(repository).reserve_minecraft_link("good", attempted_by=ATTEMPT)
+
+    assert reservation.preview.username == "Player"
+    assert reservation.preview.credit == credit
+    assert reservation.preview.credit is not None
+    assert not reservation.preview.credit.is_contested
+    assert reservation.token
+
+
+async def test_reservation_lockout_is_enforced_before_reserving() -> None:
+    """Otherwise reserving would be an uncapped oracle sitting next to a capped redemption."""
+    repository = FakeAccountRepository()
+    repository.reservable["good"] = _preview()
+    accounts = service(repository)
+    for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
+        with pytest.raises(InvalidVerificationCodeError):
+            await accounts.reserve_minecraft_link("bad", attempted_by=ATTEMPT)
+
+    with pytest.raises(VerificationAttemptsExhaustedError):
+        await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+
+
+async def test_committing_a_reservation_passes_the_token_through() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    repository.reservable["good"] = _preview()
+    repository.link_result = VerificationLinkResult(account=account)
+    accounts = service(repository)
+    reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+
+    await accounts.link_minecraft_account(
+        account.id, "good", consent=CONSENT, attempted_by=ATTEMPT, reservation=reservation
+    )
+
+    assert repository.consumed_token == reservation.token
+
+
+async def test_a_lapsed_reservation_is_not_reported_as_a_bad_code() -> None:
+    """A correct code told "invalid" sends the user to fetch a new one for the wrong reason."""
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    repository.reservable["good"] = _preview()
+    accounts = service(repository)
+    reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+    await accounts.release_minecraft_link("good", reservation)
+
+    with pytest.raises(LinkReservationExpiredError):
+        await accounts.link_minecraft_account(
+            account.id, "good", consent=CONSENT, attempted_by=ATTEMPT, reservation=reservation
+        )
+
+
+async def test_committing_a_reservation_is_not_charged_again() -> None:
+    """The guess was already capped at reservation time; charging twice halves the real budget."""
+    repository = FakeAccountRepository()
+    account = repository.seed_account(123, consent=CONSENT)
+    assert account.id is not None
+    repository.reservable["good"] = _preview()
+    accounts = service(repository)
+    reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+    repository.link_result = VerificationLinkResult()
+
+    # The code vanished between prompt and commit, which is not a guess.
+    repository.reservations.add(reservation.token)
+    with pytest.raises(InvalidVerificationCodeError):
+        await accounts.link_minecraft_account(
+            account.id, "good", consent=CONSENT, attempted_by=ATTEMPT, reservation=reservation
+        )
+
+    assert repository.failures.get(ATTEMPT, 0) == 0
 
 
 async def test_consecutive_wrong_codes_lock_the_attempting_identity() -> None:

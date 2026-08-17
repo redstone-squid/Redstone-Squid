@@ -2,10 +2,11 @@
 
 import hashlib
 import hmac
+import secrets
 import uuid
 from collections.abc import Sequence
 
-from sqlalchemy import case, delete, literal, select, text, update
+from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -21,8 +22,11 @@ from squid.accounts.domain import (
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreditPreview,
     IdentityProvider,
     IdentityRefresh,
+    LinkPreview,
+    LinkReservation,
     fold_creator_name,
 )
 from squid.accounts.errors import (
@@ -44,6 +48,15 @@ from squid.persistence.types import InstantUTC
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
+
+_BUILD_CREDITS = table("build_creators", column("alias_id"))
+"""A lightweight handle on the one column of `build_creators` this module reads.
+
+Deliberately not `squid.builds.infrastructure.models.BuildCreator`: importing that mapper pulls the
+whole `Build` relationship graph into the accounts context, which both couples the two contexts and
+makes importing this module depend on the builds taxonomy being imported first. All that is wanted
+here is a count.
+"""
 
 
 def _now() -> Instant:
@@ -425,6 +438,101 @@ class AccountRepository:
         # codeql[py/weak-sensitive-data-hashing]
         return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
 
+    def _reservation_holds(self, row: VerificationCodeModel, token: str) -> bool:
+        """Whether *token* is the live hold on *row*."""
+        if row.reserved_token is None or row.reserved_until is None:
+            return False
+        return hmac.compare_digest(row.reserved_token, self.hash_verification_code(token)) and (
+            row.reserved_until > Instant.now()
+        )
+
+    async def reserve_verification_code(self, code: str, *, ttl_seconds: int) -> LinkReservation | None:
+        """Hold a valid code for *ttl_seconds* and describe what redeeming it would do.
+
+        Returns `None` for a code that is unknown, expired, spent, or already held by someone else's
+        live prompt. Nothing about the caller is written: the hold is a token digest and a deadline
+        on a row that already existed, so a prompt that is cancelled leaves no trace of whoever saw
+        it.
+        """
+        now = _now()
+        async with self._session_factory.begin() as session:
+            row = await session.scalar(
+                select(VerificationCodeModel)
+                .where(
+                    VerificationCodeModel.expires > now,
+                    VerificationCodeModel.code == self.hash_verification_code(code),
+                    VerificationCodeModel.valid.is_(True),
+                    or_(
+                        VerificationCodeModel.reserved_until.is_(None),
+                        VerificationCodeModel.reserved_until <= now,
+                    ),
+                )
+                .with_for_update()
+            )
+            if row is None:
+                return None
+
+            token = secrets.token_urlsafe(32)
+            expires_at = now.add(seconds=ttl_seconds)
+            row.reserved_token = self.hash_verification_code(token)
+            row.reserved_until = expires_at
+            preview = await self._preview_link(session, row)
+            return LinkReservation(token=token, expires_at=expires_at, preview=preview)
+
+    async def _preview_link(self, session: AsyncSession, row: VerificationCodeModel) -> LinkPreview:
+        """Describe the effects of redeeming *row* without redeeming it."""
+        java_subject = str(row.minecraft_uuid)
+        held_elsewhere = await session.scalar(
+            select(AccountIdentityModel.id).where(
+                AccountIdentityModel.provider == IdentityProvider.JAVA,
+                AccountIdentityModel.subject == java_subject,
+            )
+        )
+        alias_row = (
+            await session.execute(
+                select(CreatorAliasModel, AccountModel.public_creator_id)
+                .outerjoin(AccountModel, CreatorAliasModel.account_id == AccountModel.id)
+                .where(CreatorAliasModel.normalized_name == fold_creator_name(row.username))
+            )
+        ).first()
+
+        credit = None
+        if alias_row is not None:
+            alias, public_creator_id = alias_row
+            build_count = await session.scalar(
+                select(func.count()).select_from(_BUILD_CREDITS).where(_BUILD_CREDITS.c.alias_id == alias.id)
+            )
+            credit = CreditPreview(
+                name=alias.name,
+                build_count=build_count or 0,
+                # Only a *held* alias reports an owner; an unclaimed one has no account to join to.
+                held_by_public_creator_id=public_creator_id if alias.account_id is not None else None,
+            )
+        return LinkPreview(
+            java_uuid=row.minecraft_uuid,
+            username=row.username,
+            credit=credit,
+            java_uuid_held_elsewhere=held_elsewhere is not None,
+        )
+
+    async def release_verification_code(self, code: str, reservation_token: str) -> bool:
+        """Drop a hold so the code is usable again at once rather than after the deadline.
+
+        Idempotent, and safe to call for a hold that already lapsed or was taken over, because it
+        only clears a row whose live token matches.
+        """
+        async with self._session_factory.begin() as session:
+            row = await session.scalar(
+                select(VerificationCodeModel)
+                .where(VerificationCodeModel.code == self.hash_verification_code(code))
+                .with_for_update()
+            )
+            if row is None or not self._reservation_holds(row, reservation_token):
+                return False
+            row.reserved_token = None
+            row.reserved_until = None
+            return True
+
     async def verification_lockout(self, provider: IdentityProvider, subject: str) -> Instant | None:
         """Return when an identity's redemption lockout ends, or `None` when it may try."""
         async with self._session_factory() as session:
@@ -500,6 +608,7 @@ class AccountRepository:
         account_id: int,
         code: str,
         consent: AccountConsent,
+        reservation_token: str | None = None,
     ) -> VerificationLinkResult:
         """Consume one code and attach its Java identity to *account_id* atomically.
 
@@ -507,6 +616,12 @@ class AccountRepository:
         of nothing else, so this path no longer mints an identity in any other namespace;
         whoever holds evidence of the caller's own provider creates the account before
         calling. That is what lets a Minecraft-only or CLI-only caller link at all.
+
+        *reservation_token* commits a hold taken by `reserve_verification_code`. The hold is checked
+        after the code is found rather than as part of finding it, so a lapsed prompt can be reported
+        as itself instead of as an invalid code. Everything else is still re-checked under the lock:
+        the reservation freezes the code, not the world, so the creator credit a preview described
+        may have been claimed in the meantime.
         """
         async with self._session_factory.begin() as session:
             verification_code = await session.scalar(
@@ -520,6 +635,8 @@ class AccountRepository:
             )
             if verification_code is None:
                 return VerificationLinkResult()
+            if reservation_token is not None and not self._reservation_holds(verification_code, reservation_token):
+                return VerificationLinkResult(reservation_expired=True)
 
             account = await session.get(AccountModel, account_id, with_for_update=True)
             if account is None:
