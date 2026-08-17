@@ -1,6 +1,7 @@
 """Guard the opt-in, pinned, non-root media worker image contract."""
 
 import re
+import tomllib
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -8,6 +9,21 @@ PROJECT_ROOT = Path(__file__).parents[2]
 
 def _read(relative_path: str) -> str:
     return (PROJECT_ROOT / relative_path).read_text()
+
+
+def _required_python_version() -> str:
+    """Return the `X.Y` the project declares it needs.
+
+    Hardcoding the interpreter version here just moved the maintenance burden: `c4c10005` bumped
+    the Dockerfile and pyproject together and this test kept asserting 3.12, so it failed for
+    months on a tree that was internally consistent. Deriving it instead turns the assertion into
+    the thing actually worth guarding -- that the image ships the interpreter the code requires.
+    """
+    metadata = tomllib.loads(_read("pyproject.toml"))
+    requires = metadata["project"]["requires-python"]
+    match = re.fullmatch(r">=\s*(\d+\.\d+)", requires)
+    assert match is not None, f"cannot derive an image tag from requires-python {requires!r}"
+    return match.group(1)
 
 
 def _argument(dockerfile: str, name: str) -> str:
@@ -24,7 +40,8 @@ def test_ffmpeg_install_is_pinned_to_base_and_debian_snapshot() -> None:
     ffmpeg_version = _argument(dockerfile, "FFMPEG_VERSION")
 
     assert re.match(r"# syntax=docker/dockerfile:1@sha256:[0-9a-f]{64}\n", dockerfile)
-    assert re.fullmatch(r"python:3\.12-slim@sha256:[0-9a-f]{64}", python_image)
+    expected_python = re.escape(_required_python_version())
+    assert re.fullmatch(rf"python:{expected_python}-slim@sha256:[0-9a-f]{{64}}", python_image)
     assert re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", snapshot)
     assert ffmpeg_version == "7:7.1.5-0+deb13u1"
     assert dockerfile.count("snapshot.debian.org/archive/debian/${DEBIAN_SNAPSHOT}") == 2
