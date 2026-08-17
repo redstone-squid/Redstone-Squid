@@ -186,7 +186,13 @@ class CreatorNotFoundError(NotFoundError):
 
 
 class AliasAlreadyClaimedError(ConflictError):
-    """A creator name is already credited to an account."""
+    """A creator name is already credited to an account.
+
+    Carries *which* creator holds it, not just that somebody does. A creator profile is public data —
+    `GET /v1/creators/{creator_id}` serves it unauthenticated — so naming the holder discloses
+    nothing that was private, and without it the error tells the affected user nothing they can act
+    on. The internal account ID stays in `context`, which is log-only.
+    """
 
     default_message = _("That creator name is already claimed by another account.")
     default_title = _("Creator name already claimed")
@@ -194,9 +200,36 @@ class AliasAlreadyClaimedError(ConflictError):
     default_resource = "creator_alias"
     default_end_user_action = _("Ask staff to review the claim if you believe the name is yours.")
 
-    def __init__(self, name: str) -> None:
-        super().__init__(context={"name": name}, public_context={"name": name})
+    def __init__(
+        self,
+        name: str,
+        *,
+        holder_public_creator_id: UUID | None = None,
+        holder_account_id: int | None = None,
+        end_user_action: str | None = None,
+    ) -> None:
+        public_context: dict[str, JSONValue] = {"name": name}
+        if holder_public_creator_id is not None:
+            public_context["public_creator_id"] = str(holder_public_creator_id)
+        context: dict[str, JSONValue] = dict(public_context)
+        if holder_account_id is not None:
+            context["holder_account_id"] = holder_account_id
+        super().__init__(context=context, public_context=public_context, end_user_action=end_user_action)
         self.name = name
+        self.holder_public_creator_id = holder_public_creator_id
+        self.holder_account_id = holder_account_id
+
+    def with_holder_name(self, holder_name: str) -> AliasAlreadyClaimedError:
+        """Name the holder in the user-facing message once something has resolved it.
+
+        Resolving a public creator profile costs a query, so it happens in the service on the error
+        path rather than in the repository on every raise.
+        """
+        return self.with_context(
+            public_context={"holder_name": holder_name},
+            message=_("**{name}** is already credited to the creator known as **{holder_name}**."),
+            message_params={"name": self.name, "holder_name": holder_name},
+        )
 
 
 class ClaimNotFoundError(NotFoundError):

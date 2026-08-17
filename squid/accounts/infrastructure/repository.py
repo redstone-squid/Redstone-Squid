@@ -44,6 +44,7 @@ from squid.accounts.infrastructure.models import PublicCreatorRedirect
 from squid.accounts.infrastructure.models import VerificationAttempt as VerificationAttemptModel
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
+from squid.core.i18n import _
 from squid.persistence.types import InstantUTC
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
@@ -334,7 +335,11 @@ class AccountRepository:
             if alias is None:
                 raise CreatorAliasNotFoundError(name)
             if alias.account_id is not None:
-                raise AliasAlreadyClaimedError(alias.name)
+                raise AliasAlreadyClaimedError(
+                    alias.name,
+                    holder_public_creator_id=await self._public_creator_id(session, alias.account_id),
+                    holder_account_id=alias.account_id,
+                )
             existing = await session.scalar(
                 select(CreatorAliasClaimModel).where(
                     CreatorAliasClaimModel.alias_id == alias.id,
@@ -413,7 +418,14 @@ class AccountRepository:
                 raise ClaimNotFoundError(claim_id)
             if status is ClaimStatus.APPROVED:
                 if alias.account_id is not None and not (reassign and alias.account_id != claim.account_id):
-                    raise AliasAlreadyClaimedError(alias.name)
+                    raise AliasAlreadyClaimedError(
+                        alias.name,
+                        holder_public_creator_id=await self._public_creator_id(session, alias.account_id),
+                        holder_account_id=alias.account_id,
+                        # Staff audience: the flag that moves a held credit already exists, so say so
+                        # rather than telling a reviewer to ask staff.
+                        end_user_action=_("Approve with `reassign: True` to move the name to the claimant."),
+                    )
                 alias.account_id = claim.account_id
                 alias.claimed_at = _now()
                 alias.claim_method = ClaimMethod.STAFF_APPROVED
@@ -437,6 +449,11 @@ class AccountRepository:
         """
         # codeql[py/weak-sensitive-data-hashing]
         return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
+
+    @staticmethod
+    async def _public_creator_id(session: AsyncSession, account_id: int) -> uuid.UUID | None:
+        """Resolve an account's public creator identity, for naming a conflict safely."""
+        return await session.scalar(select(AccountModel.public_creator_id).where(AccountModel.id == account_id))
 
     def _reservation_holds(self, row: VerificationCodeModel, token: str) -> bool:
         """Whether *token* is the live hold on *row*."""
