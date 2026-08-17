@@ -150,5 +150,5 @@ def _coerce_decimal(raw: str, field: FieldDefinition) -> Decimal:
         raise ValidationError(msg)
     if field.numeric_step is not None and value % field.numeric_step != 0:
         msg = _("{field_name} must align to increments of {step}")
-        raise ValidationError(msg, message_params={"field_name": field.name, "step": field.numeric_step})
+        raise ValidationError(msg, message_params={"field_name": field.name, "step": str(field.numeric_step)})
     return value
