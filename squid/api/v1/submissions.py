@@ -11,6 +11,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import enforce_request_idempotency
@@ -209,11 +210,62 @@ router = APIRouter(
     dependencies=[Depends(enforce_request_idempotency)],
 )
 
+_DRAFT_CREATE_LINKS = {
+    "GetCreatedDraft": {
+        "operationId": "submission_draft_get",
+        "parameters": {"draft_id": "$response.body#/id"},
+    },
+    "ChangeCreatedDraft": {
+        "operationId": "submission_draft_change",
+        "parameters": {"draft_id": "$response.body#/id"},
+    },
+    "FinalizeCreatedDraft": {
+        "operationId": "submission_finalization_start",
+        "parameters": {"draft_id": "$response.body#/id"},
+    },
+    "DeleteCreatedDraft": {
+        "operationId": "submission_draft_delete",
+        "parameters": {"draft_id": "$response.body#/id"},
+    },
+}
+_DRAFT_CHANGE_LINKS = {
+    "ChangeDraftAgain": {
+        "operationId": "submission_draft_change",
+        "parameters": {"draft_id": "$response.body#/draft/id"},
+    },
+    "FinalizeChangedDraft": {
+        "operationId": "submission_finalization_start",
+        "parameters": {"draft_id": "$response.body#/draft/id"},
+    },
+}
+_DRAFT_SUBMIT_LINKS = {
+    "GetFinalization": {
+        "operationId": "submission_finalization_get",
+        "parameters": {"draft_id": "$response.body#/draft_id"},
+    },
+    "DeleteFinalizedDraft": {
+        "operationId": "submission_draft_delete",
+        "parameters": {"draft_id": "$response.body#/draft_id"},
+    },
+}
+_DRAFT_DELETE_LINKS = {
+    "UseAfterDeletedDraft": {
+        "operationId": "submission_draft_get",
+        "parameters": {"draft_id": "$request.path.draft_id"},
+        "description": "Use-after-free check for a deleted draft identifier.",
+    },
+}
+
 
 @router.get(
     "/drafts",
     response_model=DraftListResponse,
     responses=responses(401, 403, 503),
+    operation_id="submission_drafts_list",
+    openapi_extra=contract(
+        security=[WEB, DEVICE, MINECRAFT],
+        cli=cli_command("draft.list", features=("submission-drafts",), interaction="direct"),
+    ),
 )
 async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListResponse:
     """Return at most ten compact active drafts owned by the signed-in account."""
@@ -224,6 +276,8 @@ async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListRespons
     "/form/current",
     response_model=FormManifestResponse,
     responses=responses(503),
+    operation_id="submission_form_current",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     """Return the localized form and protocol bounds authored by this server."""
@@ -235,6 +289,8 @@ async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     "/form/schemas/{schema_id}/revisions/{revision}",
     response_model=FormManifestResponse,
     responses=responses(404, 422, 503),
+    operation_id="submission_form_revision_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def pinned_form(
     schema_id: SchemaId,
@@ -253,6 +309,8 @@ async def pinned_form(
     "/form/options/{source}",
     response_model=FormOptionSetResponse,
     responses=responses(400, 404, 422, 503),
+    operation_id="submission_form_options_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def form_options(
     source: OptionSource,
@@ -270,6 +328,12 @@ async def form_options(
     response_model=StoredDraftResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 409, 422, 503),
+    operation_id="submission_draft_create",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("draft.create", features=("submission-drafts",), interaction="direct"),
+        links={"201": _DRAFT_CREATE_LINKS},
+    ),
 )
 async def create_draft(
     payload: DraftCreateRequest,
@@ -295,6 +359,11 @@ async def create_draft(
     "/drafts/{draft_id}",
     response_model=StoredDraftResponse,
     responses=responses(401, 403, 404, 422, 503),
+    operation_id="submission_draft_get",
+    openapi_extra=contract(
+        security=[WEB, DEVICE, MINECRAFT],
+        cli=cli_command("draft.show", features=("submission-drafts",), interaction="direct"),
+    ),
 )
 async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
     """Return one synchronized draft after enforcing caller ownership."""
@@ -305,6 +374,12 @@ async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> St
     "/drafts/{draft_id}/changes",
     response_model=DraftChangeResponse,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
+    operation_id="submission_draft_change",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("draft.change", features=("submission-drafts",), interaction="direct"),
+        links={"200": _DRAFT_CHANGE_LINKS},
+    ),
 )
 async def change_draft(
     draft_id: UUID,
@@ -328,6 +403,12 @@ async def change_draft(
     response_model=SubmissionFinalizationResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
+    operation_id="submission_finalization_start",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("draft.submit", features=("submission-finalization",), interaction="direct"),
+        links={"202": _DRAFT_SUBMIT_LINKS},
+    ),
 )
 async def submit_draft(
     draft_id: UUID,
@@ -348,6 +429,11 @@ async def submit_draft(
     "/drafts/{draft_id}/submission",
     response_model=SubmissionFinalizationResponse,
     responses=responses(401, 403, 404, 422, 503),
+    operation_id="submission_finalization_get",
+    openapi_extra=contract(
+        security=[WEB, DEVICE, MINECRAFT],
+        cli=cli_command("draft.status", features=("submission-finalization",), interaction="direct"),
+    ),
 )
 async def get_draft_submission(
     draft_id: UUID,
@@ -365,6 +451,12 @@ async def get_draft_submission(
     "/drafts/{draft_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 422, 503),
+    operation_id="submission_draft_delete",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("draft.delete", features=("submission-drafts",), interaction="direct"),
+        links={"204": _DRAFT_DELETE_LINKS},
+    ),
 )
 async def delete_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Response:
     """Immediately delete one caller-owned synchronized draft."""
