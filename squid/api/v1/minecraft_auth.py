@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Header, Request, Response, status
 from pydantic import AnyHttpUrl
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
 from squid.api.security import Caller, current_caller
@@ -216,6 +217,8 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="paper_installation_create",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def create_installation(
     payload: InstallationCreateRequest,
@@ -239,6 +242,8 @@ async def create_installation(
     "/paper/installations",
     response_model=InstallationListResponse,
     responses=responses(400, 401, 403, 503),
+    operation_id="paper_installations_list",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def list_installations(
     response: Response,
@@ -258,6 +263,8 @@ async def list_installations(
     response_model=IssuedInstallationResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="paper_installation_rotate",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def rotate_installation(
     installation_id: UUID,
@@ -276,6 +283,8 @@ async def rotate_installation(
     response_model=InstallationResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="paper_installation_profile_update",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def update_installation_profile(
     installation_id: UUID,
@@ -301,6 +310,8 @@ async def update_installation_profile(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="paper_installation_revoke",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def revoke_installation(
     installation_id: UUID,
@@ -318,6 +329,8 @@ async def revoke_installation(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 409, 422, 429, 503),
     dependencies=[Depends(enforce_paper_request_idempotency)],
+    operation_id="paper_challenge_start",
+    openapi_extra=contract(security=[PAPER], cli=transport_only()),
 )
 async def start_paper_challenge(
     payload: PaperChallengeCreateRequest,
@@ -337,6 +350,8 @@ async def start_paper_challenge(
     response_model=IssuedPlayerGrantResponse,
     responses=responses(400, 401, 409, 422, 503),
     dependencies=[Depends(enforce_paper_request_idempotency)],
+    operation_id="paper_challenge_exchange",
+    openapi_extra=contract(security=[PAPER], cli=transport_only()),
 )
 async def exchange_paper_challenge(
     payload: PaperChallengeExchangeRequest,
@@ -356,6 +371,8 @@ async def exchange_paper_challenge(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 409, 422, 429, 503),
     dependencies=[Depends(enforce_fabric_request_idempotency)],
+    operation_id="fabric_challenge_start",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def start_fabric_challenge(
     payload: FabricChallengeCreateRequest,
@@ -379,6 +396,8 @@ async def start_fabric_challenge(
     response_model=IssuedPlayerGrantResponse,
     responses=responses(400, 409, 422, 503),
     dependencies=[Depends(enforce_fabric_request_idempotency)],
+    operation_id="fabric_challenge_exchange",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def exchange_fabric_challenge(
     payload: FabricChallengeExchangeRequest,
@@ -398,6 +417,8 @@ async def exchange_fabric_challenge(
     response_model=ChallengeApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="minecraft_challenge_approve",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def approve_challenge(
     payload: ChallengeApprovalRequest,
@@ -416,6 +437,8 @@ async def approve_challenge(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="minecraft_grant_revoke",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def revoke_grant(
     grant_id: UUID,

@@ -44,32 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/minecraft/auth/paper/installations", "paper_installations_list", "browser-only"),
-    _operation("post", "/v1/minecraft/auth/paper/installations", "paper_installation_create", "browser-only"),
-    _operation(
-        "post",
-        "/v1/minecraft/auth/paper/installations/{installation_id}/rotate",
-        "paper_installation_rotate",
-        "browser-only",
-    ),
-    _operation(
-        "put",
-        "/v1/minecraft/auth/paper/installations/{installation_id}/profile",
-        "paper_installation_profile_update",
-        "browser-only",
-    ),
-    _operation(
-        "delete",
-        "/v1/minecraft/auth/paper/installations/{installation_id}",
-        "paper_installation_revoke",
-        "browser-only",
-    ),
-    _operation("post", "/v1/minecraft/auth/paper/challenges", "paper_challenge_start"),
-    _operation("post", "/v1/minecraft/auth/paper/challenges/exchange", "paper_challenge_exchange"),
-    _operation("post", "/v1/minecraft/auth/fabric/challenges", "fabric_challenge_start"),
-    _operation("post", "/v1/minecraft/auth/fabric/challenges/exchange", "fabric_challenge_exchange"),
-    _operation("post", "/v1/minecraft/auth/challenges/approval", "minecraft_challenge_approve", "browser-only"),
-    _operation("delete", "/v1/minecraft/auth/grants/{grant_id}", "minecraft_grant_revoke", "browser-only"),
     _operation("get", "/v1/users/me/notifications/preferences", "notification_preferences_get", "browser-only"),
     _operation("patch", "/v1/users/me/notifications/preferences", "notification_preferences_update", "browser-only"),
     _operation("post", "/v1/users/me/notifications/consent", "notification_consent_grant", "browser-only"),
