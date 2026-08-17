@@ -12965,7 +12965,7 @@
                     "$ref": "#/components/schemas/SuggestionSourceInfo"
                   },
                   "type": "array",
-                  "title": "Response List Sources V1 Suggest Get"
+                  "title": "Response Suggestion Sources List"
                 }
               }
             },
