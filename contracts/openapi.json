@@ -21,7 +21,7 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Live Livez Get"
+                  "title": "Response Health Live"
                 }
               }
             },
@@ -56,7 +56,7 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Ready Readyz Get"
+                  "title": "Response Health Ready"
                 }
               }
             },
@@ -91,7 +91,7 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Ready Health Get"
+                  "title": "Response Health Ready Compatibility"
                 }
               }
             },
@@ -171,7 +171,7 @@
               "application/json": {
                 "schema": {
                   "type": "integer",
-                  "title": "Response Get Verification Code V1 Verify Post"
+                  "title": "Response Verification Create"
                 }
               }
             },
@@ -387,7 +387,7 @@
               "application/json": {
                 "schema": {
                   "type": "integer",
-                  "title": "Response Get Verification Code Verify Post"
+                  "title": "Response Verification Create Compatibility"
                 }
               }
             },
