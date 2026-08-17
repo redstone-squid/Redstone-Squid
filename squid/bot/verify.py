@@ -83,7 +83,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             # Java subject and of nothing else. This command is reached over the gateway, so it
             # genuinely holds the Discord identity it is about to mint.
             account_id = await account_id_for(self.account_service, ctx.author)
-            claimed = await self.account_service.link_minecraft_account(
+            refresh = await self.account_service.link_minecraft_account(
                 account_id,
                 code,
                 consent=consent_view.consent,
@@ -97,52 +97,48 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             if not committed:
                 await self.account_service.release_minecraft_link(code, reservation)
 
-        message = t(locale, _("Your Discord account has been linked with your Minecraft account."))
-        if claimed is not None:
-            message += "\n" + t(
-                locale,
-                _("Build credits under **{name}** are now attributed to your account."),
-                name=claimed.name,
-            )
-        await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
+        await ctx.send(
+            view=text_layout(_link_message(refresh, locale)),
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+        )
 
     @account_group.command(name="unlink")
     async def unlink(self, ctx: Context[BotT]):
         """Unlink your minecraft account."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        ephemeral = ctx.interaction is not None
         view = ConfirmationView(t(locale, _("Are you sure you want to unlink your Minecraft account?")), locale=locale)
-        await ctx.send(view=view, allowed_mentions=no_mentions())
+        await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
 
         await view.wait()
-        if view.value:
-            # Read rather than get-or-create: someone with no account has nothing to unlink,
-            # and unlinking is no reason to write a row for them.
-            account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-            unlinked = (
-                account is not None
-                and account.id is not None
-                and await self.account_service.unlink_minecraft_account(account.id)
-            )
-            if unlinked:
-                await ctx.send(
-                    view=text_layout(
-                        t(locale, _("Your Discord account has been unlinked from your Minecraft account."))
-                    ),
-                    allowed_mentions=no_mentions(),
-                )
-            else:
-                await ctx.send(
-                    view=text_layout(
-                        t(
-                            locale,
-                            _(
-                                "You don't have a Minecraft account linked to your Discord account, "
-                                "or the unlinking failed."
-                            ),
-                        )
-                    ),
-                    allowed_mentions=no_mentions(),
-                )
+        await ctx.send(
+            view=text_layout(await self._unlink_outcome(ctx, view.value, locale)),
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+        )
+
+    async def _unlink_outcome(self, ctx: Context[BotT], confirmed: bool | None, locale: str) -> str:
+        """Say what happened for all three answers, including no answer at all.
+
+        A timed-out confirmation used to send nothing, leaving a dead prompt and no way to tell
+        "nothing happened" from "something went wrong".
+        """
+        if confirmed is None:
+            return t(locale, _("The confirmation expired, so nothing was unlinked."))
+        if not confirmed:
+            return t(locale, _("Cancelled. Your Minecraft account is still linked."))
+
+        # Read rather than get-or-create: someone with no account has nothing to unlink,
+        # and unlinking is no reason to write a row for them.
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is None or account.id is None or account.identity(IdentityProvider.JAVA) is None:
+            # Split from the failure below, which used to share one message joined by "or" and so
+            # told the user neither of the two things it might mean.
+            return t(locale, _("You don't have a Minecraft account linked, so there was nothing to unlink."))
+        if not await self.account_service.unlink_minecraft_account(account.id):
+            return t(locale, _("Unlinking failed. Please try again, and report it if it keeps happening."))
+        return t(locale, _("Your Discord account has been unlinked from your Minecraft account."))
 
     @account_group.command(name="refresh")
     @app_commands.describe(
@@ -269,6 +265,25 @@ def _claimant(claim: AliasClaim) -> str:
     return f"account {claim.account_id}"
 
 
+def _link_message(refresh: IdentityRefresh, locale: str) -> str:
+    """Render the outcome of a link in the same words a refresh uses.
+
+    Linking used to report only the alias it claimed, which cannot express the contested case at all:
+    a user whose verified name belonged to somebody else was told the link succeeded and never that
+    their credit had not moved. The reconciliation is the same operation in both commands, so it gets
+    the same vocabulary; only the headline differs.
+    """
+    lines = [
+        t(
+            locale,
+            _("Your Discord account is now linked to **{name}**."),
+            name=refresh.current_name,
+        )
+    ]
+    lines.extend(_reconciliation_lines(refresh, locale))
+    return "\n".join(lines)
+
+
 def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
     """Render every branch of a refresh, including the one where nothing changed."""
     if not refresh.renamed:
@@ -282,7 +297,13 @@ def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
                 new=refresh.current_name,
             )
         ]
+    lines.extend(_reconciliation_lines(refresh, locale))
+    return "\n".join(lines)
 
+
+def _reconciliation_lines(refresh: IdentityRefresh, locale: str) -> list[str]:
+    """Describe what happened to the creator credit, shared by linking and refreshing."""
+    lines: list[str] = []
     if refresh.claimed_alias is not None:
         lines.append(
             t(
@@ -312,7 +333,7 @@ def _refresh_message(refresh: IdentityRefresh, locale: str) -> str:
                 names=", ".join(f"**{name}**" for name in refresh.retained_alias_names),
             )
         )
-    return "\n".join(lines)
+    return lines
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

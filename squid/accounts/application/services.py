@@ -33,6 +33,7 @@ from squid.accounts.errors import (
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
+from squid.core.errors import InvalidStateError
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ class AccountService:
         consent: AccountConsent,
         attempted_by: tuple[IdentityProvider, str],
         reservation: LinkReservation | None = None,
-    ) -> CreatorAlias | None:
+    ) -> IdentityRefresh:
         """Attach a verified Java identity to an existing account using a valid one-time code.
 
         *attempted_by* is the identity being rate-limited, which is not the same thing as
@@ -203,6 +204,10 @@ class AccountService:
         Passing the *reservation* taken before the consent prompt commits that hold. The guessing was
         already charged and capped at reservation time, so this path does not charge again — the
         caller has demonstrably held a valid code since then.
+
+        Returns the whole reconciliation rather than just the alias it claimed, so linking can describe
+        its outcome in the same words as a refresh — including the contested case, which the alias
+        alone cannot express.
         """
         if reservation is None:
             await self.guard_verification_attempts(attempted_by)
@@ -227,7 +232,12 @@ class AccountService:
                 minecraft_uuid=result.conflicting_java_uuid,
             )
         await self._repository.clear_verification_failures(*attempted_by)
-        return result.claimed_alias
+        if result.refresh is None:
+            # The repository sets `refresh` on every path that consumed a code, so this is a broken
+            # adapter rather than a reachable state.
+            message = "A consumed verification code produced no identity reconciliation."
+            raise InvalidStateError(message)
+        return result.refresh
 
     async def _record_verification_failure(self, attempted_by: tuple[IdentityProvider, str]) -> None:
         """Charge one refused code against an identity's budget and log a resulting lockout."""
