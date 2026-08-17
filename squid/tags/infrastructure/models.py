@@ -89,11 +89,13 @@ class TagDefinition(Base, kw_only=True):
             "(semantic_kind <> 'restriction' AND restriction_type IS NULL)",
             name="tag_definitions_restriction_type_check",
         ),
-        CheckConstraint(
-            "(value_type = 'numeric') = (canonical_unit_key IS NOT NULL OR numeric_step IS NOT NULL) OR "
-            "(value_type = 'numeric' AND canonical_unit_key IS NULL AND numeric_step IS NULL)",
-            name="tag_definitions_numeric_metadata_check",
-        ),
+        # There was a `tag_definitions_numeric_metadata_check` here. Its second disjunct
+        # (`value_type = 'numeric' AND both columns NULL`) made every numeric row pass
+        # regardless, so all it actually enforced was that a non-numeric row carries no
+        # unit and no step -- which `tag_definitions_non_numeric_unit_check` below already
+        # states, and more strictly. Restoring the apparent intent is not an option either:
+        # `TagRepository.create_showcase` deliberately mints numeric user tags with neither
+        # a canonical unit nor a step, so "numeric implies numeric metadata" is not true here.
         CheckConstraint(
             "value_type = 'numeric' OR "
             "(canonical_unit_key IS NULL AND default_display_unit_key IS NULL AND numeric_step IS NULL)",
