@@ -81,6 +81,20 @@ class InvalidVerificationCodeError(ValidationError):
     default_end_user_action = _("Generate a new code and try again.")
 
 
+class LinkReservationExpiredError(ValidationError):
+    """A held verification code lapsed before its consent prompt was answered.
+
+    Distinct from `InvalidVerificationCodeError` on purpose: the code was correct, and telling
+    someone their good code was invalid sends them to fetch a new one for the wrong reason.
+    """
+
+    default_message = _("The linking prompt expired before you answered it.")
+    default_title = _("Prompt expired")
+    default_code = ErrorCode.LINK_RESERVATION_EXPIRED
+    default_resource = "verification_code"
+    default_end_user_action = _("Run /account link again with a fresh code from the game.")
+
+
 class VerificationAttemptsExhaustedError(RateLimitedError):
     """Too many consecutive verification codes were refused for one identity.
 
