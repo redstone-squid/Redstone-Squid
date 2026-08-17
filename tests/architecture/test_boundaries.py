@@ -263,3 +263,141 @@ def test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account
                     pass
 
     assert offenders == [], f"squid/api/ must not name discord_id outside {allowed}: {offenders}"
+
+
+BUILTIN_EXCEPTIONS = frozenset(
+    {
+        "ArithmeticError",
+        "AttributeError",
+        "BufferError",
+        "EOFError",
+        "EnvironmentError",
+        "Exception",
+        "FloatingPointError",
+        "IOError",
+        "IndexError",
+        "KeyError",
+        "LookupError",
+        "MemoryError",
+        "NameError",
+        "OSError",
+        "OverflowError",
+        "RecursionError",
+        "ReferenceError",
+        "RuntimeError",
+        "StopIteration",
+        "SyntaxError",
+        "SystemError",
+        "TimeoutError",
+        "TypeError",
+        "UnboundLocalError",
+        "UnicodeError",
+        "ValueError",
+        "ZeroDivisionError",
+    }
+)
+
+# `AssertionError` and `NotImplementedError` stay legal: they mark a programming error or an
+# unimplemented Protocol stub, neither of which is a failure a caller is meant to catch, present,
+# or translate.
+BARE_RAISE_ALLOWLIST = {
+    "squid/accounts/domain/models.py": 3,
+    "squid/auth/application/services.py": 1,
+    "squid/builds/domain/models.py": 3,
+    "squid/catalogue/domain/titles.py": 2,
+    "squid/cli_auth/application.py": 5,
+    "squid/diagnostics/application.py": 1,
+    "squid/events/application.py": 3,
+    "squid/idempotency/application.py": 1,
+    "squid/media/application/commands.py": 3,
+    "squid/media/application/jobs.py": 28,
+    "squid/media/domain/models.py": 14,
+    "squid/minecraft_auth/application/crypto.py": 1,
+    "squid/minecraft_auth/application/services.py": 2,
+    "squid/minecraft_auth/domain/models.py": 3,
+    "squid/notifications/application.py": 5,
+    "squid/notifications/domain.py": 13,
+    "squid/permissions/application/epoch.py": 1,
+    "squid/reactions/application/policies.py": 1,
+    "squid/reactions/domain/models.py": 1,
+    "squid/records/application/services.py": 7,
+    "squid/records/domain/categories.py": 1,
+    "squid/records/domain/models.py": 4,
+    "squid/schematics/application/commands.py": 3,
+    "squid/schematics/application/jobs.py": 3,
+    "squid/schematics/application/queries.py": 2,
+    "squid/schematics/application/render_jobs.py": 2,
+    "squid/search/application/embeddings.py": 3,
+    "squid/search/application/fields.py": 6,
+    "squid/search/application/ranking.py": 3,
+    "squid/search/domain/query.py": 1,
+    "squid/starboard/application/services.py": 1,
+    "squid/starboard/domain/models.py": 11,
+    "squid/submissions/application/drafts.py": 6,
+    "squid/submissions/application/finalization.py": 11,
+    "squid/submissions/application/forms.py": 1,
+    "squid/submissions/domain/drafts.py": 21,
+    "squid/submissions/domain/finalization.py": 19,
+    "squid/submissions/domain/forms.py": 18,
+    "squid/suggestions/application/registry.py": 3,
+    "squid/suggestions/application/services.py": 1,
+    "squid/sync/application.py": 2,
+    "squid/tags/application/services.py": 10,
+}
+
+
+def _raises_application_layer_paths() -> list[Path]:
+    """Application and domain modules, including the packages that flatten a layer into one file."""
+    return sorted(
+        path
+        for path in Path("squid").rglob("*.py")
+        if "application" in path.parts or "domain" in path.parts or path.stem in {"application", "domain", "services"}
+    )
+
+
+def test_application_and_domain_layers_raise_only_structured_errors() -> None:
+    """An exception's base class is its user-facing contract, so builtins are never right here.
+
+    Both transports classify a failure purely by type. `build_error_presentation`
+    (`squid/bot/errors.py`) renders friendly localized text for a `DomainError` and drops everything
+    else into a generic "Something went wrong" card that also logs at error level and files an error
+    report; `handle_squid_error` (`squid/api/errors.py`) does the equivalent for problem details. A
+    bare `ValueError` is therefore reported to operators as a crash no matter how expected it was --
+    which is exactly how an admin mistyping a record category came to look like a bug (`b03322f1d85e`).
+
+    The `SquidError` vocabulary covers every case, so no site needs a builtin: caller-contract
+    violations become `InvalidStateError` and broken persisted invariants become `DataIntegrityError`.
+    Neither changes what a user sees, but both keep this rule total and checkable.
+
+    `BARE_RAISE_ALLOWLIST` is a ratchet over the violations that predate the rule. It pins a count per
+    file so a new raise in an already-listed module still fails. Shrink it; never grow it.
+    """
+    counts: dict[str, int] = {}
+    locations: dict[str, list[int]] = {}
+    for path in _raises_application_layer_paths():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Raise) or node.exc is None:
+                continue
+            raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+            if isinstance(raised, ast.Name) and raised.id in BUILTIN_EXCEPTIONS:
+                key = path.as_posix()
+                counts[key] = counts.get(key, 0) + 1
+                locations.setdefault(key, []).append(node.lineno)
+
+    new_offenders = sorted(key for key in counts if key not in BARE_RAISE_ALLOWLIST)
+    assert new_offenders == [], (
+        "raise a squid.core.errors class instead of a builtin exception in "
+        f"{ {key: locations[key] for key in new_offenders} }"
+    )
+
+    grown = {
+        key: (BARE_RAISE_ALLOWLIST[key], count) for key, count in counts.items() if count > BARE_RAISE_ALLOWLIST[key]
+    }
+    assert grown == {}, f"these files gained bare raises (allowed, found): {grown}"
+
+    stale = {
+        key: (allowed, counts.get(key, 0))
+        for key, allowed in BARE_RAISE_ALLOWLIST.items()
+        if counts.get(key, 0) < allowed
+    }
+    assert stale == {}, f"lower or drop these BARE_RAISE_ALLOWLIST entries (allowed, found): {stale}"
