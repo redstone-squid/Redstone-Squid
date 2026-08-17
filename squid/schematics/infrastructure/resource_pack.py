@@ -62,7 +62,11 @@ class ResourcePackLoader:
                     context={"pack_path": str(self._path), "error": str(exc)},
                 ) from exc
         if self._url is None or self._expected_sha256 is None:
-            raise SchematicRenderUnavailableError
+            msg = "No resource pack is configured."
+            raise SchematicRenderUnavailableError(
+                msg,
+                developer_action="Set render_pack_path or render_pack_url (with render_pack_sha256).",
+            )
 
         cached = self._cache_dir / f"{self._expected_sha256}.zip"
         try:
