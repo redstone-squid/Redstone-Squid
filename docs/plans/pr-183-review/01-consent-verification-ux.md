@@ -34,7 +34,7 @@ dependency in that subplan.
 
 ## Findings
 
-Audited at `f55acda5`. Two of the three findings in this plan's first draft have moved, and one of its intended
+Audited at `9692dd7e`. Two of the three findings in this plan's first draft have moved, and one of its intended
 changes turned out not to be implementable as written. Both are recorded here rather than quietly dropped, so this
 plan is not read as reverting work that has since landed.
 
@@ -96,7 +96,7 @@ look, and a staff reviewer who needs to be told the `reassign` flag exists — a
 
 The information needed to fix this is already in hand at the first site: `get_alias_by_name` (`repository.py:260-270`)
 outer-joins `accounts` precisely to pick up `public_creator_id`, and `CreatorAlias` carries it
-(`squid/accounts/domain/models.py:213-226`). So naming the conflicting creator costs no extra query there.
+(`squid/accounts/domain/models.py:215-229`). So naming the conflicting creator costs no extra query there.
 
 ### Link says less about a link than refresh says about a refresh
 
@@ -363,7 +363,7 @@ aggregate.
   autocomplete adds a constant number of statements, not one per claim.
 - **Error payloads**: `AliasAlreadyClaimedError.public_context` carries `name` and `public_creator_id` and never an
   internal account ID or any Discord identifier, asserted through both renderers — `build_error_presentation`
-  (`squid/bot/errors.py:173-233`) and the RFC 9457 mapping (`squid/api/errors.py:177-197`). Assert the two raise
+  (`squid/bot/errors.py:173-233`) and the RFC 9457 mapping (`squid/api/errors.py:184-197`). Assert the two raise
   sites produce different `end_user_action` text.
 - **i18n**: the queue row and every new card field go through `t(...)`; `just i18n-extract` leaves no new
   untranslated literal in the cog, and the ownership refusal honours a non-default locale.
