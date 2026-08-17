@@ -320,7 +320,6 @@ BARE_RAISE_ALLOWLIST = {
     "squid/permissions/application/epoch.py": 1,
     "squid/reactions/application/policies.py": 1,
     "squid/reactions/domain/models.py": 1,
-    "squid/records/application/services.py": 7,
     "squid/records/domain/categories.py": 1,
     "squid/records/domain/models.py": 4,
     "squid/schematics/application/commands.py": 3,
@@ -342,7 +341,6 @@ BARE_RAISE_ALLOWLIST = {
     "squid/suggestions/application/registry.py": 3,
     "squid/suggestions/application/services.py": 1,
     "squid/sync/application.py": 2,
-    "squid/tags/application/services.py": 10,
 }
 
 
