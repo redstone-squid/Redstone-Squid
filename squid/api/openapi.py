@@ -44,30 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation(
-        "get",
-        "/v1/diagnostics/errors",
-        "diagnostics_errors_list",
-        "command",
-        command="errors.list",
-        interaction="direct",
-    ),
-    _operation(
-        "get",
-        "/v1/diagnostics/errors/{reference}",
-        "diagnostics_error_get",
-        "command",
-        command="errors.show",
-        interaction="direct",
-    ),
-    _operation(
-        "delete",
-        "/v1/diagnostics/errors",
-        "diagnostics_errors_clear",
-        "command",
-        command="errors.clear",
-        interaction="direct",
-    ),
     _operation("get", "/v1/auth/csrf", "browser_csrf_get", "browser-only"),
     _operation("get", "/v1/auth/{provider}", "browser_authorization_start", "browser-only"),
     _operation("get", "/v1/auth/{provider}/callback", "browser_authorization_callback", "browser-only"),
@@ -321,11 +297,7 @@ _DEVICE_ONLY = frozenset({"cli_session_revoke"})
 _OPTIONAL_PRINCIPAL = frozenset({"builds_list", "vote_session_get"})
 _VERIFY = frozenset({"verification_create", "verification_create_compatibility"})
 
-_SCOPES = {
-    "diagnostics_errors_list": ("diagnostics.error.read",),
-    "diagnostics_error_get": ("diagnostics.error.read",),
-    "diagnostics_errors_clear": ("diagnostics.error.clear",),
-}
+_SCOPES: dict[str, tuple[str, ...]] = {}
 """Permission nodes a credential must carry, published in the contract.
 
 Still `x-required-api-scopes` in the document: the field is part of the public
