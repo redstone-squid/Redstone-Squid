@@ -137,11 +137,11 @@ class Build(Base, kw_only=True):
     extra_info: Mapped[Info] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
-    submission_time: Mapped[Instant | None] = mapped_column(
-        InstantUTC(), server_default=func.now(), default_factory=Instant.now
+    submission_time: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
-    edited_time: Mapped[Instant | None] = mapped_column(
-        InstantUTC(), server_default=func.now(), default_factory=Instant.now
+    edited_time: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
