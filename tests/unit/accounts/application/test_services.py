@@ -302,12 +302,32 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT, java_uuid=JAVA_UUID)
     alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
-    repository.link_result = VerificationLinkResult(account=account, claimed_alias=alias)
+    repository.link_result = _linked(account, claimed_alias=alias)
     assert account.id is not None
 
-    assert (
-        await service(repository).link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
-        == alias
+    refresh = await service(repository).link_minecraft_account(
+        account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT
+    )
+
+    assert refresh.claimed_alias == alias
+
+
+def _linked(account: Account, *, claimed_alias: CreatorAlias | None = None) -> VerificationLinkResult:
+    """A successful redemption, which always carries the reconciliation it performed.
+
+    `link_minecraft_account` returns that reconciliation rather than the claimed alias alone, so
+    linking can report a contested credit in the same words a refresh does.
+    """
+    assert account.id is not None
+    return VerificationLinkResult(
+        account=account,
+        claimed_alias=claimed_alias,
+        refresh=IdentityRefresh(
+            account_id=account.id,
+            java_uuid=JAVA_UUID,
+            current_name="Player",
+            claimed_alias=claimed_alias,
+        ),
     )
 
 
@@ -359,7 +379,7 @@ async def test_committing_a_reservation_passes_the_token_through() -> None:
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
     repository.reservable["good"] = _preview()
-    repository.link_result = VerificationLinkResult(account=account)
+    repository.link_result = _linked(account)
     accounts = service(repository)
     reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
 
@@ -418,7 +438,7 @@ async def test_consecutive_wrong_codes_lock_the_attempting_identity() -> None:
 
     # The cap is now spent, so even a correct code is refused until the wait passes. That is the
     # point: the guess that succeeds is the one that takes over somebody else's Minecraft account.
-    repository.link_result = VerificationLinkResult(account=account)
+    repository.link_result = _linked(account)
     with pytest.raises(VerificationAttemptsExhaustedError) as caught:
         await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
     assert caught.value.retry_after > 0
@@ -435,9 +455,12 @@ async def test_a_lockout_is_scoped_to_one_identity() -> None:
             await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
 
     # Anyone else is unaffected, so one attacker cannot deny the whole instance.
-    repository.link_result = VerificationLinkResult(account=account)
+    repository.link_result = _linked(account)
     other = (IdentityProvider.DISCORD, "456")
-    assert await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=other) is None
+
+    linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=other)
+
+    assert linked.account_id == account.id
 
 
 async def test_a_success_clears_the_failure_count() -> None:
@@ -449,7 +472,7 @@ async def test_a_success_clears_the_failure_count() -> None:
         with pytest.raises(InvalidVerificationCodeError):
             await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
 
-    repository.link_result = VerificationLinkResult(account=account)
+    repository.link_result = _linked(account)
     await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
     assert repository.failures.get(ATTEMPT, 0) == 0
 
@@ -590,10 +613,12 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     assert account.id is not None
     assert account.identity(IdentityProvider.DISCORD) is None
     alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
-    repository.link_result = VerificationLinkResult(account=account, claimed_alias=alias)
+    repository.link_result = _linked(account, claimed_alias=alias)
     accounts = service(repository)
 
-    assert await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT) == alias
+    linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+
+    assert linked.claimed_alias == alias
     assert await accounts.unlink_minecraft_account(account.id) is True
     assert repository.accounts[account.id].identity(IdentityProvider.JAVA) is None
 

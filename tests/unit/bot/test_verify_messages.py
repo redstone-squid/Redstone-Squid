@@ -5,20 +5,26 @@ say something for all of them. The contested branch matters most: it used to be 
 from "nothing happened", which is exactly what left users unaware their new name was taken.
 """
 
+import asyncio
+from types import SimpleNamespace
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
+from discord.ext.commands import Context
 from whenever import Instant
 
 from squid.accounts.domain import (
+    Account,
     AccountIdentity,
     AliasClaim,
     ClaimStatus,
     CreatorAlias,
+    IdentityProvider,
     IdentityRefresh,
     LinkPreview,
 )
-from squid.bot.verify import _link_conflict, _refresh_message
+from squid.bot.verify import VerifyCog, _link_conflict, _link_message, _reconciliation_lines, _refresh_message
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -84,6 +90,55 @@ def test_retained_names_are_listed() -> None:
     assert "**OlderName**" in message
 
 
+def test_a_link_names_the_account_it_linked() -> None:
+    message = _link_message(_refresh(current_name="Notch", previous_name=None), LOCALE)
+
+    assert "linked to **Notch**" in message
+    # Not the refresh headline: a first link never "changed" or "stayed the same".
+    assert "still" not in message
+    assert "changed from" not in message
+
+
+def test_a_link_reports_the_credit_it_claimed() -> None:
+    message = _link_message(
+        _refresh(current_name="Notch", previous_name=None, claimed_alias=CreatorAlias(5, "Notch", account_id=1)),
+        LOCALE,
+    )
+
+    assert "Build credits under **Notch**" in message
+
+
+def test_a_link_reports_a_contested_credit() -> None:
+    """The regression this subplan exists for: linking used to report only the claimed alias.
+
+    A user whose verified name belonged to someone else was told the link succeeded, and never that
+    their credit had not moved or that a staff claim was now open.
+    """
+    message = _link_message(
+        _refresh(
+            current_name="Notch",
+            previous_name=None,
+            contested_alias=CreatorAlias(9, "Notch", account_id=2),
+            opened_claim=AliasClaim(3, 9, "Notch", 1, ClaimStatus.PENDING, NOW),
+        ),
+        LOCALE,
+    )
+
+    assert "not moved" in message
+    assert "#3" in message
+
+
+def test_link_and_refresh_describe_a_credit_in_the_same_words() -> None:
+    """One vocabulary for the reconciliation, which is the same operation in both commands."""
+    refresh = _refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1), retained_alias_names=("OldName",))
+
+    shared = _reconciliation_lines(refresh, LOCALE)
+
+    assert shared
+    assert all(line in _link_message(refresh, LOCALE) for line in shared)
+    assert all(line in _refresh_message(refresh, LOCALE) for line in shared)
+
+
 def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
     return LinkPreview(java_uuid=JAVA_UUID, username="Notch", java_uuid_held_elsewhere=held_elsewhere)
 
@@ -115,6 +170,60 @@ def test_a_uuid_linked_elsewhere_conflicts_even_with_another_identity_held() -> 
 
     # The caller's own mismatch is reported, because unlinking that is the action they must take.
     assert _link_conflict(_preview(held_elsewhere=True), existing) == OTHER_UUID
+
+
+class _StubAccounts:
+    """Just enough of `AccountService` for the unlink decision tree."""
+
+    def __init__(self, account: Account | None, *, unlinks: bool = True) -> None:
+        self._account = account
+        self._unlinks = unlinks
+
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        del provider, subject
+        return self._account
+
+    async def unlink_minecraft_account(self, account_id: int) -> bool:
+        del account_id
+        return self._unlinks
+
+
+def _unlink_outcome(accounts: _StubAccounts, *, confirmed: bool | None) -> str:
+    cog = cast(VerifyCog[Any], SimpleNamespace(account_service=accounts))
+    ctx = cast(Context[Any], SimpleNamespace(author=SimpleNamespace(id=1)))
+    return asyncio.run(VerifyCog._unlink_outcome(cog, ctx, confirmed, LOCALE))
+
+
+def _linked_account() -> Account:
+    return Account(
+        (AccountIdentity.discord(1), AccountIdentity.java(JAVA_UUID, username="Notch")),
+        None,
+        1,
+        NOW,
+    )
+
+
+def test_an_expired_unlink_confirmation_says_nothing_happened() -> None:
+    """It used to send nothing at all, leaving a dead prompt and no way to tell what happened."""
+    assert "expired" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=None)
+
+
+def test_a_declined_unlink_says_the_account_is_still_linked() -> None:
+    assert "still linked" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=False)
+
+
+def test_unlinking_nothing_is_distinguished_from_a_failure() -> None:
+    """These two shared one message joined by "or", which told the user neither thing."""
+    nothing = _unlink_outcome(_StubAccounts(None), confirmed=True)
+    failed = _unlink_outcome(_StubAccounts(_linked_account(), unlinks=False), confirmed=True)
+
+    assert "nothing to unlink" in nothing
+    assert "failed" in failed
+    assert nothing != failed
+
+
+def test_a_successful_unlink_confirms_it() -> None:
+    assert "has been unlinked" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=True)
 
 
 @pytest.mark.parametrize(
