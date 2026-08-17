@@ -43,44 +43,7 @@ def _operation(
     return OperationContract(path, method, operation_id, classification, **metadata)
 
 
-OPERATIONS = (
-    _operation(
-        "post",
-        "/v1/submissions/drafts/{draft_id}/media/{kind}",
-        "submission_media_upload",
-        "command",
-        command="media.upload",
-        features=("submission-media",),
-        interaction="direct",
-    ),
-    _operation(
-        "get",
-        "/v1/submissions/drafts/{draft_id}/media",
-        "submission_media_list",
-        "command",
-        command="media.list",
-        features=("submission-media",),
-        interaction="direct",
-    ),
-    _operation(
-        "get",
-        "/v1/submissions/drafts/{draft_id}/media/{upload_id}",
-        "submission_media_get",
-        "command",
-        command="media.status",
-        features=("submission-media",),
-        interaction="direct",
-    ),
-    _operation(
-        "delete",
-        "/v1/submissions/drafts/{draft_id}/media/{upload_id}",
-        "submission_media_discard",
-        "command",
-        command="media.discard",
-        features=("submission-media",),
-        interaction="direct",
-    ),
-)
+OPERATIONS = ()
 
 _UNSAFE_METHODS = frozenset({"post", "put", "patch", "delete"})
 _ANONYMOUS = {}
