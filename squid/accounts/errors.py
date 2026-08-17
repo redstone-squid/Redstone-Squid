@@ -8,6 +8,7 @@ from squid.core.errors import (
     ErrorCode,
     JSONValue,
     NotFoundError,
+    RateLimitedError,
     ServiceUnavailableError,
     ValidationError,
 )
@@ -78,6 +79,23 @@ class InvalidVerificationCodeError(ValidationError):
     default_code = ErrorCode.INVALID_VERIFICATION_CODE
     default_resource = "verification_code"
     default_end_user_action = _("Generate a new code and try again.")
+
+
+class VerificationAttemptsExhaustedError(RateLimitedError):
+    """Too many consecutive verification codes were refused for one identity.
+
+    A `RateLimitedError`, so the API answers 429 with `Retry-After` and the bot renders the wait
+    without any transport-specific handling. The lockout exists because a correct guess links
+    somebody else's Minecraft account to the guesser, which is identity takeover rather than a
+    nuisance: the code is the whole binding, and the redemption never mentions the UUID it was
+    issued for.
+    """
+
+    default_message = _("Too many incorrect verification codes.")
+    default_title = _("Too many attempts")
+    default_code = ErrorCode.VERIFICATION_ATTEMPTS_EXHAUSTED
+    default_resource = "verification_code"
+    default_end_user_action = _("Wait for the cooling-off period to pass, then generate a new code in game.")
 
 
 class AccountAlreadyLinkedError(ConflictError):

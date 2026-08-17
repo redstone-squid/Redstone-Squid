@@ -16387,6 +16387,7 @@
           "TAG_NOT_FOUND",
           "UNAUTHORIZED",
           "VALIDATION_ERROR",
+          "VERIFICATION_ATTEMPTS_EXHAUSTED",
           "VERSION_CATALOG_UNAVAILABLE",
           "VOTE_SESSION_NOT_FOUND"
         ],
