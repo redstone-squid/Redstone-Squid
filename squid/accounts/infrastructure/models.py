@@ -99,6 +99,7 @@ class PublicCreatorRedirect(Base):
     """Permanent redirect from a merged public creator identifier."""
 
     __tablename__ = "public_creator_redirects"
+    __table_args__ = (Index("public_creator_redirects_target_idx", "target_account_id"),)
     retired_public_creator_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     target_account_id: Mapped[int] = mapped_column(
         Integer,
@@ -115,6 +116,7 @@ class CreatorAlias(Base):
 
     __tablename__ = "creator_aliases"
     __table_args__ = (
+        Index("creator_aliases_account_idx", "account_id"),
         UniqueConstraint("normalized_name", name="creator_aliases_normalized_name_key"),
         Index(
             # The unique constraint above serves equality only; a creator typeahead needs a prefix
@@ -181,6 +183,8 @@ class CreatorAliasClaim(Base):
 
     __tablename__ = "creator_alias_claims"
     __table_args__ = (
+        Index("creator_alias_claims_account_idx", "account_id"),
+        Index("creator_alias_claims_resolved_by_idx", "resolved_by_account_id"),
         Index(
             "creator_alias_claims_one_pending_per_account",
             "alias_id",

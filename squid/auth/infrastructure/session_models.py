@@ -17,6 +17,7 @@ class WebSession(Base, kw_only=True):
 
     __tablename__ = "web_sessions"
     __table_args__ = (
+        Index("web_sessions_account_idx", "account_id"),
         UniqueConstraint("token_hash", name="web_sessions_token_hash_key"),
         Index("web_sessions_active_idx", "expires_at", postgresql_where=text("revoked_at IS NULL")),
     )

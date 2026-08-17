@@ -16,6 +16,7 @@ class CliDeviceEnrollmentRecord(Base, kw_only=True):
 
     __tablename__ = "cli_device_enrollments"
     __table_args__ = (
+        Index("cli_device_enrollments_approved_by_idx", "approved_by_account_id"),
         UniqueConstraint("device_code_hash", name="cli_device_enrollments_device_code_hash_key"),
         UniqueConstraint("user_code_hash", name="cli_device_enrollments_user_code_hash_key"),
         CheckConstraint("octet_length(device_code_hash) = 32", name="cli_device_enrollments_device_hash_length"),
