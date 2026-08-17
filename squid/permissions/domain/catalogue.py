@@ -310,6 +310,15 @@ DIAGNOSTICS_ERROR_READ = _b.node(
     _("Read a stored error report by the reference its user was shown."),
     tags=(Tag.DIAGNOSTIC, Tag.READONLY),
 )
+DIAGNOSTICS_ERROR_CLEAR = _b.node(
+    "diagnostics.error.clear",
+    NodeScope.GLOBAL,
+    _("Delete every stored error report."),
+    # `@destructive` is excluded from both admin roles (see GLOBAL_ADMIN, GUILD_ADMIN below), so
+    # this node's default DENY leaves it reachable only through the owner's unconditional `**`
+    # or an explicit grant, without a bespoke "owner only" mechanism.
+    tags=(Tag.DESTRUCTIVE, Tag.DIAGNOSTIC),
+)
 
 BOT_TREE_SYNC = _b.node(
     "bot.tree.sync",

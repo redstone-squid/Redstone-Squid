@@ -305,6 +305,20 @@
           "code": "NOT_FOUND"
         }
       }
+    },
+    "diagnostics_errors_clear": {
+      "success": {
+        "status": 204,
+        "body": null
+      },
+      "problem": {
+        "status": 403,
+        "body": {
+          "title": "Forbidden",
+          "status": 403,
+          "code": "DOMAIN_ERROR"
+        }
+      }
     }
   }
 }
