@@ -9699,7 +9699,7 @@
                     "$ref": "#/components/schemas/SearchField"
                   },
                   "type": "array",
-                  "title": "Response List Search Fields V1 Search Fields Get"
+                  "title": "Response Search Fields List"
                 }
               }
             },
