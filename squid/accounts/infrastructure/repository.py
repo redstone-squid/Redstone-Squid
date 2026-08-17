@@ -433,7 +433,13 @@ class AccountRepository:
             claim.resolved_at = _now()
             claim.resolved_by_account_id = resolved_by_account_id
             await session.flush()
-            return _to_claim(claim, alias.name)
+            # The claimant comes back with the claim so a resolution can name who was credited
+            # instead of saying "the claimant"; one account, so `_load_accounts` costs two queries.
+            claimant = await session.get(AccountModel, claim.account_id)
+            loaded = (
+                None if claimant is None else (await self._load_accounts(session, [claimant])).get(claim.account_id)
+            )
+            return _to_claim(claim, alias.name, loaded)
 
     def hash_verification_code(self, code: str) -> str:
         """Return the digest stored for a short-lived verification code.

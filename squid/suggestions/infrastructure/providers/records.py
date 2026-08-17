@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.accounts.domain import AliasClaim
+from squid.accounts.domain import AliasClaim, IdentityProvider
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 
@@ -80,7 +80,23 @@ class CompetitionProvider:
 class PendingAliasClaims(Protocol):
     """Read creator credit claims awaiting staff review."""
 
-    async def pending_alias_claims(self) -> Sequence[AliasClaim]: ...
+    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
+
+
+def _claimant_description(claim: AliasClaim) -> str:
+    """Describe a claimant in the little room an autocomplete row has.
+
+    Not `present_claimant`: this surface cannot render a mention, so it reaches for the names a
+    reviewer can actually read and falls back to the internal ID only when there is nothing else.
+    """
+    claimant = claim.claimant
+    if claimant is not None:
+        java = claimant.identity(IdentityProvider.JAVA)
+        if java is not None and java.display_name is not None:
+            return java.display_name[:100]
+        if claimant.public_creator_id is not None:
+            return f"creator {claimant.public_creator_id}"[:100]
+    return f"account {claim.account_id}"
 
 
 class AliasClaimProvider:
@@ -97,11 +113,14 @@ class AliasClaimProvider:
             candidate(
                 str(claim.id),
                 label=f"#{claim.id} · {claim.alias_name}",
-                description=f"account {claim.account_id}",
+                # Discord truncates a description at 100 characters, and a mention renders as raw
+                # `<@id>` here rather than as a chip, so this asks for claimants and then prefers a
+                # readable name over the snowflake.
+                description=_claimant_description(claim),
                 kind="claim",
                 terms=(claim.alias_name, str(claim.id)),
             )
-            for claim in await self._accounts.pending_alias_claims()
+            for claim in await self._accounts.pending_alias_claims(with_claimants=True)
         )
 
 

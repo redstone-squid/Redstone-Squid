@@ -24,7 +24,15 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
 )
-from squid.bot.verify import VerifyCog, _link_conflict, _link_message, _reconciliation_lines, _refresh_message
+from squid.bot.verify import (
+    VerifyCog,
+    _link_conflict,
+    _link_message,
+    _reconciliation_lines,
+    _refresh_message,
+    present_claimant,
+)
+from squid.suggestions.infrastructure.providers.records import _claimant_description
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -170,6 +178,60 @@ def test_a_uuid_linked_elsewhere_conflicts_even_with_another_identity_held() -> 
 
     # The caller's own mismatch is reported, because unlinking that is the action they must take.
     assert _link_conflict(_preview(held_elsewhere=True), existing) == OTHER_UUID
+
+
+def _claim(claimant: Account | None) -> AliasClaim:
+    return AliasClaim(7, 9, "Notch", 42, ClaimStatus.PENDING, NOW, claimant=claimant)
+
+
+def test_a_claimant_with_discord_is_shown_as_a_mention() -> None:
+    """The only handle a reviewer can click, and the only one Discord resolves for us."""
+    claim = _claim(Account((AccountIdentity.discord(555),), None, 42, NOW))
+
+    assert present_claimant(claim, LOCALE) == "<@555>"
+
+
+def test_a_claimant_without_discord_falls_back_to_the_java_name() -> None:
+    claim = _claim(Account((AccountIdentity.java(JAVA_UUID, username="Notch"),), None, 42, NOW))
+
+    assert present_claimant(claim, LOCALE) == "Notch"
+
+
+def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
+    creator = UUID("33333333-3333-3333-3333-333333333333")
+    claim = _claim(Account((), None, 42, NOW, creator))
+
+    presented = present_claimant(claim, LOCALE)
+
+    assert str(creator) in presented
+    assert "42" not in presented
+
+
+def test_the_internal_id_is_last_and_labelled_as_a_diagnostic() -> None:
+    """It identifies a row rather than a person, so it must not read like a name."""
+    presented = present_claimant(_claim(None), LOCALE)
+
+    assert "42" in presented
+    assert "unidentified" in presented
+
+
+def test_the_autocomplete_prefers_a_readable_name_over_a_snowflake() -> None:
+    """A mention renders as raw `<@id>` in an autocomplete row, so that surface needs its own rule."""
+    java_only = _claim(Account((AccountIdentity.java(JAVA_UUID, username="Notch"),), None, 42, NOW))
+    with_discord = _claim(
+        Account((AccountIdentity.discord(555), AccountIdentity.java(JAVA_UUID, username="Notch")), None, 42, NOW)
+    )
+
+    assert _claimant_description(java_only) == "Notch"
+    assert _claimant_description(with_discord) == "Notch"
+    assert _claimant_description(_claim(None)) == "account 42"
+
+
+def test_the_autocomplete_description_respects_discords_limit() -> None:
+    long_name = "N" * 250
+    claim = _claim(Account((AccountIdentity.java(JAVA_UUID, username=long_name),), None, 42, NOW))
+
+    assert len(_claimant_description(claim)) <= 100
 
 
 class _StubAccounts:
