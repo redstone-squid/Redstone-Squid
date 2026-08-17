@@ -4,7 +4,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.core.errors import JSONValue
+from squid.core.errors import InvalidStateError, JSONValue
 from squid.submissions.application import (
     AppliedDraftChange,
     FixedAccountDraftCapacity,
@@ -331,7 +331,7 @@ async def test_active_draft_discovery_is_bounded_owned_and_unexpired() -> None:
     discovered = await service.list_active(7)
 
     assert discovered == (active,)
-    with pytest.raises(ValueError, match="between 1 and 10"):
+    with pytest.raises(InvalidStateError, match="between 1 and 10"):
         await service.list_active(7, limit=11)
 
 
