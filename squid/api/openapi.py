@@ -44,8 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/suggest", "suggestion_sources_list"),
-    _operation("get", "/v1/suggest/{source}", "suggestions_get"),
     _operation(
         "get",
         "/v1/submissions/drafts",

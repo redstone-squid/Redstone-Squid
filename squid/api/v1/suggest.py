@@ -9,6 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Suggestions
 from squid.api.errors import responses
 from squid.api.security import Caller, caller_allows
@@ -25,13 +26,25 @@ CACHE_SECONDS = 30
 """Short enough that an approved tag shows up promptly, long enough to absorb a burst of typing."""
 
 
-@router.get("", response_model=list[SuggestionSourceInfo], responses=responses(503))
+@router.get(
+    "",
+    response_model=list[SuggestionSourceInfo],
+    responses=responses(503),
+    operation_id="suggestion_sources_list",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def list_sources(suggestions: Suggestions) -> list[SuggestionSourceInfo]:
     """Publish the registered sources and how to drive each one."""
     return [SuggestionSourceInfo.from_domain(source) for source in sorted(suggestions.registry, key=lambda s: s.id)]
 
 
-@router.get("/{source}", response_model=SuggestionPage, responses=responses(404, 422, 503))
+@router.get(
+    "/{source}",
+    response_model=SuggestionPage,
+    responses=responses(404, 422, 503),
+    operation_id="suggestions_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def suggest(
     source: Annotated[str, SourceId],
     request: Request,
