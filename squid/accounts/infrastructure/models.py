@@ -224,6 +224,13 @@ class VerificationCode(Base):
     """A verification code for linking Java Edition identities."""
 
     __tablename__ = "verification_codes"
+    __table_args__ = (
+        CheckConstraint(
+            "(reserved_token IS NULL) = (reserved_until IS NULL)",
+            name="verification_codes_reservation_complete",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)
@@ -238,6 +245,20 @@ class VerificationCode(Base):
         server_default=text("(now() + '00:10:00'::interval)"),
         default_factory=lambda: Instant.now().add(minutes=10),
     )
+    reserved_token: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    """Digest of the token held by whoever is currently being shown this code's consent prompt.
+
+    A digest rather than the token, for the same reason `code` is one. Deliberately says nothing
+    about *who* reserved it: the prompt runs before an account exists, and the notice promises that
+    cancelling stores no account information, so a reservation identifies nobody.
+    """
+
+    reserved_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
+    """When the hold lapses, freeing the code without anything having to reap it.
+
+    A crashed process therefore costs one prompt's worth of delay rather than a stuck code, and the
+    legitimate owner can always mint a fresh one from the game.
+    """
 
 
 class VerificationAttempt(Base):

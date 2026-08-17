@@ -19,6 +19,7 @@ from squid.accounts.domain import (
     CreatorProfile,
     IdentityProvider,
     IdentityRefresh,
+    LinkReservation,
 )
 
 
@@ -29,6 +30,13 @@ class VerificationLinkResult:
     account: Account | None = None
     claimed_alias: CreatorAlias | None = None
     conflicting_java_uuid: UUID | None = None
+    reservation_expired: bool = False
+    """The code was valid but the hold committing it had lapsed or been taken over.
+
+    Kept apart from an empty result so the caller can say the prompt expired rather than claim a
+    correct code was invalid.
+    """
+
     refresh: IdentityRefresh | None = None
     """The full name reconciliation, when the code was consumed.
 
@@ -91,7 +99,12 @@ class AccountRepository(Protocol):
         account_id: int,
         code: str,
         consent: AccountConsent,
+        reservation_token: str | None = None,
     ) -> VerificationLinkResult: ...
+
+    async def reserve_verification_code(self, code: str, *, ttl_seconds: int) -> LinkReservation | None: ...
+
+    async def release_verification_code(self, code: str, reservation_token: str) -> bool: ...
 
     async def refresh_java_identity(self, *, account_id: int, java_uuid: UUID, username: str) -> IdentityRefresh: ...
 
