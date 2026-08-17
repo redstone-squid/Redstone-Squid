@@ -5,6 +5,8 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import _
 from squid.idempotency.domain import (
     ExistingRequest,
     IdempotencyConflictError,
@@ -46,8 +48,8 @@ class IdempotencyService:
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if ttl_hours < 1:
-            msg = "Idempotency retention must be at least one hour."
-            raise ValueError(msg)
+            msg = _("Idempotency retention must be at least one hour.")
+            raise InvalidStateError(msg)
         self._repository = repository
         self._ttl_hours = ttl_hours
         self._now = now

@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
 from squid.media.domain.models import MediaKind
 
 
@@ -21,11 +23,11 @@ class MediaNormalizationRequest:
         if self.poster_path is not None:
             paths.append(self.poster_path)
         if len(set(paths)) != len(paths):
-            msg = "Media source, normalized output, and poster paths must be distinct."
-            raise ValueError(msg)
+            msg = _("Media source, normalized output, and poster paths must be distinct.")
+            raise ValidationError(msg)
         if self.kind is MediaKind.IMAGE and (self.poster_path is not None or self.strip_audio):
-            msg = "Image normalization does not accept a poster path or audio option."
-            raise ValueError(msg)
+            msg = _("Image normalization does not accept a poster path or audio option.")
+            raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and self.poster_path is None:
-            msg = "Video normalization requires a poster destination."
-            raise ValueError(msg)
+            msg = _("Video normalization requires a poster destination.")
+            raise ValidationError(msg)

@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Never, Protocol, TypeVar, cast
+from typing import Annotated, Protocol, TypeVar, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -34,33 +34,9 @@ from squid.cli_auth.domain import (
     IssuedCliSession,
     IssuedCliSessionChallenge,
 )
-from squid.cli_auth.errors import (
-    CliAuthorizationError,
-    CliAuthorizationPendingError,
-    CliDeviceUnavailableError,
-    CliEnrollmentAlreadyExchangedError,
-    CliEnrollmentApprovalDeniedError,
-    CliEnrollmentExpiredError,
-    CliSessionChallengeExpiredError,
-    InvalidCliDeviceProofError,
-    InvalidCliEnrollmentError,
-    InvalidCliSessionChallengeError,
-    InvalidCliSessionError,
-    TooManyActiveCliAuthorizationsError,
-)
-from squid.core.errors import (
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    NotFoundError,
-    RateLimitedError,
-    ServiceUnavailableError,
-    SquidError,
-    ValidationError,
-)
+from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
 
 _T = TypeVar("_T")
-_RATE_LIMIT_RETRY_SECONDS = 60
 
 
 class CliAuthorizationHttpService(Protocol):
@@ -352,38 +328,7 @@ async def revoke_current_session(
 
 
 async def _execute(operation: Awaitable[_T]) -> _T:
-    try:
-        return await operation
-    except CliAuthorizationError as error:
-        _raise_transport_error(error)
-
-
-def _raise_transport_error(error: CliAuthorizationError) -> Never:
-    public_context = {"cli_auth_code": error.code}
-    mapped: SquidError
-    if isinstance(error, InvalidCliSessionError):
-        mapped = AuthenticationError(str(error), public_context=public_context)
-    elif isinstance(error, CliDeviceUnavailableError):
-        mapped = NotFoundError(str(error), public_context=public_context)
-    elif isinstance(error, CliEnrollmentApprovalDeniedError):
-        mapped = AuthorizationError(str(error), public_context=public_context)
-    elif isinstance(error, TooManyActiveCliAuthorizationsError):
-        mapped = RateLimitedError(_RATE_LIMIT_RETRY_SECONDS).with_context(public_context=public_context)
-    elif isinstance(error, (InvalidCliEnrollmentError, InvalidCliDeviceProofError, InvalidCliSessionChallengeError)):
-        mapped = ValidationError(str(error), public_context=public_context)
-    elif isinstance(
-        error,
-        (
-            CliAuthorizationPendingError,
-            CliEnrollmentAlreadyExchangedError,
-            CliEnrollmentExpiredError,
-            CliSessionChallengeExpiredError,
-        ),
-    ):
-        mapped = ConflictError(str(error), public_context=public_context)
-    else:
-        mapped = ValidationError(public_context=public_context)
-    raise mapped from None
+    return await operation
 
 
 def _prevent_storage(response: Response) -> None:

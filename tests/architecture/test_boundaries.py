@@ -300,42 +300,7 @@ BUILTIN_EXCEPTIONS = frozenset(
 # `AssertionError` and `NotImplementedError` stay legal: they mark a programming error or an
 # unimplemented Protocol stub, neither of which is a failure a caller is meant to catch, present,
 # or translate.
-BARE_RAISE_ALLOWLIST = {
-    "squid/accounts/domain/models.py": 3,
-    "squid/auth/application/services.py": 1,
-    "squid/builds/domain/models.py": 3,
-    "squid/catalogue/domain/titles.py": 2,
-    "squid/cli_auth/application.py": 5,
-    "squid/diagnostics/application.py": 1,
-    "squid/events/application.py": 3,
-    "squid/idempotency/application.py": 1,
-    "squid/media/application/commands.py": 3,
-    "squid/media/application/jobs.py": 28,
-    "squid/media/domain/models.py": 14,
-    "squid/minecraft_auth/application/crypto.py": 1,
-    "squid/minecraft_auth/application/services.py": 2,
-    "squid/minecraft_auth/domain/models.py": 3,
-    "squid/notifications/application.py": 5,
-    "squid/notifications/domain.py": 13,
-    "squid/permissions/application/epoch.py": 1,
-    "squid/reactions/application/policies.py": 1,
-    "squid/reactions/domain/models.py": 1,
-    "squid/records/domain/categories.py": 1,
-    "squid/records/domain/models.py": 4,
-    "squid/schematics/application/commands.py": 3,
-    "squid/schematics/application/jobs.py": 3,
-    "squid/schematics/application/queries.py": 2,
-    "squid/schematics/application/render_jobs.py": 2,
-    "squid/search/application/embeddings.py": 3,
-    "squid/search/application/fields.py": 6,
-    "squid/search/application/ranking.py": 3,
-    "squid/search/domain/query.py": 1,
-    "squid/starboard/application/services.py": 1,
-    "squid/starboard/domain/models.py": 11,
-    "squid/suggestions/application/registry.py": 3,
-    "squid/suggestions/application/services.py": 1,
-    "squid/sync/application.py": 2,
-}
+BARE_RAISE_ALLOWLIST = {}
 
 
 def _raises_application_layer_paths() -> list[Path]:

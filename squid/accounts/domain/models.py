@@ -11,6 +11,9 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 CURRENT_CONSENT_VERSION = "2026-08-04"
 
 _POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
@@ -79,13 +82,13 @@ class AccountIdentity:
         match provider:
             case IdentityProvider.DISCORD:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
-                    msg = f"Discord identity subjects must be positive signed 64-bit integers, got {subject!r}."
-                    raise ValueError(msg)
+                    msg = _("Discord identity subjects must be positive signed 64-bit integers, got {subject!r}.")
+                    raise ValidationError(msg, message_params={"subject": subject})
                 return cls(provider, subject, display_name, verified_at)
             case IdentityProvider.BEDROCK:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
-                    msg = f"Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}."
-                    raise ValueError(msg)
+                    msg = _("Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}.")
+                    raise ValidationError(msg, message_params={"subject": subject})
                 return cls(provider, subject, display_name, verified_at)
             case IdentityProvider.JAVA:
                 # `UUID` also lowercases and hyphenates, so an uppercase or bare-hex
@@ -93,8 +96,8 @@ class AccountIdentity:
                 try:
                     canonical = str(UUID(subject))
                 except ValueError as error:
-                    msg = f"Java identity subjects must be UUIDs, got {subject!r}."
-                    raise ValueError(msg) from error
+                    msg = _("Java identity subjects must be UUIDs, got {subject!r}.")
+                    raise ValidationError(msg, message_params={"subject": subject}) from error
                 return cls(provider, canonical, display_name, verified_at)
 
     @classmethod

@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
 from squid.schematics.domain.models import SchematicFormat, Vector3
 
 
@@ -54,14 +56,17 @@ class RenderRequest:
     def __post_init__(self) -> None:
         for axis, extent in (("width", self.width), ("height", self.height)):
             if not MIN_RENDER_EXTENT <= extent <= MAX_RENDER_EXTENT:
-                msg = f"Render {axis} must be between {MIN_RENDER_EXTENT} and {MAX_RENDER_EXTENT} pixels."
-                raise ValueError(msg)
+                msg = _("Render {axis} must be between {minimum} and {maximum} pixels.")
+                raise ValidationError(
+                    msg,
+                    message_params={"axis": axis, "minimum": MIN_RENDER_EXTENT, "maximum": MAX_RENDER_EXTENT},
+                )
         if self.zoom is not None and self.zoom <= 0:
-            msg = "Render zoom must be positive."
-            raise ValueError(msg)
+            msg = _("Render zoom must be positive.")
+            raise ValidationError(msg)
         if not all(0.0 <= channel <= 1.0 for channel in self.background):
-            msg = "Render background channels must be between 0 and 1."
-            raise ValueError(msg)
+            msg = _("Render background channels must be between 0 and 1.")
+            raise ValidationError(msg)
 
     def recipe_fields(self) -> tuple[object, ...]:
         """Return the values that identify this render for cache-key purposes."""

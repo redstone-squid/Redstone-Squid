@@ -15,13 +15,14 @@ from botocore.exceptions import ClientError
 
 from squid.artifacts.application import ArtifactMetadata
 from squid.config import ObjectStorageConfig
+from squid.core.errors import DataIntegrityError, ValidationError
 
 
-class ArtifactTooLargeError(ValueError):
+class ArtifactTooLargeError(ValidationError):
     """An artifact exceeded the caller's download budget."""
 
 
-class ArtifactSourceChangedError(ValueError):
+class ArtifactSourceChangedError(DataIntegrityError):
     """A staged source changed while it was being copied to durable storage."""
 
 

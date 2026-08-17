@@ -6,7 +6,7 @@ from typing import Literal
 
 from whenever import Instant
 
-from squid.core.errors import JSONValue
+from squid.core.errors import DataIntegrityError, JSONValue
 from squid.core.i18n import _
 from squid.schematics.domain.models import (
     SchematicAnalysis,
@@ -40,12 +40,12 @@ class SchematicPublication:
             and self.rights_attested_by_account_id is not None
         )
         if self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD and not rights_complete:
-            msg = "public schematic downloads require a license and rights attestation"
-            raise ValueError(msg)
+            msg = _("public schematic downloads require a license and rights attestation")
+            raise DataIntegrityError(msg)
         sanitization_parts = (self.sanitized_at, self.sanitizer_version, self.sanitization_report)
         if any(part is not None for part in sanitization_parts) and any(part is None for part in sanitization_parts):
-            msg = "sanitization requires a timestamp, sanitizer version, and audit report"
-            raise ValueError(msg)
+            msg = _("sanitization requires a timestamp, sanitizer version, and audit report")
+            raise DataIntegrityError(msg)
 
     @property
     def is_sanitized(self) -> bool:
