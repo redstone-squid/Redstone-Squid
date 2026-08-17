@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Search
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, anchor
@@ -32,14 +33,26 @@ router = APIRouter(prefix="/search", tags=["search"])
 PUBLIC_SEARCH_STATUSES = frozenset({"confirmed"})
 
 
-@router.get("/fields", response_model=list[SearchField], responses=responses(503))
+@router.get(
+    "/fields",
+    response_model=list[SearchField],
+    responses=responses(503),
+    operation_id="search_fields_list",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def list_search_fields(search_service: Search) -> list[SearchField]:
     """Publish the effective allowlisted query-field registry."""
     registry = await search_service.fields()
     return [SearchField.from_domain(field) for field in registry.definitions]
 
 
-@router.get("/suggest", response_model=SearchSuggestions, responses=responses(400, 422, 503))
+@router.get(
+    "/suggest",
+    response_model=SearchSuggestions,
+    responses=responses(400, 422, 503),
+    operation_id="search_terms_suggest",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def suggest_terms(
     search_service: Search,
     q: Annotated[str, Query(max_length=1_000)],
@@ -49,7 +62,13 @@ async def suggest_terms(
     return SearchSuggestions(suggestions=list(await search_service.suggest(q, limit=limit)))
 
 
-@router.get("", response_model=Page[SearchResult], responses=responses(400, 422, 503))
+@router.get(
+    "",
+    response_model=Page[SearchResult],
+    responses=responses(400, 422, 503),
+    operation_id="search_execute",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def search(
     search_service: Search,
     build_queries: BuildQueries,
