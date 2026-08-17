@@ -44,10 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/builds", "builds_list"),
-    _operation("post", "/v1/builds", "builds_create", "browser-only"),
-    _operation("get", "/v1/builds/{build_id}", "builds_get"),
-    _operation("patch", "/v1/builds/{build_id}", "builds_update", "browser-only"),
     _operation(
         "post",
         "/v1/cli/auth/enrollments",
