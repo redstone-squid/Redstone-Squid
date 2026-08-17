@@ -1,13 +1,14 @@
 """A cog for verifying minecraft accounts."""
 
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-from squid.accounts.domain import AliasClaim, IdentityProvider, IdentityRefresh
-from squid.accounts.errors import AccountNotFoundError
+from squid.accounts.domain import AccountIdentity, AliasClaim, IdentityProvider, IdentityRefresh, LinkPreview
+from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.ui.views import ConfirmationView
@@ -42,32 +43,60 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        consent_view = UserDataConsentView(ctx.author.id, locale=locale)
-        message = await ctx.send(
-            view=consent_view,
-            ephemeral=ctx.interaction is not None,
-            allowed_mentions=no_mentions(),
-        )
-        consent_view.bind_message(message)
-        await consent_view.wait()
-        if consent_view.consent is None:
-            await ctx.send(
-                view=text_layout(t(locale, _("Account linking cancelled. No user account information was stored."))),
-                ephemeral=ctx.interaction is not None,
-                allowed_mentions=no_mentions(),
-            )
-            return
+        ephemeral = ctx.interaction is not None
+        attempted_by = (IdentityProvider.DISCORD, str(ctx.author.id))
 
-        # The account is created here rather than by the redemption, which is evidence of a
-        # Java subject and of nothing else. This command is reached over the gateway, so it
-        # genuinely holds the Discord identity it is about to mint.
-        account_id = await account_id_for(self.account_service, ctx.author)
-        claimed = await self.account_service.link_minecraft_account(
-            account_id,
-            code,
-            consent=consent_view.consent,
-            attempted_by=(IdentityProvider.DISCORD, str(ctx.author.id)),
-        )
+        # Read without creating: nobody gets an account row for typing a code that turns out to be
+        # wrong, and the conflict checks below need whatever they already have.
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        existing_java = None if account is None else account.identity(IdentityProvider.JAVA)
+
+        # Hold the code before prompting, so a wrong code fails here rather than after the notice has
+        # been read and agreed to, and so the prompt can say what it is actually asking about.
+        reservation = await self.account_service.reserve_minecraft_link(code, attempted_by=attempted_by)
+        committed = False
+        try:
+            conflict = _link_conflict(reservation.preview, existing_java)
+            if conflict is not None:
+                raise AccountAlreadyLinkedError(
+                    minecraft_uuid=conflict,
+                    account_id=None if account is None else account.id,
+                    provider=IdentityProvider.DISCORD,
+                    subject=str(ctx.author.id),
+                )
+
+            consent_view = UserDataConsentView(ctx.author.id, reservation.preview, locale=locale)
+            message = await ctx.send(view=consent_view, ephemeral=ephemeral, allowed_mentions=no_mentions())
+            consent_view.bind_message(message)
+            await consent_view.wait()
+            if consent_view.consent is None:
+                await ctx.send(
+                    view=text_layout(
+                        t(locale, _("Account linking cancelled. No user account information was stored."))
+                    ),
+                    ephemeral=ephemeral,
+                    allowed_mentions=no_mentions(),
+                )
+                return
+
+            # The account is created here rather than by the redemption, which is evidence of a
+            # Java subject and of nothing else. This command is reached over the gateway, so it
+            # genuinely holds the Discord identity it is about to mint.
+            account_id = await account_id_for(self.account_service, ctx.author)
+            claimed = await self.account_service.link_minecraft_account(
+                account_id,
+                code,
+                consent=consent_view.consent,
+                attempted_by=attempted_by,
+                reservation=reservation,
+            )
+            committed = True
+        finally:
+            # Every exit that did not redeem gives the code back, so a conflict, a cancellation or a
+            # timeout can be retried at once instead of waiting out the hold.
+            if not committed:
+                await self.account_service.release_minecraft_link(code, reservation)
+
         message = t(locale, _("Your Discord account has been linked with your Minecraft account."))
         if claimed is not None:
             message += "\n" + t(
@@ -75,7 +104,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 _("Build credits under **{name}** are now attributed to your account."),
                 name=claimed.name,
             )
-        await ctx.send(view=text_layout(message), allowed_mentions=no_mentions())
+        await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
 
     @account_group.command(name="unlink")
     async def unlink(self, ctx: Context[BotT]):
@@ -206,6 +235,22 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             view=text_layout(t(locale, _("Rejected the claim for **{name}**."), name=claim.alias_name)),
             allowed_mentions=no_mentions(),
         )
+
+
+def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:
+    """Return the Minecraft UUID that makes this link impossible, or `None` if it can proceed.
+
+    Both cases used to surface only after the notice had been read and agreed to, because they are
+    checked inside the redemption. The reservation makes them answerable first, which is the
+    difference between "that cannot work" and "you consented to something that then failed".
+
+    Relinking the *same* UUID is not a conflict: it is how a renamed player refreshes their name.
+    """
+    if existing_java is not None and existing_java.java_uuid != preview.java_uuid:
+        return existing_java.java_uuid
+    if preview.java_uuid_held_elsewhere and (existing_java is None or existing_java.java_uuid != preview.java_uuid):
+        return preview.java_uuid
+    return None
 
 
 def _claimant(claim: AliasClaim) -> str:
