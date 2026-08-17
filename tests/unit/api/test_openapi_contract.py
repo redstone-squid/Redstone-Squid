@@ -2,17 +2,28 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 import httpx
 
 from squid.api.capabilities import API_FEATURES
 from squid.api.errors import ProblemDetail
-from squid.api.openapi import OPERATIONS
 from tests.fuzz.api.draft_lifecycle import DRAFT_PRODUCER_LINKS
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, build_app
 
 _app, _database = build_app()
 OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
+_HTTP_METHODS = ("get", "post", "put", "patch", "delete")
+
+
+def _document_operations(document: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
+    """Return every (path, method, operation) triple for a schema-included HTTP operation."""
+    return [
+        (path, method, operation)
+        for path, path_item in document["paths"].items()
+        for method in _HTTP_METHODS
+        if (operation := path_item.get(method)) is not None
+    ]
 
 
 # Locale negotiation (squid/api/i18n.py) sits in front of every response, including error
@@ -73,30 +84,24 @@ def test_committed_openapi_document_matches_application() -> None:
     assert committed == _app.openapi()
 
 
+_CLASSIFICATIONS = frozenset({"command", "browser-only", "transport-only", "internal", "compatibility-alias"})
+
+
 def test_every_operation_has_stable_cli_and_security_metadata() -> None:
     document = _app.openapi()
-    expected_locations = {(contract.path, contract.method) for contract in OPERATIONS}
-    actual_locations = {
-        (path, method)
-        for path, path_item in document["paths"].items()
-        for method in ("get", "post", "put", "patch", "delete")
-        if method in path_item
-    }
-    assert actual_locations == expected_locations
 
     identifiers: list[str] = []
     command_paths: list[str] = []
-    for contract in OPERATIONS:
-        operation = document["paths"][contract.path][contract.method]
-        assert operation["operationId"] == contract.operation_id
+    for _path, _method, operation in _document_operations(document):
+        assert operation["operationId"]
         assert operation["security"]
-        assert operation["x-squid-cli"]["classification"] == contract.classification
+        cli = operation["x-squid-cli"]
+        assert cli["classification"] in _CLASSIFICATIONS
         identifiers.append(operation["operationId"])
-        if contract.classification == "command":
-            metadata = operation["x-squid-cli"]
-            assert metadata["interaction"] in {"direct", "browser-continuation"}
-            assert set(metadata["required_api_features"]) <= API_FEATURES
-            command_paths.append(metadata["command"])
+        if cli["classification"] == "command":
+            assert cli["interaction"] in {"direct", "browser-continuation"}
+            assert set(cli["required_api_features"]) <= API_FEATURES
+            command_paths.append(cli["command"])
 
     assert len(identifiers) == len(set(identifiers))
     assert len(command_paths) == len(set(command_paths))
@@ -106,11 +111,10 @@ def test_every_operation_response_declares_the_request_id_header() -> None:
     document = _app.openapi()
     assert document["components"]["headers"]["RequestId"]["schema"]["pattern"] == "^[A-Za-z0-9._-]{8,128}$"
 
-    for contract in OPERATIONS:
-        operation = document["paths"][contract.path][contract.method]
+    for path, method, operation in _document_operations(document):
         for status_code, response in operation["responses"].items():
             assert response["headers"]["Request-Id"] == {"$ref": "#/components/headers/RequestId"}, (
-                f"{contract.method.upper()} {contract.path} {status_code} lacks the Request-Id header"
+                f"{method.upper()} {path} {status_code} lacks the Request-Id header"
             )
 
 
@@ -126,7 +130,9 @@ def test_openapi_declares_authentication_alternatives_and_scopes() -> None:
 
 def test_openapi_declares_submission_draft_producer_links() -> None:
     document = _app.openapi()
-    operation_locations = {contract.operation_id: (contract.path, contract.method) for contract in OPERATIONS}
+    operation_locations = {
+        operation["operationId"]: (path, method) for path, method, operation in _document_operations(document)
+    }
 
     for expected in DRAFT_PRODUCER_LINKS:
         path, method = operation_locations[expected.producer_operation_id]
@@ -137,9 +143,14 @@ def test_openapi_declares_submission_draft_producer_links() -> None:
 
 
 def test_cli_command_operations_have_untranslated_fixtures() -> None:
+    document = _app.openapi()
     fixture_path = OPENAPI_DOCUMENT.parent / "fixtures" / "cli-operations.json"
     fixtures = json.loads(fixture_path.read_text(encoding="utf-8"))
-    commands = {contract.operation_id for contract in OPERATIONS if contract.classification == "command"}
+    commands = {
+        operation["operationId"]
+        for _path, _method, operation in _document_operations(document)
+        if operation["x-squid-cli"]["classification"] == "command"
+    }
 
     assert fixtures["version"] == 1
     assert set(fixtures["operations"]) == commands
