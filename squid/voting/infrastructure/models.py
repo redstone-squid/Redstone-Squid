@@ -125,7 +125,6 @@ class BuildVoteSession(Base, kw_only=True):
     __tablename__ = "build_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        Identity(),
         ForeignKey(
             "vote_sessions.id",
             name="build_vote_sessions_vote_session_id_fkey",
@@ -151,7 +150,6 @@ class DeleteLogVoteSession(Base, kw_only=True):
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        Identity(),
         ForeignKey(
             "vote_sessions.id",
             name="delete_log_vote_sessions_vote_session_id_fkey",
@@ -207,7 +205,6 @@ class Vote(Base):
     )
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
-        Identity(),
         ForeignKey(
             "vote_sessions.id",
             name="votes_vote_session_id_fkey",
