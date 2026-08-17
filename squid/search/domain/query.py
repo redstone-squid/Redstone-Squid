@@ -5,6 +5,9 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import TypeAlias
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 
 class BooleanOperator(StrEnum):
     """Boolean operators supported by search."""
@@ -70,8 +73,8 @@ class BooleanExpression:
 
     def __post_init__(self) -> None:
         if len(self.operands) < 2:
-            msg = "Boolean expressions require at least two operands"
-            raise ValueError(msg)
+            msg = _("Boolean expressions require at least two operands")
+            raise ValidationError(msg)
 
 
 QueryExpression: TypeAlias = TextExpression | FieldExpression | NotExpression | BooleanExpression

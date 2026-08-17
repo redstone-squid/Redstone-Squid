@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 
 class RecordClass(StrEnum):
     """A metric by which records are classified."""
@@ -79,8 +82,8 @@ class TimingVariant:
 
     def __post_init__(self) -> None:
         if not self.values:
-            msg = "A timing variant must contain at least its primary timing method."
-            raise ValueError(msg)
+            msg = _("A timing variant must contain at least its primary timing method.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,8 +105,8 @@ class RecordCandidate:
 
     def __post_init__(self) -> None:
         if self.fixed_volume is not None and self.fixed_volume <= 0:
-            msg = "Fixed volume must be positive."
-            raise ValueError(msg)
+            msg = _("Fixed volume must be positive.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,8 +128,8 @@ class RecordResolution:
 
     def __post_init__(self) -> None:
         if self.status is ResolutionStatus.RESOLVED and not self.holder_ids:
-            msg = "A resolved competition must have at least one holder."
-            raise ValueError(msg)
+            msg = _("A resolved competition must have at least one holder.")
+            raise ValidationError(msg)
         if self.status is not ResolutionStatus.RESOLVED and self.holder_ids:
-            msg = "Only a resolved competition can have official holders."
-            raise ValueError(msg)
+            msg = _("Only a resolved competition can have official holders.")
+            raise ValidationError(msg)

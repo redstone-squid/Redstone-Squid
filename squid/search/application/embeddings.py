@@ -8,6 +8,9 @@ from typing import Protocol
 
 import anyio
 
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import _
+
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
 """Backstop for one embedding call, sized above the OpenAI adapter's own budget.
 
@@ -52,8 +55,8 @@ class SearchEmbeddingService:
 
     def __init__(self, model: SearchEmbeddingModel, queue: SearchEmbeddingQueue, *, max_attempts: int = 5) -> None:
         if max_attempts < 1:
-            msg = "Embedding max_attempts must be positive."
-            raise ValueError(msg)
+            msg = _("Embedding max_attempts must be positive.")
+            raise InvalidStateError(msg)
         self._model = model
         self._queue = queue
         self._max_attempts = max_attempts
@@ -61,8 +64,8 @@ class SearchEmbeddingService:
     async def process_batch(self, *, limit: int = 8) -> tuple[int, int]:
         """Embed a bounded batch, retaining exhausted documents as dead letters."""
         if not 1 <= limit <= 32:
-            msg = "Embedding claim limit must be between 1 and 32."
-            raise ValueError(msg)
+            msg = _("Embedding claim limit must be between 1 and 32.")
+            raise InvalidStateError(msg)
         succeeded = failed = 0
         for job in await self._queue.claim(limit=limit):
             try:
@@ -86,6 +89,6 @@ class SearchEmbeddingService:
 
 def _require_embedding(embedding: list[float] | None) -> list[float]:
     if embedding is None:
-        msg = "The configured embedding provider did not return a vector."
-        raise RuntimeError(msg)
+        msg = _("The configured embedding provider did not return a vector.")
+        raise InvalidStateError(msg)
     return embedding

@@ -4,6 +4,8 @@ from collections.abc import Callable
 from math import isfinite
 from typing import override
 
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import _
 from squid.reactions.application.ports import RoleMultiplierProvider, WeightPolicy
 from squid.reactions.domain import ReactionActor, WeightScope
 
@@ -22,8 +24,8 @@ class RoleWeightPolicy(WeightPolicy):
         staff_multiplier: float = 3.0,
     ) -> None:
         if not isfinite(staff_multiplier) or staff_multiplier <= 0:
-            msg = "Staff multiplier must be finite and greater than zero."
-            raise ValueError(msg)
+            msg = _("Staff multiplier must be finite and greater than zero.")
+            raise InvalidStateError(msg)
         self._provider = provider
         self._eligibility = eligibility
         # A node *name*, supplied by whichever context uses this policy, so the
