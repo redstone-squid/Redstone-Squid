@@ -7,6 +7,8 @@ from datetime import datetime
 from decimal import Decimal
 from itertools import combinations, groupby, product
 
+from squid.core.errors import DataIntegrityError, InvalidStateError
+from squid.core.i18n import _
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
     CandidateFacet,
@@ -42,6 +44,7 @@ from squid.records.domain import (
     resolve_smallest_fastest,
 )
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS
+from squid.records.errors import NoMatchingRecordCategoryError
 
 
 class RecordComputationService:
@@ -299,8 +302,7 @@ class RecordService:
             tuple(sorted(request.restriction_values)),
         )
         if not _category_has_candidate(identity, source, request.version_id):
-            msg = "No confirmed build satisfies the requested record category."
-            raise ValueError(msg)
+            raise NoMatchingRecordCategoryError(kind=request.kind.value, base_key=request.base_key)
 
         ruleset_id = await self._runs.active_ruleset_id()
         await self._runs.save_requested_category(ruleset_id, identity)
@@ -426,8 +428,8 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
         return str(value).lower()
     if isinstance(value, str):
         return value
-    msg = "Parameterized record restriction is missing a category value."
-    raise ValueError(msg)
+    msg = _("Parameterized record restriction is missing a category value.")
+    raise DataIntegrityError(msg)
 
 
 def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str | bool:
@@ -435,8 +437,8 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
         return Decimal(value)
     if facet.value_type == "boolean":
         if value not in {"true", "false"}:
-            msg = f"Invalid boolean category value {value!r}."
-            raise ValueError(msg)
+            msg = _("Invalid boolean category value {value!r}.")
+            raise InvalidStateError(msg, message_params={"value": value})
         return value == "true"
     return value
 
@@ -456,8 +458,8 @@ def _base_key(source: RecordSourceCandidate) -> str:
                 f"t[{type_key or ','.join(extender.types)}]",
             )
         )
-    msg = f"Candidate {source.candidate.build_id} has no typed category facts."
-    raise ValueError(msg)
+    msg = _("Candidate {build_id} has no typed category facts.")
+    raise DataIntegrityError(msg, message_params={"build_id": source.candidate.build_id})
 
 
 def _category_with_restrictions(
@@ -483,8 +485,8 @@ def _category_with_restrictions(
             component_restrictions=components,
             miscellaneous_restrictions=miscellaneous,
         )
-    msg = f"Candidate {source.candidate.build_id} has no typed category facts."
-    raise ValueError(msg)
+    msg = _("Candidate {build_id} has no typed category facts.")
+    raise DataIntegrityError(msg, message_params={"build_id": source.candidate.build_id})
 
 
 def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
@@ -492,8 +494,8 @@ def _timing_methods(kind: BuildKind) -> tuple[str, ...]:
         return tuple(DOOR_TIMING_METHODS)
     if kind is BuildKind.EXTENDER:
         return tuple(EXTENDER_TIMING_METHODS)
-    msg = f"Fastest records are not supported for {kind.value}."
-    raise ValueError(msg)
+    msg = _("Fastest records are not supported for {kind}.")
+    raise InvalidStateError(msg, message_params={"kind": kind.value})
 
 
 def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
@@ -507,8 +509,8 @@ def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
         return (RecordClass.FIRST, *shared)
     if kind is BuildKind.EXTENDER:
         return shared
-    msg = f"Records are not supported for {kind.value}."
-    raise ValueError(msg)
+    msg = _("Records are not supported for {kind}.")
+    raise InvalidStateError(msg, message_params={"kind": kind.value})
 
 
 def _resolve_record(

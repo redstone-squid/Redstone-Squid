@@ -25,6 +25,7 @@ from squid.records.domain import (
     ResolutionStatus,
     TimingVariant,
 )
+from squid.records.errors import NoMatchingRecordCategoryError
 
 
 class FakeCandidates:
@@ -327,7 +328,7 @@ async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
     runs = FakeRuns()
     service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
 
-    with pytest.raises(ValueError, match="No confirmed build"):
+    with pytest.raises(NoMatchingRecordCategoryError, match="No confirmed build"):
         await service.lookup_or_materialize(
             RecordLookupRequest(
                 kind=BuildKind.DOOR,
