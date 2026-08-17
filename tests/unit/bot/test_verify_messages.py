@@ -10,10 +10,18 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.domain import AliasClaim, ClaimStatus, CreatorAlias, IdentityRefresh
-from squid.bot.verify import _refresh_message
+from squid.accounts.domain import (
+    AccountIdentity,
+    AliasClaim,
+    ClaimStatus,
+    CreatorAlias,
+    IdentityRefresh,
+    LinkPreview,
+)
+from squid.bot.verify import _link_conflict, _refresh_message
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
+OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")
 NOW = Instant.from_utc(2026, 8, 16)
 LOCALE = "en"
 
@@ -74,6 +82,39 @@ def test_retained_names_are_listed() -> None:
 
     assert "**OldName**" in message
     assert "**OlderName**" in message
+
+
+def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
+    return LinkPreview(java_uuid=JAVA_UUID, username="Notch", java_uuid_held_elsewhere=held_elsewhere)
+
+
+def test_a_fresh_link_has_no_conflict() -> None:
+    assert _link_conflict(_preview(), None) is None
+
+
+def test_relinking_the_same_uuid_is_not_a_conflict() -> None:
+    """It is how a renamed player refreshes their name, so it must not be refused."""
+    existing = AccountIdentity.java(JAVA_UUID, username="OldName")
+
+    assert _link_conflict(_preview(held_elsewhere=True), existing) is None
+
+
+def test_holding_a_different_java_identity_conflicts() -> None:
+    existing = AccountIdentity.java(OTHER_UUID, username="Other")
+
+    assert _link_conflict(_preview(), existing) == OTHER_UUID
+
+
+def test_a_uuid_linked_to_somebody_else_conflicts() -> None:
+    """Detected before the prompt now; it used to surface only after consent was given."""
+    assert _link_conflict(_preview(held_elsewhere=True), None) == JAVA_UUID
+
+
+def test_a_uuid_linked_elsewhere_conflicts_even_with_another_identity_held() -> None:
+    existing = AccountIdentity.java(OTHER_UUID, username="Other")
+
+    # The caller's own mismatch is reported, because unlinking that is the action they must take.
+    assert _link_conflict(_preview(held_elsewhere=True), existing) == OTHER_UUID
 
 
 @pytest.mark.parametrize(
