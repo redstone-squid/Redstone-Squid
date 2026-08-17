@@ -44,8 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/records/{record_id}", "records_get"),
-    _operation("get", "/v1/records", "records_list"),
     _operation("get", "/v1/builds/{build_id}/schematics", "build_schematics_list"),
     _operation("get", "/v1/builds/{build_id}/schematics/render", "build_schematic_render_get"),
     _operation("get", "/v1/builds/{build_id}/schematics/{schematic_id}/content", "build_schematic_content_get"),
