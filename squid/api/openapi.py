@@ -44,10 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/auth/csrf", "browser_csrf_get", "browser-only"),
-    _operation("get", "/v1/auth/{provider}", "browser_authorization_start", "browser-only"),
-    _operation("get", "/v1/auth/{provider}/callback", "browser_authorization_callback", "browser-only"),
-    _operation("post", "/v1/auth/logout", "browser_session_revoke", "browser-only"),
     _operation("get", "/v1/builds", "builds_list"),
     _operation("post", "/v1/builds", "builds_create", "browser-only"),
     _operation("get", "/v1/builds/{build_id}", "builds_get"),
