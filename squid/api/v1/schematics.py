@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query, Response
 
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, Schematics
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page, resolve_selector
@@ -23,6 +24,8 @@ router = APIRouter(tags=["schematics"])
         503,
         describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
     ),
+    operation_id="build_schematics_list",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def list_build_schematics(
     build_id: int,
@@ -47,6 +50,8 @@ async def list_build_schematics(
         **responses(404, 422, 503),
         200: {"content": {"application/octet-stream": {}}, "description": "Stored schematic content"},
     },
+    operation_id="build_schematic_content_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_schematic_content(
     build_id: int,
@@ -90,6 +95,8 @@ async def get_schematic_content(
         ),
         200: {"content": {"image/png": {}}, "description": "Rendered schematic preview"},
     },
+    operation_id="build_schematic_render_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def render_build_schematic(
     build_id: int,
@@ -134,6 +141,8 @@ async def render_build_schematic(
         **responses(404, 422, 503),
         200: {"content": {"image/png": {}}, "description": "Generated schematic preview"},
     },
+    operation_id="schematic_render_content_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_schematic_render_content(
     recipe_hash: Annotated[str, Path(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics

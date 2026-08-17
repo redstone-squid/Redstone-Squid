@@ -44,10 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/builds/{build_id}/schematics", "build_schematics_list"),
-    _operation("get", "/v1/builds/{build_id}/schematics/render", "build_schematic_render_get"),
-    _operation("get", "/v1/builds/{build_id}/schematics/{schematic_id}/content", "build_schematic_content_get"),
-    _operation("get", "/v1/schematic-renders/{recipe_hash}/content", "schematic_render_content_get"),
     _operation("get", "/v1/search/fields", "search_fields_list"),
     _operation("get", "/v1/search/suggest", "search_terms_suggest"),
     _operation("get", "/v1/search", "search_execute"),
