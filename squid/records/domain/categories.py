@@ -4,6 +4,9 @@ from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from itertools import combinations
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 
 @dataclass(frozen=True, slots=True)
 class CategorySemantics:
@@ -38,8 +41,8 @@ def generate_category_subsets(
 ) -> Iterator[frozenset[str]]:
     """Stream every unique valid subset without constructing a power-set mask."""
     if max_size < 0:
-        msg = "Maximum category size cannot be negative."
-        raise ValueError(msg)
+        msg = _("Maximum category size cannot be negative.")
+        raise ValidationError(msg)
 
     canonical_facets = tuple(sorted(semantics.closure(facets)))
     upper_bound = min(max_size, len(canonical_facets))

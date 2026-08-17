@@ -7,6 +7,9 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.errors import DataIntegrityError, ValidationError
+from squid.core.i18n import _
+
 CURRENT_NOTIFICATION_NOTICE_VERSION = "2026-08-10"
 _BUILD_KINDS = frozenset({"door", "entrance", "extender", "utility"})
 _RECORD_CLASSES = frozenset({"first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"})
@@ -58,17 +61,17 @@ class TagPredicate:
 
     def __post_init__(self) -> None:
         if self.tag_id < 1:
-            msg = "tag_id must be positive"
-            raise ValueError(msg)
+            msg = _("tag_id must be positive")
+            raise ValidationError(msg)
         if self.operator not in {"present", "exact"}:
-            msg = "tag predicate operator must be 'present' or 'exact'"
-            raise ValueError(msg)
+            msg = _("tag predicate operator must be 'present' or 'exact'")
+            raise ValidationError(msg)
         if self.operator == "present" and self.value is not None:
-            msg = "presence predicates cannot include a value"
-            raise ValueError(msg)
+            msg = _("presence predicates cannot include a value")
+            raise ValidationError(msg)
         if self.operator == "exact" and self.value is None:
-            msg = "exact predicates require a value"
-            raise ValueError(msg)
+            msg = _("exact predicates require a value")
+            raise ValidationError(msg)
 
     def as_dict(self) -> dict[str, object]:
         """Serialize the predicate into JSON-safe persistence data."""
@@ -89,14 +92,14 @@ class RecordSubscriptionFilter:
 
     def __post_init__(self) -> None:
         if not any((self.build_kinds, self.record_classes, self.version_scopes, self.tags)):
-            msg = "a record filter must contain at least one predicate"
-            raise ValueError(msg)
+            msg = _("a record filter must contain at least one predicate")
+            raise ValidationError(msg)
         _validate_values(self.build_kinds, _BUILD_KINDS, "build kind")
         _validate_values(self.record_classes, _RECORD_CLASSES, "record class")
         _validate_values(self.version_scopes, _VERSION_SCOPES, "version scope")
         if len({predicate.tag_id for predicate in self.tags}) != len(self.tags):
-            msg = "record filters may contain only one predicate per tag"
-            raise ValueError(msg)
+            msg = _("record filters may contain only one predicate per tag")
+            raise ValidationError(msg)
 
     def as_dict(self) -> dict[str, object]:
         """Serialize the filter into a stable JSON shape."""
@@ -112,24 +115,24 @@ class RecordSubscriptionFilter:
         """Parse trusted persisted JSON, raising when it no longer matches the contract."""
         raw_tags_value = value.get("tags", [])
         if not isinstance(raw_tags_value, list):
-            msg = "tags must be a list"
-            raise TypeError(msg)
+            msg = _("tags must be a list")
+            raise DataIntegrityError(msg)
         raw_tags = cast(list[object], raw_tags_value)
         tags: list[TagPredicate] = []
         for raw in raw_tags:
             if not isinstance(raw, dict):
-                msg = "tag predicates must be objects"
-                raise TypeError(msg)
+                msg = _("tag predicates must be objects")
+                raise DataIntegrityError(msg)
             raw_predicate = cast(dict[str, object], raw)
             tag_id = raw_predicate.get("tag_id")
             operator = raw_predicate.get("operator", "present")
             predicate_value = raw_predicate.get("value")
             if isinstance(tag_id, bool) or not isinstance(tag_id, int) or not isinstance(operator, str):
-                msg = "invalid tag predicate"
-                raise TypeError(msg)
+                msg = _("invalid tag predicate")
+                raise DataIntegrityError(msg)
             if predicate_value is not None and not isinstance(predicate_value, (str, int, float, bool)):
-                msg = "invalid exact tag value"
-                raise TypeError(msg)
+                msg = _("invalid exact tag value")
+                raise DataIntegrityError(msg)
             tags.append(TagPredicate(tag_id=tag_id, operator=operator, value=predicate_value))
         return cls(
             build_kinds=_string_set(value.get("build_kinds", []), "build_kinds"),
@@ -178,17 +181,17 @@ class PendingNotificationDelivery:
 
 def _string_set(value: object, name: str) -> frozenset[str]:
     if not isinstance(value, list):
-        msg = f"{name} must be a list of non-empty strings"
-        raise TypeError(msg)
+        msg = _("{name} must be a list of non-empty strings")
+        raise DataIntegrityError(msg, message_params={"name": name})
     items = cast(list[object], value)
     if not all(isinstance(item, str) and item for item in items):
-        msg = f"{name} must be a list of non-empty strings"
-        raise TypeError(msg)
+        msg = _("{name} must be a list of non-empty strings")
+        raise DataIntegrityError(msg, message_params={"name": name})
     return frozenset(cast(str, item) for item in items)
 
 
 def _validate_values(values: frozenset[str], allowed: frozenset[str], name: str) -> None:
     invalid = values - allowed
     if invalid:
-        msg = f"unsupported {name}: {sorted(invalid)[0]}"
-        raise ValueError(msg)
+        msg = _("unsupported {name}: {value}")
+        raise ValidationError(msg, message_params={"name": name, "value": sorted(invalid)[0]})

@@ -6,12 +6,13 @@ from urllib.parse import urlsplit
 import aiohttp
 
 from squid.config import CatboxConfig
+from squid.core.errors import InfrastructureError
 
 CATBOX_UPLOAD_URL = "https://catbox.moe/user/api.php"
 MAX_CATBOX_RESPONSE_BYTES = 2 * 1024
 
 
-class MediaUploadError(OSError):
+class MediaUploadError(InfrastructureError):
     """A configured media host rejected or malformed an upload."""
 
 

@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 MEBIBYTE = 1024 * 1024
 
 
@@ -45,8 +48,8 @@ class MediaBatchTotals:
 
     def __post_init__(self) -> None:
         if min(self.image_count, self.video_count, self.source_bytes, self.output_bytes) < 0:
-            msg = "Media batch totals cannot be negative."
-            raise ValueError(msg)
+            msg = _("Media batch totals cannot be negative.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,8 +77,8 @@ class MediaLimits:
             )
             <= 0
         ):
-            msg = "Every media limit must be positive."
-            raise ValueError(msg)
+            msg = _("Every media limit must be positive.")
+            raise ValidationError(msg)
 
     def batch_violation(self, totals: MediaBatchTotals) -> MediaViolation | None:
         """Return the first aggregate violation in a stable order."""
@@ -133,17 +136,17 @@ class MediaProbe:
 
     def __post_init__(self) -> None:
         if self.width <= 0 or self.height <= 0:
-            msg = "Media dimensions must be positive."
-            raise ValueError(msg)
+            msg = _("Media dimensions must be positive.")
+            raise ValidationError(msg)
         if self.frame_rate_numerator < 0 or self.frame_rate_denominator <= 0:
-            msg = "Media frame rate must be non-negative with a positive denominator."
-            raise ValueError(msg)
+            msg = _("Media frame rate must be non-negative with a positive denominator.")
+            raise ValidationError(msg)
         if self.duration_milliseconds is not None and self.duration_milliseconds < 0:
-            msg = "Media duration cannot be negative."
-            raise ValueError(msg)
+            msg = _("Media duration cannot be negative.")
+            raise ValidationError(msg)
         if self.frame_count is not None and self.frame_count < 0:
-            msg = "Media frame count cannot be negative."
-            raise ValueError(msg)
+            msg = _("Media frame count cannot be negative.")
+            raise ValidationError(msg)
 
     @property
     def has_audio(self) -> bool:
@@ -185,11 +188,11 @@ class MediaArtifact:
 
     def __post_init__(self) -> None:
         if self.byte_size <= 0 or self.width <= 0 or self.height <= 0:
-            msg = "Normalized artifact dimensions and size are invalid."
-            raise ValueError(msg)
+            msg = _("Normalized artifact dimensions and size are invalid.")
+            raise ValidationError(msg)
         if len(self.sha256) != 64 or any(character not in "0123456789abcdef" for character in self.sha256):
-            msg = "Normalized artifact SHA-256 must be lowercase hexadecimal."
-            raise ValueError(msg)
+            msg = _("Normalized artifact SHA-256 must be lowercase hexadecimal.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,22 +209,22 @@ class MediaNormalizationReport:
 
     def __post_init__(self) -> None:
         if self.source_bytes < 0:
-            msg = "Normalized media source size cannot be negative."
-            raise ValueError(msg)
+            msg = _("Normalized media source size cannot be negative.")
+            raise ValidationError(msg)
         if self.kind is MediaKind.IMAGE and self.poster is not None:
-            msg = "Only normalized videos have a poster artifact."
-            raise ValueError(msg)
+            msg = _("Only normalized videos have a poster artifact.")
+            raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and self.poster is None:
-            msg = "A normalized video must have a poster artifact."
-            raise ValueError(msg)
+            msg = _("A normalized video must have a poster artifact.")
+            raise ValidationError(msg)
         if len(set(self.actions)) != len(self.actions):
-            msg = "Normalization report actions cannot contain duplicates."
-            raise ValueError(msg)
+            msg = _("Normalization report actions cannot contain duplicates.")
+            raise ValidationError(msg)
         if self.kind is MediaKind.IMAGE and self.output.content_type != "image/png":
-            msg = "Normalized images must be PNG artifacts."
-            raise ValueError(msg)
+            msg = _("Normalized images must be PNG artifacts.")
+            raise ValidationError(msg)
         if self.kind is MediaKind.VIDEO and (
             self.output.content_type != "video/mp4" or self.poster is None or self.poster.content_type != "image/jpeg"
         ):
-            msg = "Normalized videos must contain MP4 and JPEG artifacts."
-            raise ValueError(msg)
+            msg = _("Normalized videos must contain MP4 and JPEG artifacts.")
+            raise ValidationError(msg)

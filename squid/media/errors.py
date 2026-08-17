@@ -5,8 +5,10 @@ from uuid import UUID
 
 from squid.core.errors import (
     ConflictError,
+    DataIntegrityError,
     ErrorCode,
     InfrastructureError,
+    InvalidStateError,
     NotFoundError,
     ServiceUnavailableError,
     ValidationError,
@@ -139,3 +141,54 @@ class MediaProcessingTimeoutError(MediaProcessingError, TimeoutError):
 
     def __init__(self, *, operation: str) -> None:
         super().__init__(MediaFailureReason.TOOL_TIMED_OUT, operation=operation)
+
+
+class MediaUploadConflictError(ConflictError):
+    """An upload UUID was retried with different immutable metadata."""
+
+    default_message = _("Media upload {upload_id} already exists with different metadata.")
+    default_resource = "media_upload"
+
+    def __init__(
+        self,
+        upload_id: UUID,
+        *,
+        existing_source_object_key: str,
+        existing_status: object,
+    ) -> None:
+        super().__init__(message_params={"upload_id": str(upload_id)})
+        self.upload_id = upload_id
+        self.existing_source_object_key = existing_source_object_key
+        self.existing_status = existing_status
+
+
+class MediaJobSourceError(DataIntegrityError):
+    """A queued raw object is absent, oversized, or no longer matches its metadata."""
+
+    default_message = _("The queued raw media object is inconsistent with its metadata.")
+    default_resource = "media_upload"
+
+
+class MediaJobArtifactError(DataIntegrityError):
+    """Object storage did not confirm a content-addressed normalized artifact."""
+
+    default_message = _("Object storage did not confirm a normalized media artifact.")
+    default_resource = "media_artifact"
+
+
+class MediaArtifactCleanupInProgressError(ConflictError):
+    """A retryable publication conflict with a token-fenced object deletion."""
+
+    default_message = _("A normalized media object is being cleaned up.")
+    default_resource = "media_artifact"
+
+    def __init__(self, retry_at: object) -> None:
+        super().__init__()
+        self.retry_at = retry_at
+
+
+class MediaJobClaimLostError(InvalidStateError):
+    """A worker must stop after its durable claim token is revoked or reclaimed."""
+
+    default_message = _("The media job claim is no longer valid.")
+    default_resource = "media_job"
