@@ -44,6 +44,11 @@ class FakeRepository:
         self.saved = [report for report in self.saved if report.expires_at > now]
         return len(expired)
 
+    async def clear_all(self) -> int:
+        cleared = len(self.saved)
+        self.saved = []
+        return cleared
+
     def _matching(self, reference: str, now: Instant) -> list[ErrorReport]:
         return [
             report
@@ -189,6 +194,18 @@ async def test_lookup_rejects_an_empty_reference() -> None:
 
     with pytest.raises(ErrorReportNotFoundError):
         await service.lookup("  ``  ")
+
+
+async def test_clear_all_deletes_every_report_expired_or_not() -> None:
+    repository = FakeRepository()
+    service = build_service(repository)
+    await service.record(raised(RuntimeError("boom")), correlation_id="a" * 32, reference="a" * 12, surface="http")
+    await service.record(raised(RuntimeError("boom")), correlation_id="b" * 32, reference="b" * 12, surface="http")
+
+    deleted = await service.clear_all()
+
+    assert deleted == 2
+    assert repository.saved == []
 
 
 async def test_retention_must_be_at_least_an_hour() -> None:

@@ -28,6 +28,8 @@ class ErrorReportRepository(Protocol):
 
     async def purge_expired(self, *, now: Instant) -> int: ...
 
+    async def clear_all(self) -> int: ...
+
 
 class ErrorReportService:
     """Store what failed, and hand it back to whoever is allowed to ask.
@@ -116,6 +118,14 @@ class ErrorReportService:
     async def purge_expired(self) -> int:
         """Delete reports past their retention window."""
         return await self._repository.purge_expired(now=self._now())
+
+    async def clear_all(self) -> int:
+        """Delete every stored report, expired or not.
+
+        Unlike `purge_expired`, this is an operator action rather than routine housekeeping, so
+        it is gated on `diagnostics.error.clear` rather than running unattended.
+        """
+        return await self._repository.clear_all()
 
     @staticmethod
     def normalize(reference: str) -> str:

@@ -12,7 +12,7 @@ from squid.bot.utils.components import CardField, card_layout, info_layout, no_m
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.diagnostics.domain import ErrorReport
-from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ
+from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -73,6 +73,21 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             view=info_layout(
                 t(locale, _("Recent errors")),
                 body or t(locale, _("Nothing has failed within the retention window.")),
+            ),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+
+    @error_group.command(name="clear")
+    @requires(DIAGNOSTICS_ERROR_CLEAR)
+    async def clear_errors(self, ctx: Context[BotT]) -> None:
+        """Delete every stored error report, expired or not."""
+        deleted = await self.error_reports.clear_all()
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        await ctx.send(
+            view=info_layout(
+                t(locale, _("Errors cleared")),
+                t(locale, _("Deleted {count} stored error reports."), count=deleted),
             ),
             ephemeral=True,
             allowed_mentions=no_mentions(),
