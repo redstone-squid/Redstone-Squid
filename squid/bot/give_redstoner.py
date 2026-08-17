@@ -116,7 +116,6 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(ctx, self.bot.services.settings)
         view = ErrorHandledLayoutView(timeout=None)
         view.add_item(discord.ui.TextDisplay(t(locale, _("Redstoner role controls"))))
-        view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
     @redstoner_group.command(name="resync")
@@ -174,7 +173,6 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 )
             )
         )
-        view.add_item(discord.ui.ActionRow(DynamicRemoveOwnRedstonerRoleButton()))
         await self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id).send(
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
             view=view,
