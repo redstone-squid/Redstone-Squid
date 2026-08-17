@@ -14,6 +14,8 @@ class ApiKey(Base):
 
     __tablename__ = "api_keys"
     __table_args__ = (
+        Index("api_keys_owner_idx", "owner_account_id"),
+        Index("api_keys_created_by_idx", "created_by_account_id"),
         Index("api_keys_key_id_key", "key_id", unique=True),
         Index("api_keys_active", "key_id", postgresql_where=text("revoked_at IS NULL")),
     )

@@ -51,6 +51,7 @@ class PermissionRole(Base, kw_only=True):
 
     __tablename__ = "permission_roles"
     __table_args__ = (
+        Index("permission_roles_created_by_idx", "created_by_account_id"),
         UniqueConstraint(
             "guild_id", "slug", name="permission_roles_guild_slug_key", postgresql_nulls_not_distinct=True
         ),
@@ -96,7 +97,10 @@ class PermissionRolePattern(Base, kw_only=True):
     """
 
     __tablename__ = "permission_role_patterns"
-    __table_args__ = (CheckConstraint("mode IN (1, -1)", name="permission_role_patterns_mode_check"),)
+    __table_args__ = (
+        Index("permission_role_patterns_added_by_idx", "added_by_account_id"),
+        CheckConstraint("mode IN (1, -1)", name="permission_role_patterns_mode_check"),
+    )
 
     role_id: Mapped[int] = mapped_column(
         Integer,
@@ -123,7 +127,11 @@ class PermissionRoleInclude(Base, kw_only=True):
     """A composition edge: one role including another's patterns."""
 
     __tablename__ = "permission_role_includes"
-    __table_args__ = (CheckConstraint("role_id <> included_role_id", name="permission_role_includes_no_self_include"),)
+    __table_args__ = (
+        Index("permission_role_includes_added_by_idx", "added_by_account_id"),
+        Index("permission_role_includes_included_idx", "included_role_id"),
+        CheckConstraint("role_id <> included_role_id", name="permission_role_includes_no_self_include"),
+    )
 
     role_id: Mapped[int] = mapped_column(
         Integer,
@@ -151,6 +159,7 @@ class PermissionGrant(Base, kw_only=True):
 
     __tablename__ = "permission_grants"
     __table_args__ = (
+        Index("permission_grants_granted_by_idx", "granted_by_account_id"),
         CheckConstraint(_ONE_SUBJECT, name="permission_grants_one_subject"),
         CheckConstraint(_ROLE_SUBJECT_HAS_GUILD, name="permission_grants_role_subject_has_guild"),
         CheckConstraint(_ROLE_SUBJECT_STAYS_HOME, name="permission_grants_role_subject_stays_home"),
@@ -224,6 +233,8 @@ class PermissionRoleAssignment(Base, kw_only=True):
 
     __tablename__ = "permission_role_assignments"
     __table_args__ = (
+        Index("permission_role_assignments_granted_by_idx", "granted_by_account_id"),
+        Index("permission_role_assignments_role_idx", "role_id"),
         CheckConstraint(_ONE_SUBJECT, name="permission_role_assignments_one_subject"),
         CheckConstraint(_ROLE_SUBJECT_HAS_GUILD, name="permission_role_assignments_role_subject_has_guild"),
         CheckConstraint(_ROLE_SUBJECT_STAYS_HOME, name="permission_role_assignments_role_subject_stays_home"),
@@ -296,6 +307,7 @@ class PermissionAuditEntry(Base, kw_only=True):
 
     __tablename__ = "permission_audit_log"
     __table_args__ = (
+        Index("permission_audit_log_actor_idx", "actor_account_id"),
         Index("permission_audit_log_recent", "at"),
         Index("permission_audit_log_by_subject", "subject_kind", "subject_id"),
     )

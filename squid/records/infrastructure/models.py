@@ -225,6 +225,7 @@ class RecordResult(Base, kw_only=True):
 
     __tablename__ = "record_results"
     __table_args__ = (
+        Index("record_results_provisional_build_idx", "provisional_build_id"),
         CheckConstraint(
             "status IN ('resolved', 'unresolved', 'no_candidate')",
             name="record_results_status_check",
@@ -290,6 +291,7 @@ class RecordHolderHistory(Base, kw_only=True):
 
     __tablename__ = "record_holder_history"
     __table_args__ = (
+        Index("record_holder_history_build_idx", "build_id"),
         CheckConstraint(
             "held_until IS NULL OR held_until >= held_from",
             name="record_holder_history_interval_check",
@@ -339,6 +341,7 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
 
     __tablename__ = "record_recompute_queue"
     __table_args__ = (
+        Index("record_recompute_queue_build_idx", "build_id"),
         UniqueConstraint("scope_key", name="record_recompute_queue_scope_key_key"),
         Index("record_recompute_queue_ready_idx", "available_at", postgresql_where=text("locked_at IS NULL")),
     )
