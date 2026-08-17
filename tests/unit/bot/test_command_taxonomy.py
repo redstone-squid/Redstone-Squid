@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from typing import Any, cast
 
+from discord import app_commands
 from discord.ext.commands import Command, HybridCommand, HybridGroup
 
 from squid.bot.admin import Admin
@@ -38,7 +39,6 @@ UNGATED_COMMANDS = frozenset(
         "build schematic download",
         "build schematic info",
         "build schematic render",
-        "build submit-full",
         "build view",
         "info",
         "info docs",
@@ -123,7 +123,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "schematic download",
         "schematic info",
         "schematic render",
-        "submit-full",
         "view",
     ),
     "info": ("docs", "form", "invite", "source"),
@@ -243,6 +242,23 @@ def test_build_slash_group_includes_app_only_guided_submit() -> None:
     expected_commands = {f"build {command}" for command in (*EXPECTED_PREFIX_COMMAND_TREE["build"], "submit")}
 
     assert {command.qualified_name for command in build_group.app_command.walk_commands()} == expected_commands
+
+
+def test_guided_submit_puts_attachments_last() -> None:
+    """The tab order through the options is the form: typed fields first, attachments trailing.
+
+    Attachments-first was the original dogfooding complaint against `/build submit`
+    (docs/plans/command-redesign/01-build-submit.md), so the order is pinned.
+    """
+    cog = SearchCog.__new__(SearchCog)
+    build_group = cast(HybridGroup, _command(cog.__cog_commands__, "build"))
+    submit = next(
+        command for command in build_group.app_command.walk_commands() if command.qualified_name == "build submit"
+    )
+    names = [parameter.name for parameter in cast(app_commands.Command[Any, ..., Any], submit).parameters]
+
+    assert names[0] == "door_size"
+    assert [name for name in names if name.endswith("_attachment")] == names[-4:]
 
 
 def test_search_modes_have_user_friendly_labels() -> None:
