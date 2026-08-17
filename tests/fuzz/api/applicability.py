@@ -1,11 +1,33 @@
 """Applicability manifest for operation/check coverage in API fuzzing."""
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
 
-from squid.api.openapi import OPERATIONS
 from tests.fuzz.api.schemathesis import CHECKS
 
-_OPERATION_IDS = frozenset(contract.operation_id for contract in OPERATIONS)
+_OPENAPI_DOCUMENT = Path(__file__).resolve().parents[3] / "contracts" / "openapi.json"
+_HTTP_METHODS = ("get", "post", "put", "patch", "delete")
+
+
+def _committed_operation_ids() -> frozenset[str]:
+    """Read operation ids from the committed document.
+
+    `tests/fuzz/api/schemathesis.py` already asserts the live application matches this file
+    byte-for-byte, so reading from it instead of importing `squid.api.openapi.OPERATIONS`
+    keeps this manifest valid regardless of whether an operation's contract metadata still
+    lives in that table or has moved onto its route.
+    """
+    document = json.loads(_OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
+    return frozenset(
+        operation["operationId"]
+        for path_item in document["paths"].values()
+        for method in _HTTP_METHODS
+        if (operation := path_item.get(method)) is not None
+    )
+
+
+_OPERATION_IDS = _committed_operation_ids()
 _CHECKS = frozenset(CHECKS)
 
 
