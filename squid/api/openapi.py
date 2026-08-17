@@ -44,7 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/v1/capabilities", "capabilities_get"),
     _operation(
         "get",
         "/v1/diagnostics/errors",
