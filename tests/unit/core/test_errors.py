@@ -2,6 +2,8 @@
 
 from uuid import UUID
 
+import pytest
+
 from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
@@ -39,6 +41,60 @@ def test_with_context_mutates_exception_without_changing_type() -> None:
     assert updated.context == {"build_id": 42, "operation": "confirm"}
     assert updated.public_context == {"build_id": 42, "source": "command"}
     assert updated.code is ErrorCode.BUILD_NOT_FOUND
+
+
+def test_with_context_can_restate_the_message() -> None:
+    """Enrichment that cannot restate the message is only half a helper.
+
+    A layer that resolves *what* a conflict was usually wants to say so, and the alternative was
+    assigning `message` by hand, which skips the `args` refresh and leaves `str(error)` stale.
+    """
+    error = BuildNotFoundError(42)
+
+    updated = error.with_context(
+        message="Build {build_id} was deleted while you were editing it.",
+        message_params={"build_id": 42},
+    )
+
+    assert "Build 42 was deleted" in updated.public_detail()
+    assert "Build 42 was deleted" in str(updated)
+    assert updated.args == (updated.backend_detail(),)
+
+
+def test_with_context_merges_message_params() -> None:
+    """So a later layer can add one placeholder without repeating the earlier ones."""
+    error = BuildNotFoundError(42).with_context(
+        message="Build {build_id} is held by {holder}.",
+        message_params={"build_id": 42, "holder": "nobody"},
+    )
+
+    updated = error.with_context(message_params={"holder": "someone else"})
+
+    assert "Build 42 is held by someone else." in updated.public_detail()
+
+
+def test_a_message_with_no_params_at_all_is_left_unformatted() -> None:
+    """Pinning a sharp edge that predates `with_context` accepting a message.
+
+    `_rendered_message` only calls `format` when `message_params` is non-empty, so a placeholder with
+    no params anywhere reaches the user as literal braces rather than raising. Pass every placeholder
+    you introduce; this asserts the failure mode so it is a known one.
+    """
+    error = BuildNotFoundError(42).with_context(message="Held by {holder}.")
+
+    assert error.public_detail().startswith("Held by {holder}.")
+
+
+def test_a_partially_filled_message_fails_loudly() -> None:
+    """Once any param is present, formatting runs, so a missing one raises at enrichment time.
+
+    Better here than from whichever transport formats the error first.
+    """
+    with pytest.raises(KeyError):
+        BuildNotFoundError(42).with_context(
+            message="Build {build_id} held by {holder}.",
+            message_params={"build_id": 42},
+        )
 
 
 def test_context_and_public_context_are_separate() -> None:

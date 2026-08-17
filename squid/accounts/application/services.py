@@ -24,6 +24,7 @@ from squid.accounts.domain import (
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
     AccountNotFoundError,
+    AliasAlreadyClaimedError,
     ClaimNotFoundError,
     ConsentRequiredError,
     InvalidMergeProofError,
@@ -297,7 +298,24 @@ class AccountService:
             raise AccountNotFoundError(account_id)
         if account.needs_consent_refresh:
             raise ConsentRequiredError(account_id=account_id)
-        return await self._repository.request_claim(name=name, account_id=account.id)
+        try:
+            return await self._repository.request_claim(name=name, account_id=account.id)
+        except AliasAlreadyClaimedError as conflict:
+            raise await self._name_the_holder(conflict) from None
+
+    async def _name_the_holder(self, conflict: AliasAlreadyClaimedError) -> AliasAlreadyClaimedError:
+        """Resolve a conflicting holder's public creator name, when there is one to resolve.
+
+        Enriched here rather than in the repository so the extra query happens only on the error
+        path, and only where a human is going to read the result. A profile with no aliases yet
+        leaves the message as it was rather than naming an empty string.
+        """
+        if conflict.holder_public_creator_id is None:
+            return conflict
+        profile = await self._repository.get_creator_profile(conflict.holder_public_creator_id)
+        if profile is None or not profile.aliases:
+            return conflict
+        return conflict.with_holder_name(profile.aliases[0])
 
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
         """List creator credit claims awaiting staff review.
@@ -325,12 +343,16 @@ class AccountService:
         claim = await self._repository.get_claim(claim_id)
         if claim is None or claim.status is not ClaimStatus.PENDING:
             raise ClaimNotFoundError(claim_id)
-        return await self._repository.resolve_claim(
-            claim_id=claim_id,
-            status=status,
-            resolved_by_account_id=staff_account_id,
-            reassign=reassign,
-        )
+        try:
+            return await self._repository.resolve_claim(
+                claim_id=claim_id,
+                status=status,
+                resolved_by_account_id=staff_account_id,
+                reassign=reassign,
+            )
+        except AliasAlreadyClaimedError as conflict:
+            # A reviewer needs to know who holds the name they are being stopped from granting.
+            raise await self._name_the_holder(conflict) from None
 
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
         """Generate a verification code after validating the Java account."""
