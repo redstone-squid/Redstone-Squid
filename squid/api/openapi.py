@@ -45,72 +45,6 @@ def _operation(
 
 OPERATIONS = (
     _operation(
-        "get",
-        "/v1/submissions/drafts",
-        "submission_drafts_list",
-        "command",
-        command="draft.list",
-        features=("submission-drafts",),
-        interaction="direct",
-    ),
-    _operation(
-        "post",
-        "/v1/submissions/drafts",
-        "submission_draft_create",
-        "command",
-        command="draft.create",
-        features=("submission-drafts",),
-        interaction="direct",
-    ),
-    _operation("get", "/v1/submissions/form/current", "submission_form_current"),
-    _operation("get", "/v1/submissions/form/schemas/{schema_id}/revisions/{revision}", "submission_form_revision_get"),
-    _operation("get", "/v1/submissions/form/options/{source}", "submission_form_options_get"),
-    _operation(
-        "get",
-        "/v1/submissions/drafts/{draft_id}",
-        "submission_draft_get",
-        "command",
-        command="draft.show",
-        features=("submission-drafts",),
-        interaction="direct",
-    ),
-    _operation(
-        "delete",
-        "/v1/submissions/drafts/{draft_id}",
-        "submission_draft_delete",
-        "command",
-        command="draft.delete",
-        features=("submission-drafts",),
-        interaction="direct",
-    ),
-    _operation(
-        "post",
-        "/v1/submissions/drafts/{draft_id}/changes",
-        "submission_draft_change",
-        "command",
-        command="draft.change",
-        features=("submission-drafts",),
-        interaction="direct",
-    ),
-    _operation(
-        "get",
-        "/v1/submissions/drafts/{draft_id}/submission",
-        "submission_finalization_get",
-        "command",
-        command="draft.status",
-        features=("submission-finalization",),
-        interaction="direct",
-    ),
-    _operation(
-        "post",
-        "/v1/submissions/drafts/{draft_id}/submission",
-        "submission_finalization_start",
-        "command",
-        command="draft.submit",
-        features=("submission-finalization",),
-        interaction="direct",
-    ),
-    _operation(
         "post",
         "/v1/submissions/drafts/{draft_id}/media/{kind}",
         "submission_media_upload",
@@ -190,53 +124,7 @@ Still `x-required-api-scopes` in the document: the field is part of the public
 contract and renaming it would break consumers for a vocabulary change they do
 not need to care about."""
 
-_DRAFT_RESPONSE_LINKS: dict[tuple[str, str], dict[str, dict[str, Any]]] = {
-    ("submission_draft_create", "201"): {
-        "GetCreatedDraft": {
-            "operationId": "submission_draft_get",
-            "parameters": {"draft_id": "$response.body#/id"},
-        },
-        "ChangeCreatedDraft": {
-            "operationId": "submission_draft_change",
-            "parameters": {"draft_id": "$response.body#/id"},
-        },
-        "FinalizeCreatedDraft": {
-            "operationId": "submission_finalization_start",
-            "parameters": {"draft_id": "$response.body#/id"},
-        },
-        "DeleteCreatedDraft": {
-            "operationId": "submission_draft_delete",
-            "parameters": {"draft_id": "$response.body#/id"},
-        },
-    },
-    ("submission_draft_change", "200"): {
-        "ChangeDraftAgain": {
-            "operationId": "submission_draft_change",
-            "parameters": {"draft_id": "$response.body#/draft/id"},
-        },
-        "FinalizeChangedDraft": {
-            "operationId": "submission_finalization_start",
-            "parameters": {"draft_id": "$response.body#/draft/id"},
-        },
-    },
-    ("submission_finalization_start", "202"): {
-        "GetFinalization": {
-            "operationId": "submission_finalization_get",
-            "parameters": {"draft_id": "$response.body#/draft_id"},
-        },
-        "DeleteFinalizedDraft": {
-            "operationId": "submission_draft_delete",
-            "parameters": {"draft_id": "$response.body#/draft_id"},
-        },
-    },
-    ("submission_draft_delete", "204"): {
-        "UseAfterDeletedDraft": {
-            "operationId": "submission_draft_get",
-            "parameters": {"draft_id": "$request.path.draft_id"},
-            "description": "Use-after-free check for a deleted draft identifier.",
-        },
-    },
-}
+_DRAFT_RESPONSE_LINKS: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
 
 
 def install_openapi_contract(app: FastAPI) -> None:
