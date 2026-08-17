@@ -14,7 +14,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import no_mentions, text_layout
+from squid.bot.utils.components import DISCORD_BLUE, CardField, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -26,6 +26,12 @@ from squid.permissions.domain.catalogue import (
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+CLAIM_QUEUE_PAGE = 10
+"""Claims listed at once.
+
+Bounded so the card never has to be truncated mid-entry; the footer reports the rest.
+"""
 
 
 class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
@@ -192,9 +198,42 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         """List creator credit claims awaiting review."""
         claims = await self.account_service.pending_alias_claims(with_claimants=True)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        body = "\n".join(f"**#{claim.id}** {claim.alias_name} ({_claimant(claim)})" for claim in claims)
+        if not claims:
+            await ctx.send(
+                view=text_layout(t(locale, _("No creator credit claims are awaiting review."))),
+                ephemeral=ctx.interaction is not None,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        shown = claims[:CLAIM_QUEUE_PAGE]
+        footer = None
+        if len(claims) > len(shown):
+            # Said explicitly rather than letting `card_container` truncate: a review queue that
+            # quietly stops listing work is worse than one that admits it is longer.
+            footer = t(
+                locale,
+                _("{remaining} more not shown."),
+                remaining=len(claims) - len(shown),
+            )
         await ctx.send(
-            view=text_layout(body or t(locale, _("No creator credit claims are awaiting review."))),
+            view=card_layout(
+                t(locale, _("Creator credit claims awaiting review")),
+                accent_colour=DISCORD_BLUE,
+                fields=[
+                    CardField(
+                        t(locale, _("Claim #{id} — {name}"), id=claim.id, name=claim.alias_name),
+                        t(
+                            locale,
+                            _("{claimant} · opened {age}"),
+                            claimant=present_claimant(claim, locale),
+                            age=discord.utils.format_dt(claim.created_at.to_stdlib(), style="R"),
+                        ),
+                    )
+                    for claim in shown
+                ],
+                footer=footer,
+            ),
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
@@ -215,7 +254,14 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=text_layout(t(locale, _("Credited **{name}** to the claimant."), name=claim.alias_name)),
+            view=text_layout(
+                t(
+                    locale,
+                    _("Credited **{name}** to {claimant}."),
+                    name=claim.alias_name,
+                    claimant=present_claimant(claim, locale),
+                )
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -223,12 +269,19 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @account_group.command(name="reject-claim")
     @requires(ACCOUNT_CLAIM_REJECT)
     async def reject_claim(self, ctx: Context[BotT], claim_id: int) -> None:
-        """Close a creator credit claim without crediting the claimant."""
+        """Reject a creator credit claim, leaving the name credited as it is."""
         staff_account_id = await account_id_for(self.account_service, ctx.author)
         claim = await self.account_service.reject_alias_claim(claim_id, staff_account_id=staff_account_id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
-            view=text_layout(t(locale, _("Rejected the claim for **{name}**."), name=claim.alias_name)),
+            view=text_layout(
+                t(
+                    locale,
+                    _("Closed {claimant}'s claim on **{name}** without crediting it."),
+                    name=claim.alias_name,
+                    claimant=present_claimant(claim, locale),
+                )
+            ),
             allowed_mentions=no_mentions(),
         )
 
@@ -249,20 +302,28 @@ def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) 
     return None
 
 
-def _claimant(claim: AliasClaim) -> str:
+def present_claimant(claim: AliasClaim, locale: str | None = None) -> str:
     """Name a claimant by the most recognisable identity loaded for them.
 
-    Plan 01 replaces this with a fuller presentation; the batched load is here so that work
-    does not have to reintroduce a query per claim to do it.
+    One function for all four surfaces that show a claimant — the queue, an approval, a rejection and
+    the claim-id autocomplete — so a reviewer reads the same thing everywhere.
+
+    A Discord mention is preferred because it is the only handle a reviewer can click, and because a
+    Discord identity never gets a stored `display_name`; Discord resolves the snowflake client-side.
+    The internal account ID is last and is labelled as a diagnostic, since it identifies a row rather
+    than a person.
     """
-    if claim.claimant is not None:
-        discord = claim.claimant.identity(IdentityProvider.DISCORD)
+    claimant = claim.claimant
+    if claimant is not None:
+        discord = claimant.identity(IdentityProvider.DISCORD)
         if discord is not None and discord.discord_id is not None:
             return f"<@{discord.discord_id}>"
-        java = claim.claimant.identity(IdentityProvider.JAVA)
+        java = claimant.identity(IdentityProvider.JAVA)
         if java is not None and java.display_name is not None:
             return java.display_name
-    return f"account {claim.account_id}"
+        if claimant.public_creator_id is not None:
+            return t(locale, _("creator `{creator_id}`"), creator_id=claimant.public_creator_id)
+    return t(locale, _("unidentified account (internal ID `{account_id}`)"), account_id=claim.account_id)
 
 
 def _link_message(refresh: IdentityRefresh, locale: str) -> str:
