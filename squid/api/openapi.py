@@ -44,19 +44,6 @@ def _operation(
 
 
 OPERATIONS = (
-    _operation("get", "/livez", "health_live", "internal", rationale="Process liveness probe."),
-    _operation("get", "/readyz", "health_ready", "internal", rationale="Deployment readiness probe."),
-    _operation(
-        "get", "/health", "health_ready_compatibility", "compatibility-alias", canonical_operation_id="health_ready"
-    ),
-    _operation("post", "/v1/verify", "verification_create"),
-    _operation(
-        "post",
-        "/verify",
-        "verification_create_compatibility",
-        "compatibility-alias",
-        canonical_operation_id="verification_create",
-    ),
     _operation("get", "/v1/capabilities", "capabilities_get"),
     _operation(
         "get",
@@ -336,8 +323,6 @@ _OPTIONAL_PRINCIPAL = frozenset({"builds_list", "vote_session_get"})
 _VERIFY = frozenset({"verification_create", "verification_create_compatibility"})
 
 _SCOPES = {
-    "verification_create": ("account.verify.relay",),
-    "verification_create_compatibility": ("account.verify.relay",),
     "diagnostics_errors_list": ("diagnostics.error.read",),
     "diagnostics_error_get": ("diagnostics.error.read",),
     "diagnostics_errors_clear": ("diagnostics.error.clear",),
