@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from squid.api.capabilities import API_FEATURES, API_VERSION, RENDERER_CAPABILITIES, RENDERER_CONTROLS
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.v1.schemas.capabilities import (
     ApiCapabilities,
     ApiFeatureCapabilities,
@@ -19,7 +20,12 @@ from squid.submissions.application import CURRENT_SUBMISSION_PROTOCOL
 router = APIRouter(tags=["capabilities"])
 
 
-@router.get("/capabilities", response_model=ApiCapabilities)
+@router.get(
+    "/capabilities",
+    response_model=ApiCapabilities,
+    operation_id="capabilities_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def capabilities() -> ApiCapabilities:
     """Publish independently versioned client compatibility and safety limits."""
     limits = MediaLimits()

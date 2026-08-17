@@ -81,6 +81,12 @@ class PostgresErrorReportRepository(ErrorReportRepository):
             result = await session.execute(delete(ErrorReportRow).where(ErrorReportRow.expires_at <= now))
         return cast(CursorResult[tuple[()]], result).rowcount
 
+    @override
+    async def clear_all(self) -> int:
+        async with self._session_factory.begin() as session:
+            result = await session.execute(delete(ErrorReportRow))
+        return cast(CursorResult[tuple[()]], result).rowcount
+
 
 def _matches(reference: str):
     """Match a quoted reference against either width it could have been read from.
