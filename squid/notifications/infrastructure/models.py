@@ -148,6 +148,7 @@ class NotificationDeliveryRecord(Base, kw_only=True):
 
     __tablename__ = "notification_deliveries"
     __table_args__ = (
+        Index("notification_deliveries_account_idx", "account_id"),
         UniqueConstraint("notification_id", name="notification_deliveries_notification_id_key"),
         CheckConstraint("attempts >= 0", name="notification_deliveries_attempts_nonnegative"),
         CheckConstraint("generation > 0", name="notification_deliveries_generation_positive"),

@@ -106,6 +106,7 @@ class StarboardSource(Base, kw_only=True):
     """A guild or channel whose messages feed a starboard."""
 
     __tablename__ = "starboard_sources"
+    __table_args__ = (Index("starboard_sources_guild_idx", "guild_id"),)
     starboard_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True
     )
@@ -121,6 +122,7 @@ class StarboardOriginMessage(Base, kw_only=True):
     """A source message that has been evaluated by at least one starboard."""
 
     __tablename__ = "starboard_origin_messages"
+    __table_args__ = (Index("starboard_origin_messages_guild_idx", "guild_id"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     guild_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), nullable=False
@@ -171,7 +173,10 @@ class StarboardEntry(Base, kw_only=True):
     """The materialized-post state for one source message on one starboard."""
 
     __tablename__ = "starboard_entries"
-    __table_args__ = (Index("starboard_entries_score_idx", "starboard_id", text("score DESC")),)
+    __table_args__ = (
+        Index("starboard_entries_origin_message_idx", "origin_message_id"),
+        Index("starboard_entries_score_idx", "starboard_id", text("score DESC")),
+    )
 
     starboard_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True

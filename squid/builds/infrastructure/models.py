@@ -45,6 +45,7 @@ class Build(Base, kw_only=True):
 
     __tablename__ = "builds"
     __table_args__ = (
+        Index("builds_submitter_idx", "submitter_account_id"),
         CheckConstraint(
             "record_category = ANY (ARRAY['Smallest', 'Fastest', 'First', 'Smallest Fastest', "
             "'Fastest Smallest', NULL])",
@@ -144,20 +145,39 @@ class Build(Base, kw_only=True):
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
+    # Every one of these four child tables declares `ON DELETE CASCADE`, so
+    # `passive_deletes=True` lets PostgreSQL do the cascade in the same statement that
+    # deletes the build. Without it the ORM insists on its own cascade: it loads each
+    # collection and emits one DELETE per child row, re-doing work the database was
+    # going to do anyway. `delete-orphan` still applies to items removed from a
+    # collection on a live parent, which is the case that genuinely needs the ORM.
     build_creators: Mapped[list[BuildCreator]] = relationship(
-        back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
+        back_populates="build",
+        default_factory=list,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     build_versions: Mapped[list[BuildVersion]] = relationship(
-        back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
+        back_populates="build",
+        default_factory=list,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
         default_factory=list,
         lazy="selectin",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     links: Mapped[list[BuildLink]] = relationship(
-        back_populates="build", default_factory=list, lazy="selectin", cascade="all, delete-orphan"
+        back_populates="build",
+        default_factory=list,
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     __mapper_args__ = {
@@ -266,6 +286,7 @@ class BuildCreator(Base):
     """Association table between builds and the creator names credited on them."""
 
     __tablename__ = "build_creators"
+    __table_args__ = (Index("build_creators_alias_idx", "alias_id"),)
     build_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="build_creators_build_id_fkey", ondelete="CASCADE"),
@@ -312,6 +333,7 @@ class BuildVersion(Base):
     """Association table between builds and their versions."""
 
     __tablename__ = "build_versions"
+    __table_args__ = (Index("build_versions_version_idx", "version_id"),)
     build_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="build_versions_build_id_fkey", ondelete="CASCADE"),

@@ -47,6 +47,7 @@ class VoteSession(Base, kw_only=True):
 
     __tablename__ = "vote_sessions"
     __table_args__ = (
+        Index("vote_sessions_author_idx", "author_account_id"),
         CheckConstraint(THRESHOLD_CONSTRAINT, name="vote_sessions_threshold_kind_check"),
         CheckConstraint(f"kind = ANY (ARRAY[{_KIND_VALUES}])", name="vote_sessions_kind_check"),
         CheckConstraint(f"status = ANY (ARRAY[{_STATUS_VALUES}])", name="vote_sessions_status_check"),
@@ -123,6 +124,7 @@ class VoteSessionOption(Base, kw_only=True):
 
 class BuildVoteSession(Base, kw_only=True):
     __tablename__ = "build_vote_sessions"
+    __table_args__ = (Index("build_vote_sessions_build_idx", "build_id"),)
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -169,6 +171,7 @@ class GenericVoteSession(Base, kw_only=True):
 
     __tablename__ = "generic_vote_sessions"
     __table_args__ = (
+        Index("generic_vote_sessions_guild_idx", "guild_id"),
         CheckConstraint(
             f"visibility IN ({_VISIBILITY_VALUES})",
             name="generic_vote_sessions_visibility_check",
@@ -198,6 +201,7 @@ class Vote(Base):
 
     __tablename__ = "votes"
     __table_args__ = (
+        Index("votes_account_idx", "account_id"),
         CheckConstraint(
             "weight > 0 AND weight != 'Infinity'::double precision AND weight != 'NaN'::double precision",
             name="votes_weight_check",
