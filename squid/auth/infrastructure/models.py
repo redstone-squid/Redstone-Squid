@@ -41,7 +41,8 @@ class ApiKey(Base):
     )
     """Optional account responsible for the credential."""
     created_by_account_id: Mapped[int | None] = mapped_column(
-        ForeignKey("accounts.id", name="api_keys_created_by_account_id_fkey"), default=None
+        ForeignKey("accounts.id", name="api_keys_created_by_account_id_fkey", ondelete="SET NULL"),
+        default=None,
     )
     """Account that created the credential, when known."""
     created_at: Mapped[Instant] = mapped_column(

@@ -60,7 +60,9 @@ class Account(Base):
     public_creator_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
-    created_at: Mapped[Instant | None] = mapped_column(InstantUTC(), server_default=func.now(), default=None)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 

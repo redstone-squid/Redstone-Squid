@@ -68,7 +68,7 @@ class Starboard(Base, kw_only=True):
     link_edits: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     link_deletes: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     display_emoji: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'⭐'"), default="⭐")
-    colour: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("4415105"), default=0x435E81)
+    colour: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4415105"), default=0x435E81)
     jump_to_message: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     attachments_list: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     replied_to: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
