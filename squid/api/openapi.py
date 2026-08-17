@@ -1,4 +1,9 @@
-"""Deterministic postprocessing for the public OpenAPI and CLI capability contract."""
+"""Deterministic postprocessing for the public OpenAPI and CLI capability contract.
+
+Route-declared metadata (`squid/api/contract.py`) is migrating in router-by-router; until a
+router migrates, its operations are still described by the `OPERATIONS` table below. Once the
+table is empty this module shrinks to the generic residue documented on `_postprocess`.
+"""
 
 from dataclasses import dataclass
 from typing import Any, Literal, cast
@@ -7,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
 from squid.api.capabilities import API_FEATURES
+from squid.api.contract import SECURITY_PLACEHOLDER_KEY
 
 type CliClassification = Literal["command", "browser-only", "transport-only", "internal", "compatibility-alias"]
 type SecurityRequirement = dict[str, list[str]]
@@ -66,6 +72,14 @@ OPERATIONS = (
         "diagnostics_error_get",
         "command",
         command="errors.show",
+        interaction="direct",
+    ),
+    _operation(
+        "delete",
+        "/v1/diagnostics/errors",
+        "diagnostics_errors_clear",
+        "command",
+        command="errors.clear",
         interaction="direct",
     ),
     _operation("get", "/v1/auth/csrf", "browser_csrf_get", "browser-only"),
@@ -326,6 +340,7 @@ _SCOPES = {
     "verification_create_compatibility": ("account.verify.relay",),
     "diagnostics_errors_list": ("diagnostics.error.read",),
     "diagnostics_error_get": ("diagnostics.error.read",),
+    "diagnostics_errors_clear": ("diagnostics.error.clear",),
 }
 """Permission nodes a credential must carry, published in the contract.
 
@@ -420,13 +435,45 @@ def _postprocess(document: dict[str, Any]) -> None:
     }
     for contract in OPERATIONS:
         operation = document["paths"][contract.path][contract.method]
+        if "x-squid-cli" in operation:
+            # Already fully populated by contract() on the route itself.
+            continue
         operation["operationId"] = contract.operation_id
         operation["security"] = _security(contract)
         operation["x-squid-cli"] = _cli_metadata(contract)
         _install_response_links(operation, contract)
-        _install_request_id_header(operation)
         if scopes := _SCOPES.get(contract.operation_id):
             operation["x-required-api-scopes"] = list(scopes)
+    _rename_security_placeholder(document)
+    _install_request_id_headers(document)
+
+
+def _rename_security_placeholder(document: dict[str, Any]) -> None:
+    """Rename each route's `x-squid-security` placeholder to `security`.
+
+    A dict comprehension rather than a pop-and-reinsert: the first occurrence of a key
+    decides its position in a rebuilt dict, so an operation that already carries a
+    FastAPI-generated `security` (from a `Security(...)` dependency) keeps that early
+    position with the placeholder's value, while one with no generated `security` gets it
+    appended wherever the placeholder itself landed.
+    """
+    for path_item in document["paths"].values():
+        for method, operation in path_item.items():
+            if method not in ("get", "post", "put", "patch", "delete") or SECURITY_PLACEHOLDER_KEY not in operation:
+                continue
+            path_item[method] = {
+                ("security" if key == SECURITY_PLACEHOLDER_KEY else key): value for key, value in operation.items()
+            }
+
+
+def _install_request_id_headers(document: dict[str, Any]) -> None:
+    """Declare the Request-Id correlation header the middleware emits on every response."""
+    for path_item in document["paths"].values():
+        for method, operation in path_item.items():
+            if method not in ("get", "post", "put", "patch", "delete"):
+                continue
+            for response in operation["responses"].values():
+                response.setdefault("headers", {})["Request-Id"] = {"$ref": "#/components/headers/RequestId"}
 
 
 def _cli_metadata(contract: OperationContract) -> dict[str, Any]:
@@ -472,12 +519,6 @@ def _install_response_links(operation: dict[str, Any], contract: OperationContra
             continue
         response = operation["responses"][status_code]
         response["links"] = links
-
-
-def _install_request_id_header(operation: dict[str, Any]) -> None:
-    """Declare the Request-Id correlation header the middleware emits on every response."""
-    for response in operation["responses"].values():
-        response.setdefault("headers", {})["Request-Id"] = {"$ref": "#/components/headers/RequestId"}
 
 
 def validate_operation_manifest() -> None:
