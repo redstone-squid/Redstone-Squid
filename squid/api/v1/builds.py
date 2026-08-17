@@ -6,6 +6,7 @@ from typing import Annotated, cast
 from fastapi import APIRouter, Depends, Header, Query, Response
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import BuildCommands, BuildQueries, CurrentCaller, Permissions, Search
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -53,6 +54,8 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
     status_code=201,
     responses=responses(400, 401, 403, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="builds_create",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def submit_build(
     submission: DoorSubmission,
@@ -98,6 +101,8 @@ async def submit_build(
     response_model=BuildDetail,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="builds_update",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def edit_build(
     build_id: int,
@@ -128,6 +133,8 @@ async def edit_build(
         503,
         describe={404: "No confirmed build with this identifier. A pending build answers 404 as well."},
     ),
+    operation_id="builds_get",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_build(build_id: int, response: Response, build_queries: BuildQueries) -> BuildDetail:
     """Return one confirmed public build.
@@ -141,7 +148,13 @@ async def get_build(build_id: int, response: Response, build_queries: BuildQueri
     return BuildDetail.from_domain(build)
 
 
-@router.get("", response_model=Page[BuildSummary], responses=responses(400, 401, 403, 422, 503))
+@router.get(
+    "",
+    response_model=Page[BuildSummary],
+    responses=responses(400, 401, 403, 422, 503),
+    operation_id="builds_list",
+    openapi_extra=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+)
 async def list_builds(
     build_queries: BuildQueries,
     search_service: Search,
