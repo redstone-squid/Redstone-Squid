@@ -47,7 +47,8 @@ class NoMatchingRecordCategoryError(NotFoundError):
     default_resource = "record_category"
 
     def __init__(self, *, kind: str, base_key: str) -> None:
+        # The base key is an internal identity string; logs keep it, API payloads do not.
         super().__init__(
             context={"kind": kind, "base_key": base_key},
-            public_context={"kind": kind, "base_key": base_key},
+            public_context={"kind": kind},
         )
