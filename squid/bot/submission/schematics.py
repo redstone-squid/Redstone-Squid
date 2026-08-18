@@ -189,7 +189,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         )
 
     @autocompletes(build_id="builds")
-    @BuildCommandGroup.build_hybrid_group.command(name="measure-timing")  # type: ignore
+    @schematic_group.command(name="measure-timing")  # type: ignore
     @requires(BUILD_SCHEMATIC_MEASURE_TIMING)
     @app_commands.describe(
         build_id=app_commands.locale_str(_("The submission ID whose schematic to simulate.")),
@@ -223,7 +223,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         await _say(ctx, _describe_timing(result, locale=locale), ephemeral=True)
 
     @autocompletes(build_id="builds")
-    @BuildCommandGroup.build_hybrid_group.command(name="detect-lattice")  # type: ignore
+    @schematic_group.command(name="detect-lattice")  # type: ignore
     @requires(BUILD_SCHEMATIC_DETECT_LATTICE)
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))
     async def detect_lattice(self, ctx: Context[BotT], build_id: int) -> None:
