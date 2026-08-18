@@ -13,6 +13,7 @@ from squid.bot.utils.components import edit_interaction_layout, no_mentions, tex
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
+    PollScope,
     VoteChoice,
     VoteOption,
     VoteVisibility,
@@ -126,6 +127,12 @@ def parse_option_lines(
     return tuple(options)
 
 
+SCOPE_CHOICES: tuple[tuple[PollScope, str, str], ...] = (
+    (PollScope.GUILD, "This server", "Card the poll in this channel only."),
+    (PollScope.NETWORK, "Every server", "Card the poll in every server's vote channel."),
+)
+
+
 @dataclass(frozen=True, slots=True)
 class PollDraft:
     """The wizard's editable state between the modal and publication."""
@@ -134,6 +141,7 @@ class PollDraft:
     options_text: str
     visibility: VoteVisibility = VoteVisibility.ANONYMOUS_LIVE
     duration_seconds: int = 24 * 3600
+    scope: PollScope = PollScope.GUILD
 
     @property
     def option_lines(self) -> tuple[str, ...]:
@@ -143,9 +151,17 @@ class PollDraft:
 class PollModal(ErrorHandledModal):
     """Collect the free-text half of a poll: its question and its option lines."""
 
-    def __init__(self, publisher: PollPublisher, author_account_id: int, draft: PollDraft | None = None):
+    def __init__(
+        self,
+        publisher: PollPublisher,
+        author_account_id: int,
+        draft: PollDraft | None = None,
+        *,
+        allow_network: bool = False,
+    ):
         super().__init__(title="Create a poll")
         self.publisher = publisher
+        self.allow_network = allow_network
         self.author_account_id = author_account_id
         self.draft = draft
         self.question = discord.ui.TextInput(default=draft.question if draft else "", max_length=300)
@@ -175,7 +191,14 @@ class PollModal(ErrorHandledModal):
         except InvalidVoteConfigurationError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
-        confirmation = PollConfirmation(self.publisher, interaction.user.id, self.author_account_id, draft, options)
+        confirmation = PollConfirmation(
+            self.publisher,
+            interaction.user.id,
+            self.author_account_id,
+            draft,
+            options,
+            allow_network=self.allow_network,
+        )
         await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
         confirmation.bind_message(await interaction.original_response())
 
@@ -222,6 +245,29 @@ class VisibilitySelect(discord.ui.Select["PollConfirmation"]):
         await self.confirmation.set_visibility(interaction, VoteVisibility(self.values[0]))
 
 
+class ScopeSelect(discord.ui.Select["PollConfirmation"]):
+    """Choose whether a poll stays here or reaches every server."""
+
+    def __init__(self, confirmation: PollConfirmation) -> None:
+        self.confirmation = confirmation
+        super().__init__(
+            placeholder="Where the poll appears",
+            options=[
+                discord.SelectOption(label=label, value=value.value, description=description)
+                for value, label, description in SCOPE_CHOICES
+            ],
+        )
+        self.mark_selected(confirmation.draft.scope)
+
+    def mark_selected(self, scope: PollScope) -> None:
+        for option in self.options:
+            option.default = option.value == scope.value
+
+    @override
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self.confirmation.set_scope(interaction, PollScope(self.values[0]))
+
+
 class DurationSelect(discord.ui.Select["PollConfirmation"]):
     """Choose how long a poll stays open, with an escape hatch for odd durations."""
 
@@ -261,6 +307,8 @@ class PollConfirmation(ExpiringLayoutView):
         author_account_id: int,
         draft: PollDraft,
         options: tuple[VoteOption, ...],
+        *,
+        allow_network: bool = False,
     ):
         super().__init__(timeout=900)
         self.publisher = publisher
@@ -269,8 +317,10 @@ class PollConfirmation(ExpiringLayoutView):
         self.draft = draft
         self.options = options
         self.published = False
+        self.allow_network = allow_network
         self.visibility_select = VisibilitySelect(self)
         self.duration_select = DurationSelect(self)
+        self.scope_select = ScopeSelect(self) if allow_network else None
         self._render()
 
     def _render(self) -> None:
@@ -284,12 +334,26 @@ class PollConfirmation(ExpiringLayoutView):
                 "",
                 f"**Visibility:** {self._visibility_label()}",
                 f"**Closes after:** {format_duration(self.draft.duration_seconds)}",
+                *([f"**Reaches:** {self._scope_label()}"] if self.allow_network else []),
             ]
         )
         self.add_item(discord.ui.TextDisplay(preview))
         self.add_item(discord.ui.ActionRow(self.visibility_select))
         self.add_item(discord.ui.ActionRow(self.duration_select))
+        if self.scope_select is not None:
+            self.add_item(discord.ui.ActionRow(self.scope_select))
         self.add_item(controls)
+
+    def _scope_label(self) -> str:
+        return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
+
+    async def set_scope(self, interaction: discord.Interaction, scope: PollScope) -> None:
+        """Apply a publication reach chosen from the select."""
+        self.draft = replace(self.draft, scope=scope)
+        if self.scope_select is not None:
+            self.scope_select.mark_selected(scope)
+        self._render()
+        await edit_interaction_layout(interaction, self)
 
     def _visibility_label(self) -> str:
         return next(label for value, label, _ in VISIBILITY_CHOICES if value is self.draft.visibility)
@@ -324,6 +388,13 @@ class PollConfirmation(ExpiringLayoutView):
         if interaction.guild is None or interaction.channel is None:
             await interaction.response.send_message("Polls can only be published in a server.", ephemeral=True)
             return
+        if self.draft.scope is PollScope.NETWORK and not (
+            isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(interaction.user)
+        ):
+            # Re-checked here rather than trusted from when the wizard opened, since
+            # the grant can be revoked while a draft sits open.
+            await interaction.response.send_message("You may no longer publish a poll to every server.", ephemeral=True)
+            return
         self.published = True
         await interaction.response.defer(ephemeral=True)
         try:
@@ -334,6 +405,7 @@ class PollConfirmation(ExpiringLayoutView):
                 visibility=self.draft.visibility,
                 duration_seconds=self.draft.duration_seconds,
                 options=self.options,
+                scope=self.draft.scope,
             )
         except InvalidVoteConfigurationError as error:
             self.published = False

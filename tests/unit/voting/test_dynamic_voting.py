@@ -1,5 +1,7 @@
 from dataclasses import replace
 from math import inf, nan
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -23,7 +25,7 @@ from squid.voting.domain import (
     validate_thresholds,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from tests.helpers.voting import build_snapshot, poll_snapshot
+from tests.helpers.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -249,3 +251,40 @@ def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
     assert poll.can_close(VoteActor(8, 80, guild_id=999, capabilities=close_any)) is VoteRejection.WRONG_GUILD
     assert poll.can_close(VoteActor(8, 80, guild_id=10, capabilities=close_any)) is None
     assert poll.can_close(VoteActor(8, 80, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
+
+
+async def test_publishing_a_network_poll_unscopes_its_options() -> None:
+    """Guild-scoped aliases would leave every other server's card unvotable."""
+    from squid.bot.voting.publisher import DiscordPollPublisher
+
+    created: dict[str, object] = {}
+
+    async def create_generic_poll(**kwargs: object) -> int:
+        created.update(kwargs)
+        return 7
+
+    channel = SimpleNamespace(id=200, guild=SimpleNamespace(id=10), send=None)
+    bot = SimpleNamespace(services=SimpleNamespace(votes=SimpleNamespace(create_generic_poll=create_generic_poll)))
+    publisher = DiscordPollPublisher(cast(Any, bot))
+    publisher.attach = lambda *args, **kwargs: _resolved(None)  # type: ignore[method-assign]
+
+    await publisher.create_and_publish(
+        author_account_id=1,
+        channel=cast(Any, channel),
+        question="Which?",
+        visibility=VoteVisibility.ANONYMOUS_LIVE,
+        duration_seconds=3600,
+        options=GENERIC_OPTIONS,
+        scope=PollScope.NETWORK,
+    )
+
+    assert created["scope"] is PollScope.NETWORK
+    assert created["guild_id"] == 10
+    assert all(option.guild_id is None for option in cast(Any, created["options"]))
+
+
+def _resolved(value: object):
+    async def call() -> object:
+        return value
+
+    return call()
