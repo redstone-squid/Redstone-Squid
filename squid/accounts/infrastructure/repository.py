@@ -213,15 +213,25 @@ class AccountRepository:
             )
             return None if model is None else await self._load_account(session, model)
 
-    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
-        """Resolve one external identity, atomically creating its account when absent."""
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
+        """Resolve one external identity, atomically creating its account when absent.
+
+        `consent` is written only on the row this call creates. An account that already exists is
+        returned untouched, because a receipt is evidence that somebody was asked, and this method
+        cannot tell whether the caller asked or merely arrived holding a subject.
+        """
         identity = AccountIdentity.for_provider(provider, subject)
         async with self._session_factory.begin() as session:
             existing = await self._find_account(session, identity.provider, identity.subject)
             if existing is not None:
                 return await self._load_account(session, existing)
 
-            candidate = AccountModel()
+            candidate = AccountModel(
+                consent_version=None if consent is None else consent.version,
+                consented_at=None if consent is None else consent.granted_at,
+            )
             session.add(candidate)
             await session.flush()
             # Rides the same transaction as the candidate account: if the identity insert loses
