@@ -24,7 +24,7 @@ three different ad-hoc truncation schemes standing in for a paginator.
 | 5.2 | `/admin` becomes `/records` and drops the `records-` prefix every member carried; `/help` learns to list app-only commands | **Delivered** |
 | 5.3 | `/notifications`: one panel and one `follow`, seven commands down to two (C3, C5) | **Delivered** |
 | 5.4 | `/account` claim review moves onto the `claims` list as buttons | Not started |
-| 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into one command | Not started |
+| 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into `perm can` | **Delivered** |
 | 5.6 | A shared list paginator, applied to `build queue`, `version list`, `account claims` and the records diagnostics (C6) | Not started |
 | 5.7 | One ephemerality rule, applied bot-wide (C2) | Not started |
 
@@ -165,3 +165,24 @@ resolving a creator profile and a record competition from the notifications surf
 crosses into the accounts and records contexts and wants a subject-describing port rather
 than a lookup smuggled into a view. What this step removes is the *retyping*, which was the
 part that actually cost anything.
+
+## 5.5 — `perm can`
+
+`whoami`, `test` and `explain` were three commands asking one question — what may this person
+do — separated by whose permissions and how much detail. `test` and `explain` ran the *same*
+check on the same subject and differed only in how they printed the result, which is not a
+distinction a picker entry should cost.
+
+`perm can [user] [node]` covers all three: no arguments lists what you hold, a user lists what
+they hold, and a node decides that one permission with the full trace `explain` rendered. The
+short verdict `test` printed is gone rather than kept as a flag — nobody wants less
+explanation of a permission decision, and the trace already leads with the verdict.
+
+Authorization follows the arguments rather than the command. Reading your own permissions
+needs `permission.node.view`; reading somebody else's needs `permission.subject.inspect`,
+checked inline because one `@requires` cannot say "only when the user argument names someone
+else". The group gate admits either, so nobody granted only one of them loses the command.
+
+Prose elsewhere referring to `/perm explain` — the resolution domain, the administration
+service, the decision docstrings — now names `perm can`, since that trace is the whole reason
+those modules keep a trace at all.

@@ -153,11 +153,12 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   member is the group name it actually wanted.~~ *(It became `/records`, and every member
   dropped the prefix. It keeps C1's `manage_guild` visibility.)*
 
-### `/perm`, `/role` *(phase 5)*
-- 22 staff commands, the two biggest groups after `build`. `whoami`, `test`, and `explain` are
+### `/perm`, `/role` *(phase 5.5 took the `perm` half, 2026-08-19)*
+- ~~22 staff commands, the two biggest groups after `build`. `whoami`, `test`, and `explain` are
   three ways to ask "what can I do" — one command with an optional node argument covers all
-  three. The `role` group name collides with Discord's own roles in conversation; it manages
-  permission-role objects. Low urgency once C1 hides them from non-staff.
+  three.~~ *(`perm can [user] [node]`, exactly as described.)* The `role` group name collides
+  with Discord's own roles in conversation; it manages permission-role objects. Low urgency
+  once C1 hides them from non-staff.
 
 ### `/starboard` *(phase 5)*
 - 14 commands including `emoji`/`weight` subgroups of pure CRUD. A `starboard show`-style

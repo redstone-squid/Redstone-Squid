@@ -2,7 +2,7 @@
 
 The resolver is pure: it takes a subject, a flat sequence of rules already loaded
 for that subject, and one node, and returns a decision plus the trace that
-produced it. `/perm explain` renders that trace, so there is exactly one
+produced it. `/perm can` renders that trace, so there is exactly one
 implementation of the precedence rules.
 
 Precedence, highest first:
@@ -278,7 +278,7 @@ def _ordering(rule: Rule) -> tuple[object, ...]:
     to whichever rule the database happened to return first. Two rules that tie on
     rank always agree on the verdict — deny-first is part of the rank, so an allow
     and a deny can never tie — but the *trace* would still shuffle between runs,
-    and `/perm explain` is a user-facing explanation that ought to read the same
+    and `/perm can` is a user-facing explanation that ought to read the same
     way twice.
     """
     negated_rank = tuple(-component for component in rule.rank()[1:])
@@ -293,7 +293,7 @@ def _lost_on(winner: Rank, loser: Rank) -> str:
     # Ranks are equal, so the stable tiebreaker in `_ordering` picked between
     # them. Deny-first is part of the rank, so equally-ranked rules always agree
     # on the verdict: this rule lost nothing that would have changed the answer,
-    # and `/perm explain` should say so rather than leave a blank.
+    # and `/perm can` should say so rather than leave a blank.
     return TIE
 
 
