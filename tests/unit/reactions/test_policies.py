@@ -2,6 +2,7 @@ from math import inf, nan
 
 import pytest
 
+from squid.core.errors import InvalidStateError, ValidationError
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 
@@ -37,7 +38,7 @@ async def test_role_policy_applies_eligibility_before_loading_configuration() ->
 
 @pytest.mark.parametrize("multiplier", [0, -1, inf, nan])
 def test_role_multiplier_must_be_positive_and_finite(multiplier: float) -> None:
-    with pytest.raises(ValueError, match="finite"):
+    with pytest.raises(ValidationError, match="finite"):
         RoleMultiplier(WeightScope(10, "starboard", 5), 20, multiplier)
 
 
@@ -46,5 +47,5 @@ def test_staff_multiplier_must_be_positive_and_finite(multiplier: float) -> None
     async def multipliers(scope: WeightScope) -> tuple[RoleMultiplier, ...]:
         return ()
 
-    with pytest.raises(ValueError, match="finite"):
+    with pytest.raises(InvalidStateError, match="finite"):
         RoleWeightPolicy(multipliers, staff_multiplier=multiplier)
