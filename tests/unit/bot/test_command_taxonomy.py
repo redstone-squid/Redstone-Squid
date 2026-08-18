@@ -126,17 +126,17 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "view",
     ),
     "info": ("docs", "form", "invite", "source"),
+    # `whoami`, `test` and `explain` were three spellings of "what may this person do";
+    # `can` is the one (docs/plans/command-redesign/05-condensation.md).
     "perm": (
         "audit",
+        "can",
         "deny",
-        "explain",
         "forbid",
         "grant",
         "list",
         "nodes",
         "revoke",
-        "test",
-        "whoami",
     ),
     # `admin` held nothing but record tooling, so every member repeated the group name it
     # actually wanted (docs/plans/command-redesign/05-condensation.md).
