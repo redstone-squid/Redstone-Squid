@@ -8,7 +8,7 @@ from whenever import Instant
 
 from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
 from squid.auth.domain import ApiKey
-from squid.core.errors import AuthorizationError
+from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import GrantRecord, SubjectRecords
 from squid.permissions.domain import InvalidPatternError, Pattern
@@ -160,7 +160,7 @@ async def test_unexpired_key_remains_active() -> None:
 
 
 def test_empty_pepper_is_rejected() -> None:
-    with pytest.raises(ValueError, match="must not be empty"):
+    with pytest.raises(InvalidStateError, match="must not be empty"):
         ApiKeyService(FakeApiKeyRepository(), "")
 
 

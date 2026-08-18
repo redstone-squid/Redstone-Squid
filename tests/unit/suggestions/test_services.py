@@ -7,6 +7,7 @@ limits and it does not surface failures the user cannot act on.
 import anyio
 import pytest
 
+from squid.core.errors import InvalidStateError
 from squid.suggestions.application import (
     Candidate,
     SuggestionRegistry,
@@ -200,21 +201,21 @@ def test_content_revision_is_stable_and_content_addressed() -> None:
 
 
 def test_a_source_requiring_a_node_must_name_one() -> None:
-    with pytest.raises(ValueError, match="required_node"):
+    with pytest.raises(InvalidStateError, match="required_node"):
         SuggestionSource(id="x", provider=StaticProvider.of([]), visibility=Visibility.REQUIRES_NODE)
 
 
 def test_a_public_source_may_not_name_a_node() -> None:
-    with pytest.raises(ValueError, match="required_node"):
+    with pytest.raises(InvalidStateError, match="required_node"):
         SuggestionSource(id="x", provider=StaticProvider.of([]), required_node="some.node")
 
 
 def test_source_ids_must_be_addressable_as_form_option_sources() -> None:
-    with pytest.raises(ValueError, match="invalid suggestion source id"):
+    with pytest.raises(InvalidStateError, match="invalid suggestion source id"):
         SuggestionSource(id="Not-Valid", provider=StaticProvider.of([]))
 
 
 def test_duplicate_source_ids_fail_at_startup() -> None:
     source = SuggestionSource(id="dupe", provider=StaticProvider.of([]))
-    with pytest.raises(ValueError, match="duplicate suggestion source"):
+    with pytest.raises(InvalidStateError, match="duplicate suggestion source"):
         SuggestionRegistry.of((source, source))
