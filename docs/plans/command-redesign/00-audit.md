@@ -80,17 +80,21 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
 - `error recent` lists references but offers no way to open one — each line should be
   clickable (select/buttons) instead of making the user retype the reference. *(Select.)*
 
-### `/settings` *(phase 4)*
+### `/settings` *(phase 4, done 2026-08-19)*
 - `get`/`set`/`clear` operate on exactly one key per invocation, and `set` only understands
   channel settings — anything else hits an error branch with an `AssertionError` behind it.
   `locale` is a separate command; `voting` is a five-command subgroup. First-time guild setup
   is a dozen round trips.
 - Target shape: `/settings` opens a panel (Components V2) showing every setting with channel
   selects, a locale select, and a voting section; `settings set` survives as the scriptable
-  path. The voting emoji modal already points the right direction.
+  path. The voting emoji modal already points the right direction. *(Built as described, with
+  voting on a second page — ten top-level components do not fit one. `set` narrowed to
+  `ScalarChannelSetting`, which retires the `AssertionError` branch by construction, and
+  absorbed `clear`.)*
 - The voting subcommands are the C3 offenders (raw strings, no i18n, no layouts) and
   `voting show` renders raw `<@&id>` mentions in an ephemeral message, which display as plain
-  text when the role cache misses.
+  text when the role cache misses. *(Both fixed; `voting show` and `voting emojis` are now the
+  panel's voting page, which also settles C7 for `voting emojis`.)*
 
 ### `/build` *(mostly done in phase 1; leftovers)*
 - `build queue`: prints raw `submitter_discord_id`, no pagination (C5, C6), and titles the

@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 02:50+0000\n"
+"POT-Creation-Date: 2026-08-19 03:29+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,6 +18,14 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+#: squid/bot/settings.py:256
+msgid ""
+"\n"
+"\n"
+"Build reviews are weighted by the network's own server, so this server's "
+"multipliers do not apply."
+msgstr ""
 
 #: squid/bot/submission/search_view.py:292
 #, python-brace-format
@@ -370,6 +378,10 @@ msgstr ""
 msgid "A title token cannot be blank."
 msgstr ""
 
+#: squid/bot/settings.py:194 squid/bot/settings_view.py:457
+msgid "A vote multiplier must be a positive number, such as 1.5."
+msgstr ""
+
 #: squid/submissions/application/forms.py:263
 msgid "AI-generated or AI-assisted"
 msgstr ""
@@ -587,7 +599,8 @@ msgstr ""
 msgid "Authenticate both accounts again, then retry the merge."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:217 squid/bot/submission/search_view.py:214
+#: squid/bot/diagnostics_view.py:217 squid/bot/settings_view.py:542
+#: squid/bot/submission/search_view.py:214
 msgid "Back"
 msgstr ""
 
@@ -610,6 +623,10 @@ msgstr ""
 
 #: squid/search/domain/query.py:76
 msgid "Boolean expressions require at least two operands"
+msgstr ""
+
+#: squid/bot/settings_view.py:296 squid/bot/settings_view.py:382
+msgid "Bot language"
 msgstr ""
 
 #: squid/accounts/errors.py:128
@@ -684,6 +701,16 @@ msgstr ""
 msgid "Build recalculated."
 msgstr ""
 
+#: squid/bot/settings_view.py:53
+msgid "Build reviews"
+msgstr ""
+
+#: squid/bot/settings_view.py:338
+msgid ""
+"Build reviews are weighted by the network's own server, so these "
+"multipliers do not apply here."
+msgstr ""
+
 #: squid/builds/errors.py:69
 msgid "Build revision mismatch"
 msgstr ""
@@ -706,6 +733,10 @@ msgstr ""
 
 #: squid/submissions/application/forms.py:145
 msgid "Build width"
+msgstr ""
+
+#: squid/bot/settings_view.py:48
+msgid "Builds awaiting review"
 msgstr ""
 
 #: squid/permissions/application/administration.py:74
@@ -797,6 +828,10 @@ msgstr ""
 
 #: squid/permissions/domain/catalogue.py:409
 msgid "Change a starboard's per-role vote weights."
+msgstr ""
+
+#: squid/bot/settings_view.py:184
+msgid "Change as many as you like; an emptied picker clears that setting."
 msgstr ""
 
 #: squid/permissions/domain/catalogue.py:363
@@ -891,7 +926,8 @@ msgstr ""
 msgid "Clear another user's public profile."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:229 squid/bot/submission/search_view.py:225
+#: squid/bot/diagnostics_view.py:229 squid/bot/settings_view.py:587
+#: squid/bot/submission/search_view.py:225
 msgid "Close"
 msgstr ""
 
@@ -963,8 +999,16 @@ msgstr ""
 msgid "Confirm"
 msgstr ""
 
+#: squid/bot/settings_view.py:569
+msgid "Confirm reset"
+msgstr ""
+
 #: squid/bot/submission/ui/views.py:472
 msgid "Confirm this action?"
+msgstr ""
+
+#: squid/bot/settings_view.py:47
+msgid "Confirmed builds"
 msgstr ""
 
 #: squid/bot/consent.py:75 squid/bot/consent.py:181
@@ -979,7 +1023,7 @@ msgstr ""
 msgid "Conversion report:"
 msgstr ""
 
-#: squid/bot/settings.py:144
+#: squid/bot/settings.py:110
 msgid "Could not find that channel."
 msgstr ""
 
@@ -1063,10 +1107,6 @@ msgstr ""
 msgid "Crop the schematic to the build itself and try again."
 msgstr ""
 
-#: squid/bot/settings.py:76
-msgid "Current Settings"
-msgstr ""
-
 #: squid/minecraft_auth/errors.py:45
 msgid "Current privacy consent is required."
 msgstr ""
@@ -1094,6 +1134,10 @@ msgstr ""
 #: squid/bot/diagnostics.py:61
 #, python-brace-format
 msgid "Deleted {count} stored error reports."
+msgstr ""
+
+#: squid/bot/settings_view.py:54
+msgid "Deletion votes"
 msgstr ""
 
 #: squid/submissions/application/forms.py:124
@@ -1182,6 +1226,10 @@ msgstr ""
 msgid "Draft not found"
 msgstr ""
 
+#: squid/bot/settings_view.py:492
+msgid "Each line must read `choice | emoji`."
+msgstr ""
+
 #: squid/bot/verify.py:745
 #, python-brace-format
 msgid "Each link needs a label and a URL separated by `|`, got {line!r}."
@@ -1201,6 +1249,10 @@ msgstr ""
 
 #: squid/permissions/domain/catalogue.py:158
 msgid "Edit builds you did not submit."
+msgstr ""
+
+#: squid/bot/settings_view.py:553
+msgid "Edit emojis"
 msgstr ""
 
 #: squid/bot/verify.py:366
@@ -1235,6 +1287,10 @@ msgstr ""
 msgid "Embedding max_attempts must be positive."
 msgstr ""
 
+#: squid/bot/settings_view.py:317
+msgid "Emojis"
+msgstr ""
+
 #: squid/bot/submission/ui/views.py:179
 msgid "Enter at least a width and height, such as `2x2`."
 msgstr ""
@@ -1247,10 +1303,10 @@ msgstr ""
 msgid "Entrance"
 msgstr ""
 
-#: squid/bot/settings.py:134 squid/bot/settings.py:144
-#: squid/bot/settings.py:162 squid/bot/settings.py:199
-#: squid/bot/submission/search.py:215 squid/bot/submission/search.py:230
-#: squid/bot/submission/search.py:295
+#: squid/bot/settings.py:110 squid/bot/settings.py:141
+#: squid/bot/settings.py:184 squid/bot/settings.py:193
+#: squid/bot/settings.py:216 squid/bot/submission/search.py:215
+#: squid/bot/submission/search.py:230 squid/bot/submission/search.py:295
 msgid "Error"
 msgstr ""
 
@@ -1273,6 +1329,10 @@ msgstr ""
 
 #: squid/bot/diagnostics.py:60
 msgid "Errors cleared"
+msgstr ""
+
+#: squid/bot/settings.py:242
+msgid "Every kind of voting is back to its defaults."
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:256
@@ -1335,6 +1395,10 @@ msgstr ""
 msgid "Fastest records are not supported for {kind}."
 msgstr ""
 
+#: squid/bot/settings_view.py:45
+msgid "Fastest-record builds"
+msgstr ""
+
 #: squid/builds/errors.py:56
 msgid "Fetch the build again and retry with its ETag."
 msgstr ""
@@ -1347,6 +1411,10 @@ msgstr ""
 msgid "Fields in this section"
 msgstr ""
 
+#: squid/bot/settings_view.py:46
+msgid "First-of-a-kind builds"
+msgstr ""
+
 #: squid/bot/submission/ui/views.py:638
 #, python-brace-format
 msgid ""
@@ -1356,6 +1424,14 @@ msgstr ""
 
 #: squid/records/domain/models.py:108
 msgid "Fixed volume must be positive."
+msgstr ""
+
+#: squid/bot/settings.py:129 squid/bot/settings_view.py:373
+msgid "Follow Discord"
+msgstr ""
+
+#: squid/bot/settings_view.py:294
+msgid "Following this server's Discord language"
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:146
@@ -1450,13 +1526,6 @@ msgstr ""
 
 #: squid/bot/starboard/cog.py:168
 msgid "I need View Channel, Send Messages, and Read Message History there."
-msgstr ""
-
-#: squid/bot/settings.py:100
-#, python-brace-format
-msgid ""
-"ID: {id} \n"
-" Name: {name}"
 msgstr ""
 
 #: squid/idempotency/infrastructure/crypto.py:58
@@ -1887,6 +1956,10 @@ msgstr ""
 msgid "Movement orientation"
 msgstr ""
 
+#: squid/bot/settings_view.py:445
+msgid "Multiplier — leave empty to remove this role's weight"
+msgstr ""
+
 #: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:608
 msgid "Next"
 msgstr ""
@@ -2039,6 +2112,10 @@ msgstr ""
 
 #: squid/media/errors.py:177
 msgid "Object storage did not confirm a normalized media artifact."
+msgstr ""
+
+#: squid/bot/settings_view.py:479
+msgid "One `choice | emoji` per line"
 msgstr ""
 
 #: squid/bot/errors.py:227
@@ -2278,6 +2355,10 @@ msgstr ""
 
 #: squid/bot/voting/vote.py:294
 msgid "Poll weights refreshed."
+msgstr ""
+
+#: squid/bot/settings_view.py:55
+msgid "Polls"
 msgstr ""
 
 #: squid/permissions/domain/catalogue.py:421
@@ -2556,6 +2637,10 @@ msgstr ""
 msgid "Required before review: {fields}."
 msgstr ""
 
+#: squid/bot/settings_view.py:569
+msgid "Reset"
+msgstr ""
+
 #: squid/core/errors.py:197
 msgid "Resource not found"
 msgstr ""
@@ -2647,6 +2732,10 @@ msgstr ""
 #: squid/reactions/domain/models.py:40
 #: squid/starboard/application/services.py:142
 msgid "Role multiplier must be finite and greater than zero."
+msgstr ""
+
+#: squid/bot/settings_view.py:318
+msgid "Role multipliers"
 msgstr ""
 
 #: squid/bot/permissions.py:496
@@ -2763,15 +2852,20 @@ msgstr ""
 msgid "Server profile {label} must contain 1 to {maximum} characters."
 msgstr ""
 
+#: squid/bot/settings_view.py:183
+msgid "Server settings"
+msgstr ""
+
 #: squid/api/errors.py:214 squid/core/errors.py:284
 msgid "Service unavailable"
 msgstr ""
 
-#: squid/bot/settings.py:180
+#: squid/bot/settings.py:100
 msgid "Setting updated"
 msgstr ""
 
-#: squid/bot/settings.py:154 squid/bot/settings.py:209
+#: squid/bot/settings.py:119 squid/bot/settings.py:152
+#: squid/bot/settings.py:164
 msgid "Settings updated"
 msgstr ""
 
@@ -2793,6 +2887,10 @@ msgstr ""
 
 #: squid/submissions/application/forms.py:316
 msgid "Skydoor"
+msgstr ""
+
+#: squid/bot/settings_view.py:44
+msgid "Smallest-record builds"
 msgstr ""
 
 #: squid/bot/errors.py:238
@@ -3050,7 +3148,7 @@ msgid ""
 "them."
 msgstr ""
 
-#: squid/bot/settings.py:199
+#: squid/bot/settings.py:141
 msgid "That language is not supported."
 msgstr ""
 
@@ -3068,6 +3166,10 @@ msgstr ""
 
 #: squid/bot/voting/vote.py:39
 msgid "That option is not available on this vote."
+msgstr ""
+
+#: squid/bot/settings.py:184 squid/bot/settings.py:216
+msgid "That role is not from this server."
 msgstr ""
 
 #: squid/bot/voting/vote.py:40
@@ -3206,8 +3308,8 @@ msgstr ""
 msgid "The channel that receives starred messages."
 msgstr ""
 
-#: squid/bot/settings.py:115
-msgid "The channel to send this type of message to"
+#: squid/bot/settings.py:80
+msgid "The channel to use. Leave it out to clear this setting."
 msgstr ""
 
 #: squid/bot/verify.py:70
@@ -3228,6 +3330,11 @@ msgstr ""
 
 #: squid/bot/verify.py:234
 msgid "The confirmation expired, so nothing was unlinked."
+msgstr ""
+
+#: squid/bot/settings_view.py:504
+#, python-brace-format
+msgid "The custom emoji {emoji} is inaccessible."
 msgstr ""
 
 #: squid/bot/submission/submit.py:64
@@ -3259,7 +3366,7 @@ msgstr ""
 msgid "The input coordinate you gave is not a lever or button in this schematic."
 msgstr ""
 
-#: squid/bot/settings.py:187
+#: squid/bot/settings.py:126
 msgid "The language the bot should respond in"
 msgstr ""
 
@@ -3405,6 +3512,10 @@ msgstr ""
 msgid "These search controls belong to someone else."
 msgstr ""
 
+#: squid/bot/settings_view.py:118
+msgid "These settings controls belong to someone else."
+msgstr ""
+
 #: squid/bot/submission/ui/views.py:394
 msgid "These submission controls belong to someone else."
 msgstr ""
@@ -3490,13 +3601,13 @@ msgstr ""
 msgid "This schematic is too large to preview."
 msgstr ""
 
-#: squid/bot/settings.py:210
-#, python-brace-format
-msgid "This server's language has been set to {language}."
+#: squid/bot/settings.py:153
+msgid "This server now follows its Discord language."
 msgstr ""
 
-#: squid/bot/settings.py:162
-msgid "This setting is not supported."
+#: squid/bot/settings.py:165
+#, python-brace-format
+msgid "This server's language has been set to {language}."
 msgstr ""
 
 #: squid/permissions/application/epoch.py:59
@@ -3689,12 +3800,38 @@ msgstr ""
 msgid "Vote in polls."
 msgstr ""
 
+#: squid/bot/settings_view.py:402
+msgid "Vote kind"
+msgstr ""
+
 #: squid/voting/errors.py:11
 msgid "Vote session not found"
 msgstr ""
 
 #: squid/voting/errors.py:10
 msgid "Vote session not found."
+msgstr ""
+
+#: squid/bot/settings_view.py:433
+#, python-brace-format
+msgid "Vote weight for {role}"
+msgstr ""
+
+#: squid/bot/settings_view.py:531
+msgid "Voting"
+msgstr ""
+
+#: squid/bot/settings.py:239
+msgid "Voting reset"
+msgstr ""
+
+#: squid/bot/settings.py:202 squid/bot/settings.py:223
+msgid "Voting updated"
+msgstr ""
+
+#: squid/bot/settings_view.py:205
+#, python-brace-format
+msgid "Voting — {kind}"
 msgstr ""
 
 #: squid/accounts/errors.py:172
@@ -3716,6 +3853,10 @@ msgstr ""
 #: squid/bot/notifications.py:60
 #, python-brace-format
 msgid "Web inbox: {state}"
+msgstr ""
+
+#: squid/bot/settings_view.py:419
+msgid "Weigh a role's votes"
 msgstr ""
 
 #: squid/bot/submission/search.py:112
@@ -3776,6 +3917,10 @@ msgstr ""
 
 #: squid/bot/submission/ui/views.py:241
 msgid "World downloads"
+msgstr ""
+
+#: squid/bot/settings_view.py:273
+msgid "You are no longer allowed to change this."
 msgstr ""
 
 #: squid/bot/verify.py:856
@@ -3840,10 +3985,6 @@ msgid ""
 "option."
 msgstr ""
 
-#: squid/bot/settings.py:135
-msgid "You must provide a channel for this setting."
-msgstr ""
-
 #: squid/bot/errors.py:164
 msgid "You need any one of these permissions to use this command:"
 msgstr ""
@@ -3903,12 +4044,27 @@ msgstr ""
 msgid "Your permissions"
 msgstr ""
 
-#: squid/bot/settings.py:69 squid/bot/settings.py:102
-msgid "_Not found_"
+#: squid/bot/settings_view.py:329
+#, python-brace-format
+msgid "_Deleted role_ (`{id}`)"
 msgstr ""
 
-#: squid/bot/settings.py:96
+#: squid/bot/settings_view.py:311 squid/bot/settings_view.py:315
+msgid "_None_"
+msgstr ""
+
+#: squid/bot/settings_view.py:303
+#, python-brace-format
+msgid "_Not found_ (`{id}`)"
+msgstr ""
+
+#: squid/bot/settings_view.py:301
 msgid "_Not set_"
+msgstr ""
+
+#: squid/bot/settings_view.py:498
+#, python-brace-format
+msgid "`{choice}` is not a vote choice."
 msgstr ""
 
 #: squid/bot/submission/attachments.py:73
@@ -4508,6 +4664,16 @@ msgstr ""
 msgid "{identity} is now {visibility} on your creator page."
 msgstr ""
 
+#: squid/bot/settings_view.py:469
+#, python-brace-format
+msgid "{kind} vote emojis"
+msgstr ""
+
+#: squid/bot/settings.py:240
+#, python-brace-format
+msgid "{kind} voting is back to its defaults."
+msgstr ""
+
 #: squid/submissions/domain/finalization.py:352
 #, python-brace-format
 msgid "{label} keys must be stable lowercase identifiers"
@@ -4575,39 +4741,29 @@ msgstr ""
 msgid "{remaining} more not shown."
 msgstr ""
 
+#: squid/bot/settings.py:224
+#, python-brace-format
+msgid "{role} no longer carries extra weight."
+msgstr ""
+
+#: squid/bot/settings.py:203
+#, python-brace-format
+msgid "{role} now counts {multiplier}x."
+msgstr ""
+
 #: squid/bot/diagnostics_view.py:121
 #, python-brace-format
 msgid "{section} — page {page} of {pages} · the attachment has the whole report"
 msgstr ""
 
-#: squid/bot/settings.py:93
-#, python-brace-format
-msgid "{setting} Channel Info"
-msgstr ""
-
-#: squid/bot/settings.py:155
+#: squid/bot/settings.py:120
 #, python-brace-format
 msgid "{setting} channel has successfully been set."
 msgstr ""
 
-#: squid/bot/settings.py:65
-#, python-brace-format
-msgid "{setting} channel: _Not set_\n"
-msgstr ""
-
-#: squid/bot/settings.py:70
-#, python-brace-format
-msgid "{setting} channel: {value}\n"
-msgstr ""
-
-#: squid/bot/settings.py:181
+#: squid/bot/settings.py:101
 #, python-brace-format
 msgid "{setting} has been cleared."
-msgstr ""
-
-#: squid/bot/settings.py:72
-#, python-brace-format
-msgid "{setting}: {value}\n"
 msgstr ""
 
 #: squid/suggestions/application/services.py:104
@@ -4865,5 +5021,37 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "Canonical base key shown by search or records tooling."
+#~ msgstr ""
+
+#~ msgid "Current Settings"
+#~ msgstr ""
+
+#~ msgid ""
+#~ "ID: {id} \n"
+#~ " Name: {name}"
+#~ msgstr ""
+
+#~ msgid "The channel to send this type of message to"
+#~ msgstr ""
+
+#~ msgid "This setting is not supported."
+#~ msgstr ""
+
+#~ msgid "You must provide a channel for this setting."
+#~ msgstr ""
+
+#~ msgid "_Not found_"
+#~ msgstr ""
+
+#~ msgid "{setting} Channel Info"
+#~ msgstr ""
+
+#~ msgid "{setting} channel: _Not set_\n"
+#~ msgstr ""
+
+#~ msgid "{setting} channel: {value}\n"
+#~ msgstr ""
+
+#~ msgid "{setting}: {value}\n"
 #~ msgstr ""
 
