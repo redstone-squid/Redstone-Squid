@@ -3709,6 +3709,79 @@
         }
       }
     },
+    "/v1/consent/notice": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get Notice",
+        "description": "Return the notice a client must display before recording consent to it.\n\nOne msgid shared with the Discord prompt, so the version a receipt names refers to a single\npiece of text however the reader met it.",
+        "operationId": "consent_notice_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrivacyNoticeDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/diagnostics/errors": {
       "get": {
         "tags": [
@@ -4284,7 +4357,7 @@
           "users"
         ],
         "summary": "Grant Consent",
-        "description": "Accept the current privacy notice for future writes.",
+        "description": "Accept the current privacy notice for future writes.\n\nA client that names the version it displayed is held to it: consent recorded against text the\nuser never saw is the failure that versioning the notice exists to prevent.",
         "operationId": "account_consent_grant",
         "security": [
           {
@@ -4315,6 +4388,23 @@
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ConsentGrantRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -17280,6 +17370,25 @@
         "title": "CliSessionExchangeRequest",
         "description": "Exchange an Ed25519-signed proof nonce for a short session."
       },
+      "ConsentGrantRequest": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ConsentGrantRequest",
+        "description": "Which notice version the client actually displayed before asking."
+      },
       "ControlKind": {
         "type": "string",
         "enum": [
@@ -18212,6 +18321,7 @@
           "CREATOR_NOT_FOUND",
           "CONFIGURATION_ERROR",
           "CONSENT_REQUIRED",
+          "CONSENT_VERSION_STALE",
           "DATA_INTEGRITY_ERROR",
           "DOMAIN_ERROR",
           "INFRASTRUCTURE_ERROR",
@@ -20150,6 +20260,36 @@
         ],
         "title": "PaperChallengeExchangeRequest",
         "description": "Exchange an approved Paper challenge on its authenticated installation."
+      },
+      "PrivacyNoticeDetail": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "locale": {
+            "type": "string",
+            "title": "Locale"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "locale",
+          "title",
+          "body"
+        ],
+        "title": "PrivacyNoticeDetail",
+        "description": "The current notice, its version, and the locale it was rendered in."
       },
       "ProblemDetail": {
         "properties": {

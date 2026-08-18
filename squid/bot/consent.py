@@ -4,38 +4,11 @@ from typing import Any, override
 
 import discord
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, LinkPreview
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, AccountConsent, LinkPreview
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions
 from squid.core.i18n import _, ntranslate
-
-PRIVACY_NOTICE = _(
-    "Redstone Squid stores your Discord user ID, your Minecraft UUID and your current Minecraft "
-    "username. The pair is what lets the bot recognise you as a build creator and keep the two "
-    "accounts associated.\n\n"
-    "Linking also claims build credit recorded under your verified Minecraft username, so those "
-    "builds are attributed to your account. Credit already claimed by someone else is never taken "
-    "from them; agreeing opens a claim for staff to review instead.\n\n"
-    "Every account has a public creator page, and a linked account appears on yours by default. "
-    "You can hide any linked account individually with `/account visibility`, or hide the whole "
-    "page. A hidden page still lists the build credit you hold, because that credit is what "
-    "attributes the builds themselves.\n\n"
-    "Agreeing records which version of this notice you accepted and when. Cancelling stores no "
-    "account information at all."
-)
-"""The full notice, kept out of the card and reachable from its own button.
-
-One message rather than several so the version recorded in a consent receipt refers to a single
-piece of text. The card still names the stored categories itself: consent is not informed if every
-category is behind a button.
-
-Publication is described here as well as storage, since a linked identity now appears on a public
-creator page by default. `CURRENT_CONSENT_VERSION` is deliberately *not* bumped for that change:
-the deployment has no users beyond the maintainer dogfooding it, so a re-consent round would gate
-his own writes to no one's benefit. The version discipline starts at the first alpha, and a change
-of this shape after that point needs a bump.
-"""
 
 
 class UserDataConsentView(ExpiringLayoutView):

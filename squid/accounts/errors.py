@@ -216,6 +216,28 @@ class ConsentRequiredError(ValidationError):
         self.account_id = account_id
 
 
+class StaleConsentNoticeError(ConflictError):
+    """A client offered acceptance of a notice version that is no longer published.
+
+    Recorded consent is only meaningful if the text the user read is the text the receipt names.
+    A client holding a cached notice would otherwise record agreement to wording nobody saw.
+    """
+
+    default_message = _("The privacy notice has changed since this one was shown.")
+    default_title = _("Privacy notice out of date")
+    default_code = ErrorCode.CONSENT_VERSION_STALE
+    default_resource = "account"
+    default_end_user_action = _("Re-read the current privacy notice, then accept it again.")
+
+    def __init__(self, *, offered: str, current: str) -> None:
+        super().__init__(
+            context={"offered": offered, "current": current},
+            public_context={"offered": offered, "current": current},
+        )
+        self.offered = offered
+        self.current = current
+
+
 class CreatorAliasNotFoundError(NotFoundError):
     """No build credits a creator under the requested name."""
 
