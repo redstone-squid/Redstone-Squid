@@ -5,7 +5,7 @@ from collections.abc import Sequence
 import pytest
 from whenever import Instant
 
-from squid.core.errors import ErrorCode
+from squid.core.errors import ErrorCode, InvalidStateError
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.domain import ErrorReport, ErrorReportNotFoundError
 from squid.records.errors import RecordNotFoundError
@@ -209,5 +209,5 @@ async def test_clear_all_deletes_every_report_expired_or_not() -> None:
 
 
 async def test_retention_must_be_at_least_an_hour() -> None:
-    with pytest.raises(ValueError, match="at least one hour"):
+    with pytest.raises(InvalidStateError, match="at least one hour"):
         ErrorReportService(FakeRepository(), retention_hours=0)
