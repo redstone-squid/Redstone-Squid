@@ -1240,15 +1240,15 @@ class AccountRepository:
             "WHERE absorbed_vote.account_id = :absorbed AND survivor_vote.account_id = :survivor "
             "AND absorbed_vote.vote_session_id = survivor_vote.vote_session_id",
             "UPDATE votes SET account_id = :survivor WHERE account_id = :absorbed",
+            # Only switches move now: the notice receipt this used to fold lives on `accounts`,
+            # where the survivor's own row already carries the answer.
             "INSERT INTO notification_profiles "
-            "(account_id, notice_version, consented_at, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at) "
-            "SELECT :survivor, notice_version, consented_at, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at "
+            "(account_id, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at) "
+            "SELECT :survivor, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at "
             "FROM notification_profiles WHERE account_id = :absorbed "
             "ON CONFLICT (account_id) DO UPDATE SET "
             "web_enabled = notification_profiles.web_enabled OR EXCLUDED.web_enabled, "
             "dm_enabled = notification_profiles.dm_enabled OR EXCLUDED.dm_enabled, "
-            "notice_version = COALESCE(notification_profiles.notice_version, EXCLUDED.notice_version), "
-            "consented_at = COALESCE(notification_profiles.consented_at, EXCLUDED.consented_at), "
             "dm_suspended_at = COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)",
             "DELETE FROM notification_profiles WHERE account_id = :absorbed",
             "DELETE FROM notification_subscriptions absorbed_subscription USING notification_subscriptions survivor_subscription "

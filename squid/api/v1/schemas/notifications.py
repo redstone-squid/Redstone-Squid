@@ -17,12 +17,15 @@ from squid.notifications import (
 
 
 class NotificationPreferencesDetail(BaseModel):
-    """Notification-specific consent and independent channel switches."""
+    """Independent channel switches, and whether the account may use them yet.
+
+    `consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one
+    privacy notice, and there is no notification-specific notice to report separately.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    notice_version: str | None
-    consented: bool
+    consent_pending: bool
     web_enabled: bool
     dm_enabled: bool
     dm_suspended: bool
@@ -30,8 +33,7 @@ class NotificationPreferencesDetail(BaseModel):
     @classmethod
     def from_domain(cls, preferences: NotificationPreferences) -> NotificationPreferencesDetail:
         return cls(
-            notice_version=preferences.notice_version,
-            consented=preferences.has_current_consent,
+            consent_pending=preferences.consent_pending,
             web_enabled=preferences.web_enabled,
             dm_enabled=preferences.dm_enabled,
             dm_suspended=preferences.dm_suspended_at is not None,
