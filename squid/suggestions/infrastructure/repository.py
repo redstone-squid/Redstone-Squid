@@ -212,29 +212,28 @@ class PostgresSuggestionRepository:
         async with self._session_factory() as session:
             return [value for value in (await session.scalars(statement)).all() if value is not None]
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str]]:
-        """Return record competition UUIDs with a readable identity and its category key."""
-        statement = select(
-            RecordCompetition.public_id,
-            RecordCompetition.record_class,
-            RecordCompetition.build_kind,
-            RecordCompetition.version_scope,
-            RecordCompetition.category_key,
+    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
+        """Return record competition UUIDs with the newest definition's readable title.
+
+        Competitions store no title of their own, so this borrows the newest definition's; every
+        competition has at least one definition because both are only ever created together.
+        """
+        latest = (
+            select(RecordDefinition.competition_id, RecordDefinition.title, RecordDefinition.subtitle)
+            .distinct(RecordDefinition.competition_id)
+            .order_by(RecordDefinition.competition_id, RecordDefinition.id.desc())
+            .subquery()
+        )
+        statement = select(RecordCompetition.public_id, latest.c.title, latest.c.subtitle).join(
+            latest, latest.c.competition_id == RecordCompetition.public_id
         )
         terms = query.strip()
         if terms:
-            statement = statement.where(RecordCompetition.category_key.ilike(f"%{terms}%"))
-        statement = statement.order_by(RecordCompetition.build_kind, RecordCompetition.category_key).limit(limit)
+            statement = statement.where(or_(latest.c.title.ilike(f"%{terms}%"), latest.c.subtitle.ilike(f"%{terms}%")))
+        statement = statement.order_by(latest.c.title, RecordCompetition.public_id).limit(limit)
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).all()
-        return [
-            (
-                str(row.public_id),
-                f"{row.record_class} {row.build_kind} ({row.version_scope})",
-                row.category_key,
-            )
-            for row in rows
-        ]
+        return [(str(row.public_id), row.title, row.subtitle) for row in rows]
 
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
         """Return credited creator names and whether each has been claimed by an account."""
