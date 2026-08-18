@@ -12,14 +12,17 @@ from squid.accounts.domain import (
     AccountConsent,
     AccountIdentity,
     AccountMerge,
+    AccountProfile,
     AliasClaim,
     ClaimMethod,
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreatorProfileRecord,
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
+    ProfileUpdate,
 )
 
 
@@ -68,11 +71,29 @@ class AccountRepository(Protocol):
 
     async def unlink_java_identity(self, account_id: int) -> bool: ...
 
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None: ...
+
+    async def count_identities(self, account_id: int) -> int: ...
+
+    async def set_identity_visibility(
+        self, account_id: int, identity_id: int, *, is_public: bool
+    ) -> AccountIdentity: ...
+
+    async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None: ...
+
+    async def get_profile(self, account_id: int) -> AccountProfile | None: ...
+
+    async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile: ...
+
+    async def clear_profile(self, account_id: int) -> AccountProfile: ...
+
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge: ...
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None: ...
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None: ...
+
+    async def get_creator_profile_record(self, public_id: UUID) -> CreatorProfileRecord | None: ...
 
     async def claim_unclaimed_alias(
         self, *, account_id: int, name: str, method: ClaimMethod

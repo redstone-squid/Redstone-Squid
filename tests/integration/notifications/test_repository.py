@@ -25,6 +25,7 @@ from squid.persistence.base import Base
 _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
+    Base.metadata.tables["account_profiles"],
     # Replaced `global_administrators` when permissions moved to RBAC; the
     # notification repository joins it to find who may be notified.
     Base.metadata.tables["permission_roles"],
