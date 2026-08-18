@@ -25,23 +25,19 @@ from squid.persistence.types import InstantUTC
 
 
 class NotificationProfile(Base, kw_only=True):
-    """A notification-specific notice receipt and independent channel preferences."""
+    """Independent notification channel preferences.
+
+    Carries no consent receipt: notifications are covered by the one privacy notice, whose
+    receipt lives on `accounts`. A row here means "these switches", not "this person agreed".
+    """
 
     __tablename__ = "notification_profiles"
-    __table_args__ = (
-        CheckConstraint(
-            "(notice_version IS NULL) = (consented_at IS NULL)",
-            name="notification_profiles_notice_receipt_complete",
-        ),
-    )
 
     account_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="notification_profiles_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    notice_version: Mapped[str | None] = mapped_column(Text, default=None)
-    consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     web_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_suspended_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

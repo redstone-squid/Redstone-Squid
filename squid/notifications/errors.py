@@ -1,13 +1,6 @@
 """Notification application errors."""
 
-from squid.core.errors import ConflictError, NotFoundError
-
-
-class NotificationConsentRequiredError(ConflictError):
-    """Raised when notification state is changed without the current notice."""
-
-    default_message = "Accept the current notification notice before enabling notifications."
-    default_resource = "notification_preferences"
+from squid.core.errors import NotFoundError
 
 
 class NotificationSubscriptionNotFoundError(NotFoundError):

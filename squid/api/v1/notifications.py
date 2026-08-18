@@ -44,32 +44,10 @@ async def get_preferences(notifications: Notifications, caller: UserCaller) -> N
     return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(caller)))
 
 
-@router.post(
-    "/consent",
-    response_model=NotificationPreferencesDetail,
-    responses=responses(401, 403, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
-    operation_id="notification_consent_grant",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
-)
-async def accept_notice(
-    request: NotificationPreferenceUpdate,
-    notifications: Notifications,
-    caller: UserCaller,
-) -> NotificationPreferencesDetail:
-    """Accept the notification-specific notice and choose initial channels."""
-    preferences = await notifications.accept_notice(
-        _account_id(caller),
-        web_enabled=request.web_enabled,
-        dm_enabled=request.dm_enabled,
-    )
-    return NotificationPreferencesDetail.from_domain(preferences)
-
-
 @router.patch(
     "/preferences",
     response_model=NotificationPreferencesDetail,
-    responses=responses(401, 403, 409, 503),
+    responses=responses(400, 401, 403, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="notification_preferences_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -108,7 +86,7 @@ async def list_subscriptions(
     "/subscriptions",
     response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
-    responses=responses(401, 403, 404, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="notification_subscription_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),

@@ -252,22 +252,12 @@ class MockIdempotency:
 
 class MockNotifications:
     async def preferences(self, account_id: int):
-        return NotificationPreferences(account_id=account_id, notice_version=None, consented_at=None)
-
-    async def accept_notice(self, account_id: int, *, web_enabled: bool, dm_enabled: bool):
-        return NotificationPreferences(
-            account_id=account_id,
-            notice_version="2026-08-10",
-            consented_at=None,
-            web_enabled=web_enabled,
-            dm_enabled=dm_enabled,
-        )
+        return NotificationPreferences(account_id=account_id, consent_pending=True)
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool):
         return NotificationPreferences(
             account_id=account_id,
-            notice_version="2026-08-10",
-            consented_at=None,
+            consent_pending=False,
             web_enabled=web_enabled,
             dm_enabled=dm_enabled,
         )

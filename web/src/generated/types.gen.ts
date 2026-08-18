@@ -2040,17 +2040,16 @@ export type NotificationPreferenceUpdate = {
 /**
  * NotificationPreferencesDetail
  *
- * Notification-specific consent and independent channel switches.
+ * Independent channel switches, and whether the account may use them yet.
+ *
+ * `consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one
+ * privacy notice, and there is no notification-specific notice to report separately.
  */
 export type NotificationPreferencesDetail = {
     /**
-     * Notice Version
+     * Consent Pending
      */
-    notice_version: string | null;
-    /**
-     * Consented
-     */
-    consented: boolean;
+    consent_pending: boolean;
     /**
      * Web Enabled
      */
@@ -6178,6 +6177,10 @@ export type NotificationPreferencesUpdateData = {
 
 export type NotificationPreferencesUpdateErrors = {
     /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
      * Unauthorized
      */
     401: ProblemDetail;
@@ -6185,10 +6188,6 @@ export type NotificationPreferencesUpdateErrors = {
      * Forbidden
      */
     403: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
     /**
      * Validation Error
      */
@@ -6213,59 +6212,6 @@ export type NotificationPreferencesUpdateResponses = {
 };
 
 export type NotificationPreferencesUpdateResponse = NotificationPreferencesUpdateResponses[keyof NotificationPreferencesUpdateResponses];
-
-export type NotificationConsentGrantData = {
-    body: NotificationPreferenceUpdate;
-    headers?: {
-        /**
-         * Idempotency-Key
-         *
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/notifications/consent';
-};
-
-export type NotificationConsentGrantErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type NotificationConsentGrantError = NotificationConsentGrantErrors[keyof NotificationConsentGrantErrors];
-
-export type NotificationConsentGrantResponses = {
-    /**
-     * Successful Response
-     */
-    200: NotificationPreferencesDetail;
-};
-
-export type NotificationConsentGrantResponse = NotificationConsentGrantResponses[keyof NotificationConsentGrantResponses];
 
 export type NotificationSubscriptionsListData = {
     body?: never;
@@ -6322,6 +6268,10 @@ export type NotificationSubscriptionCreateData = {
 };
 
 export type NotificationSubscriptionCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
