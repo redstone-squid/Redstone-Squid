@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 05:39+0000\n"
+"POT-Creation-Date: 2026-08-19 05:43+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -84,7 +84,7 @@ msgid ""
 "-# Page {page} of {pages}"
 msgstr ""
 
-#: squid/bot/submission/submit.py:223
+#: squid/bot/submission/submit.py:230
 #, python-brace-format
 msgid ""
 "## Submitted for review\n"
@@ -470,7 +470,7 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: squid/bot/submission/search.py:231
+#: squid/bot/submission/search.py:239
 msgid "Alias added."
 msgstr "别名已添加。"
 
@@ -478,7 +478,7 @@ msgstr "别名已添加。"
 msgid "Alias already added"
 msgstr "别名已存在"
 
-#: squid/bot/submission/search.py:225
+#: squid/bot/submission/search.py:233
 msgid "Alias already on this restriction."
 msgstr "该别名已存在于此限制中。"
 
@@ -490,7 +490,7 @@ msgstr "别名已被使用"
 msgid "Allow direct messages from this server, then run the command again."
 msgstr ""
 
-#: squid/bot/submission/search.py:225
+#: squid/bot/submission/search.py:233
 msgid "Already added"
 msgstr "已添加"
 
@@ -524,8 +524,8 @@ msgstr ""
 msgid "An error report names internal paths, so it is never posted in a channel."
 msgstr ""
 
-#: squid/bot/submission/submit.py:72 squid/bot/submission/submit.py:73
-#: squid/bot/submission/submit.py:74 squid/bot/submission/submit.py:75
+#: squid/bot/submission/submit.py:79 squid/bot/submission/submit.py:80
+#: squid/bot/submission/submit.py:81 squid/bot/submission/submit.py:82
 msgid "An image, video, or schematic; sorted out automatically."
 msgstr ""
 
@@ -554,7 +554,7 @@ msgstr "发生了意外错误。参考编号：`{error_id}`"
 msgid "Anything staff should know"
 msgstr ""
 
-#: squid/bot/submission/submit.py:71
+#: squid/bot/submission/submit.py:78
 msgid "Anything staff should know about the build."
 msgstr ""
 
@@ -724,7 +724,7 @@ msgstr ""
 msgid "Build not found."
 msgstr "找不到该构造。"
 
-#: squid/bot/submission/submit.py:355
+#: squid/bot/submission/submit.py:392
 msgid "Build recalculated."
 msgstr "构造已重新计算。"
 
@@ -760,6 +760,10 @@ msgstr "构造已标记"
 
 #: squid/submissions/application/forms.py:145
 msgid "Build width"
+msgstr ""
+
+#: squid/bot/submission/submit.py:387
+msgid "Builds are only read out of messages posted in a build log channel."
 msgstr ""
 
 #: squid/bot/settings_view.py:48
@@ -893,7 +897,7 @@ msgstr "请检查命令参数后重试。"
 msgid "Check the creator ID and try again."
 msgstr ""
 
-#: squid/bot/submission/submit.py:111 squid/bot/submission/ui/views.py:169
+#: squid/bot/submission/submit.py:118 squid/bot/submission/ui/views.py:169
 msgid "Check the dimensions"
 msgstr ""
 
@@ -975,7 +979,7 @@ msgstr ""
 msgid "Closing time"
 msgstr ""
 
-#: squid/bot/submission/submit.py:69
+#: squid/bot/submission/submit.py:76
 msgid "Comma separated, e.g. `Seamless, Observerless`. See `/info docs`."
 msgstr ""
 
@@ -1241,7 +1245,7 @@ msgstr ""
 msgid "Door type"
 msgstr ""
 
-#: squid/bot/submission/submit.py:65
+#: squid/bot/submission/submit.py:72
 msgid "Door, Skydoor, or Trapdoor."
 msgstr ""
 
@@ -1332,8 +1336,8 @@ msgstr ""
 
 #: squid/bot/settings.py:110 squid/bot/settings.py:141
 #: squid/bot/settings.py:184 squid/bot/settings.py:193
-#: squid/bot/settings.py:216 squid/bot/submission/search.py:263
-#: squid/bot/submission/search.py:278 squid/bot/submission/search.py:341
+#: squid/bot/settings.py:216 squid/bot/submission/search.py:271
+#: squid/bot/submission/search.py:286 squid/bot/submission/search.py:349
 msgid "Error"
 msgstr "错误"
 
@@ -1632,7 +1636,7 @@ msgstr ""
 msgid "Images"
 msgstr ""
 
-#: squid/bot/submission/submit.py:70
+#: squid/bot/submission/submit.py:77
 msgid "In-game names of the creator(s), comma separated."
 msgstr ""
 
@@ -1676,7 +1680,7 @@ msgstr "内部错误"
 msgid "Internal server error"
 msgstr "内部服务器错误"
 
-#: squid/bot/submission/search.py:349
+#: squid/bot/submission/search.py:357
 #, python-brace-format
 msgid "Internal state for build #{id} is attached."
 msgstr ""
@@ -2050,8 +2054,8 @@ msgstr ""
 msgid "No build credits a creator by that name."
 msgstr ""
 
-#: squid/bot/submission/search.py:263 squid/bot/submission/search.py:278
-#: squid/bot/submission/search.py:341
+#: squid/bot/submission/search.py:271 squid/bot/submission/search.py:286
+#: squid/bot/submission/search.py:349
 msgid "No build with that ID."
 msgstr "没有该 ID 对应的构造。"
 
@@ -2162,12 +2166,16 @@ msgstr ""
 msgid "Nothing has failed within the retention window."
 msgstr ""
 
-#: squid/bot/submission/search.py:245
+#: squid/bot/submission/search.py:253
 msgid "Nothing is waiting for review."
 msgstr ""
 
 #: squid/bot/notifications.py:115
 msgid "Nothing to follow"
+msgstr ""
+
+#: squid/bot/submission/submit.py:386
+msgid "Nothing to recalculate"
 msgstr ""
 
 #: squid/bot/permissions.py:84
@@ -2332,7 +2340,7 @@ msgstr "可选：将标题诊断限制为单一构造类型。"
 msgid "Optionally rebuild just doors or extenders."
 msgstr "可选：仅重建门或延伸器。"
 
-#: squid/bot/submission/search.py:171
+#: squid/bot/submission/search.py:179
 msgid "Order results by a field, ascending or descending."
 msgstr ""
 
@@ -2374,11 +2382,11 @@ msgstr ""
 msgid "Pattern"
 msgstr ""
 
-#: squid/bot/submission/submit.py:66
+#: squid/bot/submission/submit.py:73
 msgid "Pattern types, comma separated. For example: full lamp, funnel."
 msgstr ""
 
-#: squid/bot/submission/search.py:242
+#: squid/bot/submission/search.py:250
 msgid "Pending submissions"
 msgstr ""
 
@@ -2938,7 +2946,7 @@ msgstr ""
 msgid "Search results cannot be sorted by {field_name}."
 msgstr ""
 
-#: squid/bot/submission/search.py:169
+#: squid/bot/submission/search.py:177
 msgid "Search text and filters, e.g. `width:5`."
 msgstr "搜索文本和过滤条件，例如 `width:5`。"
 
@@ -3089,7 +3097,7 @@ msgstr ""
 msgid "Subcommands"
 msgstr ""
 
-#: squid/bot/submission/submit.py:211
+#: squid/bot/submission/submit.py:218
 msgid "Submission cancelled. Nothing was saved."
 msgstr ""
 
@@ -3097,7 +3105,7 @@ msgstr ""
 msgid "Submission draft not found."
 msgstr ""
 
-#: squid/bot/submission/submit.py:204
+#: squid/bot/submission/submit.py:211
 msgid "Submission expired. Nothing was saved."
 msgstr ""
 
@@ -3105,11 +3113,11 @@ msgstr ""
 msgid "Submission form"
 msgstr "提交表单"
 
-#: squid/bot/submission/search.py:302
+#: squid/bot/submission/search.py:310
 msgid "Submission has been confirmed."
 msgstr "提交已确认。"
 
-#: squid/bot/submission/search.py:323
+#: squid/bot/submission/search.py:331
 msgid "Submission has been denied."
 msgstr "提交已被拒绝。"
 
@@ -3139,8 +3147,8 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/submission/edit.py:178 squid/bot/submission/search.py:231
-#: squid/bot/submission/search.py:302 squid/bot/submission/search.py:323
+#: squid/bot/submission/edit.py:178 squid/bot/submission/search.py:239
+#: squid/bot/submission/search.py:310 squid/bot/submission/search.py:331
 msgid "Success"
 msgstr "成功"
 
@@ -3324,19 +3332,19 @@ msgstr ""
 msgid "The Fabric PKCE proof is invalid."
 msgstr ""
 
-#: squid/bot/submission/search.py:332
+#: squid/bot/submission/search.py:340
 msgid "The ID of the build whose debug details you want to see."
 msgstr "你要查看调试详情的构造 ID。"
 
-#: squid/bot/submission/search.py:293
+#: squid/bot/submission/search.py:301
 msgid "The ID of the build you want to confirm."
 msgstr "你要确认的构造 ID。"
 
-#: squid/bot/submission/search.py:310
+#: squid/bot/submission/search.py:318
 msgid "The ID of the build you want to deny."
 msgstr "你要拒绝的构造 ID。"
 
-#: squid/bot/submission/search.py:253
+#: squid/bot/submission/search.py:261
 msgid "The ID of the build you want to see."
 msgstr "你要查看的构造 ID。"
 
@@ -3376,7 +3384,7 @@ msgstr ""
 msgid "The active idempotency encryption key is absent from the keyring."
 msgstr ""
 
-#: squid/bot/submission/search.py:214
+#: squid/bot/submission/search.py:222
 msgid "The additional name."
 msgstr "附加名称。"
 
@@ -3441,7 +3449,7 @@ msgstr ""
 msgid "The custom emoji {emoji} is inaccessible."
 msgstr ""
 
-#: squid/bot/submission/submit.py:64
+#: squid/bot/submission/submit.py:71
 msgid "The door opening, e.g. `2x2`. Width x height (x depth)."
 msgstr ""
 
@@ -3535,7 +3543,7 @@ msgstr "请求的操作无法完成。"
 msgid "The requested resource was not found."
 msgstr "找不到请求的资源。"
 
-#: squid/bot/submission/search.py:213
+#: squid/bot/submission/search.py:221
 msgid "The restriction to add another name for."
 msgstr "要为其添加别名的限制。"
 
@@ -3600,7 +3608,7 @@ msgstr "类型化的记录系列。"
 msgid "The verification code is invalid or expired."
 msgstr "验证码无效或已过期。"
 
-#: squid/bot/submission/submit.py:67
+#: squid/bot/submission/submit.py:74
 msgid "The whole build, e.g. `5x7x4`. Width x height (x depth)."
 msgstr ""
 
@@ -3815,7 +3823,7 @@ msgstr "使用 `/help <command>` 获取更多信息。"
 msgid "Use a supported Minecraft version format and try again."
 msgstr "请使用受支持的 Minecraft 版本格式后重试。"
 
-#: squid/bot/submission/search.py:172
+#: squid/bot/submission/search.py:180
 msgid "Use keyword matching or smart meaning-based matching."
 msgstr "使用关键词匹配或基于语义的智能匹配。"
 
@@ -3848,7 +3856,7 @@ msgstr "版本添加成功：{version}"
 msgid "Versions"
 msgstr ""
 
-#: squid/bot/submission/submit.py:68
+#: squid/bot/submission/submit.py:75
 msgid "Versions the build works in, like `1.17 - 1.18.1, 1.20+`."
 msgstr ""
 
@@ -3974,7 +3982,7 @@ msgstr ""
 msgid "Weigh a role's votes"
 msgstr ""
 
-#: squid/bot/submission/search.py:170
+#: squid/bot/submission/search.py:178
 msgid "What to look through: records, builds, patterns, restrictions, or all."
 msgstr "要搜索的范围：记录、构造、样式、限制或全部内容。"
 

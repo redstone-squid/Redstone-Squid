@@ -33,7 +33,7 @@ its front door — `submit` is one command with autocompleted options and a work
 |---|-------|--------|
 | 6.1 | `build queue`: a shared list paginator, submitters named rather than numbered, and a title that matches the command (C5, C6) | **Delivered** |
 | 6.2 | One edit surface: `/build edit` is app-only, its typed options seed the workspace view, and the gate is the view's owner-or-node rule (C7) | Not started |
-| 6.3 | `build recalc` becomes the "Recalculate Build" message context menu (C4) | Not started |
+| 6.3 | `build recalc` becomes the "Recalculate Build" message context menu (C4) | **Delivered** |
 | 6.4 | `build debug` attaches its dump as a file instead of pasting a `__dict__` into a message | **Delivered** |
 | 6.5 | `measure-timing` and `detect-lattice` move under `build schematic` | **Delivered** |
 
@@ -86,6 +86,34 @@ at exactly the queue lengths worth looking at. The shared paginator is described
 The build id stays. It is the handle a reviewer types into `build approve`, it is what the
 card's own footer calls the submission, and unlike the submitter snowflake it is a number the
 user is meant to see.
+
+## 6.3 — recalculation is a right-click
+
+`build recalc` took a `discord.Message`, which in slash form means copying a link to a message
+and pasting it back at the bot (audit C4). Re-reading a build is a judgement about one specific
+message, so it is now the **Recalculate Build** message context menu — the third of the five
+this app may register, after phase 1's **Edit Build** and phase 5.1's **Vote to Delete**.
+
+**It now says when there is nothing to recalculate.** Inference is an `on_message` listener
+that silently ignores anything outside a build log channel, so the command answered "Build
+recalculated." whatever you pointed it at, including messages no build could ever come from.
+The eligibility test is split out of the listener and the menu answers with it.
+
+**The permission gate moved into the body.** A context menu cannot carry a `commands.check`, so
+`enforce(interaction, ...)` in `squid/bot/utils/permissions.py` raises exactly what
+`requires(...)` raises and the shared error presenter renders one refusal for both surfaces,
+`forbid` explanation included. Writing a bespoke denial card here is how the same refusal ends
+up reading differently depending on which surface produced it.
+
+**Both of the cog's context menus are now removed on unload.** The tree belongs to the bot
+rather than the cog, so reloading the extension left the old menu registered and the second
+`add_command` raised. That was already true of **Edit Build**; adding a second menu to the same
+cog is what made it worth fixing rather than noting.
+
+### Taxonomy edits
+
+Removed: `build recalc`. The node `build.submission.recalc` is unchanged and is still what the
+menu checks.
 
 ## 6.4 — a debug dump is a file
 
