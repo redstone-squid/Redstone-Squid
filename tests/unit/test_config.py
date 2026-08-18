@@ -1,6 +1,7 @@
 """Typed startup configuration tests."""
 
 import logging
+from functools import partial
 from pathlib import Path
 from typing import cast
 
@@ -11,6 +12,7 @@ from squid.config import (
     ApplicationConfig,
     ObjectStorageConfig,
     UpstreamHttpConfig,
+    default_render_cache_dir,
     load_api_process_config,
     load_application_config,
     load_bot_process_config,
@@ -36,9 +38,15 @@ def _issues(error: ConfigurationError) -> list[dict[str, str]]:
     return cast(list[dict[str, str]], error.context["issues"])
 
 
-@pytest.fixture(autouse=True)
-def _isolate_dotenv(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.chdir(tmp_path)
+@pytest.fixture
+def dotenv(tmp_path: Path) -> Path:
+    """Dotenv path handed to every loader, absent unless a test writes to it.
+
+    Passing the path beats the `monkeypatch.chdir(tmp_path)` this replaces: that moved the whole
+    process to keep the repository's own `.env` out of the loaders, which made the isolation
+    invisible at the call site and would have made these tests unsafe to run in parallel.
+    """
+    return tmp_path / ".env"
 
 
 def _set_environment(monkeypatch: pytest.MonkeyPatch, **values: str) -> None:
@@ -102,7 +110,9 @@ def test_upstream_http_rejects_loopback_queries_and_credentials() -> None:
         UpstreamHttpConfig.model_validate({"mojang_profile_url": "http://user:password@127.0.0.1:8101/profile"})
 
 
-def test_api_process_projects_loopback_upstreams_into_the_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_process_projects_loopback_upstreams_into_the_runtime(
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path
+) -> None:
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret",
@@ -111,13 +121,15 @@ def test_api_process_projects_loopback_upstreams_into_the_runtime(monkeypatch: p
         SQUID_UPSTREAM_HTTP_DISCORD_AUTHORIZE_URL="http://127.0.0.1:8102/discord/authorize",
     )
 
-    config = load_api_process_config()
+    config = load_api_process_config(dotenv_path=dotenv)
 
     assert str(config.runtime.upstream_http.mojang_profile_url).startswith("http://127.0.0.1:8101/")
     assert str(config.runtime.upstream_http.discord_api_url).startswith("http://127.0.0.1:8102/")
 
 
-def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_application_config_groups_and_resolves_settings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, dotenv: Path
+) -> None:
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -147,7 +159,7 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_OBSERVABILITY_RELEASE="abcdef123456",
     )
 
-    config = load_application_config()
+    config = load_application_config(dotenv_path=dotenv)
 
     assert isinstance(config, ApplicationConfig)
     assert config.database.url.get_secret_value() == BASE_ENVIRONMENT["SQUID_DATABASE_URL"]
@@ -185,47 +197,49 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     assert EMBEDDING_DIMENSION == 1536
 
 
-def test_observability_exports_nowhere_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_observability_exports_nowhere_by_default(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """Disabled, with no endpoint and no credentials: nothing leaves the process unasked."""
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
 
-    config = load_bot_process_config().observability
+    config = load_bot_process_config(dotenv_path=dotenv).observability
 
     assert config.enabled is False
     assert config.endpoint is None
     assert config.headers == {}
 
 
-def test_observability_samples_everything_until_it_is_tuned(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_observability_samples_everything_until_it_is_tuned(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """A separate claim from the one above: the ratio only takes effect once exporting is on."""
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
 
-    assert load_bot_process_config().observability.sample_ratio == 1.0
+    assert load_bot_process_config(dotenv_path=dotenv).observability.sample_ratio == 1.0
 
 
-def test_worker_loads_only_inherited_observability_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_worker_loads_only_inherited_observability_settings(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     monkeypatch.setenv("SQUID_OBSERVABILITY_ENABLED", "true")
     monkeypatch.setenv("SQUID_OBSERVABILITY_ENDPOINT", "http://collector:4318/v1/traces")
 
-    config = load_worker_observability_config()
+    config = load_worker_observability_config(dotenv_path=dotenv)
 
     assert config.enabled is True
     assert str(config.endpoint) == "http://collector:4318/v1/traces"
 
 
-def test_media_worker_concurrency_is_explicit_and_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_media_worker_concurrency_is_explicit_and_bounded(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(monkeypatch, SQUID_WORKER_MEDIA_JOB_CONCURRENCY="2")
 
-    assert load_worker_process_config().worker.media_job_concurrency == 2
+    assert load_worker_process_config(dotenv_path=dotenv).worker.media_job_concurrency == 2
 
     monkeypatch.setenv("SQUID_WORKER_MEDIA_JOB_CONCURRENCY", "9")
     with pytest.raises(ConfigurationError) as exc_info:
-        load_worker_process_config()
+        load_worker_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "worker.media_job_concurrency" for issue in _issues(exc_info.value))
 
 
-def test_media_and_minecraft_auth_runtime_settings_are_process_shared(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_media_and_minecraft_auth_runtime_settings_are_process_shared(
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path
+) -> None:
     pepper = "minecraft-auth-pepper-with-32-bytes"
     _set_environment(
         monkeypatch,
@@ -236,7 +250,7 @@ def test_media_and_minecraft_auth_runtime_settings_are_process_shared(monkeypatc
         SQUID_MINECRAFT_AUTH_VERIFICATION_URI="https://catalogue.example/minecraft/link",
     )
 
-    config = load_api_process_config().runtime
+    config = load_api_process_config(dotenv_path=dotenv).runtime
 
     assert config.media.enabled is True
     assert config.media.threads == 3
@@ -245,7 +259,7 @@ def test_media_and_minecraft_auth_runtime_settings_are_process_shared(monkeypatc
     assert str(config.minecraft_auth.verification_uri) == "https://catalogue.example/minecraft/link"
 
 
-def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret",
@@ -253,7 +267,7 @@ def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "minecraft_auth.pepper" for issue in _issues(exc_info.value))
 
@@ -272,16 +286,17 @@ def test_minecraft_auth_pepper_requires_32_bytes(monkeypatch: pytest.MonkeyPatch
 def test_minecraft_auth_requires_a_complete_https_device_flow(
     monkeypatch: pytest.MonkeyPatch,
     settings: dict[str, str],
+    dotenv: Path,
 ) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", **settings)
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "minecraft_auth" for issue in _issues(exc_info.value))
 
 
-def test_cli_auth_runtime_settings_are_process_shared(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_cli_auth_runtime_settings_are_process_shared(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     pepper = "cli-auth-pepper-with-at-least-32-bytes"
     _set_environment(
         monkeypatch,
@@ -290,7 +305,7 @@ def test_cli_auth_runtime_settings_are_process_shared(monkeypatch: pytest.Monkey
         SQUID_CLI_AUTH_VERIFICATION_URI="https://catalogue.example/cli/link",
     )
 
-    config = load_api_process_config().runtime
+    config = load_api_process_config(dotenv_path=dotenv).runtime
 
     assert config.cli_auth.pepper is not None
     assert config.cli_auth.pepper.get_secret_value() == pepper
@@ -315,17 +330,18 @@ def test_cli_auth_runtime_settings_are_process_shared(monkeypatch: pytest.Monkey
 def test_cli_auth_requires_a_complete_strong_https_device_flow(
     monkeypatch: pytest.MonkeyPatch,
     settings: dict[str, str],
+    dotenv: Path,
 ) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", **settings)
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"].startswith("cli_auth") for issue in _issues(exc_info.value))
 
 
 @pytest.mark.parametrize("ratio", ["-0.1", "1.1"])
-def test_observability_sample_ratio_is_bounded(monkeypatch: pytest.MonkeyPatch, ratio: str) -> None:
+def test_observability_sample_ratio_is_bounded(monkeypatch: pytest.MonkeyPatch, ratio: str, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -333,12 +349,12 @@ def test_observability_sample_ratio_is_bounded(monkeypatch: pytest.MonkeyPatch, 
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "observability.sample_ratio" for issue in _issues(exc_info.value))
 
 
-def test_enabled_observability_requires_an_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_enabled_observability_requires_an_endpoint(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -346,12 +362,12 @@ def test_enabled_observability_requires_an_endpoint(monkeypatch: pytest.MonkeyPa
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "observability" for issue in _issues(exc_info.value))
 
 
-def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -359,13 +375,13 @@ def test_embedding_credentials_fall_back_to_openai(monkeypatch: pytest.MonkeyPat
         SQUID_OPENAI_BASE_URL="https://shared.example/v1",
     )
 
-    config = load_bot_process_config()
+    config = load_bot_process_config(dotenv_path=dotenv)
 
     assert config.runtime.embeddings.api_key is config.openai.api_key
     assert config.runtime.embeddings.base_url == config.openai.base_url
 
 
-def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -377,7 +393,7 @@ def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch) ->
         SQUID_COMMUNITY_BUILD_LOG_CHANNEL_IDS="[6, 7]",
     )
 
-    config = load_bot_process_config().runtime.community
+    config = load_bot_process_config(dotenv_path=dotenv).runtime.community
 
     assert config.redstoner_starboard_author_id == 1
     assert config.redstoner_starboard_channel_id == 2
@@ -389,6 +405,7 @@ def test_community_ids_load_from_environment(monkeypatch: pytest.MonkeyPatch) ->
 
 def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
     monkeypatch: pytest.MonkeyPatch,
+    dotenv: Path,
 ) -> None:
     _set_environment(
         monkeypatch,
@@ -400,7 +417,7 @@ def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
         SQUID_SCHEMATIC_DUPLICATE_TOTAL_TIMEOUT_SECONDS="12",
     )
 
-    config = load_bot_process_config().runtime.schematics
+    config = load_bot_process_config(dotenv_path=dotenv).runtime.schematics
 
     assert config.duplicate_metric_tolerance == 0.15
     assert config.duplicate_near_distance == 0.75
@@ -441,7 +458,9 @@ def test_diagnostics_retention_rejects_a_zero_window(monkeypatch: pytest.MonkeyP
 
 
 def test_schematic_render_settings_load_from_flat_environment_names(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    dotenv: Path,
 ) -> None:
     pack_path = tmp_path / "vanilla.zip"
     _set_environment(
@@ -455,7 +474,7 @@ def test_schematic_render_settings_load_from_flat_environment_names(
         SQUID_SCHEMATIC_RENDER_MAX_BLOCK_COUNT="12345",
     )
 
-    config = load_bot_process_config().runtime.schematics
+    config = load_bot_process_config(dotenv_path=dotenv).runtime.schematics
 
     assert config.render_enabled is True
     assert config.render_pack_path == pack_path
@@ -463,16 +482,16 @@ def test_schematic_render_settings_load_from_flat_environment_names(
     assert config.render_max_block_count == 12345
 
 
-def test_enabled_schematic_rendering_requires_a_pack(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_enabled_schematic_rendering_requires_a_pack(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_SCHEMATIC_RENDER_ENABLED="true")
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "schematic" for issue in _issues(exc_info.value))
 
 
-def test_remote_schematic_render_pack_requires_a_sha256(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_remote_schematic_render_pack_requires_a_sha256(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_DISCORD_TOKEN="discord-token",
@@ -480,23 +499,24 @@ def test_remote_schematic_render_pack_requires_a_sha256(monkeypatch: pytest.Monk
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "schematic" for issue in _issues(exc_info.value))
 
 
-def test_process_loaders_require_only_their_own_transport(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_process_loaders_require_only_their_own_transport(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
-    assert load_bot_process_config().discord.token.get_secret_value() == "discord-token"
+    assert load_bot_process_config(dotenv_path=dotenv).discord.token.get_secret_value() == "discord-token"
 
     monkeypatch.delenv("SQUID_DISCORD_TOKEN")
     monkeypatch.setenv("SQUID_API_SECRET", "api-secret")
-    assert load_api_process_config().api.secret.get_secret_value() == "api-secret"
+    assert load_api_process_config(dotenv_path=dotenv).api.secret.get_secret_value() == "api-secret"
 
 
 def test_unknown_environment_keys_warn_with_name_only_and_typo_suggestion(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
+    dotenv: Path,
 ) -> None:
     secret_value = "must-not-appear-in-diagnostics"
     _set_environment(
@@ -506,7 +526,7 @@ def test_unknown_environment_keys_warn_with_name_only_and_typo_suggestion(
     )
 
     with caplog.at_level(logging.WARNING, logger="squid.config"):
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     record = next(record for record in caplog.records if record.getMessage().startswith("Unknown SQUID"))
     assert record.__dict__["squid.config.unknown_keys"] == ("SQUID_SCHEMATIC_WORKRES",)
@@ -514,7 +534,9 @@ def test_unknown_environment_keys_warn_with_name_only_and_typo_suggestion(
     assert secret_value not in str(record.__dict__)
 
 
-def test_strict_unknown_environment_keys_fail_without_exposing_values(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_strict_unknown_environment_keys_fail_without_exposing_values(
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path
+) -> None:
     secret_value = "must-not-appear-in-diagnostics"
     _set_environment(
         monkeypatch,
@@ -524,7 +546,7 @@ def test_strict_unknown_environment_keys_fail_without_exposing_values(monkeypatc
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert _issues(exc_info.value) == [
         {
@@ -538,19 +560,19 @@ def test_strict_unknown_environment_keys_fail_without_exposing_values(monkeypatc
 
 def test_sibling_process_keys_in_shared_dotenv_are_not_reported_unknown(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
+    dotenv: Path,
 ) -> None:
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
-    (tmp_path / ".env").write_text("SQUID_API_PORT=9000\nSQUID_WORKER_HEALTH_PORT=9001\n", encoding="utf-8")
+    dotenv.write_text("SQUID_API_PORT=9000\nSQUID_WORKER_HEALTH_PORT=9001\n", encoding="utf-8")
 
     with caplog.at_level(logging.WARNING, logger="squid.config"):
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert not any(record.getMessage().startswith("Unknown SQUID") for record in caplog.records)
 
 
-def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """Aggregation is the contract here, not the current list of required groups.
 
     A loader that raised on the first missing setting would send an operator round the
@@ -562,7 +584,7 @@ def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatc
         monkeypatch.delenv(name, raising=False)
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_application_config()
+        load_application_config(dotenv_path=dotenv)
 
     issues = _issues(exc_info.value)
     fields = {issue["field"] for issue in issues}
@@ -571,7 +593,9 @@ def test_configuration_reports_all_missing_fields(monkeypatch: pytest.MonkeyPatc
     assert all(issue["message"] for issue in issues)
 
 
-def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path
+) -> None:
     """SQUID_CURSOR_SECRET outlived the signed cursors it fed.
 
     Strict mode turns an unknown key into a boot failure, so without the retired-key tombstone a
@@ -585,7 +609,7 @@ def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(monkeypat
         SQUID_CURSOR_SECRET="left-over-from-an-older-release",
     )
 
-    assert load_bot_process_config().database is not None
+    assert load_bot_process_config(dotenv_path=dotenv).database is not None
 
 
 def test_compose_only_keys_in_the_shared_dotenv_do_not_block_boot(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -609,11 +633,11 @@ def test_compose_only_keys_in_the_shared_dotenv_do_not_block_boot(monkeypatch: p
     assert load_bot_process_config().database is not None
 
 
-def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret-long-enough", SQUID_API_KEY_PEPPER="too-short")
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "api.key_pepper" for issue in _issues(exc_info.value))
 
@@ -658,6 +682,7 @@ def test_idempotency_encryption_keyring_is_complete_and_strong(
     active_key_id: str,
     keys: str,
     field: str,
+    dotenv: Path,
 ) -> None:
     """The exact field matters because the rendered message is derived from it.
 
@@ -673,12 +698,12 @@ def test_idempotency_encryption_keyring_is_complete_and_strong(
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == field for issue in _issues(exc_info.value))
 
 
-def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     secret_value = "postgresql://user:super-secret-password@database.example/squid"
     _set_environment(
         monkeypatch,
@@ -690,7 +715,7 @@ def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPat
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_application_config()
+        load_application_config(dotenv_path=dotenv)
 
     rendered_error = f"{exc_info.value} {exc_info.value.backend_detail()} {exc_info.value.context}"
     assert "super-secret-password" not in rendered_error
@@ -698,7 +723,7 @@ def test_configuration_errors_do_not_expose_inputs(monkeypatch: pytest.MonkeyPat
     assert "very-loud" not in rendered_error
 
 
-def test_configuration_failures_name_the_variables_to_change(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configuration_failures_name_the_variables_to_change(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """The rendered text is the whole diagnostic an operator gets.
 
     Nothing renders `context["issues"]`: logging is configured from the settings being loaded,
@@ -713,7 +738,7 @@ def test_configuration_failures_name_the_variables_to_change(monkeypatch: pytest
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_application_config()
+        load_application_config(dotenv_path=dotenv)
 
     rendered = exc_info.value.backend_detail()
     assert "  - SQUID_API_PORT: " in rendered
@@ -721,13 +746,13 @@ def test_configuration_failures_name_the_variables_to_change(monkeypatch: pytest
     assert rendered.endswith("Correct the listed SQUID_* settings and restart the process.")
 
 
-def test_a_missing_settings_group_names_its_required_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_missing_settings_group_names_its_required_variables(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """`SQUID_DATABASE_*: Field required` would not say that the variable is SQUID_DATABASE_URL."""
     for name in (*BASE_ENVIRONMENT, "SQUID_DISCORD_TOKEN"):
         monkeypatch.delenv(name, raising=False)
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     rendered = exc_info.value.backend_detail()
     assert "  - SQUID_DATABASE_URL: " in rendered
@@ -735,7 +760,9 @@ def test_a_missing_settings_group_names_its_required_variables(monkeypatch: pyte
     assert "  - SQUID_DISCORD_TOKEN: " in rendered
 
 
-def test_a_rendered_failure_never_invents_an_environment_variable(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_rendered_failure_never_invents_an_environment_variable(
+    monkeypatch: pytest.MonkeyPatch, dotenv: Path
+) -> None:
     """A name assembled from a validation location can be one no source ever reads.
 
     Setting an invented variable looks like a fix and is then silently ignored, so a location
@@ -748,14 +775,14 @@ def test_a_rendered_failure_never_invents_an_environment_variable(monkeypatch: p
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     rendered = exc_info.value.backend_detail()
     assert "  - SQUID_API_IDEMPOTENCY_KEYS: Every idempotency key must be valid padded base64." in rendered
     assert "SQUID_API_KEYS" not in rendered
 
 
-def test_a_rendered_failure_omits_configured_dictionary_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_rendered_failure_omits_configured_dictionary_keys(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """A validation location can end in a key the deployment chose, so only two levels are read.
 
     `context["issues"]` keeps the full internal path — that is the long-standing structured
@@ -768,12 +795,12 @@ def test_a_rendered_failure_omits_configured_dictionary_keys(monkeypatch: pytest
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert "a-key-id-naming-an-internal-system" not in exc_info.value.backend_detail()
 
 
-def test_an_unparsable_setting_names_the_group_it_belongs_to(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_unparsable_setting_names_the_group_it_belongs_to(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """pydantic-settings fails structured values before validation, with only free text.
 
     Its message names the field but its cause can quote the input, so the field name is taken
@@ -786,7 +813,7 @@ def test_an_unparsable_setting_names_the_group_it_belongs_to(monkeypatch: pytest
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     rendered = exc_info.value.backend_detail()
     assert "  - SQUID_API_*: Could not parse the configured value." in rendered
@@ -799,34 +826,35 @@ def test_an_unparsable_setting_names_the_group_it_belongs_to(monkeypatch: pytest
 def test_a_configuration_failure_exits_without_a_traceback(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    dotenv: Path,
 ) -> None:
     """Entrypoints load settings before logging exists, so the report goes to stderr."""
     _set_environment(monkeypatch, SQUID_API_PORT="65536")
 
     with pytest.raises(SystemExit) as exit_info:
-        load_or_exit(load_api_process_config)
+        load_or_exit(partial(load_api_process_config, dotenv_path=dotenv))
 
     assert exit_info.value.code == 1
     assert "  - SQUID_API_PORT: " in capsys.readouterr().err
 
 
-def test_load_or_exit_returns_a_valid_configuration_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_load_or_exit_returns_a_valid_configuration_unchanged(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret-long-enough", SQUID_API_PORT="9000")
 
-    assert load_or_exit(load_api_process_config).api.port == 9000
+    assert load_or_exit(partial(load_api_process_config, dotenv_path=dotenv)).api.port == 9000
 
 
 @pytest.mark.parametrize("port", ["0", "65536", "not-a-port"])
-def test_api_port_is_bounded(monkeypatch: pytest.MonkeyPatch, port: str) -> None:
+def test_api_port_is_bounded(monkeypatch: pytest.MonkeyPatch, port: str, dotenv: Path) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", SQUID_API_PORT=port)
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "api.port" for issue in _issues(exc_info.value))
 
 
-def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     _set_environment(
         monkeypatch,
         SQUID_API_SECRET="api-secret",
@@ -845,7 +873,7 @@ def test_api_rate_limit_and_trusted_proxy_settings_load(monkeypatch: pytest.Monk
         SQUID_RATE_LIMIT_LOCAL_MAX_KEYS="4096",
     )
 
-    config = load_api_process_config()
+    config = load_api_process_config(dotenv_path=dotenv)
 
     assert config.api.trusted_proxy_ips == ("127.0.0.1", "10.0.0.0/8")
     assert config.rate_limit.redis_url is not None
@@ -876,16 +904,19 @@ def test_invalid_api_rate_limit_settings_are_rejected(
     monkeypatch: pytest.MonkeyPatch,
     setting: dict[str, str],
     field: str,
+    dotenv: Path,
 ) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret", **setting)
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_api_process_config()
+        load_api_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == field for issue in _issues(exc_info.value))
 
 
-def test_google_credentials_are_mutually_exclusive(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_google_credentials_are_mutually_exclusive(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, dotenv: Path
+) -> None:
     credentials_file = tmp_path / "credentials.json"
     credentials_file.write_text("{}", encoding="utf-8")
     _set_environment(
@@ -896,7 +927,7 @@ def test_google_credentials_are_mutually_exclusive(monkeypatch: pytest.MonkeyPat
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "google" for issue in _issues(exc_info.value))
 
@@ -905,6 +936,7 @@ def test_google_credentials_are_mutually_exclusive(monkeypatch: pytest.MonkeyPat
 def test_log_files_must_stay_beneath_log_directory(
     monkeypatch: pytest.MonkeyPatch,
     log_file: str,
+    dotenv: Path,
 ) -> None:
     _set_environment(
         monkeypatch,
@@ -913,6 +945,23 @@ def test_log_files_must_stay_beneath_log_directory(
     )
 
     with pytest.raises(ConfigurationError) as exc_info:
-        load_bot_process_config()
+        load_bot_process_config(dotenv_path=dotenv)
 
     assert any(issue["field"] == "bot.log_file" for issue in _issues(exc_info.value))
+
+
+def test_render_cache_dir_defaults_under_xdg_cache_home(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+
+    assert default_render_cache_dir() == tmp_path / "redstone-squid" / "schematics"
+
+
+def test_render_cache_dir_treats_an_empty_xdg_cache_home_as_unset(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Honouring an empty value literally would scatter caches wherever the process was started."""
+    monkeypatch.setenv("XDG_CACHE_HOME", "")
+
+    cache_dir = default_render_cache_dir(working_directory=tmp_path)
+
+    assert cache_dir == tmp_path / ".cache" / "redstone-squid" / "schematics"

@@ -655,6 +655,22 @@ class GoogleConfig(_FrozenModel):
         return self._credentials_info
 
 
+def default_render_cache_dir(*, working_directory: Path | None = None) -> Path:
+    """Cache root for rendered schematics when the operator names none.
+
+    Honours `XDG_CACHE_HOME`, falling back to `.cache` beside the process working directory
+    rather than the spec's `$HOME/.cache`, because a container image often has no writable home.
+    `working_directory` exists so that fallback can be asserted without `chdir`-ing the process.
+    """
+    cache_home = os.environ.get("XDG_CACHE_HOME")
+    if cache_home:
+        return Path(cache_home) / "redstone-squid" / "schematics"
+    # An empty XDG_CACHE_HOME means "unset" per the XDG spec; taking it literally would resolve
+    # the cache to a bare relative "redstone-squid/schematics" under the working directory.
+    base = Path.cwd() if working_directory is None else working_directory
+    return base / ".cache" / "redstone-squid" / "schematics"
+
+
 class SchematicConfig(_FrozenModel):
     """Schematic engine resource budgets and worker supervision settings.
 
@@ -702,11 +718,7 @@ class SchematicConfig(_FrozenModel):
     """Expected lowercase SHA-256. Required for remote packs; local packs may derive it."""
     render_public_base_url: AnyHttpUrl | None = None
     """Public API origin used for stable worker-published PNG URLs."""
-    render_cache_dir: Path = Field(
-        default_factory=lambda: (
-            Path(os.environ.get("XDG_CACHE_HOME", Path.cwd() / ".cache")) / "redstone-squid" / "schematics"
-        )
-    )
+    render_cache_dir: Path = Field(default_factory=default_render_cache_dir)
     render_width: int = Field(default=768, ge=64, le=4096)
     render_height: int = Field(default=768, ge=64, le=4096)
     render_max_block_count: int = Field(default=400_000, ge=1)
@@ -1174,6 +1186,14 @@ class ApplicationConfig(BotProcessConfig):
 
 _DOTENV_KEY = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
 
+DEFAULT_DOTENV_PATH = Path(".env")
+"""Dotenv file the loaders read when a caller injects no other path.
+
+Deliberately relative, so a deployment still picks up the file beside the process working
+directory. Callers that must not depend on the working directory — tests above all — pass an
+absolute `dotenv_path` to the loader instead of moving the whole process with `chdir`.
+"""
+
 
 _RETIRED_ENVIRONMENT_KEYS = frozenset({"SQUID_CURSOR_SECRET"})
 """Keys a deployment may still be setting for a feature that has since been removed.
@@ -1267,12 +1287,11 @@ def _issues_message(summary: str, issues: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _configured_environment_keys() -> set[str]:
+def _configured_environment_keys(dotenv_path: Path) -> set[str]:
     """Read configured key names without parsing or retaining their values."""
     names = {name for name in os.environ if name.upper().startswith("SQUID_")}
-    dotenv = Path(".env")
     try:
-        lines = dotenv.read_text(encoding="utf-8").splitlines()
+        lines = dotenv_path.read_text(encoding="utf-8").splitlines()
     except FileNotFoundError:
         return names
     except OSError:
@@ -1286,10 +1305,10 @@ def _configured_environment_keys() -> set[str]:
     return names
 
 
-def _audit_unknown_environment_keys(*, strict: bool) -> None:
+def _audit_unknown_environment_keys(*, strict: bool, dotenv_path: Path) -> None:
     """Report likely deployment typos while accepting sibling-process keys."""
     known = _known_environment_keys() | _RETIRED_ENVIRONMENT_KEYS | _INFRASTRUCTURE_ENVIRONMENT_KEYS
-    unknown = sorted(name for name in _configured_environment_keys() if name.upper() not in known)
+    unknown = sorted(name for name in _configured_environment_keys(dotenv_path) if name.upper() not in known)
     if not unknown:
         return
     suggestions = {
@@ -1354,12 +1373,13 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
     )
 
 
-def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT]) -> ConfigT:
+def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT], dotenv_path: Path | None) -> ConfigT:
+    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
     try:
-        config = config_type()  # type: ignore[call-arg]
+        config = config_type(_env_file=resolved)  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=config.strict_unknown_keys)
+    _audit_unknown_environment_keys(strict=config.strict_unknown_keys, dotenv_path=resolved)
     return config
 
 
@@ -1377,27 +1397,27 @@ def load_or_exit[ConfigT](loader: Callable[[], ConfigT]) -> ConfigT:
         raise SystemExit(1) from None
 
 
-def load_application_config() -> ApplicationConfig:
+def load_application_config(*, dotenv_path: Path | None = None) -> ApplicationConfig:
     """Load and validate settings for the combined application launcher."""
-    return _load_settings(ApplicationConfig)
+    return _load_settings(ApplicationConfig, dotenv_path)
 
 
-def load_bot_process_config() -> BotProcessConfig:
+def load_bot_process_config(*, dotenv_path: Path | None = None) -> BotProcessConfig:
     """Load and validate settings for the standalone Discord process."""
-    return _load_settings(BotProcessConfig)
+    return _load_settings(BotProcessConfig, dotenv_path)
 
 
-def load_api_process_config() -> ApiProcessConfig:
+def load_api_process_config(*, dotenv_path: Path | None = None) -> ApiProcessConfig:
     """Load and validate settings for the standalone HTTP API process."""
-    return _load_settings(ApiProcessConfig)
+    return _load_settings(ApiProcessConfig, dotenv_path)
 
 
-def load_worker_process_config() -> WorkerProcessConfig:
+def load_worker_process_config(*, dotenv_path: Path | None = None) -> WorkerProcessConfig:
     """Load and validate settings for the standalone database worker process."""
-    return _load_settings(WorkerProcessConfig)
+    return _load_settings(WorkerProcessConfig, dotenv_path)
 
 
-def load_database_config() -> DatabaseConfig:
+def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
     """Load only the database settings needed by migration tooling."""
 
     class DatabaseSettings(BaseSettings):
@@ -1405,15 +1425,16 @@ def load_database_config() -> DatabaseConfig:
         database: DatabaseConfig
         strict_unknown_keys: bool = False
 
+    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
     try:
-        settings = DatabaseSettings()  # type: ignore[call-arg]
+        settings = DatabaseSettings(_env_file=resolved)  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys)
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
     return settings.database
 
 
-def load_worker_observability_config() -> ObservabilityConfig:
+def load_worker_observability_config(*, dotenv_path: Path | None = None) -> ObservabilityConfig:
     """Load only inherited observability settings in a schematic worker child."""
 
     class WorkerObservabilitySettings(BaseSettings):
@@ -1421,15 +1442,16 @@ def load_worker_observability_config() -> ObservabilityConfig:
         observability: ObservabilityConfig = ObservabilityConfig()
         strict_unknown_keys: bool = False
 
+    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
     try:
-        settings = WorkerObservabilitySettings()  # type: ignore[call-arg]
+        settings = WorkerObservabilitySettings(_env_file=resolved)  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys)
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
     return settings.observability
 
 
-def load_worker_log_config() -> LogConfig:
+def load_worker_log_config(*, dotenv_path: Path | None = None) -> LogConfig:
     """Load only inherited logging settings in a schematic worker child."""
 
     class WorkerLogSettings(BaseSettings):
@@ -1437,15 +1459,17 @@ def load_worker_log_config() -> LogConfig:
         log: LogConfig = LogConfig()
         strict_unknown_keys: bool = False
 
+    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
     try:
-        settings = WorkerLogSettings()  # type: ignore[call-arg]
+        settings = WorkerLogSettings(_env_file=resolved)  # type: ignore[call-arg]
     except (ValidationError, SettingsError) as exc:
         raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys)
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
     return settings.log
 
 
 __all__ = [
+    "DEFAULT_DOTENV_PATH",
     "EMBEDDING_DIMENSION",
     "ApiProcessConfig",
     "ApplicationConfig",
@@ -1470,6 +1494,7 @@ __all__ = [
     "UpstreamHttpConfig",
     "WorkerConfig",
     "WorkerProcessConfig",
+    "default_render_cache_dir",
     "load_api_process_config",
     "load_application_config",
     "load_bot_process_config",
