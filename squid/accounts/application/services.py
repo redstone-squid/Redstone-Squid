@@ -11,7 +11,9 @@ from squid.accounts.application.ports import AccountRepository
 from squid.accounts.domain import (
     Account,
     AccountConsent,
+    AccountIdentity,
     AccountMerge,
+    AccountProfile,
     AliasClaim,
     ClaimStatus,
     CreatorAlias,
@@ -19,16 +21,21 @@ from squid.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
+    ProfileUpdate,
+    PublicCreatorProfile,
     RecentAccountProof,
+    present_public_profile,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
+    AccountIdentityNotFoundError,
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
     ConsentRequiredError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
+    LastIdentityError,
     LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
@@ -256,8 +263,78 @@ class AccountService:
             )
 
     async def unlink_minecraft_account(self, account_id: int) -> bool:
-        """Unlink every Java identity from an account."""
+        """Unlink every Java identity from an account.
+
+        Superseded by `unlink_identity`, which removes one identity rather than a whole provider.
+        Kept until the bot stops calling it.
+        """
         return await self._repository.unlink_java_identity(account_id)
+
+    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+        """Return every identity linked to an account, hidden ones included.
+
+        This is the self view, so visibility does not filter it: you can only unhide what you can
+        see listed.
+        """
+        account = await self._repository.get_by_id(account_id)
+        if account is None:
+            raise AccountNotFoundError(account_id)
+        return account.identities
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
+        """Remove one linked identity, refusing to strand the account without any.
+
+        Creator credit is deliberately untouched: aliases stay claimed, because a build's
+        attribution is a fact about the build and should not change when someone tidies up how
+        they sign in.
+        """
+        if await self._repository.count_identities(account_id) <= 1:
+            raise LastIdentityError(account_id=account_id)
+        removed = await self._repository.unlink_identity(account_id, identity_id)
+        if removed is None:
+            raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
+        return removed
+
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
+        """Publish or withhold one linked identity on the account's public profile."""
+        return await self._repository.set_identity_visibility(account_id, identity_id, is_public=is_public)
+
+    async def record_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
+        """Store the provider key an avatar URL needs, when a caller happens to hold a fresh one."""
+        await self._repository.set_identity_avatar_key(account_id, identity_id, avatar_key)
+
+    async def get_profile(self, account_id: int) -> AccountProfile:
+        """Return an account's own profile, including anything it has chosen to hide."""
+        profile = await self._repository.get_profile(account_id)
+        if profile is None:
+            raise AccountNotFoundError(account_id)
+        return profile
+
+    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
+        """Apply a partial profile edit after validating it.
+
+        Consent-gated like every other write that publishes something about a person: a profile is
+        the most public thing an account owns.
+        """
+        account = await self._repository.get_by_id(account_id)
+        if account is None:
+            raise AccountNotFoundError(account_id)
+        if account.needs_consent_refresh:
+            raise ConsentRequiredError(account_id=account_id)
+        return await self._repository.upsert_profile(account_id, update.validated())
+
+    async def clear_profile(self, account_id: int) -> AccountProfile:
+        """Reset a profile to its empty state, for staff handling abuse.
+
+        Deliberately does not hide the profile: `hidden` belongs to its owner, and a moderation
+        action that also flipped it would take that decision away from them.
+        """
+        return await self._repository.clear_profile(account_id)
+
+    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+        """Return what a stranger may see of one creator, following merge redirects."""
+        record = await self._repository.get_creator_profile_record(public_id)
+        return None if record is None else present_public_profile(record)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Re-read the linked Java name from Mojang and reconcile the creator credit.
