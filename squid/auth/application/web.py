@@ -9,7 +9,6 @@ from collections.abc import Callable, Mapping
 from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import CONSENT_CUTOFF
 from squid.auth.application.ports import WebSessionRepository
 from squid.auth.application.providers import OAuthProvider
 from squid.auth.domain.sessions import OAuthState
@@ -115,9 +114,3 @@ class WebSessionService:
                 resource="identity_provider",
             )
         return provider
-
-
-def consent_pending(created_at: Instant | None, consent_version: str | None, current_version: str) -> bool:
-    """Apply the explicit grandfather cutoff to the write-consent gate."""
-    cutoff = Instant.parse_iso(CONSENT_CUTOFF)
-    return created_at is not None and created_at >= cutoff and consent_version != current_version
