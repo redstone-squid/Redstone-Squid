@@ -8,6 +8,7 @@ from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
 from squid.api.v1.capabilities import router as capabilities_router
 from squid.api.v1.cli_auth import router as cli_auth_router
+from squid.api.v1.consent import router as consent_router
 from squid.api.v1.creators import profiles_router
 from squid.api.v1.creators import router as creator_aliases_router
 from squid.api.v1.diagnostics import router as diagnostics_router
@@ -34,6 +35,7 @@ router.include_router(auth_router)
 router.include_router(builds_router)
 router.include_router(capabilities_router)
 router.include_router(cli_auth_router)
+router.include_router(consent_router)
 router.include_router(diagnostics_router)
 router.include_router(me_router)
 router.include_router(me_accounts_router)

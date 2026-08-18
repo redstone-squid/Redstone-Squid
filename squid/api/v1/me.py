@@ -5,7 +5,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from squid.accounts.application import AccountService
-from squid.accounts.errors import AccountNotFoundError
+from squid.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.accounts.errors import AccountNotFoundError, StaleConsentNoticeError
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries
 from squid.api.errors import responses
@@ -22,6 +23,7 @@ from squid.api.pagination import (
 from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
+from squid.api.v1.schemas.consent import ConsentGrantRequest
 from squid.api.v1.schemas.me import (
     AccountMergeDetail,
     IdentityDetail,
@@ -86,10 +88,20 @@ async def _render_me(accounts: AccountService, account_id: int, *, consent_pendi
     operation_id="account_consent_grant",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
-async def grant_consent(accounts: Accounts, caller: UserCaller) -> UserMe:
-    """Accept the current privacy notice for future writes."""
+async def grant_consent(
+    accounts: Accounts,
+    caller: UserCaller,
+    body: ConsentGrantRequest | None = None,
+) -> UserMe:
+    """Accept the current privacy notice for future writes.
+
+    A client that names the version it displayed is held to it: consent recorded against text the
+    user never saw is the failure that versioning the notice exists to prevent.
+    """
     if caller.account_id is None:
         raise AuthenticationError
+    if body is not None and body.version is not None and body.version != CURRENT_CONSENT_VERSION:
+        raise StaleConsentNoticeError(offered=body.version, current=CURRENT_CONSENT_VERSION)
     await accounts.grant_current_consent(caller.account_id)
     return await _render_me(accounts, caller.account_id, consent_pending=False)
 
