@@ -24,7 +24,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.attributes import get_history
 from whenever import Instant
 
-from squid.accounts.domain import ClaimMethod, ClaimStatus, IdentityProvider, fold_creator_name
+from squid.accounts.domain import (
+    MERGE_TICKET_TTL_SECONDS,
+    ClaimMethod,
+    ClaimStatus,
+    IdentityProvider,
+    fold_creator_name,
+)
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC
 
@@ -379,5 +385,45 @@ class VerificationAttempt(Base):
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     updated_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+
+
+class AccountMergeTicket(Base):
+    """A live, single-use claim that one account consents to being absorbed by another.
+
+    A merge needs recent proof of *both* accounts, and no one session can hold both. The ticket is
+    that second proof, carried through the only channel the two sides share: a person who can sign
+    into each. Minting one is the absorbed side authenticating; redeeming it is the surviving side
+    doing so, inside the ticket's lifetime.
+
+    Keyed on the account rather than on the digest, so minting replaces. One account can only ever
+    have one live ticket, which is most of why an eight-character code is enough.
+    """
+
+    __tablename__ = "account_merge_tickets"
+    __table_args__ = (
+        CheckConstraint("expires_at > created_at", name="account_merge_tickets_expiry_after_creation"),
+        Index("account_merge_tickets_code_digest_idx", "code_digest"),
+    )
+
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", name="account_merge_tickets_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    code_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    """Digest, never the code. The plaintext is shown once at mint time and never stored, exactly
+    as a verification code is."""
+
+    expires_at: Mapped[Instant] = mapped_column(
+        InstantUTC(),
+        nullable=False,
+        default_factory=lambda: Instant.now().add(seconds=MERGE_TICKET_TTL_SECONDS),
+    )
+    """Doubles as the proof timestamp: a ticket is redeemable for exactly as long as
+    `RecentAccountProof` accepts the authentication that minted it."""
+
+    created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )

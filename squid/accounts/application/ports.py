@@ -22,6 +22,7 @@ from squid.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
+    MergeTicket,
     ProfileUpdate,
 )
 
@@ -86,6 +87,12 @@ class AccountRepository(Protocol):
     async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile: ...
 
     async def clear_profile(self, account_id: int) -> AccountProfile: ...
+
+    async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket: ...
+
+    async def peek_merge_ticket(self, code: str) -> MergeTicket | None: ...
+
+    async def consume_merge_ticket(self, code: str) -> MergeTicket | None: ...
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge: ...
 
