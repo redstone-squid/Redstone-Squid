@@ -1,5 +1,5 @@
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -19,6 +19,7 @@ from squid.records.application.ports import RecomputeLease
 from squid.records.application.services import RecordComputationService, RecordService
 from squid.records.domain import (
     BuildKind,
+    CategoryText,
     DoorCategory,
     RecordCandidate,
     RecordClass,
@@ -40,6 +41,7 @@ class FakeRuns:
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
+        self.requested_titles: dict[str, dict[RecordClass, CategoryText]] = {}
         self.gap_rows: tuple[RecordGap, ...] = ()
         self.title_gap_rows: tuple[TitleDiagnosticGap, ...] = ()
         self.queued: tuple[BuildKind, ...] = ()
@@ -90,9 +92,15 @@ class FakeRuns:
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
 
-    async def save_requested_category(self, ruleset_id: int, category: CategoryIdentity) -> None:
+    async def save_requested_category(
+        self,
+        ruleset_id: int,
+        category: CategoryIdentity,
+        titles: Mapping[RecordClass, CategoryText],
+    ) -> None:
         assert ruleset_id == 7
         self.requested.setdefault(category.kind, []).append(category)
+        self.requested_titles[category.key] = dict(titles)
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
         self.queued = (*self.queued, kind)
@@ -316,7 +324,12 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     )
 
     assert summary.run_ids == (1,)
-    assert runs.requested[BuildKind.DOOR][0].restriction_ids == tuple(range(1, 10))
+    identity = runs.requested[BuildKind.DOOR][0]
+    assert identity.restriction_ids == tuple(range(1, 10))
+    titles = runs.requested_titles[identity.key]
+    assert set(titles) == set(RecordClass)
+    assert all("2x2" in text.title for text in titles.values())
+    assert all(identity.base_key not in text.title for text in titles.values())
     exact = [record for record in runs.batches[0].records if len(record.competition.identity.restriction_ids) == 9]
     assert {record.record_class for record in exact} == set(RecordClass)
     assert all(record.competition.source == "public_lookup" for record in exact)
