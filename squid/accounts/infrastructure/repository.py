@@ -30,6 +30,7 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
+    MergeTicket,
     ProfileLink,
     ProfileUpdate,
     fold_creator_name,
@@ -44,6 +45,7 @@ from squid.accounts.errors import (
 )
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.infrastructure.models import AccountMergeTicket as AccountMergeTicketModel
 from squid.accounts.infrastructure.models import AccountProfile as AccountProfileModel
 from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
 from squid.accounts.infrastructure.models import CreatorAliasClaim as CreatorAliasClaimModel
@@ -100,6 +102,14 @@ def _to_profile(model: AccountProfileModel) -> AccountProfile:
         hidden=model.hidden,
         avatar_identity_id=model.avatar_identity_id,
         updated_at=model.updated_at,
+    )
+
+
+def _to_merge_ticket(model: AccountMergeTicketModel) -> MergeTicket:
+    return MergeTicket(
+        account_id=model.account_id,
+        created_at=model.created_at,
+        expires_at=model.expires_at,
     )
 
 
@@ -391,6 +401,57 @@ class AccountRepository:
             model.updated_at = _now()
             await session.flush()
             return _to_profile(model)
+
+    async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
+        """Mint the account's merge ticket, replacing any live one.
+
+        Replace rather than insert: one live ticket per account is what keeps a short code safe,
+        and minting a second would double a guesser's target surface for no user-visible gain.
+        """
+        now = _now()
+        expires_at = now.add(seconds=ttl_seconds)
+        digest = self.hash_verification_code(code)
+        async with self._session_factory.begin() as session:
+            account = await session.get(AccountModel, account_id)
+            if account is None:
+                raise AccountNotFoundError(account_id)
+            await session.execute(
+                insert(AccountMergeTicketModel)
+                .values(account_id=account_id, code_digest=digest, created_at=now, expires_at=expires_at)
+                .on_conflict_do_update(
+                    index_elements=[AccountMergeTicketModel.account_id],
+                    set_={"code_digest": digest, "created_at": now, "expires_at": expires_at},
+                )
+            )
+            return MergeTicket(account_id=account_id, created_at=now, expires_at=expires_at)
+
+    async def peek_merge_ticket(self, code: str) -> MergeTicket | None:
+        """Return a live ticket without spending it, for a confirmation screen."""
+        async with self._session_factory() as session:
+            row = await session.scalar(
+                select(AccountMergeTicketModel).where(
+                    AccountMergeTicketModel.code_digest == self.hash_verification_code(code),
+                    AccountMergeTicketModel.expires_at > _now(),
+                )
+            )
+            return None if row is None else _to_merge_ticket(row)
+
+    async def consume_merge_ticket(self, code: str) -> MergeTicket | None:
+        """Spend a live ticket, returning it, or `None` when there is nothing to spend.
+
+        The delete is the redemption: a code that reaches here twice fails the second time, so a
+        replayed request cannot merge a second account into the survivor.
+        """
+        async with self._session_factory.begin() as session:
+            row = await session.scalar(
+                delete(AccountMergeTicketModel)
+                .where(
+                    AccountMergeTicketModel.code_digest == self.hash_verification_code(code),
+                    AccountMergeTicketModel.expires_at > _now(),
+                )
+                .returning(AccountMergeTicketModel)
+            )
+            return None if row is None else _to_merge_ticket(row)
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge:
         """Move resources to one account and preserve the absorbed public ID as a redirect."""

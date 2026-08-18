@@ -1,5 +1,6 @@
 """Account application services: one account may hold Discord and Java identities alike."""
 
+import base64
 import logging
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
@@ -9,6 +10,8 @@ from whenever import Instant
 
 from squid.accounts.application.ports import AccountRepository
 from squid.accounts.domain import (
+    MERGE_CODE_BYTES,
+    MERGE_TICKET_TTL_SECONDS,
     Account,
     AccountConsent,
     AccountIdentity,
@@ -21,6 +24,8 @@ from squid.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
+    MergePreview,
+    MergeTicket,
     ProfileUpdate,
     PublicCreatorProfile,
     RecentAccountProof,
@@ -33,6 +38,7 @@ from squid.accounts.errors import (
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
     ConsentRequiredError,
+    InvalidMergeCodeError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
     LastIdentityError,
@@ -138,6 +144,62 @@ class AccountService:
         ):
             raise InvalidMergeProofError
         return await self._repository.merge(surviving_proof.account_id, absorbed_proof.account_id)
+
+    async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
+        """Mint a single-use code offering this account up to be absorbed.
+
+        Called on the account that is going *away*. That direction is deliberate: minting is an
+        act of consent by the side that loses its public creator id, and it is the side that must
+        prove it authenticated recently, since the surviving side proves that by redeeming.
+
+        The plaintext is returned once and never stored.
+        """
+        code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
+        # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
+        # verification code, so no application-layer value is ever the stored one.
+        ticket = await self._repository.replace_merge_ticket(account_id, code, MERGE_TICKET_TTL_SECONDS)
+        return code, ticket
+
+    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+        """Describe what redeeming *code* would move, without spending it.
+
+        A merge cannot be undone -- the absorbed public creator id becomes a permanent redirect --
+        so both surfaces show this before the irreversible button.
+        """
+        ticket = await self._repository.peek_merge_ticket(code)
+        if ticket is None or ticket.account_id == surviving_account_id:
+            # Self-merge is refused here as well as in `merge_accounts`, so the preview never
+            # renders a confirmation for something that cannot commit.
+            raise InvalidMergeCodeError
+        absorbed = await self._repository.get_by_id(ticket.account_id)
+        if absorbed is None or absorbed.public_creator_id is None:
+            raise InvalidMergeCodeError
+        record = await self._repository.get_creator_profile_record(absorbed.public_creator_id)
+        aliases = () if record is None else record.aliases
+        return MergePreview(
+            absorbed_public_creator_id=absorbed.public_creator_id,
+            alias_names=tuple(alias.name for alias in aliases),
+            identity_count=len(absorbed.identities),
+            build_count=sum(alias.build_count for alias in aliases),
+        )
+
+    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
+        """Absorb the account that minted *code* into the caller's.
+
+        Consuming the ticket is what supplies the absorbed side's `RecentAccountProof`: the ticket
+        was minted by an authenticated session and lives exactly as long as such a proof is
+        accepted, so its creation timestamp is the proof timestamp. The caller authenticating now
+        is the surviving side's.
+        """
+        ticket = await self._repository.consume_merge_ticket(code)
+        if ticket is None:
+            raise InvalidMergeCodeError
+        checked_at = now or Instant.now()
+        return await self.merge_accounts(
+            RecentAccountProof(surviving_account_id, checked_at),
+            RecentAccountProof(ticket.account_id, ticket.created_at),
+            now=checked_at,
+        )
 
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
