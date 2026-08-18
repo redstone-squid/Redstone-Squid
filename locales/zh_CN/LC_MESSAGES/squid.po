@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 05:35+0000\n"
+"POT-Creation-Date: 2026-08-19 05:39+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -113,7 +113,7 @@ msgstr ""
 msgid "(hidden)"
 msgstr ""
 
-#: squid/bot/submission/search.py:108
+#: squid/bot/submission/search.py:112
 #, python-brace-format
 msgid ""
 "**#{id}** {title}\n"
@@ -470,7 +470,7 @@ msgid ""
 "nothing."
 msgstr ""
 
-#: squid/bot/submission/search.py:198
+#: squid/bot/submission/search.py:231
 msgid "Alias added."
 msgstr "别名已添加。"
 
@@ -478,7 +478,7 @@ msgstr "别名已添加。"
 msgid "Alias already added"
 msgstr "别名已存在"
 
-#: squid/bot/submission/search.py:192
+#: squid/bot/submission/search.py:225
 msgid "Alias already on this restriction."
 msgstr "该别名已存在于此限制中。"
 
@@ -490,7 +490,7 @@ msgstr "别名已被使用"
 msgid "Allow direct messages from this server, then run the command again."
 msgstr ""
 
-#: squid/bot/submission/search.py:192
+#: squid/bot/submission/search.py:225
 msgid "Already added"
 msgstr "已添加"
 
@@ -1332,8 +1332,8 @@ msgstr ""
 
 #: squid/bot/settings.py:110 squid/bot/settings.py:141
 #: squid/bot/settings.py:184 squid/bot/settings.py:193
-#: squid/bot/settings.py:216 squid/bot/submission/search.py:230
-#: squid/bot/submission/search.py:245 squid/bot/submission/search.py:310
+#: squid/bot/settings.py:216 squid/bot/submission/search.py:263
+#: squid/bot/submission/search.py:278 squid/bot/submission/search.py:341
 msgid "Error"
 msgstr "错误"
 
@@ -1675,6 +1675,11 @@ msgstr "内部错误"
 #: squid/api/errors.py:214 squid/api/errors.py:285
 msgid "Internal server error"
 msgstr "内部服务器错误"
+
+#: squid/bot/submission/search.py:349
+#, python-brace-format
+msgid "Internal state for build #{id} is attached."
+msgstr ""
 
 #: squid/records/application/services.py:459
 #, python-brace-format
@@ -2045,8 +2050,8 @@ msgstr ""
 msgid "No build credits a creator by that name."
 msgstr ""
 
-#: squid/bot/submission/search.py:230 squid/bot/submission/search.py:245
-#: squid/bot/submission/search.py:310
+#: squid/bot/submission/search.py:263 squid/bot/submission/search.py:278
+#: squid/bot/submission/search.py:341
 msgid "No build with that ID."
 msgstr "没有该 ID 对应的构造。"
 
@@ -2157,7 +2162,7 @@ msgstr ""
 msgid "Nothing has failed within the retention window."
 msgstr ""
 
-#: squid/bot/submission/search.py:212
+#: squid/bot/submission/search.py:245
 msgid "Nothing is waiting for review."
 msgstr ""
 
@@ -2327,7 +2332,7 @@ msgstr "可选：将标题诊断限制为单一构造类型。"
 msgid "Optionally rebuild just doors or extenders."
 msgstr "可选：仅重建门或延伸器。"
 
-#: squid/bot/submission/search.py:138
+#: squid/bot/submission/search.py:171
 msgid "Order results by a field, ascending or descending."
 msgstr ""
 
@@ -2373,7 +2378,7 @@ msgstr ""
 msgid "Pattern types, comma separated. For example: full lamp, funnel."
 msgstr ""
 
-#: squid/bot/submission/search.py:209
+#: squid/bot/submission/search.py:242
 msgid "Pending submissions"
 msgstr ""
 
@@ -2933,7 +2938,7 @@ msgstr ""
 msgid "Search results cannot be sorted by {field_name}."
 msgstr ""
 
-#: squid/bot/submission/search.py:136
+#: squid/bot/submission/search.py:169
 msgid "Search text and filters, e.g. `width:5`."
 msgstr "搜索文本和过滤条件，例如 `width:5`。"
 
@@ -3100,11 +3105,11 @@ msgstr ""
 msgid "Submission form"
 msgstr "提交表单"
 
-#: squid/bot/submission/search.py:269
+#: squid/bot/submission/search.py:302
 msgid "Submission has been confirmed."
 msgstr "提交已确认。"
 
-#: squid/bot/submission/search.py:290
+#: squid/bot/submission/search.py:323
 msgid "Submission has been denied."
 msgstr "提交已被拒绝。"
 
@@ -3134,8 +3139,8 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/submission/edit.py:178 squid/bot/submission/search.py:198
-#: squid/bot/submission/search.py:269 squid/bot/submission/search.py:290
+#: squid/bot/submission/edit.py:178 squid/bot/submission/search.py:231
+#: squid/bot/submission/search.py:302 squid/bot/submission/search.py:323
 msgid "Success"
 msgstr "成功"
 
@@ -3319,19 +3324,19 @@ msgstr ""
 msgid "The Fabric PKCE proof is invalid."
 msgstr ""
 
-#: squid/bot/submission/search.py:299
+#: squid/bot/submission/search.py:332
 msgid "The ID of the build whose debug details you want to see."
 msgstr "你要查看调试详情的构造 ID。"
 
-#: squid/bot/submission/search.py:260
+#: squid/bot/submission/search.py:293
 msgid "The ID of the build you want to confirm."
 msgstr "你要确认的构造 ID。"
 
-#: squid/bot/submission/search.py:277
+#: squid/bot/submission/search.py:310
 msgid "The ID of the build you want to deny."
 msgstr "你要拒绝的构造 ID。"
 
-#: squid/bot/submission/search.py:220
+#: squid/bot/submission/search.py:253
 msgid "The ID of the build you want to see."
 msgstr "你要查看的构造 ID。"
 
@@ -3371,7 +3376,7 @@ msgstr ""
 msgid "The active idempotency encryption key is absent from the keyring."
 msgstr ""
 
-#: squid/bot/submission/search.py:181
+#: squid/bot/submission/search.py:214
 msgid "The additional name."
 msgstr "附加名称。"
 
@@ -3530,7 +3535,7 @@ msgstr "请求的操作无法完成。"
 msgid "The requested resource was not found."
 msgstr "找不到请求的资源。"
 
-#: squid/bot/submission/search.py:180
+#: squid/bot/submission/search.py:213
 msgid "The restriction to add another name for."
 msgstr "要为其添加别名的限制。"
 
@@ -3810,7 +3815,7 @@ msgstr "使用 `/help <command>` 获取更多信息。"
 msgid "Use a supported Minecraft version format and try again."
 msgstr "请使用受支持的 Minecraft 版本格式后重试。"
 
-#: squid/bot/submission/search.py:139
+#: squid/bot/submission/search.py:172
 msgid "Use keyword matching or smart meaning-based matching."
 msgstr "使用关键词匹配或基于语义的智能匹配。"
 
@@ -3969,7 +3974,7 @@ msgstr ""
 msgid "Weigh a role's votes"
 msgstr ""
 
-#: squid/bot/submission/search.py:137
+#: squid/bot/submission/search.py:170
 msgid "What to look through: records, builds, patterns, restrictions, or all."
 msgstr "要搜索的范围：记录、构造、样式、限制或全部内容。"
 
@@ -4541,7 +4546,7 @@ msgstr ""
 msgid "shown publicly"
 msgstr ""
 
-#: squid/bot/submission/search.py:104
+#: squid/bot/submission/search.py:108
 msgid "someone unlinked"
 msgstr ""
 
@@ -4586,7 +4591,7 @@ msgstr "向当前服务器"
 msgid "unidentified account (internal ID `{account_id}`)"
 msgstr ""
 
-#: squid/bot/submission/search.py:111 squid/bot/verify.py:277
+#: squid/bot/submission/search.py:115 squid/bot/verify.py:277
 msgid "unknown"
 msgstr ""
 
