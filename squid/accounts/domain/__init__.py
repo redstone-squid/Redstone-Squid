@@ -1,11 +1,16 @@
 """Public account domain API: one account, many identities."""
 
-from squid.accounts.domain.models import (
+from squid.accounts.domain.consent import (
     CONSENT_CUTOFF,
     CURRENT_CONSENT_VERSION,
+    PRIVACY_NOTICE,
+    PRIVACY_NOTICE_TITLE,
+    AccountConsent,
+    consent_refresh_required,
+)
+from squid.accounts.domain.models import (
     MERGE_PROOF_MAX_AGE_SECONDS,
     Account,
-    AccountConsent,
     AccountIdentity,
     AccountMerge,
     AliasClaim,
@@ -20,7 +25,6 @@ from squid.accounts.domain.models import (
     LinkReservation,
     RecentAccountProof,
     VerificationCode,
-    consent_refresh_required,
     fold_creator_name,
 )
 from squid.accounts.domain.profiles import (
@@ -63,6 +67,8 @@ __all__ = [
     "MERGE_CODE_BYTES",
     "MERGE_PROOF_MAX_AGE_SECONDS",
     "MERGE_TICKET_TTL_SECONDS",
+    "PRIVACY_NOTICE",
+    "PRIVACY_NOTICE_TITLE",
     "PROFILE_LINK_SCHEMES",
     "UNSET",
     "Account",

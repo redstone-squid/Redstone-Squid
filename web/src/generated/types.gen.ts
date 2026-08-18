@@ -768,6 +768,18 @@ export type CliSessionExchangeRequest = {
 };
 
 /**
+ * ConsentGrantRequest
+ *
+ * Which notice version the client actually displayed before asking.
+ */
+export type ConsentGrantRequest = {
+    /**
+     * Version
+     */
+    version?: string | null;
+};
+
+/**
  * ControlKind
  *
  * The small set of controls every client knows how to draw.
@@ -1267,7 +1279,7 @@ export type DraftSummaryResponse = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
  * ErrorReportDetail
@@ -2272,6 +2284,30 @@ export type PaperChallengeExchangeRequest = {
      * Device Code
      */
     device_code: string;
+};
+
+/**
+ * PrivacyNoticeDetail
+ *
+ * The current notice, its version, and the locale it was rendered in.
+ */
+export type PrivacyNoticeDetail = {
+    /**
+     * Version
+     */
+    version: string;
+    /**
+     * Locale
+     */
+    locale: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Body
+     */
+    body: string;
 };
 
 /**
@@ -4558,6 +4594,35 @@ export type CliSessionRevokeResponses = {
 
 export type CliSessionRevokeResponse = CliSessionRevokeResponses[keyof CliSessionRevokeResponses];
 
+export type ConsentNoticeGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/consent/notice';
+};
+
+export type ConsentNoticeGetErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type ConsentNoticeGetError = ConsentNoticeGetErrors[keyof ConsentNoticeGetErrors];
+
+export type ConsentNoticeGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: PrivacyNoticeDetail;
+};
+
+export type ConsentNoticeGetResponse = ConsentNoticeGetResponses[keyof ConsentNoticeGetResponses];
+
 export type DiagnosticsErrorsClearData = {
     body?: never;
     headers?: {
@@ -4743,7 +4808,10 @@ export type AccountGetResponses = {
 export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
 
 export type AccountConsentGrantData = {
-    body?: never;
+    /**
+     * Body
+     */
+    body?: ConsentGrantRequest | null;
     headers?: {
         /**
          * Idempotency-Key
