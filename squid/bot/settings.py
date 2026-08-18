@@ -11,7 +11,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain.catalogue import (
     SETTINGS_SERVER_EDIT,
@@ -33,6 +33,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
     @hybrid_group(name="settings")
     @requires(SETTINGS_SERVER_VIEW, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT, mode="any")
+    @hide_unless(manage_guild=True)
     @guild_only()
     async def settings_hybrid_group(self, ctx: Context[BotT]):
         """Allows you to configure the bot for your server."""

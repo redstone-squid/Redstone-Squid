@@ -13,7 +13,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -180,6 +180,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @commands.hybrid_command(name="archive")
     @requires(MESSAGE_ARCHIVE_CREATE, guild_only=True)
+    @hide_unless(manage_messages=True)
     async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = True):
         """Makes a copy of the message in the current channel."""
         if isinstance(message.author, discord.User):

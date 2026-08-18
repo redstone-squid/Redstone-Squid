@@ -62,9 +62,21 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 | 4 | 04-settings.md (todo) | Settings panel: view everything at once, edit several keys per trip; bring `voting` replies onto i18n/layouts | Not started |
 | 5 | 05-condensation.md (todo) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | Not started |
 
-The audit also surfaced one item worth doing *before* phase 2: **C1, picker visibility** —
-adding `default_permissions` to the staff groups so non-staff pickers shrink from ~108
-commands to the handful they can run. It is a few lines per group and changes how much of
-phase 5 is even necessary. Phase 5 stays last otherwise: merging the long tail is easier once
-phases 1–4 have established the target shapes (typed-options-plus-workspace, single-entry
-search, panel-style settings).
+**C1, picker visibility, is delivered** (2026-08-18), ahead of phase 2 as the audit
+recommended. `hide_unless(...)` in `squid/bot/utils/permissions.py` wraps
+`app_commands.default_permissions` with the one thing that decorator does not say out loud —
+it is a visibility hint, not a gate — and eight top-level staff commands now carry it:
+`/perm`, `/role`, `/settings`, `/starboard`, `/admin`, `/error` (all `manage_guild`),
+`/redstoner` (`manage_roles`), and `/archive` (`manage_messages`). Everything else stays
+visible to everyone. `requires(...)` is untouched and remains the real gate; a guild admin
+can override any of these per command in Server Settings, which is why each bit was chosen to
+match the operation rather than defaulting everything to `manage_guild`.
+
+Two taxonomy pins came with it: `test_staff_groups_are_hidden_from_non_staff_pickers` fixes
+the whole map, so a staff group shipped visible fails CI, and
+`test_subcommands_do_not_claim_a_visibility_they_would_not_get` catches the trap that Discord
+accepts and then ignores `default_member_permissions` on a subcommand.
+
+Phase 5 stays last otherwise: merging the long tail is easier once phases 1–4 have
+established the target shapes (typed-options-plus-workspace, single-entry search, panel-style
+settings), and C1 has already taken the pressure off it.
