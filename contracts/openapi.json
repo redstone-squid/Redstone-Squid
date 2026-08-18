@@ -20085,6 +20085,15 @@
         "title": "PaperChallengeExchangeRequest",
         "description": "Exchange an approved Paper challenge on its authenticated installation."
       },
+      "PollScope": {
+        "type": "string",
+        "enum": [
+          "guild",
+          "network"
+        ],
+        "title": "PollScope",
+        "description": "How far a generic poll is published."
+      },
       "PrivacyNoticeDetail": {
         "properties": {
           "version": {
@@ -21928,6 +21937,9 @@
           "visibility": {
             "$ref": "#/components/schemas/VoteVisibility"
           },
+          "scope": {
+            "$ref": "#/components/schemas/PollScope"
+          },
           "deadline": {
             "type": "string",
             "format": "date-time",
@@ -21939,6 +21951,7 @@
         "required": [
           "question",
           "visibility",
+          "scope",
           "deadline"
         ],
         "title": "VotePollSummary",
