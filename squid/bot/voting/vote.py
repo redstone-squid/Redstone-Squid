@@ -357,22 +357,27 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Resolve current member facts for a service-level weight refresh.
 
         A ballot records an account, so the snowflake to look the member up by is read
-        here. An account with no Discord identity resolves to `None`, which the caller
-        already reads as "not a member" -- correct, since it has no guild role weight.
+        here. Somebody who is definitely not in the guild resolves to an actor holding
+        nothing, which weighs the default; `None` is kept for the questions we could
+        not ask, so the caller leaves the cached weight alone instead of rewriting it
+        from an answer we never got.
         """
         guild = self.bot.get_guild(guild_id)
-        if guild is None:
-            return None
         account = await self.bot.services.accounts.get_account_by_id(account_id)
         identity = None if account is None else account.identity(IdentityProvider.DISCORD)
         if identity is None or identity.discord_id is None:
-            return None
+            # No Discord identity at all, so no roles anywhere.
+            return VoteActor(account_id, discord_id=0, guild_id=guild_id)
         discord_id = identity.discord_id
+        if guild is None:
+            return None
         member = guild.get_member(discord_id)
         if member is None:
             try:
                 member = await guild.fetch_member(discord_id)
-            except discord.NotFound, discord.Forbidden:
+            except discord.NotFound:
+                return VoteActor(account_id, discord_id, guild_id)
+            except discord.Forbidden:
                 return None
         return await self._actor(member, kind, account_id=account_id)
 
