@@ -116,7 +116,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "debug",
         "edit",
         "queue",
-        "recalc",
         "reject",
         "schematic",
         "schematic convert",
@@ -312,7 +311,6 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build reject") == {"build.submission.reject"}
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
     assert _nodes(search.__cog_commands__, "build edit") == {"build.submission.edit"}
-    assert _nodes(search.__cog_commands__, "build recalc") == {"build.submission.recalc"}
     assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
     assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
