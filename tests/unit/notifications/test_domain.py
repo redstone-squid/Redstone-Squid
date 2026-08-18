@@ -76,14 +76,12 @@ def test_staff_submission_delivery_uses_pending_review_command_not_public_link()
     assert "https://example.test/builds/42" not in rendered
 
 
-def test_notification_management_is_slash_only() -> None:
+def test_notification_management_is_two_slash_commands() -> None:
+    """One panel and one verb, where there used to be seven commands.
+
+    `status`, `channels`, `list` and `unfollow` are what `/notifications show` shows, and
+    `follow-creator`, `follow-record` and `follow-records` were one verb spelled three times
+    (docs/plans/command-redesign/05-condensation.md).
+    """
     assert NotificationCog.__cog_commands__ == []
-    assert {command.name for command in NotificationCog.__cog_app_commands__} == {
-        "status",
-        "channels",
-        "follow-creator",
-        "follow-record",
-        "follow-records",
-        "list",
-        "unfollow",
-    }
+    assert {command.name for command in NotificationCog.__cog_app_commands__} == {"show", "follow"}

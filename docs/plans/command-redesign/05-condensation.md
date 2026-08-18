@@ -22,7 +22,7 @@ three different ad-hoc truncation schemes standing in for a paginator.
 |---|-------|--------|
 | 5.1 | The `vote` group disappears: `vote poll` retired, `vote delete` becomes a context menu, `poll close`/`refresh` become buttons on the poll card (C4, C7) | **Delivered** |
 | 5.2 | `/admin` becomes `/records` and drops the `records-` prefix every member carried; `/help` learns to list app-only commands | **Delivered** |
-| 5.3 | `/notifications`: one `follow`, layouts and i18n, subscriptions named rather than UUID'd, unfollow from the list (C3, C5) | Not started |
+| 5.3 | `/notifications`: one panel and one `follow`, seven commands down to two (C3, C5) | **Delivered** |
 | 5.4 | `/account` claim review moves onto the `claims` list as buttons | Not started |
 | 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into one command | Not started |
 | 5.6 | A shared list paginator, applied to `build queue`, `version list`, `account claims` and the records diagnostics (C6) | Not started |
@@ -128,3 +128,40 @@ already turns names into ids for the slash path, and accepting names outright me
 `RestrictionDefinition` to carry an id — a change in the builds context for the benefit of one
 staff inspection command. The option text no longer instructs anyone to type ids by hand,
 which is the part that was actively misleading.
+
+## 5.3 — one panel and one verb for notifications
+
+Seven slash commands became two.
+
+**`/notifications show` is the panel.** `status` read the two delivery switches, `channels`
+wrote both, `list` printed the subscriptions, and `unfollow` took an id you had to read off
+`list` and type into a second command. All four are one screen now: two toggle buttons and a
+select whose options *are* the subscriptions, so the id never becomes something a person
+handles. The same shape as phase 4's settings panel, holding the service rather than a
+snapshot for the same reason — the panel exists to write.
+
+`show` rather than a bare `/notifications` because Discord has no bare-group invocation; a
+hybrid group would fake one with a fallback, but this cog is app-only on purpose (the panel
+needs an interaction), so the fallback is spelled out.
+
+**`/notifications follow` is the one verb.** `follow-creator`, `follow-record` and
+`follow-records` were one verb spelled three times, told apart by which argument you had.
+Which argument you have still tells them apart; it just no longer costs three picker entries
+and three near-identical descriptions. Giving none, or more than one kind at once, is an
+error rather than a guess.
+
+**Replies are layouts** (audit C3). The cog already translated its strings — the audit's
+"raw strings" finding was half right — but sent them as bare content while the rest of the
+bot sends cards. It also stopped printing the new subscription's id, which was the only
+reason anybody had to remember one.
+
+**A record filter reads as its predicates.** `list` rendered `str(filter.as_dict())`, braces
+and all; the panel renders `door · smallest · tag 4=glass`.
+
+### Deferred within this step
+
+Creator and record subscriptions still show a public UUID (audit C5). Naming them means
+resolving a creator profile and a record competition from the notifications surface, which
+crosses into the accounts and records contexts and wants a subject-describing port rather
+than a lookup smuggled into a view. What this step removes is the *retyping*, which was the
+part that actually cost anything.
