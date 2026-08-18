@@ -626,7 +626,7 @@ class PermissionAdministrationService:
 
 
 def scope_label(scope_guild_id: int | None) -> str:
-    """How a rule's scope reads in `/perm list` and `/perm explain`."""
+    """How a rule's scope reads in `/perm list` and `/perm can`."""
     return "global" if scope_guild_id is None else f"guild {scope_guild_id}"
 
 

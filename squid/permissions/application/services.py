@@ -180,7 +180,7 @@ class PermissionService:
         )
 
     async def check(self, subject: Subject, node: PermissionNode | str) -> Decision:
-        """Decide one node, with the trace that `/perm explain` renders."""
+        """Decide one node, with the trace that `/perm can` renders."""
         return resolve(node, subject, await self.rules_for(subject), catalogue=self._catalogue)
 
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:

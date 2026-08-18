@@ -47,7 +47,7 @@ def deny(raw: str, **overrides: Any) -> Rule:
 
 
 def signature(decision: Decision) -> tuple[object, ...]:
-    """Everything about a decision that callers and `/perm explain` depend on."""
+    """Everything about a decision that callers and `/perm can` depend on."""
     return (
         decision.node,
         decision.allowed,
@@ -307,7 +307,7 @@ def test_p12_an_exact_rule_beats_any_wildcard_of_the_opposite_effect(name: str, 
 def test_p13_the_trace_explains_the_decision_it_came_with(name: str, ruleset: list[Rule]) -> None:
     """P13: replaying the winning step alone reproduces the verdict.
 
-    `/perm explain` renders this trace, so a trace that disagrees with its own
+    `/perm can` renders this trace, so a trace that disagrees with its own
     decision would be a lie told to whoever is debugging a permission problem.
     """
     decision = resolve(name, MEMBER, ruleset)

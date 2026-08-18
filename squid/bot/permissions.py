@@ -1,6 +1,6 @@
 """Discord commands for granting permissions and shaping roles.
 
-`/perm explain` renders `Decision.trace` directly, so there is exactly one
+`/perm can` renders `Decision.trace` directly, so there is exactly one
 implementation of the precedence rules: whatever the resolver did is what the
 explanation says it did. The three effects are presented in Discord's own
 vocabulary -- allow, deny, and "no rule" -- with `forbid` kept visually distinct
@@ -17,7 +17,13 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import build_subject, hide_unless, requires, subject_for
+from squid.bot.utils.permissions import (
+    PermissionNodeRequired,
+    build_subject,
+    hide_unless,
+    requires,
+    subject_for,
+)
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.application.administration import (
@@ -243,30 +249,39 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         await self._reply(ctx, _("Permission rules"), "\n".join(lines))
 
     @autocompletes(node="permission_nodes")
-    @perm_group.command(name="explain")
-    @requires(PERM_SUBJECT_INSPECT)
-    async def explain(self, ctx: Context[BotT], user: discord.Member, node: str) -> None:
-        """Show exactly why a user does or does not hold a permission."""
-        subject = await build_subject(self.bot, user, ctx.guild.id if ctx.guild is not None else None)
-        decision = await self.bot.services.permissions.check(subject, node)
-        await self._reply(ctx, _("Permission decision"), render_decision(decision, user.display_name))
+    @perm_group.command(name="can")
+    @requires(PERM_NODE_VIEW, PERM_SUBJECT_INSPECT, mode="any")
+    @app_commands.describe(
+        user=app_commands.locale_str(_("Whose permissions to read. Staff only; defaults to you.")),
+        node=app_commands.locale_str(_("One permission to decide, instead of listing everything held.")),
+    )
+    async def can(self, ctx: Context[BotT], user: discord.Member | None = None, node: str | None = None) -> None:
+        """Answer what someone may do, with or without a specific permission in mind.
 
-    @perm_group.command(name="whoami")
-    @requires(PERM_NODE_VIEW)
-    async def whoami(self, ctx: Context[BotT]) -> None:
-        """List the permissions you currently hold here."""
-        held = await self.bot.services.permissions.capabilities(await subject_for(ctx), CATALOGUE)
-        await self._reply(ctx, _("Your permissions"), "\n".join(f"`{name}`" for name in sorted(held)))
+        This was `whoami`, `test` and `explain`: three commands asking one question, told
+        apart by whose permissions and how much detail. `test` and `explain` even ran the
+        same check and differed only in how they printed it, so the fuller rendering wins.
+        """
+        target = user or ctx.author
+        if target.id != ctx.author.id:
+            # Reading your own permissions needs no inspection right; reading somebody
+            # else's does, and a single `@requires` cannot say "only in that case".
+            if not await self.bot.services.permissions.allows(await subject_for(ctx), PERM_SUBJECT_INSPECT):
+                raise PermissionNodeRequired((PERM_SUBJECT_INSPECT.name,))
+            subject = await build_subject(self.bot, target, ctx.guild.id if ctx.guild is not None else None)
+        else:
+            subject = await subject_for(ctx)
 
-    @autocompletes(node="permission_nodes")
-    @perm_group.command(name="test")
-    @requires(PERM_SUBJECT_INSPECT)
-    async def test(self, ctx: Context[BotT], user: discord.Member, node: str) -> None:
-        """Answer one permission question with a plain yes or no."""
-        subject = await build_subject(self.bot, user, ctx.guild.id if ctx.guild is not None else None)
-        decision = await self.bot.services.permissions.check(subject, node)
-        verdict = _("allowed") if decision.allowed else _("denied")
-        await self._reply(ctx, _("Permission check"), f"`{node}` for {user.mention}: **{verdict}**")
+        if node is not None:
+            decision = await self.bot.services.permissions.check(subject, node)
+            await self._reply(ctx, _("Permission decision"), render_decision(decision, target.display_name))
+            return
+        held = await self.bot.services.permissions.capabilities(subject, CATALOGUE)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        # Interpolated here rather than through `_reply`, which translates the title it is
+        # given: a title already formatted would be looked up as a whole and never match.
+        title = t(locale, _("Permissions held by {name}"), name=target.display_name)
+        await self._reply(ctx, title, "\n".join(f"`{name}`" for name in sorted(held)))
 
     @perm_group.command(name="audit")
     @requires(PERM_AUDIT_VIEW)
