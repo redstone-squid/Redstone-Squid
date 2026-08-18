@@ -7,6 +7,7 @@ from whenever import Instant
 
 from squid.voting.domain import (
     EmojiPreset,
+    PollScope,
     RoleWeight,
     StoredVoteMutation,
     VoteActor,
@@ -92,6 +93,7 @@ class VoteRepository(Protocol):
         deadline: Instant,
         options: Sequence[VoteOption],
         guild_id: int | None = None,
+        scope: PollScope = PollScope.GUILD,
     ) -> int: ...
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None: ...

@@ -21,13 +21,15 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, StrEnumText, now
-from squid.voting.domain import VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+from squid.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
 
 _KIND_VALUES = ", ".join(f"'{kind.value}'" for kind in VoteKind)
 _CHOICE_VALUES = ", ".join(f"'{choice.value}'" for choice in VoteChoice)
 _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in VoteStatus)
 _RESULT_VALUES = ", ".join(f"'{result.value}'" for result in VoteSessionResult)
 _VISIBILITY_VALUES = ", ".join(f"'{visibility.value}'" for visibility in VoteVisibility)
+
+_SCOPE_VALUES = ", ".join(f"'{scope.value}'" for scope in PollScope)
 
 THRESHOLD_CONSTRAINT = (
     "CASE WHEN kind = 'generic'"
@@ -176,6 +178,11 @@ class GenericVoteSession(Base, kw_only=True):
             f"visibility IN ({_VISIBILITY_VALUES})",
             name="generic_vote_sessions_visibility_check",
         ),
+        CheckConstraint(f"scope IN ({_SCOPE_VALUES})", name="generic_vote_sessions_scope_check"),
+        CheckConstraint(
+            "scope = 'guild' OR guild_id IS NOT NULL",
+            name="generic_vote_sessions_network_guild_check",
+        ),
         Index("generic_vote_sessions_deadline_idx", "deadline"),
     )
     vote_session_id: Mapped[int] = mapped_column(
@@ -193,6 +200,10 @@ class GenericVoteSession(Base, kw_only=True):
     """
     question: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[VoteVisibility] = mapped_column(StrEnumText(VoteVisibility), nullable=False)
+    scope: Mapped[PollScope] = mapped_column(
+        StrEnumText(PollScope), nullable=False, server_default=PollScope.GUILD.value
+    )
+    """Whether the poll is carded only in its own guild or in every vote channel."""
     deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
 
