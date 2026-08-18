@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 04:32+0000\n"
+"POT-Creation-Date: 2026-08-19 04:40+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -390,7 +390,7 @@ msgstr ""
 msgid "API key pepper must not be empty."
 msgstr ""
 
-#: squid/bot/help.py:90
+#: squid/bot/help.py:27
 msgid "Account"
 msgstr ""
 
@@ -418,7 +418,7 @@ msgstr ""
 msgid "Add links & details"
 msgstr ""
 
-#: squid/bot/help.py:91
+#: squid/bot/help.py:29
 msgid "Administration & setup"
 msgstr ""
 
@@ -637,7 +637,7 @@ msgstr ""
 msgid "Browse the permission catalogue and your own permissions."
 msgstr ""
 
-#: squid/bot/help.py:88
+#: squid/bot/help.py:25
 msgid "Build"
 msgstr ""
 
@@ -892,7 +892,7 @@ msgstr ""
 msgid "Choose a smaller or less resource-intensive file and try again."
 msgstr ""
 
-#: squid/bot/help.py:101
+#: squid/bot/help.py:121
 msgid "Choose a workflow, then use `/help command` for syntax and details."
 msgstr ""
 
@@ -952,17 +952,11 @@ msgstr ""
 msgid "Comma separated, e.g. `Seamless, Observerless`. See `/info docs`."
 msgstr ""
 
-#: squid/bot/submission/records.py:130
-msgid ""
-"Comma-separated restriction IDs; large exact categories are saved for "
-"reuse."
-msgstr ""
-
-#: squid/bot/help.py:237 squid/bot/help.py:257
+#: squid/bot/help.py:271 squid/bot/help.py:291
 msgid "Command Help"
 msgstr ""
 
-#: squid/bot/help.py:180
+#: squid/bot/help.py:214
 #, python-brace-format
 msgid "Command Help - `{name}`"
 msgstr ""
@@ -971,11 +965,11 @@ msgstr ""
 msgid "Command already running"
 msgstr ""
 
-#: squid/bot/help.py:84
+#: squid/bot/help.py:111
 msgid "Command names and options also autocomplete in Discord."
 msgstr ""
 
-#: squid/bot/help.py:64
+#: squid/bot/help.py:91
 msgid "Command not found"
 msgstr ""
 
@@ -987,12 +981,16 @@ msgstr ""
 msgid "Command unavailable"
 msgstr ""
 
-#: squid/bot/help.py:74
+#: squid/bot/help.py:101
 msgid "Commands"
 msgstr ""
 
-#: squid/bot/help.py:73
+#: squid/bot/help.py:100
 msgid "Commands in this area."
+msgstr ""
+
+#: squid/bot/help.py:28
+msgid "Community"
 msgstr ""
 
 #: squid/submissions/application/forms.py:256
@@ -1188,7 +1186,7 @@ msgstr ""
 msgid "Discord membership information is temporarily unavailable."
 msgstr ""
 
-#: squid/bot/help.py:89
+#: squid/bot/help.py:26
 msgid "Discover"
 msgstr ""
 
@@ -1331,7 +1329,7 @@ msgstr ""
 msgid "Error {reference}"
 msgstr ""
 
-#: squid/bot/help.py:275
+#: squid/bot/help.py:309
 msgid "Error."
 msgstr ""
 
@@ -1505,7 +1503,7 @@ msgstr ""
 msgid "Have your votes counted at the staff weight."
 msgstr ""
 
-#: squid/bot/help.py:170
+#: squid/bot/help.py:204
 msgid "Help"
 msgstr ""
 
@@ -1589,7 +1587,7 @@ msgstr ""
 msgid "Include signs, books, names, and other free text"
 msgstr ""
 
-#: squid/bot/help.py:92
+#: squid/bot/help.py:30
 msgid "Information"
 msgstr ""
 
@@ -1998,7 +1996,7 @@ msgstr ""
 msgid "No changes to review yet."
 msgstr ""
 
-#: squid/bot/help.py:65
+#: squid/bot/help.py:92
 #, python-brace-format
 msgid "No command named `{name}` is available."
 msgstr ""
@@ -2011,8 +2009,8 @@ msgstr ""
 msgid "No creator credit claims are awaiting review."
 msgstr ""
 
-#: squid/bot/help.py:34 squid/bot/help.py:82 squid/bot/help.py:181
-#: squid/bot/help.py:195 squid/bot/help.py:208
+#: squid/bot/help.py:52 squid/bot/help.py:109 squid/bot/help.py:215
+#: squid/bot/help.py:229 squid/bot/help.py:242
 msgid "No details provided"
 msgstr ""
 
@@ -2061,7 +2059,7 @@ msgstr ""
 msgid "No unresolved active record categories."
 msgstr ""
 
-#: squid/bot/help.py:233 squid/bot/help.py:253 squid/bot/starboard/cog.py:307
+#: squid/bot/help.py:267 squid/bot/help.py:287 squid/bot/starboard/cog.py:307
 msgid "None"
 msgstr ""
 
@@ -2349,6 +2347,16 @@ msgstr ""
 msgid "Pick one of the coordinates listed below."
 msgstr ""
 
+#: squid/bot/submission/records.py:130
+msgid ""
+"Pick restrictions from the list; large exact categories are saved for "
+"reuse."
+msgstr ""
+
+#: squid/bot/submission/records.py:147
+msgid "Pick restrictions from the suggestions rather than typing them."
+msgstr ""
+
 #: squid/catalogue/domain/titles.py:121
 msgid "Piston extender length must be positive."
 msgstr ""
@@ -2357,11 +2365,11 @@ msgstr ""
 msgid "Please try again later."
 msgstr ""
 
-#: squid/bot/voting/controls.py:71
+#: squid/bot/voting/controls.py:78
 msgid "Poll closed."
 msgstr ""
 
-#: squid/bot/voting/controls.py:102
+#: squid/bot/voting/controls.py:109
 msgid "Poll weights refreshed."
 msgstr ""
 
@@ -2543,7 +2551,7 @@ msgstr ""
 msgid "Recount a starboard's reactions."
 msgstr ""
 
-#: squid/bot/help.py:100
+#: squid/bot/help.py:120
 msgid "Redstone Squid help"
 msgstr ""
 
@@ -2676,10 +2684,6 @@ msgstr ""
 
 #: squid/bot/submission/records.py:153
 msgid "Restrictions can only be combined with a hand-typed base key."
-msgstr ""
-
-#: squid/bot/submission/records.py:147
-msgid "Restrictions must be comma-separated numeric IDs."
 msgstr ""
 
 #: squid/permissions/domain/catalogue.py:426
@@ -2985,7 +2989,7 @@ msgstr ""
 msgid "Starboard votes recounted."
 msgstr ""
 
-#: squid/bot/help.py:83
+#: squid/bot/help.py:110
 msgid "Subcommands"
 msgstr ""
 
@@ -3324,7 +3328,7 @@ msgstr ""
 msgid "The code you received by running /link in the game."
 msgstr ""
 
-#: squid/bot/help.py:49
+#: squid/bot/help.py:76
 msgid "The command to get help for."
 msgstr ""
 
@@ -3667,7 +3671,7 @@ msgstr ""
 msgid "Try again in {seconds:.1f} seconds."
 msgstr ""
 
-#: squid/bot/help.py:266
+#: squid/bot/help.py:300
 #, python-brace-format
 msgid ""
 "Unable to find command `{name}`. Use /help to get a list of available "
@@ -4571,7 +4575,7 @@ msgstr ""
 msgid "{count} reports share this reference; this is the newest."
 msgstr ""
 
-#: squid/bot/voting/controls.py:107
+#: squid/bot/voting/controls.py:114
 #, python-brace-format
 msgid "{count} voter(s) could not be resolved, so their cached weight was kept."
 msgstr ""
@@ -4583,7 +4587,7 @@ msgid ""
 "evidence."
 msgstr ""
 
-#: squid/bot/help.py:155
+#: squid/bot/help.py:189
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -4593,7 +4597,7 @@ msgid ""
 "{more_information}\n"
 msgstr ""
 
-#: squid/bot/help.py:231
+#: squid/bot/help.py:265
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -4603,7 +4607,7 @@ msgid ""
 "{more_information}"
 msgstr ""
 
-#: squid/bot/help.py:251
+#: squid/bot/help.py:285
 #, python-brace-format
 msgid ""
 "{description}\n"
@@ -4715,7 +4719,7 @@ msgstr ""
 msgid "{name} cannot be negative"
 msgstr ""
 
-#: squid/bot/help.py:72
+#: squid/bot/help.py:99
 #, python-brace-format
 msgid "{name} commands"
 msgstr ""
@@ -5068,5 +5072,13 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "The message to hold a deletion vote for."
+#~ msgstr ""
+
+#~ msgid ""
+#~ "Comma-separated restriction IDs; large "
+#~ "exact categories are saved for reuse."
+#~ msgstr ""
+
+#~ msgid "Restrictions must be comma-separated numeric IDs."
 #~ msgstr ""
 
