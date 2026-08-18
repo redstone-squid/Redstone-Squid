@@ -32,6 +32,7 @@ from squid.records.application.models import (
 from squid.records.application.ports import RecomputeLease
 from squid.records.domain import (
     BuildKind,
+    CategoryText,
     DoorCategory,
     ExtenderCategory,
     RecordCandidate,
@@ -458,7 +459,12 @@ class PostgresRecordRepository:
                     identities.append(identity)
             return tuple(identities)
 
-    async def save_requested_category(self, ruleset_id: int, category: CategoryIdentity) -> None:
+    async def save_requested_category(
+        self,
+        ruleset_id: int,
+        category: CategoryIdentity,
+        titles: Mapping[RecordClass, CategoryText],
+    ) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
         async with self._session_factory() as session, session.begin():
             for record_class in _record_classes(category.kind):
@@ -488,9 +494,9 @@ class PostgresRecordRepository:
                         version_scope=VersionScope.ALL_TIME.value,
                         version_id=None,
                         category_key=category.key,
-                        title=f"{record_class.value.replace('_', ' ').title()} {category.base_key}",
-                        subtitle=None,
-                        title_diagnostics=[],
+                        title=titles[record_class].title,
+                        subtitle=titles[record_class].subtitle,
+                        title_diagnostics=[diagnostic.as_dict() for diagnostic in titles[record_class].diagnostics],
                         materialization_source="public_lookup",
                     )
                     session.add(definition)

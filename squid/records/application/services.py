@@ -28,6 +28,7 @@ from squid.records.application.models import (
 from squid.records.application.ports import RecordCandidateRepository, RecordRunRepository
 from squid.records.domain import (
     BuildKind,
+    CategoryText,
     DoorCategory,
     ExtenderCategory,
     RecordCandidate,
@@ -119,9 +120,9 @@ class RecordComputationService:
         scoped = tuple(candidate for candidate in source if version_id is None or version_id in candidate.version_ids)
         competitions = self._eager_competitions(kind, scoped)
         for identity in requested:
-            requested_competition = self._requested_competition(identity, scoped)
-            if requested_competition is not None:
-                competitions[identity.key] = requested_competition
+            competition = self.requested_competition(identity, scoped)
+            if competition is not None:
+                competitions[identity.key] = competition
 
         scope = VersionScope.ALL_TIME if version_id is None else VersionScope.CURRENT
         records: list[ComputedRecord] = []
@@ -188,11 +189,12 @@ class RecordComputationService:
                 grouped[identity.key].append((source, selected))
         return {key: self._make_competition(items, source="eager") for key, items in grouped.items()}
 
-    def _requested_competition(
+    def requested_competition(
         self,
         identity: CategoryIdentity,
         candidates: Sequence[RecordSourceCandidate],
     ) -> CategoryCompetition | None:
+        """Build the competition for one requested exact category, or None if no candidate qualifies."""
         items: list[tuple[RecordSourceCandidate, tuple[CandidateFacet, ...]]] = []
         requested_ids = frozenset(identity.restriction_ids)
         requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
@@ -240,6 +242,13 @@ class RecordComputationService:
             candidate_version_ids=tuple((item[0].candidate.build_id, item[0].version_ids) for item in items),
             source="public_lookup" if source == "public_lookup" else "eager",
         )
+
+    def format_record_titles(self, competition: CategoryCompetition) -> dict[RecordClass, CategoryText]:
+        """Render the per-class titles a definition stores for this competition."""
+        return {
+            record_class: self._formatter.format_record(record_class, competition.category_text)
+            for record_class in _record_classes(competition.identity.kind)
+        }
 
 
 class RecordService:
@@ -295,50 +304,29 @@ class RecordService:
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""
         source = tuple(await self._candidates.list_confirmed(request.kind))
+        scoped = tuple(
+            candidate
+            for candidate in source
+            if request.version_id is None or request.version_id in candidate.version_ids
+        )
         identity = CategoryIdentity(
             request.kind,
             request.base_key,
             tuple(sorted(request.restriction_ids)),
             tuple(sorted(request.restriction_values)),
         )
-        if not _category_has_candidate(identity, source, request.version_id):
+        competition = self._computation.requested_competition(identity, scoped)
+        if competition is None:
             raise NoMatchingRecordCategoryError(kind=request.kind.value, base_key=request.base_key)
 
         ruleset_id = await self._runs.active_ruleset_id()
-        await self._runs.save_requested_category(ruleset_id, identity)
+        await self._runs.save_requested_category(
+            ruleset_id, identity, self._computation.format_record_titles(competition)
+        )
         return await self._computation.rebuild(
             current_version_id=request.version_id,
             kinds=(request.kind,),
         )
-
-
-def _category_has_candidate(
-    identity: CategoryIdentity,
-    candidates: Iterable[RecordSourceCandidate],
-    version_id: int | None,
-) -> bool:
-    requested = frozenset(identity.restriction_ids)
-    return any(
-        _base_key(candidate) == identity.base_key
-        and requested <= {facet.id for facet in candidate.restrictions}
-        and _candidate_satisfies_identity(candidate, identity)
-        and (version_id is None or version_id in candidate.version_ids)
-        for candidate in candidates
-    )
-
-
-def _candidate_satisfies_identity(candidate: RecordSourceCandidate, identity: CategoryIdentity) -> bool:
-    facets = {facet.id: facet for facet in candidate.restrictions}
-    for tag_id, operator, raw_value in identity.restriction_values:
-        facet = facets.get(tag_id)
-        if facet is None or facet.record_operator != operator:
-            return False
-        if not _satisfies(facet, _coerce_category_value(facet, raw_value)):
-            return False
-    return all(
-        facets[tag_id].assigned_value is None or any(value[0] == tag_id for value in identity.restriction_values)
-        for tag_id in identity.restriction_ids
-    )
 
 
 def _observed_thresholds(
