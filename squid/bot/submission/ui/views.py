@@ -85,6 +85,7 @@ EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
     EditFieldSpec("door_type", "Full lamp, Funnel"),
     EditFieldSpec("door_orientation_type", "Door, Trapdoor, Skydoor", categories=_DOOR_ONLY),
     EditFieldSpec("wiring_placement_restrictions", "Seamless, Full Flush"),
+    EditFieldSpec("animated_restrictions", "Symmetrical, Full Sync"),
     EditFieldSpec("component_restrictions", "Observerless"),
     EditFieldSpec("miscellaneous_restrictions", "Directional, Locational"),
     EditFieldSpec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
@@ -94,6 +95,10 @@ EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
     EditFieldSpec("video_urls", "any urls, comma separated"),
     EditFieldSpec("world_download_urls", "any urls, comma separated"),
     EditFieldSpec("completion_time", "Any time format works"),
+    EditFieldSpec("extra_user_info", "Anything a reader should know"),
+    EditFieldSpec("server_ip", "play.example.com"),
+    EditFieldSpec("coordinates", "x y z"),
+    EditFieldSpec("command_to_get_to_build", "/warp door"),
 )
 """Every entry must name a BuildEditPatch field; a test pins that."""
 
@@ -526,6 +531,26 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         self.page = 1
         self._max_pages = max(1, (len(self.items) + 4) // 5)
         self.expiry_time = Instant.now().add(seconds=timeout)
+
+    def stage(self, attribute: str, text: str) -> bool:
+        """Fill one field as though it had been typed into the modal.
+
+        This is how `/build edit`'s typed options reach the workspace: an option arrives as
+        text, and the field that owns the attribute parses and remembers it, so the review
+        prompt shows the change alongside anything edited by hand afterwards.
+
+        Returns:
+            Whether a field owning `attribute` exists on this build. Door facts do not exist
+            on an extender, so the caller can report the mismatch rather than drop it.
+        """
+        for item in self.items:
+            if item.attribute == attribute:
+                item.stage(text)
+                self.validation_error = (
+                    "\n".join(error for error in (self.validation_error, item.validation_error) if error) or None
+                )
+                return True
+        return False
 
     async def can_edit(self, interaction: Interaction[BotT]) -> bool:
         """Allow pending-build owners, and anyone holding the build-edit node.
