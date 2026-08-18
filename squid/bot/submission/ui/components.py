@@ -165,15 +165,24 @@ class BuildField[T](discord.ui.TextInput):
 
     async def on_modal_submit(self) -> None:
         """Parse and retain the proposed value without mutating the build."""
+        self.stage(self.value)
+
+    def stage(self, text: str) -> None:
+        """Take a proposed value from anywhere, not only from a submitted modal.
+
+        `/build edit` fills fields from its typed options before the workspace is ever
+        rendered, so the parse-and-remember half of a modal submission has to be reachable
+        without one.
+        """
         self.validation_error = None
-        if self.value == self.current_string_value:
+        if text == self.current_string_value:
             return
 
         self.modified = True
-        self.default = self.value
-        self.current_string_value = self.value
+        self.default = text
+        self.current_string_value = text
         try:
-            value = self.parser(self.value)
+            value = self.parser(text)
         except Exception as error:
             self.modified = False
             self.validation_error = str(error) or t(None, _("Invalid value"))
@@ -211,12 +220,22 @@ _EDIT_FIELD_READERS: dict[str, tuple[Callable[[Build], Any], Any]] = {
         lambda build: build.normal_closing_time if isinstance(build, DoorBuild) else None,
         int | None,
     ),
+    # These three are stored inside `extra_info["server_info"]` rather than as attributes, and
+    # `extra_user_info` is written to both `description` and `extra_info["user"]` on apply.
+    "extra_user_info": (lambda build: build.description, str | None),
+    "server_ip": (lambda build: _server_info(build).get("server_ip"), str | None),
+    "coordinates": (lambda build: _server_info(build).get("coordinates"), str | None),
+    "command_to_get_to_build": (lambda build: _server_info(build).get("command_to_build"), str | None),
     "image_urls": (lambda build: list(build.image_urls), list[str]),
     "video_urls": (lambda build: list(build.video_urls), list[str]),
     "world_download_urls": (lambda build: list(build.world_download_urls), list[str]),
     "schematic_urls": (lambda build: list(build.schematic_urls), list[str]),
     "render_urls": (lambda build: list(build.render_urls), list[str]),
 }
+
+
+def _server_info(build: Build) -> dict[str, Any]:
+    return dict(build.extra_info.get("server_info", {}))
 
 
 def _read_edit_value(build: Build, attribute: str) -> Any:

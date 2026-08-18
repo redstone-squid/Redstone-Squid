@@ -190,7 +190,10 @@ def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
         return ", ".join(inner_fmt(i) for i in lst)
 
     def _parse(lst_str: str) -> list[T]:
-        return [inner_parser(i) for i in lst_str.split(",")]
+        # Stripped and emptied out: the formatter writes ", " between entries, so round-tripping
+        # a list through the modal otherwise grows a leading space onto every entry after the
+        # first, and a trailing comma becomes an empty creator.
+        return [inner_parser(item) for entry in lst_str.split(",") if (item := entry.strip())]
 
     return _format, _parse
 

@@ -16,7 +16,15 @@ from squid.builds.application.ports import (
 )
 from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
-from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, Status
+from squid.builds.domain import (
+    Build,
+    BuildDraft,
+    BuildLink,
+    DoorBuild,
+    RestrictionTypeLiteral,
+    Status,
+    sort_restrictions,
+)
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application.services import PermissionService
@@ -126,6 +134,11 @@ class BuildService:
         definitions = await self._restrictions.fetch_all_restrictions()
         build.classify_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
         return build
+
+    async def sort_restrictions(self, restrictions: Sequence[str]) -> dict[RestrictionTypeLiteral, list[str]]:
+        """Group restriction names by bucket without writing them onto a build."""
+        definitions = await self._restrictions.fetch_all_restrictions()
+        return sort_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
 
     async def submit(self, build: Build, *, submitter_account_id: int, ai_generated: bool) -> Build:
         """Apply submission metadata and persist an already prepared build.
