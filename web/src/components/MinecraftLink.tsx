@@ -4,17 +4,20 @@ import type { ChallengeApprovalResponse } from "../generated/types.gen";
 import {
   asSubmissionError,
   createMinecraftLinkApi,
+  type ConsentApi,
   type MinecraftLinkApi,
   type SubmissionApiError,
 } from "../lib/submission-api";
 import type { RuntimeConfig } from "../lib/config";
 import type { Locale } from "../lib/i18n";
+import ConsentGate from "./ConsentGate";
 
 type Props = {
   locale: Locale;
   config: RuntimeConfig;
   initialCode?: string;
   api?: MinecraftLinkApi;
+  consentApi?: ConsentApi;
 };
 
 const USER_CODE = /^[A-Za-z2-7-]{8,32}$/;
@@ -67,6 +70,7 @@ export default function MinecraftLink({
   config,
   initialCode = "",
   api: suppliedApi,
+  consentApi,
 }: Props) {
   const copy = COPY[locale];
   const api = useMemo(
@@ -77,6 +81,7 @@ export default function MinecraftLink({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<SubmissionApiError | string>();
   const [approval, setApproval] = useState<ChallengeApprovalResponse>();
+  const [needsConsent, setNeedsConsent] = useState(false);
   const returnUrl = new URL(
     locale === "zh-CN" ? "/zh-cn/minecraft/link" : "/minecraft/link",
     config.siteUrl,
@@ -96,8 +101,12 @@ export default function MinecraftLink({
     setError(undefined);
     try {
       setApproval(await api.approve(normalized));
+      setNeedsConsent(false);
     } catch (caught) {
-      setError(asSubmissionError(caught));
+      const failure = asSubmissionError(caught);
+      // Recoverable in place: show the notice, and on acceptance run the same approval again.
+      if (failure.kind === "consent") setNeedsConsent(true);
+      setError(failure);
     } finally {
       setBusy(false);
     }
@@ -131,6 +140,19 @@ export default function MinecraftLink({
     typeof error === "string" ? error : error ? errorMessage(error, locale) : undefined;
   return (
     <section className="surface minecraft-link-card">
+      {needsConsent && (
+        <ConsentGate
+          locale={locale}
+          config={config}
+          api={consentApi}
+          onAccepted={() => {
+            setNeedsConsent(false);
+            setError(undefined);
+            return approve();
+          }}
+          onCancel={() => setNeedsConsent(false)}
+        />
+      )}
       {failure && (
         <div className="submission-inline-error" role="alert">
           <p>{failure}</p>
