@@ -1,5 +1,28 @@
 # Advanced API Fuzzing Architecture for the Rust CLI Contract
 
+> **Status.** Contract, environment, and Docker layers are implemented and verified in-tree, last
+> touched by `52189d8c` (2026-08-11): the canonical `contracts/openapi.json` with stable operation
+> IDs, auth alternatives, a complete `x-squid-cli` audit (`tests/unit/api/test_openapi_contract.py::
+> test_every_operation_has_stable_cli_and_security_metadata`), `/v1/capabilities`, language-neutral
+> fixtures (`contracts/fixtures/cli-operations.json`), the pinned Schemathesis 4.24.2 launcher
+> (`tests/fuzz/api/schemathesis.py`), the bounded Atheris launcher, the disposable Docker
+> composition (`tests/fuzz/api/docker_stack.py`, `docker_safety.py`, `fake_upstreams.py`,
+> `loopback_proxy.py`, `redis_state.py`, `database.py`), `just fuzz-api-smoke`, and the redacted
+> `FindingCandidateV1`/`QualifiedFindingV1` envelope schemas (`contracts/fuzz/*.schema.json`).
+>
+> Not implemented, as of 2026-08-18: `DraftLifecycleStateMachine`
+> (`tests/fuzz/api/draft_lifecycle.py:308`) is defined but never configured or run anywhere in the
+> tree — it is only exercised through the pure in-memory `FakeDraftClient` in
+> `tests/unit/fuzz/test_api_draft_lifecycle.py`, so no live API campaign has actually run yet. Every
+> other persona, invariant, and Atheris chaos target (races, DB/Redis faults, differential replay)
+> is unstarted. None of the four `api-fuzz-*.yml` trust-boundary workflows, the age/X25519-encrypted
+> triage bundle, or `scripts/triage_fuzz_findings.py` exist; `.github/workflows/fuzz.yml` still only
+> runs the pre-existing `version_parser` Atheris target, and `ci.yml` only diffs the exported
+> contract/schema artifacts rather than running a live campaign. Device-auth, resumable-upload, and
+> WebSocket campaigns remain correctly gated behind their CLI backend prerequisites (milestone 9).
+> This document stays in `docs/plans/`, not `docs/plans/completed/`, until the state machine runs
+> against a live stack and the remaining milestones land.
+
 ## Summary
 
 Retain Schemathesis for OpenAPI-aware HTTP and stateful testing, and Atheris for fast coverage-guided fuzzing
@@ -14,24 +37,15 @@ The fuzzer hardens the backend contract consumed by the existing Rust CLI, but i
 infrastructure. This preserves the approaches proven by RESTler, OSS-Fuzz, and SQLite without reproducing those
 systems inside this repository.
 
-### Implementation status (2026-08-12)
+### Implementation status
 
-The canonical contract, stable operation IDs, authentication alternatives, complete `x-squid-cli` audit,
-capability endpoint, language-neutral fixtures, pinned Schemathesis dependency, and bounded Atheris launcher are
-implemented. The first environment layer is also present: loopback-configurable upstream adapters, unguessable run
-identity, live reset attestation, deterministic in-container Mojang/Discord fakes, fail-closed Docker cleanup guards,
-a 20-second one-worker `st run` watchdog, sanitized NDJSON classification, and versioned redacted finding envelopes.
+See the status block at the top of this document. In short: contract, environment, Docker, and draft-workflow
+scaffolding (committed OpenAPI producer links, an applicability manifest, and a deterministic Alice/web draft
+lifecycle reducer/state-machine scaffold) are in place.
 
-The concrete local Docker composition and deterministic reset layer are implemented: isolated PostgreSQL roles,
-migrated template-database cloning, deterministic seed IDs, Redis ACL separation, an API container with only
-target-visible synthetic app credentials, an isolated fake-upstream container behind an API-local loopback proxy, exact
-resource-limit attestation, one non-fuzzing lifecycle integration test, and a bounded `just fuzz-api-smoke` recipe.
-The first draft workflow layer is also present as committed OpenAPI producer links, an applicability manifest, and a
-deterministic Alice/web draft lifecycle reducer/state-machine scaffold.
-
-The next integration slice is to connect the draft lifecycle scaffold to a live Schemathesis/Hypothesis state machine,
-then add the next persona/workflow only after the single lifecycle check is green on the intended Docker runner. No API
-campaign should be run merely to validate harness mechanics on a resource-constrained development box.
+The next integration slice is still to connect the draft lifecycle scaffold to a live Schemathesis/Hypothesis state
+machine, then add the next persona/workflow only after the single lifecycle check is green on the intended Docker
+runner. No API campaign should be run merely to validate harness mechanics on a resource-constrained development box.
 
 ## Architecture and Contract Boundaries
 
