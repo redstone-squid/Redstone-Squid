@@ -27,7 +27,15 @@ class VoteWeightPolicy(Protocol):
 class VoteActorResolver(Protocol):
     """Resolve current member facts for refresh operations."""
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None: ...
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+        """Return the account's membership facts in `guild_id`.
+
+        An account that is definitely not a member resolves to a `VoteActor` with
+        no roles or capabilities, which weights at the default. `None` is reserved
+        for "cannot answer" — an unreachable or invisible guild — and tells callers
+        to keep the weight they already have rather than rewriting it.
+        """
+        ...
 
 
 class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
