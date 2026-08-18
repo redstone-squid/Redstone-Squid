@@ -180,10 +180,17 @@ async def edit_layout(
 async def edit_interaction_layout(
     interaction: discord.Interaction[Any],
     layout: discord.ui.LayoutView,
+    *,
+    attachments: Sequence[discord.File | discord.Attachment] | None = None,
 ) -> None:
-    """Edit the source interaction message, converting legacy payloads when needed."""
+    """Edit the source interaction message, converting legacy payloads when needed.
+
+    `attachments` replaces the message's files, so passing `[]` strips them and omitting it
+    leaves them alone — a paging button should not re-upload what it is not changing.
+    """
+    extra: dict[str, Any] = {} if attachments is None else {"attachments": list(attachments)}
     message = interaction.message
     if message is not None and not _message_uses_components_v2(message):
-        await interaction.response.edit_message(content=None, embed=None, view=layout)
+        await interaction.response.edit_message(content=None, embed=None, view=layout, **extra)
         return
-    await interaction.response.edit_message(view=layout)
+    await interaction.response.edit_message(view=layout, **extra)
