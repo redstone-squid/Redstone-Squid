@@ -233,8 +233,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
             return
+        allow_network = isinstance(ctx.author, discord.Member) and await self.publisher.may_create_network(ctx.author)
         await ctx.interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
-            PollModal(self.publisher, account.id)
+            PollModal(self.publisher, account.id, allow_network=allow_network)
         )
 
     @poll_group.command(name="create")
