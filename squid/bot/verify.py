@@ -1,21 +1,42 @@
 """A cog for verifying minecraft accounts."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 from uuid import UUID
 
 import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-from squid.accounts.domain import AccountIdentity, AliasClaim, IdentityProvider, IdentityRefresh, LinkPreview
+from squid.accounts.application import AccountService
+from squid.accounts.domain import (
+    MAX_BIO_LENGTH,
+    MAX_DISPLAY_NAME_LENGTH,
+    MAX_PRONOUNS_LENGTH,
+    Account,
+    AccountIdentity,
+    AccountProfile,
+    AliasClaim,
+    IdentityProvider,
+    IdentityRefresh,
+    LinkPreview,
+    ProfileLink,
+    ProfileUpdate,
+)
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.bot.consent import UserDataConsentView
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.profile_render import (
+    identity_label,
+    own_profile_avatar,
+    own_profile_fields,
+    public_profile_fields,
+)
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import DISCORD_BLUE, CardField, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
+from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
@@ -110,21 +131,68 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
 
     @account_group.command(name="unlink")
-    async def unlink(self, ctx: Context[BotT]):
-        """Unlink your minecraft account."""
+    @app_commands.describe(
+        identity=app_commands.locale_str(_("Which linked account to unlink. Defaults to your Minecraft account."))
+    )
+    async def unlink(self, ctx: Context[BotT], identity: int | None = None):
+        """Unlink one of your linked accounts."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         ephemeral = ctx.interaction is not None
-        view = ConfirmationView(t(locale, _("Are you sure you want to unlink your Minecraft account?")), locale=locale)
+        target = await self._unlink_target(ctx, identity, locale)
+        if isinstance(target, str):
+            await ctx.send(view=text_layout(target), ephemeral=ephemeral, allowed_mentions=no_mentions())
+            return
+
+        prompt = t(
+            locale,
+            _("Are you sure you want to unlink {identity}?"),
+            identity=identity_label(target, locale),
+        )
+        if target.provider is IdentityProvider.DISCORD and target.discord_id == ctx.author.id:
+            # Unlinking the identity you are speaking through is legal but startling, so say what
+            # it costs before the button rather than after.
+            prompt += "\n\n" + t(
+                locale,
+                _("This is the Discord account you are using now. The bot will stop recognising you here."),
+            )
+        view = ConfirmationView(prompt, locale=locale)
         await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
 
         await view.wait()
         await ctx.send(
-            view=text_layout(await self._unlink_outcome(ctx, view.value, locale)),
+            view=text_layout(await self._unlink_outcome(ctx, view.value, target, locale)),
             ephemeral=ephemeral,
             allowed_mentions=no_mentions(),
         )
 
-    async def _unlink_outcome(self, ctx: Context[BotT], confirmed: bool | None, locale: str) -> str:
+    async def _unlink_target(self, ctx: Context[BotT], identity_id: int | None, locale: str) -> AccountIdentity | str:
+        """Resolve which identity to unlink, or return the message explaining why none was found.
+
+        With no argument this keeps the old behaviour of meaning "my Minecraft account", which is
+        what almost every invocation means; an account holding several Java identities — which
+        only a merge produces — is asked to pick.
+        """
+        # Read rather than get-or-create: someone with no account has nothing to unlink, and
+        # unlinking is no reason to write a row for them.
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is None or account.id is None:
+            return t(locale, _("You don't have any linked accounts, so there was nothing to unlink."))
+        if identity_id is not None:
+            chosen = next((candidate for candidate in account.identities if candidate.id == identity_id), None)
+            if chosen is None:
+                return t(locale, _("That isn't one of your linked accounts. Run `/account identities` to see them."))
+            return chosen
+
+        java = [candidate for candidate in account.identities if candidate.provider is IdentityProvider.JAVA]
+        if not java:
+            return t(locale, _("You don't have a Minecraft account linked, so there was nothing to unlink."))
+        if len(java) > 1:
+            return t(locale, _("You have several Minecraft accounts linked. Name one with the `identity` option."))
+        return java[0]
+
+    async def _unlink_outcome(
+        self, ctx: Context[BotT], confirmed: bool | None, target: AccountIdentity, locale: str
+    ) -> str:
         """Say what happened for all three answers, including no answer at all.
 
         A timed-out confirmation used to send nothing, leaving a dead prompt and no way to tell
@@ -133,18 +201,202 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         if confirmed is None:
             return t(locale, _("The confirmation expired, so nothing was unlinked."))
         if not confirmed:
-            return t(locale, _("Cancelled. Your Minecraft account is still linked."))
+            return t(locale, _("Cancelled. Nothing was unlinked."))
 
-        # Read rather than get-or-create: someone with no account has nothing to unlink,
-        # and unlinking is no reason to write a row for them.
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is None or account.id is None or account.identity(IdentityProvider.JAVA) is None:
-            # Split from the failure below, which used to share one message joined by "or" and so
-            # told the user neither of the two things it might mean.
-            return t(locale, _("You don't have a Minecraft account linked, so there was nothing to unlink."))
-        if not await self.account_service.unlink_minecraft_account(account.id):
-            return t(locale, _("Unlinking failed. Please try again, and report it if it keeps happening."))
-        return t(locale, _("Your Discord account has been unlinked from your Minecraft account."))
+        if account is None or account.id is None or target.id is None:
+            return t(locale, _("You don't have any linked accounts, so there was nothing to unlink."))
+        removed = await self.account_service.unlink_identity(account.id, target.id)
+        return t(
+            locale,
+            _("Unlinked {identity}. Any build credit you hold is unaffected."),
+            identity=identity_label(removed, locale),
+        )
+
+    @account_group.command(name="identities")
+    async def identities(self, ctx: Context[BotT]) -> None:
+        """List the accounts linked to you, and whether each one is shown publicly."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is None or account.id is None or not account.identities:
+            await ctx.send(
+                view=text_layout(t(locale, _("You don't have any linked accounts yet."))),
+                ephemeral=ctx.interaction is not None,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        await ctx.send(
+            view=card_layout(
+                t(locale, _("Your linked accounts")),
+                accent_colour=DISCORD_BLUE,
+                fields=[
+                    CardField(
+                        identity_label(identity, locale),
+                        t(
+                            locale,
+                            _("{visibility} · verified {age} · id `{id}`"),
+                            visibility=(
+                                t(locale, _("shown publicly")) if identity.is_public else t(locale, _("hidden"))
+                            ),
+                            age=(
+                                discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R")
+                                if identity.verified_at is not None
+                                else t(locale, _("unknown"))
+                            ),
+                            id=identity.id,
+                        ),
+                    )
+                    for identity in account.identities
+                ],
+                footer=t(locale, _("Use the id with `/account visibility` or `/account unlink`.")),
+            ),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+
+    @account_group.command(name="visibility")
+    @app_commands.describe(
+        public=app_commands.locale_str(_("Whether to show this on your public creator page.")),
+        identity=app_commands.locale_str(
+            _("Which linked account to show or hide. Omit to show or hide the whole page.")
+        ),
+    )
+    async def visibility(self, ctx: Context[BotT], public: bool, identity: int | None = None) -> None:
+        """Choose what your public creator page shows."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        account_id = await account_id_for(self.account_service, ctx.author)
+
+        if identity is None:
+            await self.account_service.update_profile(account_id, ProfileUpdate(hidden=not public))
+            message = (
+                t(locale, _("Your creator page is public again."))
+                if public
+                else t(
+                    locale,
+                    _(
+                        "Your creator page is hidden. It still lists the creator names you hold, "
+                        "because that credit is what attributes your builds."
+                    ),
+                )
+            )
+        else:
+            updated = await self.account_service.set_identity_visibility(account_id, identity, is_public=public)
+            message = t(
+                locale,
+                _("{identity} is now {visibility} on your creator page."),
+                identity=identity_label(updated, locale),
+                visibility=t(locale, _("shown")) if public else t(locale, _("hidden")),
+            )
+        await ctx.send(
+            view=text_layout(message),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
+        )
+
+    @account_group.command(name="profile")
+    @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to you.")))
+    async def profile(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
+        """Show a creator page."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        ephemeral = ctx.interaction is not None
+        target = user or ctx.author
+        # Read-only for everyone, including yourself: viewing a page is not evidence that anybody
+        # asked to be remembered, so it must not create an account row.
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(target.id))
+        if account is None or account.id is None or account.public_creator_id is None:
+            await ctx.send(
+                view=text_layout(
+                    t(locale, _("You don't have a creator page yet. Link an account to get one."))
+                    if target.id == ctx.author.id
+                    else t(locale, _("{user} doesn't have a creator page."), user=target.display_name)
+                ),
+                ephemeral=ephemeral,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        if target.id == ctx.author.id:
+            await self._refresh_discord_avatar_key(account, target)
+            view = await self._own_profile_card(account.id, account.identities, locale)
+        else:
+            view = await self._public_profile_card(account.public_creator_id, target.display_name, locale)
+        await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
+
+    async def _own_profile_card(self, account_id: int, identities: tuple[AccountIdentity, ...], locale: str):
+        """Render the caller's own page, showing what is hidden as well as what is not."""
+        profile = await self.account_service.get_profile(account_id)
+        footer = (
+            t(locale, _("This page is hidden. Only your creator names are public."))
+            if profile.hidden
+            else t(locale, _("Edit it with `/account profile-edit`."))
+        )
+        return card_layout(
+            profile.display_name or t(locale, _("Your creator page")),
+            profile.bio,
+            accent_colour=DISCORD_BLUE,
+            fields=own_profile_fields(profile, identities, locale),
+            footer=footer,
+            media=own_profile_avatar(profile, identities),
+        )
+
+    async def _public_profile_card(self, public_id: UUID, fallback_name: str, locale: str):
+        """Render somebody else's page from the same filtered view the API serves."""
+        public = await self.account_service.get_public_profile(public_id)
+        if public is None:
+            return text_layout(t(locale, _("That creator page could not be found.")))
+        if public.hidden:
+            return card_layout(
+                t(locale, _("Hidden creator page")),
+                t(locale, _("This creator has hidden their page. Their build credit is still listed.")),
+                accent_colour=DISCORD_BLUE,
+                fields=public_profile_fields(public, locale),
+            )
+        return card_layout(
+            public.display_name or fallback_name,
+            public.bio,
+            accent_colour=DISCORD_BLUE,
+            fields=public_profile_fields(public, locale),
+            media=() if public.avatar_url is None else (public.avatar_url,),
+        )
+
+    async def _refresh_discord_avatar_key(self, account: Account, user: discord.Member | discord.User) -> None:
+        """Store the viewer's current Discord avatar hash, which only the gateway supplies.
+
+        Opportunistic: this is the one place the bot reliably holds both the account and a fresh
+        `discord.User`, so an avatar that would otherwise render as null gets filled in whenever
+        someone looks at their own page.
+        """
+        identity = next(
+            (
+                candidate
+                for candidate in account.identities
+                if candidate.provider is IdentityProvider.DISCORD and candidate.discord_id == user.id
+            ),
+            None,
+        )
+        if account.id is None or identity is None or identity.id is None:
+            return
+        key = user.avatar.key if user.avatar is not None else None
+        if key != identity.avatar_key:
+            await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
+
+    @account_group.command(name="profile-edit")
+    async def profile_edit(self, ctx: Context[BotT]) -> None:
+        """Edit your creator page."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        if ctx.interaction is None:
+            # A modal needs an interaction to open in, which a prefix invocation does not have.
+            await ctx.send(
+                view=text_layout(t(locale, _("Use the `/account profile-edit` slash command to edit your page."))),
+                allowed_mentions=no_mentions(),
+            )
+            return
+        account_id = await account_id_for(self.account_service, ctx.author)
+        profile = await self.account_service.get_profile(account_id)
+        await ctx.interaction.response.send_modal(
+            ProfileEditModal(self.account_service, account_id, profile, locale=locale)
+        )
 
     @account_group.command(name="refresh")
     @app_commands.describe(
@@ -170,6 +422,74 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             ephemeral=ctx.interaction is not None,
             allowed_mentions=no_mentions(),
         )
+
+    @account_group.command(name="merge-code")
+    async def merge_code(self, ctx: Context[BotT]) -> None:
+        """Offer this account up to be absorbed by another account you hold."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        account_id = await account_id_for(self.account_service, ctx.author)
+        code, ticket = await self.account_service.create_merge_code(account_id)
+        await ctx.send(
+            view=card_layout(
+                t(locale, _("Merge code")),
+                t(
+                    locale,
+                    _(
+                        "Run `/account merge {code}` while signed in as the account you want to **keep**. "
+                        "This account is the one that will be absorbed."
+                    ),
+                    code=code,
+                ),
+                accent_colour=DISCORD_BLUE,
+                footer=t(
+                    locale,
+                    _("Expires {expiry}. Give it to nobody but yourself: it hands this account over."),
+                    expiry=discord.utils.format_dt(ticket.expires_at.to_stdlib(), style="R"),
+                ),
+            ),
+            # Always ephemeral, even from a prefix invocation, because the code is a credential.
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+
+    @account_group.command(name="merge")
+    @app_commands.describe(code=app_commands.locale_str(_("A code from `/account merge-code` on your other account.")))
+    async def merge(self, ctx: Context[BotT], code: str) -> None:
+        """Absorb another account you hold into this one."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        account_id = await account_id_for(self.account_service, ctx.author)
+        preview = await self.account_service.preview_merge(account_id, code)
+
+        view = ConfirmationView(
+            t(
+                locale,
+                _(
+                    "Merging will move {aliases} creator name(s) and {identities} linked account(s) "
+                    "onto this account, along with {builds} build credit(s).\n\n"
+                    "This cannot be undone: the other account's creator page will permanently "
+                    "redirect here."
+                ),
+                aliases=len(preview.alias_names),
+                identities=preview.identity_count,
+                builds=preview.build_count,
+            ),
+            locale=locale,
+        )
+        await ctx.send(view=view, ephemeral=True, allowed_mentions=no_mentions())
+        await view.wait()
+
+        if view.value is None:
+            message = t(locale, _("The confirmation expired, so nothing was merged."))
+        elif not view.value:
+            message = t(locale, _("Cancelled. Nothing was merged."))
+        else:
+            merge = await self.account_service.complete_merge(account_id, code)
+            message = t(
+                locale,
+                _("Merged. `{redirected}` now redirects to your creator page."),
+                redirected=merge.redirected_public_creator_id,
+            )
+        await ctx.send(view=text_layout(message), ephemeral=True, allowed_mentions=no_mentions())
 
     @autocompletes(name="creators")
     @account_group.command(name="claim")
@@ -284,6 +604,90 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             ),
             allowed_mentions=no_mentions(),
         )
+
+
+class ProfileEditModal(discord.ui.Modal):
+    """Edit the free-text parts of a creator page.
+
+    Links are one `label | url` per line rather than a repeated field because a modal allows five
+    inputs total; the same domain validator parses them, so the bot and the API agree on what a
+    valid link is.
+    """
+
+    def __init__(
+        self,
+        account_service: AccountService,
+        account_id: int,
+        profile: AccountProfile,
+        *,
+        locale: str,
+    ) -> None:
+        super().__init__(title=t(locale, _("Edit your creator page")))
+        self._account_service = account_service
+        self._account_id = account_id
+        self._locale = locale
+        self.display_name = discord.ui.TextInput(
+            label=t(locale, _("Display name")),
+            required=False,
+            max_length=MAX_DISPLAY_NAME_LENGTH,
+            default=profile.display_name,
+        )
+        self.pronouns = discord.ui.TextInput(
+            label=t(locale, _("Pronouns")),
+            required=False,
+            max_length=MAX_PRONOUNS_LENGTH,
+            default=profile.pronouns,
+        )
+        self.bio = discord.ui.TextInput(
+            label=t(locale, _("Bio")),
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=MAX_BIO_LENGTH,
+            default=profile.bio,
+        )
+        self.links = discord.ui.TextInput(
+            label=t(locale, _("Links (one per line: Label | https://...)")),
+            style=discord.TextStyle.paragraph,
+            required=False,
+            default="\n".join(f"{link.label} | {link.url}" for link in profile.links),
+        )
+        for item in (self.display_name, self.pronouns, self.bio, self.links):
+            self.add_item(item)
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        update = ProfileUpdate(
+            display_name=self.display_name.value or None,
+            pronouns=self.pronouns.value or None,
+            bio=self.bio.value or None,
+            links=_parse_link_lines(self.links.value, self._locale),
+        )
+        await self._account_service.update_profile(self._account_id, update)
+        await interaction.response.send_message(
+            view=text_layout(t(self._locale, _("Your creator page has been updated."))),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+
+
+def _parse_link_lines(raw: str, locale: str) -> tuple[ProfileLink, ...]:
+    """Parse `Label | https://...` lines into links, refusing a line that is not one.
+
+    Parsing only splits; `ProfileUpdate.validated` in the service is what accepts or rejects the
+    URL itself, so the modal cannot end up with a laxer idea of a valid link than the API.
+    """
+    links: list[ProfileLink] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        label, separator, url = line.partition("|")
+        if not separator:
+            raise ValidationError(
+                t(locale, _("Each link needs a label and a URL separated by `|`, got {line!r}.")),
+                message_params={"line": line.strip()},
+            )
+        links.append(ProfileLink(label=label.strip(), url=url.strip()))
+    return tuple(links)
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:
