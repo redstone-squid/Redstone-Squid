@@ -133,14 +133,18 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   on the `claims` list view — staff currently read a claim ID off a card and retype it into a
   second command that already autocompletes it. With C1, the split becomes invisible anyway.
 
-### `/notifications` *(phase 5)*
-- `consent` (accept notice + choose channels) and `channels` (choose channels) are
-  near-duplicates; one settings-style command or panel covers both.
-- `follow-creator`, `follow-record`, `follow-records` are three commands for "follow
+### `/notifications` *(phase 5.3, done 2026-08-19)*
+- ~~`consent` (accept notice + choose channels) and `channels` (choose channels) are
+  near-duplicates; one settings-style command or panel covers both.~~ *(`consent` had already
+  moved to `/account consent`; `status` and `channels` are the panel.)*
+- ~~`follow-creator`, `follow-record`, `follow-records` are three commands for "follow
   something"; one `follow` with a kind choice (or just the structured filter form) reads
-  better in the picker.
-- Replies are raw strings (C3); `list` prints UUIDs (C5); `unfollow` autocompletes ids that
-  `list` makes you read manually — same button-instead-of-retype shape as account claims.
+  better in the picker.~~ *(One `follow`; the kind is inferred from which argument was given,
+  so there is no kind choice to get wrong.)*
+- ~~Replies are raw strings (C3); `list` prints UUIDs (C5); `unfollow` autocompletes ids that
+  `list` makes you read manually — same button-instead-of-retype shape as account claims.~~
+  *(Layouts throughout; the select removes subscriptions directly. The strings were already
+  translated — the finding was half right. Subject UUIDs remain, deliberately: see the plan.)*
 
 ### `/admin` *(phase 5.2, done 2026-08-19)*
 - ~~The group is named `admin` but contains only record-computation tooling (`records-gaps`,
