@@ -38,6 +38,7 @@ from squid.search.infrastructure.models import (
     SearchEmbeddingQueueItem,
     SearchProjectionQueueItem,
 )
+from squid.tags.domain import TagSemanticKind
 from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
 from squid.tags.infrastructure.models import TagAlias, TagDefinition
 from squid.versions.infrastructure.models import Version
@@ -487,11 +488,16 @@ class SearchProjectionLoader:
                     )
                 ).all()
             )
+            # The document says which kind of tag it is, so `kind:pattern` and
+            # `kind:restriction` answer the questions the retired `/patterns search` and
+            # `/restrictions search` commands used to. `kind:tag` is kept alongside it,
+            # because "any curated tag" is still a question and used to be the only answer.
             return _metadata_projection(
                 source_key=f"tag:{source_id}",
                 title=definition.display_name,
-                subtype="tag",
+                subtype=TagSemanticKind(definition.semantic_kind).value,
                 tags=aliases,
+                extra_facets=(ProjectionFacet("kind", "tag"),),
                 data={
                     "tag_id": source_id,
                     "aliases": aliases,
@@ -594,6 +600,7 @@ def _metadata_projection(
     title: str,
     subtype: str,
     tags: Sequence[str] = (),
+    extra_facets: Sequence[ProjectionFacet] = (),
     data: dict[str, object],
 ) -> SearchProjection:
     return SearchProjection(
@@ -602,7 +609,7 @@ def _metadata_projection(
         title=title,
         tags=tuple(tags),
         document_data={"metadata_kind": subtype, **data},
-        facets=(ProjectionFacet("kind", subtype), ProjectionFacet(subtype, title)),
+        facets=(ProjectionFacet("kind", subtype), ProjectionFacet(subtype, title), *extra_facets),
     )
 
 
