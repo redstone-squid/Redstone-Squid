@@ -1,6 +1,18 @@
 """Core translation lookup tests."""
 
-from squid.core.i18n import negotiate_locale, negotiate_locale_candidates, ntranslate, translate
+from pathlib import Path
+
+from babel.messages.catalog import Catalog
+from babel.messages.mofile import write_mo
+
+from squid.core.i18n import (
+    _catalog,
+    locales_dir,
+    negotiate_locale,
+    negotiate_locale_candidates,
+    ntranslate,
+    translate,
+)
 
 
 def test_translate_falls_back_to_source_string_for_unknown_locale() -> None:
@@ -58,3 +70,25 @@ def test_ntranslate_selects_plural_form() -> None:
     plural = "{n} builds found."
     assert ntranslate("en", singular, plural, 1) == "1 build found."
     assert ntranslate("en", singular, plural, 5) == "5 builds found."
+
+
+def test_locales_dir_points_at_the_shipped_catalogs() -> None:
+    """The walk out of `squid/core/` breaks silently: a wrong directory just stops translating."""
+    assert (locales_dir() / "zh_CN" / "LC_MESSAGES" / "squid.po").is_file()
+
+
+def test_catalog_maps_a_bcp47_tag_onto_its_gettext_directory(tmp_path: Path) -> None:
+    """A `zh-CN` tag has to find `zh_CN/LC_MESSAGES/squid.mo`; nothing else pins that conversion.
+
+    Compiled catalogs are produced by `just i18n-compile` and are not committed, so a test
+    reading the shipped tree would assert the untranslated fallback on a clean checkout and
+    prove nothing. Injecting `localedir` lets this assert a translation actually being found.
+    """
+    messages = tmp_path / "zh_CN" / "LC_MESSAGES"
+    messages.mkdir(parents=True)
+    catalog = Catalog(locale="zh_CN")
+    catalog.add("Hello", "你好")
+    with (messages / "squid.mo").open("wb") as handle:
+        write_mo(handle, catalog)
+
+    assert _catalog("zh-CN", tmp_path).gettext("Hello") == "你好"
