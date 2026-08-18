@@ -6,13 +6,16 @@ emoji palette, option parsing, and "create this poll and put it in this channel"
 """
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Protocol
 
 import discord
 
 from squid.bot._types import GuildMessageable
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.voting.domain import VoteKind, VoteOption, VoteVisibility
+from squid.bot.utils.permissions import build_subject
+from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
+from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -32,7 +35,10 @@ class PollPublisher(Protocol):
         visibility: VoteVisibility,
         duration_seconds: int,
         options: Sequence[VoteOption],
+        scope: PollScope = PollScope.GUILD,
     ) -> discord.Message: ...
+
+    async def may_create_network(self, member: discord.Member) -> bool: ...
 
 
 class DiscordPollPublisher:
@@ -65,6 +71,7 @@ class DiscordPollPublisher:
         visibility: VoteVisibility,
         duration_seconds: int,
         options: Sequence[VoteOption],
+        scope: PollScope = PollScope.GUILD,
     ) -> discord.Message:
         """Persist the poll, then hand one Discord message to the reconciler.
 
@@ -73,6 +80,10 @@ class DiscordPollPublisher:
         decision -- the channel the command was run in -- so it is sent here and
         adopted, rather than the renderer inventing somewhere to put it.
         """
+        if scope is PollScope.NETWORK:
+            # Aliases resolved against the author's guild would leave every other
+            # server's card with nothing to react to.
+            options = [replace(option, guild_id=None) for option in options]
         session_id = await self._bot.services.votes.create_generic_poll(
             author_account_id=author_account_id,
             question=question,
@@ -80,8 +91,15 @@ class DiscordPollPublisher:
             duration_seconds=duration_seconds,
             options=options,
             guild_id=channel.guild.id,
+            scope=scope,
         )
         return await self.attach(session_id, channel)
+
+    async def may_create_network(self, member: discord.Member) -> bool:
+        """Whether `member` may publish a poll into every server's vote channel."""
+        subject = await build_subject(self._bot, member, member.guild.id)
+        capabilities = await self._bot.services.permissions.capabilities(subject, (VOTE_POLL_NETWORK_CREATE,))
+        return VOTE_POLL_NETWORK_CREATE.name in capabilities
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
         """Post one card for an existing poll and let the reconcile loop own it."""
