@@ -27,6 +27,7 @@ CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
+    Base.metadata.tables["account_profiles"],
     Base.metadata.tables["public_creator_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],

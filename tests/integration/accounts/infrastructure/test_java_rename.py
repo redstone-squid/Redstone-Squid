@@ -37,6 +37,7 @@ JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
+    Base.metadata.tables["account_profiles"],
     Base.metadata.tables["public_creator_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],
