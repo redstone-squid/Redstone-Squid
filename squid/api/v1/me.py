@@ -4,8 +4,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
+from squid.accounts.application import AccountService
 from squid.accounts.errors import AccountNotFoundError
-from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, cli_command, contract
+from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -21,12 +22,21 @@ from squid.api.pagination import (
 from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
-from squid.api.v1.schemas.me import MinecraftIdentityRefresh, UserMe
+from squid.api.v1.schemas.me import (
+    IdentityDetail,
+    IdentityVisibilityRequest,
+    MinecraftIdentityRefresh,
+    ProfileDetail,
+    ProfileUpdateRequest,
+    UserMe,
+)
 from squid.builds.domain import Status
 from squid.core.errors import AuthenticationError
 from squid.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
+    ACCOUNT_PROFILE_MODERATE,
+    ACCOUNT_SELF_MANAGE,
     ACCOUNT_SELF_READ,
 )
 
@@ -34,6 +44,7 @@ router = APIRouter(prefix="/users/me", tags=["users"])
 accounts_router = APIRouter(prefix="/accounts", tags=["users"])
 UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
 RefreshCaller = Annotated[Caller, Depends(requires(ACCOUNT_IDENTITY_REFRESH))]
+ManageCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_MANAGE))]
 _ALL_STATUSES = frozenset(Status)
 
 
@@ -52,10 +63,15 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> UserMe:
     """
     if caller.account_id is None:
         raise AuthenticationError
-    account = await accounts.get_account_by_id(caller.account_id)
+    return await _render_me(accounts, caller.account_id, consent_pending=caller.consent_pending)
+
+
+async def _render_me(accounts: AccountService, account_id: int, *, consent_pending: bool) -> UserMe:
+    """Compose the self view from the account and its profile."""
+    account = await accounts.get_account_by_id(account_id)
     if account is None:
-        raise AccountNotFoundError(caller.account_id)
-    return UserMe.from_domain(account, consent_pending=caller.consent_pending)
+        raise AccountNotFoundError(account_id)
+    return UserMe.from_domain(account, await accounts.get_profile(account_id), consent_pending=consent_pending)
 
 
 @router.post(
@@ -70,8 +86,94 @@ async def grant_consent(accounts: Accounts, caller: UserCaller) -> UserMe:
     """Accept the current privacy notice for future writes."""
     if caller.account_id is None:
         raise AuthenticationError
-    account = await accounts.grant_current_consent(caller.account_id)
-    return UserMe.from_domain(account, consent_pending=False)
+    await accounts.grant_current_consent(caller.account_id)
+    return await _render_me(accounts, caller.account_id, consent_pending=False)
+
+
+@router.patch(
+    "/profile",
+    response_model=ProfileDetail,
+    responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="account_profile_update",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+)
+async def update_profile(
+    body: ProfileUpdateRequest,
+    accounts: Accounts,
+    caller: ManageCaller,
+) -> ProfileDetail:
+    """Edit the caller's own public profile.
+
+    Partial: an omitted field is left alone and an explicit `null` clears it, so a client that
+    only knows about some fields cannot wipe the ones it has never heard of.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    profile = await accounts.update_profile(caller.account_id, body.to_domain())
+    return ProfileDetail.from_domain(profile, await accounts.list_identities(caller.account_id))
+
+
+@router.get(
+    "/identities",
+    response_model=list[IdentityDetail],
+    responses=responses(401, 403, 404, 503),
+    operation_id="account_identity_list",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
+async def list_identities(accounts: Accounts, caller: UserCaller) -> list[IdentityDetail]:
+    """List every identity linked to the caller's account, hidden ones included.
+
+    Unfiltered by visibility on purpose: you can only unhide what you can see listed.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    identities = await accounts.list_identities(caller.account_id)
+    return [IdentityDetail.from_domain(identity) for identity in identities]
+
+
+@router.put(
+    "/identities/{identity_id}/visibility",
+    response_model=IdentityDetail,
+    responses=responses(401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="account_identity_visibility_set",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+)
+async def set_identity_visibility(
+    identity_id: int,
+    body: IdentityVisibilityRequest,
+    accounts: Accounts,
+    caller: ManageCaller,
+) -> IdentityDetail:
+    """Publish or withhold one linked identity on the public creator profile."""
+    if caller.account_id is None:
+        raise AuthenticationError
+    identity = await accounts.set_identity_visibility(caller.account_id, identity_id, is_public=body.public)
+    return IdentityDetail.from_domain(identity)
+
+
+@router.delete(
+    "/identities/{identity_id}",
+    response_model=IdentityDetail,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="account_identity_unlink",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE],
+        cli=cli_command("account.identity.unlink", interaction="direct"),
+    ),
+)
+async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCaller) -> IdentityDetail:
+    """Unlink one identity from the caller's account.
+
+    Refuses the last one with 409: every sign-in path resolves an account from a provider
+    subject, so an account with no identities is one nobody can reach again. Creator credit is
+    untouched — attribution is a fact about a build, not about how its author signs in.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    return IdentityDetail.from_domain(await accounts.unlink_identity(caller.account_id, identity_id))
 
 
 @router.post(
@@ -107,6 +209,27 @@ async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) 
 async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) -> MinecraftIdentityRefresh:
     """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(account_id))
+
+
+@accounts_router.delete(
+    "/{account_id}/profile",
+    response_model=ProfileDetail,
+    responses=responses(401, 403, 404, 422, 503),
+    dependencies=[
+        Depends(requires(ACCOUNT_PROFILE_MODERATE)),
+        Depends(enforce_request_idempotency),
+    ],
+    operation_id="account_profile_clear",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+)
+async def clear_profile(account_id: int, accounts: Accounts) -> ProfileDetail:
+    """Reset another account's profile to empty, for staff handling abuse.
+
+    Deliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that
+    also flipped it would take that decision away from them.
+    """
+    profile = await accounts.clear_profile(account_id)
+    return ProfileDetail.from_domain(profile, await accounts.list_identities(account_id))
 
 
 @router.get(
