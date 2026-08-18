@@ -49,7 +49,7 @@ class CreatorProfileReader(Protocol):
 class CompetitionReader(Protocol):
     """Read record competition identifiers."""
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str]]: ...
+    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
 
 
 class CreatorProfileProvider:
@@ -68,7 +68,7 @@ class CreatorProfileProvider:
 
 
 class CompetitionProvider:
-    """Suggest record competitions by their readable identity, submitting the public UUID."""
+    """Suggest record competitions by their record title, submitting the public UUID."""
 
     def __init__(self, reader: CompetitionReader) -> None:
         self._reader = reader
@@ -78,11 +78,12 @@ class CompetitionProvider:
         return tuple(
             candidate(
                 public_id,
-                label=f"{title} — {category_key}",
+                label=title,
+                description=subtitle,
                 kind="competition",
-                terms=(title, category_key),
+                terms=(title, subtitle) if subtitle else (title,),
             )
-            for public_id, title, category_key in competitions
+            for public_id, title, subtitle in competitions
         )
 
 
