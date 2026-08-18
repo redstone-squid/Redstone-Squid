@@ -43,8 +43,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         gaps = await self.records.gaps(kind=kind)
         if gaps:
             description = "\n".join(
-                f"`{gap.definition_id}` **{gap.record_class.value.upper()}** "
-                f"{gap.category_key} — builds {', '.join(map(str, gap.build_ids))}; "
+                f"`{gap.definition_id}` **{gap.title}** — builds {', '.join(map(str, gap.build_ids))}; "
                 f"missing {', '.join(gap.fields)}"
                 for gap in gaps[:30]
             )
@@ -53,7 +52,9 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         else:
             description = t(locale, _("No unresolved active record categories."))
         await ctx.send(
-            view=info_layout(t(locale, _("Record evidence gaps")), description), allowed_mentions=no_mentions()
+            view=info_layout(t(locale, _("Record evidence gaps")), description),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
         )
 
     @admin_group.command(name="records-title-issues")
