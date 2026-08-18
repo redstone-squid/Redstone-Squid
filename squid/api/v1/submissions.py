@@ -10,12 +10,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.security import Caller, current_caller
+from squid.api.security import Caller, current_caller, require_consented_account
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
@@ -169,8 +168,7 @@ async def authenticated_submission_actor(
 def _submission_actor(caller: Caller) -> AuthenticatedSubmissionActor:
     if caller.account_id is None or caller.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
-    if caller.consent_pending:
-        raise ConsentRequiredError(account_id=caller.account_id)
+    require_consented_account(caller)
     if caller.kind == "account":
         origin = SubmissionOrigin.WEB
     elif caller.kind == "cli":
