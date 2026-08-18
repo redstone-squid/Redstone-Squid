@@ -26,7 +26,8 @@ the person actually using it (a fuller code-level inventory lives in
   *(Phase 3 found the prefix form does bind its argument; what it does not do is stay private.
   Both are fixed.)*
 - **Settings are one-at-a-time.** `/settings set` takes a single key per invocation; first-time
-  setup of a guild is a dozen round trips. No panel view, no batch edit.
+  setup of a guild is a dozen round trips. No panel view, no batch edit. *(Phase 4: `/settings`
+  is the panel, with a picker per key.)*
 - **Too many commands overall.** Every subsystem grew its own group (`patterns`,
   `restrictions`, `version`, `tag`, `vote`/`poll`, `admin records-*`, …). Many are
   staff-or-never commands sitting in everyone's command picker.
@@ -61,7 +62,7 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 | 1 | [01-build-submit.md](01-build-submit.md) | One `/build submit`: typed fields with autocomplete first, attachments last, workspace kept; `submit-full` removed | **Delivered** |
 | 2 | [02-search.md](02-search.md) | One `/search`: taxonomies named in `scope`, tag kinds indexed, one sort option; `/patterns` removed and `/restrictions` reduced to its staff command | **Delivered** |
 | 3 | [03-diagnostics.md](03-diagnostics.md) | `/error`: reports page inline, `recent` entries open in place, and every reply is private on the prefix side too | **Delivered** |
-| 4 | 04-settings.md (todo) | Settings panel: view everything at once, edit several keys per trip; bring `voting` replies onto i18n/layouts | Not started |
+| 4 | [04-settings.md](04-settings.md) | `/settings` opens a panel: every key on one screen with a picker each, voting configured where it is displayed; `list`/`get`/`clear`/`voting show`/`voting emojis` removed | **Delivered** |
 | 5 | 05-condensation.md (todo) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | Not started |
 
 **C1, picker visibility, is delivered** (2026-08-18), ahead of phase 2 as the audit
