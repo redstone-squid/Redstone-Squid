@@ -437,6 +437,11 @@ VOTE_POLL_CREATE = _b.node(
     NodeScope.GUILD,
     _("Create a poll."),
 )
+VOTE_POLL_NETWORK_CREATE = _b.node(
+    "vote.poll.network_create",
+    NodeScope.GUILD,
+    _("Create a poll carded in every server's vote channel."),
+)
 VOTE_POLL_CLOSE_ANY = _b.node(
     "vote.poll.close_any",
     NodeScope.GUILD,
