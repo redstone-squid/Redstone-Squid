@@ -9,7 +9,21 @@ from sqlalchemy.engine import Dialect
 from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
-__all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText"]
+__all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText", "now"]
+
+
+def now() -> Instant:
+    """The current instant at the precision `InstantUTC` can actually store.
+
+    `Instant.now()` is nanosecond-resolution and PostgreSQL `timestamptz` is microsecond, so a
+    row written from an unrounded instant comes back slightly earlier than the object that wrote
+    it. Nothing raises; the two simply stop comparing equal, which surfaces as an ORM instance
+    disagreeing with a re-read of the row it just created.
+
+    Minting at storage precision fixes it at the source, so every persisted default is exact
+    across a round trip. Use `Instant.now()` for anything that is only ever compared in memory.
+    """
+    return Instant.now().round("microsecond", mode="floor")
 
 
 class InstantUTC(TypeDecorator[Instant]):

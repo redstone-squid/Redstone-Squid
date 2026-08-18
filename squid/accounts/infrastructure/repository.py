@@ -54,7 +54,7 @@ from squid.accounts.infrastructure.models import VerificationAttempt as Verifica
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import _
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
@@ -69,15 +69,12 @@ here is a count.
 """
 
 
-def _now() -> Instant:
-    """The current instant at the precision `timestamptz` actually keeps.
+_now = now
+"""This module's long-standing local name for the shared storage-precision clock.
 
-    `Instant.now()` carries nanoseconds and the column carries microseconds, so an unfloored
-    value makes an object built from it disagree with the row it was just written to. Every
-    timestamp this module stores goes through here, so an in-memory value and its persisted
-    form are the same value.
-    """
-    return Instant.now().round("microsecond", mode="floor")
+It was the first place the nanosecond/microsecond mismatch was found; the definition now lives
+in `squid.persistence.types` so every persisted default gets the same treatment.
+"""
 
 
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:

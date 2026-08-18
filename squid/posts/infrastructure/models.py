@@ -5,7 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class DiscordPost(Base, kw_only=True):
@@ -54,7 +54,7 @@ class DiscordPost(Base, kw_only=True):
     applied_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
     """The queue generation this post was last rendered at."""
     posted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     rendered_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     suppressed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
