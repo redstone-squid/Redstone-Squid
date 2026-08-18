@@ -53,9 +53,6 @@ UNGATED_COMMANDS = frozenset(
         "info form",
         "info invite",
         "info source",
-        "patterns",
-        "patterns list",
-        "patterns search",
         # Anyone in a guild may open a poll, so `poll create` needs no node. Closing and
         # refreshing one are authorized against the session rather than the caller: both
         # run `VoteSessionSnapshot.can_close`, which admits the poll's author as well as
@@ -65,8 +62,6 @@ UNGATED_COMMANDS = frozenset(
         "poll close",
         "poll create",
         "poll refresh",
-        "restrictions",
-        "restrictions search",
         "search",
         "tag",
         "tag apply",
@@ -149,7 +144,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "view",
     ),
     "info": ("docs", "form", "invite", "source"),
-    "patterns": ("list", "search"),
     "perm": (
         "audit",
         "deny",
@@ -167,7 +161,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # opened it. `vote poll` survives only as a deprecated alias for `poll create`.
     "poll": ("close", "create", "refresh"),
     "redstoner": ("panel", "resync"),
-    "restrictions": ("add-alias", "search"),
+    "restrictions": ("add-alias",),
     "role": (
         "add-role",
         "assign",
@@ -233,6 +227,7 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     "error": frozenset({"manage_guild"}),
     "perm": frozenset({"manage_guild"}),
     "redstoner": frozenset({"manage_roles"}),
+    "restrictions": frozenset({"manage_guild"}),
     "role": frozenset({"manage_guild"}),
     "settings": frozenset({"manage_guild"}),
     "starboard": frozenset({"manage_guild"}),
@@ -340,6 +335,7 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build recalc") == {"build.submission.recalc"}
     assert _nodes(search.__cog_commands__, "build measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build detect-lattice") == {"build.schematic.detect_lattice"}
+    assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
     assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 
     settings = SettingsCog.__new__(SettingsCog)
@@ -381,6 +377,7 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
         (SettingsCog, "settings", "settings set"),
         (StarboardCog, "starboard", "starboard recount"),
         (RecordCog, "admin", "admin records-rebuild"),
+        (SearchCog, "restrictions", "restrictions add-alias"),
     ):
         commands = _commands_of(cog)
         assert _nodes(commands, member) <= _nodes(commands, group)

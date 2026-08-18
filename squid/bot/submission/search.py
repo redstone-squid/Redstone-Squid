@@ -25,8 +25,7 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
-from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -51,6 +50,44 @@ class SearchModeChoice(StrEnum):
     smart = "smart"
 
 
+class SearchTarget(StrEnum):
+    """What a search looks through.
+
+    `patterns` and `restrictions` are the metadata scope plus a filter. Naming them
+    here is what retired `/patterns search` and `/restrictions search`: nobody
+    discovers `kind:pattern`, but everybody opens this option anyway.
+    """
+
+    records = "records"
+    builds = "builds"
+    patterns = "patterns"
+    restrictions = "restrictions"
+    everything = "everything"
+
+
+_SEARCH_TARGETS: dict[SearchTarget, tuple[SearchScope, str | None]] = {
+    SearchTarget.records: (SearchScope.RECORDS, None),
+    SearchTarget.builds: (SearchScope.BUILDS, None),
+    SearchTarget.patterns: (SearchScope.METADATA, "kind:pattern"),
+    SearchTarget.restrictions: (SearchScope.METADATA, "kind:restriction"),
+    SearchTarget.everything: (SearchScope.ALL, None),
+}
+
+
+def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
+    """Resolve a target to a domain scope and the query expressing it.
+
+    The user's text is parenthesised because AND binds tighter than OR:
+    `kind:pattern a OR b` would parse as `(kind:pattern AND a) OR b`.
+    """
+    scope, narrowing = _SEARCH_TARGETS[target]
+    if narrowing is None:
+        return scope, query
+    if not query.strip():
+        return scope, narrowing
+    return scope, f"{narrowing} ({query})"
+
+
 class SearchCog[
     BotT: "squid.bot.app.RedstoneSquid",
 ](
@@ -72,29 +109,28 @@ class SearchCog[
     @commands.hybrid_command("search")
     @app_commands.describe(
         query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
-        scope=app_commands.locale_str(_("Search records, builds, tags and fields, or everything.")),
+        scope=app_commands.locale_str(_("What to look through: records, builds, patterns, restrictions, or all.")),
         sort=app_commands.locale_str(_("Order results by a field, ascending or descending.")),
         mode=app_commands.locale_str(_("Use keyword matching or smart meaning-based matching.")),
     )
     async def search_records(
         self,
         ctx: Context[BotT],
-        scope: SearchScope = SearchScope.RECORDS,
+        scope: SearchTarget = SearchTarget.records,
         sort: str | None = None,
         mode: SearchModeChoice = SearchModeChoice.keyword,
         *,
         query: str,
     ) -> None:
-        """Search records, builds, and metadata using text and field filters."""
+        """Search records, builds, patterns, and restrictions using text and field filters."""
         await ctx.defer()
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        search_scope, targeted_query = _targeted(scope, query)
         request = SearchRequest(
-            query,
-            scope=scope,
+            targeted_query,
+            scope=search_scope,
             mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
-            # `SearchSort.parse` and not `SearchSort(sort, direction)`: the `search_sorts`
-            # suggestions are already complete answers in `field` / `-field` form, so a
-            # separate direction option contradicted every value the user could pick.
+            # Parsed, not split: `search_sorts` suggests complete `field` / `-field` values.
             sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
@@ -106,28 +142,11 @@ class SearchCog[
         view.bind_message(message)
 
     @commands.hybrid_group(name="restrictions")
+    @requires(RESTRICTION_ALIAS_CREATE)
+    @hide_unless(manage_guild=True)
     async def restrictions_group(self, ctx: Context[BotT]) -> None:
-        """Find restrictions and manage their aliases."""
+        """Maintain the restriction taxonomy."""
         await ctx.send_help("restrictions")
-
-    @autocompletes(query="approved_restrictions")
-    @restrictions_group.command(name="search")
-    @app_commands.describe(
-        query=app_commands.locale_str(_("Part of a restriction name. Leave blank to list all restrictions."))
-    )
-    async def search_restrictions(self, ctx: Context[BotT], query: str | None = None):
-        """Search restriction names."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with RunningMessage(ctx, locale=locale) as sent_message:
-            matches = await self.queries.restrictions(query)
-            description = "\n".join(
-                f"{item.restriction_id}: {item.name}{' (alias)' if item.is_alias else ''}" for item in matches
-            )
-            await edit_layout(
-                sent_message,
-                info_layout(t(locale, _("Restrictions")), description),
-                allowed_mentions=no_mentions(),
-            )
 
     @autocompletes(restriction="approved_restrictions")
     @restrictions_group.command(name="add-alias")
@@ -154,38 +173,6 @@ class SearchCog[
                     info_layout(t(locale, _("Success")), t(locale, _("Alias added."))),
                     allowed_mentions=no_mentions(),
                 )
-
-    @commands.hybrid_group(name="patterns")
-    async def patterns_group(self, ctx: Context[BotT]) -> None:
-        """List and search build patterns."""
-        await ctx.send_help("patterns")
-
-    @patterns_group.command(name="list")
-    async def list_patterns(self, ctx: Context[BotT]):
-        """List all available build patterns."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with RunningMessage(ctx, locale=locale) as sent_message:
-            names = await self.queries.patterns()
-            await edit_layout(
-                sent_message,
-                info_layout(t(locale, _("Patterns")), ", ".join(names)),
-                allowed_mentions=no_mentions(),
-            )
-
-    @autocompletes(query="approved_patterns")
-    @patterns_group.command(name="search")
-    @app_commands.describe(query=app_commands.locale_str(_("A full or partial pattern name.")))
-    async def search_patterns(self, ctx: Context[BotT], query: str):
-        """Search build pattern names."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with RunningMessage(ctx, locale=locale) as sent_message:
-            matches = await self.queries.search_patterns(query)
-            description = "\n".join(f"{name} (score: {score:.1f})" for name, score, _ in matches)
-            await edit_layout(
-                sent_message,
-                info_layout(t(locale, _("Patterns")), description or t(locale, _("No patterns match that query."))),
-                allowed_mentions=no_mentions(),
-            )
 
     @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
