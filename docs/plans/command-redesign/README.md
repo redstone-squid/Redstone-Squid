@@ -23,6 +23,8 @@ the person actually using it (a fuller code-level inventory lives in
   reader.
 - **Diagnostics fight the reader.** `/error` (the `show` fallback) does not work as a prefix
   command in practice, and the traceback cannot be expanded past what one message shows.
+  *(Phase 3 found the prefix form does bind its argument; what it does not do is stay private.
+  Both are fixed.)*
 - **Settings are one-at-a-time.** `/settings set` takes a single key per invocation; first-time
   setup of a guild is a dozen round trips. No panel view, no batch edit.
 - **Too many commands overall.** Every subsystem grew its own group (`patterns`,
@@ -58,7 +60,7 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 | 0 | [00-audit.md](00-audit.md) | Code-level audit of all 19 groups; cross-cutting defects C1–C7 | **Done** |
 | 1 | [01-build-submit.md](01-build-submit.md) | One `/build submit`: typed fields with autocomplete first, attachments last, workspace kept; `submit-full` removed | **Delivered** |
 | 2 | [02-search.md](02-search.md) | One `/search`: taxonomies named in `scope`, tag kinds indexed, one sort option; `/patterns` removed and `/restrictions` reduced to its staff command | **Delivered** |
-| 3 | 03-diagnostics.md (todo) | `/error`: fix the prefix form (missing `invoke_without_command=True`), make `recent` entries openable in place | Not started |
+| 3 | [03-diagnostics.md](03-diagnostics.md) | `/error`: reports page inline, `recent` entries open in place, and every reply is private on the prefix side too | **Delivered** |
 | 4 | 04-settings.md (todo) | Settings panel: view everything at once, edit several keys per trip; bring `voting` replies onto i18n/layouts | Not started |
 | 5 | 05-condensation.md (todo) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | Not started |
 
