@@ -5,7 +5,7 @@ import json
 import logging
 from dataclasses import asdict
 from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import discord
 from discord import app_commands
@@ -162,6 +162,14 @@ class SearchCog[
         self.messages = bot.services.messages
         self.restrictions = bot.services.restrictions
         self.register_edit_context_menu()
+        self.register_recalc_context_menu()
+
+    @override
+    async def cog_unload(self) -> None:
+        # The tree is the bot's, not the cog's, so a reload leaves both menus registered and
+        # the second `add_command` raises rather than replacing them.
+        for menu in (self.edit_ctx_menu, self.recalc_ctx_menu):
+            self.bot.tree.remove_command(menu.name, type=menu.type)
 
     @autocompletes(sort="search_sorts", query="search_query")
     @commands.hybrid_command("search")
