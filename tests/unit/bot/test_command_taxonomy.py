@@ -3,6 +3,7 @@
 from collections.abc import Iterable
 from typing import Any, cast
 
+import discord
 from discord import app_commands
 from discord.ext.commands import Command, HybridCommand, HybridGroup
 
@@ -217,6 +218,36 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
 }
 
 
+PICKER_VISIBILITY: dict[str, frozenset[str]] = {
+    # Discord permissions that a viewer must hold for a top-level command to appear
+    # in their picker at all (audit finding C1). Everything absent from this map is
+    # visible to everyone, which is the default and has to stay a deliberate choice:
+    # before this map existed, all ~108 commands showed up for every user and the
+    # staff-only ones failed only after being invoked.
+    #
+    # These are visibility hints, never gates. `requires(...)` decides, and a guild
+    # admin can override any of these per command in Server Settings; the bits below
+    # are chosen to match the operation, so the override is rarely needed.
+    "admin": frozenset({"manage_guild"}),
+    "archive": frozenset({"manage_messages"}),
+    "error": frozenset({"manage_guild"}),
+    "perm": frozenset({"manage_guild"}),
+    "redstoner": frozenset({"manage_roles"}),
+    "role": frozenset({"manage_guild"}),
+    "settings": frozenset({"manage_guild"}),
+    "starboard": frozenset({"manage_guild"}),
+}
+"""Top-level commands hidden from pickers, and what a viewer needs to see them."""
+
+
+def _default_permissions(command: AnyCommand) -> frozenset[str] | None:
+    """The Discord permissions gating a command's visibility, by name."""
+    permissions = getattr(getattr(command, "app_command", None), "default_permissions", None)
+    if not isinstance(permissions, discord.Permissions):
+        return None
+    return frozenset(name for name, enabled in permissions if enabled)
+
+
 def _public_command_names() -> set[str]:
     return {command.qualified_name for cog in PUBLIC_COGS for command in cog.__cog_commands__ if not command.hidden}  # type: ignore
 
@@ -371,3 +402,35 @@ def test_every_privileged_command_declares_a_node() -> None:
                     ungated.add(entry.qualified_name)
 
     assert ungated == UNGATED_COMMANDS
+
+
+def test_staff_groups_are_hidden_from_non_staff_pickers() -> None:
+    """Which commands the picker offers is part of the public surface.
+
+    A staff group shipped without a visibility hint is invisible in review and
+    very visible to users, so the whole map is pinned rather than each entry.
+    """
+    visibility = {
+        command.qualified_name: names
+        for cog in PUBLIC_COGS
+        for command in _commands_of(cog)
+        if command.parent is None and (names := _default_permissions(command)) is not None
+    }
+
+    assert visibility == PICKER_VISIBILITY
+
+
+def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
+    """Discord reads `default_member_permissions` on top-level commands only.
+
+    On a subcommand it is accepted and ignored, so one written there would read
+    as a gate in the source while doing nothing at all.
+    """
+    mislabelled = {
+        command.qualified_name
+        for cog in PUBLIC_COGS
+        for command in _commands_of(cog)
+        if command.parent is not None and _default_permissions(command) is not None
+    }
+
+    assert mislabelled == set()

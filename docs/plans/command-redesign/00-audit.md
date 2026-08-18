@@ -17,8 +17,9 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   `/admin`, `/error`, `/redstoner` included — and the wrong ones fail only after invocation.
   This single fact produces most of the "too many commands" feeling. Fix is cheap relative to
   impact: set `default_permissions` (and/or `guild_only`) on staff groups so the picker shrinks
-  to what the viewer can actually run. Runtime nodes stay as the real gate. *(Feeds phase 5,
-  possibly worth doing first — it changes how urgent the rest of the condensation is.)*
+  to what the viewer can actually run. Runtime nodes stay as the real gate. **Done
+  2026-08-18**, before phase 2: see [README.md](README.md) for the eight commands and the
+  permission bit each one claims.
 - **C2 — Ephemerality has no policy.** Three patterns coexist: always-ephemeral (72 sites),
   `ephemeral=ctx.interaction is not None` (11 sites), and always-public. Near-identical
   commands differ: `account approve-claim` answers publicly, `account claims` ephemerally.
