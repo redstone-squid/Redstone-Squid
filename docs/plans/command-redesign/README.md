@@ -65,9 +65,11 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 **C1, picker visibility, is delivered** (2026-08-18), ahead of phase 2 as the audit
 recommended. `hide_unless(...)` in `squid/bot/utils/permissions.py` wraps
 `app_commands.default_permissions` with the one thing that decorator does not say out loud —
-it is a visibility hint, not a gate — and eight top-level staff commands now carry it:
-`/perm`, `/role`, `/settings`, `/starboard`, `/admin`, `/error` (all `manage_guild`),
-`/redstoner` (`manage_roles`), and `/archive` (`manage_messages`). Everything else stays
+it is a visibility hint, not a gate — and nine top-level staff commands now carry it:
+`/perm`, `/role`, `/settings`, `/starboard`, `/admin`, `/error`, `/restrictions` (all
+`manage_guild`), `/redstoner` (`manage_roles`), and `/archive` (`manage_messages`).
+`/restrictions` joined in phase 2, once its public lookup moved into `/search` and left
+it a staff-only taxonomy group. Everything else stays
 visible to everyone. `requires(...)` is untouched and remains the real gate; a guild admin
 can override any of these per command in Server Settings, which is why each bit was chosen to
 match the operation rather than defaulting everything to `manage_guild`.
