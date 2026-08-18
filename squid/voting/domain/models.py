@@ -51,6 +51,13 @@ class VoteVisibility(StrEnum):
     ANONYMOUS_HIDDEN = "anonymous_hidden"
 
 
+class PollScope(StrEnum):
+    """How far a generic poll is published."""
+
+    GUILD = "guild"
+    NETWORK = "network"
+
+
 class VoteRejection(StrEnum):
     """Why a ballot or closure request was refused."""
 
@@ -179,6 +186,12 @@ class GenericPoll:
     visibility: VoteVisibility
     deadline: Instant
     guild_id: int | None = None
+    scope: PollScope = PollScope.GUILD
+    """Whether the poll is carded in its own guild alone or in every vote channel.
+
+    A network poll is still owned by `guild_id`, which weighs its ballots wherever
+    they are cast.
+    """
 
 
 def validate_thresholds(kind: VoteKind, pass_threshold: int | None, fail_threshold: int | None) -> None:
@@ -270,9 +283,14 @@ class VoteSessionSnapshot:
         """Return why `actor` may not close this session, or None when they may."""
         if self.kind is not VoteKind.GENERIC or self.poll is None:
             return VoteRejection.NOT_AUTHORIZED
-        if self.poll.guild_id is not None and actor.guild_id and self.poll.guild_id != actor.guild_id:
+        author = actor.account_id == self.author_account_id
+        elsewhere = self.poll.guild_id is not None and actor.guild_id and self.poll.guild_id != actor.guild_id
+        # A network poll is carded in guilds its author may not belong to, so only
+        # they may close it from elsewhere. Anyone else must stand in the owning
+        # guild, which is where the capability admitting them was resolved.
+        if elsewhere and not (author and self.poll.scope is PollScope.NETWORK):
             return VoteRejection.WRONG_GUILD
-        if actor.account_id != self.author_account_id and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
+        if not author and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
             return VoteRejection.NOT_AUTHORIZED
         return None
 

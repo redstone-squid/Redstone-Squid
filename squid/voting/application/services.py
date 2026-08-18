@@ -16,6 +16,7 @@ from squid.voting.domain import (
     CastVoteResult,
     DeleteLogVoteTarget,
     EmojiPreset,
+    PollScope,
     RoleWeight,
     VoteActor,
     VoteChange,
@@ -170,6 +171,7 @@ class VoteService:
         duration_seconds: int,
         options: Sequence[VoteOption],
         guild_id: int | None = None,
+        scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
     ) -> int:
         """Create a generic poll independently of where it will be shown.
@@ -188,6 +190,15 @@ class VoteService:
         if guild_id is not None and any(option.guild_id not in (None, guild_id) for option in options):
             msg = "Poll options must belong to the poll guild."
             raise InvalidVoteConfigurationError(msg)
+        if scope is PollScope.NETWORK:
+            if guild_id is None:
+                # The owning guild weighs the ballots cast on every card.
+                msg = "A network poll must belong to a guild."
+                raise InvalidVoteConfigurationError(msg)
+            if any(option.guild_id is not None for option in options):
+                # Guild-scoped aliases would leave the other guilds' cards unvotable.
+                msg = "Network poll options must not be scoped to one guild."
+                raise InvalidVoteConfigurationError(msg)
         return await self._repository.create_generic_session(
             author_account_id=author_account_id,
             question=question.strip(),
@@ -195,6 +206,7 @@ class VoteService:
             deadline=(now or Instant.now()).add(seconds=duration_seconds),
             options=options,
             guild_id=guild_id,
+            scope=scope,
         )
 
     async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
