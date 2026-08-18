@@ -36,6 +36,7 @@ from squid.builds.infrastructure.models import (
 )
 from squid.core.errors import InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
+from squid.persistence.types import now
 from squid.tags.domain import TagAssignment as DomainTagAssignment
 from squid.tags.domain import TagValueType
 from squid.tags.infrastructure.models import (
@@ -230,7 +231,7 @@ class BuildRepository:
 
         If the build does not exist in the database, it will be inserted instead.
         """
-        build.edited_time = Instant.now()
+        build.edited_time = now()
 
         if build.id is None:
             async with self._session_factory() as session:
@@ -294,7 +295,8 @@ class BuildRepository:
                 sql_build.version_spec = build.version_spec
                 sql_build.ai_generated = build.ai_generated or False
                 sql_build.embedding = build.embedding
-                sql_build.edited_time = build.edited_time
+                # Never None: `save` stamps it before dispatching here, and the column is NOT NULL.
+                sql_build.edited_time = build.edited_time if build.edited_time is not None else now()
 
                 self._update_category_fields(build, sql_build)
 
@@ -579,7 +581,7 @@ class BuildRepository:
 
     async def _set_status(self, build: Build, status: Status, *, operation: str) -> None:
         assert build.id is not None
-        edited_time = Instant.now()
+        edited_time = now()
         async with self._session_factory() as session:
             statement = (
                 update(SQLBuild)
