@@ -62,6 +62,20 @@ class AccountIdentity:
     display_name: str | None = None
     verified_at: Instant | None = None
     id: int | None = None
+    is_public: bool = True
+    """Whether this identity appears on the account's public creator profile.
+
+    Public by default: the point of a creator profile is being findable as the person who built
+    the thing. Hiding is per identity rather than all-or-nothing because the reasons differ —
+    plenty of people will publish an IGN and not a Discord account.
+    """
+
+    avatar_key: str | None = None
+    """Provider-specific rendering key, needed only where the subject is not enough.
+
+    Discord avatar URLs need the hash, which only the gateway knows, so the bot refreshes it.
+    Java heads derive from the UUID, so this stays `None` there.
+    """
 
     @classmethod
     def for_provider(
