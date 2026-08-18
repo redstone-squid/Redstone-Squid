@@ -6,6 +6,7 @@ from "nothing happened", which is exactly what left users unaware their new name
 """
 
 import asyncio
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any, cast
 from uuid import UUID
@@ -237,28 +238,42 @@ def test_the_autocomplete_description_respects_discords_limit() -> None:
 class _StubAccounts:
     """Just enough of `AccountService` for the unlink decision tree."""
 
-    def __init__(self, account: Account | None, *, unlinks: bool = True) -> None:
+    def __init__(self, account: Account | None) -> None:
         self._account = account
-        self._unlinks = unlinks
 
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         del provider, subject
         return self._account
 
-    async def unlink_minecraft_account(self, account_id: int) -> bool:
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         del account_id
-        return self._unlinks
+        assert self._account is not None
+        return next(identity for identity in self._account.identities if identity.id == identity_id)
+
+
+def _cog(accounts: _StubAccounts) -> VerifyCog[Any]:
+    return cast(VerifyCog[Any], SimpleNamespace(account_service=accounts))
+
+
+def _ctx() -> Context[Any]:
+    return cast(Context[Any], SimpleNamespace(author=SimpleNamespace(id=1)))
 
 
 def _unlink_outcome(accounts: _StubAccounts, *, confirmed: bool | None) -> str:
-    cog = cast(VerifyCog[Any], SimpleNamespace(account_service=accounts))
-    ctx = cast(Context[Any], SimpleNamespace(author=SimpleNamespace(id=1)))
-    return asyncio.run(VerifyCog._unlink_outcome(cog, ctx, confirmed, LOCALE))
+    return asyncio.run(VerifyCog._unlink_outcome(_cog(accounts), _ctx(), confirmed, _java_identity(), LOCALE))
+
+
+def _unlink_target(accounts: _StubAccounts, identity_id: int | None = None) -> Any:
+    return asyncio.run(VerifyCog._unlink_target(_cog(accounts), _ctx(), identity_id, LOCALE))
+
+
+def _java_identity() -> AccountIdentity:
+    return replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2)
 
 
 def _linked_account() -> Account:
     return Account(
-        (AccountIdentity.discord(1), AccountIdentity.java(JAVA_UUID, username="Notch")),
+        (replace(AccountIdentity.discord(1), id=1), _java_identity()),
         None,
         1,
         NOW,
@@ -270,22 +285,49 @@ def test_an_expired_unlink_confirmation_says_nothing_happened() -> None:
     assert "expired" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=None)
 
 
-def test_a_declined_unlink_says_the_account_is_still_linked() -> None:
-    assert "still linked" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=False)
+def test_a_declined_unlink_says_nothing_was_unlinked() -> None:
+    assert "Cancelled" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=False)
 
 
-def test_unlinking_nothing_is_distinguished_from_a_failure() -> None:
-    """These two shared one message joined by "or", which told the user neither thing."""
-    nothing = _unlink_outcome(_StubAccounts(None), confirmed=True)
-    failed = _unlink_outcome(_StubAccounts(_linked_account(), unlinks=False), confirmed=True)
+def test_a_successful_unlink_names_what_it_removed_and_reassures_about_credit() -> None:
+    message = _unlink_outcome(_StubAccounts(_linked_account()), confirmed=True)
 
-    assert "nothing to unlink" in nothing
-    assert "failed" in failed
-    assert nothing != failed
+    assert "Notch" in message
+    assert "credit" in message
 
 
-def test_a_successful_unlink_confirms_it() -> None:
-    assert "has been unlinked" in _unlink_outcome(_StubAccounts(_linked_account()), confirmed=True)
+def test_no_argument_still_means_the_minecraft_account() -> None:
+    """The overwhelmingly common invocation must keep working without an identity id."""
+    assert _unlink_target(_StubAccounts(_linked_account())) == _java_identity()
+
+
+def test_unlinking_with_nothing_linked_says_so() -> None:
+    assert "nothing to unlink" in _unlink_target(_StubAccounts(None))
+
+
+def test_an_account_without_a_java_identity_is_told_so() -> None:
+    account = Account((replace(AccountIdentity.discord(1), id=1),), None, 1, NOW)
+
+    assert "Minecraft account linked" in _unlink_target(_StubAccounts(account))
+
+
+def test_several_java_identities_ask_the_user_to_pick() -> None:
+    """Only a merge produces this, and picking for them could unlink the wrong one."""
+    account = Account(
+        (
+            _java_identity(),
+            replace(AccountIdentity.java(OTHER_UUID, username="Other"), id=3),
+        ),
+        None,
+        1,
+        NOW,
+    )
+
+    assert "several Minecraft accounts" in _unlink_target(_StubAccounts(account))
+
+
+def test_an_identity_that_is_not_yours_is_refused() -> None:
+    assert "isn't one of your linked accounts" in _unlink_target(_StubAccounts(_linked_account()), 9999)
 
 
 @pytest.mark.parametrize(
