@@ -8,8 +8,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.core.i18n import _
 from squid.notifications import (
@@ -51,6 +51,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     async def status(self, interaction: discord.Interaction) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
         preferences = await self.bot.services.notifications.preferences(account_id)
         lines = [
             t(
@@ -72,6 +74,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     async def channels(self, interaction: discord.Interaction, web: bool, dm: bool) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
         await self.bot.services.notifications.set_preferences(account_id, web_enabled=web, dm_enabled=dm)
         await interaction.response.send_message(t(locale, _("Notification channels updated.")), ephemeral=True)
 
@@ -80,6 +84,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     async def follow_creator(self, interaction: discord.Interaction, creator_id: str) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
         subscription = await self.bot.services.notifications.subscribe(
             account_id,
             kind=SubscriptionKind.CREATOR,
@@ -94,6 +100,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     async def follow_record(self, interaction: discord.Interaction, competition_id: str) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
         subscription = await self.bot.services.notifications.subscribe(
             account_id,
             kind=SubscriptionKind.RECORD,
@@ -121,6 +129,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     ) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
         tags = ()
         if tag_id is not None:
             tags = (TagPredicate(tag_id, "present" if tag_value is None else "exact", tag_value),)
@@ -142,7 +152,10 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     @app_commands.command(name="list", description="List your notification subscriptions")
     async def list_subscriptions(self, interaction: discord.Interaction) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
-        subscriptions = await self.bot.services.notifications.subscriptions(await self._account_id(interaction))
+        account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
+        subscriptions = await self.bot.services.notifications.subscriptions(account_id)
         content = "\n".join(
             f"#{subscription.id}: {subscription.kind.value} {_subscription_target(subscription)}"
             for subscription in subscriptions
@@ -153,7 +166,10 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
     @app_commands.command(name="unfollow", description="Remove one notification subscription")
     async def unfollow(self, interaction: discord.Interaction, subscription_id: int) -> None:
         locale = await resolve_locale(interaction, self.bot.services.settings)
-        await self.bot.services.notifications.unsubscribe(await self._account_id(interaction), subscription_id)
+        account_id = await self._account_id(interaction)
+        if account_id is None:
+            return
+        await self.bot.services.notifications.unsubscribe(account_id, subscription_id)
         await interaction.response.send_message(t(locale, _("Subscription removed.")), ephemeral=True)
 
     async def process_deliveries(self) -> None:
@@ -179,8 +195,10 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             else:
                 await self.bot.services.notifications.complete_delivery(delivery)
 
-    async def _account_id(self, interaction: discord.Interaction) -> int:
-        return await account_id_for(self.bot.services.accounts, interaction.user)
+    async def _account_id(self, interaction: discord.Interaction) -> int | None:
+        """The caller's consented account, or `None` once they have been told why not."""
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        return await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale)
 
 
 def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:

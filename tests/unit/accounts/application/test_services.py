@@ -230,8 +230,13 @@ class FakeAccountRepository:
             account_id: account for account_id in account_ids if (account := self.accounts.get(account_id)) is not None
         }
 
-    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
-        return await self.get_by_identity(provider, subject) or self.seed_account(int(subject), provider=provider)
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
+        # `consent` rides on creation only; an account that already exists is returned untouched.
+        return await self.get_by_identity(provider, subject) or self.seed_account(
+            int(subject), provider=provider, consent=consent
+        )
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
         account = self.accounts[account_id]
@@ -952,3 +957,31 @@ class TestMergeCodes:
         Two windows that could disagree would be a bug waiting for someone to tune one of them.
         """
         assert MERGE_TICKET_TTL_SECONDS == MERGE_PROOF_MAX_AGE_SECONDS
+
+
+async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write() -> None:
+    """The Discord gate asks, then mints. Splitting that into create-then-record leaves a
+    receipt-less account behind whenever the second call fails."""
+    repository = FakeAccountRepository()
+    account_service = service(repository)
+    consent = AccountConsent.grant_current()
+
+    account = await account_service.get_or_create_identity(IdentityProvider.DISCORD, "99", consent=consent)
+
+    assert account.consent == consent
+    assert not account.needs_consent_refresh
+
+
+async def test_an_existing_account_is_not_handed_a_receipt_it_never_agreed_to() -> None:
+    """`get_or_create_identity` cannot tell whether its caller asked anybody, so it only ever
+    writes a receipt onto the row it creates itself."""
+    repository = FakeAccountRepository()
+    account_service = service(repository)
+    existing = repository.seed_account(99, provider=IdentityProvider.DISCORD)
+
+    account = await account_service.get_or_create_identity(
+        IdentityProvider.DISCORD, "99", consent=AccountConsent.grant_current()
+    )
+
+    assert account.id == existing.id
+    assert account.consent is None

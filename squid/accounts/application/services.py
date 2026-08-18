@@ -115,14 +115,20 @@ class AccountService:
         """
         return await self._repository.get_many(account_ids)
 
-    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
         """Resolve the account established by a verified external identity, creating it if absent.
 
         Every caller holds evidence of the *provider* subject it passes — an OAuth exchange, a
         gateway event — which is what makes creating an account here legitimate. Nothing that
         merely observes a subject may use this; see `AccountIdCache`'s never-create rule.
+
+        A caller that just asked for consent passes the receipt, so the row and its receipt are
+        one write. Creating the row first and recording consent second leaves a receipt-less
+        account behind whenever the second call fails.
         """
-        return await self._repository.get_or_create_identity(provider, subject)
+        return await self._repository.get_or_create_identity(provider, subject, consent=consent)
 
     async def grant_current_consent(self, account_id: int) -> Account:
         """Record consent for any authenticated caller, however they proved their identity."""
