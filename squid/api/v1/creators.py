@@ -1,4 +1,4 @@
-"""Public creator-credit read routes."""
+"""Public creator read routes."""
 
 from typing import Annotated
 from uuid import UUID
@@ -9,10 +9,10 @@ from squid.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundErro
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Accounts
 from squid.api.errors import responses
-from squid.api.v1.schemas.users import CreatorAliasDetail, CreatorProfileDetail
+from squid.api.v1.schemas.creators import CreatorAliasDetail, CreatorProfileDetail
 
-router = APIRouter(prefix="/creator-aliases", tags=["creator aliases"])
-profiles_router = APIRouter(prefix="/creators", tags=["creator aliases"])
+router = APIRouter(prefix="/creator-aliases", tags=["creators"])
+profiles_router = APIRouter(prefix="/creators", tags=["creators"])
 
 
 @router.get(
@@ -40,8 +40,12 @@ async def get_creator_alias(
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_creator_profile(creator_id: UUID, accounts: Accounts) -> CreatorProfileDetail:
-    """Return every public alias grouped under a stable creator identity."""
-    profile = await accounts.get_creator_profile(creator_id)
+    """Return a creator's public page, following permanent merge redirects.
+
+    Visibility is applied in the domain, not here: `present_public_profile` is the one authority
+    on what a stranger sees, so this route cannot accidentally disagree with the bot about it.
+    """
+    profile = await accounts.get_public_profile(creator_id)
     if profile is None:
         raise CreatorNotFoundError(creator_id)
     return CreatorProfileDetail.from_domain(profile)
