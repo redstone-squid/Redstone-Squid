@@ -2,12 +2,16 @@
 
 > **Status.** Findings inventory, compiled 2026-08-17 by reading every cog with a UX eye. This
 > expands the complaint list in [README.md](README.md); each finding is tagged with the phase
-> that should absorb it. Phase 5 (condensation) owns anything untagged.
+> that should absorb it. Anything untagged was originally phase 5's; what phase 5 turned out
+> to be too large to hold is now phases 6–10, and [README.md](README.md) is the map.
 
-The surface today: **~108 commands across 19 top-level groups** (`build` 14, `settings` 11,
+The surface when this was written: **~108 commands across 19 top-level groups**
+(`build` 14, `settings` 11,
 `starboard` 14, `role` 12, `perm` 10, `notifications` 8, `account` 7, `tag` 6, `admin` 4,
 `info` 4, plus `search`, `restrictions`, `patterns`, `vote`, `poll`, `version`, `error`,
 `redstoner`, `help`, `archive`). A typical non-staff user needs perhaps eight of them.
+*(The `account` figure is wrong: it had 14 members, not 7. Corrected here rather than in
+the count above, which is the number the redesign was argued from.)*
 
 ## Cross-cutting findings
 

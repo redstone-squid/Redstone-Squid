@@ -33,14 +33,17 @@ two sweeps (5.6, 5.7) come last because they touch what the earlier steps rewrit
 
 ## Not in this phase
 
-- **`/starboard`'s 14 commands.** The audit's own suggestion was "C1 first, then decide how
-  much is worth rebuilding", and C1 has since hidden the whole group. A panel like phase 4's
-  is the right shape, but it is a phase of its own, not a step in a sweep.
-- **`/role` and the rest of `/perm`.** 22 staff commands that a non-staff picker no longer
-  shows. Renaming `role` (it manages permission-role objects, not Discord roles) is a
-  documentation problem more than a UI one.
-- **`build edit`'s 22 flags.** Phase 1 established the shape the consolidation would take;
-  doing it needs the same care phase 1 needed and does not fit here.
+Each of these is a phase-sized rebuild rather than a step in a sweep, so each now has a phase
+of its own in [README.md](README.md).
+
+- **`/starboard`'s 14 commands** *(phase 9)*. The audit's own suggestion was "C1 first, then
+  decide how much is worth rebuilding", and C1 has since hidden the whole group. A panel like
+  phase 4's is the right shape.
+- **`/role` and the rest of `/perm`** *(phase 10)*. 20 staff commands that a non-staff picker
+  no longer shows. Renaming `role` (it manages permission-role objects, not Discord roles) is
+  a documentation problem more than a UI one.
+- **`build edit`'s 22 flags** *(phase 6)*. Phase 1 established the shape the consolidation
+  would take; doing it needs the same care phase 1 needed.
 
 ## 5.1 — polls carry their own controls
 
