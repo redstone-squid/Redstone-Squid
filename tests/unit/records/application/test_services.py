@@ -397,7 +397,8 @@ async def test_gaps_delegates_active_result_query() -> None:
     runs = FakeRuns()
     gap = RecordGap(
         definition_id=1,
-        category_key="door|2x2",
+        title="Fastest 2x2 Door",
+        subtitle=None,
         record_class=RecordClass.FASTEST,
         build_ids=(4,),
         fields=("closing",),
