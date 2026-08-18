@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class SubmissionDraft(Base, kw_only=True):
@@ -74,10 +74,10 @@ class SubmissionDraft(Base, kw_only=True):
     )
     """Server-derived Paper installation retained independently of credential generations."""
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
@@ -111,7 +111,7 @@ class SubmissionDraftAccess(Base, kw_only=True):
     )
     role: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -148,5 +148,5 @@ class SubmissionDraftChange(Base, kw_only=True):
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     operations: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
     applied_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

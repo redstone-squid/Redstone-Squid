@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class PaperInstallationRecord(Base, kw_only=True):
@@ -76,7 +76,7 @@ class PaperInstallationRecord(Base, kw_only=True):
     public_website_url: Mapped[str | None] = mapped_column(Text, default=None)
     sponsor_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     rotated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

@@ -21,7 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class NotificationProfile(Base, kw_only=True):
@@ -42,10 +42,10 @@ class NotificationProfile(Base, kw_only=True):
     dm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_suspended_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -97,7 +97,7 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
     filter: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -134,7 +134,7 @@ class NotificationRecord(Base, kw_only=True):
     )
     web_visible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     read_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -175,7 +175,7 @@ class NotificationDeliveryRecord(Base, kw_only=True):
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)

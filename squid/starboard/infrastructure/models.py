@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class Starboard(Base, kw_only=True):
@@ -74,7 +74,7 @@ class Starboard(Base, kw_only=True):
     replied_to: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     ping_author: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -134,7 +134,7 @@ class StarboardOriginMessage(Base, kw_only=True):
     has_image: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     posted_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     seen_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
 
@@ -165,7 +165,7 @@ class StarboardVote(Base, kw_only=True):
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     target_author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 

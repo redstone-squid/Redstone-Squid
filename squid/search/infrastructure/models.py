@@ -28,7 +28,7 @@ from whenever import Instant
 
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class SearchDocument(Base, kw_only=True):
@@ -79,7 +79,7 @@ class SearchDocument(Base, kw_only=True):
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(EMBEDDING_DIMENSION), default=None)
     embedding_model: Mapped[str | None] = mapped_column(Text, default=None)
     refreshed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -174,10 +174,10 @@ class SearchProjectionQueueItem(Base, kw_only=True):
     source_key: Mapped[str] = mapped_column(Text, nullable=False)
     action: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'upsert'"))
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     """When this row next becomes claimable, and the only column backoff writes."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
@@ -207,10 +207,10 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
     )
     source_hash: Mapped[str] = mapped_column(Text, nullable=False)
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     """When this row next becomes claimable, and the only column backoff writes."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)

@@ -26,7 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 from squid.tags.domain import (
     RecordOperator,
     TagAuthority,
@@ -145,10 +145,10 @@ class TagDefinition(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -178,7 +178,7 @@ class TagAlias(Base, kw_only=True):
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="aliases", lazy="joined", default=None)
@@ -272,10 +272,10 @@ class BuildTagAssignment(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="assignments", lazy="joined", default=None)
