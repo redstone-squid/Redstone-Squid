@@ -18,6 +18,9 @@ from squid.voting.errors import DiscordMemberServiceUnavailableError
 logger = logging.getLogger(__name__)
 DEFAULT_DISCORD_API_URL = Route.BASE
 MAX_RATE_LIMIT_WAIT_SECONDS = 60.0
+
+_UNREADABLE = object()
+"""Marks a guild this token cannot read, as opposed to one holding no such member."""
 """Ceiling on how long one lookup may wait out a rate limit.
 
 discord.py raises `RateLimited` rather than sleeping past this, which is the
@@ -115,31 +118,51 @@ class DiscordRestActorResolver:
         self._login_lock = asyncio.Lock()
         self._cache_ttl_seconds = cache_ttl_seconds
         self._clock = clock
-        self._cache: dict[tuple[int, int], tuple[float, VoteActor | None]] = {}
+        self._cache: dict[tuple[int, int], tuple[float, VoteActor | None, bool]] = {}
 
     async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Return current member facts, raising when Discord cannot answer reliably."""
+        """Return current member facts, raising when Discord cannot answer reliably.
+
+        Callers use this to gate access, so an unreadable guild denies just like an
+        absent member does.
+        """
+        actor, _ = await self._member_with_certainty(account_id, guild_id, kind)
+        return actor
+
+    async def _member_with_certainty(
+        self, account_id: int, guild_id: int, kind: VoteKind
+    ) -> tuple[VoteActor | None, bool]:
+        """Return member facts plus whether an absence is a fact or an unanswered question."""
         del kind  # Every kind's nodes resolve together, so one load answers all of them.
         discord_id = await self._discord_id(account_id)
         if discord_id is None:
-            # No Discord identity means no guild membership and so no role weight, which
-            # existing callers already read as "not a member".
-            return None
+            # No Discord identity means no guild membership and so no role weight.
+            return None, True
         cache_key = (guild_id, discord_id)
         cached = self._cache.get(cache_key)
         now = self._clock()
         if cached is not None and cached[0] > now:
-            return cached[1]
+            return cached[1], cached[2]
 
         payload = await self._request_member(discord_id, guild_id)
-        actor = None if payload is None else await self._actor_from_payload(payload, account_id, discord_id, guild_id)
-        self._cache[cache_key] = (now + self._cache_ttl_seconds, actor)
-        return actor
+        certain = payload is not _UNREADABLE
+        actor = (
+            await self._actor_from_payload(payload, account_id, discord_id, guild_id)
+            if payload is not None and certain
+            else None
+        )
+        self._cache[cache_key] = (now + self._cache_ttl_seconds, actor, certain)
+        return actor, certain
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Resolve refresh facts, retaining cached vote weight on any failure."""
+        """Resolve refresh facts, retaining cached vote weight on any failure.
+
+        A member we can prove is absent resolves to an actor holding nothing, so the
+        refresh drops them to the default weight; a guild we could not read resolves
+        to `None`, which keeps whatever weight is already recorded.
+        """
         try:
-            return await self.member(account_id, guild_id, kind)
+            actor, certain = await self._member_with_certainty(account_id, guild_id, kind)
         except Exception:
             logger.warning(
                 "Could not refresh Discord membership facts for vote session",
@@ -147,6 +170,11 @@ class DiscordRestActorResolver:
                 extra={"squid.discord.guild_id": guild_id},
             )
             return None
+        if actor is not None:
+            return actor
+        if not certain:
+            return None
+        return VoteActor(account_id, await self._discord_id(account_id) or 0, guild_id)
 
     async def aclose(self) -> None:
         """Close the internally-owned HTTP client, once."""
@@ -190,14 +218,16 @@ class DiscordRestActorResolver:
             return self._http
 
     async def _request_member(self, discord_id: int, guild_id: int) -> object | None:
-        """Fetch a member payload, or `None` when the member is not visible."""
+        """Fetch a member payload, `None` when absent, or `_UNREADABLE` when unknowable."""
         try:
             http = await self._client()
             return await http.get_member(guild_id, discord_id)
-        except Forbidden, NotFound:
-            # Not a member of the guild, or not visible to this token. Both are
-            # "no such voter here", which is a fact rather than a failure.
+        except NotFound:
+            # Discord answered: there is no such voter here.
             return None
+        except Forbidden:
+            # This token cannot see the guild, so absence is unproven.
+            return _UNREADABLE
         except DiscordException as error:
             # Covers RateLimited past the cap, 5xx, and a rejected login, none of
             # which let this lookup answer truthfully.
