@@ -23,6 +23,9 @@ non-ASCII digits such as U+0661 that `int()` then happily parses into a differen
 CONSENT_CUTOFF = "2026-08-04T00:00:00+00:00"
 """Accounts created before this instant predate consent receipts and are grandfathered."""
 
+_CONSENT_CUTOFF_INSTANT = Instant.parse_iso(CONSENT_CUTOFF)
+"""Parsed once: the predicate below runs on every authenticated request."""
+
 MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 """Maximum age of an identity proof accepted for a self-service account merge."""
 
@@ -167,6 +170,25 @@ class AccountConsent:
         return cls(version=CURRENT_CONSENT_VERSION, granted_at=Instant.now())
 
 
+def consent_refresh_required(created_at: Instant | None, consent_version: str | None) -> bool:
+    """Whether the current notice must be accepted before more data about this account is stored.
+
+    The one Python spelling of the gate, taking raw columns because the browser-session reader
+    holds those rather than an assembled `Account`. `squid.accounts.infrastructure.consent`
+    carries the SQL spelling, and a test pins that the two agree.
+
+    Grandfathering is deliberately narrow. `CONSENT_CUTOFF` means "predates receipts existing at
+    all", not "opted out permanently", so an account that has *ever* consented rejoins the version
+    treadmill even if it predates the cutoff. An unpersisted account has no creation instant to
+    judge and is never grandfathered.
+    """
+    if consent_version == CURRENT_CONSENT_VERSION:
+        return False
+    if consent_version is not None:
+        return True
+    return created_at is None or created_at >= _CONSENT_CUTOFF_INSTANT
+
+
 @dataclass(frozen=True, slots=True)
 class Account:
     """One internal caller with any number of verified external identities."""
@@ -184,7 +206,10 @@ class Account:
     @property
     def needs_consent_refresh(self) -> bool:
         """Whether the current privacy notice must be accepted before storing more identity data."""
-        return self.consent is None or self.consent.version != CURRENT_CONSENT_VERSION
+        return consent_refresh_required(
+            self.created_at,
+            None if self.consent is None else self.consent.version,
+        )
 
 
 @dataclass(frozen=True, slots=True)

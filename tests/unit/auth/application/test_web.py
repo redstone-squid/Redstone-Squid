@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.accounts.domain import IdentityProvider
 from squid.auth.application.providers import DiscordOAuthProvider, OAuthProvider
-from squid.auth.application.web import WebSessionService, consent_pending
+from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials, OAuthConfig, UpstreamHttpConfig
 from squid.core.errors import AuthenticationError, NotFoundError
 from tests.unit.auth.application.fakes import FakeXboxOAuthProvider, SessionRepository
@@ -168,9 +168,3 @@ def test_a_deployment_with_no_providers_reports_itself_unconfigured() -> None:
     web = WebSessionService(SessionRepository(), AsyncMock(), {}, 336, "pepper", now=lambda: NOW)
 
     assert web.configured is False
-
-
-def test_consent_gate_grandfathers_accounts_before_cutoff() -> None:
-    assert not consent_pending(Instant.from_utc(2026, 8, 3), None, "current")
-    assert consent_pending(Instant.from_utc(2026, 8, 5), None, "current")
-    assert not consent_pending(Instant.from_utc(2026, 8, 5), "current", "current")
