@@ -1,9 +1,13 @@
 """Everything related to querying the database for information."""
 
+import io
+import json
 import logging
-from enum import StrEnum
-from typing import TYPE_CHECKING
+from dataclasses import asdict
+from enum import Enum, StrEnum
+from typing import TYPE_CHECKING, Any
 
+import discord
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
@@ -111,6 +115,35 @@ def _pending_entry(build: Build, locale: str | None) -> str:
         creators=escape_markdown(creators) if creators else t(locale, _("unknown")),
         submitter=submitter,
     )
+
+
+def _debug_dump(build: Build) -> str:
+    """Serialize a build's internal state as readable JSON.
+
+    This used to be `str(build.__dict__)` pasted into a message body, which Discord truncates
+    at exactly the builds worth debugging and which renders enums as their repr. A file
+    survives the length limit and opens in something that can fold it.
+
+    `embedding` is dropped: a few thousand floats tell a reader nothing and would dominate the
+    file. Its length is kept, because "is this build embedded at all" is a real question.
+    """
+    state: dict[str, Any] = {key: value for key, value in asdict(build).items() if key != "embedding"}
+    state["category"] = build.category
+    state["embedding_dimensions"] = len(build.embedding) if build.embedding is not None else None
+    return json.dumps(_jsonable(state), indent=2, sort_keys=True, default=str)
+
+
+def _jsonable(value: Any) -> Any:
+    """Render enums by name, since an IntEnum otherwise serializes as the integer."""
+    match value:
+        case Enum():
+            return value.name
+        case dict():
+            return {str(key): _jsonable(item) for key, item in value.items()}
+        case list() | tuple():
+            return [_jsonable(item) for item in value]
+        case _:
+            return value
 
 
 class SearchCog[
@@ -300,23 +333,23 @@ class SearchCog[
     )
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
+        await ctx.defer()
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            build = await self.queries.get(build_id)
-
-            if build is None:
-                return await edit_layout(
-                    sent_message,
-                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
-                    allowed_mentions=no_mentions(),
-                )
-
-            await edit_layout(
-                sent_message,
-                text_layout(escape_markdown(str(build.__dict__))),
+        build = await self.queries.get(build_id)
+        if build is None:
+            await ctx.send(
+                view=error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                 allowed_mentions=no_mentions(),
             )
-        return None
+            return
+
+        # One message carrying the file, rather than a running message that would then have to
+        # be edited into holding an attachment it was not sent with.
+        await ctx.send(
+            view=text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
+            file=discord.File(io.BytesIO(_debug_dump(build).encode()), filename=f"build-{build_id}-debug.json"),
+            allowed_mentions=no_mentions(),
+        )
 
     @Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
