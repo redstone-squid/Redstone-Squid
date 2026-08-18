@@ -80,7 +80,6 @@ def test_notification_management_is_slash_only() -> None:
     assert NotificationCog.__cog_commands__ == []
     assert {command.name for command in NotificationCog.__cog_app_commands__} == {
         "status",
-        "consent",
         "channels",
         "follow-creator",
         "follow-record",

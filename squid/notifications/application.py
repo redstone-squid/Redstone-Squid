@@ -4,12 +4,12 @@ from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import _
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.events import DomainEvent
 from squid.notifications.domain import (
-    CURRENT_NOTIFICATION_NOTICE_VERSION,
     InboxNotification,
     NotificationPreferences,
     NotificationSubscription,
@@ -17,17 +17,13 @@ from squid.notifications.domain import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.errors import NotificationConsentRequiredError, NotificationSubscriptionNotFoundError
+from squid.notifications.errors import NotificationSubscriptionNotFoundError
 
 
 class NotificationRepository(Protocol):
     """Persistence needed by the notification application service."""
 
     async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
-
-    async def accept_notice(
-        self, account_id: int, *, web_enabled: bool, dm_enabled: bool
-    ) -> NotificationPreferences: ...
 
     async def update_preferences(
         self, account_id: int, *, web_enabled: bool, dm_enabled: bool
@@ -90,21 +86,15 @@ class NotificationService:
         """Return preferences, including an implicit disabled profile when absent."""
         return await self._repository.get_preferences(account_id)
 
-    async def accept_notice(
-        self, account_id: int, *, web_enabled: bool = False, dm_enabled: bool = False
-    ) -> NotificationPreferences:
-        """Record the current notification notice and initial channel choices."""
-        return await self._repository.accept_notice(account_id, web_enabled=web_enabled, dm_enabled=dm_enabled)
-
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        """Change channels only after the notification-specific notice is current."""
+        """Set both channels, once the account has accepted the privacy notice."""
         preferences = await self._repository.update_preferences(
             account_id,
             web_enabled=web_enabled,
             dm_enabled=dm_enabled,
         )
         if preferences is None:
-            raise NotificationConsentRequiredError
+            raise ConsentRequiredError(account_id=account_id)
         return preferences
 
     async def subscribe(
@@ -118,7 +108,7 @@ class NotificationService:
         """Create or return one equivalent enabled subscription."""
         preferences = await self._repository.get_preferences(account_id)
         if not preferences.has_current_consent:
-            raise NotificationConsentRequiredError
+            raise ConsentRequiredError(account_id=account_id)
         if kind is SubscriptionKind.RECORD_FILTER:
             if subject_id is not None or record_filter is None:
                 msg = _("record_filter subscriptions require only a structured filter")
@@ -209,4 +199,4 @@ class NotificationService:
         return await self._repository.suspend_dm(delivery, str(error)[:4000])
 
 
-__all__ = ["CURRENT_NOTIFICATION_NOTICE_VERSION", "NotificationRepository", "NotificationService"]
+__all__ = ["NotificationRepository", "NotificationService"]
