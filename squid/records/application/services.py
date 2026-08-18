@@ -7,7 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from itertools import combinations, groupby, product
 
-from squid.core.errors import DataIntegrityError, InvalidStateError
+from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.core.i18n import _
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.records.application.models import (
@@ -45,7 +45,7 @@ from squid.records.domain import (
     resolve_smallest_fastest,
 )
 from squid.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS
-from squid.records.errors import NoMatchingRecordCategoryError
+from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 
 
 class RecordComputationService:
@@ -299,6 +299,37 @@ class RecordService:
             total=await self._runs.count_published_records(),
             keyset=True,
             id_of=lambda record: record.id,
+        )
+
+    async def materialize_definition(
+        self,
+        definition_id: int,
+        *,
+        kind: BuildKind | None = None,
+        version_id: int | None = None,
+    ) -> RebuildSummary:
+        """Re-materialize the exact category an existing definition identifies."""
+        identity = await self._runs.get_definition_identity(definition_id)
+        if identity is None:
+            raise RecordDefinitionNotFoundError(definition_id)
+        if kind is not None and kind is not identity.kind:
+            msg = _("Record category {definition_id} is a {actual} category, not {requested}.")
+            raise ValidationError(
+                msg,
+                message_params={
+                    "definition_id": definition_id,
+                    "actual": identity.kind.value,
+                    "requested": kind.value,
+                },
+            )
+        return await self.lookup_or_materialize(
+            RecordLookupRequest(
+                kind=identity.kind,
+                base_key=identity.base_key,
+                restriction_ids=frozenset(identity.restriction_ids),
+                restriction_values=identity.restriction_values,
+                version_id=version_id,
+            )
         )
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
