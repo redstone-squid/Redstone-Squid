@@ -297,6 +297,10 @@ class VoteService:
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
             return VoteRefreshResult(None)
+        return await self._refresh_snapshot(snapshot)
+
+    async def _refresh_snapshot(self, snapshot: VoteSessionSnapshot) -> VoteRefreshResult:
+        """Recompute cached weights for a session already read, carded or not."""
         weights, unresolved = await self._calculate_refresh(snapshot)
         mutation = await self._repository.refresh_weights(snapshot.id, weights)
         if unresolved:
@@ -330,18 +334,7 @@ class VoteService:
         """Close all expired generic polls; safe to call repeatedly after restarts."""
         closed: list[VoteSessionSnapshot] = []
         for snapshot in await self._repository.list_due(now or Instant.now()):
-            if snapshot.messages:
-                await self.refresh(snapshot.messages[0].id)
-            else:
-                weights, unresolved = await self._calculate_refresh(snapshot)
-                await self._repository.refresh_weights(snapshot.id, weights)
-                if unresolved:
-                    logger.warning(
-                        "Due poll %s retained unresolved cached weights for %s",
-                        snapshot.id,
-                        unresolved,
-                        extra={"squid.vote.session_id": snapshot.id},
-                    )
+            await self._refresh_snapshot(snapshot)
             mutation = await self._repository.close_by_id(snapshot.id)
             if mutation is not None and mutation.just_closed:
                 closed.append(mutation.session)
@@ -389,9 +382,15 @@ class VoteService:
             await self._refresh_kind(guild_id, current_kind)
 
     async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
+        """Reweigh the open sessions this guild's table governs.
+
+        Only the sessions it owns: editing a multiplier used to rewrite cached
+        weights on every session merely carded here, including shared build
+        reviews this guild has no say over.
+        """
         for snapshot in await self.list_open(kind):
-            if any(message.guild_id == guild_id for message in snapshot.messages):
-                await self.refresh(snapshot.messages[0].id)
+            if self._owner_guild_id(snapshot) == guild_id:
+                await self._refresh_snapshot(snapshot)
 
     async def _calculate_refresh(
         self, snapshot: VoteSessionSnapshot, *, replacing: VoteActor | None = None

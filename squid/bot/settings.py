@@ -257,7 +257,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             await ctx.send(str(error), ephemeral=True)
             return
         await self.bot.services.votes.set_role_weight(weight)
-        await ctx.send("Voting role weight updated.", ephemeral=True)
+        await ctx.send(f"Voting role weight updated.{self._weight_scope_note(ctx.guild.id, kind)}", ephemeral=True)
 
     @voting_settings.command(name="weight-remove")
     @requires(SETTINGS_VOTING_EDIT)
@@ -268,7 +268,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             await ctx.send("That role is not from this server.", ephemeral=True)
             return
         await self.bot.services.votes.remove_role_weight(ctx.guild.id, kind, role.id)
-        await ctx.send("Voting role weight removed.", ephemeral=True)
+        await ctx.send(f"Voting role weight removed.{self._weight_scope_note(ctx.guild.id, kind)}", ephemeral=True)
+
+    def _weight_scope_note(self, guild_id: int, kind: VoteKind) -> str:
+        """Warn when this server's multipliers bind nothing it can see."""
+        if kind is not VoteKind.BUILD or self.bot.owner_server_id in (None, guild_id):
+            return ""
+        return " Build reviews are weighted by the network's own server, so this server's multipliers do not apply."
 
     @voting_settings.command(name="reset")
     @requires(SETTINGS_VOTING_EDIT)
