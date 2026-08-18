@@ -10,6 +10,7 @@ from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT
 from squid.voting.application import VoteService
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
+    DeleteLogVoteTarget,
     EmojiPreset,
     RoleWeight,
     StoredVoteMutation,
@@ -27,10 +28,15 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from tests.helpers.voting import build_snapshot, poll_snapshot
+from tests.helpers.voting import DEFAULT_BUILD_TARGET, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
+OWNER_GUILD_ID = 10
+"""The guild that owns the default snapshot, matching its message location."""
+
+VOTING_GUILD_ID = 999
+"""A guild that hosts a card for a shared session without owning it."""
 
 
 def snapshot(
@@ -40,7 +46,22 @@ def snapshot(
     result: VoteSessionResult = VoteSessionResult.PENDING,
     votes: dict[int, float] | None = None,
 ) -> VoteSessionSnapshot:
-    return build_snapshot(kind=kind, status=status, result=result, votes=votes)
+    # A delete-log session is owned by the server holding the message it targets,
+    # which is also where its card lives.
+    target = (
+        DeleteLogVoteTarget(message_id=501, channel_id=200, server_id=OWNER_GUILD_ID)
+        if kind is VoteKind.DELETE_LOG
+        else DEFAULT_BUILD_TARGET
+    )
+    return build_snapshot(kind=kind, status=status, result=result, votes=votes, target=target)
+
+
+def shared_snapshot() -> VoteSessionSnapshot:
+    """A build review carded in the owner guild and in a second guild."""
+    return replace(
+        snapshot(),
+        messages=(VoteMessage(100, 200, OWNER_GUILD_ID), VoteMessage(101, 201, VOTING_GUILD_ID)),
+    )
 
 
 class FakeVoteRepository:
@@ -48,6 +69,8 @@ class FakeVoteRepository:
         self.session = session
         self.cast_calls: list[tuple[int, int, int, str, str, float, dict[int, float] | None]] = []
         self.mutation: StoredVoteMutation | None = None
+        self.role_weights: dict[tuple[int, VoteKind], list[RoleWeight]] = {}
+        self.role_weight_lookups: list[tuple[int, VoteKind]] = []
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
         self.generic_create_calls: list[tuple[int, str, VoteVisibility, Instant, int | None]] = []
@@ -152,7 +175,8 @@ class FakeVoteRepository:
         pass
 
     async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
-        return []
+        self.role_weight_lookups.append((guild_id, kind))
+        return self.role_weights.get((guild_id, kind), [])
 
     async def set_role_weight(self, weight: RoleWeight) -> None:
         pass
@@ -168,6 +192,22 @@ class MissingActorResolver:
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> None:
         del account_id, guild_id, kind
         return
+
+
+class RecordingActorResolver:
+    """Resolve members from a fixed roster, recording which guild was asked."""
+
+    def __init__(self, members: dict[tuple[int, int], VoteActor] | None = None):
+        self.members = members or {}
+        self.calls: list[tuple[int, int]] = []
+
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
+        del kind
+        self.calls.append((account_id, guild_id))
+        if (account_id, guild_id) in self.members:
+            return self.members[(account_id, guild_id)]
+        # Definitely not a member, as opposed to a guild we could not reach.
+        return VoteActor(account_id=account_id, discord_id=account_id * 10, guild_id=guild_id)
 
 
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
@@ -251,11 +291,16 @@ async def test_cast_vote_applies_choice_and_staff_weight(
         current_weight=expected_weight,
         just_closed=False,
     )
-    service = VoteService(repository)
+    service = VoteService(repository, build_owner_guild_id=OWNER_GUILD_ID)
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, capabilities=STAFF if has_staff_weight else frozenset()),
+        VoteActor(
+            account_id=7,
+            discord_id=70,
+            guild_id=OWNER_GUILD_ID,
+            capabilities=STAFF if has_staff_weight else frozenset(),
+        ),
         emoji,
     )
 
@@ -341,7 +386,7 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, capabilities=STAFF | DELETE_LOG),
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF | DELETE_LOG),
         "👍",
     )
 
@@ -423,11 +468,11 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
         current_weight=6.0,
         just_closed=False,
     )
-    service = VoteService(repository)
+    service = VoteService(repository, build_owner_guild_id=OWNER_GUILD_ID)
 
     result = await service.cast_vote(
         100,
-        VoteActor(account_id=7, discord_id=70, capabilities=STAFF),
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
         "<:strong_yes:123>",
     )
 
@@ -555,3 +600,135 @@ async def test_closing_a_poll_requires_the_creator_or_the_close_any_capability()
     assert stranger.rejection is VoteRejection.NOT_AUTHORIZED
     assert creator.accepted
     assert creator.just_closed
+
+
+async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> None:
+    initial = shared_snapshot()
+    repository = FakeVoteRepository(initial)
+    repository.role_weights = {
+        (OWNER_GUILD_ID, VoteKind.BUILD): [RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 4.0)],
+        # A guild hosting a card must not be able to weight the shared outcome.
+        (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)],
+    }
+    repository.mutation = StoredVoteMutation(initial, None, 4.0, just_closed=False)
+    resolver = RecordingActorResolver(
+        {(7, OWNER_GUILD_ID): VoteActor(7, 70, guild_id=OWNER_GUILD_ID, role_ids=frozenset({55}))}
+    )
+    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+
+    result = await service.cast_vote(
+        101,
+        VoteActor(account_id=7, discord_id=70, guild_id=VOTING_GUILD_ID, role_ids=frozenset({77})),
+        "👍",
+    )
+
+    assert result.accepted
+    assert resolver.calls == [(7, OWNER_GUILD_ID)]
+    assert repository.role_weight_lookups == [(OWNER_GUILD_ID, VoteKind.BUILD)]
+    assert repository.cast_calls[0][5] == 4.0
+
+
+async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> None:
+    initial = shared_snapshot()
+    repository = FakeVoteRepository(initial)
+    repository.role_weights = {
+        (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)]
+    }
+    repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
+    service = VoteService(
+        repository,
+        actor_resolver=RecordingActorResolver(),
+        build_owner_guild_id=OWNER_GUILD_ID,
+    )
+
+    result = await service.cast_vote(
+        101,
+        VoteActor(
+            account_id=7,
+            discord_id=70,
+            guild_id=VOTING_GUILD_ID,
+            role_ids=frozenset({77}),
+            capabilities=STAFF,
+        ),
+        "👍",
+    )
+
+    assert result.accepted
+    assert repository.cast_calls[0][5] == 1.0
+
+
+async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight() -> None:
+    initial = shared_snapshot()
+    repository = FakeVoteRepository(initial)
+    repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
+    service = VoteService(
+        repository,
+        actor_resolver=MissingActorResolver(),
+        build_owner_guild_id=OWNER_GUILD_ID,
+    )
+
+    result = await service.cast_vote(
+        101,
+        VoteActor(account_id=7, discord_id=70, guild_id=VOTING_GUILD_ID, capabilities=STAFF),
+        "👍",
+    )
+
+    assert result.accepted
+    assert repository.cast_calls[0][5] == 1.0
+
+
+async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() -> None:
+    initial = snapshot()
+    repository = FakeVoteRepository(initial)
+    repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
+    service = VoteService(repository)
+
+    result = await service.cast_vote(
+        100,
+        VoteActor(account_id=7, discord_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF),
+        "👍",
+    )
+
+    assert result.accepted
+    assert repository.cast_calls[0][5] == 1.0
+
+
+async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
+    selections = (
+        VoteSelection(account_id=7, guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=100.0),
+        VoteSelection(account_id=8, guild_id=OWNER_GUILD_ID, option_id="approve", emoji="👍", weight=1.0),
+    )
+    initial = replace(shared_snapshot(), selections=selections)
+    repository = FakeVoteRepository(initial)
+    repository.role_weights = {
+        (OWNER_GUILD_ID, VoteKind.BUILD): [RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 4.0)],
+        (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)],
+    }
+    resolver = RecordingActorResolver(
+        {(8, OWNER_GUILD_ID): VoteActor(8, 80, guild_id=OWNER_GUILD_ID, role_ids=frozenset({55}))}
+    )
+    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+
+    weights, unresolved = await service._calculate_refresh(initial)
+
+    assert unresolved == []
+    # The cast guild is never consulted, so the ballot cast in 999 loses its 100x.
+    assert [guild for _, guild in resolver.calls] == [OWNER_GUILD_ID, OWNER_GUILD_ID]
+    assert weights == {7: 1.0, 8: 4.0}
+
+
+async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
+    service = VoteService(FakeVoteRepository(None), build_owner_guild_id=OWNER_GUILD_ID)
+    poll = poll_snapshot(guild_id=77)
+    assert poll.poll is not None
+
+    delete_log = replace(
+        snapshot(kind=VoteKind.DELETE_LOG),
+        target=DeleteLogVoteTarget(message_id=501, channel_id=200, server_id=64),
+    )
+
+    assert service._owner_guild_id(snapshot()) == OWNER_GUILD_ID
+    assert service._owner_guild_id(delete_log) == 64
+    assert service._owner_guild_id(poll) == 77
+    assert service._owner_guild_id(replace(poll, poll=replace(poll.poll, guild_id=None))) is None
+    assert VoteService(FakeVoteRepository(None))._owner_guild_id(snapshot()) is None
