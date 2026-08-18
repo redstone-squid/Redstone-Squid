@@ -34,7 +34,7 @@ its front door — `submit` is one command with autocompleted options and a work
 | 6.1 | `build queue`: a shared list paginator, submitters named rather than numbered, and a title that matches the command (C5, C6) | **Delivered** |
 | 6.2 | One edit surface: `/build edit` is app-only, its typed options seed the workspace view, and the gate is the view's owner-or-node rule (C7) | Not started |
 | 6.3 | `build recalc` becomes the "Recalculate Build" message context menu (C4) | Not started |
-| 6.4 | `build debug` attaches its dump as a file instead of pasting a `__dict__` into a message | Not started |
+| 6.4 | `build debug` attaches its dump as a file instead of pasting a `__dict__` into a message | **Delivered** |
 | 6.5 | `measure-timing` and `detect-lattice` move under `build schematic` | **Delivered** |
 
 Ordering is by independence. 6.2 is the phase's real work and comes after the smaller steps
@@ -86,6 +86,19 @@ at exactly the queue lengths worth looking at. The shared paginator is described
 The build id stays. It is the handle a reviewer types into `build approve`, it is what the
 card's own footer calls the submission, and unlike the submitter snowflake it is a number the
 user is meant to see.
+
+## 6.4 — a debug dump is a file
+
+`build debug` rendered `str(build.__dict__)` into a message body. Two things were wrong with
+that and neither was the command's existence: the output passes Discord's length limit on
+exactly the builds complicated enough to be worth debugging, and Python's `repr` renders an
+`IntEnum` status as `<Status.PENDING: 0>` and every `Instant` as its constructor call.
+
+It now attaches `build-<id>-debug.json`: sorted keys, indented, enums by name, and one message
+carrying both the file and the sentence saying what it is. `embedding` is dropped, because a
+few thousand floats would be most of the file and mean nothing to a reader; the length is kept
+as `embedding_dimensions`, since "is this build embedded at all" is a question somebody
+actually asks.
 
 ## 6.5 — the schematic tools live under `build schematic`
 
