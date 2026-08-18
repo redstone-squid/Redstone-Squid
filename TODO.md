@@ -57,11 +57,10 @@
     characters, which is already the width of the untraced fallback, and lookup accepts either width.
 - [ ] Integrate Sentry (or wire up a real log/trace backend) instead of the current no-op `debug` exporter in
   `deploy/otel-collector.yaml`.
-- [ ] Let the worker and API processes use the human-readable log formatter in dev mode like the bot does.
-  `configure_service_worker_logging` and `configure_api_logging` (`squid/logging_config.py:286`,`:302`) never
-  pass `development_mode` to `build_logging_config`, so it defaults to `False` and `worker.log` is always raw
-  JSON, unlike `configure_bot_logging` which threads `dev_mode` through and gets the `"default"` formatter
-  locally.
+- [x] Let the worker and API processes use the human-readable log formatter in dev mode like the bot does.
+  `development_mode` moved from `BotProcessConfig` to the shared `_ProcessSettings` base, and
+  `configure_service_worker_logging`/`configure_api_logging` now take a `dev_mode` flag threaded from
+  `resolved_config.development_mode`, matching `configure_bot_logging`.
 
 ## Schematic rendering
 

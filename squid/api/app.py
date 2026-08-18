@@ -213,7 +213,7 @@ def main(process_config: ApiProcessConfig | None = None) -> None:
     import uvicorn
 
     resolved_config = process_config or load_or_exit(load_api_process_config)
-    configure_api_logging(resolved_config.logging)
+    configure_api_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="api")
     try:
         uvicorn.run(
