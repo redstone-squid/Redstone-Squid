@@ -8,10 +8,10 @@ from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 
 
-class RecordKeyReader(Protocol):
-    """Read canonical record category keys."""
+class RecordDefinitionReader(Protocol):
+    """Read record definitions by the title an admin recognizes them by."""
 
-    async def record_base_keys(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
+    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
 
 
 class CreatorReader(Protocol):
@@ -20,15 +20,24 @@ class CreatorReader(Protocol):
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
 
 
-class RecordBaseKeyProvider:
-    """Suggest the canonical category keys `/admin records-lookup` materializes against."""
+class RecordDefinitionProvider:
+    """Suggest the categories `/admin records-lookup` materializes, submitting the definition id."""
 
-    def __init__(self, reader: RecordKeyReader) -> None:
+    def __init__(self, reader: RecordDefinitionReader) -> None:
         self._reader = reader
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        keys = await self._reader.record_base_keys(request.query, limit=request.limit or MAX_SUGGESTIONS)
-        return tuple(candidate(key, description=build_kind, kind="record_category") for key, build_kind in keys)
+        rows = await self._reader.record_definitions(request.query, limit=request.limit or MAX_SUGGESTIONS)
+        return tuple(
+            candidate(
+                str(definition_id),
+                label=title,
+                description=build_kind,
+                kind="record_category",
+                terms=(title, str(definition_id)),
+            )
+            for definition_id, title, build_kind in rows
+        )
 
 
 class CreatorProfileReader(Protocol):

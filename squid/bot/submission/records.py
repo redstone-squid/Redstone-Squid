@@ -115,7 +115,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @autocompletes(
-        base_key="record_base_keys",
+        base_key="record_definitions",
         version_id="version_ids",
         restrictions=suggests("restriction_ids", multi=True),
     )

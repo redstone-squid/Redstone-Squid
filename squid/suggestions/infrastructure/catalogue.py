@@ -54,7 +54,7 @@ from squid.suggestions.infrastructure.providers.records import (
     CreatorProfileProvider,
     CreatorProvider,
     PendingAliasClaims,
-    RecordBaseKeyProvider,
+    RecordDefinitionProvider,
 )
 from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 from squid.tags.domain import TagDefinition, TagSemanticKind
@@ -140,8 +140,8 @@ def build_registry(
                 kind_label="version",
             ),
             SuggestionSource(
-                id="record_base_keys",
-                provider=RecordBaseKeyProvider(repository),
+                id="record_definitions",
+                provider=RecordDefinitionProvider(repository),
                 kind_label="record_category",
             ),
             SuggestionSource(

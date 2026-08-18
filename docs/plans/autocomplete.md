@@ -49,7 +49,7 @@ validates that the *parameter* exists.
 | `permission_nodes` | enumerable | string | — | — | — |
 | `permission_patterns` | enumerable | string | — | — | — |
 | `permission_roles` | queried | string | — | `guild_id` | — |
-| `record_base_keys` | queried | string | — | — | — |
+| `record_definitions` | queried | string | — | — | — |
 | `record_classes` | enumerable | string | — | — | — |
 | `records` | queried | string | — | — | — |
 | `restriction_ids` | enumerable | integer | — | — | `,` |
