@@ -17,6 +17,7 @@ from psycopg2 import sql
 from psycopg2.extensions import connection as PsycopgConnection
 from sqlalchemy import URL
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.auth.application.services import hash_api_key_secret
 from squid.auth.application.web import hash_web_session_token
 from tests.fuzz.api.environment import RunIdentity, SeededIds, SyntheticSecrets, UnsafeEnvironmentError
@@ -256,10 +257,16 @@ class DatabaseController:
                             ALICE_ACCOUNT_ID,
                             ALICE_PUBLIC_ID,
                             "2026-01-01T00:00:00Z",
-                            "2026-08-04",
+                            CURRENT_CONSENT_VERSION,
                             "2026-08-04T00:00:00Z",
                         ),
-                        (BOB_ACCOUNT_ID, BOB_PUBLIC_ID, "2026-01-01T00:00:00Z", "2026-08-04", "2026-08-04T00:00:00Z"),
+                        (
+                            BOB_ACCOUNT_ID,
+                            BOB_PUBLIC_ID,
+                            "2026-01-01T00:00:00Z",
+                            CURRENT_CONSENT_VERSION,
+                            "2026-08-04T00:00:00Z",
+                        ),
                         (
                             CONSENT_PENDING_ACCOUNT_ID,
                             "00000000-0000-0000-0000-000000001003",
@@ -271,7 +278,7 @@ class DatabaseController:
                             ADMINISTRATOR_ACCOUNT_ID,
                             "00000000-0000-0000-0000-000000001004",
                             "2026-01-01T00:00:00Z",
-                            "2026-08-04",
+                            CURRENT_CONSENT_VERSION,
                             "2026-08-04T00:00:00Z",
                         ),
                     ),
