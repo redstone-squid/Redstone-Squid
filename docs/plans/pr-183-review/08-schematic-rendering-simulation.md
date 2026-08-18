@@ -34,7 +34,14 @@
 
 ## Implementation notes
 
-Landed across `74c17dea`…`47e6f053`. Four things the plan did not anticipate:
+Landed across `a94106d9`…`bec8e143`. (These commits were renumbered by a later rebase; the original
+citation — `74c17dea`…`47e6f053` — no longer resolves in history, but the four commits below carry
+the same messages and diffs described here: `a94106d9` "schematics: type the render preparation
+outcome", `ecdde5e9` "schematics: tell moderators why a build has no preview", `0d322812`
+"schematics: name the inputs an ambiguous simulation could use", `0c6304e9` "schematics: give every
+worker stderr pump an owner", `bec8e143` "docs: name pyrefly as the local type checker" — the last of
+which is also where the `TaskGroup.start_soon` typing fix below actually landed.) Four things the
+plan did not anticipate:
 
 - **The candidate coordinates could not have reached a caller at all.** `_translate` rebuilds a
   child's `invalid` error from its wire kind alone, discarding the message, the end-user action,
@@ -68,6 +75,18 @@ New user-facing strings are not in `locales/squid.pot`. That catalog is already 
 HEAD from earlier plans in this series, so refreshing it is its own commit rather than a partial
 sweep hidden inside this one.
 
+## Status
+
+**Done.** Re-verified against current code: `RenderPreparation`/`RenderSkipReason`/`FreshRender`/
+`CachedRender`/`SkippedRender` all exist in `squid/schematics/application/queries.py`, the old
+unbounded `_render_attempted` set is gone, `explain_render_skip` is wired into
+`squid/bot/submission/schematics.py:78`, `AmbiguousSimulationInputError` and the
+`ambiguous_simulation_input` wire kind exist end to end, `_resolve_simulation_input` checks `manual`
+before Insign/heuristic, `SimulationResult` was retained rather than renamed, and stderr pumps are
+owned by the pool's `anyio.create_task_group()` (`worker.py:431`, `self._pumps.start_soon`) rather
+than bare `asyncio.create_task`. Only the implementation-notes commit hashes were stale (a later
+rebase renumbered them); corrected above.
+
 ## Validation
 
 - Focused, with `--no-cov`: `tests/unit/schematics/`, `tests/unit/worker/`,
@@ -78,5 +97,7 @@ sweep hidden inside this one.
 - Changed-file Ruff via the commit hooks, plus `git diff --check`. No persistence structure changes,
   so no `alembic heads` run.
 - `just typecheck`: 17 errors, all in `tests/*/accounts/` and `tests/unit/persistence/` from
-  `ee0d2ec1`, none in files this plan touched. The two it did find here are fixed in `8f715f74`:
-  `TaskGroup.start_soon` wants a callable returning a `Coroutine`, not an `Awaitable`.
+  `ee0d2ec1`, none in files this plan touched. The two it did find here are fixed in `bec8e143`
+  (cited as `8f715f74` before the rebase noted above): `TaskGroup.start_soon` wants a callable
+  returning a `Coroutine`, not an `Awaitable` — confirmed still in place at
+  `squid/schematics/infrastructure/worker.py:124`.

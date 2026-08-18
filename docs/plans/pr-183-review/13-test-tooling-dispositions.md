@@ -50,34 +50,32 @@ two regexes fail to parse is absent from `ALEMBIC_UTIL_ENTITIES`, and therefore 
 comparison `alembic-utils` makes during autogenerate. A `CREATE FUNCTION` whose body does not end in
 `$$;` at the start of a line, or a `CREATE TRIGGER` broken across lines, would drop out silently.
 
-What is wrong is the guard's form. Two hand-maintained magic numbers have been bumped across 15
-commits, and two plan documents now instruct the next author to bump them again
-(`docs/plans/rbac.md:301`, `docs/plans/durable-queues.md:64-65`) — a check whose maintenance
-instructions have to be written down in other people's plans is not paying for itself.
-
-The replacement asserts the invariant the numbers were standing in for:
-
+What was wrong was the guard's form. Two hand-maintained magic numbers had been bumped across 15
+commits, and two plan documents instructed the next author to bump them again
+(`docs/plans/rbac.md:301`, `docs/plans/durable-queues.md:64-65`). This has landed:
+`parse_entities(sql)` in `squid/persistence/alembic_entities.py` now takes the SQL as an argument
+(read from disk only by the cached `alembic_util_entities()`, not at import time) and raises when
+`EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` disagree with what the regexes actually parsed —
 ```python
-_KINDS = re.findall(r"^CREATE (\w+)", _ENTITY_SQL, flags=re.MULTILINE)
-if sorted(_KINDS) != sorted(["FUNCTION"] * len(_FUNCTION_SQL) + ["TRIGGER"] * len(_TRIGGER_SQL)):
-    msg = "postgres_entities.sql has a statement alembic_entities.py did not parse"
-    raise RuntimeError(msg)
+functions = re.findall(r"^CREATE FUNCTION .*?\$\$;", sql, flags=re.MULTILINE | re.DOTALL)
+triggers = re.findall(r"^CREATE TRIGGER .*?;$", sql, flags=re.MULTILINE)
+if len(functions) != EXPECTED_FUNCTIONS or len(triggers) != EXPECTED_TRIGGERS:
+    raise RuntimeError(...)
 ```
-
-Every `CREATE` statement in the file must have produced exactly one parsed entity. Nothing to bump
-per migration; it fails precisely when a body regex misses something, and it also catches the
-`CREATE PROCEDURE` case `docs/new-migration.md:20-22` warns `alembic-utils` cannot manage. Extract
-the module body into `_parse_entities(sql)` so a unit test can feed it a deliberately malformed
-statement instead of relying on import order.
+`tests/unit/persistence/test_alembic_entities.py` covers a well-formed definition, each direction of
+a miscount, an unterminated `$$` body, and the shipped `postgres_entities.sql` itself — the malformed
+cases the old import-time constant could never be fed.
 
 `tests/integration/test_alembic_migrations.py:218-222` already compares the parsed triggers against
 the live database (`trigger_names == expected_triggers`), so a missed statement would eventually
 fail there too — but only with Docker and Postgres, whereas the import-time check fails in every
 process the moment the file is edited. Both are worth having.
 
-Two documentation fixes ship with it: delete the bump instructions from the two plans, and correct
-`docs/new-migration.md:13`, which still points at `squid/db/postgres_entities.sql` — a path that has
-not existed since the persistence package was renamed.
+The three documentation fixes that were meant to ship with it have now landed: `docs/plans/rbac.md`
+and `docs/plans/durable-queues.md` no longer instruct the next author to bump hand-maintained
+numbers — they point at the `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` constants instead and record the
+current count (12/38) as a snapshot, not an instruction — and `docs/new-migration.md:13` now points
+at `squid/persistence/postgres_entities.sql`.
 
 ## Not done here
 
