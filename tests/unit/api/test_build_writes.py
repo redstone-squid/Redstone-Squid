@@ -91,7 +91,10 @@ async def test_submit_gates_new_accounts_on_current_consent() -> None:
     with pytest.raises(ConsentRequiredError) as error:
         await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), services.builds, pending)
 
-    assert error.value.public_context == {"consent_url": "/v1/users/me/consent"}
+    assert error.value.public_context == {
+        "consent_url": "/v1/users/me/consent",
+        "notice_url": "/v1/consent/notice",
+    }
 
 
 @pytest.mark.asyncio

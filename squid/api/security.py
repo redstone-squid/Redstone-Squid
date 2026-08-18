@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import Depends, Request, Security
 from fastapi.security import APIKeyHeader
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.cli_auth.errors import CliAuthorizationError
 from squid.core.errors import AuthenticationError, AuthorizationError
@@ -219,3 +220,33 @@ async def current_caller(
         nodes=key.scopes,
         account_id=key.owner_account_id,
     )
+
+
+def require_consented_account(caller: Caller) -> int:
+    """The account id behind a caller that may be written about, or the reason it may not.
+
+    The single spelling of the write gate, after five routers had each grown their own copy and
+    started to disagree about which of `kind`, `account_id` and `discord_id` they tested. Keyed
+    on `account_id` alone: the `kind` test was redundant with it, and the `discord_id` test
+    refused a CLI device and a Minecraft player who each hold a perfectly good account.
+
+    Stays a plain function rather than only a dependency because three call sites need their own
+    checks around it and cannot express that as `Depends`.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    if caller.consent_pending:
+        raise ConsentRequiredError(account_id=caller.account_id).with_context(
+            public_context={"consent_url": "/v1/users/me/consent", "notice_url": "/v1/consent/notice"},
+            end_user_action="Accept the current privacy notice and retry.",
+        )
+    return caller.account_id
+
+
+async def consented_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
+    """Dependency form, for routes whose only precondition is a consented account."""
+    return require_consented_account(caller)
+
+
+ConsentedAccountId = Annotated[int, Depends(consented_account_id)]
+"""A signed-in account that has accepted the current notice."""

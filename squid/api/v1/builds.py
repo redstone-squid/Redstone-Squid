@@ -5,7 +5,6 @@ from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, Header, Query, Response
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import BuildCommands, BuildQueries, CurrentCaller, Permissions, Search
 from squid.api.errors import responses
@@ -21,7 +20,7 @@ from squid.api.pagination import (
     render_page,
     resolve_selector,
 )
-from squid.api.security import Caller, caller_allows, requires, subject_for
+from squid.api.security import Caller, caller_allows, require_consented_account, requires, subject_for
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
@@ -64,14 +63,13 @@ async def submit_build(
     caller: UserWriter,
 ) -> BuildDetail:
     """Submit a door build for Discord moderation."""
-    _require_consented_user(caller)
+    account_id = require_consented_account(caller)
     if submission.category.casefold() != "door":
         msg = "Only door submissions are supported."
         raise InvalidBuildError(msg, public_context={"category": submission.category})
-    assert caller.account_id is not None  # `_require_consented_user` rejects a caller without one
     build = await builds.submit_door(
         DoorSubmissionInput(
-            submitter_account_id=caller.account_id,
+            submitter_account_id=account_id,
             door_size=submission.door_size,
             pattern=tuple(submission.pattern),
             door_type=submission.door_type,
@@ -113,7 +111,7 @@ async def edit_build(
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
     """Edit an owned pending build, or any build with `build.submission.edit`."""
-    _require_consented_user(caller)
+    require_consented_account(caller)
     build = await builds.apply_edit(
         BuildEditor(subject=subject_for(caller)),
         build_id,
@@ -225,22 +223,6 @@ async def _require_pending_view(permissions: PermissionService, caller: Caller) 
     """
     if not await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING):
         raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
-
-
-def _require_consented_user(caller: Caller) -> None:
-    """Require an authenticated account that has accepted the current notice.
-
-    Keyed on `account_id` alone. The `kind` test was redundant with it, and the
-    `discord_id` test refused a CLI device and a Minecraft player who each held a
-    perfectly good account -- for a snowflake that no write on this path ever used.
-    """
-    if caller.account_id is None:
-        raise AuthenticationError
-    if caller.consent_pending:
-        raise ConsentRequiredError(account_id=caller.account_id).with_context(
-            public_context={"consent_url": "/v1/users/me/consent"},
-            end_user_action="Accept the current privacy notice and retry.",
-        )
 
 
 def build_etag(build: Build) -> str:
