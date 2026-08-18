@@ -322,7 +322,7 @@ class DatabaseWorker:
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
     """Run the worker until a process signal or caller-owned stop event fires."""
     resolved_config = process_config or load_or_exit(load_worker_process_config)
-    configure_service_worker_logging(resolved_config.logging)
+    configure_service_worker_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="worker")
     stop = stop_event or asyncio.Event()
     loop = asyncio.get_running_loop()

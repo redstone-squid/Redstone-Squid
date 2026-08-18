@@ -978,6 +978,8 @@ class _ProcessSettings(BaseSettings):
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
     strict_unknown_keys: bool = False
     """Reject unknown ``SQUID_*`` names instead of logging and ignoring them."""
+    development_mode: bool = False
+    """Whether this process should favour human-readable logs and verbose diagnostics."""
 
     @classmethod
     @override
@@ -1024,7 +1026,6 @@ class _ProcessSettings(BaseSettings):
 class BotProcessConfig(_ProcessSettings):
     """Validated configuration required by the Discord process."""
 
-    development_mode: bool = False
     discord: DiscordConfig
     bot: BotConfig = BotConfig()
     catbox: CatboxConfig = CatboxConfig()
@@ -1150,6 +1151,7 @@ class ApplicationConfig(BotProcessConfig):
                     "log",
                     "observability",
                     "strict_unknown_keys",
+                    "development_mode",
                     "oauth",
                     "api",
                     "rate_limit",
@@ -1177,6 +1179,7 @@ class ApplicationConfig(BotProcessConfig):
                     "log",
                     "observability",
                     "strict_unknown_keys",
+                    "development_mode",
                     "worker",
                     "upstream_http",
                 }
