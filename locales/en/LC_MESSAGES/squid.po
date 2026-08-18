@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 04:48+0000\n"
+"POT-Creation-Date: 2026-08-19 04:52+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -327,7 +327,7 @@ msgstr ""
 msgid "A creator profile to follow."
 msgstr ""
 
-#: squid/bot/permissions.py:113
+#: squid/bot/permissions.py:119
 msgid "A node, a wildcard like build.**, or a @tag selector."
 msgstr ""
 
@@ -2077,7 +2077,7 @@ msgstr ""
 msgid "No stored error matches that reference."
 msgstr ""
 
-#: squid/bot/permissions.py:215
+#: squid/bot/permissions.py:221
 msgid "No such rule; nothing changed."
 msgstr ""
 
@@ -2129,7 +2129,7 @@ msgstr ""
 msgid "Notes"
 msgstr ""
 
-#: squid/bot/permissions.py:496
+#: squid/bot/permissions.py:511
 msgid "Nothing changed"
 msgstr ""
 
@@ -2141,7 +2141,7 @@ msgstr ""
 msgid "Nothing to follow"
 msgstr ""
 
-#: squid/bot/permissions.py:78
+#: squid/bot/permissions.py:84
 msgid "Nothing to show."
 msgstr ""
 
@@ -2174,6 +2174,10 @@ msgstr ""
 msgid "One of the command options is invalid."
 msgstr ""
 
+#: squid/bot/permissions.py:256
+msgid "One permission to decide, instead of listing everything held."
+msgstr ""
+
 #: squid/bot/notifications.py:80
 msgid "One stable record competition to follow."
 msgstr ""
@@ -2194,7 +2198,7 @@ msgstr ""
 msgid "Only normalized videos have a poster artifact."
 msgstr ""
 
-#: squid/bot/permissions.py:95
+#: squid/bot/permissions.py:101
 msgid "Only show nodes containing this text."
 msgstr ""
 
@@ -2348,41 +2352,42 @@ msgstr ""
 msgid "Pending tags"
 msgstr ""
 
-#: squid/bot/permissions.py:286
+#: squid/bot/permissions.py:301
 msgid "Permission audit"
 msgstr ""
 
-#: squid/bot/permissions.py:269
-msgid "Permission check"
-msgstr ""
-
-#: squid/bot/permissions.py:252
+#: squid/bot/permissions.py:277
 msgid "Permission decision"
 msgstr ""
 
-#: squid/bot/permissions.py:107
+#: squid/bot/permissions.py:113
 #, python-brace-format
 msgid "Permission nodes ({page}/{pages})"
 msgstr ""
 
-#: squid/bot/permissions.py:308
+#: squid/bot/permissions.py:323
 msgid "Permission roles"
 msgstr ""
 
-#: squid/bot/permissions.py:216
+#: squid/bot/permissions.py:222
 msgid "Permission rule"
 msgstr ""
 
-#: squid/bot/permissions.py:243
+#: squid/bot/permissions.py:249
 msgid "Permission rules"
 msgstr ""
 
-#: squid/bot/permissions.py:188
+#: squid/bot/permissions.py:194
 msgid "Permission updated"
 msgstr ""
 
 #: squid/bot/errors.py:156
 msgid "Permission withheld"
+msgstr ""
+
+#: squid/bot/permissions.py:283
+#, python-brace-format
+msgid "Permissions held by {name}"
 msgstr ""
 
 #: squid/cli_auth/application.py:225
@@ -2670,7 +2675,7 @@ msgstr ""
 msgid "Reload the draft before trying again."
 msgstr ""
 
-#: squid/bot/permissions.py:215
+#: squid/bot/permissions.py:221
 #, python-brace-format
 msgid "Removed `{pattern}`."
 msgstr ""
@@ -2771,24 +2776,24 @@ msgstr ""
 msgid "Reviewer only"
 msgstr ""
 
-#: squid/bot/permissions.py:470
+#: squid/bot/permissions.py:485
 msgid "Role assigned"
 msgstr ""
 
-#: squid/bot/permissions.py:354
+#: squid/bot/permissions.py:369
 msgid "Role created"
 msgstr ""
 
-#: squid/bot/permissions.py:364
+#: squid/bot/permissions.py:379
 msgid "Role deleted"
 msgstr ""
 
-#: squid/bot/permissions.py:384
+#: squid/bot/permissions.py:399
 #, python-brace-format
 msgid "Role excludes `{pattern}`"
 msgstr ""
 
-#: squid/bot/permissions.py:374
+#: squid/bot/permissions.py:389
 #, python-brace-format
 msgid "Role includes `{pattern}`"
 msgstr ""
@@ -2806,22 +2811,22 @@ msgstr ""
 msgid "Role multipliers"
 msgstr ""
 
-#: squid/bot/permissions.py:496
+#: squid/bot/permissions.py:511
 msgid "Role unassigned"
 msgstr ""
 
-#: squid/bot/permissions.py:364 squid/bot/permissions.py:405
-#: squid/bot/permissions.py:433
+#: squid/bot/permissions.py:379 squid/bot/permissions.py:420
+#: squid/bot/permissions.py:448
 msgid "Role unchanged"
 msgstr ""
 
-#: squid/bot/permissions.py:391 squid/bot/permissions.py:405
-#: squid/bot/permissions.py:419 squid/bot/permissions.py:433
-#: squid/bot/permissions.py:443
+#: squid/bot/permissions.py:406 squid/bot/permissions.py:420
+#: squid/bot/permissions.py:434 squid/bot/permissions.py:448
+#: squid/bot/permissions.py:458
 msgid "Role updated"
 msgstr ""
 
-#: squid/bot/permissions.py:338
+#: squid/bot/permissions.py:353
 #, python-brace-format
 msgid "Role {slug}"
 msgstr ""
@@ -3942,7 +3947,7 @@ msgstr ""
 msgid "Where"
 msgstr ""
 
-#: squid/bot/permissions.py:114
+#: squid/bot/permissions.py:120
 msgid "Where the grant applies."
 msgstr ""
 
@@ -3968,6 +3973,10 @@ msgstr ""
 
 #: squid/bot/verify.py:452
 msgid "Whose linked account to refresh. Staff only; defaults to you."
+msgstr ""
+
+#: squid/bot/permissions.py:255
+msgid "Whose permissions to read. Staff only; defaults to you."
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:141
@@ -4107,10 +4116,6 @@ msgstr ""
 msgid "Your linked accounts"
 msgstr ""
 
-#: squid/bot/permissions.py:259
-msgid "Your permissions"
-msgstr ""
-
 #: squid/bot/settings_view.py:329
 #, python-brace-format
 msgid "_Deleted role_ (`{id}`)"
@@ -4153,10 +4158,6 @@ msgstr ""
 
 #: squid/submissions/application/finalization.py:123
 msgid "actionable submission errors require at least one issue"
-msgstr ""
-
-#: squid/bot/permissions.py:268
-msgid "allowed"
 msgstr ""
 
 #: squid/submissions/domain/drafts.py:91
@@ -4217,10 +4218,6 @@ msgstr ""
 
 #: squid/notifications/application.py:185
 msgid "delivery claim limit must be between 1 and 100"
-msgstr ""
-
-#: squid/bot/permissions.py:268
-msgid "denied"
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:353
@@ -5173,5 +5170,17 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "on"
+#~ msgstr ""
+
+#~ msgid "Permission check"
+#~ msgstr ""
+
+#~ msgid "Your permissions"
+#~ msgstr ""
+
+#~ msgid "allowed"
+#~ msgstr ""
+
+#~ msgid "denied"
 #~ msgstr ""
 
