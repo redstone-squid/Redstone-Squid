@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import Message, app_commands
-from discord.ext.commands import Cog, Context
+from discord.ext.commands import Cog
 
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
@@ -19,8 +19,15 @@ from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimension
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.components import (
+    StaticLayout,
+    edit_layout,
+    error_layout,
+    no_mentions,
+    reply_layout,
+    text_layout,
+)
+from squid.bot.utils.permissions import enforce
 from squid.builds.application import (
     BuildInferenceService,
     BuildService,
@@ -321,16 +328,24 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             f"schematic measures {measured.width}x{measured.height}x{measured.length}"
         )
 
+    def _is_build_log_message(self, message: Message) -> bool:
+        """Whether inference has anything to read this message for.
+
+        Split out of the listener so the right-click can say "not a build log message" instead
+        of reporting a recalculation that never ran.
+        """
+        return (
+            not message.author.bot
+            and isinstance(message.channel, discord.TextChannel)
+            and message.channel.id in self.bot.community_config.build_log_channel_ids
+        )
+
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
         """Infer a build from a message."""
-        if message.author.bot:
+        if not self._is_build_log_message(message):
             return
-
-        if message.channel.id not in self.bot.community_config.build_log_channel_ids:
-            return
-        if not isinstance(message.channel, discord.TextChannel):
-            return
+        assert isinstance(message.channel, discord.TextChannel)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
         builds = await ingest_message_bundle(
@@ -344,15 +359,34 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         for build in builds:
             await self.bot.for_build(build).post_for_voting(type="add")
 
-    @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
-    @requires(BUILD_SUBMISSION_RECALC)
-    async def recalc(self, ctx: Context[BotT], message: discord.Message):
-        """Recalculate a build from a message."""
-        await ctx.defer(ephemeral=True)
-        await self.infer_build_from_message(message)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=text_layout(t(locale, _("Build recalculated."))),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+    def register_recalc_context_menu(self) -> None:
+        """Register the build recalculation context menu."""
+        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
+        self.recalc_ctx_menu = app_commands.ContextMenu(
+            name="Recalculate Build",
+            callback=self.recalc_context_menu,
         )
+        self.bot.tree.add_command(self.recalc_ctx_menu)
+
+    async def recalc_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+        """Re-read a build out of the message that was right-clicked.
+
+        This was `/build recalc <message>`, which in slash form meant copying a link to a
+        message and pasting it back at the bot (audit C4). Inference is a judgement about one
+        specific message, which is what a message context menu is.
+        """
+        await interaction.response.defer(ephemeral=True)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
+        await enforce(interaction, BUILD_SUBMISSION_RECALC)
+        if not self._is_build_log_message(message):
+            await reply_layout(
+                interaction,
+                error_layout(
+                    t(locale, _("Nothing to recalculate")),
+                    t(locale, _("Builds are only read out of messages posted in a build log channel.")),
+                ),
+            )
+            return
+        await self.infer_build_from_message(message)
+        await reply_layout(interaction, text_layout(t(locale, _("Build recalculated."))))

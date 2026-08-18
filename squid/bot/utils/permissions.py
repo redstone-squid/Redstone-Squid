@@ -138,6 +138,33 @@ async def allows(
     return await interaction.client.services.permissions.allows(subject, node)
 
 
+async def enforce(
+    interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
+    *nodes: PermissionNode | str,
+    mode: CheckMode = "all",
+) -> None:
+    """Deny an interaction the way `requires(...)` denies a command.
+
+    Context menus and component callbacks cannot carry a `commands.check`, so the check has to
+    happen in the body — and answering it with a hand-written "you cannot do that" card would
+    make the same refusal read differently depending on which surface it came from. Raising
+    what the decorator raises means one presenter renders both, `forbid` explanation included.
+
+    Raises:
+        PermissionNodeRequired: If the caller does not hold the nodes.
+    """
+    resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
+    subject = await subject_for_interaction(interaction)
+    decisions = await interaction.client.services.permissions.decisions(subject, resolved)
+    if _satisfied(decisions, mode):
+        return
+    raise PermissionNodeRequired(
+        tuple(node.name for node in resolved),
+        mode=mode,
+        forbidden=any(decision.reason is Reason.FORBIDDEN for decision in decisions),
+    )
+
+
 def requires(
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
