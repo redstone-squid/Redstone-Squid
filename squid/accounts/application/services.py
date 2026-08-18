@@ -324,14 +324,6 @@ class AccountService:
                 extra={"provider": provider.value, "locked_until": str(locked_until)},
             )
 
-    async def unlink_minecraft_account(self, account_id: int) -> bool:
-        """Unlink every Java identity from an account.
-
-        Superseded by `unlink_identity`, which removes one identity rather than a whole provider.
-        Kept until the bot stops calling it.
-        """
-        return await self._repository.unlink_java_identity(account_id)
-
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         """Return every identity linked to an account, hidden ones included.
 
