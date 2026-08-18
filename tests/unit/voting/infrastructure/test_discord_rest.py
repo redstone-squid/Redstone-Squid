@@ -219,3 +219,36 @@ class TestConfiguredBase:
         route = Route("GET", "/guilds/{guild_id}/members/{member_id}", guild_id=10, member_id=7)
 
         assert route.key == "GET /guilds/{guild_id}/members/{member_id}"
+
+
+async def test_resolve_reports_a_proven_absence_as_a_weightless_member() -> None:
+    """404 is Discord answering, so the refresh may drop the voter to the default."""
+    http = StubHTTPClient(discord_error(NotFound, 404))
+    resolver = resolver_for(http)
+
+    actor = await resolver.resolve(1, 10, VoteKind.BUILD)
+
+    assert actor is not None
+    assert actor.role_ids == frozenset()
+    assert actor.capabilities == frozenset()
+    assert actor.guild_id == 10
+
+
+async def test_resolve_keeps_the_cached_weight_when_the_guild_is_unreadable() -> None:
+    """403 is a question we could not ask, so no weight may be rewritten from it."""
+    http = StubHTTPClient(discord_error(Forbidden, 403))
+    resolver = resolver_for(http)
+
+    assert await resolver.resolve(1, 10, VoteKind.BUILD) is None
+    # The gate still denies, because it cannot prove membership either.
+    assert await resolver.member(1, 10, VoteKind.BUILD) is None
+
+
+async def test_resolve_reports_an_account_without_discord_as_weightless() -> None:
+    http = StubHTTPClient({"roles": ["11"]})
+    resolver = resolver_for(http, discord_ids=FakeDiscordIds(known=False))
+
+    actor = await resolver.resolve(1, 10, VoteKind.BUILD)
+
+    assert actor is not None
+    assert actor.role_ids == frozenset()
