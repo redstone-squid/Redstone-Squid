@@ -27,14 +27,14 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self.records = bot.services.records
         self.computation = bot.services.record_computation
 
-    @hybrid_group(name="admin")
+    @hybrid_group(name="records")
     @requires(RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
     @hide_unless(manage_guild=True)
-    async def admin_group(self, ctx: Context[BotT]) -> None:
-        """Inspect and maintain internal bot data."""
-        await ctx.send_help("admin")
+    async def records_group(self, ctx: Context[BotT]) -> None:
+        """Inspect and maintain computed record categories."""
+        await ctx.send_help("records")
 
-    @admin_group.command(name="records-gaps")
+    @records_group.command(name="gaps")
     @requires(RECORD_ENTRY_INSPECT)
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit gaps to one build kind.")))
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
@@ -57,7 +57,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-    @admin_group.command(name="records-title-issues")
+    @records_group.command(name="title-issues")
     @requires(RECORD_ENTRY_INSPECT)
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit title diagnostics to one build kind.")))
     async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
@@ -81,7 +81,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @autocompletes(current_version_id="version_ids")
-    @admin_group.command(name="records-rebuild")
+    @records_group.command(name="rebuild")
     @requires(RECORD_ENTRY_REBUILD)
     @app_commands.describe(
         current_version_id=app_commands.locale_str(
@@ -120,14 +120,14 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         version_id="version_ids",
         restrictions=suggests("restriction_ids", multi=True),
     )
-    @admin_group.command(name="records-lookup")
+    @records_group.command(name="lookup")
     @requires(RECORD_ENTRY_INSPECT)
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind=app_commands.locale_str(_("The typed record family.")),
         base_key=app_commands.locale_str(_("Pick a record category, or paste a raw base key.")),
         restrictions=app_commands.locale_str(
-            _("Comma-separated restriction IDs; large exact categories are saved for reuse.")
+            _("Pick restrictions from the list; large exact categories are saved for reuse.")
         ),
         version_id=app_commands.locale_str(_("Optional pinned version database ID.")),
     )
@@ -144,7 +144,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         try:
             restriction_ids = frozenset(int(value.strip()) for value in restrictions.split(",") if value.strip())
         except ValueError as error:
-            msg = t(locale, _("Restrictions must be comma-separated numeric IDs."))
+            msg = t(locale, _("Pick restrictions from the suggestions rather than typing them."))
             raise commands.BadArgument(msg) from error
         # An autocomplete pick submits a definition id; a raw base key always contains "|".
         selected = base_key.strip()

@@ -16,6 +16,7 @@ from discord.ext import commands
 
 from squid.bot.app import EXTENSIONS
 from squid.bot.errors import SquidCommandTree
+from squid.bot.help import DIRECTORY_CATEGORIES
 
 
 class StubBot(commands.Bot):
@@ -115,3 +116,19 @@ async def test_the_error_group_is_the_lookup_command(loaded_bot: commands.Bot) -
 
 def test_extension_list_has_no_duplicates() -> None:
     assert len(EXTENSIONS) == len(set(EXTENSIONS))
+
+
+async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands.Bot) -> None:
+    """Every category entry has to resolve, in either tree.
+
+    The map is edited by hand and read by name, so a renamed or retired group leaves an
+    entry that quietly lists nothing: `patterns` survived phase 2 and `vote` survived phase
+    5.1 this way. Both trees are consulted because `/poll` is app-only, and the directory
+    listing it at all is the point of `_root_commands`.
+    """
+    prefix_names = {command.name for command in loaded_bot.commands}
+    app_names = {command.name for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.chat_input)}
+    listed = {name for _title, names in DIRECTORY_CATEGORIES for name in names}
+
+    assert listed <= prefix_names | app_names
+    assert "poll" not in prefix_names, "the directory would find `poll` anyway if it were not app-only"

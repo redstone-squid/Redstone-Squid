@@ -21,7 +21,7 @@ class CreatorReader(Protocol):
 
 
 class RecordDefinitionProvider:
-    """Suggest the categories `/admin records-lookup` materializes, submitting the definition id."""
+    """Suggest the categories `/records lookup` materializes, submitting the definition id."""
 
     def __init__(self, reader: RecordDefinitionReader) -> None:
         self._reader = reader
