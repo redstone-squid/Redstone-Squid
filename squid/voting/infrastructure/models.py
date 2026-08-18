@@ -34,13 +34,18 @@ _SCOPE_VALUES = ", ".join(f"'{scope.value}'" for scope in PollScope)
 THRESHOLD_CONSTRAINT = (
     "CASE WHEN kind = 'generic'"
     " THEN pass_threshold IS NULL AND fail_threshold IS NULL"
-    " ELSE pass_threshold > 0 AND fail_threshold < 0"
+    " ELSE pass_threshold IS NOT NULL AND fail_threshold IS NOT NULL"
+    " AND pass_threshold > 0 AND fail_threshold < 0"
     " END"
 )
 """Thresholds belong to score-closing kinds only.
 
 Generic polls close on a deadline, so a threshold on one is unreadable state; this
 is the constraint that stopped the `32767`/`-32768` sentinels from coming back.
+
+The null checks are explicit because `NULL > 0` is NULL, not false, and a check
+constraint only rejects on false -- without them a build session with no thresholds
+at all satisfied the constraint and could never close.
 """
 
 
