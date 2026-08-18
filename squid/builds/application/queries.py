@@ -8,16 +8,6 @@ from squid.builds.domain import Build, Status
 from squid.builds.errors import BuildNotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 
-
-@dataclass(frozen=True, slots=True)
-class RestrictionSearchItem:
-    """A restriction name or alias returned by a substring search."""
-
-    restriction_id: int
-    name: str
-    is_alias: bool
-
-
 type BuildSortField = Literal["id", "submission_time"]
 BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
 """Columns an authoritative build listing may order by; both are indexed."""
@@ -68,16 +58,6 @@ class BuildQueryRepository(Protocol):
     async def get_pending(self) -> list[Build]: ...
 
 
-class BuildMetadataQueries(Protocol):
-    """Restriction and pattern metadata queries."""
-
-    async def search_restrictions(self, query: str | None) -> list[RestrictionSearchItem]: ...
-
-    async def list_patterns(self) -> list[str]: ...
-
-    async def search_patterns(self, query: str, limit: int = 25) -> list[tuple[str, float, int]]: ...
-
-
 class SemanticBuildSearch(Protocol):
     """Natural-language build lookup."""
 
@@ -85,16 +65,14 @@ class SemanticBuildSearch(Protocol):
 
 
 class BuildQueryService:
-    """Coordinate build, restriction, pattern, and semantic queries."""
+    """Coordinate authoritative build reads and semantic build lookup."""
 
     def __init__(
         self,
         builds: BuildQueryRepository,
-        metadata: BuildMetadataQueries,
         semantic_search: SemanticBuildSearch,
     ):
         self._builds = builds
-        self._metadata = metadata
         self._semantic_search = semantic_search
 
     async def get(self, build_id: int) -> Build | None:
@@ -156,15 +134,6 @@ class BuildQueryService:
             keyset=sort.field == "id",
             id_of=_persisted_build_id,
         )
-
-    async def restrictions(self, query: str | None) -> list[RestrictionSearchItem]:
-        return await self._metadata.search_restrictions(query)
-
-    async def patterns(self) -> list[str]:
-        return await self._metadata.list_patterns()
-
-    async def search_patterns(self, query: str) -> list[tuple[str, float, int]]:
-        return await self._metadata.search_patterns(query)
 
     async def semantic(self, query: str) -> Build | None:
         build_id = await self._semantic_search.find_build_id(query)
