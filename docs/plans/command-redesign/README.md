@@ -63,7 +63,7 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 | 2 | [02-search.md](02-search.md) | One `/search`: taxonomies named in `scope`, tag kinds indexed, one sort option; `/patterns` removed and `/restrictions` reduced to its staff command | **Delivered** |
 | 3 | [03-diagnostics.md](03-diagnostics.md) | `/error`: reports page inline, `recent` entries open in place, and every reply is private on the prefix side too | **Delivered** |
 | 4 | [04-settings.md](04-settings.md) | `/settings` opens a panel: every key on one screen with a picker each, voting configured where it is displayed; `list`/`get`/`clear`/`voting show`/`voting emojis` removed | **Delivered** |
-| 5 | 05-condensation.md (todo) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | Not started |
+| 5 | [05-condensation.md](05-condensation.md) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | In progress |
 
 **C1, picker visibility, is delivered** (2026-08-18), ahead of phase 2 as the audit
 recommended. `hide_unless(...)` in `squid/bot/utils/permissions.py` wraps
