@@ -438,15 +438,11 @@ class SearchProjectionLoader:
             ).all()
         )
         first_holder = holders[0] if holders else None
-        title = (
-            first_holder.title
-            if first_holder is not None
-            else f"{definition.record_class.title()} {definition.category_key}"
-        )
-        subtitle = first_holder.subtitle if first_holder is not None else None
+        title = first_holder.title if first_holder is not None else definition.title
+        subtitle = first_holder.subtitle if first_holder is not None else definition.subtitle
         holder_ids = tuple(holder.build_id for holder in holders)
         metric = first_holder.metric_snapshot if first_holder is not None else {}
-        tags = (definition.record_class, definition.build_kind, definition.category_key, definition.version_scope)
+        tags = (definition.record_class, definition.build_kind, definition.version_scope)
         facets = (
             ProjectionFacet("record_class", definition.record_class),
             ProjectionFacet("record_state", "current"),

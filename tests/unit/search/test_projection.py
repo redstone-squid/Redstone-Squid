@@ -3,7 +3,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +26,37 @@ async def test_loader_rejects_retired_legacy_record_keys() -> None:
 
     assert await loader.load("record", "legacy-smallest:1") is None
     session.scalar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_record_documents_carry_titles_not_category_keys() -> None:
+    definition = SimpleNamespace(
+        id=7,
+        record_class="fastest",
+        build_kind="door",
+        version_scope="all_time",
+        category_key="door:door|2x2|t[20]|Door:r[]:p[]",
+        title="Fastest 2x2 Door",
+        subtitle="All-time",
+    )
+    result = SimpleNamespace(id=3, status="unresolved", history_complete=True, gap_reasons={})
+    session = AsyncMock(spec=AsyncSession)
+    execute_result = MagicMock()
+    execute_result.one_or_none.return_value = (result, definition)
+    session.execute.return_value = execute_result
+    scalars_result = MagicMock()
+    scalars_result.all.return_value = []
+    session.scalars.return_value = scalars_result
+    loader = SearchProjectionLoader(cast(AsyncSession, session))
+
+    projection = await loader.load("record", "result:3")
+
+    assert projection is not None
+    # With no holder, the definition's formatted title is the fallback, never the raw key.
+    assert projection.title == "Fastest 2x2 Door"
+    assert projection.subtitle == "All-time"
+    assert projection.tags == ("fastest", "door", "all_time")
+    assert projection.document_data["category_key"] == definition.category_key
 
 
 def test_normalize_collapses_case_and_whitespace() -> None:
