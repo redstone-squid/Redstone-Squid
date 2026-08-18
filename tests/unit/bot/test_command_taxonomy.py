@@ -130,7 +130,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "archive": (),
     # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
-    "error": ("recent",),
+    "error": ("clear", "recent"),
     "build": (
         "approve",
         "debug",
@@ -322,6 +322,7 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     diagnostics = Diagnostics.__new__(Diagnostics)
     assert _nodes(diagnostics.__cog_commands__, "error") == {"diagnostics.error.read"}
     assert _nodes(diagnostics.__cog_commands__, "error recent") == {"diagnostics.error.read"}
+    assert _nodes(diagnostics.__cog_commands__, "error clear") == {"diagnostics.error.clear"}
 
     admin = Admin.__new__(Admin)
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
