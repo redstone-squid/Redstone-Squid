@@ -22,6 +22,22 @@ class RecordNotFoundError(NotFoundError):
         self.record_id = record_id
 
 
+class RecordDefinitionNotFoundError(NotFoundError):
+    """No record definition exists with the requested identifier."""
+
+    default_message = _("Record category not found.")
+    default_title = _("Record category not found")
+    default_code = ErrorCode.RECORD_NOT_FOUND
+    default_resource = "record_definition"
+
+    def __init__(self, definition_id: int) -> None:
+        super().__init__(
+            context={"definition_id": definition_id},
+            public_context={"definition_id": definition_id},
+        )
+        self.definition_id = definition_id
+
+
 class NoMatchingRecordCategoryError(NotFoundError):
     """No confirmed build satisfies the requested record category."""
 
