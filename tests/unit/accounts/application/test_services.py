@@ -16,31 +16,38 @@ from squid.accounts.domain import (
     AccountConsent,
     AccountIdentity,
     AccountMerge,
+    AccountProfile,
     AliasClaim,
     ClaimMethod,
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreatorProfileRecord,
     CreditPreview,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
+    ProfileLink,
+    ProfileUpdate,
     RecentAccountProof,
     fold_creator_name,
 )
 from squid.accounts.errors import (
     AccountAlreadyLinkedError,
+    AccountIdentityNotFoundError,
     AccountNotFoundError,
     ClaimNotFoundError,
     ConsentRequiredError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
+    LastIdentityError,
     LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
+from squid.core.errors import ValidationError
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_JAVA_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -65,6 +72,8 @@ class FakeAccountRepository:
         self.consumed_token: str | None = None
         self.failures: dict[tuple[IdentityProvider, str], int] = {}
         self.lockouts: dict[tuple[IdentityProvider, str], Instant] = {}
+        self.profiles: dict[int, AccountProfile] = {}
+        self.avatar_keys: dict[tuple[int, int], str | None] = {}
         self._next_id = 1
 
     def seed_account(
@@ -75,9 +84,9 @@ class FakeAccountRepository:
         consent: AccountConsent | None = None,
         java_uuid: UUID | None = None,
     ) -> Account:
-        identities = [AccountIdentity.for_provider(provider, str(subject), verified_at=NOW)]
+        identities = [replace(AccountIdentity.for_provider(provider, str(subject), verified_at=NOW), id=1)]
         if java_uuid is not None:
-            identities.append(AccountIdentity.java(java_uuid, username="Player", verified_at=NOW))
+            identities.append(replace(AccountIdentity.java(java_uuid, username="Player", verified_at=NOW), id=2))
         account = Account(tuple(identities), consent, self._next_id, NOW, UUID(int=self._next_id))
         self.accounts[self._next_id] = account
         self._next_id += 1
@@ -113,6 +122,78 @@ class FakeAccountRepository:
             remaining, account.consent, account.id, account.created_at, account.public_creator_id
         )
         return True
+
+    async def count_identities(self, account_id: int) -> int:
+        account = self.accounts.get(account_id)
+        return 0 if account is None else len(account.identities)
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
+        account = self.accounts.get(account_id)
+        if account is None:
+            return None
+        removed = next((identity for identity in account.identities if identity.id == identity_id), None)
+        if removed is None:
+            return None
+        remaining = tuple(identity for identity in account.identities if identity.id != identity_id)
+        self.accounts[account_id] = replace(account, identities=remaining)
+        return removed
+
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
+        account = self.accounts.get(account_id)
+        target = (
+            None
+            if account is None
+            else next((identity for identity in account.identities if identity.id == identity_id), None)
+        )
+        if account is None or target is None:
+            raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
+        updated = replace(target, is_public=is_public)
+        self.accounts[account_id] = replace(
+            account,
+            identities=tuple(updated if i.id == identity_id else i for i in account.identities),
+        )
+        return updated
+
+    async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
+        self.avatar_keys[(account_id, identity_id)] = avatar_key
+
+    async def get_profile(self, account_id: int) -> AccountProfile | None:
+        if account_id not in self.accounts:
+            return None
+        return self.profiles.setdefault(account_id, AccountProfile.empty(account_id))
+
+    async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
+        current = self.profiles.setdefault(account_id, AccountProfile.empty(account_id))
+        avatar_identity_id = update_request.avatar_identity_id
+        if isinstance(avatar_identity_id, int):
+            account = self.accounts.get(account_id)
+            owned = account is not None and any(i.id == avatar_identity_id for i in account.identities)
+            if not owned:
+                raise AccountIdentityNotFoundError(avatar_identity_id, account_id=account_id)
+        updated = update_request.apply(current)
+        self.profiles[account_id] = updated
+        return updated
+
+    async def clear_profile(self, account_id: int) -> AccountProfile:
+        cleared = AccountProfile.empty(account_id)
+        self.profiles[account_id] = cleared
+        return cleared
+
+    async def get_creator_profile_record(self, public_id: UUID) -> CreatorProfileRecord | None:
+        account = next(
+            (candidate for candidate in self.accounts.values() if candidate.public_creator_id == public_id),
+            None,
+        )
+        if account is None or account.id is None:
+            return None
+        return CreatorProfileRecord(
+            public_id=public_id,
+            account_id=account.id,
+            profile=self.profiles.get(account.id, AccountProfile.empty(account.id)),
+            identities=account.identities,
+            joined_at=account.created_at,
+            canonical_public_id=public_id,
+        )
 
     async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
         alias = await self.get_alias_by_name(name)
@@ -270,7 +351,9 @@ async def test_discord_login_creates_an_account_without_making_discord_primary()
 
     account = await service(repository).get_or_create_identity(IdentityProvider.DISCORD, "123")
 
-    assert account.identity(IdentityProvider.DISCORD) == AccountIdentity.discord(123, verified_at=NOW)
+    # The fake assigns identity ids because persistence does, and per-identity visibility and
+    # unlink are both addressed by that id.
+    assert account.identity(IdentityProvider.DISCORD) == replace(AccountIdentity.discord(123, verified_at=NOW), id=1)
     assert account.identity(IdentityProvider.JAVA) is None
 
 
@@ -630,3 +713,128 @@ async def test_linking_against_a_missing_account_does_not_create_one() -> None:
         await service(repository).link_minecraft_account(999, "valid", consent=CONSENT, attempted_by=ATTEMPT)
 
     assert repository.accounts == {}
+
+
+class TestProfiles:
+    async def test_update_requires_current_consent(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1)
+        assert account.id is not None
+
+        with pytest.raises(ConsentRequiredError):
+            await service(repository).update_profile(account.id, ProfileUpdate(display_name="Notch"))
+
+    async def test_update_normalizes_through_the_domain(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+
+        profile = await service(repository).update_profile(account.id, ProfileUpdate(display_name="  Notch  "))
+
+        assert profile.display_name == "Notch"
+
+    async def test_update_rejects_an_invalid_link(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+        update = ProfileUpdate(links=(ProfileLink("Site", "javascript:alert(1)"),))
+
+        with pytest.raises(ValidationError):
+            await service(repository).update_profile(account.id, update)
+
+    async def test_update_refuses_an_avatar_from_another_account(self) -> None:
+        repository = FakeAccountRepository()
+        owner = repository.seed_account(1, consent=CONSENT)
+        repository.seed_account(2, consent=CONSENT)
+        assert owner.id is not None
+
+        with pytest.raises(AccountIdentityNotFoundError):
+            await service(repository).update_profile(owner.id, ProfileUpdate(avatar_identity_id=9999))
+
+    async def test_update_refuses_an_unknown_account(self) -> None:
+        with pytest.raises(AccountNotFoundError):
+            await service(FakeAccountRepository()).update_profile(404, ProfileUpdate(bio="hi"))
+
+    async def test_clear_profile_resets_content_and_leaves_it_visible(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+        accounts = service(repository)
+        await accounts.update_profile(account.id, ProfileUpdate(display_name="Spam", hidden=True))
+
+        cleared = await accounts.clear_profile(account.id)
+
+        assert cleared.display_name is None
+        assert not cleared.hidden
+
+    async def test_public_profile_applies_visibility(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+        assert account.public_creator_id is not None
+        accounts = service(repository)
+        await accounts.update_profile(account.id, ProfileUpdate(display_name="Notch", hidden=True))
+
+        public = await accounts.get_public_profile(account.public_creator_id)
+
+        assert public is not None
+        assert public.hidden
+        assert public.display_name is None
+
+    async def test_public_profile_is_none_for_an_unknown_creator(self) -> None:
+        assert await service(FakeAccountRepository()).get_public_profile(UUID(int=99)) is None
+
+
+class TestIdentityManagement:
+    async def test_list_identities_includes_hidden_ones(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+        assert account.id is not None
+        accounts = service(repository)
+        await accounts.set_identity_visibility(account.id, 2, is_public=False)
+
+        identities = await accounts.list_identities(account.id)
+
+        assert len(identities) == 2
+        assert not next(identity for identity in identities if identity.id == 2).is_public
+
+    async def test_unlink_removes_one_identity_and_keeps_the_other(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+        assert account.id is not None
+
+        removed = await service(repository).unlink_identity(account.id, 2)
+
+        assert removed.provider is IdentityProvider.JAVA
+        assert [identity.provider for identity in repository.accounts[account.id].identities] == [
+            IdentityProvider.DISCORD
+        ]
+
+    async def test_unlink_refuses_the_last_identity(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+
+        with pytest.raises(LastIdentityError):
+            await service(repository).unlink_identity(account.id, 1)
+
+        assert len(repository.accounts[account.id].identities) == 1
+
+    async def test_unlink_refuses_an_identity_the_account_does_not_hold(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+        assert account.id is not None
+
+        with pytest.raises(AccountIdentityNotFoundError):
+            await service(repository).unlink_identity(account.id, 9999)
+
+    async def test_unlinking_does_not_touch_creator_credit(self) -> None:
+        """Attribution is a fact about a build, not about how someone signs in."""
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+        assert account.id is not None
+        repository.aliases[1] = CreatorAlias(1, "Player", account_id=account.id)
+
+        await service(repository).unlink_identity(account.id, 2)
+
+        assert repository.aliases[1].account_id == account.id
