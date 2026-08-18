@@ -114,7 +114,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "build": (
         "approve",
         "debug",
-        "edit",
         "queue",
         "reject",
         "schematic",
@@ -263,10 +262,12 @@ def test_public_prefix_command_tree_matches_taxonomy() -> None:
     assert _public_command_names() == _qualified_names(EXPECTED_PREFIX_COMMAND_TREE)
 
 
-def test_build_slash_group_includes_app_only_guided_submit() -> None:
+def test_build_slash_group_includes_the_app_only_workspaces() -> None:
     cog = SearchCog.__new__(SearchCog)
     build_group = cast(HybridGroup, _command(cog.__cog_commands__, "build"))
-    expected_commands = {f"build {command}" for command in (*EXPECTED_PREFIX_COMMAND_TREE["build"], "submit")}
+    # `submit` and `edit` are app-only: both open a workspace, which needs an interaction
+    # (docs/plans/command-redesign/01-build-submit.md, 06-build.md).
+    expected_commands = {f"build {command}" for command in (*EXPECTED_PREFIX_COMMAND_TREE["build"], "submit", "edit")}
 
     assert {command.qualified_name for command in build_group.app_command.walk_commands()} == expected_commands
 
@@ -310,7 +311,6 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build approve") == {"build.submission.approve"}
     assert _nodes(search.__cog_commands__, "build reject") == {"build.submission.reject"}
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
-    assert _nodes(search.__cog_commands__, "build edit") == {"build.submission.edit"}
     assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
     assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
