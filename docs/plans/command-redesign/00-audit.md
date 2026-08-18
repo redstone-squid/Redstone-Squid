@@ -41,6 +41,10 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   numeric Discord ID instead of a mention or name; `restrictions search` prints
   `restriction_id: name` lines; `patterns search` prints match scores; `admin records-lookup`
   demands comma-separated numeric restriction IDs as input; notifications display bare UUIDs.
+  *(Phase 2 settled the two search cases. `records lookup` keeps its ids: the autocomplete
+  already turns names into them, and accepting names outright needs `RestrictionDefinition`
+  to carry an id, which is a change in another bounded context. The rest is phase 5.3 and
+  5.6.)*
 - **C6 — Pagination is ad hoc.** `search` has a real paginator; `build queue` renders
   everything into one card (overflow risk); `version list` truncates at 20 with a TODO;
   `account claims` caps at 10 with a "N more not shown" footer; `admin records-gaps` caps
@@ -138,11 +142,12 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
 - Replies are raw strings (C3); `list` prints UUIDs (C5); `unfollow` autocompletes ids that
   `list` makes you read manually — same button-instead-of-retype shape as account claims.
 
-### `/admin` *(phase 5)*
-- The group is named `admin` but contains only record-computation tooling (`records-gaps`,
+### `/admin` *(phase 5.2, done 2026-08-19)*
+- ~~The group is named `admin` but contains only record-computation tooling (`records-gaps`,
   `records-title-issues`, `records-rebuild`, `records-lookup`). Either it becomes `/records`
   (staff-gated via C1) or the commands move under `build`. The `records-` prefix on every
-  member is the group name it actually wanted.
+  member is the group name it actually wanted.~~ *(It became `/records`, and every member
+  dropped the prefix. It keeps C1's `manage_guild` visibility.)*
 
 ### `/perm`, `/role` *(phase 5)*
 - 22 staff commands, the two biggest groups after `build`. `whoami`, `test`, and `explain` are

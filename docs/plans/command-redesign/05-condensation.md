@@ -21,7 +21,7 @@ three different ad-hoc truncation schemes standing in for a paginator.
 | # | Scope | Status |
 |---|-------|--------|
 | 5.1 | The `vote` group disappears: `vote poll` retired, `vote delete` becomes a context menu, `poll close`/`refresh` become buttons on the poll card (C4, C7) | **Delivered** |
-| 5.2 | `/admin` becomes `/records` and drops the `records-` prefix every member carried (C5 on its restriction input) | Not started |
+| 5.2 | `/admin` becomes `/records` and drops the `records-` prefix every member carried; `/help` learns to list app-only commands | **Delivered** |
 | 5.3 | `/notifications`: one `follow`, layouts and i18n, subscriptions named rather than UUID'd, unfollow from the list (C3, C5) | Not started |
 | 5.4 | `/account` claim review moves onto the `claims` list as buttons | Not started |
 | 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into one command | Not started |
@@ -96,3 +96,35 @@ A poll whose card was deleted can no longer be closed by hand; it closes at its 
 any other. The renderer already treats a deleted card as deliberate (`repost_if_deleted =
 False`), so this trades a rarely-used escape hatch for not asking anyone to paste a link
 again. The prefix forms of `vote delete` and the poll commands are gone with them.
+
+## 5.2 — the group `admin` always was
+
+`/admin` held four commands, all of them record-computation tooling, and every one repeated
+the group name it actually wanted: `admin records-gaps`, `admin records-title-issues`,
+`admin records-rebuild`, `admin records-lookup`. It is now `/records gaps`, `title-issues`,
+`rebuild` and `lookup`. C1's `manage_guild` visibility hint moves with it, and the nodes are
+unchanged — the rename is a rename.
+
+`admin` was also a misleading name for a picker entry: it reads as "everything staff", while
+the actual administrative surface is spread across `settings`, `perm`, `role`, `starboard`
+and `error`.
+
+**`/help` now lists app-only commands too.** The directory read `bot.commands`, which is the
+prefix tree, so a command with no prefix spelling was missing from the one surface built for
+discovery. That had been true of `/help` and `/notifications` all along, and 5.1 added `/poll`
+to the list by making it app-only — a command nobody can find is not much better than a
+command that does not exist.
+
+The category map moved out of the command body into `DIRECTORY_CATEGORIES` for the same
+reason as everything else in this phase: it is edited by hand and read by name, so a retired
+group leaves an entry that lists nothing at all. `patterns` outlived phase 2 in it and `vote`
+outlived 5.1 by a commit. `test_the_help_directory_names_commands_that_exist` resolves every
+entry against a fully loaded bot, so the next one fails instead.
+
+### Deferred within this step
+
+`records lookup` still takes restriction ids rather than names (audit C5). Its autocomplete
+already turns names into ids for the slash path, and accepting names outright means teaching
+`RestrictionDefinition` to carry an id — a change in the builds context for the benefit of one
+staff inspection command. The option text no longer instructs anyone to type ids by hand,
+which is the part that was actively misleading.
