@@ -18,6 +18,8 @@ from whenever import Instant
 
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Door, Extender
+from squid.core.errors import DataIntegrityError
+from squid.core.i18n import _
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.models import (
     CandidateFacet,
@@ -458,6 +460,20 @@ class PostgresRecordRepository:
                 if identity is not None:
                     identities.append(identity)
             return tuple(identities)
+
+    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
+        """Return the parsed category identity of one stored definition."""
+        async with self._session_factory() as session:
+            key = await session.scalar(
+                select(RecordDefinition.category_key).where(RecordDefinition.id == definition_id)
+            )
+        if key is None:
+            return None
+        identity = parse_category_key(key)
+        if identity is None:
+            msg = _("Record definition {definition_id} stores a category key that does not parse.")
+            raise DataIntegrityError(msg, message_params={"definition_id": definition_id})
+        return identity
 
     async def save_requested_category(
         self,

@@ -124,7 +124,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind=app_commands.locale_str(_("The typed record family.")),
-        base_key=app_commands.locale_str(_("Canonical base key shown by search or records tooling.")),
+        base_key=app_commands.locale_str(_("Pick a record category, or paste a raw base key.")),
         restrictions=app_commands.locale_str(
             _("Comma-separated restriction IDs; large exact categories are saved for reuse.")
         ),
@@ -145,15 +145,24 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         except ValueError as error:
             msg = t(locale, _("Restrictions must be comma-separated numeric IDs."))
             raise commands.BadArgument(msg) from error
-        await ctx.defer()
-        summary = await self.records.lookup_or_materialize(
-            RecordLookupRequest(
-                kind=kind,
-                base_key=base_key,
-                restriction_ids=restriction_ids,
-                version_id=version_id,
+        # An autocomplete pick submits a definition id; a raw base key always contains "|".
+        selected = base_key.strip()
+        if selected.isdigit():
+            if restriction_ids:
+                msg = t(locale, _("Restrictions can only be combined with a hand-typed base key."))
+                raise commands.BadArgument(msg)
+            await ctx.defer()
+            summary = await self.records.materialize_definition(int(selected), kind=kind, version_id=version_id)
+        else:
+            await ctx.defer()
+            summary = await self.records.lookup_or_materialize(
+                RecordLookupRequest(
+                    kind=kind,
+                    base_key=selected,
+                    restriction_ids=restriction_ids,
+                    version_id=version_id,
+                )
             )
-        )
         await ctx.send(
             view=info_layout(
                 t(locale, _("Record category materialized")),

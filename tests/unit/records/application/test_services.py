@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from squid.core.errors import ValidationError
 from squid.records.application.models import (
     CandidateFacet,
     CategoryIdentity,
@@ -26,7 +27,7 @@ from squid.records.domain import (
     ResolutionStatus,
     TimingVariant,
 )
-from squid.records.errors import NoMatchingRecordCategoryError
+from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 
 
 class FakeCandidates:
@@ -42,6 +43,7 @@ class FakeRuns:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
         self.requested_titles: dict[str, dict[RecordClass, CategoryText]] = {}
+        self.definition_identities: dict[int, CategoryIdentity] = {}
         self.gap_rows: tuple[RecordGap, ...] = ()
         self.title_gap_rows: tuple[TitleDiagnosticGap, ...] = ()
         self.queued: tuple[BuildKind, ...] = ()
@@ -91,6 +93,9 @@ class FakeRuns:
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
+
+    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
+        return self.definition_identities.get(definition_id)
 
     async def save_requested_category(
         self,
@@ -333,6 +338,42 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     exact = [record for record in runs.batches[0].records if len(record.competition.identity.restriction_ids) == 9]
     assert {record.record_class for record in exact} == set(RecordClass)
     assert all(record.competition.source == "public_lookup" for record in exact)
+
+
+@pytest.mark.asyncio
+async def test_materialize_definition_round_trips_the_stored_identity() -> None:
+    flush = CandidateFacet(id=1, kind="restriction", name="Flush", restriction_type="wiring-placement")
+    candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=(flush,)),))
+    runs = FakeRuns()
+    identity = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", (1,))
+    runs.definition_identities[42] = identity
+    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+
+    summary = await service.materialize_definition(42, kind=BuildKind.DOOR)
+
+    assert summary.run_ids == (1,)
+    assert runs.requested[BuildKind.DOOR] == [identity]
+
+
+@pytest.mark.asyncio
+async def test_materialize_definition_rejects_unknown_id() -> None:
+    candidates = FakeCandidates(())
+    runs = FakeRuns()
+    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+
+    with pytest.raises(RecordDefinitionNotFoundError):
+        await service.materialize_definition(999)
+
+
+@pytest.mark.asyncio
+async def test_materialize_definition_rejects_kind_mismatch() -> None:
+    candidates = FakeCandidates(())
+    runs = FakeRuns()
+    runs.definition_identities[42] = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", ())
+    service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
+
+    with pytest.raises(ValidationError):
+        await service.materialize_definition(42, kind=BuildKind.EXTENDER)
 
 
 @pytest.mark.asyncio
