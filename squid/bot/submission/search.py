@@ -35,7 +35,7 @@ from squid.permissions.domain.catalogue import (
     BUILD_SUBMISSION_REJECT,
     RESTRICTION_ALIAS_CREATE,
 )
-from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
+from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -73,17 +73,15 @@ class SearchCog[
     @app_commands.describe(
         query=app_commands.locale_str(_("Search text and filters, e.g. `width:5`.")),
         scope=app_commands.locale_str(_("Search records, builds, tags and fields, or everything.")),
+        sort=app_commands.locale_str(_("Order results by a field, ascending or descending.")),
         mode=app_commands.locale_str(_("Use keyword matching or smart meaning-based matching.")),
-        sort=app_commands.locale_str(_("Field to sort by, such as width or closing_delay.")),
-        direction=app_commands.locale_str(_("Sort low-to-high or high-to-low.")),
     )
     async def search_records(
         self,
         ctx: Context[BotT],
         scope: SearchScope = SearchScope.RECORDS,
-        mode: SearchModeChoice = SearchModeChoice.keyword,
         sort: str | None = None,
-        direction: SortDirection = SortDirection.ASCENDING,
+        mode: SearchModeChoice = SearchModeChoice.keyword,
         *,
         query: str,
     ) -> None:
@@ -94,7 +92,10 @@ class SearchCog[
             query,
             scope=scope,
             mode=SearchMode.LEXICAL if mode is SearchModeChoice.keyword else SearchMode.SEMANTIC,
-            sort=SearchSort(sort, direction) if sort is not None else None,
+            # `SearchSort.parse` and not `SearchSort(sort, direction)`: the `search_sorts`
+            # suggestions are already complete answers in `field` / `-field` form, so a
+            # separate direction option contradicted every value the user could pick.
+            sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
         view = SearchResultsView(self.search, request, page, author_id=ctx.author.id, locale=locale)
