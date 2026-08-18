@@ -109,19 +109,21 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "archive": (),
     # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
     "error": ("clear", "recent"),
+    # The schematic tools all sit under `build schematic`, which is what their
+    # permission nodes always said (docs/plans/command-redesign/06-build.md).
     "build": (
         "approve",
         "debug",
-        "detect-lattice",
         "edit",
-        "measure-timing",
         "queue",
         "recalc",
         "reject",
         "schematic",
         "schematic convert",
+        "schematic detect-lattice",
         "schematic download",
         "schematic info",
+        "schematic measure-timing",
         "schematic render",
         "view",
     ),
@@ -311,8 +313,8 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
     assert _nodes(search.__cog_commands__, "build edit") == {"build.submission.edit"}
     assert _nodes(search.__cog_commands__, "build recalc") == {"build.submission.recalc"}
-    assert _nodes(search.__cog_commands__, "build measure-timing") == {"build.schematic.measure_timing"}
-    assert _nodes(search.__cog_commands__, "build detect-lattice") == {"build.schematic.detect_lattice"}
+    assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
+    assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
     assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
     assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 

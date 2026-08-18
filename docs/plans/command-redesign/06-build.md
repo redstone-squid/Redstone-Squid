@@ -31,11 +31,11 @@ its front door — `submit` is one command with autocompleted options and a work
 
 | # | Scope | Status |
 |---|-------|--------|
-| 6.1 | `build queue`: a shared list paginator, submitters named rather than numbered, and a title that matches the command (C5, C6) | Not started |
+| 6.1 | `build queue`: a shared list paginator, submitters named rather than numbered, and a title that matches the command (C5, C6) | **Delivered** |
 | 6.2 | One edit surface: `/build edit` is app-only, its typed options seed the workspace view, and the gate is the view's owner-or-node rule (C7) | Not started |
 | 6.3 | `build recalc` becomes the "Recalculate Build" message context menu (C4) | Not started |
 | 6.4 | `build debug` attaches its dump as a file instead of pasting a `__dict__` into a message | Not started |
-| 6.5 | `measure-timing` and `detect-lattice` move under `build schematic` | Not started |
+| 6.5 | `measure-timing` and `detect-lattice` move under `build schematic` | **Delivered** |
 
 Ordering is by independence. 6.2 is the phase's real work and comes after the smaller steps
 have settled the group's shape around it.
@@ -63,3 +63,40 @@ copy, not this.
 - **`build view` and `build approve`/`reject`.** Three commands that take a build id and do one
   obvious thing with it. They are not overlapping spellings of one question, and an id with
   autocomplete behind it is not the kind of id C5 objects to.
+
+## 6.1 — the review queue is a list, and lists are paginated
+
+Three changes to one command, all of them things a reviewer had been reading around.
+
+**The submitter is a mention.** The list rendered `submitter_discord_id` as a bare integer
+(audit C5), which names nobody: a reviewer wanting to ask the submitter a question had to
+paste the number somewhere that would resolve it. It is now `<@id>`, which every client
+resolves and which pings no one under the `no_mentions()` policy the rest of the bot sends
+with. The field is derived from the account rather than stored on the build, so it can be
+absent; that build now reads "submitted by someone unlinked" instead of "submitted by None".
+
+**The card is titled what the command does.** It said "Open Records" — a name from when this
+group was records-only — while the command's own description said pending submissions.
+
+**The list pages.** It printed every pending build into one message, which Discord truncates
+at exactly the queue lengths worth looking at. The shared paginator is described above.
+
+### Kept deliberately
+
+The build id stays. It is the handle a reviewer types into `build approve`, it is what the
+card's own footer calls the submission, and unlike the submitter snowflake it is a number the
+user is meant to see.
+
+## 6.5 — the schematic tools live under `build schematic`
+
+`measure-timing` and `detect-lattice` read a build's attached schematic and report what the
+engine found in it, which is the sentence that describes `build schematic` as a whole. They
+sat one level up for no reason anybody recorded, and their permission nodes had said where
+they belonged the whole time: `build.schematic.measure_timing` and
+`build.schematic.detect_lattice` were never renamed to match the commands' location, because
+the location was the thing that was wrong.
+
+### Taxonomy edits
+
+`build measure-timing` and `build detect-lattice` become `build schematic measure-timing` and
+`build schematic detect-lattice`. The nodes are untouched, so no grant changes.
