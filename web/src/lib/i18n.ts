@@ -165,6 +165,15 @@ const english = {
   "gallery.next": "Next media",
   "gallery.position": "Item {current} of {total}",
   "gallery.open": "Open original media",
+  "consent.heading": "Accept the privacy notice",
+  "consent.version": "Version {version}",
+  "consent.loading": "Loading the privacy notice…",
+  "consent.accept": "Accept and continue",
+  "consent.accepting": "Recording your acceptance…",
+  "consent.cancel": "Not now",
+  "consent.failed": "The privacy notice could not be loaded. Try again shortly.",
+  "consent.rejected": "Your acceptance could not be recorded. Try again shortly.",
+  "consent.stale": "The notice changed while you were reading it. Read it again and re-accept.",
 } as const;
 
 export type MessageKey = keyof typeof english;
@@ -325,6 +334,15 @@ const chinese: Dictionary = {
   "gallery.next": "下一项媒体",
   "gallery.position": "第 {current} 项，共 {total} 项",
   "gallery.open": "打开原始媒体",
+  "consent.heading": "接受隐私声明",
+  "consent.version": "版本 {version}",
+  "consent.loading": "正在加载隐私声明…",
+  "consent.accept": "接受并继续",
+  "consent.accepting": "正在记录你的接受…",
+  "consent.cancel": "暂不接受",
+  "consent.failed": "无法加载隐私声明，请稍后重试。",
+  "consent.rejected": "无法记录你的接受，请稍后重试。",
+  "consent.stale": "你阅读期间声明已更新，请重新阅读并再次接受。",
 };
 
 export const dictionaries = { en: english, "zh-CN": chinese } satisfies Record<Locale, Dictionary>;

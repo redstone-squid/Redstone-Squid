@@ -13,11 +13,14 @@ import type {
 } from "../generated/types.gen";
 import {
   asSubmissionError,
+  withConsentRetry,
+  type ConsentApi,
   createSubmissionApi,
   type SubmissionApi,
   SubmissionApiError,
 } from "../lib/submission-api";
 import type { RuntimeConfig } from "../lib/config";
+import ConsentGate from "./ConsentGate";
 import type { Locale } from "../lib/i18n";
 import {
   draftValue,
@@ -40,6 +43,7 @@ type Props = {
   locale: Locale;
   config: RuntimeConfig;
   api?: SubmissionApi;
+  consentApi?: ConsentApi;
 };
 
 type Copy = {
@@ -227,11 +231,20 @@ function mediaFailureMessage(error: SubmissionApiError, copy: Copy): string {
   return error.kind === "unavailable" ? copy.mediaUnavailable : failureMessage(error, copy);
 }
 
-export default function SubmissionFlow({ locale, config, api: suppliedApi }: Props) {
+export default function SubmissionFlow({ locale, config, api: suppliedApi, consentApi }: Props) {
   const copy = COPY[locale];
-  const api = useMemo(
+  // The call a consent refusal interrupted, or null. Held in state rather than a ref because it
+  // decides what renders: its presence *is* "show the notice".
+  const [pendingRetry, setPendingRetry] = useState<(() => Promise<unknown>) | null>(null);
+  const baseApi = useMemo(
     () => suppliedApi ?? createSubmissionApi(locale, config),
     [config, locale, suppliedApi],
+  );
+  // Any refused call is recoverable in place: the gate appears, and accepting re-runs exactly
+  // the call that was refused rather than restarting the flow.
+  const api = useMemo(
+    () => withConsentRetry(baseApi, (retry) => setPendingRetry(() => retry)),
+    [baseApi],
   );
   const [manifest, setManifest] = useState<FormManifestResponse>();
   const [draft, setDraft] = useState<StoredDraftResponse>();
@@ -620,6 +633,26 @@ export default function SubmissionFlow({ locale, config, api: suppliedApi }: Pro
     );
   }
   if (!manifest) return null;
+
+  // A blocking step, so it replaces the flow rather than sitting inside one of its branches:
+  // nothing further can succeed until the notice is accepted, and the draft lives server-side,
+  // so returning to it afterwards costs nothing.
+  if (pendingRetry) {
+    return (
+      <ConsentGate
+        locale={locale}
+        config={config}
+        api={consentApi}
+        onAccepted={async () => {
+          setPendingRetry(null);
+          setActionError(undefined);
+          // Its own failure is already reported through the normal error path.
+          await pendingRetry().catch(() => undefined);
+        }}
+        onCancel={() => setPendingRetry(null)}
+      />
+    );
+  }
 
   const signInUrl =
     typeof window === "undefined"
