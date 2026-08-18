@@ -41,6 +41,7 @@ SECOND_MINECRAFT_UUID = UUID("22222222-2222-2222-2222-222222222222")
 _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
+    Base.metadata.tables["account_profiles"],
     Base.metadata.tables["public_creator_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],

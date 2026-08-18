@@ -17,19 +17,26 @@ from squid.accounts.domain import (
     AccountConsent,
     AccountIdentity,
     AccountMerge,
+    AccountProfile,
     AliasClaim,
     ClaimMethod,
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    CreatorProfileRecord,
+    CreditedAlias,
     CreditPreview,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
+    ProfileLink,
+    ProfileUpdate,
     fold_creator_name,
 )
+from squid.accounts.domain.profiles import UNSET
 from squid.accounts.errors import (
+    AccountIdentityNotFoundError,
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
@@ -38,6 +45,7 @@ from squid.accounts.errors import (
 )
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.infrastructure.models import AccountProfile as AccountProfileModel
 from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
 from squid.accounts.infrastructure.models import CreatorAliasClaim as CreatorAliasClaimModel
 from squid.accounts.infrastructure.models import PublicCreatorRedirect
@@ -78,6 +86,21 @@ def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
         subject=model.subject,
         display_name=model.display_name,
         verified_at=model.verified_at,
+        is_public=model.is_public,
+        avatar_key=model.avatar_key,
+    )
+
+
+def _to_profile(model: AccountProfileModel) -> AccountProfile:
+    return AccountProfile(
+        account_id=model.account_id,
+        display_name=model.display_name,
+        bio=model.bio,
+        pronouns=model.pronouns,
+        links=tuple(ProfileLink(label=link["label"], url=link["url"]) for link in model.links),
+        hidden=model.hidden,
+        avatar_identity_id=model.avatar_identity_id,
+        updated_at=model.updated_at,
     )
 
 
@@ -140,6 +163,7 @@ class AccountRepository:
             )
             session.add(account)
             await session.flush()
+            session.add(AccountProfileModel(account_id=account.id))
             rows = [self._identity_model(account.id, identity) for identity in identities]
             session.add_all(rows)
             # The flush populates `id` from RETURNING, and every other column `_to_identity`
@@ -191,6 +215,9 @@ class AccountRepository:
             candidate = AccountModel()
             session.add(candidate)
             await session.flush()
+            # Rides the same transaction as the candidate account: if the identity insert loses
+            # the race below, deleting the candidate takes this row with it via CASCADE.
+            session.add(AccountProfileModel(account_id=candidate.id))
             inserted_id = await session.scalar(
                 insert(AccountIdentityModel)
                 .values(
@@ -233,6 +260,136 @@ class AccountRepository:
                 .returning(AccountIdentityModel.id)
             )
             return removed.first() is not None
+
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
+        """Remove one identity by internal id, returning it, or `None` when it is not this account's.
+
+        Addressed by id rather than by provider because an account can hold two identities from the
+        same provider: a merge moves every row across, and picking "the Discord one" would then be
+        a coin flip.
+        """
+        async with self._session_factory.begin() as session:
+            removed = await session.scalar(
+                delete(AccountIdentityModel)
+                .where(
+                    AccountIdentityModel.id == identity_id,
+                    AccountIdentityModel.account_id == account_id,
+                )
+                .returning(AccountIdentityModel)
+            )
+            # An avatar sourced from this identity clears itself: the foreign key is ON DELETE SET
+            # NULL precisely so nothing has to remember to do it here.
+            return None if removed is None else _to_identity(removed)
+
+    async def count_identities(self, account_id: int) -> int:
+        """Return how many identities an account currently holds."""
+        async with self._session_factory() as session:
+            return (
+                await session.scalar(
+                    select(func.count())
+                    .select_from(AccountIdentityModel)
+                    .where(AccountIdentityModel.account_id == account_id)
+                )
+                or 0
+            )
+
+    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
+        """Publish or withhold one identity on the account's public profile."""
+        async with self._session_factory.begin() as session:
+            updated = await session.scalar(
+                update(AccountIdentityModel)
+                .where(
+                    AccountIdentityModel.id == identity_id,
+                    AccountIdentityModel.account_id == account_id,
+                )
+                .values(is_public=is_public)
+                .returning(AccountIdentityModel)
+            )
+            if updated is None:
+                raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
+            return _to_identity(updated)
+
+    async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
+        """Record the provider rendering key an avatar URL needs.
+
+        Separate from the profile write because it is not a user edit: the bot refreshes it
+        opportunistically whenever it happens to hold a fresh `discord.User`.
+        """
+        async with self._session_factory.begin() as session:
+            await session.execute(
+                update(AccountIdentityModel)
+                .where(
+                    AccountIdentityModel.id == identity_id,
+                    AccountIdentityModel.account_id == account_id,
+                )
+                .values(avatar_key=avatar_key)
+            )
+
+    async def get_profile(self, account_id: int) -> AccountProfile | None:
+        """Return an account's own profile, visibility flags and all."""
+        async with self._session_factory() as session:
+            model = await session.get(AccountProfileModel, account_id)
+            # Every account is given a profile row, but a read that predates its creation must
+            # render as an empty profile rather than a 500.
+            if model is None:
+                exists = await session.scalar(select(AccountModel.id).where(AccountModel.id == account_id))
+                return None if exists is None else AccountProfile.empty(account_id)
+            return _to_profile(model)
+
+    async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
+        """Apply a validated partial edit, creating the profile row if it is somehow missing."""
+        async with self._session_factory.begin() as session:
+            account = await session.get(AccountModel, account_id)
+            if account is None:
+                raise AccountNotFoundError(account_id)
+            model = await session.get(AccountProfileModel, account_id, with_for_update=True)
+            if model is None:
+                model = AccountProfileModel(account_id=account_id)
+                session.add(model)
+                await session.flush()
+            avatar_identity_id = update_request.avatar_identity_id
+            if avatar_identity_id is not UNSET and avatar_identity_id is not None:
+                # The foreign key cannot express "and it must be yours" without a composite key
+                # that would break ON DELETE SET NULL, so ownership is checked here.
+                owner = await session.scalar(
+                    select(AccountIdentityModel.account_id).where(AccountIdentityModel.id == avatar_identity_id)
+                )
+                if owner != account_id:
+                    raise AccountIdentityNotFoundError(avatar_identity_id, account_id=account_id)
+            updated = update_request.apply(_to_profile(model))
+            model.display_name = updated.display_name
+            model.bio = updated.bio
+            model.pronouns = updated.pronouns
+            model.links = [{"label": link.label, "url": link.url} for link in updated.links]
+            model.hidden = updated.hidden
+            model.avatar_identity_id = updated.avatar_identity_id
+            model.updated_at = _now()
+            await session.flush()
+            return _to_profile(model)
+
+    async def clear_profile(self, account_id: int) -> AccountProfile:
+        """Reset a profile to the state a new account starts with.
+
+        Staff moderation. Clearing leaves the profile *visible*: `hidden` is the owner's control,
+        and a takedown that also hid the page would silently take that decision away from them.
+        """
+        async with self._session_factory.begin() as session:
+            model = await session.get(AccountProfileModel, account_id, with_for_update=True)
+            if model is None:
+                account = await session.get(AccountModel, account_id)
+                if account is None:
+                    raise AccountNotFoundError(account_id)
+                model = AccountProfileModel(account_id=account_id)
+                session.add(model)
+            model.display_name = None
+            model.bio = None
+            model.pronouns = None
+            model.links = []
+            model.hidden = False
+            model.avatar_identity_id = None
+            model.updated_at = _now()
+            await session.flush()
+            return _to_profile(model)
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge:
         """Move resources to one account and preserve the absorbed public ID as a redirect."""
@@ -308,6 +465,59 @@ class AccountRepository:
                 )
             ).all()
             return CreatorProfile(public_id=public_id, aliases=tuple(aliases), canonical_public_id=canonical_id)
+
+    async def get_creator_profile_record(self, public_id: uuid.UUID) -> CreatorProfileRecord | None:
+        """Return everything known about one creator, before visibility is applied.
+
+        Deliberately unfiltered: `present_public_profile` decides what a stranger sees, and it can
+        only be the one authority on that if persistence hands it the whole truth.
+        """
+        async with self._session_factory() as session:
+            account = await session.scalar(select(AccountModel).where(AccountModel.public_creator_id == public_id))
+            canonical_id = public_id
+            if account is None:
+                account = await session.scalar(
+                    select(AccountModel)
+                    .join(PublicCreatorRedirect, PublicCreatorRedirect.target_account_id == AccountModel.id)
+                    .where(PublicCreatorRedirect.retired_public_creator_id == public_id)
+                )
+                if account is None:
+                    return None
+                canonical_id = account.public_creator_id
+
+            profile_model = await session.get(AccountProfileModel, account.id)
+            profile = AccountProfile.empty(account.id) if profile_model is None else _to_profile(profile_model)
+            identities = (
+                await session.scalars(
+                    select(AccountIdentityModel)
+                    .where(AccountIdentityModel.account_id == account.id)
+                    .order_by(AccountIdentityModel.provider, AccountIdentityModel.id)
+                )
+            ).all()
+            # One grouped count for every alias at once: a creator page renders every name they
+            # hold, and a count per name would be an N+1 on the most public read in the system.
+            credit_counts = (
+                select(_BUILD_CREDITS.c.alias_id, func.count().label("build_count"))
+                .group_by(_BUILD_CREDITS.c.alias_id)
+                .subquery()
+            )
+            alias_rows = (
+                await session.execute(
+                    select(CreatorAliasModel.name, func.coalesce(credit_counts.c.build_count, 0))
+                    .outerjoin(credit_counts, credit_counts.c.alias_id == CreatorAliasModel.id)
+                    .where(CreatorAliasModel.account_id == account.id)
+                    .order_by(CreatorAliasModel.normalized_name)
+                )
+            ).all()
+            return CreatorProfileRecord(
+                public_id=public_id,
+                account_id=account.id,
+                profile=profile,
+                identities=tuple(_to_identity(identity) for identity in identities),
+                aliases=tuple(CreditedAlias(name=name, build_count=count) for name, count in alias_rows),
+                joined_at=account.created_at,
+                canonical_public_id=canonical_id,
+            )
 
     async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
         """Claim an alias only if it remains unclaimed at update time."""

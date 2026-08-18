@@ -18,6 +18,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.default import DefaultExecutionContext
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.attributes import get_history
@@ -93,6 +94,95 @@ class AccountIdentity(Base):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
     created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    """Whether this identity appears on the account's public creator profile."""
+
+    avatar_key: Mapped[str | None] = mapped_column(Text, default=None)
+    """Provider rendering key, where the subject alone is not enough to build an avatar URL.
+
+    Discord avatar URLs need the hash, which only the gateway supplies. Java heads derive from
+    the UUID, so this stays NULL there.
+    """
+
+
+class AccountProfile(Base):
+    """What an account chooses to publish about itself on its creator page.
+
+    A child of `accounts` rather than more columns on it. The account row is an identity anchor
+    that thirty-odd foreign keys point at and that link and merge paths lock `FOR UPDATE`;
+    profile text is user-edited prose with an entirely different write cadence, and widening the
+    anchor to carry it would make every identity read pay for a bio.
+    """
+
+    __tablename__ = "account_profiles"
+    __table_args__ = (
+        # Length and shape only. The application owns normalization (NFKC-fold, trim, control
+        # character rejection) for the same reason `creator_aliases.normalized_name` does, so
+        # these catch a hand-written SQL insert rather than defining the value.
+        CheckConstraint(
+            "display_name IS NULL OR char_length(display_name) BETWEEN 1 AND 64",
+            name="account_profiles_display_name_length",
+        ),
+        CheckConstraint(
+            "display_name IS NULL OR display_name = btrim(display_name)",
+            name="account_profiles_display_name_trimmed",
+        ),
+        CheckConstraint("bio IS NULL OR char_length(bio) BETWEEN 1 AND 500", name="account_profiles_bio_length"),
+        CheckConstraint(
+            "pronouns IS NULL OR char_length(pronouns) BETWEEN 1 AND 40",
+            name="account_profiles_pronouns_length",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(links) = 'array' AND jsonb_array_length(links) <= 10",
+            name="account_profiles_links_shape",
+        ),
+        # An unindexed foreign key makes deleting an identity scan this table; the same defect
+        # class was closed across the schema in b9d3e6a1f8c5.
+        Index("account_profiles_avatar_identity_idx", "avatar_identity_id"),
+    )
+    account_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", name="account_profiles_account_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    display_name: Mapped[str | None] = mapped_column(Text, default=None)
+    """Presentation only, deliberately not a `creator_aliases` name: renaming yourself here moves
+    no build credit and needs no staff review."""
+
+    bio: Mapped[str | None] = mapped_column(Text, default=None)
+    pronouns: Mapped[str | None] = mapped_column(Text, default=None)
+    links: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
+    )
+    """External links as `[{"label": ..., "url": ...}]`.
+
+    JSONB rather than a child table: nothing queries links, and every write replaces the whole
+    list from one owner, so a table would buy referential integrity to nothing and cost a join on
+    the hottest public read.
+    """
+
+    hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    """Whether to withhold the profile. A hidden profile still serves its aliases and build
+    credits, because a creator page that vanished would strand every build crediting it."""
+
+    avatar_identity_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("account_identities.id", name="account_profiles_avatar_identity_id_fkey", ondelete="SET NULL"),
+        default=None,
+    )
+    """The linked identity this profile's avatar is rendered from.
+
+    `SET NULL` so unlinking that identity clears the avatar rather than leaving a render pointing
+    at a subject we no longer hold. Ownership — that the identity belongs to this same account —
+    is checked in the repository, since the composite foreign key that would enforce it here
+    cannot coexist with `ON DELETE SET NULL`.
+    """
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    updated_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
 
