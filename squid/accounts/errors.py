@@ -62,6 +62,66 @@ class AccountNotFoundError(NotFoundError):
         self.subject = subject
 
 
+class AccountIdentityNotFoundError(NotFoundError):
+    """The account has no identity with the requested internal id.
+
+    Identities are addressed by id rather than by provider because an account can legitimately
+    hold two of the same provider — a merge moves every identity row across.
+    """
+
+    default_message = _("That linked identity does not belong to your account.")
+    default_title = _("Identity not found")
+    default_code = ErrorCode.ACCOUNT_IDENTITY_NOT_FOUND
+    default_resource = "account_identity"
+    default_end_user_action = _("List your linked identities and try again with one of those.")
+
+    def __init__(self, identity_id: int, *, account_id: int | None = None) -> None:
+        context: dict[str, JSONValue] = {"identity_id": identity_id}
+        if account_id is not None:
+            context["account_id"] = account_id
+        super().__init__(context=context, public_context={"identity_id": identity_id})
+        self.identity_id = identity_id
+        self.account_id = account_id
+
+
+class LastIdentityError(ConflictError):
+    """Unlinking the account's only identity would leave nobody able to sign in.
+
+    Nothing else can re-attach an identity to an orphaned account: every sign-in path starts from
+    a provider subject and looks the account up by it. Deleting the account is a different
+    operation with different consequences for build credit, so this refuses rather than guessing.
+    """
+
+    default_message = _("You cannot unlink your only remaining identity.")
+    default_title = _("Last identity")
+    default_code = ErrorCode.LAST_IDENTITY
+    default_resource = "account_identity"
+    default_end_user_action = _("Link another identity first, then unlink this one.")
+
+    def __init__(self, *, account_id: int | None = None) -> None:
+        super().__init__(context={} if account_id is None else {"account_id": account_id})
+        self.account_id = account_id
+
+
+class InvalidProfileError(ValidationError):
+    """Profile content failed validation."""
+
+    default_message = _("The profile data is invalid.")
+    default_title = _("Invalid profile")
+    default_code = ErrorCode.INVALID_PROFILE
+    default_resource = "account_profile"
+
+
+class InvalidMergeCodeError(ValidationError):
+    """A merge code is unknown, already spent, or expired."""
+
+    default_message = _("That merge code is invalid or expired.")
+    default_title = _("Invalid merge code")
+    default_code = ErrorCode.INVALID_MERGE_CODE
+    default_resource = "account_merge"
+    default_end_user_action = _("Generate a new merge code from the account you want to absorb, then try again.")
+
+
 class InvalidMergeProofError(ValidationError):
     """Both accounts were not authenticated recently enough for a merge."""
 
