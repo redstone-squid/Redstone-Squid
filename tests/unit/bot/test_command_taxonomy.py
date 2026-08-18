@@ -53,24 +53,12 @@ UNGATED_COMMANDS = frozenset(
         "info form",
         "info invite",
         "info source",
-        # Anyone in a guild may open a poll, so `poll create` needs no node. Closing and
-        # refreshing one are authorized against the session rather than the caller: both
-        # run `VoteSessionSnapshot.can_close`, which admits the poll's author as well as
-        # holders of `vote.poll.close_any`. A node on the command could not express "or
-        # you opened this one", and would lock authors out of their own polls.
-        "poll",
-        "poll close",
-        "poll create",
-        "poll refresh",
         "search",
         "tag",
         "tag apply",
         "tag propose",
         "version",
         "version list",
-        "vote",
-        "vote poll",
-        "vote delete",
     }
 )
 """Commands that legitimately declare no permission node: the public ones.
@@ -156,10 +144,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "test",
         "whoami",
     ),
-    # Polls got their own top-level group in `509406c2`, because a poll is not a vote on
-    # a build: it stands alone, has no submission behind it, and is closed by whoever
-    # opened it. `vote poll` survives only as a deprecated alias for `poll create`.
-    "poll": ("close", "create", "refresh"),
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias",),
     "role": (
@@ -206,7 +190,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
-    "vote": ("delete", "poll"),
 }
 
 
@@ -448,6 +431,20 @@ def test_the_error_group_binds_a_reference_from_the_prefix_form() -> None:
     assert error.invoke_without_command is True
     assert error.fallback == "show"
     assert "reference" in error.clean_params
+
+
+def test_polls_are_one_app_only_command() -> None:
+    """A poll opens a modal, which a prefix invocation cannot do (audit C7).
+
+    `poll` was a hybrid group whose members answered "use the slash command `/poll
+    create`", so the prefix tree advertised three entry points and honoured none.
+    Declaring it app-only is the audit's other option, and the group had nothing left to
+    hold once `close` and `refresh` moved onto the poll card itself.
+    """
+    cog = VoteCog.__new__(VoteCog)
+
+    assert [command.qualified_name for command in cog.__cog_app_commands__] == ["poll"]
+    assert not [command.qualified_name for command in cog.__cog_commands__]
 
 
 def test_the_settings_group_opens_the_panel_from_its_fallback() -> None:

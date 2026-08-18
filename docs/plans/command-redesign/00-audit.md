@@ -34,7 +34,9 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   `vote delete`, `build recalc`, `redstoner resync` all take a `discord.Message`, which in
   slash form means pasting a message link. These are right-click actions; only build edit has a
   context menu today. Adding context menus (Discord allows 5 per app — budget them) would let
-  several commands disappear.
+  several commands disappear. *(Phase 5.1 settled the poll three: `close` and `refresh` became
+  buttons on the card, which is cheaper than a context menu because it costs none of the five,
+  and `vote delete` took the second slot. `build recalc` and `redstoner resync` remain.)*
 - **C5 — Raw internals leak into user-facing output.** `build queue` prints the submitter's
   numeric Discord ID instead of a mention or name; `restrictions search` prints
   `restriction_id: name` lines; `patterns search` prints match scores; `admin records-lookup`
@@ -48,7 +50,8 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   interaction ("Use the slash command to open the editor"): `poll create`,
   `settings voting emojis`, and (until phase 1) `build submit-full`. Each should either work
   from prefix or be declared app-only, so the taxonomy stops advertising entry points that
-  refuse to run.
+  refuse to run. *(All three settled: phase 1 for `build submit-full`, phase 4 for
+  `voting emojis`, and phase 5.1 declared `/poll` app-only.)*
 
 ## Per-group findings
 
@@ -112,12 +115,13 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
 - `measure-timing` and `detect-lattice` are schematic tools living directly under `build`
   while four other schematic tools live under `build schematic` — move them in.
 
-### `/vote`, `/poll` *(phase 5)*
-- `vote` retains two members: the deprecated `vote poll` alias and `vote delete`. Retire the
+### `/vote`, `/poll` *(phase 5.1, done 2026-08-19)*
+- ~~`vote` retains two members: the deprecated `vote poll` alias and `vote delete`. Retire the
   alias, move deletion votes to a context menu or `/poll delete-message`, and the whole `vote`
-  group disappears.
-- `poll close`/`poll refresh` take message links (C4); both are also buttons-on-the-poll
-  candidates, which would empty the `poll` group down to `create`.
+  group disappears.~~ *(Context menu. The group is gone.)*
+- ~~`poll close`/`poll refresh` take message links (C4); both are also buttons-on-the-poll
+  candidates, which would empty the `poll` group down to `create`.~~ *(Buttons on the poll.
+  `create` then had no group left to sit in, so `/poll` is one app-only command.)*
 
 ### `/account` *(phase 5)*
 - Self-service (`link`, `unlink`, `refresh`, `claim`) and staff review (`claims`,
