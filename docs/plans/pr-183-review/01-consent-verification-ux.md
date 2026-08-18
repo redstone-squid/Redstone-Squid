@@ -430,4 +430,28 @@ Things found while building that the plan did not predict:
   are their own commits.
 - Two latent bugs found in `verification_codes` while adding to it are filed in
   [`BUGS.md`](../../../BUGS.md): the `SmallInteger` primary key exhausts after 32,767 codes, and the
-  code digest has no index.
+  code digest has no index. Both are still open — unrelated later commits (`db: index the foreign
+  keys that referential actions scan`, `db: close four small schema defects`) touched other tables,
+  not this one.
+- **The autocomplete does not call `present_claimant`, on purpose.** §4 said to "build `description`
+  from `present_claimant`", and the disposition table says "one `present_claimant` serves all four
+  surfaces" — that is now slightly wrong. `records.py` has its own `_claimant_description`
+  (`squid/suggestions/infrastructure/providers/records.py:86-99`), with a docstring explaining why:
+  a Discord mention renders as a raw, unclickable `<@id>` string in an autocomplete row rather than
+  as a chip, so preferring a mention there (as `present_claimant` does) would be worse than falling
+  through to the Java name. Pinned by
+  `test_the_autocomplete_prefers_a_readable_name_over_a_snowflake`
+  (`tests/unit/bot/test_verify_messages.py:218-227`). Three of the four surfaces (queue, approve,
+  reject) do share `present_claimant`; the autocomplete's divergence is deliberate, not a gap.
+- **Verified against current code at `f4cd124b` (2026-08-18).** All five subplans' claims hold:
+  the card-based consent view, the two-step reservation with `LinkReservationExpiredError`, the
+  shared `_reconciliation_lines` behind `_link_message`/`_refresh_message`, the four claimant
+  surfaces, and `AliasAlreadyClaimedError.with_holder_name`. The commit hashes recorded in
+  "Delivery" no longer resolve (`git show c4f30e83` etc. fail) — an unrelated history rewrite
+  changed every hash in the repo after this work landed, including the migration revision id
+  `c4e8f2a1b6d3`'s neighbors; the migration id itself is stable and still the sole `alembic head`.
+  Content was matched by commit message instead: `accounts: let a verification code be held before
+  it is spent` (`5a2b716b`), `bot: preview the link a consent prompt is asking for` (`b0566ebc`),
+  `bot: describe link and refresh in the same words` (`72b82a63`), `bot: name the claimant wherever
+  a claim is shown` (`77cd618e`), `accounts: name the creator holding a contested alias`
+  (`98dd81ab`).

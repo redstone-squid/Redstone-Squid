@@ -35,7 +35,11 @@ deleting coverage.
 9. Replace the hand-maintained entity counts in `squid/persistence/alembic_entities.py` with a
    self-checking parse assertion, and remove the bump instructions the counts forced into two other
    plan documents. Detailed in [the dispositions](13-test-tooling-dispositions.md#tooling); this is
-   the one thread here that lands on a source file rather than a test.
+   the one thread here that lands on a source file rather than a test. **Done:**
+   `parse_entities(sql)` plus the `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` guard and
+   `tests/unit/persistence/test_alembic_entities.py` have landed, the stale bump instructions in
+   `docs/plans/rbac.md` and `docs/plans/durable-queues.md` now point at the constants instead, and
+   `docs/new-migration.md:13` points at the current `squid/persistence/postgres_entities.sql` path.
 
 ## Validation
 

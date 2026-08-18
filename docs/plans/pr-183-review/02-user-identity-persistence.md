@@ -362,7 +362,7 @@ correctly regardless, since it is the same pass a later Unicode change would nee
 3. `accounts: refresh linked Java identities on demand` — subplan 3.
 4. `accounts: name errors by provider and subject` — subplan 4.
 5. `accounts: batch identity loads` — subplan 5.
-6. `accounts: harden the verification code` — subplan 6, landed 2026-08-17 in `8498da21`.
+6. `accounts: harden the verification code` — subplan 6, landed 2026-08-17 in `921ac54a`.
 
 Replying on GitHub and resolving threads requires separate explicit authorization, per the
 [directory README](README.md).
