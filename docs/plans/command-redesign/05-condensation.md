@@ -25,7 +25,7 @@ three different ad-hoc truncation schemes standing in for a paginator.
 | 5.3 | `/notifications`: one panel and one `follow`, seven commands down to two (C3, C5) | **Delivered** |
 | 5.4 | `/account` claim review moves onto the `claims` list as buttons | Not started |
 | 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into `perm can` | **Delivered** |
-| 5.6 | A shared list paginator, applied to `build queue`, `version list`, `account claims` and the records diagnostics (C6) | Not started |
+| 5.6 | A shared list paginator, applied to `version list`, `account claims` and the records diagnostics (C6). The module itself lands in phase 6, whose `build queue` needs it first | Not started |
 | 5.7 | One ephemerality rule, applied bot-wide (C2) | Not started |
 
 Ordering is by independence, not by value: each step is a commit that stands alone, and the
