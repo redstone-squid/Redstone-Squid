@@ -65,16 +65,20 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   language (`width:5` already exists) and demoting the enums.
 - `restrictions add-alias` is a staff taxonomy edit living in a public lookup group.
 
-### `/error` *(phase 3)*
-- **Root cause of the prefix complaint found:** `hybrid_group(name="error", fallback="show")`
-  without `invoke_without_command=True`. On the prefix side a group only runs its callback
-  without parsing arguments, so `!error <ref>` cannot bind `reference` and dies. The slash
-  fallback works; the prefix form never could.
+### `/error` *(phase 3, done 2026-08-19)*
+- ~~**Root cause of the prefix complaint found:** `hybrid_group(name="error", fallback="show")`
+  without `invoke_without_command=True`.~~ **Wrong.** `HybridGroup.__init__` sets that flag
+  unconditionally, and `Group.invoke` rewinds the argument view when the first word is not a
+  subcommand, so `!error <ref>` has always bound `reference`. The prefix form's actual defect
+  was the opposite one: it worked, and `Context.send` drops `ephemeral` without an interaction,
+  so it posted the traceback into the channel. See
+  [03-diagnostics.md](03-diagnostics.md).
 - The full traceback *is* already attached as `error-<ref>.txt` with the log tail, with a
   1200-char inline preview. If that still reads as "can't expand", the fix is interaction
-  design (expand button / paged inline view), not data availability.
+  design (expand button / paged inline view), not data availability. *(Paged inline view, with
+  the log tail paging after the traceback.)*
 - `error recent` lists references but offers no way to open one — each line should be
-  clickable (select/buttons) instead of making the user retype the reference.
+  clickable (select/buttons) instead of making the user retype the reference. *(Select.)*
 
 ### `/settings` *(phase 4)*
 - `get`/`set`/`clear` operate on exactly one key per invocation, and `set` only understands
