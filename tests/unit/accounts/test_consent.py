@@ -2,7 +2,13 @@
 
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, consent_refresh_required
+from squid.accounts.domain import (
+    CURRENT_CONSENT_VERSION,
+    PRIVACY_NOTICE,
+    Account,
+    AccountConsent,
+    consent_refresh_required,
+)
 
 BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -46,3 +52,37 @@ def test_the_account_aggregate_delegates_to_the_same_predicate() -> None:
     assert not grandfathered.needs_consent_refresh
     assert stale.needs_consent_refresh
     assert not current.needs_consent_refresh
+
+
+def test_the_notice_names_everything_it_is_consent_to() -> None:
+    """The notice fronts every gated action, so it has to describe all of them.
+
+    Pinned as substrings rather than as exact prose: the wording is meant to be edited, but a
+    category quietly dropping out of it turns the receipt into consent to something narrower
+    than what actually happens.
+    """
+    notice = PRIVACY_NOTICE.casefold()
+
+    assert "discord user id" in notice  # what is stored
+    assert "minecraft uuid" in notice
+    assert "build credit" in notice  # what is claimed
+    assert "claim for staff to review" in notice  # and what is not taken from others
+    assert "submitting a build publishes it" in notice  # what submitting does
+    assert "public catalogue" in notice
+    assert "licence" in notice  # deferred to the per-submission choice, but named
+    assert "creator page is public" in notice  # what is published about you
+    assert "notifications are covered by this notice" in notice
+    assert "cancelling stores nothing" in notice  # and what declining costs
+
+
+def test_the_notice_is_plain_text_in_paragraphs() -> None:
+    """It is rendered into a Discord card, an HTML page and a terminal alike."""
+    assert "\n\n" in PRIVACY_NOTICE
+    assert "<" not in PRIVACY_NOTICE
+
+
+def test_the_version_is_an_iso_date() -> None:
+    """Receipts sort and compare as text, which only works while the format holds."""
+    year, month, day = CURRENT_CONSENT_VERSION.split("-")
+    assert (len(year), len(month), len(day)) == (4, 2, 2)
+    assert CURRENT_CONSENT_VERSION.replace("-", "").isdigit()
