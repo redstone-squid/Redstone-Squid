@@ -1,7 +1,12 @@
 # De-privileging Discord in the account system
 
-> **Status.** Done. Every milestone landed; the amendments building it forced are recorded
-> inline below, each marked **Amended in build**.
+> **Status.** Implemented on 2026-08-16. Every milestone (M0-M11) landed; the amendments
+> building it forced are recorded inline below, each marked **Amended in build**. Re-verified
+> in-tree on 2026-08-18: `Caller.discord_id` does not exist, the architecture ratchet
+> (`tests/architecture/test_boundaries.py::test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account`)
+> enforces it, `IdentityProvider` is `{DISCORD, JAVA, BEDROCK}` with `AccountIdentity.for_provider`
+> as the exhaustive format authority, and every milestone commit (M0 through M11) is present in
+> `git log`. No further work is outstanding.
 >
 > Discord is now one `IdentityProvider` among several, reached through an OAuth adapter.
 > Every account-scoped write is keyed on `account_id`, and `Caller.discord_id` no longer
