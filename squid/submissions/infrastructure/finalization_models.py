@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class SubmissionFinalizationJob(Base, kw_only=True):
@@ -78,7 +78,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
@@ -89,10 +89,10 @@ class SubmissionFinalizationJob(Base, kw_only=True):
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
     attention_issues: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default_factory=list)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -120,5 +120,5 @@ class SubmissionFinalizationResult(Base, kw_only=True):
     target_key: Mapped[str] = mapped_column(Text, nullable=False)
     provenance: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class ApiKey(Base):
@@ -46,7 +46,7 @@ class ApiKey(Base):
     )
     """Account that created the credential, when known."""
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     """When the credential was created."""
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

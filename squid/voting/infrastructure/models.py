@@ -20,7 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, StrEnumText
+from squid.persistence.types import InstantUTC, StrEnumText, now
 from squid.voting.domain import VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
 
 _KIND_VALUES = ", ".join(f"'{kind.value}'" for kind in VoteKind)
@@ -68,7 +68,7 @@ class VoteSession(Base, kw_only=True):
     pass_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     fail_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
     votes: Mapped[list[Vote]] = relationship(

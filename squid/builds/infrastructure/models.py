@@ -34,7 +34,7 @@ from squid.builds.domain import (
 )
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, IntEnumSmallInt
+from squid.persistence.types import InstantUTC, IntEnumSmallInt, now
 
 if TYPE_CHECKING:
     from squid.tags.infrastructure.models import BuildTagAssignment
@@ -138,10 +138,10 @@ class Build(Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
     submission_time: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     edited_time: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 

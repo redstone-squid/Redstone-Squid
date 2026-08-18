@@ -32,7 +32,7 @@ from squid.accounts.domain import (
     fold_creator_name,
 )
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
 """Generated from the enum so the CHECK cannot drift from the domain."""
@@ -68,7 +68,7 @@ class Account(Base):
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
@@ -97,10 +97,10 @@ class AccountIdentity(Base):
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
     verified_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     """Whether this identity appears on the account's public creator profile."""
@@ -186,10 +186,10 @@ class AccountProfile(Base):
     cannot coexist with `ON DELETE SET NULL`.
     """
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -205,7 +205,7 @@ class PublicCreatorRedirect(Base):
         nullable=False,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -260,7 +260,7 @@ class CreatorAlias(Base):
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_method: Mapped[ClaimMethod | None] = mapped_column(Text, default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -312,7 +312,7 @@ class CreatorAliasClaim(Base):
     )
     status: Mapped[ClaimStatus] = mapped_column(Text, nullable=False, default=ClaimStatus.PENDING)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     resolved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     resolved_by_account_id: Mapped[int | None] = mapped_column(
@@ -339,7 +339,7 @@ class VerificationCode(Base):
     username: Mapped[str] = mapped_column(Text, nullable=False, default="")
     valid: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     expires: Mapped[Instant] = mapped_column(
         InstantUTC(),
@@ -385,7 +385,7 @@ class VerificationAttempt(Base):
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -425,5 +425,5 @@ class AccountMergeTicket(Base):
     `RecentAccountProof` accepts the authentication that minted it."""
 
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

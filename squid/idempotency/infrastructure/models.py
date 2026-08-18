@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class IdempotencyRequest(Base, kw_only=True):
@@ -53,7 +53,7 @@ class IdempotencyRequest(Base, kw_only=True):
     response_body_key_id: Mapped[str | None] = mapped_column(Text, default=None)
     response_body_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
