@@ -14,11 +14,13 @@ from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
     DISCORD_YELLOW,
+    MAX_DISPLAY_CHARACTERS,
     CardField,
     StaticLayout,
     card_layout,
-    text_layout,
+    truncate_display_text,
 )
+from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
 
@@ -105,8 +107,17 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> Sta
 
 
 def render_generic_poll(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> StaticLayout:
-    """Render a user-created poll, honouring its visibility setting."""
-    return text_layout(generic_poll_text(snapshot, voter_discord_ids))
+    """Render a user-created poll, honouring its visibility setting.
+
+    An open poll carries its own close and refresh controls; a closed one has nothing left
+    to do, so its card is inert and stays readable as a record.
+    """
+    body = discord.ui.TextDisplay(
+        truncate_display_text(generic_poll_text(snapshot, voter_discord_ids), MAX_DISPLAY_CHARACTERS)
+    )
+    if snapshot.status is VoteStatus.CLOSED:
+        return StaticLayout(body)
+    return StaticLayout(body, poll_controls())
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:

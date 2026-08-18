@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 03:29+0000\n"
+"POT-Creation-Date: 2026-08-19 04:32+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -838,6 +838,10 @@ msgstr ""
 msgid "Cannot edit this build"
 msgstr ""
 
+#: squid/bot/voting/vote.py:227
+msgid "Cannot vote on this message"
+msgstr ""
+
 #: squid/permissions/domain/catalogue.py:385
 msgid "Change a starboard's configuration."
 msgstr ""
@@ -1150,6 +1154,10 @@ msgstr ""
 #: squid/bot/diagnostics.py:61
 #, python-brace-format
 msgid "Deleted {count} stored error reports."
+msgstr ""
+
+#: squid/bot/voting/vote.py:246
+msgid "Deletion vote opened."
 msgstr ""
 
 #: squid/bot/settings_view.py:54
@@ -2174,7 +2182,7 @@ msgstr ""
 msgid "Only the person this prompt is for can answer it."
 msgstr ""
 
-#: squid/bot/voting/vote.py:41
+#: squid/bot/voting/actors.py:30
 msgid "Only the poll creator or staff can do that."
 msgstr ""
 
@@ -2365,11 +2373,11 @@ msgstr ""
 msgid "Please try again later."
 msgstr "请稍后再试。"
 
-#: squid/bot/voting/vote.py:268
+#: squid/bot/voting/controls.py:71
 msgid "Poll closed."
 msgstr ""
 
-#: squid/bot/voting/vote.py:294
+#: squid/bot/voting/controls.py:102
 msgid "Poll weights refreshed."
 msgstr ""
 
@@ -3126,8 +3134,8 @@ msgstr ""
 msgid "Thanks. Run `/account profile-edit` again to open the editor."
 msgstr ""
 
-#: squid/bot/voting/vote.py:231
-msgid "Thanks. Run `/poll create` again to open the editor."
+#: squid/bot/voting/vote.py:206
+msgid "Thanks. Run `/poll` again to open the editor."
 msgstr ""
 
 #: squid/bot/verify.py:160
@@ -3176,11 +3184,11 @@ msgstr ""
 msgid "That merge code is invalid or expired."
 msgstr ""
 
-#: squid/bot/voting/vote.py:36
+#: squid/bot/voting/actors.py:25
 msgid "That message is not an open vote."
 msgstr ""
 
-#: squid/bot/voting/vote.py:39
+#: squid/bot/voting/actors.py:28
 msgid "That option is not available on this vote."
 msgstr ""
 
@@ -3188,11 +3196,11 @@ msgstr ""
 msgid "That role is not from this server."
 msgstr ""
 
-#: squid/bot/voting/vote.py:40
+#: squid/bot/voting/actors.py:29
 msgid "That vote belongs to a different server."
 msgstr ""
 
-#: squid/bot/voting/vote.py:37
+#: squid/bot/voting/actors.py:26
 msgid "That vote is already closed."
 msgstr ""
 
@@ -3407,13 +3415,9 @@ msgstr ""
 msgid "The media job claim is no longer valid."
 msgstr ""
 
-#: squid/bot/voting/vote.py:394
+#: squid/bot/voting/vote.py:228
 msgid "The message is not from this guild."
 msgstr "该消息不是来自此服务器。"
-
-#: squid/bot/voting/vote.py:387
-msgid "The message to hold a deletion vote for."
-msgstr "要发起删除投票的消息。"
 
 #: squid/starboard/domain/models.py:111
 msgid "The minimum message age cannot exceed the maximum."
@@ -3956,7 +3960,7 @@ msgstr "你不能在此处使用此命令。"
 msgid "You do not have a Minecraft account linked."
 msgstr ""
 
-#: squid/bot/voting/vote.py:38
+#: squid/bot/voting/actors.py:27
 msgid "You do not have a trusted role."
 msgstr "你没有受信任的身份组。"
 
@@ -4583,6 +4587,11 @@ msgstr ""
 msgid "{count} reports share this reference; this is the newest."
 msgstr ""
 
+#: squid/bot/voting/controls.py:107
+#, python-brace-format
+msgid "{count} voter(s) could not be resolved, so their cached weight was kept."
+msgstr ""
+
 #: squid/bot/submission/records.py:108
 #, python-brace-format
 msgid ""
@@ -4814,7 +4823,7 @@ msgstr ""
 msgid "{user} doesn't have a creator page."
 msgstr ""
 
-#: squid/bot/voting/vote.py:326
+#: squid/bot/voting/vote.py:278
 #, python-brace-format
 msgid "{user}, voting stores your Discord user ID. Run `/account consent` first."
 msgstr ""
@@ -5092,4 +5101,10 @@ msgstr ""
 
 #~ msgid "{setting}: {value}\n"
 #~ msgstr "{setting}：{value}\n"
+
+#~ msgid "Thanks. Run `/poll create` again to open the editor."
+#~ msgstr ""
+
+#~ msgid "The message to hold a deletion vote for."
+#~ msgstr "要发起删除投票的消息。"
 
