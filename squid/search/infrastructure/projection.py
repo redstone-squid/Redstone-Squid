@@ -488,10 +488,8 @@ class SearchProjectionLoader:
                     )
                 ).all()
             )
-            # The document says which kind of tag it is, so `kind:pattern` and
-            # `kind:restriction` answer the questions the retired `/patterns search` and
-            # `/restrictions search` commands used to. `kind:tag` is kept alongside it,
-            # because "any curated tag" is still a question and used to be the only answer.
+            # The kind is projected so `kind:pattern` and `kind:restriction` are answerable;
+            # `kind:tag` is kept alongside because it used to be the only answer.
             return _metadata_projection(
                 source_key=f"tag:{source_id}",
                 title=definition.display_name,

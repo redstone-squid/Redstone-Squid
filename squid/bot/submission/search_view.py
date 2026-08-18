@@ -247,12 +247,7 @@ _METADATA_LABELS = {
     "version": _("Version"),
     "tag": _("Tag"),
 }
-"""What a taxonomy result calls itself, in the reader's vocabulary.
-
-The index stores the internal kind. Naming these here rather than title-casing the stored
-value keeps the mapping translatable, and leaves an unknown kind rendering as itself instead
-of as a blank.
-"""
+"""What a taxonomy result calls itself. Named rather than title-cased so it translates."""
 
 
 def _metadata_label(kind: str, locale: str | None) -> str:

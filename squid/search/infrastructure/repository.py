@@ -89,9 +89,7 @@ class PostgresSearchBackend(SearchBackend):
             if request.sort is not None:
                 field = registry.resolve(request.sort.field)
                 if field is None or not field.supports_sort:
-                    # A bad sort field is user input, not a programming error: it arrives from
-                    # `?sort=` on the API and from a typed option on the bot, and both need a
-                    # message rather than a 500.
+                    # User input on both transports, so a message rather than a 500.
                     msg = _("Search results cannot be sorted by {field_name}.")
                     raise ValidationError(
                         msg,

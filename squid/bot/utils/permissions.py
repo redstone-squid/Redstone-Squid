@@ -176,15 +176,11 @@ def requires(
 
 
 def hide_unless[CommandT](**permissions: bool) -> Callable[[CommandT], CommandT]:
-    """Keep a command out of the pickers of viewers lacking these Discord permissions.
+    """Keep a command out of the picker of viewers lacking these Discord permissions.
 
-    Visibility only. Discord evaluates `default_member_permissions` per viewer and
-    lets guild admins override it per command in Server Settings, so it can never
-    be the gate — `requires(...)` is, and stays applied alongside. The pair reads
-    as: this decides who *sees* the command, that decides who may *run* it.
-
-    Discord reads the field on top-level commands only, so this belongs on a group
-    or a standalone command; on a subcommand it is silently ignored.
+    Visibility only: guild admins can override it per command, so `requires(...)`
+    stays the gate. Discord reads the field on top-level commands only and ignores
+    it on subcommands.
     """
     return app_commands.default_permissions(**permissions)
 
