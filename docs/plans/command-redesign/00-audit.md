@@ -40,20 +40,22 @@ the count above, which is the number the redesign was argued from.)*
   context menu today. Adding context menus (Discord allows 5 per app — budget them) would let
   several commands disappear. *(Phase 5.1 settled the poll three: `close` and `refresh` became
   buttons on the card, which is cheaper than a context menu because it costs none of the five,
-  and `vote delete` took the second slot. `build recalc` and `redstoner resync` remain.)*
+  and `vote delete` took the second slot. Phase 6.3 made `build recalc` the third,
+  "Recalculate Build"; `redstoner resync` remains.)*
 - **C5 — Raw internals leak into user-facing output.** `build queue` prints the submitter's
   numeric Discord ID instead of a mention or name; `restrictions search` prints
   `restriction_id: name` lines; `patterns search` prints match scores; `admin records-lookup`
   demands comma-separated numeric restriction IDs as input; notifications display bare UUIDs.
   *(Phase 2 settled the two search cases. `records lookup` keeps its ids: the autocomplete
   already turns names into them, and accepting names outright needs `RestrictionDefinition`
-  to carry an id, which is a change in another bounded context. The rest is phase 5.3 and
-  5.6.)*
+  to carry an id, which is a change in another bounded context. `build queue` names its
+  submitters as of phase 6.1. The rest is phase 5.3.)*
 - **C6 — Pagination is ad hoc.** `search` has a real paginator; `build queue` renders
   everything into one card (overflow risk); `version list` truncates at 20 with a TODO;
   `account claims` caps at 10 with a "N more not shown" footer; `admin records-gaps` caps
   at 30. One shared list-paginator applied everywhere would retire three bespoke truncation
-  schemes.
+  schemes. *(The paginator landed in phase 6.1, `squid/bot/utils/pagination.py`, applied to
+  `build queue`; the other three call sites are phase 5.6.)*
 - **C7 — "Hybrid" commands that aren't.** Several hybrid commands immediately bail without an
   interaction ("Use the slash command to open the editor"): `poll create`,
   `settings voting emojis`, and (until phase 1) `build submit-full`. Each should either work
@@ -107,21 +109,23 @@ the count above, which is the number the redesign was argued from.)*
   text when the role cache misses. *(Both fixed; `voting show` and `voting emojis` are now the
   panel's voting page, which also settles C7 for `voting emojis`.)*
 
-### `/build` *(mostly done in phase 1; leftovers)*
-- `build queue`: prints raw `submitter_discord_id`, no pagination (C5, C6), and titles the
-  card "Open Records" while the command says "pending submissions".
-- `build edit` is gated on `build.submission.edit`, so a submitter cannot invoke it on their
+### `/build` *(phase 1, then phase 6; done 2026-08-19)*
+- ~~`build queue`: prints raw `submitter_discord_id`, no pagination (C5, C6), and titles the
+  card "Open Records" while the command says "pending submissions".~~ *(6.1: all three.)*
+- ~~`build edit` is gated on `build.submission.edit`, so a submitter cannot invoke it on their
   own pending build — yet the edit *button* on the submission preview allows exactly that via
   `BuildEditView.can_edit`. Same operation, two authorization answers depending on entry
-  point. Align the command gate with the view's owner-or-node rule.
-- Two divergent edit surfaces: the 22-flag `build edit` command (near the 25-option cap) and
+  point. Align the command gate with the view's owner-or-node rule.~~ *(6.2: the command now
+  opens the view, so the view's rule is the only rule.)*
+- ~~Two divergent edit surfaces: the 22-flag `build edit` command (near the 25-option cap) and
   the interactive `BuildEditView`. After phase 1 the same consolidation argument applies:
-  typed options for the autocompleted fields, the view for everything else.
-- `build recalc` takes a `discord.Message` (C4 — context menu candidate).
-- `build debug` dumps `str(build.__dict__)` into a message; an attached JSON file would
-  survive size limits and be readable.
-- `measure-timing` and `detect-lattice` are schematic tools living directly under `build`
-  while four other schematic tools live under `build schematic` — move them in.
+  typed options for the autocompleted fields, the view for everything else.~~ *(6.2, exactly
+  that shape.)*
+- ~~`build recalc` takes a `discord.Message` (C4 — context menu candidate).~~ *(6.3.)*
+- ~~`build debug` dumps `str(build.__dict__)` into a message; an attached JSON file would
+  survive size limits and be readable.~~ *(6.4.)*
+- ~~`measure-timing` and `detect-lattice` are schematic tools living directly under `build`
+  while four other schematic tools live under `build schematic` — move them in.~~ *(6.5.)*
 
 ### `/vote`, `/poll` *(phase 5.1, done 2026-08-19)*
 - ~~`vote` retains two members: the deprecated `vote poll` alias and `vote delete`. Retire the

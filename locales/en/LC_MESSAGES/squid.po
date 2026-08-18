@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 05:43+0000\n"
+"POT-Creation-Date: 2026-08-19 06:06+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -55,11 +55,11 @@ msgstr ""
 msgid " ({count} reactions)"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:721
+#: squid/bot/submission/ui/views.py:746
 msgid "## Changes saved"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:693
+#: squid/bot/submission/ui/views.py:718
 #, python-brace-format
 msgid ""
 "## Review changes\n"
@@ -425,7 +425,7 @@ msgstr ""
 msgid "Add an alias for a restriction."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:334
+#: squid/bot/submission/ui/views.py:339
 msgid "Add links & details"
 msgstr ""
 
@@ -534,7 +534,11 @@ msgstr ""
 msgid "An unexpected error occurred. Reference: `{error_id}`"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:233
+#: squid/bot/submission/edit.py:61
+msgid "Anything a reader should know about the build."
+msgstr ""
+
+#: squid/bot/submission/ui/views.py:238
 msgid "Anything staff should know"
 msgstr ""
 
@@ -615,7 +619,7 @@ msgstr ""
 msgid "Back"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:367
+#: squid/bot/submission/ui/views.py:372
 msgid "Basics"
 msgstr ""
 
@@ -657,7 +661,7 @@ msgstr ""
 msgid "Build `{id}` has no schematic attached."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:124
+#: squid/bot/submission/ui/views.py:129
 msgid "Build basics"
 msgstr ""
 
@@ -665,7 +669,7 @@ msgstr ""
 msgid "Build busy"
 msgstr ""
 
-#: squid/builds/domain/models.py:385
+#: squid/builds/domain/models.py:400
 msgid ""
 "Build cannot be instantiated directly; construct a category subclass or a"
 " BuildDraft."
@@ -682,18 +686,6 @@ msgstr ""
 
 #: squid/submissions/application/forms.py:147
 msgid "Build depth"
-msgstr ""
-
-#: squid/bot/submission/edit.py:162
-msgid "Build edit canceled by user"
-msgstr ""
-
-#: squid/bot/submission/edit.py:154
-msgid "Build edit canceled due to inactivity."
-msgstr ""
-
-#: squid/bot/submission/edit.py:178
-msgid "Build edited successfully"
 msgstr ""
 
 #: squid/submissions/application/forms.py:146
@@ -730,7 +722,7 @@ msgstr ""
 msgid "Build revision required"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:375
+#: squid/bot/submission/ui/views.py:380
 msgid "Build size"
 msgstr ""
 
@@ -806,13 +798,9 @@ msgstr ""
 msgid "Camera yaw in degrees. Omit for the default view."
 msgstr ""
 
-#: squid/bot/consent.py:49 squid/bot/submission/ui/views.py:336
-#: squid/bot/submission/ui/views.py:475
+#: squid/bot/consent.py:49 squid/bot/submission/ui/views.py:341
+#: squid/bot/submission/ui/views.py:480
 msgid "Cancel"
-msgstr ""
-
-#: squid/bot/submission/edit.py:162
-msgid "Cancelled"
 msgstr ""
 
 #: squid/bot/consent.py:309
@@ -833,7 +821,7 @@ msgstr ""
 msgid "Candidate {build_id} has no typed category facts."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:553
+#: squid/bot/submission/ui/views.py:578
 msgid "Cannot edit this build"
 msgstr ""
 
@@ -881,11 +869,11 @@ msgstr ""
 msgid "Check the creator ID and try again."
 msgstr ""
 
-#: squid/bot/submission/submit.py:118 squid/bot/submission/ui/views.py:169
+#: squid/bot/submission/submit.py:118 squid/bot/submission/ui/views.py:174
 msgid "Check the dimensions"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:255
+#: squid/bot/submission/ui/views.py:260
 msgid "Check the links"
 msgstr ""
 
@@ -893,7 +881,7 @@ msgstr ""
 msgid "Check the spelling against the creator list on a build you worked on."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:419
+#: squid/bot/submission/ui/views.py:424
 msgid ""
 "Choose a door type and add an opening size such as `2x2` before "
 "submitting."
@@ -967,6 +955,10 @@ msgstr ""
 msgid "Comma separated, e.g. `Seamless, Observerless`. See `/info docs`."
 msgstr ""
 
+#: squid/bot/submission/edit.py:59
+msgid "Comma separated. Replaces every restriction on the build."
+msgstr ""
+
 #: squid/bot/help.py:271 squid/bot/help.py:291
 msgid "Command Help"
 msgstr ""
@@ -1012,7 +1004,7 @@ msgstr ""
 msgid "Completion date or context"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:474
+#: squid/bot/submission/ui/views.py:479
 msgid "Confirm"
 msgstr ""
 
@@ -1020,7 +1012,7 @@ msgstr ""
 msgid "Confirm reset"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:472
+#: squid/bot/submission/ui/views.py:477
 msgid "Confirm this action?"
 msgstr ""
 
@@ -1105,7 +1097,7 @@ msgstr ""
 msgid "Creator not found."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:160 squid/bot/submission/ui/views.py:378
+#: squid/bot/submission/ui/views.py:165 squid/bot/submission/ui/views.py:383
 #: squid/submissions/application/forms.py:131
 msgid "Creators"
 msgstr ""
@@ -1213,11 +1205,11 @@ msgstr ""
 msgid "Door geometry"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:156
+#: squid/bot/submission/ui/views.py:161
 msgid "Door opening size"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:178
+#: squid/bot/submission/ui/views.py:183
 msgid "Door opening size required"
 msgstr ""
 
@@ -1225,11 +1217,11 @@ msgstr ""
 msgid "Door orientation"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:369
+#: squid/bot/submission/ui/views.py:374
 msgid "Door type"
 msgstr ""
 
-#: squid/bot/submission/submit.py:72
+#: squid/bot/submission/edit.py:55 squid/bot/submission/submit.py:72
 msgid "Door, Skydoor, or Trapdoor."
 msgstr ""
 
@@ -1254,11 +1246,11 @@ msgstr ""
 msgid "Earlier"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:333
+#: squid/bot/submission/ui/views.py:338
 msgid "Edit basics"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:647
+#: squid/bot/submission/ui/views.py:672
 msgid "Edit build"
 msgstr ""
 
@@ -1274,7 +1266,7 @@ msgstr ""
 msgid "Edit it with `/account profile-edit`."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:606
+#: squid/bot/submission/ui/views.py:631
 msgid "Edit this section"
 msgstr ""
 
@@ -1284,14 +1276,6 @@ msgstr ""
 
 #: squid/permissions/domain/catalogue.py:298
 msgid "Edit your own profile, visibility, linked identities, and merges."
-msgstr ""
-
-#: squid/bot/submission/edit.py:169
-msgid "Editing"
-msgstr ""
-
-#: squid/bot/submission/edit.py:169
-msgid "Editing build..."
 msgstr ""
 
 #: squid/search/application/embeddings.py:67
@@ -1306,7 +1290,7 @@ msgstr ""
 msgid "Emojis"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:179
+#: squid/bot/submission/ui/views.py:184
 msgid "Enter at least a width and height, such as `2x2`."
 msgstr ""
 
@@ -1320,8 +1304,9 @@ msgstr ""
 
 #: squid/bot/settings.py:110 squid/bot/settings.py:141
 #: squid/bot/settings.py:184 squid/bot/settings.py:193
-#: squid/bot/settings.py:216 squid/bot/submission/search.py:271
-#: squid/bot/submission/search.py:286 squid/bot/submission/search.py:349
+#: squid/bot/settings.py:216 squid/bot/submission/edit.py:84
+#: squid/bot/submission/search.py:271 squid/bot/submission/search.py:286
+#: squid/bot/submission/search.py:349
 msgid "Error"
 msgstr ""
 
@@ -1350,7 +1335,7 @@ msgstr ""
 msgid "Every kind of voting is back to its defaults."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:256
+#: squid/bot/submission/ui/views.py:261
 msgid "Every link must start with `https://` or `http://`."
 msgstr ""
 
@@ -1422,7 +1407,7 @@ msgstr ""
 msgid "Fetch the latest build, merge the changes, and try again."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:655
+#: squid/bot/submission/ui/views.py:680
 msgid "Fields in this section"
 msgstr ""
 
@@ -1430,7 +1415,7 @@ msgstr ""
 msgid "First-of-a-kind builds"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:638
+#: squid/bot/submission/ui/views.py:663
 #, python-brace-format
 msgid ""
 "Fix these values before review:\n"
@@ -1481,19 +1466,19 @@ msgstr ""
 msgid "Following this server's Discord language"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:146
+#: squid/bot/submission/ui/views.py:151
 msgid "For example: 1.20.4+"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:131
+#: squid/bot/submission/ui/views.py:136
 msgid "For example: 2x2"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:213
+#: squid/bot/submission/ui/views.py:218
 msgid "For example: Seamless, Observerless"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:136
+#: squid/bot/submission/ui/views.py:141
 msgid "For example: regular, full lamp"
 msgstr ""
 
@@ -1552,10 +1537,6 @@ msgstr ""
 msgid "Help"
 msgstr ""
 
-#: squid/bot/submission/edit.py:133
-msgid "Here is a preview of the changes. Use the buttons to confirm or cancel."
-msgstr ""
-
 #: squid/bot/give_redstoner.py:170
 #, python-brace-format
 msgid ""
@@ -1599,7 +1580,7 @@ msgstr ""
 msgid "Identity not found"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:218
+#: squid/bot/submission/ui/views.py:223
 msgid "Image links, comma separated"
 msgstr ""
 
@@ -1616,11 +1597,11 @@ msgstr ""
 msgid "Image width and height in pixels."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:239
+#: squid/bot/submission/ui/views.py:244
 msgid "Images"
 msgstr ""
 
-#: squid/bot/submission/submit.py:77
+#: squid/bot/submission/edit.py:60 squid/bot/submission/submit.py:77
 msgid "In-game names of the creator(s), comma separated."
 msgstr ""
 
@@ -1678,14 +1659,6 @@ msgstr ""
 msgid "Invalid command input"
 msgstr ""
 
-#: squid/bot/utils/converters.py:46
-msgid "Invalid dimensions"
-msgstr ""
-
-#: squid/bot/utils/converters.py:103 squid/bot/utils/converters.py:114
-msgid "Invalid integer"
-msgstr ""
-
 #: squid/accounts/errors.py:119
 msgid "Invalid merge code"
 msgstr ""
@@ -1702,7 +1675,7 @@ msgstr ""
 msgid "Invalid request"
 msgstr ""
 
-#: squid/bot/submission/ui/components.py:179 squid/core/errors.py:189
+#: squid/bot/submission/ui/components.py:188 squid/core/errors.py:189
 msgid "Invalid value"
 msgstr ""
 
@@ -1777,7 +1750,7 @@ msgstr ""
 msgid "Links (one per line: Label | https://...)"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:203
+#: squid/bot/submission/ui/views.py:208
 msgid "Links and optional details"
 msgstr ""
 
@@ -2000,7 +1973,7 @@ msgstr ""
 msgid "Minecraft authorization pepper must not be empty."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:151
+#: squid/bot/submission/ui/views.py:156
 msgid "Minecraft names, comma separated"
 msgstr ""
 
@@ -2016,7 +1989,7 @@ msgstr ""
 msgid "Multiplier — leave empty to remove this role's weight"
 msgstr ""
 
-#: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:608
+#: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:633
 #: squid/bot/utils/pagination.py:138
 msgid "Next"
 msgstr ""
@@ -2038,12 +2011,12 @@ msgstr ""
 msgid "No build credits a creator by that name."
 msgstr ""
 
-#: squid/bot/submission/search.py:271 squid/bot/submission/search.py:286
-#: squid/bot/submission/search.py:349
+#: squid/bot/submission/edit.py:84 squid/bot/submission/search.py:271
+#: squid/bot/submission/search.py:286 squid/bot/submission/search.py:349
 msgid "No build with that ID."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:684
+#: squid/bot/submission/ui/views.py:709
 msgid "No changes to review yet."
 msgstr ""
 
@@ -2138,7 +2111,11 @@ msgstr ""
 msgid "Normalized videos must contain MP4 and JPEG artifacts."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:242
+#: squid/bot/submission/edit.py:119
+msgid "Not a field of this build"
+msgstr ""
+
+#: squid/bot/submission/ui/views.py:247
 msgid "Notes"
 msgstr ""
 
@@ -2227,11 +2204,11 @@ msgstr ""
 msgid "Only the bot owner can use this command."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:382
+#: squid/bot/submission/ui/views.py:387
 msgid "Only the door type and opening size are required."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:570 squid/bot/submission/ui/views.py:601
+#: squid/bot/submission/ui/views.py:595 squid/bot/submission/ui/views.py:626
 msgid "Only the pending build's submitter or a trusted staff member can edit it."
 msgstr ""
 
@@ -2271,7 +2248,7 @@ msgstr ""
 msgid "Opening height"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:371
+#: squid/bot/submission/ui/views.py:376
 msgid "Opening size"
 msgstr ""
 
@@ -2340,7 +2317,7 @@ msgstr ""
 msgid "Outside your authority"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:158
+#: squid/bot/submission/ui/views.py:163
 msgid "Overall build size"
 msgstr ""
 
@@ -2361,12 +2338,12 @@ msgstr ""
 msgid "Parameterized record restriction is missing a category value."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:244 squid/bot/submission/ui/views.py:157
-#: squid/bot/submission/ui/views.py:373
+#: squid/bot/submission/search_view.py:244 squid/bot/submission/ui/views.py:162
+#: squid/bot/submission/ui/views.py:378
 msgid "Pattern"
 msgstr ""
 
-#: squid/bot/submission/submit.py:73
+#: squid/bot/submission/edit.py:56 squid/bot/submission/submit.py:73
 msgid "Pattern types, comma separated. For example: full lamp, funnel."
 msgstr ""
 
@@ -2466,7 +2443,7 @@ msgstr ""
 msgid "Post and manage the Redstoner self-assign panel."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:192 squid/bot/submission/ui/views.py:607
+#: squid/bot/submission/search_view.py:192 squid/bot/submission/ui/views.py:632
 #: squid/bot/utils/pagination.py:124
 msgid "Previous"
 msgstr ""
@@ -2545,7 +2522,7 @@ msgstr ""
 msgid "Read your own account and notifications."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:358
+#: squid/bot/submission/ui/views.py:363
 msgid "Ready to submit. Optional details can be added later."
 msgstr ""
 
@@ -2736,7 +2713,7 @@ msgstr ""
 msgid "Require an exact value for that tag."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:356
+#: squid/bot/submission/ui/views.py:361
 #, python-brace-format
 msgid "Required before review: {fields}."
 msgstr ""
@@ -2762,7 +2739,7 @@ msgstr ""
 msgid "Restriction not found."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:238
+#: squid/bot/submission/ui/views.py:243
 msgid "Restrictions"
 msgstr ""
 
@@ -2786,17 +2763,13 @@ msgstr ""
 msgid "Review and accept the current privacy notice, then try again."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:609
+#: squid/bot/submission/ui/views.py:634
 msgid "Review changes"
 msgstr ""
 
 #: squid/submissions/application/forms.py:235
 #: squid/submissions/application/forms.py:243
 msgid "Review the disclosure preview before submitting."
-msgstr ""
-
-#: squid/bot/submission/edit.py:138
-msgid "Review the proposed build changes."
 msgstr ""
 
 #: squid/submissions/application/forms.py:210
@@ -2934,7 +2907,7 @@ msgstr ""
 msgid "Search text and filters, e.g. `width:5`."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:650
+#: squid/bot/submission/ui/views.py:675
 #, python-brace-format
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
@@ -3109,7 +3082,7 @@ msgstr ""
 msgid "Submission target rejected actionable fields."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:362
+#: squid/bot/submission/ui/views.py:367
 msgid "Submit a build"
 msgstr ""
 
@@ -3121,18 +3094,18 @@ msgstr ""
 msgid "Submit a new record through the Google form."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:335
+#: squid/bot/submission/ui/views.py:340
 msgid "Submit for review"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:444
+#: squid/bot/submission/ui/views.py:449
 msgid ""
 "Submitting failed and nothing was saved. Press “Submit for review” to try"
 " again."
 msgstr ""
 
-#: squid/bot/submission/edit.py:178 squid/bot/submission/search.py:239
-#: squid/bot/submission/search.py:310 squid/bot/submission/search.py:331
+#: squid/bot/submission/search.py:239 squid/bot/submission/search.py:310
+#: squid/bot/submission/search.py:331
 msgid "Success"
 msgstr ""
 
@@ -3141,7 +3114,7 @@ msgstr ""
 msgid "Suggestions remain unofficial until staff promotes them."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:159
+#: squid/bot/submission/ui/views.py:164
 msgid "Supported versions"
 msgstr ""
 
@@ -3316,6 +3289,10 @@ msgstr ""
 msgid "The Fabric PKCE proof is invalid."
 msgstr ""
 
+#: squid/bot/submission/edit.py:53
+msgid "The ID of the build to edit."
+msgstr ""
+
 #: squid/bot/submission/search.py:340
 msgid "The ID of the build whose debug details you want to see."
 msgstr ""
@@ -3433,7 +3410,7 @@ msgstr ""
 msgid "The custom emoji {emoji} is inaccessible."
 msgstr ""
 
-#: squid/bot/submission/submit.py:71
+#: squid/bot/submission/edit.py:54 squid/bot/submission/submit.py:71
 msgid "The door opening, e.g. `2x2`. Width x height (x depth)."
 msgstr ""
 
@@ -3592,7 +3569,7 @@ msgstr ""
 msgid "The verification code is invalid or expired."
 msgstr ""
 
-#: squid/bot/submission/submit.py:74
+#: squid/bot/submission/edit.py:57 squid/bot/submission/submit.py:74
 msgid "The whole build, e.g. `5x7x4`. Width x height (x depth)."
 msgstr ""
 
@@ -3616,7 +3593,7 @@ msgstr ""
 msgid "These settings controls belong to someone else."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:394
+#: squid/bot/submission/ui/views.py:399
 msgid "These submission controls belong to someone else."
 msgstr ""
 
@@ -3632,11 +3609,16 @@ msgstr ""
 msgid "This build has no primary schematic to preview."
 msgstr ""
 
+#: squid/bot/submission/edit.py:122
+#, python-brace-format
+msgid "This build has no {fields}. Open the workspace to see what it does have."
+msgstr ""
+
 #: squid/builds/errors.py:35
 msgid "This build is currently being edited by someone else."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:426
+#: squid/bot/submission/ui/views.py:431
 msgid "This build is still being submitted. Give it a moment."
 msgstr ""
 
@@ -3652,12 +3634,12 @@ msgstr ""
 msgid "This creator has hidden their page. Their build credit is still listed."
 msgstr ""
 
-#: squid/bot/submission/edit.py:191 squid/bot/submission/edit.py:201
-#: squid/bot/submission/edit.py:209
+#: squid/bot/submission/edit.py:137 squid/bot/submission/edit.py:147
+#: squid/bot/submission/edit.py:155
 msgid "This does not look like a build."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:564
+#: squid/bot/submission/ui/views.py:589
 msgid "This edit session expired. Reopen the build to start again."
 msgstr ""
 
@@ -3712,10 +3694,6 @@ msgstr ""
 
 #: squid/permissions/application/epoch.py:59
 msgid "This watcher was built without a wake listener."
-msgstr ""
-
-#: squid/bot/submission/edit.py:153
-msgid "Timed out"
 msgstr ""
 
 #: squid/bot/notifications_view.py:98
@@ -3819,10 +3797,6 @@ msgstr ""
 msgid "Use the id with `/account visibility` or `/account unlink`."
 msgstr ""
 
-#: squid/bot/submission/edit.py:129
-msgid "User confirming changes..."
-msgstr ""
-
 #: squid/submissions/application/forms.py:289
 msgid "Utility"
 msgstr ""
@@ -3836,11 +3810,11 @@ msgstr ""
 msgid "Version added successfully: {version}"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:377
+#: squid/bot/submission/ui/views.py:382
 msgid "Versions"
 msgstr ""
 
-#: squid/bot/submission/submit.py:75
+#: squid/bot/submission/edit.py:58 squid/bot/submission/submit.py:75
 msgid "Versions the build works in, like `1.17 - 1.18.1, 1.20+`."
 msgstr ""
 
@@ -3852,7 +3826,7 @@ msgstr ""
 msgid "Vertical upward"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:223
+#: squid/bot/submission/ui/views.py:228
 msgid "Video links, comma separated"
 msgstr ""
 
@@ -3860,7 +3834,7 @@ msgstr ""
 msgid "Video normalization requires a poster destination."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:240
+#: squid/bot/submission/ui/views.py:245
 msgid "Videos"
 msgstr ""
 
@@ -3954,10 +3928,6 @@ msgstr ""
 msgid "Wait for the other edit to finish and try again."
 msgstr ""
 
-#: squid/bot/submission/edit.py:129
-msgid "Waiting"
-msgstr ""
-
 #: squid/bot/notifications_view.py:127 squid/bot/notifications_view.py:196
 msgid "Web inbox"
 msgstr ""
@@ -4010,7 +3980,7 @@ msgstr ""
 msgid "Whose permissions to read. Staff only; defaults to you."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:141
+#: squid/bot/submission/ui/views.py:146
 msgid "Width x Height x Depth"
 msgstr ""
 
@@ -4022,11 +3992,11 @@ msgstr ""
 msgid "Working"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:228
+#: squid/bot/submission/ui/views.py:233
 msgid "World download links, comma separated"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:241
+#: squid/bot/submission/ui/views.py:246
 msgid "World downloads"
 msgstr ""
 
@@ -4251,11 +4221,11 @@ msgstr ""
 msgid "delivery claim limit must be between 1 and 100"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:353
+#: squid/bot/submission/ui/views.py:358
 msgid "door opening size"
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:351
+#: squid/bot/submission/ui/views.py:356
 msgid "door type"
 msgstr ""
 
@@ -5223,5 +5193,44 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "Open Records"
+#~ msgstr ""
+
+#~ msgid "Build edit canceled by user"
+#~ msgstr ""
+
+#~ msgid "Build edit canceled due to inactivity."
+#~ msgstr ""
+
+#~ msgid "Build edited successfully"
+#~ msgstr ""
+
+#~ msgid "Cancelled"
+#~ msgstr ""
+
+#~ msgid "Editing"
+#~ msgstr ""
+
+#~ msgid "Editing build..."
+#~ msgstr ""
+
+#~ msgid "Here is a preview of the changes. Use the buttons to confirm or cancel."
+#~ msgstr ""
+
+#~ msgid "Invalid dimensions"
+#~ msgstr ""
+
+#~ msgid "Invalid integer"
+#~ msgstr ""
+
+#~ msgid "Review the proposed build changes."
+#~ msgstr ""
+
+#~ msgid "Timed out"
+#~ msgstr ""
+
+#~ msgid "User confirming changes..."
+#~ msgstr ""
+
+#~ msgid "Waiting"
 #~ msgstr ""
 
