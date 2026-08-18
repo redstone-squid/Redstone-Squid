@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import CreatorAlias, CreatorProfile
+from squid.accounts.domain import CreatorAlias, CreditedAlias, PublicCreatorProfile
 from squid.api.dependencies import get_services
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Build, DoorBuild, Status
@@ -74,10 +74,15 @@ class AccountFake(AccountService):
         return CreatorAlias(7, "Builder", account_id=42, public_creator_id=CREATOR_PUBLIC_ID)
 
     @override
-    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
+    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
         if public_id != CREATOR_PUBLIC_ID:
             return None
-        return CreatorProfile(CREATOR_PUBLIC_ID, ("Builder", "OldBuilder"))
+        return PublicCreatorProfile(
+            public_id=CREATOR_PUBLIC_ID,
+            hidden=False,
+            aliases=(CreditedAlias("Builder", build_count=2), CreditedAlias("OldBuilder")),
+            display_name="Builder",
+        )
 
 
 class SchematicFake(SchematicService):
@@ -217,7 +222,19 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockD
     assert response.status_code == 200
     assert response.json() == {
         "id": "22222222-2222-2222-2222-222222222222",
-        "aliases": ["Builder", "OldBuilder"],
+        "canonical_id": None,
+        "hidden": False,
+        "aliases": [
+            {"name": "Builder", "build_count": 2},
+            {"name": "OldBuilder", "build_count": 0},
+        ],
+        "display_name": "Builder",
+        "bio": None,
+        "pronouns": None,
+        "links": [],
+        "avatar_url": None,
+        "joined_at": None,
+        "identities": [],
     }
 
 
