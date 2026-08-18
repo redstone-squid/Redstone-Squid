@@ -1,11 +1,10 @@
 # RBAC, replacing the four permission tiers
 
-> **Status.** Every phase has landed: 0–1 on 2026-08-13, 2–8 on 2026-08-14. The four tiers are
-> gone, the tables are dropped, and `/perm` and `/role` are the way permissions are administered.
-> One thing this document asked for is *not* implemented and says so where it belongs: property
-> **P11** (§10). Amend this document in place as
-> building it proves parts of it wrong, calling out the amendments where they occur rather than
-> silently applying them.
+> **Status.** Complete. Every phase landed: 0–1 on 2026-08-13, 2–8 on 2026-08-14, and property
+> **P11** (§10) on 2026-08-19. The four tiers are gone, the tables are dropped, `/perm` and
+> `/role` are the way permissions are administered, and the one property this document deferred
+> is now written. Amend this document in place as building it proves parts of it wrong, calling
+> out the amendments where they occur rather than silently applying them.
 
 ## Context
 
@@ -828,13 +827,31 @@ generate rule sets, roles and composition graphs over the real catalogue.
   editor's own effective permissions are unchanged by the edit, and no sequence of accepted edits
   lets a subject reach a node they could not already reach. *Deferred to Phase 7*, with the gates
   themselves; P5 already covers the delegation half of it.
-  > **Amendment (Phase 7).** Still not written, and this is the one real gap left in the suite.
-  > The gates have example-based tests — a held pattern is granted, one beyond the actor is
-  > refused, a peer role cannot be managed, a built-in refuses structural edits, an exclusion needs
-  > no authority — but nothing quantifies over *sequences* of accepted edits, which is where a
-  > multi-step escalation would hide. It needs a Hypothesis strategy over role graphs plus edit
-  > operations, and it is worth doing before anyone delegates `role.definition.manage_guild`
-  > widely.
+  > **Amendment (Phase 7, closed 2026-08-19).** Written as
+  > `test_p11_accepted_role_edits_never_grow_the_editors_authority` in
+  > `tests/unit/permissions/application/test_administration.py`. It runs against
+  > `PermissionAdministrationService` and the in-memory `FakeStore` rather than against bare
+  > `RoleSpec` graphs, because the escalation this property worries about is produced by the
+  > *gates*, not by the resolver P5–P10 already cover — the boundary check on `add_include`, the
+  > rank check on `assign`, cycle rejection — and those live only at that layer.
+  >
+  > A Hypothesis strategy draws a small sequence (≤6) of typed edit operations — include, exclude,
+  > compose, self-assign, re-rank — over two freshly created, unprotected roles, plus a starting
+  > grant set and a seeded role assignment that gives the actor a non-zero rank to manage with
+  > (an actor holding no role assignment at all can manage nothing, since rank 0 is the floor).
+  > Composition targets include the four protected built-ins, so cycle rejection and the
+  > protected-role refusal both get exercised. After every *accepted* edit the actor's freshly
+  > re-resolved capability set must be a subset of both the set just before that edit and the set
+  > held before the whole sequence began; after the sequence, neither role's resolved leaves may
+  > exceed that starting set either, which is the check that would catch a composed-in leaf
+  > sneaking past the boundary through indirection. 500 examples (`HYPOTHESIS_PROFILE=ci`) pass in
+  > under 4 seconds.
+  >
+  > Writing it surfaced one real gap, not in the gates but in the test double they were checked
+  > against: `FakeStore.load_for_subject` never populated `SubjectRecords.assignments`, so no
+  > previously-existing test in that file could have caught a bug in how an *assigned* role's
+  > patterns reach resolution — only direct grants were ever exercised. Fixed alongside this
+  > property, since the property is exactly the case that needed it.
 - **P12 specificity dominance**, **P13 trace soundness** (re-running with only the winning trace
   step reproduces the verdict, which is what keeps `/perm explain` honest), **P14 default
   fallthrough**.

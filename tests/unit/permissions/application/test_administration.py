@@ -1,6 +1,10 @@
 """The two management gates, and the delegation rules behind `/perm`."""
 
+import dataclasses
+
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 from whenever import Instant
 
 from squid.core.errors import ConflictError, ValidationError
@@ -8,12 +12,14 @@ from squid.permissions.application import PermissionService
 from squid.permissions.application.administration import (
     EXCLUDE_MODE,
     INCLUDE_MODE,
+    Actor,
     PermissionAdministrationService,
     PermissionAuthorityError,
     PermissionRankError,
     ProtectedRoleError,
 )
 from squid.permissions.application.ports import (
+    AssignmentRecord,
     AssignmentRow,
     AuditEntry,
     AuditRow,
@@ -23,6 +29,8 @@ from squid.permissions.application.ports import (
     SubjectRecords,
 )
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Subject
+
+from ..domain.strategies import patterns as domain_patterns
 
 GUILD = 555
 
@@ -62,6 +70,15 @@ class FakeStore:
                 )
                 for rule in self.rules
                 if rule.subject_account_id == account_id
+            ),
+            assignments=tuple(
+                AssignmentRecord(
+                    role_id=assignment.role_id,
+                    subject_account_id=assignment.subject_account_id,
+                    scope_guild_id=assignment.scope_guild_id,
+                )
+                for assignment in self.assignments
+                if assignment.subject_account_id == account_id
             ),
         )
 
@@ -406,3 +423,159 @@ async def test_every_mutation_records_an_audit_entry() -> None:
 
     assert [entry.action for entry in store.audit_entries] == ["grant"]
     assert store.audit_entries[0].reason == "event weekend"
+
+
+# ---- P11: the two management gates are non-escalating ------------------------
+#
+# The example tests above show each gate refusing a single bad edit. What they
+# cannot show is a *sequence* of individually-accepted edits compounding into an
+# escalation -- e.g. composing a role into another, then composing that one
+# into a third, hiding a leaf the actor never held behind two hops of
+# indirection. This section quantifies over such sequences instead.
+
+CUSTOM_A = "custom-role-a"
+CUSTOM_B = "custom-role-b"
+SEED_ROLE = "seed-assigned"
+"""Assigned to the actor before the sequence starts, purely to give them a
+starting `highest_rank` without touching the two roles under test -- an actor
+with no role assignment at all can manage nothing, rank 0 being the floor."""
+
+REJECTIONS = (PermissionAuthorityError, PermissionRankError, ProtectedRoleError, ValidationError, ConflictError)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _IncludeOp:
+    slug: str
+    pattern: str
+    mode: int = INCLUDE_MODE
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _ComposeOp:
+    slug: str
+    included_slug: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _AssignOp:
+    slug: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _RankOp:
+    slug: str
+    rank: int
+
+
+_P11Op = _IncludeOp | _ComposeOp | _AssignOp | _RankOp
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class _P11Scenario:
+    initial_patterns: list[str]
+    actor_rank: int
+    rank_a: int
+    rank_b: int
+    guild_a: int | None
+    guild_b: int | None
+    ops: list[_P11Op]
+
+
+def _p11_operations() -> st.SearchStrategy[_P11Op]:
+    slugs = st.sampled_from((CUSTOM_A, CUSTOM_B))
+    compose_targets = st.sampled_from((CUSTOM_A, CUSTOM_B, "trusted", "guild-admin", "global-admin", "owner"))
+    return st.one_of(
+        st.builds(_IncludeOp, slug=slugs, pattern=domain_patterns(), mode=st.just(INCLUDE_MODE)),
+        st.builds(_IncludeOp, slug=slugs, pattern=domain_patterns(), mode=st.just(EXCLUDE_MODE)),
+        st.builds(_ComposeOp, slug=slugs, included_slug=compose_targets),
+        st.builds(_AssignOp, slug=slugs),
+        st.builds(_RankOp, slug=slugs, rank=st.integers(min_value=0, max_value=999)),
+    )
+
+
+@st.composite
+def _p11_scenarios(draw: st.DrawFn) -> _P11Scenario:
+    return _P11Scenario(
+        initial_patterns=draw(st.lists(domain_patterns(), max_size=5, unique=True)),
+        actor_rank=draw(st.integers(min_value=0, max_value=900)),
+        rank_a=draw(st.integers(min_value=0, max_value=999)),
+        rank_b=draw(st.integers(min_value=0, max_value=999)),
+        guild_a=draw(st.sampled_from((None, GUILD))),
+        guild_b=draw(st.sampled_from((None, GUILD))),
+        ops=draw(st.lists(_p11_operations(), max_size=6)),
+    )
+
+
+async def _p11_apply(service: PermissionAdministrationService, actor: Actor, op: _P11Op) -> None:
+    if isinstance(op, _IncludeOp):
+        await service.add_pattern(actor, await service.role(op.slug), op.pattern, mode=op.mode)
+    elif isinstance(op, _ComposeOp):
+        await service.add_include(actor, await service.role(op.slug), await service.role(op.included_slug))
+    elif isinstance(op, _AssignOp):
+        role = await service.role(op.slug)
+        await service.assign(actor, role, account_id=7, scope_guild_id=role.guild_id)
+    elif isinstance(op, _RankOp):
+        await service.set_rank(actor, await service.role(op.slug), op.rank)
+
+
+@settings(max_examples=200, deadline=None)
+@given(scenario=_p11_scenarios())
+async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario: _P11Scenario) -> None:
+    """P11: no sequence of edits the boundary gate accepts lets the editor -- or
+    a role they shape -- reach a node they could not already reach.
+
+    Checked two ways: after every accepted edit, the editor's own resolved
+    capabilities cannot exceed what they held before the whole sequence began;
+    and once the sequence ends, neither role under test confers a leaf outside
+    that starting set, which is what would let some *other* subject inherit an
+    escalation the editor engineered through composition.
+    """
+    store = FakeStore(
+        roles=(
+            RoleRecord(
+                id=200,
+                slug=CUSTOM_A,
+                guild_id=scenario.guild_a,
+                builtin_key=None,
+                rank=scenario.rank_a,
+                protected=False,
+            ),
+            RoleRecord(
+                id=201,
+                slug=CUSTOM_B,
+                guild_id=scenario.guild_b,
+                builtin_key=None,
+                rank=scenario.rank_b,
+                protected=False,
+            ),
+            RoleRecord(
+                id=202,
+                slug=SEED_ROLE,
+                guild_id=None,
+                builtin_key=None,
+                rank=scenario.actor_rank,
+                protected=False,
+            ),
+        ),
+        rules=granted(*scenario.initial_patterns),
+    )
+    store.assignments.append(AssignmentRow(id=1, role_id=202, role_slug=SEED_ROLE, subject_account_id=7))
+    service = admin(store)
+    subject = Subject(account_id=7, guild_id=GUILD)
+    initial_held = (await service.actor(subject)).held
+
+    for op in scenario.ops:
+        actor = await service.actor(subject)
+        before_held = actor.held
+        try:
+            await _p11_apply(service, actor, op)
+        except REJECTIONS:
+            continue
+        after_held = (await service.actor(subject)).held
+        assert after_held <= before_held
+        assert after_held <= initial_held
+
+    roles = await service.roles()
+    for slug in (CUSTOM_A, CUSTOM_B):
+        leaves = frozenset(service.resolved_leaves(await service.role(slug), roles))
+        assert leaves <= initial_held
