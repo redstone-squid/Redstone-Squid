@@ -24,7 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class RecordRuleset(Base, kw_only=True):
@@ -46,7 +46,7 @@ class RecordRuleset(Base, kw_only=True):
     formatter_version: Mapped[str] = mapped_column(Text, nullable=False)
     activated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -108,7 +108,7 @@ class RecordDefinition(Base, kw_only=True):
     )
     materialization_source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'eager'"))
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -149,7 +149,7 @@ class RecordCompetition(Base, kw_only=True):
     )
     category_key: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -214,7 +214,7 @@ class RecordComputationRun(Base, kw_only=True):
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'running'"))
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     started_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     error: Mapped[str | None] = mapped_column(Text, default=None)
@@ -256,7 +256,7 @@ class RecordResult(Base, kw_only=True):
     )
     history_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     computed_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -358,10 +358,10 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
     )
     enqueued_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     """When this row next becomes claimable, and the only column backoff writes."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)

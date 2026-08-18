@@ -25,7 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 _EFFECT_VALUES = "effect IN (1, -1, -2)"
 """Allow, deny, forbid. See `squid.permissions.domain.models.Effect`."""
@@ -83,7 +83,7 @@ class PermissionRole(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -119,7 +119,7 @@ class PermissionRolePattern(Base, kw_only=True):
         default=None,
     )
     added_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -150,7 +150,7 @@ class PermissionRoleInclude(Base, kw_only=True):
         default=None,
     )
     added_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -223,7 +223,7 @@ class PermissionGrant(Base, kw_only=True):
     declared scope, so nodes added later are safe under old grants."""
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     granted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
@@ -293,7 +293,7 @@ class PermissionRoleAssignment(Base, kw_only=True):
     scope_guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     granted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
@@ -333,9 +333,7 @@ class PermissionAuditEntry(Base, kw_only=True):
     """Mandatory for `forbid`, enforced by the service rather than the schema so
     the column stays usable for the actions that do not need it."""
     details: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True, default=None)
-    at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
+    at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False, server_default=func.now(), default_factory=now)
 
 
 class PermissionEpoch(Base, kw_only=True):
@@ -353,5 +351,5 @@ class PermissionEpoch(Base, kw_only=True):
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class DomainEventRecord(Base, kw_only=True):
@@ -29,7 +29,7 @@ class DomainEventRecord(Base, kw_only=True):
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
     occurred_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -67,7 +67,7 @@ class DomainEventDeliveryRecord(Base, kw_only=True):
         Text, ForeignKey("domain_event_consumers.name", ondelete="CASCADE"), primary_key=True
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
