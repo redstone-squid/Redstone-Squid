@@ -33,6 +33,13 @@ DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
 INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000103")
 OPERATION_ID = UUID("00000000-0000-4000-8000-000000000102")
 NOW = Instant.parse_iso("2026-08-11T00:00:00Z")
+"""The clock every draft in this file is seeded against.
+
+Pass it to the service too. A service left on the real clock agrees with these fixtures only
+until the drafts' seven-day expiry falls into the past, at which point `get_owned` starts
+reporting `expired` and unrelated assertions fail on a date rather than on a change. The two
+services that deliberately offset from `NOW` are testing expiry itself.
+"""
 
 
 class FakeManifestRegistry:
@@ -200,7 +207,7 @@ def _complete_answers() -> dict[str, JSONValue]:
 @pytest.mark.asyncio
 async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
     repository = FakeDraftRepository()
-    service = SubmissionDraftService(repository, FakeManifestRegistry())
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
 
     with pytest.raises(DraftSchemaUnsupportedError):
         await service.create(
@@ -240,7 +247,7 @@ async def test_create_requires_server_derived_installation_provenance_only_for_p
     origin: SubmissionOrigin,
     source_installation_id: UUID | None,
 ) -> None:
-    service = SubmissionDraftService(FakeDraftRepository(), FakeManifestRegistry())
+    service = SubmissionDraftService(FakeDraftRepository(), FakeManifestRegistry(), now=lambda: NOW)
 
     with pytest.raises(ValueError, match="Paper drafts require server-derived installation provenance"):
         await service.create(
@@ -258,7 +265,7 @@ async def test_create_requires_server_derived_installation_provenance_only_for_p
 @pytest.mark.asyncio
 async def test_capacity_and_single_owner_are_enforced() -> None:
     repository = FakeDraftRepository()
-    service = SubmissionDraftService(repository, FakeManifestRegistry(), FixedAccountDraftCapacity(1))
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), FixedAccountDraftCapacity(1), now=lambda: NOW)
     await service.create(
         owner_account_id=7,
         category="other",
@@ -339,7 +346,7 @@ async def test_active_draft_discovery_is_bounded_owned_and_unexpired() -> None:
 @pytest.mark.parametrize("status", [DraftStatus.PROCESSING, DraftStatus.SUBMITTED, DraftStatus.EXPIRED])
 async def test_delete_rejects_every_noneditable_lifecycle_state(status: DraftStatus) -> None:
     repository = FakeDraftRepository()
-    service = SubmissionDraftService(repository, FakeManifestRegistry())
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
     created = await service.create(
         owner_account_id=7,
         category="other",
@@ -362,7 +369,7 @@ async def test_delete_rejects_every_noneditable_lifecycle_state(status: DraftSta
 @pytest.mark.asyncio
 async def test_change_is_idempotent_even_after_revision_advances() -> None:
     repository = FakeDraftRepository()
-    service = SubmissionDraftService(repository, FakeManifestRegistry())
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
     await service.create(
         owner_account_id=7,
         category="other",
@@ -445,7 +452,7 @@ async def test_expiry_batch_uses_the_service_clock_and_a_bounded_limit() -> None
 @pytest.mark.asyncio
 async def test_finalization_validation_uses_complete_pinned_answers() -> None:
     repository = FakeDraftRepository()
-    service = SubmissionDraftService(repository, FakeManifestRegistry())
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
     created = await service.create(
         owner_account_id=7,
         category="other",
@@ -481,7 +488,7 @@ async def test_finalization_validation_uses_complete_pinned_answers() -> None:
 @pytest.mark.asyncio
 async def test_processing_reports_field_errors_for_incomplete_web_draft() -> None:
     repository = FakeDraftRepository()
-    service = SubmissionDraftService(repository, FakeManifestRegistry())
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
     await service.create(
         owner_account_id=7,
         category="other",
