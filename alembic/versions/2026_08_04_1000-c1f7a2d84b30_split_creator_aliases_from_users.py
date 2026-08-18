@@ -14,7 +14,7 @@ from alembic_utils.pg_trigger import PGTrigger
 from alembic_utils.replaceable_entity import ReplaceableEntity
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "c1f7a2d84b30"
 down_revision: str | Sequence[str] | None = "a6c14ee7529f"
@@ -322,6 +322,6 @@ EntityT = TypeVar("EntityT", bound=ReplaceableEntity)
 def _selected_entities(entity_type: type[EntityT], names: set[str]) -> list[EntityT]:
     return [
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, entity_type) and entity.signature.partition("(")[0] in names
     ]

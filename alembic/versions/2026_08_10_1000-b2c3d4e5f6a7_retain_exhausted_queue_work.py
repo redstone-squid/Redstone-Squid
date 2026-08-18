@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic_utils.pg_function import PGFunction
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "b2c3d4e5f6a7"
 down_revision: str | Sequence[str] | None = "a1b2c3d4e5f6"
@@ -109,7 +109,7 @@ def downgrade() -> None:
 
 
 def _current_enqueue_discord_sync_sql() -> str:
-    for entity in ALEMBIC_UTIL_ENTITIES:
+    for entity in alembic_util_entities():
         if isinstance(entity, PGFunction) and entity.signature.partition("(")[0] == "enqueue_discord_sync":
             statement = str(entity.to_sql_statement_create())
             return statement.replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION", 1)

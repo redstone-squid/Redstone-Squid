@@ -11,7 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.permissions.infrastructure.repository import EPOCH_CHANNEL
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 _CREATE_SCHEMA = """
 CREATE TABLE permission_epoch (
@@ -41,7 +41,7 @@ async def epoch_schema(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     """Install the shipped trigger over a minimal production-shaped schema."""
     statements = [
         text(entity.to_sql_statement_create().text)
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, PGFunction | PGTrigger) and entity.signature.partition("(")[0] in _ENTITY_NAMES
     ]
     assert len(statements) == 2
