@@ -9,10 +9,10 @@ from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.events.infrastructure.models import DomainEventRecord
-from squid.notifications.domain import CURRENT_NOTIFICATION_NOTICE_VERSION, RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.domain import RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.infrastructure.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
@@ -59,9 +59,12 @@ def repository(
     return PostgresNotificationRepository(async_session_factory)
 
 
-async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> int:
+async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, consented: bool = True) -> int:
     async with session_factory.begin() as session:
-        account = Account()
+        account = Account(
+            consent_version=CURRENT_CONSENT_VERSION if consented else None,
+            consented_at=Instant.now() if consented else None,
+        )
         session.add(account)
         await session.flush()
         # The claim reads the DM address from here rather than from the delivery row.
@@ -69,8 +72,6 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession]) -> i
         session.add(
             NotificationProfile(
                 account_id=account.id,
-                notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
-                consented_at=Instant.now(),
                 web_enabled=True,
                 dm_enabled=True,
             )
@@ -176,7 +177,7 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
-        account = Account()
+        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
         session.add(account)
         await session.flush()
         account_id = account.id
@@ -210,3 +211,41 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
     assert filtered.id == filtered_again.id
     async with async_session_factory() as session:
         assert len((await session.scalars(select(NotificationSubscriptionRecord))).all()) == 2
+
+
+async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The gate moved onto `accounts`; it did not disappear.
+
+    Folding the notification notice left `dm_enabled = true` rows behind whose accounts have not
+    accepted the current privacy notice. The switch survives, because it is the person's stated
+    preference, but nothing may be delivered against it until the notice is accepted -- which is
+    the whole behavioural claim of the migration that dropped the second receipt.
+
+    Seeded through the same helper as the passing case, so the only difference between a delivery
+    that is claimed and one that is not is the account's consent.
+    """
+    await _seed_delivery(async_session_factory, consented=False)
+
+    assert await repository.claim_deliveries(limit=10) == ()
+
+
+async def test_a_consented_account_can_set_channels_without_a_separate_accept_step(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """There is no profile row to create first: accepting the notice is the only precondition."""
+    async with async_session_factory.begin() as session:
+        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(account)
+        await session.flush()
+        account_id = account.id
+
+    preferences = await repository.update_preferences(account_id, web_enabled=True, dm_enabled=False)
+
+    assert preferences is not None
+    assert preferences.web_enabled is True
+    assert preferences.dm_enabled is False
+    assert preferences.consent_pending is False

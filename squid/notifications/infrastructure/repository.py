@@ -12,13 +12,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
+from squid.accounts.infrastructure.consent import account_consent_current
 from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Build, BuildCreator
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventDeliveryRecord, DomainEventRecord
 from squid.notifications.domain import (
-    CURRENT_NOTIFICATION_NOTICE_VERSION,
     InboxNotification,
     NotificationKind,
     NotificationPreferences,
@@ -84,61 +84,54 @@ class PostgresNotificationRepository:
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
         async with self._session_factory() as session:
             profile = await session.get(NotificationProfile, account_id)
-            return _preferences(account_id, profile)
+            return _preferences(account_id, profile, await self._consent_pending(session, account_id))
 
-    async def accept_notice(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        async with self._session_factory() as session, session.begin():
-            statement = (
-                insert(NotificationProfile)
-                .values(
-                    account_id=account_id,
-                    notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
-                    consented_at=func.now(),
-                    web_enabled=web_enabled,
-                    dm_enabled=dm_enabled,
-                    dm_suspended_at=None,
-                    updated_at=func.now(),
-                )
-                .on_conflict_do_update(
-                    index_elements=[NotificationProfile.account_id],
-                    set_={
-                        "notice_version": CURRENT_NOTIFICATION_NOTICE_VERSION,
-                        "consented_at": func.now(),
-                        "web_enabled": web_enabled,
-                        "dm_enabled": dm_enabled,
-                        "dm_suspended_at": None,
-                        "updated_at": func.now(),
-                    },
-                )
-                .returning(NotificationProfile)
-            )
-            profile = (await session.scalars(statement)).one()
-            if not dm_enabled:
-                await self._cancel_pending_deliveries(session, account_id)
-            return _preferences(account_id, profile)
+    @staticmethod
+    async def _consent_pending(session: AsyncSession, account_id: int) -> bool:
+        """Whether the account still owes the current privacy notice."""
+        writable = await session.scalar(select(Account.id).where(Account.id == account_id, account_consent_current()))
+        return writable is None
 
     async def update_preferences(
         self, account_id: int, *, web_enabled: bool, dm_enabled: bool
     ) -> NotificationPreferences | None:
+        """Set both channels, creating the profile row on first use.
+
+        An upsert rather than an update because there is no longer a separate accept step to
+        have created the row: a consented account turning a channel on for the first time is one
+        call. The gate is read first and separately because an UPDATE cannot join to `accounts`,
+        and this runs when a human toggles a switch, so a second round trip costs nothing.
+        """
         async with self._session_factory() as session, session.begin():
-            profile = await session.scalar(
-                update(NotificationProfile)
-                .where(
-                    NotificationProfile.account_id == account_id,
-                    NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
-                    NotificationProfile.consented_at.is_not(None),
+            if await self._consent_pending(session, account_id):
+                return None
+            profile = (
+                await session.scalars(
+                    insert(NotificationProfile)
+                    .values(
+                        account_id=account_id,
+                        web_enabled=web_enabled,
+                        dm_enabled=dm_enabled,
+                        dm_suspended_at=None,
+                        updated_at=func.now(),
+                    )
+                    .on_conflict_do_update(
+                        index_elements=[NotificationProfile.account_id],
+                        set_={
+                            "web_enabled": web_enabled,
+                            "dm_enabled": dm_enabled,
+                            # Re-enabling DMs clears a suspension; leaving them off preserves it,
+                            # so a bounce is not forgotten by an unrelated web-inbox toggle.
+                            "dm_suspended_at": None if dm_enabled else NotificationProfile.dm_suspended_at,
+                            "updated_at": func.now(),
+                        },
+                    )
+                    .returning(NotificationProfile)
                 )
-                .values(
-                    web_enabled=web_enabled,
-                    dm_enabled=dm_enabled,
-                    dm_suspended_at=None if dm_enabled else NotificationProfile.dm_suspended_at,
-                    updated_at=func.now(),
-                )
-                .returning(NotificationProfile)
-            )
-            if profile is not None and not dm_enabled:
+            ).one()
+            if not dm_enabled:
                 await self._cancel_pending_deliveries(session, account_id)
-            return None if profile is None else _preferences(account_id, profile)
+            return _preferences(account_id, profile, consent_pending=False)
 
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
         async with self._session_factory() as session:
@@ -268,9 +261,11 @@ class PostgresNotificationRepository:
     @staticmethod
     async def _web_inbox_enabled(session: AsyncSession, account_id: int) -> bool:
         enabled = await session.scalar(
-            select(NotificationProfile.web_enabled).where(
+            select(NotificationProfile.web_enabled)
+            .join(Account, Account.id == NotificationProfile.account_id)
+            .where(
                 NotificationProfile.account_id == account_id,
-                NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
+                account_consent_current(),
             )
         )
         return bool(enabled)
@@ -337,6 +332,7 @@ class PostgresNotificationRepository:
                             NotificationProfile.account_id == NotificationDeliveryRecord.account_id,
                         )
                         .join(NotificationRecord, NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                        .join(Account, Account.id == NotificationDeliveryRecord.account_id)
                         .join(
                             AccountIdentity,
                             (AccountIdentity.account_id == NotificationDeliveryRecord.account_id)
@@ -350,7 +346,7 @@ class PostgresNotificationRepository:
                                 NotificationDeliveryRecord.claimed_at.is_(None),
                                 NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
                             ),
-                            NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
+                            account_consent_current(),
                             NotificationProfile.dm_enabled.is_(True),
                             NotificationProfile.dm_suspended_at.is_(None),
                             or_(
@@ -616,10 +612,10 @@ class PostgresNotificationRepository:
                     (AccountIdentity.account_id == NotificationProfile.account_id)
                     & (AccountIdentity.provider == IdentityProvider.DISCORD),
                 )
+                .join(Account, Account.id == NotificationProfile.account_id)
                 .where(
                     NotificationProfile.account_id == account_id,
-                    NotificationProfile.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION,
-                    NotificationProfile.consented_at.is_not(None),
+                    account_consent_current(),
                     or_(NotificationProfile.web_enabled.is_(True), NotificationProfile.dm_enabled.is_(True)),
                 )
             )
@@ -777,13 +773,14 @@ class PostgresNotificationRepository:
         return matched
 
 
-def _preferences(account_id: int, profile: NotificationProfile | None) -> NotificationPreferences:
+def _preferences(
+    account_id: int, profile: NotificationProfile | None, consent_pending: bool
+) -> NotificationPreferences:
     if profile is None:
-        return NotificationPreferences(account_id=account_id, notice_version=None, consented_at=None)
+        return NotificationPreferences(account_id=account_id, consent_pending=consent_pending)
     return NotificationPreferences(
         account_id=account_id,
-        notice_version=profile.notice_version,
-        consented_at=profile.consented_at,
+        consent_pending=consent_pending,
         web_enabled=profile.web_enabled,
         dm_enabled=profile.dm_enabled,
         dm_suspended_at=profile.dm_suspended_at,

@@ -8,8 +8,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
+from squid.core.i18n import _
 from squid.notifications import (
     NotificationSubscription,
     PendingNotificationDelivery,
@@ -45,52 +47,61 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 
-    @app_commands.command(name="status", description="Show your notification consent and channels")
+    @app_commands.command(name="status", description="Show your notification channels")
     async def status(self, interaction: discord.Interaction) -> None:
-        account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        account_id = await self._account_id(interaction)
         preferences = await self.bot.services.notifications.preferences(account_id)
-        await interaction.response.send_message(
-            "Notification notice: "
-            f"{'accepted' if preferences.has_current_consent else 'not accepted'}\n"
-            f"Web inbox: {'on' if preferences.web_enabled else 'off'}\n"
-            f"Discord DMs: {'on' if preferences.dm_enabled else 'off'}"
-            + (" (suspended after Discord rejected a DM)" if preferences.dm_suspended_at is not None else ""),
-            ephemeral=True,
-        )
-
-    @app_commands.command(name="consent", description="Accept the notification notice and choose channels")
-    async def consent(self, interaction: discord.Interaction, web: bool = False, dm: bool = False) -> None:
-        account_id = await account_id_for(self.bot.services.accounts, interaction.user)
-        await self.bot.services.notifications.accept_notice(account_id, web_enabled=web, dm_enabled=dm)
-        await interaction.response.send_message("Notification preferences saved.", ephemeral=True)
+        lines = [
+            t(
+                locale,
+                _("Web inbox: {state}"),
+                state=t(locale, _("on")) if preferences.web_enabled else t(locale, _("off")),
+            ),
+            t(
+                locale,
+                _("Discord DMs: {state}"),
+                state=t(locale, _("on")) if preferences.dm_enabled else t(locale, _("off")),
+            ),
+        ]
+        if preferences.dm_suspended_at is not None:
+            lines.append(t(locale, _("DMs are suspended because Discord rejected one.")))
+        await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     @app_commands.command(name="channels", description="Change web and Discord DM channels")
     async def channels(self, interaction: discord.Interaction, web: bool, dm: bool) -> None:
-        account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        account_id = await self._account_id(interaction)
         await self.bot.services.notifications.set_preferences(account_id, web_enabled=web, dm_enabled=dm)
-        await interaction.response.send_message("Notification channels updated.", ephemeral=True)
+        await interaction.response.send_message(t(locale, _("Notification channels updated.")), ephemeral=True)
 
     @autocompletes(creator_id="creator_profiles")
     @app_commands.command(name="follow-creator", description="Follow a public creator profile UUID")
     async def follow_creator(self, interaction: discord.Interaction, creator_id: str) -> None:
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         subscription = await self.bot.services.notifications.subscribe(
             account_id,
             kind=SubscriptionKind.CREATOR,
             subject_id=UUID(creator_id),
         )
-        await interaction.response.send_message(f"Creator subscription #{subscription.id} saved.", ephemeral=True)
+        await interaction.response.send_message(
+            t(locale, _("Creator subscription #{id} saved."), id=subscription.id), ephemeral=True
+        )
 
     @autocompletes(competition_id="competitions")
     @app_commands.command(name="follow-record", description="Follow one stable record competition UUID")
     async def follow_record(self, interaction: discord.Interaction, competition_id: str) -> None:
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         subscription = await self.bot.services.notifications.subscribe(
             account_id,
             kind=SubscriptionKind.RECORD,
             subject_id=UUID(competition_id),
         )
-        await interaction.response.send_message(f"Record subscription #{subscription.id} saved.", ephemeral=True)
+        await interaction.response.send_message(
+            t(locale, _("Record subscription #{id} saved."), id=subscription.id), ephemeral=True
+        )
 
     @autocompletes(
         build_kind="build_kinds",
@@ -108,6 +119,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         tag_id: int | None = None,
         tag_value: str | None = None,
     ) -> None:
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         tags = ()
         if tag_id is not None:
@@ -123,22 +135,26 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             kind=SubscriptionKind.RECORD_FILTER,
             record_filter=record_filter,
         )
-        await interaction.response.send_message(f"Record filter #{subscription.id} saved.", ephemeral=True)
+        await interaction.response.send_message(
+            t(locale, _("Record filter #{id} saved."), id=subscription.id), ephemeral=True
+        )
 
     @app_commands.command(name="list", description="List your notification subscriptions")
     async def list_subscriptions(self, interaction: discord.Interaction) -> None:
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         subscriptions = await self.bot.services.notifications.subscriptions(await self._account_id(interaction))
         content = "\n".join(
             f"#{subscription.id}: {subscription.kind.value} {_subscription_target(subscription)}"
             for subscription in subscriptions
         )
-        await interaction.response.send_message(content or "You have no subscriptions.", ephemeral=True)
+        await interaction.response.send_message(content or t(locale, _("You have no subscriptions.")), ephemeral=True)
 
     @autocompletes(subscription_id="notification_subscriptions")
     @app_commands.command(name="unfollow", description="Remove one notification subscription")
     async def unfollow(self, interaction: discord.Interaction, subscription_id: int) -> None:
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         await self.bot.services.notifications.unsubscribe(await self._account_id(interaction), subscription_id)
-        await interaction.response.send_message("Subscription removed.", ephemeral=True)
+        await interaction.response.send_message(t(locale, _("Subscription removed.")), ephemeral=True)
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
