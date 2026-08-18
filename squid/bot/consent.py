@@ -17,6 +17,10 @@ PRIVACY_NOTICE = _(
     "Linking also claims build credit recorded under your verified Minecraft username, so those "
     "builds are attributed to your account. Credit already claimed by someone else is never taken "
     "from them; agreeing opens a claim for staff to review instead.\n\n"
+    "Every account has a public creator page, and a linked account appears on yours by default. "
+    "You can hide any linked account individually with `/account visibility`, or hide the whole "
+    "page. A hidden page still lists the build credit you hold, because that credit is what "
+    "attributes the builds themselves.\n\n"
     "Agreeing records which version of this notice you accepted and when. Cancelling stores no "
     "account information at all."
 )
@@ -25,6 +29,12 @@ PRIVACY_NOTICE = _(
 One message rather than several so the version recorded in a consent receipt refers to a single
 piece of text. The card still names the stored categories itself: consent is not informed if every
 category is behind a button.
+
+Publication is described here as well as storage, since a linked identity now appears on a public
+creator page by default. `CURRENT_CONSENT_VERSION` is deliberately *not* bumped for that change:
+the deployment has no users beyond the maintainer dogfooding it, so a re-consent round would gate
+his own writes to no one's benefit. The version discipline starts at the first alpha, and a change
+of this shape after that point needs a bump.
 """
 
 
