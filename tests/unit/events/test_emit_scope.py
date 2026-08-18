@@ -2,7 +2,7 @@
 
 from alembic_utils.pg_trigger import PGTrigger
 
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 EMITTING_TABLES = {"public.builds", "public.vote_sessions"}
 """Tables allowed to emit domain events.
@@ -18,7 +18,7 @@ handler writes to it, directly or through a service.
 def test_only_the_reviewed_tables_emit_domain_events() -> None:
     emitting = {
         trigger.on_entity
-        for trigger in ALEMBIC_UTIL_ENTITIES
+        for trigger in alembic_util_entities()
         if isinstance(trigger, PGTrigger) and "emit_domain_event" in trigger.definition
     }
     assert emitting == EMITTING_TABLES

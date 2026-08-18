@@ -11,7 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
@@ -217,9 +217,11 @@ def test_migrations_create_schema_without_drift(
         engine.dispose()
 
     expected_functions = {
-        entity.signature.partition("(")[0] for entity in ALEMBIC_UTIL_ENTITIES if type(entity).__name__ == "PGFunction"
+        entity.signature.partition("(")[0]
+        for entity in alembic_util_entities()
+        if type(entity).__name__ == "PGFunction"
     }
-    expected_triggers = {entity.signature for entity in ALEMBIC_UTIL_ENTITIES if type(entity).__name__ == "PGTrigger"}
+    expected_triggers = {entity.signature for entity in alembic_util_entities() if type(entity).__name__ == "PGTrigger"}
     assert expected_functions <= function_names
     assert outdated_messages_function is None
     assert trigger_names == expected_triggers
