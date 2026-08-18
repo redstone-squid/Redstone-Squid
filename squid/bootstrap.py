@@ -27,7 +27,6 @@ from squid.builds.application import (
 )
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, PostgresBuildIndex
 from squid.builds.infrastructure.locks import BuildLockRepository
-from squid.builds.infrastructure.queries import BuildMetadataRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
@@ -291,7 +290,6 @@ class _ServiceGraph:
     def build_queries(self) -> BuildQueryService:
         return BuildQueryService(
             self.build_repository,
-            BuildMetadataRepository(self.db.async_session),
             self.embedding_service,
         )
 
