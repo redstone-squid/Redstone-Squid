@@ -20,6 +20,7 @@ from squid.accounts.domain.models import (
     LinkReservation,
     RecentAccountProof,
     VerificationCode,
+    consent_refresh_required,
     fold_creator_name,
 )
 from squid.accounts.domain.profiles import (
@@ -90,6 +91,7 @@ __all__ = [
     "RecentAccountProof",
     "VerificationCode",
     "avatar_url_for",
+    "consent_refresh_required",
     "fold_creator_name",
     "present_public_profile",
 ]
