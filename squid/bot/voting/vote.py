@@ -6,23 +6,19 @@ from typing import TYPE_CHECKING, override
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog, Context, guild_only, hybrid_group
+from discord.ext.commands import Cog
 
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.permissions import build_subject
+from squid.bot.utils.components import error_layout, no_mentions, reply_layout, text_layout
+from squid.bot.voting import controls
+from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import PollModal
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
-from squid.permissions.domain.catalogue import (
-    VOTE_LOG_DELETE_CAST,
-    VOTE_POLL_CLOSE_ANY,
-    VOTE_WEIGHT_STAFF,
-)
 from squid.runtime import JobHandle
 from squid.voting.domain import VoteActor, VoteKind, VoteRejection
 
@@ -32,31 +28,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-REJECTION_MESSAGES = {
-    VoteRejection.NOT_FOUND: _("That message is not an open vote."),
-    VoteRejection.CLOSED: _("That vote is already closed."),
-    VoteRejection.NOT_ELIGIBLE: _("You do not have a trusted role."),
-    VoteRejection.INVALID_OPTION: _("That option is not available on this vote."),
-    VoteRejection.WRONG_GUILD: _("That vote belongs to a different server."),
-    VoteRejection.NOT_AUTHORIZED: _("Only the poll creator or staff can do that."),
-}
-"""One localizable sentence per typed rejection.
-
-Keyed by the enum rather than formatted from it, so adding a rejection to the domain
-fails the lookup here instead of leaking `not_eligible` into a user's channel.
-"""
-
 _QUIET_REJECTIONS = frozenset({VoteRejection.NOT_FOUND, VoteRejection.CLOSED, VoteRejection.INVALID_OPTION})
 """Refusals a reaction should not be answered with.
 
 Racing a close, or reacting with an emoji that is not an option, is ordinary and
 would otherwise put a bot message in the channel for every stray reaction.
 """
-
-
-def describe_rejection(locale: str | None, rejection: VoteRejection) -> str:
-    """Render a typed rejection as a localized sentence."""
-    return t(locale, REJECTION_MESSAGES[rejection])
 
 
 class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -67,10 +44,19 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self._background_tasks: set[JobHandle] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
+        # A context menu cannot be declared with a decorator on a bound method, so it is
+        # built here and taken back down on unload; the tree is the bot's, not the cog's.
+        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
+        self.delete_ctx_menu = app_commands.ContextMenu(
+            name="Vote to Delete",
+            callback=self.delete_vote_context_menu,
+        )
+        self.bot.tree.add_command(self.delete_ctx_menu)
 
     @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
+        self.bot.tree.remove_command(self.delete_ctx_menu.name, type=self.delete_ctx_menu.type)
         await self.bot.background_tasks.cancel(*self._background_tasks)
 
     def _track(self, handle: JobHandle) -> None:
@@ -118,7 +104,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await self._decline_unconsented_vote(message, user, payload.emoji)
             return
 
-        actor = await self._actor(user, snapshot.kind, account_id=account_id)
+        actor = await resolve_actor(self.bot, user, account_id=account_id)
         previous = snapshot.selection_for(actor.account_id)
         result = await self.vote_service.cast_vote(payload.message_id, actor, emoji_name)
         if result.rejection is not None:
@@ -150,7 +136,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         member = await event.resolve_member()
         if member is None or member.bot:
             return
-        actor = await self._actor(member, snapshot.kind, account_id=account_id)
+        actor = await resolve_actor(self.bot, member, account_id=account_id)
         # Re-casting the same option toggles it off, which is what removing the
         # reaction means for a poll whose reactions are the ballots.
         result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
@@ -204,94 +190,60 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    @hybrid_group(name="vote")
-    async def vote_group(self, ctx: Context[BotT]) -> None:
-        """Start and manage votes."""
-        await ctx.send_help("vote")
-
-    @hybrid_group(name="poll")
-    @guild_only()
-    async def poll_group(self, ctx: Context[BotT]) -> None:
-        """Create and manage multi-option polls."""
-        await ctx.send_help("poll")
-
-    async def _open_poll_wizard(self, ctx: Context[BotT]) -> None:
-        """Open the ephemeral wizard, shared by `/poll create` and its old alias."""
-        if ctx.interaction is None:
-            await ctx.send("Use the slash command `/poll create` to open the poll editor.")
-            return
-        locale = await resolve_locale(ctx, self.bot.services.settings)
+    @app_commands.command(name="poll")
+    @app_commands.guild_only()
+    async def poll(self, interaction: discord.Interaction[BotT]) -> None:
+        """Create a multi-option poll through an ephemeral preview wizard."""
+        locale = await resolve_locale(interaction, self.bot.services.settings)
         # A modal has to open on an unspent interaction, and showing the notice spends this one,
         # so an unconsented author is asked here and re-runs to get the editor.
-        account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD, str(interaction.user.id)
+        )
         if account is None or account.id is None or account.needs_consent_refresh:
-            if await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale) is None:
+            if await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale) is None:
                 return
-            await ctx.send(
-                view=text_layout(t(locale, _("Thanks. Run `/poll create` again to open the editor."))),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
-            )
+            await reply_layout(interaction, text_layout(t(locale, _("Thanks. Run `/poll` again to open the editor."))))
             return
-        allow_network = isinstance(ctx.author, discord.Member) and await self.publisher.may_create_network(ctx.author)
-        await ctx.interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
+        allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
+            interaction.user
+        )
+        await interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
             PollModal(self.publisher, account.id, allow_network=allow_network)
         )
 
-    @poll_group.command(name="create")
-    @guild_only()
-    async def create_poll(self, ctx: Context[BotT]) -> None:
-        """Create a multi-option poll through an ephemeral preview wizard."""
-        await self._open_poll_wizard(ctx)
+    async def delete_vote_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+        """Open a vote on deleting the message that was right-clicked.
 
-    @vote_group.command(name="poll")
-    @guild_only()
-    async def poll_alias(self, ctx: Context[BotT]) -> None:
-        """Deprecated alias for `/poll create`."""
-        await self._open_poll_wizard(ctx)
+        This was `/vote delete <message>`, which in slash form meant pasting a link to a
+        message you were already looking at (audit C4).
+        """
+        await interaction.response.defer(ephemeral=True)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        if interaction.guild is None or message.guild != interaction.guild:
+            await reply_layout(
+                interaction,
+                error_layout(
+                    t(locale, _("Cannot vote on this message")),
+                    t(locale, _("The message is not from this guild.")),
+                ),
+            )
+            return
 
-    @poll_group.command(name="close")
-    @guild_only()
-    async def close_poll(self, ctx: Context[BotT], message: discord.Message) -> None:
-        """Close a poll early as its creator or a configured staff member."""
-        assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
-        if account_id is None:
+        author_account_id = await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale)
+        if author_account_id is None:
             return
-        actor = await self._actor(ctx.author, VoteKind.GENERIC, account_id=account_id)
-        result = await self.vote_service.close(message.id, actor)
-        if result.rejection is not None or result.session is None:
-            await ctx.send(describe_rejection(locale, result.rejection or VoteRejection.NOT_FOUND), ephemeral=True)
-            return
-        await self.bot.refresh_posts("vote_session", str(result.session.id))
-        await ctx.send(t(locale, _("Poll closed.")), ephemeral=True)
 
-    @poll_group.command(name="refresh")
-    @guild_only()
-    async def refresh_poll(self, ctx: Context[BotT], message: discord.Message) -> None:
-        """Refresh a poll's cached role weights."""
-        assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        snapshot = await self.vote_service.get_session(message.id)
-        if snapshot is None:
-            await ctx.send(describe_rejection(locale, VoteRejection.NOT_FOUND), ephemeral=True)
-            return
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
-        if account_id is None:
-            return
-        actor = await self._actor(ctx.author, VoteKind.GENERIC, account_id=account_id)
-        # Refreshing recomputes the weights a close would act on, so it is gated by the
-        # same rule rather than a second copy of it.
-        rejection = snapshot.can_close(actor)
-        if rejection is not None:
-            await ctx.send(describe_rejection(locale, rejection), ephemeral=True)
-            return
-        result = await self.vote_service.refresh(message.id)
-        if result.session is not None:
-            await self.bot.refresh_posts("vote_session", str(result.session.id))
-        suffix = "" if result.complete else f" Some accounts could not be resolved: {result.unresolved_account_ids}."
-        await ctx.send(f"{t(locale, _('Poll weights refreshed.'))}{suffix}", ephemeral=True)
+        # The card is a public artifact of a public decision, so it goes in the channel
+        # rather than into the ephemeral reply the right-click opened.
+        async with self.bot.get_running_message(message.channel, locale=locale) as published:
+            await start_delete_log_vote(
+                self.bot,
+                author_account_id=author_account_id,
+                target_message=message,
+                published_message=published,
+            )
+        await reply_layout(interaction, text_layout(t(locale, _("Deletion vote opened."))))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.
@@ -330,30 +282,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 allowed_mentions=no_mentions(),
             )
 
-    async def _actor(self, member: discord.Member, kind: VoteKind, *, account_id: int) -> VoteActor:
-        """Resolve one member's vote capabilities in a single permission load.
-
-        The tiers this replaces cost up to four round trips here -- a global
-        admin lookup, a guild lookup and a settings read, twice over.
-
-        The account id is required rather than resolved here. This used to mint one on sight,
-        which meant a raw reaction wrote a row naming somebody who had never been asked; every
-        caller now establishes consent first, and the ones that cannot ask refuse instead.
-        """
-        del kind  # Every kind's nodes are resolved together; one load answers all.
-        subject = await build_subject(self.bot, member, member.guild.id)
-        capabilities = await self.bot.services.permissions.capabilities(
-            subject,
-            (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
-        )
-        return VoteActor(
-            account_id,
-            member.id,
-            member.guild.id,
-            frozenset(role.id for role in member.roles),
-            capabilities=capabilities,
-        )
-
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Resolve current member facts for a service-level weight refresh.
 
@@ -380,35 +308,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 return VoteActor(account_id, discord_id, guild_id)
             except discord.Forbidden:
                 return None
-        return await self._actor(member, kind, account_id=account_id)
-
-    @vote_group.command(name="delete")
-    @app_commands.rename(target_message="message")
-    @app_commands.describe(target_message=app_commands.locale_str(_("The message to hold a deletion vote for.")))
-    async def start_vote(self, ctx: Context[BotT], target_message: discord.Message):
-        """Start a vote to delete a message."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        # Check if guild_id matches the current guild
-        if ctx.guild != target_message.guild:
-            await ctx.send(
-                view=text_layout(t(locale, _("The message is not from this guild."))),
-                allowed_mentions=no_mentions(),
-            )
-            return
-
-        author_account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
-        if author_account_id is None:
-            return
-
-        async with self.bot.get_running_message(ctx, locale=locale) as message:
-            await start_delete_log_vote(
-                self.bot,
-                author_account_id=author_account_id,
-                target_message=target_message,
-                published_message=message,
-            )
+        return await resolve_actor(self.bot, member, account_id=account_id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
+    controls.register(bot)
     await bot.add_cog(VoteCog(bot))
