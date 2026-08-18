@@ -9,7 +9,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RecordLookupRequest
@@ -29,6 +29,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @hybrid_group(name="admin")
     @requires(RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
+    @hide_unless(manage_guild=True)
     async def admin_group(self, ctx: Context[BotT]) -> None:
         """Inspect and maintain internal bot data."""
         await ctx.send_help("admin")
