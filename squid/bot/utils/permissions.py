@@ -6,10 +6,12 @@ engine in `squid.permissions` decides. Nothing here knows about tiers any more:
 command runs rather than who is running it.
 """
 
+from collections.abc import Callable
 from functools import cache
 from typing import TYPE_CHECKING, Literal
 
 import discord
+from discord import app_commands
 from discord.ext.commands import CheckFailure, Context, NoPrivateMessage, check
 from whenever import Instant
 
@@ -171,6 +173,20 @@ def requires(
     predicate.__squid_nodes__ = tuple(node.name for node in resolved)  # pyrefly: ignore[missing-attribute]
     predicate.__squid_mode__ = mode  # pyrefly: ignore[missing-attribute]
     return check(predicate)
+
+
+def hide_unless[CommandT](**permissions: bool) -> Callable[[CommandT], CommandT]:
+    """Keep a command out of the pickers of viewers lacking these Discord permissions.
+
+    Visibility only. Discord evaluates `default_member_permissions` per viewer and
+    lets guild admins override it per command in Server Settings, so it can never
+    be the gate — `requires(...)` is, and stays applied alongside. The pair reads
+    as: this decides who *sees* the command, that decides who may *run* it.
+
+    Discord reads the field on top-level commands only, so this belongs on a group
+    or a standalone command; on a subcommand it is silently ignored.
+    """
+    return app_commands.default_permissions(**permissions)
 
 
 def _satisfied(decisions: tuple[Decision, ...], mode: CheckMode) -> bool:

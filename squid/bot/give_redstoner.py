@@ -14,7 +14,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledLayoutView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.permissions import check_is_home_server, requires
+from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
@@ -104,6 +104,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @hybrid_group(name="redstoner")
     @check_is_home_server()
     @requires(REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
+    @hide_unless(manage_roles=True)
     async def redstoner_group(self, ctx: Context[BotT]) -> None:
         """Manage Redstoner role automation."""
         await ctx.send_help("redstoner")

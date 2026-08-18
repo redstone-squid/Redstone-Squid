@@ -9,7 +9,7 @@ from discord.ext.commands import Context
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import CardField, card_layout, info_layout, no_mentions
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.diagnostics.domain import ErrorReport
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
@@ -37,6 +37,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @commands.hybrid_group(name="error", fallback="show")
     @requires(DIAGNOSTICS_ERROR_READ)
+    @hide_unless(manage_guild=True)
     async def error_group(self, ctx: Context[BotT], reference: str) -> None:
         """Show the stored error behind a reference someone reported."""
         report, matches = await self.error_reports.lookup(reference)
