@@ -10,7 +10,7 @@ Steps:
 1. Update the SQLAlchemy models in `squid/<context>/infrastructure/models.py`, then register the module in
    `squid/persistence/__init__.py`. A new models module that is not registered there is invisible to
    `Base.metadata`, so `alembic autogenerate` emits a *drop* for its tables rather than a create.
-2. For a PostgreSQL function or trigger, update `squid/db/postgres_entities.sql`.
+2. For a PostgreSQL function or trigger, update `squid/persistence/postgres_entities.sql`.
 3. Run `just db-revision "<short description>"`.
 4. Review the generated revision. Data migrations and PostgreSQL procedures require explicit `op.execute(...)` SQL.
 5. Run `just db-upgrade`, then `just db-check`.

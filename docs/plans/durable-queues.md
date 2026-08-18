@@ -1,11 +1,16 @@
 # Durable work queues
 
-> **Status.** PR 1 implemented 2026-08-16 (commits `8381ddd0`..`a5363e8a`). PR 2 —
-> `enforce_queue_claim_tokens` — is still outstanding and must not merge until PR 1 is deployed
-> everywhere. The findings below were verified in-tree, not hypothetical: defects 1-5 and 7 were
-> live, and both bugs in the `record_recompute_queue` audit were active data-correctness faults.
-> **Defect 6 was fixed in flight by revision `c2d3e4f5a6b1`** and is retained below as the worked
-> example of the hazard, not as outstanding work.
+> **Status.** PR 1 implemented 2026-08-16 (commits `80657335`..`eb041c00`; re-verified in-tree
+> 2026-08-18 after a rebase changed these hashes, content unchanged). PR 2 —
+> `enforce_queue_claim_tokens` — is still outstanding: `alembic/versions/2026_08_16_1200-c3d4e5f6a7b2_add_queue_claim_tokens.py`
+> is revision 1 (nullable `claim_token`, `available_at`, no CHECK constraints), the migration
+> chain past it (through head `b9d3e6a1f8c5`) contains no `enforce_queue_claim_tokens` revision
+> and no new `*_claim_complete` CHECK constraint, and `squid/persistence/queue.py:302-313`
+> (`token_of`) still treats a null token as a valid deploy-window state. PR 2 must not merge until
+> PR 1 is deployed everywhere. The findings below were verified in-tree, not hypothetical: defects
+> 1-5 and 7 were live, and both bugs in the `record_recompute_queue` audit were active
+> data-correctness faults. **Defect 6 was fixed in flight by revision `c2d3e4f5a6b1`** and is
+> retained below as the worked example of the hazard, not as outstanding work.
 >
 > **What building it proved wrong** — see [Corrections](#corrections-from-implementation) for
 > detail:
@@ -266,10 +271,12 @@ rewritten by `c2d3e4f5a6b1`) — and five Python upserts (`squid/tags/infrastruc
 `squid/search/infrastructure/projection.py:218` and :229).
 
 No trigger work is needed here. `discord_sync_queue_bump_generation` and its function are dropped by
-`c2d3e4f5a6b1`, which already moved the counts in `squid/persistence/alembic_entities.py:20` from
-16/39 to 15/38. This change replaces four function bodies rather than adding or removing any, so it
-leaves those counts alone — but rebase onto the current head before writing the migration, because
-that file is under active edit.
+`c2d3e4f5a6b1`, which already moved the counts in `squid/persistence/alembic_entities.py`. The guard
+is now `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` constants (`alembic_entities.py:14-15`), currently
+`12 functions / 38 triggers` — later, unrelated function work dropped the function count further
+since this paragraph was written. This change replaces four function bodies rather than adding or
+removing any, so it leaves those counts alone — but rebase onto the current head before writing the
+migration, because that file is under active edit.
 
 New column attribute docstrings must be mirrored by `comment=` in the migration, because
 `squid/persistence/base.py` turns them into column comments that `alembic check` compares.
@@ -366,13 +373,18 @@ is eight commits rather than nine:
 
 | | Commit | |
 | --- | --- | --- |
-| 1 | `8381ddd0` | `persistence: give the work queues a claim token and a retry clock` |
-| 2+3 | `a569c304` | `persistence: claim through a database-minted fencing token` |
-| 4 | `ed1cc6d2` | `search: fence projection acknowledgement inside the caller's session` |
-| 5 | `087c1839` | `records: fence the recompute lease on its claim tokens` |
-| 6 | `7d6fdd2b` | `worker: generate the queue-health query from the queue specs` |
-| 7 | `9ac344a7` | `notifications: use the shared visibility timeout and backoff` |
-| 8 | `a5363e8a` | `events: claim deliveries through the shared protocol` |
+| 1 | `80657335` | `persistence: give the work queues a claim token and a retry clock` |
+| 2+3 | `18b502eb` | `persistence: claim through a database-minted fencing token` |
+| 4 | `0614cd28` | `search: fence projection acknowledgement inside the caller's session` |
+| 5 | `ec7d16e9` | `records: fence the recompute lease on its claim tokens` |
+| 6 | `ca967636` | `worker: generate the queue-health query from the queue specs` |
+| 7 | `f30973d6` | `notifications: use the shared visibility timeout and backoff` |
+| 8 | `eb041c00` | `events: claim deliveries through the shared protocol` |
+
+Hashes above are post-rebase (this branch was rebased 146 commits forward on 2026-08-18); the
+commit content is unchanged from the 2026-08-16 landing, re-verified against current
+`squid/persistence/queue.py`, `squid/schematics/infrastructure/jobs.py`, and
+`squid/search/infrastructure/embeddings.py`.
 
 Commit 8 was the falsification test and it **passed**: `domain_event_deliveries` converted using
 only fields the other six specs already use, plus `claim_count`, for which it already had a column.
