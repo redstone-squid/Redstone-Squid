@@ -113,9 +113,11 @@ resolved there.
 
 - `/squid set <field> <value>` serves inline `options` only. Values behind an `optionSource` need a
   cache warmed off-thread when the manifest loads.
-- The Kotlin module was never compiled: `./gradlew :core:compileTestKotlin` fails before reaching
-  the compiler because dependency verification rejects `kotlinx-coroutines-bom-1.8.0.pom`, which
-  `minecraft/gradle/verification-metadata.xml` does not list. No CI workflow builds this module
-  either, so `SquidCommandTreeTest` has never run.
 - `/v1/search/suggest` and the `/api/suggest` web proxies still exist with no callers, kept so a
   browser holding a stale bundle across a deploy does not get a 404.
+
+Resolved since this section was written: the Kotlin module's dependency verification was fixed
+(`minecraft/gradle/verification-metadata.xml` now pins `kotlinx-coroutines-bom-1.11.0`, and Loom's
+locally-merged Minecraft jar is excluded from checksum verification rather than pinned), and CI
+now runs `./gradlew build` for the module (`minecraft-quality` in `.github/workflows/ci.yml`), so
+`SquidCommandTreeTest` runs on every change to `minecraft/**`.
