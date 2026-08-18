@@ -23,8 +23,12 @@ from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.builds import BuildStatusFilter, BuildSummary
 from squid.api.v1.schemas.me import (
+    AccountMergeDetail,
     IdentityDetail,
     IdentityVisibilityRequest,
+    MergeCodeDetail,
+    MergePreviewDetail,
+    MergeRequest,
     MinecraftIdentityRefresh,
     ProfileDetail,
     ProfileUpdateRequest,
@@ -174,6 +178,72 @@ async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCa
     if caller.account_id is None:
         raise AuthenticationError
     return IdentityDetail.from_domain(await accounts.unlink_identity(caller.account_id, identity_id))
+
+
+@router.post(
+    "/merge-code",
+    response_model=MergeCodeDetail,
+    responses=responses(401, 403, 404, 503),
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="account_merge_code_create",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE],
+        cli=cli_command("account.merge.code", interaction="direct"),
+    ),
+)
+async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCodeDetail:
+    """Offer this account up to be absorbed by another one you hold.
+
+    Run this as the account you are giving up: it loses its public creator id to a permanent
+    redirect, so minting the code is that side's consent. Redeem it as the account you are
+    keeping. The code is shown once and replaces any previous one.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    code, ticket = await accounts.create_merge_code(caller.account_id)
+    return MergeCodeDetail(code=code, expires_at=ticket.expires_at)
+
+
+@router.post(
+    "/merge/preview",
+    response_model=MergePreviewDetail,
+    responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="account_merge_preview",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE],
+        cli=cli_command("account.merge.preview", interaction="direct"),
+    ),
+)
+async def preview_merge(body: MergeRequest, accounts: Accounts, caller: ManageCaller) -> MergePreviewDetail:
+    """Describe what redeeming a merge code would move, without spending it.
+
+    A merge cannot be undone, so this exists to be shown before the irreversible call.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    return MergePreviewDetail.from_domain(await accounts.preview_merge(caller.account_id, body.code))
+
+
+@router.post(
+    "/merge",
+    response_model=AccountMergeDetail,
+    responses=responses(400, 401, 403, 404, 422, 503),
+    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="account_merge_complete",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE],
+        cli=cli_command("account.merge.complete", interaction="direct"),
+    ),
+)
+async def complete_merge(body: MergeRequest, accounts: Accounts, caller: ManageCaller) -> AccountMergeDetail:
+    """Absorb the account that minted this code into the caller's account.
+
+    Irreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.
+    """
+    if caller.account_id is None:
+        raise AuthenticationError
+    return AccountMergeDetail.from_domain(await accounts.complete_merge(caller.account_id, body.code))
 
 
 @router.post(

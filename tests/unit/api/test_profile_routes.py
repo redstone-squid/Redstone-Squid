@@ -7,21 +7,36 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
+from whenever import Instant
 
 from squid.accounts.domain import (
     UNSET,
     AccountIdentity,
+    AccountMerge,
     AccountProfile,
     IdentityProvider,
+    MergePreview,
+    MergeTicket,
     ProfileLink,
 )
-from squid.accounts.errors import LastIdentityError
+from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
 from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.me import clear_profile, list_identities, set_identity_visibility, unlink_identity, update_profile
-from squid.api.v1.schemas.me import IdentityVisibilityRequest, ProfileUpdateRequest
+from squid.api.v1.me import (
+    clear_profile,
+    complete_merge,
+    create_merge_code,
+    list_identities,
+    preview_merge,
+    set_identity_visibility,
+    unlink_identity,
+    update_profile,
+)
+from squid.api.v1.schemas.me import IdentityVisibilityRequest, MergeRequest, ProfileUpdateRequest
 from squid.core.errors import AuthenticationError
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
+SURVIVING_ID = UUID("22222222-2222-4222-8222-222222222222")
+ABSORBED_ID = UUID("33333333-3333-4333-8333-333333333333")
 DISCORD = replace(AccountIdentity.discord(7), id=1)
 JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Steve"), id=2)
 
@@ -131,3 +146,60 @@ class TestStaffClear:
         accounts.clear_profile.assert_awaited_once_with(42)
         assert response.display_name is None
         assert response.hidden is False
+
+
+class TestMerge:
+    def _merge_accounts(self, **overrides: object) -> Any:
+        preview = MergePreview(
+            absorbed_public_creator_id=ABSORBED_ID,
+            alias_names=("Notch",),
+            identity_count=2,
+            build_count=3,
+        )
+        merge = AccountMerge(1, 2, SURVIVING_ID, ABSORBED_ID)
+        ticket = MergeTicket(1, Instant.from_utc(2026, 8, 18), Instant.from_utc(2026, 8, 18, 0, 10))
+        defaults: dict[str, object] = {
+            "create_merge_code": AsyncMock(return_value=("ABCD2345", ticket)),
+            "preview_merge": AsyncMock(return_value=preview),
+            "complete_merge": AsyncMock(return_value=merge),
+        }
+        return cast(Any, SimpleNamespace(**(defaults | overrides)))
+
+    async def test_a_code_is_minted_for_the_calling_account(self) -> None:
+        """Minted by the side being absorbed: it is that side's consent to disappear."""
+        accounts = self._merge_accounts()
+
+        response = await create_merge_code(accounts, _caller())
+
+        accounts.create_merge_code.assert_awaited_once_with(1)
+        assert response.code == "ABCD2345"
+
+    async def test_the_preview_names_what_would_move(self) -> None:
+        accounts = self._merge_accounts()
+
+        response = await preview_merge(MergeRequest(code="ABCD2345"), accounts, _caller())
+
+        assert response.absorbed_creator_id == ABSORBED_ID
+        assert response.alias_names == ["Notch"]
+        assert response.build_count == 3
+
+    async def test_completing_reports_the_permanent_redirect(self) -> None:
+        accounts = self._merge_accounts()
+
+        response = await complete_merge(MergeRequest(code="ABCD2345"), accounts, _caller())
+
+        accounts.complete_merge.assert_awaited_once_with(1, "ABCD2345")
+        assert response.surviving_creator_id == SURVIVING_ID
+        assert response.redirected_creator_id == ABSORBED_ID
+
+    async def test_a_bad_code_surfaces_as_a_validation_error(self) -> None:
+        accounts = self._merge_accounts(complete_merge=AsyncMock(side_effect=InvalidMergeCodeError))
+
+        with pytest.raises(InvalidMergeCodeError):
+            await complete_merge(MergeRequest(code="NOPE"), accounts, _caller())
+
+    async def test_an_unauthenticated_caller_cannot_mint(self) -> None:
+        anonymous = Caller(kind="anonymous", subject="anonymous")
+
+        with pytest.raises(AuthenticationError):
+            await create_merge_code(self._merge_accounts(), anonymous)
