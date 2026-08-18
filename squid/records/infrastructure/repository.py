@@ -982,7 +982,8 @@ def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordG
             fields.append(field)
     return RecordGap(
         definition_id=definition.id,
-        category_key=definition.category_key,
+        title=definition.title,
+        subtitle=definition.subtitle,
         record_class=RecordClass(definition.record_class),
         build_ids=tuple(build_ids),
         fields=tuple(fields),

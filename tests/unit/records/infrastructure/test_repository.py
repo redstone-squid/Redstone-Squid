@@ -32,6 +32,7 @@ from squid.records.infrastructure.repository import (
     CALCULATOR_VERSION,
     FORMATTER_VERSION,
     PostgresRecordRepository,
+    _gap_from_row,
     parse_category_key,
 )
 
@@ -88,6 +89,34 @@ def test_requested_category_key_round_trips() -> None:
 
 def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
     assert parse_category_key("not-a-record-category") is None
+
+
+def test_gap_rows_carry_the_definition_title() -> None:
+    definition = RecordDefinition(
+        ruleset_id=1,
+        record_class=RecordClass.FASTEST.value,
+        build_kind=BuildKind.DOOR.value,
+        version_scope=VersionScope.ALL_TIME.value,
+        category_key="door:door|2x2|t[20]|Door:r[]:p[]",
+        title="Fastest 2x2 Door",
+        subtitle="All-time",
+        materialization_source="eager",
+    )
+    definition.id = 5
+    result = RecordResult(
+        run_id=1,
+        definition_id=5,
+        status="unresolved",
+        gap_reasons={"missing": [{"build_id": 4, "field": "closing"}]},
+    )
+
+    gap = _gap_from_row(definition, result)
+
+    assert gap.definition_id == 5
+    assert gap.title == "Fastest 2x2 Door"
+    assert gap.subtitle == "All-time"
+    assert gap.build_ids == (4,)
+    assert gap.fields == ("closing",)
 
 
 def test_record_definitions_persist_canonical_title_metadata() -> None:
