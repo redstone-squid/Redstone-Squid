@@ -71,6 +71,7 @@ class FakeVoteRepository:
         self.mutation: StoredVoteMutation | None = None
         self.role_weights: dict[tuple[int, VoteKind], list[RoleWeight]] = {}
         self.role_weight_lookups: list[tuple[int, VoteKind]] = []
+        self.due: list[VoteSessionSnapshot] = []
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
         self.generic_create_calls: list[tuple[int, str, VoteVisibility, Instant, int | None]] = []
@@ -166,7 +167,7 @@ class FakeVoteRepository:
         return self.mutation
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
-        return []
+        return self.due
 
     async def get_emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset | None:
         return None
@@ -732,3 +733,40 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
     assert service._owner_guild_id(poll) == 77
     assert service._owner_guild_id(replace(poll, poll=replace(poll.poll, guild_id=None))) is None
     assert VoteService(FakeVoteRepository(None))._owner_guild_id(snapshot()) is None
+
+
+async def test_a_weight_edit_reaches_only_the_sessions_that_guild_owns() -> None:
+    initial = shared_snapshot()
+    repository = FakeVoteRepository(initial)
+    resolver = RecordingActorResolver()
+    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+
+    # A guild that merely hosts a card for the shared review.
+    await service.set_role_weight(RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0))
+
+    assert resolver.calls == []
+
+
+async def test_a_weight_edit_in_the_owner_guild_reweighs_its_sessions() -> None:
+    selections = (VoteSelection(account_id=7, guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=9.0),)
+    initial = replace(shared_snapshot(), selections=selections)
+    repository = FakeVoteRepository(initial)
+    resolver = RecordingActorResolver()
+    service = VoteService(repository, actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID)
+
+    await service.set_role_weight(RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 4.0))
+
+    assert resolver.calls == [(7, OWNER_GUILD_ID)]
+
+
+async def test_a_due_poll_without_a_card_still_has_its_weights_recomputed() -> None:
+    selections = (VoteSelection(account_id=7, guild_id=77, option_id="one", emoji="1️⃣", weight=9.0),)
+    poll = replace(poll_snapshot(guild_id=77), selections=selections, messages=())
+    repository = FakeVoteRepository(poll)
+    repository.due = [poll]
+    resolver = RecordingActorResolver()
+    service = VoteService(repository, actor_resolver=resolver)
+
+    await service.close_due()
+
+    assert resolver.calls == [(7, 77)]
