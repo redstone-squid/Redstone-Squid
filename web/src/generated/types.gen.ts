@@ -5,6 +5,22 @@ export type ClientOptions = {
 };
 
 /**
+ * AccountMergeDetail
+ *
+ * The stable identities left behind by a completed merge.
+ */
+export type AccountMergeDetail = {
+    /**
+     * Surviving Creator Id
+     */
+    surviving_creator_id: string;
+    /**
+     * Redirected Creator Id
+     */
+    redirected_creator_id: string;
+};
+
+/**
  * ApiCapabilities
  *
  * Namespaced compatibility facts for generated and handwritten clients.
@@ -40,6 +56,23 @@ export type ApiVersionCapabilities = {
      * Semantic Version
      */
     semantic_version: string;
+};
+
+/**
+ * AvatarDetail
+ *
+ * The linked identity a profile's avatar is rendered from.
+ */
+export type AvatarDetail = {
+    /**
+     * Identity Id
+     */
+    identity_id: number;
+    provider: IdentityProvider;
+    /**
+     * Url
+     */
+    url: string | null;
 };
 
 /**
@@ -764,7 +797,11 @@ export type CreatorAliasDetail = {
 /**
  * CreatorProfileDetail
  *
- * A stable public creator identity with all of its claimed aliases.
+ * A creator's public page.
+ *
+ * `hidden` is the shape switch: a hidden profile still serves `id`, `canonical_id` and
+ * `aliases`, because build credit is a fact about a build and a page that vanished would strand
+ * every build crediting it. Everything else is null or empty in that case.
  */
 export type CreatorProfileDetail = {
     /**
@@ -772,9 +809,61 @@ export type CreatorProfileDetail = {
      */
     id: string;
     /**
+     * Canonical Id
+     */
+    canonical_id: string | null;
+    /**
+     * Hidden
+     */
+    hidden: boolean;
+    /**
      * Aliases
      */
-    aliases: Array<string>;
+    aliases: Array<CreditedAliasDetail>;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * Bio
+     */
+    bio: string | null;
+    /**
+     * Pronouns
+     */
+    pronouns: string | null;
+    /**
+     * Links
+     */
+    links: Array<ProfileLinkDetail>;
+    /**
+     * Avatar Url
+     */
+    avatar_url: string | null;
+    /**
+     * Joined At
+     */
+    joined_at: string | null;
+    /**
+     * Identities
+     */
+    identities: Array<PublicIdentityDetail>;
+};
+
+/**
+ * CreditedAliasDetail
+ *
+ * One creator name held by this creator, and how many builds carry it.
+ */
+export type CreditedAliasDetail = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Build Count
+     */
+    build_count: number;
 };
 
 /**
@@ -1178,7 +1267,7 @@ export type DraftSummaryResponse = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
  * ErrorReportDetail
@@ -1552,6 +1641,58 @@ export type HttpValidationError = {
 };
 
 /**
+ * IdentityDetail
+ *
+ * One identity linked to the caller's own account.
+ *
+ * Carries the internal `id` because that is the handle every write takes: an account can hold
+ * two identities from one provider once it has absorbed another account in a merge, so
+ * "the Discord one" is not a usable address.
+ */
+export type IdentityDetail = {
+    /**
+     * Id
+     */
+    id: number;
+    provider: IdentityProvider;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * Verified At
+     */
+    verified_at: string | null;
+    /**
+     * Is Public
+     */
+    is_public: boolean;
+};
+
+/**
+ * IdentityProvider
+ *
+ * An independently verified external identity namespace.
+ */
+export type IdentityProvider = 'discord' | 'java' | 'bedrock';
+
+/**
+ * IdentityVisibilityRequest
+ *
+ * Whether one linked identity appears on the public creator profile.
+ */
+export type IdentityVisibilityRequest = {
+    /**
+     * Public
+     */
+    public: boolean;
+};
+
+/**
  * InboxNotificationDetail
  *
  * One web inbox item.
@@ -1720,6 +1861,61 @@ export type JsonValue2 = unknown;
  * A hosted media type accepted by a submission.
  */
 export type MediaKind = 'image' | 'video';
+
+/**
+ * MergeCodeDetail
+ *
+ * A freshly minted, single-use merge code.
+ *
+ * The plaintext appears here and nowhere else: persistence keeps only a digest, so a lost code
+ * is reminted rather than recovered.
+ */
+export type MergeCodeDetail = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Expires At
+     */
+    expires_at: string;
+};
+
+/**
+ * MergePreviewDetail
+ *
+ * What completing a merge would move, shown before the irreversible call.
+ */
+export type MergePreviewDetail = {
+    /**
+     * Absorbed Creator Id
+     */
+    absorbed_creator_id: string;
+    /**
+     * Alias Names
+     */
+    alias_names: Array<string>;
+    /**
+     * Identity Count
+     */
+    identity_count: number;
+    /**
+     * Build Count
+     */
+    build_count: number;
+};
+
+/**
+ * MergeRequest
+ *
+ * A merge code, redeemed by the account that will survive.
+ */
+export type MergeRequest = {
+    /**
+     * Code
+     */
+    code: string;
+};
 
 /**
  * MetadataSearchEntry
@@ -2118,6 +2314,87 @@ export type ProblemDetail = {
 };
 
 /**
+ * ProfileDetail
+ *
+ * The caller's own profile, including anything it has chosen to hide.
+ */
+export type ProfileDetail = {
+    /**
+     * Display Name
+     */
+    display_name: string | null;
+    /**
+     * Bio
+     */
+    bio: string | null;
+    /**
+     * Pronouns
+     */
+    pronouns: string | null;
+    /**
+     * Links
+     */
+    links: Array<ProfileLinkDetail>;
+    /**
+     * Hidden
+     */
+    hidden: boolean;
+    avatar: AvatarDetail | null;
+};
+
+/**
+ * ProfileLinkDetail
+ *
+ * One external link published on a creator profile.
+ */
+export type ProfileLinkDetail = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Url
+     */
+    url: string;
+};
+
+/**
+ * ProfileUpdateRequest
+ *
+ * A partial profile edit.
+ *
+ * Omitting a field leaves it alone; sending `null` clears it. Pydantic cannot express that
+ * difference in the annotation alone, so `to_domain` reads `model_fields_set` — which is also
+ * why every field defaults to `None` rather than to a sentinel clients would have to send.
+ */
+export type ProfileUpdateRequest = {
+    /**
+     * Display Name
+     */
+    display_name?: string | null;
+    /**
+     * Bio
+     */
+    bio?: string | null;
+    /**
+     * Pronouns
+     */
+    pronouns?: string | null;
+    /**
+     * Links
+     */
+    links?: Array<ProfileLinkDetail> | null;
+    /**
+     * Hidden
+     */
+    hidden?: boolean | null;
+    /**
+     * Avatar Identity Id
+     */
+    avatar_identity_id?: number | null;
+};
+
+/**
  * ProtocolCapabilities
  *
  * Compatibility intervals for protocols outside HTTP API SemVer.
@@ -2140,6 +2417,26 @@ export type ProtocolInterval = {
      * Maximum
      */
     maximum: number;
+};
+
+/**
+ * PublicIdentityDetail
+ *
+ * A linked identity the creator has chosen to publish.
+ *
+ * Carries no verification timestamp and no internal id: when it was verified is nobody else's
+ * business, and the id is the handle used to change it.
+ */
+export type PublicIdentityDetail = {
+    provider: IdentityProvider;
+    /**
+     * Subject
+     */
+    subject: string;
+    /**
+     * Display Name
+     */
+    display_name: string | null;
 };
 
 /**
@@ -2874,7 +3171,11 @@ export type User = {
 /**
  * UserMe
  *
- * The caller's own linked-account data.
+ * The caller's own account: who they are, how they sign in, and what they publish.
+ *
+ * Provider-neutral on purpose. The previous shape flattened one Discord identity and one Java
+ * identity into four top-level fields, which could not describe a caller with two of either and
+ * implied Discord by omission for callers that have none.
  */
 export type UserMe = {
     /**
@@ -2882,17 +3183,13 @@ export type UserMe = {
      */
     id: number;
     /**
-     * Discord Id
+     * Creator Id
      */
-    discord_id: number | null;
+    creator_id: string;
     /**
-     * Minecraft Uuid
+     * Created At
      */
-    minecraft_uuid: string | null;
-    /**
-     * Ign
-     */
-    ign: string | null;
+    created_at: string | null;
     /**
      * Consent Version
      */
@@ -2901,6 +3198,11 @@ export type UserMe = {
      * Consent Pending
      */
     consent_pending: boolean;
+    /**
+     * Identities
+     */
+    identities: Array<IdentityDetail>;
+    profile: ProfileDetail;
 };
 
 /**
@@ -3154,7 +3456,7 @@ export type HealthLiveData = {
 
 export type HealthLiveResponses = {
     /**
-     * Response Live Livez Get
+     * Response Health Live
      *
      * Successful Response
      */
@@ -3174,7 +3476,7 @@ export type HealthReadyData = {
 
 export type HealthReadyResponses = {
     /**
-     * Response Ready Readyz Get
+     * Response Health Ready
      *
      * Successful Response
      */
@@ -3194,7 +3496,7 @@ export type HealthReadyCompatibilityData = {
 
 export type HealthReadyCompatibilityResponses = {
     /**
-     * Response Ready Health Get
+     * Response Health Ready Compatibility
      *
      * Successful Response
      */
@@ -3255,7 +3557,7 @@ export type VerificationCreateError = VerificationCreateErrors[keyof Verificatio
 
 export type VerificationCreateResponses = {
     /**
-     * Response Get Verification Code V1 Verify Post
+     * Response Verification Create
      *
      * Successful Response
      */
@@ -3314,7 +3616,7 @@ export type VerificationCreateCompatibilityError = VerificationCreateCompatibili
 
 export type VerificationCreateCompatibilityResponses = {
     /**
-     * Response Get Verification Code Verify Post
+     * Response Verification Create Compatibility
      *
      * Successful Response
      */
@@ -4256,6 +4558,51 @@ export type CliSessionRevokeResponses = {
 
 export type CliSessionRevokeResponse = CliSessionRevokeResponses[keyof CliSessionRevokeResponses];
 
+export type DiagnosticsErrorsClearData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/diagnostics/errors';
+};
+
+export type DiagnosticsErrorsClearErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type DiagnosticsErrorsClearError = DiagnosticsErrorsClearErrors[keyof DiagnosticsErrorsClearErrors];
+
+export type DiagnosticsErrorsClearResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DiagnosticsErrorsClearResponse = DiagnosticsErrorsClearResponses[keyof DiagnosticsErrorsClearResponses];
+
 export type DiagnosticsErrorsListData = {
     body?: never;
     path?: never;
@@ -4452,6 +4799,393 @@ export type AccountConsentGrantResponses = {
 
 export type AccountConsentGrantResponse = AccountConsentGrantResponses[keyof AccountConsentGrantResponses];
 
+export type AccountProfileUpdateData = {
+    body: ProfileUpdateRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/users/me/profile';
+};
+
+export type AccountProfileUpdateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountProfileUpdateError = AccountProfileUpdateErrors[keyof AccountProfileUpdateErrors];
+
+export type AccountProfileUpdateResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProfileDetail;
+};
+
+export type AccountProfileUpdateResponse = AccountProfileUpdateResponses[keyof AccountProfileUpdateResponses];
+
+export type AccountIdentityListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/users/me/identities';
+};
+
+export type AccountIdentityListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountIdentityListError = AccountIdentityListErrors[keyof AccountIdentityListErrors];
+
+export type AccountIdentityListResponses = {
+    /**
+     * Response Account Identity List
+     *
+     * Successful Response
+     */
+    200: Array<IdentityDetail>;
+};
+
+export type AccountIdentityListResponse = AccountIdentityListResponses[keyof AccountIdentityListResponses];
+
+export type AccountIdentityVisibilitySetData = {
+    body: IdentityVisibilityRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Identity Id
+         */
+        identity_id: number;
+    };
+    query?: never;
+    url: '/v1/users/me/identities/{identity_id}/visibility';
+};
+
+export type AccountIdentityVisibilitySetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountIdentityVisibilitySetError = AccountIdentityVisibilitySetErrors[keyof AccountIdentityVisibilitySetErrors];
+
+export type AccountIdentityVisibilitySetResponses = {
+    /**
+     * Successful Response
+     */
+    200: IdentityDetail;
+};
+
+export type AccountIdentityVisibilitySetResponse = AccountIdentityVisibilitySetResponses[keyof AccountIdentityVisibilitySetResponses];
+
+export type AccountIdentityUnlinkData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Identity Id
+         */
+        identity_id: number;
+    };
+    query?: never;
+    url: '/v1/users/me/identities/{identity_id}';
+};
+
+export type AccountIdentityUnlinkErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountIdentityUnlinkError = AccountIdentityUnlinkErrors[keyof AccountIdentityUnlinkErrors];
+
+export type AccountIdentityUnlinkResponses = {
+    /**
+     * Successful Response
+     */
+    200: IdentityDetail;
+};
+
+export type AccountIdentityUnlinkResponse = AccountIdentityUnlinkResponses[keyof AccountIdentityUnlinkResponses];
+
+export type AccountMergeCodeCreateData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/users/me/merge-code';
+};
+
+export type AccountMergeCodeCreateErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMergeCodeCreateError = AccountMergeCodeCreateErrors[keyof AccountMergeCodeCreateErrors];
+
+export type AccountMergeCodeCreateResponses = {
+    /**
+     * Successful Response
+     */
+    200: MergeCodeDetail;
+};
+
+export type AccountMergeCodeCreateResponse = AccountMergeCodeCreateResponses[keyof AccountMergeCodeCreateResponses];
+
+export type AccountMergePreviewData = {
+    body: MergeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/users/me/merge/preview';
+};
+
+export type AccountMergePreviewErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMergePreviewError = AccountMergePreviewErrors[keyof AccountMergePreviewErrors];
+
+export type AccountMergePreviewResponses = {
+    /**
+     * Successful Response
+     */
+    200: MergePreviewDetail;
+};
+
+export type AccountMergePreviewResponse = AccountMergePreviewResponses[keyof AccountMergePreviewResponses];
+
+export type AccountMergeCompleteData = {
+    body: MergeRequest;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/users/me/merge';
+};
+
+export type AccountMergeCompleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMergeCompleteError = AccountMergeCompleteErrors[keyof AccountMergeCompleteErrors];
+
+export type AccountMergeCompleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: AccountMergeDetail;
+};
+
+export type AccountMergeCompleteResponse = AccountMergeCompleteResponses[keyof AccountMergeCompleteResponses];
+
 export type AccountMinecraftRefreshData = {
     body?: never;
     headers?: {
@@ -4644,6 +5378,64 @@ export type AccountMinecraftRefreshForResponses = {
 };
 
 export type AccountMinecraftRefreshForResponse = AccountMinecraftRefreshForResponses[keyof AccountMinecraftRefreshForResponses];
+
+export type AccountProfileClearData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: number;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/profile';
+};
+
+export type AccountProfileClearErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountProfileClearError = AccountProfileClearErrors[keyof AccountProfileClearErrors];
+
+export type AccountProfileClearResponses = {
+    /**
+     * Successful Response
+     */
+    200: ProfileDetail;
+};
+
+export type AccountProfileClearResponse = AccountProfileClearResponses[keyof AccountProfileClearResponses];
 
 export type PaperInstallationsListData = {
     body?: never;
@@ -5437,7 +6229,7 @@ export type NotificationSubscriptionsListError = NotificationSubscriptionsListEr
 
 export type NotificationSubscriptionsListResponses = {
     /**
-     * Response List Subscriptions V1 Users Me Notifications Subscriptions Get
+     * Response Notification Subscriptions List
      *
      * Successful Response
      */
@@ -6041,7 +6833,7 @@ export type SearchFieldsListError = SearchFieldsListErrors[keyof SearchFieldsLis
 
 export type SearchFieldsListResponses = {
     /**
-     * Response List Search Fields V1 Search Fields Get
+     * Response Search Fields List
      *
      * Successful Response
      */
@@ -6993,7 +7785,7 @@ export type SuggestionSourcesListError = SuggestionSourcesListErrors[keyof Sugge
 
 export type SuggestionSourcesListResponses = {
     /**
-     * Response List Sources V1 Suggest Get
+     * Response Suggestion Sources List
      *
      * Successful Response
      */
