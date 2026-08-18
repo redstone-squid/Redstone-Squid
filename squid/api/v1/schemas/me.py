@@ -8,9 +8,11 @@ from whenever import Instant
 from squid.accounts.domain import (
     Account,
     AccountIdentity,
+    AccountMerge,
     AccountProfile,
     IdentityProvider,
     IdentityRefresh,
+    MergePreview,
     ProfileLink,
     ProfileUpdate,
     avatar_url_for,
@@ -223,4 +225,64 @@ class MinecraftIdentityRefresh(BaseModel):
             retained_creator_names=refresh.retained_alias_names,
             contested_creator_name=None if refresh.contested_alias is None else refresh.contested_alias.name,
             pending_claim_id=None if refresh.opened_claim is None else refresh.opened_claim.id,
+        )
+
+
+class MergeCodeDetail(BaseModel):
+    """A freshly minted, single-use merge code.
+
+    The plaintext appears here and nowhere else: persistence keeps only a digest, so a lost code
+    is reminted rather than recovered.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    expires_at: Instant
+
+
+class MergeRequest(BaseModel):
+    """A merge code, redeemed by the account that will survive."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+
+
+class MergePreviewDetail(BaseModel):
+    """What completing a merge would move, shown before the irreversible call."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    absorbed_creator_id: UUID
+    """The creator id that would become a permanent redirect to the caller's."""
+
+    alias_names: list[str]
+    identity_count: int
+    build_count: int
+
+    @classmethod
+    def from_domain(cls, preview: MergePreview) -> MergePreviewDetail:
+        return cls(
+            absorbed_creator_id=preview.absorbed_public_creator_id,
+            alias_names=list(preview.alias_names),
+            identity_count=preview.identity_count,
+            build_count=preview.build_count,
+        )
+
+
+class AccountMergeDetail(BaseModel):
+    """The stable identities left behind by a completed merge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    surviving_creator_id: UUID
+    redirected_creator_id: UUID
+    """Permanently redirects to `surviving_creator_id`, so links to the absorbed creator survive."""
+
+    @classmethod
+    def from_domain(cls, merge: AccountMerge) -> AccountMergeDetail:
+        return cls(
+            surviving_creator_id=merge.surviving_public_creator_id,
+            redirected_creator_id=merge.redirected_public_creator_id,
         )
