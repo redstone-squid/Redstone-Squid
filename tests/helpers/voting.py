@@ -17,6 +17,7 @@ from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,
     GenericPoll,
+    PollScope,
     VoteChoice,
     VoteKind,
     VoteMessage,
@@ -91,6 +92,7 @@ def poll_snapshot(
     visibility: VoteVisibility = VoteVisibility.ANONYMOUS_LIVE,
     question: str = "Question?",
     guild_id: int | None = 10,
+    scope: PollScope = PollScope.GUILD,
     messages: tuple[VoteMessage, ...] = (),
     options: tuple[VoteOption, ...] = GENERIC_OPTIONS,
     selections: tuple[VoteSelection, ...] = (),
@@ -110,7 +112,7 @@ def poll_snapshot(
         options=options,
         target=None,
         selections=selections,
-        poll=GenericPoll(question, visibility, deadline or Instant.now().add(hours=1), guild_id),
+        poll=GenericPoll(question, visibility, deadline or Instant.now().add(hours=1), guild_id, scope),
     )
 
 
