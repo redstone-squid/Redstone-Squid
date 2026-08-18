@@ -8,11 +8,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 from pydantic import AnyHttpUrl
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Caller, current_caller
+from squid.api.security import Caller, current_caller, require_consented_account
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     ChallengeApprovalResponse,
@@ -151,9 +150,7 @@ async def current_account_id(caller: Annotated[Caller, Depends(current_caller)])
     """Require a signed-in human account with current privacy consent."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    if caller.consent_pending:
-        raise ConsentRequiredError(account_id=caller.account_id)
-    return caller.account_id
+    return require_consented_account(caller)
 
 
 Installations = Annotated[PaperInstallationHttpService, Depends(get_installation_service)]
