@@ -34,7 +34,6 @@ from squid.accounts.domain import (
     ProfileUpdate,
     fold_creator_name,
 )
-from squid.accounts.domain.profiles import UNSET
 from squid.accounts.errors import (
     AccountIdentityNotFoundError,
     AccountNotFoundError,
@@ -348,7 +347,9 @@ class AccountRepository:
                 session.add(model)
                 await session.flush()
             avatar_identity_id = update_request.avatar_identity_id
-            if avatar_identity_id is not UNSET and avatar_identity_id is not None:
+            # An `int` is the only case that needs checking: UNSET leaves the avatar alone and
+            # `None` clears it, and neither can point at somebody else's identity.
+            if isinstance(avatar_identity_id, int):
                 # The foreign key cannot express "and it must be yours" without a composite key
                 # that would break ON DELETE SET NULL, so ownership is checked here.
                 owner = await session.scalar(
