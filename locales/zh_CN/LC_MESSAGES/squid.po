@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-18 13:51+0000\n"
+"POT-Creation-Date: 2026-08-19 02:50+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -41,7 +41,7 @@ msgstr ""
 "**标签**\n"
 "{tags}"
 
-#: squid/bot/submission/records.py:52 squid/bot/submission/records.py:73
+#: squid/bot/submission/records.py:51 squid/bot/submission/records.py:74
 #, python-brace-format
 msgid ""
 "\n"
@@ -463,11 +463,15 @@ msgstr "该别名已存在于此限制中。"
 msgid "Alias in use"
 msgstr "别名已被使用"
 
+#: squid/bot/diagnostics.py:96
+msgid "Allow direct messages from this server, then run the command again."
+msgstr ""
+
 #: squid/bot/submission/search.py:167
 msgid "Already added"
 msgstr "已添加"
 
-#: squid/bot/diagnostics.py:117
+#: squid/bot/diagnostics_view.py:280
 msgid "Ambiguous"
 msgstr ""
 
@@ -491,6 +495,10 @@ msgstr "一个已批准的构造标签。"
 
 #: squid/tags/application/services.py:128
 msgid "An approved user showcase tag is required."
+msgstr ""
+
+#: squid/bot/diagnostics.py:104
+msgid "An error report names internal paths, so it is never posted in a channel."
 msgstr ""
 
 #: squid/bot/submission/submit.py:72 squid/bot/submission/submit.py:73
@@ -595,7 +603,7 @@ msgstr ""
 msgid "Authenticate both accounts again, then retry the merge."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:214
+#: squid/bot/diagnostics_view.py:217 squid/bot/submission/search_view.py:214
 msgid "Back"
 msgstr "返回"
 
@@ -624,7 +632,7 @@ msgstr ""
 msgid "Both accounts must be authenticated again before they can be merged."
 msgstr ""
 
-#: squid/permissions/domain/catalogue.py:459
+#: squid/permissions/domain/catalogue.py:464
 msgid "Browse the permission catalogue and your own permissions."
 msgstr ""
 
@@ -789,8 +797,8 @@ msgstr ""
 msgid "Cancelled. Nothing was unlinked."
 msgstr ""
 
-#: squid/records/application/services.py:461
-#: squid/records/application/services.py:488
+#: squid/records/application/services.py:480
+#: squid/records/application/services.py:507
 #, python-brace-format
 msgid "Candidate {build_id} has no typed category facts."
 msgstr ""
@@ -798,10 +806,6 @@ msgstr ""
 #: squid/bot/submission/ui/views.py:553
 msgid "Cannot edit this build"
 msgstr ""
-
-#: squid/bot/submission/records.py:127
-msgid "Canonical base key shown by search or records tooling."
-msgstr "由搜索或记录工具显示的规范基础键。"
 
 #: squid/permissions/domain/catalogue.py:385
 msgid "Change a starboard's configuration."
@@ -869,6 +873,10 @@ msgstr ""
 msgid "Choose a workflow, then use `/help command` for syntax and details."
 msgstr ""
 
+#: squid/bot/diagnostics_view.py:183
+msgid "Choose an error to open"
+msgstr ""
+
 #: squid/submissions/application/forms.py:205
 msgid "Choose explicitly; publication is never inferred."
 msgstr ""
@@ -899,11 +907,11 @@ msgstr ""
 msgid "Clear another user's public profile."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:225
+#: squid/bot/diagnostics_view.py:229 squid/bot/submission/search_view.py:225
 msgid "Close"
 msgstr ""
 
-#: squid/permissions/domain/catalogue.py:443
+#: squid/permissions/domain/catalogue.py:448
 msgid "Close or refresh a poll you did not create."
 msgstr ""
 
@@ -920,7 +928,7 @@ msgstr ""
 msgid "Comma separated, e.g. `Seamless, Observerless`. See `/info docs`."
 msgstr ""
 
-#: squid/bot/submission/records.py:129
+#: squid/bot/submission/records.py:130
 msgid ""
 "Comma-separated restriction IDs; large exact categories are saved for "
 "reuse."
@@ -995,6 +1003,14 @@ msgstr "找不到该频道。"
 msgid "Could not find the redstoner role."
 msgstr "找不到红石玩家（redstoner）身份组。"
 
+#: squid/bot/diagnostics.py:95
+msgid "Could not send you the report"
+msgstr ""
+
+#: squid/permissions/domain/catalogue.py:443
+msgid "Create a poll carded in every server's vote channel."
+msgstr ""
+
 #: squid/permissions/domain/catalogue.py:438
 msgid "Create a poll."
 msgstr ""
@@ -1007,7 +1023,7 @@ msgstr ""
 msgid "Create and edit global permission roles."
 msgstr ""
 
-#: squid/permissions/domain/catalogue.py:483
+#: squid/permissions/domain/catalogue.py:488
 msgid "Create and edit this server's permission roles."
 msgstr ""
 
@@ -1091,7 +1107,7 @@ msgstr ""
 msgid "Delete every stored error report."
 msgstr ""
 
-#: squid/bot/diagnostics.py:91
+#: squid/bot/diagnostics.py:61
 #, python-brace-format
 msgid "Deleted {count} stored error reports."
 msgstr ""
@@ -1187,6 +1203,10 @@ msgstr ""
 msgid "Each link needs a label and a URL separated by `|`, got {line!r}."
 msgstr ""
 
+#: squid/bot/diagnostics_view.py:195
+msgid "Earlier"
+msgstr ""
+
 #: squid/bot/submission/ui/views.py:333
 msgid "Edit basics"
 msgstr ""
@@ -1258,7 +1278,7 @@ msgstr ""
 msgid "Error report retention must be at least one hour."
 msgstr ""
 
-#: squid/bot/diagnostics.py:47
+#: squid/bot/diagnostics_view.py:116
 #, python-brace-format
 msgid "Error {reference}"
 msgstr ""
@@ -1267,7 +1287,7 @@ msgstr ""
 msgid "Error."
 msgstr "错误。"
 
-#: squid/bot/diagnostics.py:90
+#: squid/bot/diagnostics.py:60
 msgid "Errors cleared"
 msgstr ""
 
@@ -1291,7 +1311,7 @@ msgstr ""
 msgid "Exact source Minecraft version"
 msgstr ""
 
-#: squid/bot/diagnostics.py:102
+#: squid/bot/diagnostics_view.py:265
 msgid "Exception"
 msgstr ""
 
@@ -1326,7 +1346,7 @@ msgstr ""
 msgid "Extension time"
 msgstr ""
 
-#: squid/records/application/services.py:497
+#: squid/records/application/services.py:516
 #, python-brace-format
 msgid "Fastest records are not supported for {kind}."
 msgstr ""
@@ -1374,7 +1394,7 @@ msgstr ""
 msgid "Forbidden"
 msgstr "禁止访问"
 
-#: squid/bot/diagnostics.py:103
+#: squid/bot/diagnostics_view.py:266
 msgid "Full ID"
 msgstr ""
 
@@ -1405,7 +1425,7 @@ msgstr ""
 msgid "Grant or revoke permissions anywhere, including global ones."
 msgstr ""
 
-#: squid/permissions/domain/catalogue.py:478
+#: squid/permissions/domain/catalogue.py:483
 msgid "Grant or revoke this server's permissions."
 msgstr ""
 
@@ -1413,7 +1433,7 @@ msgstr ""
 msgid "HTTP error"
 msgstr "HTTP 错误"
 
-#: squid/permissions/domain/catalogue.py:453
+#: squid/permissions/domain/catalogue.py:458
 msgid "Have your votes counted at the staff weight."
 msgstr ""
 
@@ -1522,7 +1542,7 @@ msgstr ""
 msgid "Inspect a build's raw stored representation."
 msgstr ""
 
-#: squid/permissions/domain/catalogue.py:466
+#: squid/permissions/domain/catalogue.py:471
 msgid "Inspect and explain another user's permissions."
 msgstr ""
 
@@ -1542,7 +1562,7 @@ msgstr "内部错误"
 msgid "Internal server error"
 msgstr "内部服务器错误"
 
-#: squid/records/application/services.py:440
+#: squid/records/application/services.py:459
 #, python-brace-format
 msgid "Invalid boolean category value {value!r}."
 msgstr ""
@@ -1606,6 +1626,10 @@ msgstr ""
 
 #: squid/accounts/errors.py:96
 msgid "Last identity"
+msgstr ""
+
+#: squid/bot/diagnostics_view.py:206
+msgid "Later"
 msgstr ""
 
 #: squid/accounts/domain/profiles.py:100
@@ -1677,6 +1701,10 @@ msgstr ""
 
 #: squid/bot/submission/ui/components.py:71
 msgid "Locational"
+msgstr ""
+
+#: squid/bot/diagnostics_view.py:308
+msgid "Log tail"
 msgstr ""
 
 #: squid/records/domain/categories.py:44
@@ -1885,7 +1913,7 @@ msgstr "下一页"
 msgid "No Minecraft account linked"
 msgstr ""
 
-#: squid/bot/submission/records.py:75
+#: squid/bot/submission/records.py:76
 msgid "No active record titles require taxonomy review."
 msgstr "没有需要分类审核的活跃记录标题。"
 
@@ -1912,7 +1940,7 @@ msgstr ""
 msgid "No command named `{name}` is available."
 msgstr ""
 
-#: squid/records/errors.py:28
+#: squid/records/errors.py:44
 msgid "No confirmed build satisfies the requested record category."
 msgstr ""
 
@@ -1962,7 +1990,11 @@ msgstr ""
 msgid "No tags are awaiting review."
 msgstr "没有待审核的标签。"
 
-#: squid/bot/submission/records.py:54
+#: squid/bot/diagnostics_view.py:304
+msgid "No traceback was recorded."
+msgstr ""
+
+#: squid/bot/submission/records.py:53
 msgid "No unresolved active record categories."
 msgstr "没有未解决的活跃记录类别。"
 
@@ -2006,7 +2038,7 @@ msgstr ""
 msgid "Nothing changed"
 msgstr ""
 
-#: squid/bot/diagnostics.py:76
+#: squid/bot/diagnostics_view.py:92
 msgid "Nothing has failed within the retention window."
 msgstr ""
 
@@ -2115,7 +2147,7 @@ msgstr ""
 msgid "Operation conflict"
 msgstr "操作冲突"
 
-#: squid/bot/submission/records.py:87
+#: squid/bot/submission/records.py:88
 msgid "Optional database ID to also compute the pinned current-version records."
 msgstr "可选的数据库 ID，用于同时计算固定当前版本的记录。"
 
@@ -2132,7 +2164,7 @@ msgstr ""
 msgid "Optional name shown in addition to the canonical structured title."
 msgstr ""
 
-#: squid/bot/submission/records.py:131
+#: squid/bot/submission/records.py:132
 msgid "Optional pinned version database ID."
 msgstr "可选的固定版本数据库 ID。"
 
@@ -2144,11 +2176,11 @@ msgstr "可选的搜索和排序字段，例如 closing_delay。"
 msgid "Optionally limit gaps to one build kind."
 msgstr "可选：将缺口限制为单一构造类型。"
 
-#: squid/bot/submission/records.py:61
+#: squid/bot/submission/records.py:62
 msgid "Optionally limit title diagnostics to one build kind."
 msgstr "可选：将标题诊断限制为单一构造类型。"
 
-#: squid/bot/submission/records.py:89
+#: squid/bot/submission/records.py:90
 msgid "Optionally rebuild just doors or extenders."
 msgstr "可选：仅重建门或延伸器。"
 
@@ -2180,7 +2212,7 @@ msgstr "仅限所有者"
 msgid "Paper drafts require server-derived installation provenance."
 msgstr ""
 
-#: squid/records/application/services.py:431
+#: squid/records/application/services.py:450
 msgid "Parameterized record restriction is missing a category value."
 msgstr ""
 
@@ -2242,6 +2274,10 @@ msgstr ""
 msgid "Persisted data is inconsistent with application expectations."
 msgstr "持久化数据与应用程序预期不一致。"
 
+#: squid/bot/submission/records.py:128
+msgid "Pick a record category, or paste a raw base key."
+msgstr ""
+
 #: squid/schematics/errors.py:44
 msgid "Pick one of the coordinates listed below."
 msgstr ""
@@ -2254,11 +2290,11 @@ msgstr ""
 msgid "Please try again later."
 msgstr "请稍后再试。"
 
-#: squid/bot/voting/vote.py:267
+#: squid/bot/voting/vote.py:268
 msgid "Poll closed."
 msgstr ""
 
-#: squid/bot/voting/vote.py:293
+#: squid/bot/voting/vote.py:294
 msgid "Poll weights refreshed."
 msgstr ""
 
@@ -2336,7 +2372,7 @@ msgstr ""
 msgid "Read regulations"
 msgstr "阅读规章"
 
-#: squid/permissions/domain/catalogue.py:472
+#: squid/permissions/domain/catalogue.py:477
 msgid "Read the permission audit log."
 msgstr ""
 
@@ -2356,7 +2392,7 @@ msgstr ""
 msgid "Recent account proof required"
 msgstr ""
 
-#: squid/bot/diagnostics.py:75
+#: squid/bot/diagnostics_view.py:93
 msgid "Recent errors"
 msgstr ""
 
@@ -2368,20 +2404,36 @@ msgstr "已识别的 Java 版本"
 msgid "Recompute a build's derived attributes."
 msgstr ""
 
-#: squid/bot/submission/records.py:162
+#: squid/bot/submission/records.py:172
 #, python-brace-format
 msgid "Recomputed {definitions} definitions; {resolved} resolved."
 msgstr "已重新计算 {definitions} 个定义；已解决 {resolved} 个。"
 
-#: squid/bot/submission/records.py:159
+#: squid/bot/submission/records.py:169
 msgid "Record category materialized"
 msgstr "记录类别已具体化"
 
-#: squid/records/errors.py:29
+#: squid/records/errors.py:29 squid/records/errors.py:45
 msgid "Record category not found"
 msgstr ""
 
-#: squid/bot/submission/records.py:56
+#: squid/records/errors.py:28
+msgid "Record category not found."
+msgstr ""
+
+#: squid/records/application/services.py:316
+#, python-brace-format
+msgid "Record category {definition_id} is a {actual} category, not {requested}."
+msgstr ""
+
+#: squid/records/infrastructure/repository.py:474
+#, python-brace-format
+msgid ""
+"Record definition {definition_id} stores a category key that does not "
+"parse."
+msgstr ""
+
+#: squid/bot/submission/records.py:55
 msgid "Record evidence gaps"
 msgstr "记录证据缺口"
 
@@ -2403,16 +2455,16 @@ msgstr ""
 msgid "Record subscription #{id} saved."
 msgstr ""
 
-#: squid/bot/submission/records.py:77
+#: squid/bot/submission/records.py:78
 msgid "Record title diagnostics"
 msgstr "记录标题诊断"
 
-#: squid/records/application/services.py:512
+#: squid/records/application/services.py:531
 #, python-brace-format
 msgid "Records are not supported for {kind}."
 msgstr ""
 
-#: squid/bot/submission/records.py:104
+#: squid/bot/submission/records.py:105
 msgid "Records rebuilt"
 msgstr "记录已重建"
 
@@ -2547,7 +2599,11 @@ msgstr "限制"
 msgid "Restrictions and tags"
 msgstr ""
 
-#: squid/bot/submission/records.py:146
+#: squid/bot/submission/records.py:153
+msgid "Restrictions can only be combined with a hand-typed base key."
+msgstr ""
+
+#: squid/bot/submission/records.py:147
 msgid "Restrictions must be comma-separated numeric IDs."
 msgstr "限制必须是以逗号分隔的数字 ID。"
 
@@ -2710,6 +2766,10 @@ msgstr "搜索文本和过滤条件，例如 `width:5`。"
 #: squid/bot/submission/ui/views.py:650
 #, python-brace-format
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
+msgstr ""
+
+#: squid/bot/diagnostics.py:103
+msgid "Sent by direct message"
 msgstr ""
 
 #: squid/bot/errors.py:189
@@ -3242,11 +3302,11 @@ msgstr ""
 msgid "The media job claim is no longer valid."
 msgstr ""
 
-#: squid/bot/voting/vote.py:388
+#: squid/bot/voting/vote.py:394
 msgid "The message is not from this guild."
 msgstr "该消息不是来自此服务器。"
 
-#: squid/bot/voting/vote.py:381
+#: squid/bot/voting/vote.py:387
 msgid "The message to hold a deletion vote for."
 msgstr "要发起删除投票的消息。"
 
@@ -3343,7 +3403,7 @@ msgstr "提供的值无效。"
 msgid "The tag value, omitted for plain tags."
 msgstr "标签的值，普通标签可省略。"
 
-#: squid/bot/submission/records.py:126
+#: squid/bot/submission/records.py:127
 msgid "The typed record family."
 msgstr "类型化的记录系列。"
 
@@ -3353,6 +3413,10 @@ msgstr "验证码无效或已过期。"
 
 #: squid/bot/submission/submit.py:67
 msgid "The whole build, e.g. `5x7x4`. Width x height (x depth)."
+msgstr ""
+
+#: squid/bot/diagnostics_view.py:71
+msgid "These error controls belong to someone else."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:48
@@ -3410,7 +3474,7 @@ msgid ""
 "recognising you here."
 msgstr ""
 
-#: squid/bot/diagnostics.py:109
+#: squid/bot/diagnostics_view.py:272
 msgid "This job was abandoned; nothing will retry it."
 msgstr ""
 
@@ -3483,6 +3547,10 @@ msgstr ""
 
 #: squid/core/errors.py:226
 msgid "Too many requests. Please try again later."
+msgstr ""
+
+#: squid/bot/diagnostics_view.py:303
+msgid "Traceback"
 msgstr ""
 
 #: squid/messages/errors.py:10 squid/posts/errors.py:10
@@ -3631,7 +3699,7 @@ msgstr ""
 msgid "Vote configuration is invalid."
 msgstr "投票配置无效。"
 
-#: squid/permissions/domain/catalogue.py:448
+#: squid/permissions/domain/catalogue.py:453
 msgid "Vote in build log deletion votes."
 msgstr ""
 
@@ -3672,11 +3740,11 @@ msgstr ""
 msgid "What to look through: records, builds, patterns, restrictions, or all."
 msgstr "要搜索的范围：记录、构造、样式、限制或全部内容。"
 
-#: squid/bot/diagnostics.py:100
+#: squid/bot/diagnostics_view.py:263
 msgid "When"
 msgstr ""
 
-#: squid/bot/diagnostics.py:101
+#: squid/bot/diagnostics_view.py:264
 msgid "Where"
 msgstr ""
 
@@ -3712,7 +3780,7 @@ msgstr ""
 msgid "Width x Height x Depth"
 msgstr ""
 
-#: squid/bot/diagnostics.py:108
+#: squid/bot/diagnostics_view.py:271
 msgid "Work lost"
 msgstr ""
 
@@ -4356,12 +4424,12 @@ msgstr ""
 msgid "{count} builds"
 msgstr ""
 
-#: squid/bot/diagnostics.py:118
+#: squid/bot/diagnostics_view.py:281
 #, python-brace-format
 msgid "{count} reports share this reference; this is the newest."
 msgstr ""
 
-#: squid/bot/submission/records.py:107
+#: squid/bot/submission/records.py:108
 #, python-brace-format
 msgid ""
 "{definitions} definitions; {resolved} resolved; {unresolved} awaiting "
@@ -4540,6 +4608,11 @@ msgstr "{reason}，位于 {url}"
 msgid "{remaining} more not shown."
 msgstr ""
 
+#: squid/bot/diagnostics_view.py:121
+#, python-brace-format
+msgid "{section} — page {page} of {pages} · the attachment has the whole report"
+msgstr ""
+
 #: squid/bot/settings.py:93
 #, python-brace-format
 msgid "{setting} Channel Info"
@@ -4587,7 +4660,7 @@ msgstr ""
 msgid "{user} doesn't have a creator page."
 msgstr ""
 
-#: squid/bot/voting/vote.py:325
+#: squid/bot/voting/vote.py:326
 #, python-brace-format
 msgid "{user}, voting stores your Discord user ID. Run `/account consent` first."
 msgstr ""
@@ -4828,4 +4901,7 @@ msgstr ""
 
 #~ msgid "Sort low-to-high or high-to-low."
 #~ msgstr "按从低到高或从高到低排序。"
+
+#~ msgid "Canonical base key shown by search or records tooling."
+#~ msgstr "由搜索或记录工具显示的规范基础键。"
 

@@ -1,29 +1,20 @@
 """Look up a stored error report from the reference a user quoted."""
 
-import io
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from discord import File
+import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
+from squid.bot.diagnostics_view import ErrorReportView, report_attachment
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.utils.components import CardField, card_layout, info_layout, no_mentions
+from squid.bot.utils.components import error_layout, info_layout, no_mentions
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
-from squid.diagnostics.domain import ErrorReport
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
 if TYPE_CHECKING:
     import squid.bot.app
-
-TRACEBACK_PREVIEW_CHARS = 1200
-"""How much traceback goes in the card before the rest moves to an attachment.
-
-A card has a 4000-character display budget shared with every other field, and a real traceback
-routinely exceeds it on its own. The tail is previewed because that is where the failure is; the
-whole thing is attached so nothing is actually lost.
-"""
 
 RECENT_LIMIT = 10
 
@@ -42,18 +33,8 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Show the stored error behind a reference someone reported."""
         report, matches = await self.error_reports.lookup(reference)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=card_layout(
-                t(locale, _("Error {reference}"), reference=report.reference),
-                _preview(report, locale),
-                fields=_summary_fields(report, matches, locale),
-            ),
-            file=_attachment(report),
-            # Always ephemeral: a traceback names internal paths and carries the unredacted
-            # message every other surface deliberately withholds.
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
-        )
+        view = ErrorReportView(author_id=ctx.author.id, locale=locale, report=report, matches=matches)
+        await self._deliver(ctx, view, locale, file=report_attachment(report))
 
     @error_group.command(name="recent")
     @requires(DIAGNOSTICS_ERROR_READ)
@@ -65,19 +46,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """
         reports = await self.error_reports.recent(limit=RECENT_LIMIT, work_lost_only=work_lost)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        body = "\n".join(
-            f"{':warning: ' if report.work_lost else ''}`{report.reference}` — "
-            f"{report.exception_type} in {report.origin or report.surface}"
-            for report in reports
-        )
-        await ctx.send(
-            view=info_layout(
-                t(locale, _("Recent errors")),
-                body or t(locale, _("Nothing has failed within the retention window.")),
-            ),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
-        )
+        await self._deliver(ctx, ErrorReportView(author_id=ctx.author.id, locale=locale, reports=reports), locale)
 
     @error_group.command(name="clear")
     @requires(DIAGNOSTICS_ERROR_CLEAR)
@@ -85,70 +54,60 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Delete every stored error report, expired or not."""
         deleted = await self.error_reports.clear_all()
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=info_layout(
+        await self._deliver(
+            ctx,
+            info_layout(
                 t(locale, _("Errors cleared")),
                 t(locale, _("Deleted {count} stored error reports."), count=deleted),
             ),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+            locale,
         )
 
+    async def _deliver(
+        self,
+        ctx: Context[BotT],
+        layout: discord.ui.LayoutView,
+        locale: str | None,
+        *,
+        file: discord.File | None = None,
+    ) -> None:
+        """Answer where only the caller can read it, whatever the transport invoked us.
 
-def _summary_fields(report: ErrorReport, matches: int, locale: str | None) -> list[CardField]:
-    fields = [
-        CardField(t(locale, _("When")), f"<t:{report.occurred_at.timestamp()}:f>"),
-        CardField(t(locale, _("Where")), f"{report.surface} — {report.origin or '—'}"),
-        CardField(t(locale, _("Exception")), report.exception_type),
-        CardField(t(locale, _("Full ID")), f"`{report.correlation_id}`"),
-    ]
-    if report.work_lost:
-        fields.append(
-            CardField(
-                t(locale, _("Work lost")),
-                t(locale, _("This job was abandoned; nothing will retry it.")),
+        A report carries a traceback naming internal paths and the unredacted message every
+        other surface withholds, so it is ephemeral on the slash side. `Context.send` silently
+        drops `ephemeral` when there is no interaction, though, so the prefix form used to post
+        that traceback — plus its log tail and attachment — into whichever channel it was typed
+        in. There it goes to the author's direct messages instead, and the channel gets a line
+        saying so.
+        """
+        payload: dict[str, Any] = {"view": layout, "allowed_mentions": no_mentions()}
+        if file is not None:
+            payload["file"] = file
+
+        if ctx.interaction is not None or ctx.guild is None:
+            message = await ctx.send(ephemeral=True, **payload)
+        else:
+            try:
+                message = await ctx.author.send(**payload)
+            except discord.Forbidden:
+                await ctx.send(
+                    view=error_layout(
+                        t(locale, _("Could not send you the report")),
+                        t(locale, _("Allow direct messages from this server, then run the command again.")),
+                    ),
+                    allowed_mentions=no_mentions(),
+                )
+                return
+            await ctx.send(
+                view=info_layout(
+                    t(locale, _("Sent by direct message")),
+                    t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
+                ),
+                allowed_mentions=no_mentions(),
             )
-        )
-    if matches > 1:
-        # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
-        # would have a moderator confidently reading the wrong incident.
-        fields.append(
-            CardField(
-                t(locale, _("Ambiguous")),
-                t(locale, _("{count} reports share this reference; this is the newest."), count=matches),
-            )
-        )
-    return fields
 
-
-def _preview(report: ErrorReport, locale: str | None) -> str:
-    del locale
-    tail = report.traceback[-TRACEBACK_PREVIEW_CHARS:]
-    marker = "…\n" if len(report.traceback) > TRACEBACK_PREVIEW_CHARS else ""
-    return f"```\n{marker}{tail}\n```"
-
-
-def _attachment(report: ErrorReport) -> File:
-    """Bundle the traceback and the log tail, which never fit in a card together."""
-    lines = [
-        f"reference: {report.reference}",
-        f"correlation_id: {report.correlation_id}",
-        f"occurred_at: {report.occurred_at}",
-        f"surface: {report.surface}",
-        f"origin: {report.origin or '-'}",
-        f"exception: {report.exception_type}",
-        f"code: {report.error_code.value if report.error_code else '-'}",
-        f"work_lost: {report.work_lost}",
-        f"message: {report.message}",
-        f"context: {dict(report.context)}",
-        "",
-        "traceback:",
-        report.traceback,
-        "",
-        "log tail:",
-        *report.log_tail,
-    ]
-    return File(io.BytesIO("\n".join(lines).encode()), filename=f"error-{report.reference}.txt")
+        if isinstance(layout, ErrorReportView):
+            layout.bind_message(message)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

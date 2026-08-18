@@ -431,3 +431,19 @@ def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
     }
 
     assert mislabelled == set()
+
+
+def test_the_error_group_binds_a_reference_from_the_prefix_form() -> None:
+    """`!error <reference>` works, contrary to what the redesign audit recorded.
+
+    `HybridGroup.__init__` always sets `invoke_without_command`, and `Group.invoke` rewinds the
+    argument view when the first word is not a subcommand, so the fallback's parameter binds on
+    the prefix side too. Pinned because converting the group away from `hybrid_group` would take
+    the prefix form away with nothing else failing.
+    """
+    cog = Diagnostics.__new__(Diagnostics)
+    error = cast(HybridGroup, _command(cog.__cog_commands__, "error"))
+
+    assert error.invoke_without_command is True
+    assert error.fallback == "show"
+    assert "reference" in error.clean_params
