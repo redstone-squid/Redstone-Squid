@@ -12,6 +12,8 @@ from squid.accounts.application.ports import VerificationLinkResult
 from squid.accounts.application.services import VERIFICATION_MAX_CONSECUTIVE_FAILURES
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
+    MERGE_PROOF_MAX_AGE_SECONDS,
+    MERGE_TICKET_TTL_SECONDS,
     Account,
     AccountConsent,
     AccountIdentity,
@@ -28,6 +30,7 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
+    MergeTicket,
     ProfileLink,
     ProfileUpdate,
     RecentAccountProof,
@@ -39,6 +42,7 @@ from squid.accounts.errors import (
     AccountNotFoundError,
     ClaimNotFoundError,
     ConsentRequiredError,
+    InvalidMergeCodeError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
     LastIdentityError,
@@ -73,6 +77,7 @@ class FakeAccountRepository:
         self.failures: dict[tuple[IdentityProvider, str], int] = {}
         self.lockouts: dict[tuple[IdentityProvider, str], Instant] = {}
         self.profiles: dict[int, AccountProfile] = {}
+        self.merge_tickets: dict[str, MergeTicket] = {}
         self.avatar_keys: dict[tuple[int, int], str | None] = {}
         self._next_id = 1
 
@@ -122,6 +127,30 @@ class FakeAccountRepository:
             remaining, account.consent, account.id, account.created_at, account.public_creator_id
         )
         return True
+
+    async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
+        self.merge_tickets = {
+            digest: ticket for digest, ticket in self.merge_tickets.items() if ticket.account_id != account_id
+        }
+        ticket = MergeTicket(account_id, NOW, NOW.add(seconds=ttl_seconds))
+        self.merge_tickets[code] = ticket
+        return ticket
+
+    async def peek_merge_ticket(self, code: str) -> MergeTicket | None:
+        ticket = self.merge_tickets.get(code)
+        return ticket if ticket is not None and ticket.is_live_at(NOW) else None
+
+    async def consume_merge_ticket(self, code: str) -> MergeTicket | None:
+        ticket = await self.peek_merge_ticket(code)
+        if ticket is not None:
+            del self.merge_tickets[code]
+        return ticket
+
+    def expire_merge_tickets(self) -> None:
+        """Age every live ticket past its window, without waiting ten minutes."""
+        self.merge_tickets = {
+            digest: replace(ticket, expires_at=NOW.subtract(seconds=1)) for digest, ticket in self.merge_tickets.items()
+        }
 
     async def count_identities(self, account_id: int) -> int:
         account = self.accounts.get(account_id)
@@ -838,3 +867,95 @@ class TestIdentityManagement:
         await service(repository).unlink_identity(account.id, 2)
 
         assert repository.aliases[1].account_id == account.id
+
+
+class TestMergeCodes:
+    """The two-sided proof: minting is the absorbed side, redeeming is the survivor."""
+
+    async def test_a_minted_code_previews_and_completes(self) -> None:
+        repository = FakeAccountRepository()
+        survivor = repository.seed_account(1, consent=CONSENT)
+        absorbed = repository.seed_account(2, consent=CONSENT)
+        assert survivor.id is not None
+        assert absorbed.id is not None
+        repository.merge_result = AccountMerge(survivor.id, absorbed.id, UUID(int=1), UUID(int=2))
+        accounts = service(repository)
+
+        code, ticket = await accounts.create_merge_code(absorbed.id)
+        preview = await accounts.preview_merge(survivor.id, code)
+
+        assert ticket.account_id == absorbed.id
+        assert preview.absorbed_public_creator_id == absorbed.public_creator_id
+        assert preview.identity_count == 1
+
+        merge = await accounts.complete_merge(survivor.id, code, now=NOW)
+
+        assert merge.surviving_account_id == survivor.id
+        assert merge.absorbed_account_id == absorbed.id
+
+    async def test_a_code_cannot_be_spent_twice(self) -> None:
+        repository = FakeAccountRepository()
+        survivor = repository.seed_account(1, consent=CONSENT)
+        absorbed = repository.seed_account(2, consent=CONSENT)
+        assert survivor.id is not None
+        assert absorbed.id is not None
+        repository.merge_result = AccountMerge(survivor.id, absorbed.id, UUID(int=1), UUID(int=2))
+        accounts = service(repository)
+        code, _ = await accounts.create_merge_code(absorbed.id)
+        await accounts.complete_merge(survivor.id, code, now=NOW)
+
+        with pytest.raises(InvalidMergeCodeError):
+            await accounts.complete_merge(survivor.id, code, now=NOW)
+
+    async def test_minting_replaces_the_previous_code(self) -> None:
+        """One live ticket per account is what keeps a short code safe."""
+        repository = FakeAccountRepository()
+        survivor = repository.seed_account(1, consent=CONSENT)
+        absorbed = repository.seed_account(2, consent=CONSENT)
+        assert survivor.id is not None
+        assert absorbed.id is not None
+        accounts = service(repository)
+
+        first, _ = await accounts.create_merge_code(absorbed.id)
+        await accounts.create_merge_code(absorbed.id)
+
+        with pytest.raises(InvalidMergeCodeError):
+            await accounts.preview_merge(survivor.id, first)
+
+    async def test_an_unknown_code_is_refused(self) -> None:
+        repository = FakeAccountRepository()
+        survivor = repository.seed_account(1, consent=CONSENT)
+        assert survivor.id is not None
+
+        with pytest.raises(InvalidMergeCodeError):
+            await service(repository).complete_merge(survivor.id, "NOTACODE")
+
+    async def test_an_expired_ticket_is_refused(self) -> None:
+        repository = FakeAccountRepository()
+        survivor = repository.seed_account(1, consent=CONSENT)
+        absorbed = repository.seed_account(2, consent=CONSENT)
+        assert survivor.id is not None
+        assert absorbed.id is not None
+        accounts = service(repository)
+        code, _ = await accounts.create_merge_code(absorbed.id)
+        repository.expire_merge_tickets()
+
+        with pytest.raises(InvalidMergeCodeError):
+            await accounts.complete_merge(survivor.id, code, now=NOW)
+
+    async def test_merging_an_account_into_itself_is_refused(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+        accounts = service(repository)
+        code, _ = await accounts.create_merge_code(account.id)
+
+        with pytest.raises(InvalidMergeCodeError):
+            await accounts.preview_merge(account.id, code)
+
+    async def test_the_ticket_window_matches_the_proof_window(self) -> None:
+        """A ticket must be redeemable for exactly as long as its proof is accepted.
+
+        Two windows that could disagree would be a bug waiting for someone to tune one of them.
+        """
+        assert MERGE_TICKET_TTL_SECONDS == MERGE_PROOF_MAX_AGE_SECONDS
