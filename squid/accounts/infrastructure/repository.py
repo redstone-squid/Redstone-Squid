@@ -257,19 +257,6 @@ class AccountRepository:
             await session.flush()
             return await self._load_account(session, model)
 
-    async def unlink_java_identity(self, account_id: int) -> bool:
-        """Remove every Java identity from one account."""
-        async with self._session_factory.begin() as session:
-            removed = await session.execute(
-                delete(AccountIdentityModel)
-                .where(
-                    AccountIdentityModel.account_id == account_id,
-                    AccountIdentityModel.provider == IdentityProvider.JAVA,
-                )
-                .returning(AccountIdentityModel.id)
-            )
-            return removed.first() is not None
-
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
         """Remove one identity by internal id, returning it, or `None` when it is not this account's.
 

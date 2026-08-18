@@ -118,16 +118,6 @@ class FakeAccountRepository:
             None,
         )
 
-    async def unlink_java_identity(self, account_id: int) -> bool:
-        account = self.accounts.get(account_id)
-        if account is None or account.identity(IdentityProvider.JAVA) is None:
-            return False
-        remaining = tuple(identity for identity in account.identities if identity.provider is not IdentityProvider.JAVA)
-        self.accounts[account_id] = Account(
-            remaining, account.consent, account.id, account.created_at, account.public_creator_id
-        )
-        return True
-
     async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
         self.merge_tickets = {
             digest: ticket for digest, ticket in self.merge_tickets.items() if ticket.account_id != account_id
@@ -731,7 +721,10 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
 
     assert linked.claimed_alias == alias
-    assert await accounts.unlink_minecraft_account(account.id) is True
+    java = repository.accounts[account.id].identity(IdentityProvider.JAVA)
+    assert java is not None
+    assert java.id is not None
+    await accounts.unlink_identity(account.id, java.id)
     assert repository.accounts[account.id].identity(IdentityProvider.JAVA) is None
 
 
