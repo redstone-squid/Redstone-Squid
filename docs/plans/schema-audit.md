@@ -1,5 +1,13 @@
 # Close the remaining schema-audit findings
 
+> **Status.** Phase 0 (ten findings) is landed and content-verified in-tree 2026-08-18 — see the
+> updated commit table below; the branch was rebased after the original landing, which rewrote
+> every commit hash in this document without changing any of the underlying fixes. The nine
+> findings in Phases 1-6 are still fully open: none of the described schema or application changes
+> have started. The "correctness gate" baseline (13 `modify_comment` diffs) and the "Not planned"
+> items are unchanged. Re-verified item-by-item against current code, not assumed from the original
+> audit.
+
 ## Context
 
 A full audit of the 101 application tables and their SQLAlchemy models — reading the metadata
@@ -33,18 +41,28 @@ added to a `mapped_column` is a schema change. Use a `#` comment for notes about
 
 ## Phase 0 — Landed — **DONE**
 
+Commit hashes below are current as of 2026-08-18; the branch was rebased after these landed,
+which invalidated the hashes originally recorded here (`424e644a`, `cc072ba2`, `eb8206bb`,
+`70aebd41`, `daec045c`, `e00bf658`, `bcac687a` — none resolve any more). Content re-verified
+unchanged.
+
 | Commit | Finding |
 |---|---|
-| `424e644a` | `Identity()` on three foreign-key columns in `votes`, `build_vote_sessions`, `delete_log_vote_sessions` |
-| `cc072ba2` | `build_edit_history` — single-row-per-build primary key, redundant unique, identity on the FK, no writer |
-| `eb8206bb` | `tag_definitions_numeric_metadata_check` admitted every row |
-| `70aebd41` | `messages.id` and `server_settings.server_id` declared `SERIAL` for externally assigned snowflakes |
-| `daec045c` | 37 foreign-key indexes, chiefly the 22-constraint `accounts` erasure fan-out |
-| `e00bf658` | `passive_deletes=True` on the four `Build` collections |
-| `bcac687a` | `api_keys.created_by_account_id` ON DELETE; `starboards.colour` width; three nullable `created_at` columns |
+| `5061234e` | `Identity()` on three foreign-key columns in `votes`, `build_vote_sessions`, `delete_log_vote_sessions` |
+| `e8dbbada` | `build_edit_history` — dropped outright rather than fixed in place (single-row-per-build primary key, redundant unique, identity on the FK, no writer; nothing ever wrote to it) |
+| `9c12b7b4` | `tag_definitions_numeric_metadata_check` admitted every row |
+| `4eaaa220` | `messages.id` and `server_settings.server_id` declared `SERIAL` for externally assigned snowflakes (model-only fix, `autoincrement=False`; no migration needed since the deployed baseline never had the sequence) |
+| `ac4f91a2` | 37 foreign-key indexes, chiefly the 22-constraint `accounts` erasure fan-out, plus `passive_deletes=True` on the four `Build` collections (both original findings landed together) |
+| `53877d09` | `api_keys.created_by_account_id` ON DELETE; `starboards.colour` width; three nullable `created_at` columns |
 
-Migration chain: `c4e8f2a1b6d3` → `d5f9a2c7b481` → `e6a0b3d8c592` → `f7b1c4e9d6a3` →
-`a8c2d5f0e7b4` → `b9d3e6a1f8c5`.
+Migration chain (unaffected by the rebase — Alembic revision ids are independent of git commit
+hashes): `c4e8f2a1b6d3` → `d5f9a2c7b481` → `e6a0b3d8c592` → `f7b1c4e9d6a3` → `a8c2d5f0e7b4` →
+`b9d3e6a1f8c5`.
+
+One stray leftover from the `build_edit_history` drop: `schema/structure/public/tables/build_edit_history/`
+(`table.sql`, `policies.sql`) is still tracked in git even though the table no longer exists in any
+model or migration — a stale dump, not a schema defect. Worth a cleanup commit but out of scope
+here; see `schema-integrity-hardening.md`'s note on `schema_dump.sql` staleness.
 
 ## Two corrections to the original audit
 
@@ -93,11 +111,13 @@ Independent of each other; any can go first.
   joined-table inheritance consistent.
 
 - **Guard `permission_role_includes` against cycles in the database.** `_would_cycle`
-  (`squid/permissions/application/administration.py:514-527`) is a read-then-write with no lock, so
-  two concurrent `add_include` calls that are each individually acyclic can commit a cycle. The DB
-  only has `role_id <> included_role_id`. A `CONSTRAINT TRIGGER` running a recursive CTE belongs in
+  (`squid/permissions/application/administration.py:516-527`, called from `:497`) is a
+  read-then-write with no lock, so two concurrent `add_include` calls that are each individually
+  acyclic can commit a cycle. The DB only has `role_id <> included_role_id`. Still true as of
+  2026-08-18 — no trigger added. A `CONSTRAINT TRIGGER` running a recursive CTE belongs in
   `squid/persistence/postgres_entities.sql` — note the arity assertion at
-  `squid/persistence/alembic_entities.py:20` counts functions and triggers and must be updated.
+  `squid/persistence/alembic_entities.py:15-16` (`EXPECTED_FUNCTIONS = 12`, `EXPECTED_TRIGGERS = 38`)
+  counts functions and triggers and must be updated.
 
 - **Object-key integrity in media and schematics.** `schematic_files.object_key` is not unique, and
   `media_artifacts.object_key` has an index but no FK to `media_artifact_objects.object_key`.
@@ -160,7 +180,11 @@ The records repository reads the variants table and falls back to the columns
 fallback is always taken for doors and `_extender_candidate` receives an empty tuple — meaning
 extender fastest records can never resolve.
 
-TODO.md already tracks the missing extender writer. Sequence that first; collapsing to one
+Still true as of 2026-08-18: no code writes a `DoorTimingVariant`/`ExtenderTimingVariant` row
+anywhere. **The "TODO.md already tracks this" claim is now stale** — TODO.md's current extender
+entry (`- [ ] Add piston-extender create/update submission persistence`, line 19) is about
+submission persistence for extenders generally, not the timing-variant writer specifically; it may
+or may not cover this when done. Sequence the variant writer first regardless; collapsing to one
 representation only makes sense once something populates it.
 
 ## Phase 6 — Retire the record denormalizations

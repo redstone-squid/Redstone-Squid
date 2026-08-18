@@ -298,7 +298,9 @@ key, with the key's lifetime.
 as statement-level `AFTER INSERT OR UPDATE OR DELETE` triggers on the six mutable tables, doing
 `UPDATE ... version + 1 RETURNING version` then `PERFORM pg_notify('squid_permissions', ...)` —
 the same shape as `publish_domain_event` at `postgres_entities.sql:352`. **Bump the
-`15 functions / 34 triggers` assertion at `squid/persistence/alembic_entities.py:20-22`.**
+function/trigger count assertion at `squid/persistence/alembic_entities.py`.** Done: the
+guard is now `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` constants (`alembic_entities.py:14-15`),
+reading `12 functions / 38 triggers` as of the current schema.
 
 > **Amendment (Phase 2).** Six tables, but not the six this paragraph had in mind.
 > `permission_audit_log` gets no trigger: it is append-only and no decision reads it, so bumping the
