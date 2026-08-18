@@ -11,7 +11,7 @@ from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_trigger import PGTrigger
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "e8a6b347c921"
 down_revision: str | Sequence[str] | None = "d42be8a917c3"
@@ -38,14 +38,14 @@ def downgrade() -> None:
 def _enqueue_build_function() -> PGFunction:
     return next(
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, PGFunction) and entity.signature.partition("(")[0] == "enqueue_build_search_projection"
     )
 
 
 def _timing_triggers() -> list[PGTrigger]:
     names = {"door_timing_variants_enqueue_search", "extender_timing_variants_enqueue_search"}
-    return [entity for entity in ALEMBIC_UTIL_ENTITIES if isinstance(entity, PGTrigger) and entity.signature in names]
+    return [entity for entity in alembic_util_entities() if isinstance(entity, PGTrigger) and entity.signature in names]
 
 
 _PREVIOUS_FUNCTION = """

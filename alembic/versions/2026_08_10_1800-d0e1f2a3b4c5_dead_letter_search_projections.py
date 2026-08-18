@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic_utils.pg_function import PGFunction
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "d0e1f2a3b4c5"
 down_revision: str | Sequence[str] | None = "c9d0e1f2a3b4"
@@ -60,6 +60,6 @@ def downgrade() -> None:
 def _search_projection_functions() -> list[PGFunction]:
     return [
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, PGFunction) and entity.signature.partition("(")[0] in _FUNCTION_NAMES
     ]
