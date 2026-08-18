@@ -68,6 +68,8 @@ class RecordRunRepository(Protocol):
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 
+    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None: ...
+
     async def save_requested_category(
         self,
         ruleset_id: int,
