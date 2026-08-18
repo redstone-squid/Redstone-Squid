@@ -292,6 +292,18 @@ ACCOUNT_IDENTITY_REFRESH_ANY = _b.node(
     _("Re-read another user's linked Minecraft name."),
     tags=(Tag.MODERATION,),
 )
+ACCOUNT_SELF_MANAGE = _b.node(
+    "account.self.manage",
+    NodeScope.GLOBAL,
+    _("Edit your own profile, visibility, linked identities, and merges."),
+    default=Default.ALLOW,
+)
+ACCOUNT_PROFILE_MODERATE = _b.node(
+    "account.profile.moderate",
+    NodeScope.GLOBAL,
+    _("Clear another user's public profile."),
+    tags=(Tag.MODERATION,),
+)
 
 PERM_GRANT_GLOBAL = _b.node(
     "perm.grant.global",

@@ -8,6 +8,7 @@ from uuid import UUID
 
 from fastapi import FastAPI
 
+from squid.accounts.domain import AccountProfile
 from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
 from squid.builds.errors import BuildNotFoundError
@@ -72,6 +73,15 @@ class MockAccountManager:
 
     async def get_creator_profile(self, _public_id: UUID):
         return None
+
+    async def get_public_profile(self, _public_id: UUID):
+        return None
+
+    async def get_profile(self, account_id: int):
+        return AccountProfile.empty(account_id)
+
+    async def list_identities(self, _account_id: int):
+        return ()
 
     async def generate_verification_code(self, user_uuid: str | UUID) -> int:
         if isinstance(user_uuid, str):
