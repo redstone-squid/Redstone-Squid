@@ -8,6 +8,7 @@ from squid.bot.voting.rendering import generic_poll_text
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.voting.application import RoleVoteWeightPolicy
 from squid.voting.domain import (
+    PollScope,
     RoleWeight,
     VoteActor,
     VoteChoice,
@@ -229,3 +230,22 @@ def test_option_lines_reject_duplicates_bad_counts_and_unusable_emojis() -> None
         )
     with pytest.raises(InvalidVoteConfigurationError, match="palette does not have enough"):
         parse_option_lines(["Red", "Blue"], guild_id=10, palette=palette)
+
+
+def test_a_guild_poll_may_only_be_closed_from_the_guild_that_owns_it() -> None:
+    poll = poll_snapshot(author_account_id=7, guild_id=10, scope=PollScope.GUILD)
+
+    assert poll.can_close(VoteActor(7, 70, guild_id=10)) is None
+    assert poll.can_close(VoteActor(7, 70, guild_id=999)) is VoteRejection.WRONG_GUILD
+
+
+def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
+    poll = poll_snapshot(author_account_id=7, guild_id=10, scope=PollScope.NETWORK)
+    close_any = frozenset({VOTE_POLL_CLOSE_ANY.name})
+
+    # The author may be standing in any guild the poll reached.
+    assert poll.can_close(VoteActor(7, 70, guild_id=999)) is None
+    # Staff elsewhere hold a capability resolved in the wrong guild.
+    assert poll.can_close(VoteActor(8, 80, guild_id=999, capabilities=close_any)) is VoteRejection.WRONG_GUILD
+    assert poll.can_close(VoteActor(8, 80, guild_id=10, capabilities=close_any)) is None
+    assert poll.can_close(VoteActor(8, 80, guild_id=10)) is VoteRejection.NOT_AUTHORIZED

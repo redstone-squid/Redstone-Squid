@@ -12,6 +12,7 @@ from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
     EmojiPreset,
+    PollScope,
     RoleWeight,
     StoredVoteMutation,
     VoteActor,
@@ -28,7 +29,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from tests.helpers.voting import DEFAULT_BUILD_TARGET, build_snapshot, poll_snapshot
+from tests.helpers.voting import DEFAULT_BUILD_TARGET, GENERIC_OPTIONS, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -72,6 +73,7 @@ class FakeVoteRepository:
         self.role_weights: dict[tuple[int, VoteKind], list[RoleWeight]] = {}
         self.role_weight_lookups: list[tuple[int, VoteKind]] = []
         self.due: list[VoteSessionSnapshot] = []
+        self.generic_scopes: list[PollScope] = []
         self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
         self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
         self.generic_create_calls: list[tuple[int, str, VoteVisibility, Instant, int | None]] = []
@@ -100,8 +102,10 @@ class FakeVoteRepository:
         deadline: Instant,
         options: Sequence[VoteOption],
         guild_id: int | None = None,
+        scope: PollScope = PollScope.GUILD,
     ) -> int:
         self.generic_create_calls.append((author_account_id, question, visibility, deadline, guild_id))
+        self.generic_scopes.append(scope)
         return 26
 
     async def create_build_session(
@@ -770,3 +774,52 @@ async def test_a_due_poll_without_a_card_still_has_its_weights_recomputed() -> N
     await service.close_due()
 
     assert resolver.calls == [(7, 77)]
+
+
+async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> None:
+    service = VoteService(FakeVoteRepository(None))
+    unscoped = (
+        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
+        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
+    )
+
+    with pytest.raises(InvalidVoteConfigurationError, match="must belong to a guild"):
+        await service.create_generic_poll(
+            author_account_id=7,
+            question="Which?",
+            visibility=VoteVisibility.ANONYMOUS_LIVE,
+            duration_seconds=3600,
+            options=unscoped,
+            scope=PollScope.NETWORK,
+        )
+
+    with pytest.raises(InvalidVoteConfigurationError, match="not be scoped to one guild"):
+        await service.create_generic_poll(
+            author_account_id=7,
+            question="Which?",
+            visibility=VoteVisibility.ANONYMOUS_LIVE,
+            duration_seconds=3600,
+            options=GENERIC_OPTIONS,
+            guild_id=10,
+            scope=PollScope.NETWORK,
+        )
+
+
+async def test_a_network_poll_records_its_scope() -> None:
+    repository = FakeVoteRepository(None)
+    service = VoteService(repository)
+
+    await service.create_generic_poll(
+        author_account_id=7,
+        question="Which?",
+        visibility=VoteVisibility.ANONYMOUS_LIVE,
+        duration_seconds=3600,
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
+        ),
+        guild_id=10,
+        scope=PollScope.NETWORK,
+    )
+
+    assert repository.generic_scopes == [PollScope.NETWORK]
