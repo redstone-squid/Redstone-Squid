@@ -1,26 +1,133 @@
-"""Discord components for obtaining informed user-data consent."""
+"""Asking one Discord user for informed consent, and continuing what they asked for."""
 
-from typing import Any, override
+from typing import Any, cast, override
 
 import discord
+from discord.ext import commands
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, AccountConsent, LinkPreview
+from squid.accounts.application import AccountService
+from squid.accounts.domain import (
+    CURRENT_CONSENT_VERSION,
+    PRIVACY_NOTICE,
+    AccountConsent,
+    IdentityProvider,
+    LinkPreview,
+)
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
-from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions
+from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
 from squid.core.i18n import _, ntranslate
 
+type ConsentTarget = commands.Context[Any] | discord.Interaction[Any]
+"""Anywhere the bot can both identify a user and answer them.
 
-class UserDataConsentView(ExpiringLayoutView):
-    """Ask one Discord user to accept the current account-link privacy notice.
+Prefix commands, hybrid commands, slash-only cogs, modals and view buttons all reach the gate,
+and the difference between them is only how a message gets sent.
+"""
 
-    Built around a *preview* rather than prose. The prompt used to describe categories of data
-    because it ran before the code was redeemed and could not know anything concrete; a held code
-    means it can name the Minecraft account, the credit at stake and the receipt it will write, which
-    is what makes the decision an informed one rather than a policy to skim.
+
+class ConsentPromptView(ExpiringLayoutView):
+    """Ask one Discord user to accept the current privacy notice.
+
+    The card names the stored categories itself and keeps the full notice behind a button:
+    consent is not informed if every category is behind a button, and it is not read if the whole
+    policy is in front of one.
     """
 
     actions = discord.ui.ActionRow()
+
+    def __init__(self, user_id: int, *, locale: str | None = None, timeout: float = 120.0) -> None:
+        super().__init__(timeout=timeout)
+        self.user_id = user_id
+        self.locale = locale
+        self.consent: AccountConsent | None = None
+        controls = self.actions
+        self.clear_items()
+        self.add_item(card_container(self._title(locale), self._summary(locale), fields=self._fields(locale)))
+        self.add_item(controls)
+        self.accept.label = self._accept_label(locale)
+        self.cancel.label = t(locale, _("Cancel"))
+        self.privacy.label = t(locale, _("Privacy notice"))
+
+    def _title(self, locale: str | None) -> str:
+        return t(locale, _("Before Redstone Squid stores anything about you"))
+
+    def _summary(self, locale: str | None) -> str:
+        return t(
+            locale,
+            _(
+                "Agreeing stores your Discord user ID and records this consent, so the bot can "
+                "recognise you and attribute your builds. Cancelling stores nothing."
+            ),
+        )
+
+    def _accept_label(self, locale: str | None) -> str:
+        return t(locale, _("Agree"))
+
+    def _fields(self, locale: str | None) -> tuple[CardField, ...]:
+        """Lay out exactly what agreeing will write."""
+        return (
+            CardField(
+                t(locale, _("Discord account")),
+                t(locale, _("<@{user_id}> (`{user_id}`)"), user_id=self.user_id),
+            ),
+            CardField(
+                t(locale, _("Consent recorded")),
+                t(locale, _("Notice `{version}`, timed at the moment you agree."), version=CURRENT_CONSENT_VERSION),
+            ),
+        )
+
+    @override
+    async def interaction_check(self, interaction: discord.Interaction[Any], /) -> bool:
+        if interaction.user.id == self.user_id:
+            return True
+        await interaction.response.send_message(
+            t(self.locale, _("Only the person this prompt is for can answer it.")),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+        return False
+
+    @actions.button(label="Agree", style=discord.ButtonStyle.success)
+    async def accept(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
+        self.consent = AccountConsent.grant_current()
+        await self._finish(interaction)
+
+    @actions.button(label="Cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
+        await self._finish(interaction)
+
+    @actions.button(label="Privacy notice", style=discord.ButtonStyle.secondary)
+    async def privacy(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
+        """Show the full notice without answering the prompt either way."""
+        await interaction.response.send_message(
+            t(self.locale, PRIVACY_NOTICE),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+
+    async def _finish(self, interaction: discord.Interaction[Any]) -> None:
+        """Render the prompt inert before releasing the waiting command."""
+        for child in self.walk_children():
+            if isinstance(child, discord.ui.Button | discord.ui.Select):
+                child.disabled = True
+        await edit_interaction_layout(interaction, self)
+        self.stop()
+
+    @property
+    def notice_version(self) -> str:
+        """Return the privacy notice version presented by this view."""
+        return CURRENT_CONSENT_VERSION
+
+
+class LinkConsentView(ConsentPromptView):
+    """The account-link prompt, built around a *preview* rather than prose.
+
+    The prompt used to describe categories of data because it ran before the code was redeemed and
+    could not know anything concrete; a held code means it can name the Minecraft account, the
+    credit at stake and the receipt it will write, which is what makes the decision an informed one
+    rather than a policy to skim.
+    """
 
     def __init__(
         self,
@@ -30,31 +137,29 @@ class UserDataConsentView(ExpiringLayoutView):
         locale: str | None = None,
         timeout: float = 120.0,
     ) -> None:
-        super().__init__(timeout=timeout)
-        self.user_id = user_id
+        # Set before `super().__init__`, which calls the hooks below.
         self.preview = preview
-        self.locale = locale
-        self.consent: AccountConsent | None = None
-        controls = self.actions
-        self.clear_items()
-        self.add_item(
-            card_container(
-                t(locale, _("Link {username} to your Discord account"), username=preview.username),
-                t(
-                    locale,
-                    _(
-                        "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
-                        "Minecraft username, and records this consent. Cancelling stores nothing."
-                    ),
-                ),
-                fields=self._fields(locale),
-            )
-        )
-        self.add_item(controls)
-        self.accept.label = t(locale, _("Agree and link"))
-        self.cancel.label = t(locale, _("Cancel"))
-        self.privacy.label = t(locale, _("Privacy notice"))
+        super().__init__(user_id, locale=locale, timeout=timeout)
 
+    @override
+    def _title(self, locale: str | None) -> str:
+        return t(locale, _("Link {username} to your Discord account"), username=self.preview.username)
+
+    @override
+    def _summary(self, locale: str | None) -> str:
+        return t(
+            locale,
+            _(
+                "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
+                "Minecraft username, and records this consent. Cancelling stores nothing."
+            ),
+        )
+
+    @override
+    def _accept_label(self, locale: str | None) -> str:
+        return t(locale, _("Agree and link"))
+
+    @override
     def _fields(self, locale: str | None) -> tuple[CardField, ...]:
         """Lay out exactly what redeeming this code will write."""
         return (
@@ -114,44 +219,99 @@ class UserDataConsentView(ExpiringLayoutView):
             builds=builds,
         )
 
-    @override
-    async def interaction_check(self, interaction: discord.Interaction[Any], /) -> bool:
-        if interaction.user.id == self.user_id:
-            return True
-        await interaction.response.send_message(
-            t(self.locale, _("Only the person linking the account can answer this prompt.")),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+
+def _is_context(target: ConsentTarget) -> bool:
+    """Whether this is a command context rather than a bare interaction.
+
+    Duck-typed rather than `isinstance(target, commands.Context)`, matching `resolve_locale`, so
+    the lightweight doubles in `tests/helpers/discord.py` work without subclassing discord types.
+    """
+    return hasattr(target, "author")
+
+
+async def _send(target: ConsentTarget, view: discord.ui.LayoutView, *, ephemeral: bool) -> discord.Message:
+    """Send one view through whichever surface the caller arrived on."""
+    if _is_context(target):
+        context = cast(commands.Context[Any], target)
+        return await context.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
+    interaction = cast(discord.Interaction[Any], target)
+    if interaction.response.is_done():
+        return await interaction.followup.send(
+            view=view, ephemeral=ephemeral, wait=True, allowed_mentions=no_mentions()
         )
-        return False
+    await interaction.response.send_message(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
+    return await interaction.original_response()
 
-    @actions.button(label="Agree and link", style=discord.ButtonStyle.success)
-    async def accept(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
-        self.consent = AccountConsent.grant_current()
-        await self._finish(interaction)
 
-    @actions.button(label="Cancel", style=discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
-        await self._finish(interaction)
+def _default_ephemeral(target: ConsentTarget) -> bool:
+    """Keep a consent prompt out of the channel wherever the surface allows it."""
+    if not _is_context(target):
+        return True
+    return cast(commands.Context[Any], target).interaction is not None
 
-    @actions.button(label="Privacy notice", style=discord.ButtonStyle.secondary)
-    async def privacy(self, interaction: discord.Interaction[Any], button: discord.ui.Button[Any]) -> None:
-        """Show the full notice without answering the prompt either way."""
-        await interaction.response.send_message(
-            t(self.locale, PRIVACY_NOTICE),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+
+def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
+    if _is_context(target):
+        return cast(commands.Context[Any], target).author
+    return cast(discord.Interaction[Any], target).user
+
+
+async def prompt_for_consent(
+    target: ConsentTarget,
+    *,
+    user_id: int,
+    locale: str | None = None,
+    preview: LinkPreview | None = None,
+    timeout: float = 120.0,
+) -> AccountConsent | None:
+    """Show the notice and wait, returning the receipt the user granted.
+
+    `None` covers both cancelling and letting the prompt expire; neither stores anything, so the
+    caller treats them the same and only the wording differs.
+    """
+    view = (
+        ConsentPromptView(user_id, locale=locale, timeout=timeout)
+        if preview is None
+        else LinkConsentView(user_id, preview, locale=locale, timeout=timeout)
+    )
+    message = await _send(target, view, ephemeral=_default_ephemeral(target))
+    view.bind_message(message)
+    await view.wait()
+    return view.consent
+
+
+async def ensure_consented_account(
+    target: ConsentTarget,
+    accounts: AccountService,
+    *,
+    locale: str | None = None,
+    timeout: float = 120.0,
+) -> int | None:
+    """The account id behind this Discord user, once it has accepted the current notice.
+
+    Returns `None` when the prompt was declined or expired. The user has already been told, so the
+    caller simply returns rather than raising: a consent gate is a question, and "no" is an answer
+    rather than an error.
+
+    The read comes first and creates nothing. That ordering is the notice's central promise --
+    cancelling has to store nothing, which it cannot do if the account row was minted to ask the
+    question. It also means the fast path for an already-consented user is one indexed lookup.
+    """
+    user = _user_of(target)
+    account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
+    if account is not None and account.id is not None and not account.needs_consent_refresh:
+        return account.id
+
+    consent = await prompt_for_consent(target, user_id=user.id, locale=locale, timeout=timeout)
+    if consent is None:
+        await _send(
+            target,
+            text_layout(t(locale, _("Cancelled. No account information was stored."))),
+            ephemeral=_default_ephemeral(target),
         )
+        return None
 
-    async def _finish(self, interaction: discord.Interaction[Any]) -> None:
-        """Render the prompt inert before releasing the waiting command."""
-        for child in self.walk_children():
-            if isinstance(child, discord.ui.Button | discord.ui.Select):
-                child.disabled = True
-        await edit_interaction_layout(interaction, self)
-        self.stop()
-
-    @property
-    def notice_version(self) -> str:
-        """Return the privacy notice version presented by this view."""
-        return CURRENT_CONSENT_VERSION
+    # One write, so a receipt is never separated from the row it belongs to.
+    granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
+    assert granted.id is not None, "get_or_create_identity always returns a persisted account"
+    return granted.id

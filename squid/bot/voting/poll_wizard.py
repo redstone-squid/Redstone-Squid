@@ -143,9 +143,10 @@ class PollDraft:
 class PollModal(ErrorHandledModal):
     """Collect the free-text half of a poll: its question and its option lines."""
 
-    def __init__(self, publisher: PollPublisher, draft: PollDraft | None = None):
+    def __init__(self, publisher: PollPublisher, author_account_id: int, draft: PollDraft | None = None):
         super().__init__(title="Create a poll")
         self.publisher = publisher
+        self.author_account_id = author_account_id
         self.draft = draft
         self.question = discord.ui.TextInput(default=draft.question if draft else "", max_length=300)
         self.options = discord.ui.TextInput(
@@ -174,7 +175,7 @@ class PollModal(ErrorHandledModal):
         except InvalidVoteConfigurationError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
-        confirmation = PollConfirmation(self.publisher, interaction.user.id, draft, options)
+        confirmation = PollConfirmation(self.publisher, interaction.user.id, self.author_account_id, draft, options)
         await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
         confirmation.bind_message(await interaction.original_response())
 
@@ -257,12 +258,14 @@ class PollConfirmation(ExpiringLayoutView):
         self,
         publisher: PollPublisher,
         owner_id: int,
+        author_account_id: int,
         draft: PollDraft,
         options: tuple[VoteOption, ...],
     ):
         super().__init__(timeout=900)
         self.publisher = publisher
         self.owner_id = owner_id
+        self.author_account_id = author_account_id
         self.draft = draft
         self.options = options
         self.published = False
@@ -325,7 +328,7 @@ class PollConfirmation(ExpiringLayoutView):
         await interaction.response.defer(ephemeral=True)
         try:
             message = await self.publisher.create_and_publish(
-                author_discord_id=interaction.user.id,
+                author_account_id=self.author_account_id,
                 channel=cast(GuildMessageable, interaction.channel),
                 question=self.draft.question,
                 visibility=self.draft.visibility,
@@ -344,7 +347,9 @@ class PollConfirmation(ExpiringLayoutView):
     @controls.button(label="Edit", style=discord.ButtonStyle.secondary)
     async def edit(self, interaction: discord.Interaction, button: discord.ui.Button[PollConfirmation]) -> None:
         del button
-        await interaction.response.send_modal(PollModal(self.publisher, self.draft))  # pyrefly: ignore[no-matching-overload]
+        await interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
+            PollModal(self.publisher, self.author_account_id, self.draft)
+        )
 
     @controls.button(label="Cancel", style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button[PollConfirmation]) -> None:

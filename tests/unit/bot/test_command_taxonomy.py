@@ -26,6 +26,7 @@ UNGATED_COMMANDS = frozenset(
         # Public: anyone may run these.
         "account",
         "account claim",
+        "account consent",
         "account identities",
         "account link",
         "account merge",
@@ -109,6 +110,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "approve-claim",
         "claim",
         "claims",
+        "consent",
         "identities",
         "link",
         "merge",

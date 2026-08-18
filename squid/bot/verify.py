@@ -9,6 +9,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
+    CURRENT_CONSENT_VERSION,
     MAX_BIO_LENGTH,
     MAX_DISPLAY_NAME_LENGTH,
     MAX_PRONOUNS_LENGTH,
@@ -23,7 +24,8 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
-from squid.bot.consent import UserDataConsentView
+from squid.bot.consent import ensure_consented_account, prompt_for_consent
+from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     identity_label,
@@ -32,7 +34,6 @@ from squid.bot.profile_render import (
     public_profile_fields,
 )
 from squid.bot.submission.ui.views import ConfirmationView
-from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import DISCORD_BLUE, CardField, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
@@ -92,11 +93,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     subject=str(ctx.author.id),
                 )
 
-            consent_view = UserDataConsentView(ctx.author.id, reservation.preview, locale=locale)
-            message = await ctx.send(view=consent_view, ephemeral=ephemeral, allowed_mentions=no_mentions())
-            consent_view.bind_message(message)
-            await consent_view.wait()
-            if consent_view.consent is None:
+            consent = await prompt_for_consent(ctx, user_id=ctx.author.id, locale=locale, preview=reservation.preview)
+            if consent is None:
                 await ctx.send(
                     view=text_layout(
                         t(locale, _("Account linking cancelled. No user account information was stored."))
@@ -108,12 +106,17 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
 
             # The account is created here rather than by the redemption, which is evidence of a
             # Java subject and of nothing else. This command is reached over the gateway, so it
-            # genuinely holds the Discord identity it is about to mint.
-            account_id = await account_id_for(self.account_service, ctx.author)
+            # genuinely holds the Discord identity it is about to mint, and it carries the receipt
+            # into the same write so a row never exists without one.
+            account = await self.account_service.get_or_create_identity(
+                IdentityProvider.DISCORD, str(ctx.author.id), consent=consent
+            )
+            assert account.id is not None, "get_or_create_identity always returns a persisted account"
+            account_id = account.id
             refresh = await self.account_service.link_minecraft_account(
                 account_id,
                 code,
-                consent=consent_view.consent,
+                consent=consent,
                 attempted_by=attempted_by,
                 reservation=reservation,
             )
@@ -126,6 +129,35 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
 
         await ctx.send(
             view=text_layout(_link_message(refresh, locale)),
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+        )
+
+    @account_group.command(name="consent")
+    async def consent(self, ctx: Context[BotT]) -> None:
+        """Read the privacy notice and accept it."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        ephemeral = ctx.interaction is not None
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is not None and account.id is not None and not account.needs_consent_refresh:
+            await ctx.send(
+                view=text_layout(
+                    t(
+                        locale,
+                        _("You have already accepted notice `{version}`. Press the button to read it again."),
+                        version=CURRENT_CONSENT_VERSION,
+                    )
+                ),
+                ephemeral=ephemeral,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if account_id is None:
+            return
+        await ctx.send(
+            view=text_layout(t(locale, _("Thanks. You can use the bot's other commands now."))),
             ephemeral=ephemeral,
             allowed_mentions=no_mentions(),
         )
@@ -265,7 +297,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def visibility(self, ctx: Context[BotT], public: bool, identity: int | None = None) -> None:
         """Choose what your public creator page shows."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await account_id_for(self.account_service, ctx.author)
+        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if account_id is None:
+            return
 
         if identity is None:
             await self.account_service.update_profile(account_id, ProfileUpdate(hidden=not public))
@@ -392,10 +426,25 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 allowed_mentions=no_mentions(),
             )
             return
-        account_id = await account_id_for(self.account_service, ctx.author)
-        profile = await self.account_service.get_profile(account_id)
+        # A modal has to open on an unspent interaction, and showing the notice spends this one.
+        # So the gate runs first and, when it had to ask, the command ends by confirming the
+        # receipt: re-running is one keystroke, and the alternative is an interaction token that
+        # cannot open anything.
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is None or account.id is None or account.needs_consent_refresh:
+            account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+            if account_id is None:
+                return
+            await ctx.send(
+                view=text_layout(t(locale, _("Thanks. Run `/account profile-edit` again to open the editor."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        profile = await self.account_service.get_profile(account.id)
         await ctx.interaction.response.send_modal(
-            ProfileEditModal(self.account_service, account_id, profile, locale=locale)
+            ProfileEditModal(self.account_service, account.id, profile, locale=locale)
         )
 
     @account_group.command(name="refresh")
@@ -427,7 +476,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def merge_code(self, ctx: Context[BotT]) -> None:
         """Offer this account up to be absorbed by another account you hold."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await account_id_for(self.account_service, ctx.author)
+        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if account_id is None:
+            return
         code, ticket = await self.account_service.create_merge_code(account_id)
         await ctx.send(
             view=card_layout(
@@ -457,7 +508,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def merge(self, ctx: Context[BotT], code: str) -> None:
         """Absorb another account you hold into this one."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await account_id_for(self.account_service, ctx.author)
+        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if account_id is None:
+            return
         preview = await self.account_service.preview_merge(account_id, code)
 
         view = ConfirmationView(
@@ -496,9 +549,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @app_commands.describe(name=app_commands.locale_str(_("A creator name credited on builds you worked on.")))
     async def claim(self, ctx: Context[BotT], *, name: str) -> None:
         """Ask staff to credit you with an older creator name."""
-        account_id = await account_id_for(self.account_service, ctx.author)
-        claim = await self.account_service.request_alias_claim(account_id, name)
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if account_id is None:
+            return
+        claim = await self.account_service.request_alias_claim(account_id, name)
         await ctx.send(
             view=text_layout(
                 t(
@@ -568,11 +623,13 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @requires(ACCOUNT_CLAIM_APPROVE)
     async def approve_claim(self, ctx: Context[BotT], claim_id: int, reassign: bool = False) -> None:
         """Credit a claimant with the creator name they requested."""
-        staff_account_id = await account_id_for(self.account_service, ctx.author)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        staff_account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if staff_account_id is None:
+            return
         claim = await self.account_service.approve_alias_claim(
             claim_id, staff_account_id=staff_account_id, reassign=reassign
         )
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=text_layout(
                 t(
@@ -590,9 +647,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     @requires(ACCOUNT_CLAIM_REJECT)
     async def reject_claim(self, ctx: Context[BotT], claim_id: int) -> None:
         """Reject a creator credit claim, leaving the name credited as it is."""
-        staff_account_id = await account_id_for(self.account_service, ctx.author)
-        claim = await self.account_service.reject_alias_claim(claim_id, staff_account_id=staff_account_id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        staff_account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
+        if staff_account_id is None:
+            return
+        claim = await self.account_service.reject_alias_claim(claim_id, staff_account_id=staff_account_id)
         await ctx.send(
             view=text_layout(
                 t(
@@ -606,7 +665,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
 
 
-class ProfileEditModal(discord.ui.Modal):
+class ProfileEditModal(ErrorHandledModal):
     """Edit the free-text parts of a creator page.
 
     Links are one `label | url` per line rather than a repeated field because a modal allows five

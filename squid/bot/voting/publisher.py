@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.voting.domain import VoteKind, VoteOption, VoteVisibility
 
@@ -27,7 +26,7 @@ class PollPublisher(Protocol):
     async def create_and_publish(
         self,
         *,
-        author_discord_id: int,
+        author_account_id: int,
         channel: GuildMessageable,
         question: str,
         visibility: VoteVisibility,
@@ -60,7 +59,7 @@ class DiscordPollPublisher:
     async def create_and_publish(
         self,
         *,
-        author_discord_id: int,
+        author_account_id: int,
         channel: GuildMessageable,
         question: str,
         visibility: VoteVisibility,
@@ -74,7 +73,6 @@ class DiscordPollPublisher:
         decision -- the channel the command was run in -- so it is sent here and
         adopted, rather than the renderer inventing somewhere to put it.
         """
-        author_account_id = await account_id_for(self._bot.services.accounts, author_discord_id)
         session_id = await self._bot.services.votes.create_generic_poll(
             author_account_id=author_account_id,
             question=question,

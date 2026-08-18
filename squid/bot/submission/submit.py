@@ -9,6 +9,7 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog, Context
 
+from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
 from squid.bot.submission.groups import BuildCommandGroup
@@ -17,7 +18,6 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
-from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import requires
@@ -94,6 +94,11 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
         await interaction.response.defer(ephemeral=True)
         locale = await resolve_locale(interaction, self.bot.services.settings)
+        # Before the uploads, not after: declining should not cost the user an attachment round
+        # trip, and the notice describes exactly what submitting a build publishes.
+        uploader_account_id = await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale)
+        if uploader_account_id is None:
+            return
 
         draft = BuildDraft(ai_generated=False)
         try:
@@ -158,7 +163,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # schematic export is frequently cropped to the mechanism and legitimately smaller than
         # the build a person measured. The form shows the prefill as an editable default, and
         # whatever the human submits wins from that point on.
-        uploader_account_id = await account_id_for(self.bot.services.accounts, interaction.user)
         analyses = await self._analyse_attachments(pending_schematics, uploader_account_id=uploader_account_id)
         if analyses and not any(item is not None for item in draft.dimensions):
             measured = analyses[0][1].analysis.metrics.dimensions
