@@ -194,3 +194,22 @@ async def edit_interaction_layout(
         await interaction.response.edit_message(content=None, embed=None, view=layout, **extra)
         return
     await interaction.response.edit_message(view=layout, **extra)
+
+
+async def reply_layout(
+    interaction: discord.Interaction[Any],
+    layout: discord.ui.LayoutView,
+    *,
+    ephemeral: bool = True,
+) -> None:
+    """Answer an interaction with a layout, whether or not it has already been responded to.
+
+    A component callback cannot know: a consent prompt or a deferral upstream may have spent
+    the response, and the second send has to be a followup or Discord rejects it.
+    """
+    if interaction.response.is_done():
+        await interaction.followup.send(view=layout, ephemeral=ephemeral, allowed_mentions=no_mentions())
+        return
+    await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
+        view=layout, ephemeral=ephemeral, allowed_mentions=no_mentions()
+    )
