@@ -18,7 +18,7 @@ from squid.bot.utils.components import (
     card_container,
     truncate_display_text,
 )
-from squid.bot.voting.sessions import ensure_build_review
+from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.domain.titles import format_build_display_title
 
@@ -47,11 +47,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
     async def get_channels_to_post_to(self) -> list[GuildMessageable]:
         """Gets the channels in which this build should be posted to."""
 
-        target: Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
+        target: Literal["Smallest", "Fastest", "First", "Builds"]
 
         match self.build.submission_status:
             case Status.PENDING:
-                target = "Vote"
+                return await configured_vote_channels(self.bot)
             case Status.DENIED:
                 msg = "Denied submissions should not be posted."
                 raise ValueError(msg)

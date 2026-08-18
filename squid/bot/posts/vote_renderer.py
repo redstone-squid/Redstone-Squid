@@ -9,9 +9,10 @@ import discord
 from squid.accounts.domain import IdentityProvider
 from squid.bot.posts.renderer import DesiredPost
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
+from squid.bot.voting.sessions import configured_vote_channels
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, settle_all
 from squid.posts.domain import ResourceKind
-from squid.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, VoteSessionSnapshot
+from squid.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, PollScope, VoteSessionSnapshot
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -112,9 +113,14 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         if snapshot.poll is None:
             return ()
         layout = render_generic_poll(snapshot, await self._voter_discord_ids(snapshot))
+        channels = await self._published_channels(snapshot)
+        if snapshot.poll.scope is PollScope.NETWORK and snapshot.status == "open":
+            # Same fill as a build review: a guild that gains a vote channel mid-poll
+            # still gets a card, and a delivery that failed is retried.
+            channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
         return [
             DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", layout=layout)
-            for channel_id, guild_id in (await self._published_channels(snapshot)).items()
+            for channel_id, guild_id in channels.items()
         ]
 
     async def _voter_discord_ids(self, snapshot: VoteSessionSnapshot) -> dict[int, int]:

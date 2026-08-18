@@ -8,7 +8,7 @@ two-phase construction — be deleted outright.
 
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import discord
 
@@ -20,6 +20,13 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 logger = logging.getLogger(__name__)
+
+
+async def configured_vote_channels(bot: squid.bot.app.RedstoneSquid) -> list[GuildMessageable]:
+    """Every vote channel the bot can currently see, one per guild that set one."""
+    configured = await bot.services.settings.get_many((guild.id for guild in bot.guilds), "Vote")
+    resolved = (bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
+    return cast(list[GuildMessageable], [channel for channel in resolved if channel is not None])
 
 
 async def ensure_build_review(
