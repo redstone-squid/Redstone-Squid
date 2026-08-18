@@ -25,7 +25,9 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
+from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import hide_unless, requires
+from squid.builds.domain import Build
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -86,6 +88,29 @@ def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
     if not query.strip():
         return scope, narrowing
     return scope, f"{narrowing} ({query})"
+
+
+def _pending_entry(build: Build, locale: str | None) -> str:
+    """One line of the review queue: what it is, who made it, who sent it.
+
+    The submitter is a mention rather than the snowflake the old list printed (audit C5).
+    It can be absent: `submitter_discord_id` is derived from the account, and an account with
+    no Discord identity linked has none.
+    """
+    creators = ", ".join(sorted(build.creators_ign))
+    submitter = (
+        f"<@{build.submitter_discord_id}>"
+        if build.submitter_discord_id is not None
+        else t(locale, _("someone unlinked"))
+    )
+    return t(
+        locale,
+        _("**#{id}** {title}\n-# by {creators} · submitted by {submitter}"),
+        id=build.id,
+        title=escape_markdown(build.title),
+        creators=escape_markdown(creators) if creators else t(locale, _("unknown")),
+        submitter=submitter,
+    )
 
 
 class SearchCog[
@@ -177,27 +202,17 @@ class SearchCog[
     @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
+        await ctx.defer()
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            pending_submissions = await self.queries.pending()
-
-            if len(pending_submissions) == 0:
-                desc = t(locale, _("No open submissions."))
-            else:
-                desc = []
-                for sub in pending_submissions:
-                    # ID - Title
-                    # by Creators - submitted by Submitter
-                    desc.append(
-                        f"**{sub.id}** - {sub.title}\n_by {', '.join(sorted(sub.creators_ign))}_ - _submitted by {sub.submitter_discord_id}_"
-                    )
-                desc = "\n\n".join(desc)
-
-            await edit_layout(
-                sent_message,
-                info_layout(title=t(locale, _("Open Records")), description=desc),
-                allowed_mentions=no_mentions(),
-            )
+        pending = await self.queries.pending()
+        paginator = ListPaginator(
+            t(locale, _("Pending submissions")),
+            [_pending_entry(build, locale) for build in pending],
+            author_id=ctx.author.id,
+            empty=t(locale, _("Nothing is waiting for review.")),
+            locale=locale,
+        )
+        await paginator.send(ctx)
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="view")  # type: ignore
