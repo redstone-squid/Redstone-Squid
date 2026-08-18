@@ -201,15 +201,22 @@ async def reply_layout(
     layout: discord.ui.LayoutView,
     *,
     ephemeral: bool = True,
-) -> None:
+    wait: bool = False,
+) -> discord.Message | None:
     """Answer an interaction with a layout, whether or not it has already been responded to.
 
     A component callback cannot know: a consent prompt or a deferral upstream may have spent
     the response, and the second send has to be a followup or Discord rejects it.
+
+    `wait` costs a round trip to fetch the message back, so it is opt-in and only worth it
+    for a view that needs to edit itself later — an expiring panel disabling its controls.
     """
     if interaction.response.is_done():
-        await interaction.followup.send(view=layout, ephemeral=ephemeral, allowed_mentions=no_mentions())
-        return
+        message = await interaction.followup.send(
+            view=layout, ephemeral=ephemeral, wait=wait, allowed_mentions=no_mentions()
+        )
+        return message if wait else None
     await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
         view=layout, ephemeral=ephemeral, allowed_mentions=no_mentions()
     )
+    return await interaction.original_response() if wait else None

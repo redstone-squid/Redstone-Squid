@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 04:40+0000\n"
+"POT-Creation-Date: 2026-08-19 04:48+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -337,6 +337,10 @@ msgstr ""
 
 #: squid/bot/verify.py:549
 msgid "A creator name credited on builds you worked on."
+msgstr ""
+
+#: squid/bot/notifications.py:79
+msgid "A creator profile to follow."
 msgstr ""
 
 #: squid/bot/permissions.py:113
@@ -946,8 +950,8 @@ msgstr ""
 msgid "Clear another user's public profile."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:229 squid/bot/settings_view.py:587
-#: squid/bot/submission/search_view.py:225
+#: squid/bot/diagnostics_view.py:229 squid/bot/notifications_view.py:225
+#: squid/bot/settings_view.py:587 squid/bot/submission/search_view.py:225
 msgid "Close"
 msgstr ""
 
@@ -1078,7 +1082,7 @@ msgstr ""
 msgid "Created starboard **{name}** in {channel}."
 msgstr ""
 
-#: squid/bot/submission/search_view.py:246
+#: squid/bot/notifications_view.py:34 squid/bot/submission/search_view.py:246
 msgid "Creator"
 msgstr ""
 
@@ -1106,11 +1110,6 @@ msgstr ""
 msgid "Creator not found."
 msgstr ""
 
-#: squid/bot/notifications.py:95
-#, python-brace-format
-msgid "Creator subscription #{id} saved."
-msgstr ""
-
 #: squid/bot/submission/ui/views.py:160 squid/bot/submission/ui/views.py:378
 #: squid/submissions/application/forms.py:131
 msgid "Creators"
@@ -1127,10 +1126,6 @@ msgstr ""
 
 #: squid/minecraft_auth/errors.py:45
 msgid "Current privacy consent is required."
-msgstr ""
-
-#: squid/bot/notifications.py:70
-msgid "DMs are suspended because Discord rejected one."
 msgstr ""
 
 #: squid/bot/admin.py:302
@@ -1182,9 +1177,8 @@ msgstr ""
 msgid "Discord"
 msgstr ""
 
-#: squid/bot/notifications.py:65
-#, python-brace-format
-msgid "Discord DMs: {state}"
+#: squid/bot/notifications_view.py:128 squid/bot/notifications_view.py:212
+msgid "Discord DMs"
 msgstr ""
 
 #: squid/bot/consent.py:71 squid/bot/consent.py:176
@@ -1200,6 +1194,10 @@ msgstr ""
 
 #: squid/voting/errors.py:34
 msgid "Discord membership information is temporarily unavailable."
+msgstr ""
+
+#: squid/bot/notifications_view.py:162
+msgid "Discord rejected a DM, so DMs are suspended until you re-enable them."
 msgstr ""
 
 #: squid/bot/help.py:26
@@ -1452,6 +1450,38 @@ msgstr ""
 msgid "Follow Discord"
 msgstr ""
 
+#: squid/bot/notifications.py:84
+msgid "Follow records carrying this showcase tag."
+msgstr ""
+
+#: squid/bot/notifications.py:81
+msgid "Follow records of this build kind."
+msgstr ""
+
+#: squid/bot/notifications.py:82
+msgid "Follow records of this class."
+msgstr ""
+
+#: squid/bot/notifications.py:83
+msgid "Follow records pinned to this version scope."
+msgstr ""
+
+#: squid/bot/notifications_view.py:129
+msgid "Following"
+msgstr ""
+
+#: squid/bot/notifications.py:125
+msgid "Following a creator."
+msgstr ""
+
+#: squid/bot/notifications.py:130
+msgid "Following a record."
+msgstr ""
+
+#: squid/bot/notifications.py:143
+msgid "Following records matching that filter."
+msgstr ""
+
 #: squid/bot/settings_view.py:294
 msgid "Following this server's Discord language"
 msgstr ""
@@ -1501,6 +1531,10 @@ msgstr "正在获取信息……"
 
 #: squid/bot/submission/schematics.py:173
 msgid "Give either a data version or a Minecraft version to convert to."
+msgstr ""
+
+#: squid/bot/notifications.py:116
+msgid "Give exactly one of a creator, a record, or a record filter."
 msgstr ""
 
 #: squid/permissions/domain/catalogue.py:311
@@ -2119,6 +2153,10 @@ msgstr ""
 msgid "Nothing has failed within the retention window."
 msgstr ""
 
+#: squid/bot/notifications.py:115
+msgid "Nothing to follow"
+msgstr ""
+
 #: squid/bot/permissions.py:78
 msgid "Nothing to show."
 msgstr ""
@@ -2128,12 +2166,20 @@ msgstr ""
 msgid "Notice `{version}`, timed at the moment you agree."
 msgstr ""
 
-#: squid/bot/notifications.py:80
-msgid "Notification channels updated."
+#: squid/bot/notifications_view.py:97
+msgid "Notifications"
 msgstr ""
 
 #: squid/media/errors.py:177
 msgid "Object storage did not confirm a normalized media artifact."
+msgstr ""
+
+#: squid/bot/notifications_view.py:125
+msgid "Off"
+msgstr ""
+
+#: squid/bot/notifications_view.py:125
+msgid "On"
 msgstr ""
 
 #: squid/bot/settings_view.py:479
@@ -2143,6 +2189,10 @@ msgstr ""
 #: squid/bot/errors.py:227
 msgid "One of the command options is invalid."
 msgstr "其中一个命令选项无效。"
+
+#: squid/bot/notifications.py:80
+msgid "One stable record competition to follow."
+msgstr ""
 
 #: squid/submissions/application/drafts.py:45
 msgid "Only Paper drafts may retain an installation provenance ID."
@@ -2187,6 +2237,10 @@ msgstr ""
 #: squid/bot/submission/search.py:198
 msgid "Open Records"
 msgstr "打开记录"
+
+#: squid/bot/notifications.py:147
+msgid "Open `/notifications` to see or undo everything you follow."
+msgstr ""
 
 #: squid/bot/admin.py:304
 msgid "Open database"
@@ -2504,6 +2558,10 @@ msgstr ""
 msgid "Recomputed {definitions} definitions; {resolved} resolved."
 msgstr "已重新计算 {definitions} 个定义；已解决 {resolved} 个。"
 
+#: squid/bot/notifications_view.py:35
+msgid "Record"
+msgstr ""
+
 #: squid/bot/submission/records.py:169
 msgid "Record category materialized"
 msgstr "记录类别已具体化"
@@ -2532,9 +2590,8 @@ msgstr ""
 msgid "Record evidence gaps"
 msgstr "记录证据缺口"
 
-#: squid/bot/notifications.py:149
-#, python-brace-format
-msgid "Record filter #{id} saved."
+#: squid/bot/notifications_view.py:36
+msgid "Record filter"
 msgstr ""
 
 #: squid/records/errors.py:16
@@ -2543,11 +2600,6 @@ msgstr ""
 
 #: squid/records/errors.py:15
 msgid "Record not found."
-msgstr ""
-
-#: squid/bot/notifications.py:111
-#, python-brace-format
-msgid "Record subscription #{id} saved."
 msgstr ""
 
 #: squid/bot/submission/records.py:78
@@ -2663,6 +2715,10 @@ msgstr ""
 #: squid/core/errors.py:181
 msgid "Request failed"
 msgstr "请求失败"
+
+#: squid/bot/notifications.py:85
+msgid "Require an exact value for that tag."
+msgstr ""
 
 #: squid/bot/submission/ui/views.py:356
 #, python-brace-format
@@ -3057,10 +3113,6 @@ msgstr ""
 msgid ""
 "Submitting failed and nothing was saved. Press “Submit for review” to try"
 " again."
-msgstr ""
-
-#: squid/bot/notifications.py:173
-msgid "Subscription removed."
 msgstr ""
 
 #: squid/bot/submission/edit.py:178 squid/bot/submission/search.py:173
@@ -3532,6 +3584,10 @@ msgstr ""
 msgid "These error controls belong to someone else."
 msgstr ""
 
+#: squid/bot/notifications_view.py:74
+msgid "These notification controls belong to someone else."
+msgstr ""
+
 #: squid/bot/submission/search_view.py:48
 msgid "These search controls belong to someone else."
 msgstr "这些搜索控件属于其他人。"
@@ -3642,6 +3698,10 @@ msgstr ""
 msgid "Timed out"
 msgstr "已超时"
 
+#: squid/bot/notifications_view.py:98
+msgid "Toggle where notifications arrive, and unfollow what you no longer want."
+msgstr ""
+
 #: squid/cli_auth/errors.py:108
 msgid "Too many CLI authorization requests are active."
 msgstr ""
@@ -3701,6 +3761,10 @@ msgstr "未授权"
 #: squid/core/errors.py:211
 msgid "Unauthorized."
 msgstr "未授权。"
+
+#: squid/bot/notifications_view.py:178
+msgid "Unfollow…"
+msgstr ""
 
 #: squid/accounts/errors.py:182
 msgid "Unlink the current account before linking a new one."
@@ -3874,9 +3938,8 @@ msgstr "请等待其他编辑完成后重试。"
 msgid "Waiting"
 msgstr "等待中"
 
-#: squid/bot/notifications.py:60
-#, python-brace-format
-msgid "Web inbox: {state}"
+#: squid/bot/notifications_view.py:127 squid/bot/notifications_view.py:196
+msgid "Web inbox"
 msgstr ""
 
 #: squid/bot/settings_view.py:419
@@ -3999,10 +4062,6 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/notifications.py:163
-msgid "You have no subscriptions."
-msgstr ""
-
 #: squid/bot/verify.py:222
 msgid ""
 "You have several Minecraft accounts linked. Name one with the `identity` "
@@ -4085,6 +4144,10 @@ msgstr ""
 #: squid/bot/settings_view.py:301
 msgid "_Not set_"
 msgstr "_未设置_"
+
+#: squid/bot/notifications_view.py:134
+msgid "_Nothing yet._"
+msgstr ""
 
 #: squid/bot/settings_view.py:498
 #, python-brace-format
@@ -4373,14 +4436,6 @@ msgstr ""
 
 #: squid/submissions/domain/finalization.py:302
 msgid "normalized submissions require creators and an exact source version"
-msgstr ""
-
-#: squid/bot/notifications.py:61 squid/bot/notifications.py:66
-msgid "off"
-msgstr ""
-
-#: squid/bot/notifications.py:61 squid/bot/notifications.py:66
-msgid "on"
 msgstr ""
 
 #: squid/submissions/domain/finalization.py:195
@@ -4837,6 +4892,11 @@ msgstr ""
 msgid "{visibility} · verified {age} · id `{id}`"
 msgstr ""
 
+#: squid/bot/notifications_view.py:140
+#, python-brace-format
+msgid "…and {count} more."
+msgstr ""
+
 #~ msgid "This paginator belongs to someone else."
 #~ msgstr "此分页器属于其他人。"
 
@@ -5119,4 +5179,37 @@ msgstr ""
 
 #~ msgid "Restrictions must be comma-separated numeric IDs."
 #~ msgstr "限制必须是以逗号分隔的数字 ID。"
+
+#~ msgid "Creator subscription #{id} saved."
+#~ msgstr ""
+
+#~ msgid "DMs are suspended because Discord rejected one."
+#~ msgstr ""
+
+#~ msgid "Discord DMs: {state}"
+#~ msgstr ""
+
+#~ msgid "Notification channels updated."
+#~ msgstr ""
+
+#~ msgid "Record filter #{id} saved."
+#~ msgstr ""
+
+#~ msgid "Record subscription #{id} saved."
+#~ msgstr ""
+
+#~ msgid "Subscription removed."
+#~ msgstr ""
+
+#~ msgid "Web inbox: {state}"
+#~ msgstr ""
+
+#~ msgid "You have no subscriptions."
+#~ msgstr ""
+
+#~ msgid "off"
+#~ msgstr ""
+
+#~ msgid "on"
+#~ msgstr ""
 
