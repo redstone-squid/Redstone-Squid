@@ -14429,7 +14429,7 @@
     "/v1/creator-aliases/{name}": {
       "get": {
         "tags": [
-          "creator aliases"
+          "creators"
         ],
         "summary": "Get Creator Alias",
         "description": "Return a creator credit without exposing its linked account.",
@@ -14555,10 +14555,10 @@
     "/v1/creators/{creator_id}": {
       "get": {
         "tags": [
-          "creator aliases"
+          "creators"
         ],
         "summary": "Get Creator Profile",
-        "description": "Return every public alias grouped under a stable creator identity.",
+        "description": "Return a creator's public page, following permanent merge redirects.\n\nVisibility is applied in the domain, not here: `present_public_profile` is the one authority\non what a stranger sees, so this route cannot accidentally disagree with the bot about it.",
         "operationId": "creator_profile_get",
         "security": [
           {}
@@ -16701,22 +16701,136 @@
             "format": "uuid",
             "title": "Id"
           },
+          "canonical_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Canonical Id"
+          },
+          "hidden": {
+            "type": "boolean",
+            "title": "Hidden"
+          },
           "aliases": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/CreditedAliasDetail"
             },
             "type": "array",
             "title": "Aliases"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "pronouns": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pronouns"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileLinkDetail"
+            },
+            "type": "array",
+            "title": "Links"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "joined_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joined At"
+          },
+          "identities": {
+            "items": {
+              "$ref": "#/components/schemas/PublicIdentityDetail"
+            },
+            "type": "array",
+            "title": "Identities"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "id",
-          "aliases"
+          "canonical_id",
+          "hidden",
+          "aliases",
+          "display_name",
+          "bio",
+          "pronouns",
+          "links",
+          "avatar_url",
+          "joined_at",
+          "identities"
         ],
         "title": "CreatorProfileDetail",
-        "description": "A stable public creator identity with all of its claimed aliases."
+        "description": "A creator's public page.\n\n`hidden` is the shape switch: a hidden profile still serves `id`, `canonical_id` and\n`aliases`, because build credit is a fact about a build and a page that vanished would strand\nevery build crediting it. Everything else is null or empty in that case."
+      },
+      "CreditedAliasDetail": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "build_count": {
+            "type": "integer",
+            "title": "Build Count"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "build_count"
+        ],
+        "title": "CreditedAliasDetail",
+        "description": "One creator name held by this creator, and how many builds carry it."
       },
       "CsrfTokenResponse": {
         "properties": {
@@ -19619,6 +19733,37 @@
         "title": "ProtocolInterval",
         "description": "Inclusive versions accepted for one independently versioned protocol."
       },
+      "PublicIdentityDetail": {
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/IdentityProvider"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "provider",
+          "subject",
+          "display_name"
+        ],
+        "title": "PublicIdentityDetail",
+        "description": "A linked identity the creator has chosen to publish.\n\nCarries no verification timestamp and no internal id: when it was verified is nobody else's\nbusiness, and the id is the handle used to change it."
+      },
       "RecordDetail": {
         "properties": {
           "id": {
@@ -21411,8 +21556,8 @@
       "description": "Recognized Minecraft versions."
     },
     {
-      "name": "creator aliases",
-      "description": "Public creator credits."
+      "name": "creators",
+      "description": "Public creator profiles and credits."
     },
     {
       "name": "schematics",
