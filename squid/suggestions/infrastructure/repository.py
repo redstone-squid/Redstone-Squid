@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
+from squid.records.domain import VersionScope
 from squid.records.infrastructure.models import RecordCompetition, RecordDefinition
 from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
 from squid.tags.infrastructure.models import TagApplicability, TagDefinition
@@ -133,19 +134,24 @@ class PostgresSuggestionRepository:
             for row in rows
         ]
 
-    async def record_base_keys(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
-        """Return distinct canonical category keys with the build kind they belong to.
+    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
+        """Return definition ids with the title an admin recognizes them by.
 
-        `/admin records-lookup` asks for a key that is only discoverable by reading other tooling's
-        output, which is what `TODO.md` records as needing a friendly selector.
+        Only the all-time scope is offered: every current-scope category has an all-time twin, and
+        `/admin records-lookup` materializes the all-time definition regardless of which id it gets.
         """
-        statement = select(RecordDefinition.category_key, RecordDefinition.build_kind).distinct()
+        statement = select(RecordDefinition.id, RecordDefinition.title, RecordDefinition.build_kind).where(
+            RecordDefinition.version_scope == VersionScope.ALL_TIME.value
+        )
         terms = query.strip()
         if terms:
-            statement = statement.where(RecordDefinition.category_key.ilike(f"%{terms}%"))
-        statement = statement.order_by(RecordDefinition.category_key).limit(limit)
+            condition = RecordDefinition.title.ilike(f"%{terms}%")
+            if terms.isdigit():
+                condition = or_(condition, RecordDefinition.id == int(terms))
+            statement = statement.where(condition)
+        statement = statement.order_by(RecordDefinition.title, RecordDefinition.id).limit(limit)
         async with self._session_factory() as session:
-            return [(row.category_key, row.build_kind) for row in (await session.execute(statement)).all()]
+            return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
     async def version_ids(self) -> Sequence[tuple[int, str]]:
         """Return each recognized version's database id with its display name.
