@@ -7,7 +7,6 @@ from pathlib import Path
 
 from babel import Locale, UnknownLocaleError
 
-LOCALES_DIR = Path(__file__).resolve().parent.parent.parent / "locales"
 DOMAIN = "squid"
 DEFAULT_LOCALE = "en"
 SUPPORTED_LOCALES = frozenset({"en", "zh-CN"})
@@ -22,14 +21,23 @@ def _(message: str) -> str:
     return message
 
 
+def locales_dir() -> Path:
+    """Directory holding the compiled gettext catalogs shipped with this source tree.
+
+    Resolved on demand rather than at import, so a test can point `_catalog` at a fixture
+    tree without reloading the module, and so importing `squid.core.i18n` touches no disk.
+    """
+    return Path(__file__).resolve().parent.parent.parent / "locales"
+
+
 @cache
-def _catalog(locale: str) -> gettext.NullTranslations:
+def _catalog(locale: str, localedir: Path | None = None) -> gettext.NullTranslations:
     # On-disk catalog directories follow gettext/babel's underscore convention
     # (e.g. locales/zh_CN/), while `locale` elsewhere is the BCP-47 hyphenated
     # form used by Discord and HTTP Accept-Language (e.g. "zh-CN").
     return gettext.translation(
         DOMAIN,
-        localedir=LOCALES_DIR,
+        localedir=locales_dir() if localedir is None else localedir,
         languages=[locale.replace("-", "_")],
         fallback=True,
     )
