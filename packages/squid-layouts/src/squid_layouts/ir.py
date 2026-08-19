@@ -5,7 +5,7 @@ are immutable descriptions. `solve` fits them to the message budgets and `materi
 the result into discord.py items — authors never do budget arithmetic.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 
 import discord
@@ -73,6 +73,39 @@ class LinkButton:
 
 
 @dataclass(frozen=True, slots=True)
+class Button:
+    """An interactive button whose handler runs through the mount's dispatch funnel."""
+
+    label: str
+    on_click: Callable[[discord.Interaction], Awaitable[None]]
+    key: str | None = None
+    style: discord.ButtonStyle = discord.ButtonStyle.secondary
+    emoji: str | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Option:
+    label: str
+    value: str
+    description: str | None = None
+    default: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SelectMenu:
+    """A string select; occupies its own row when materialized."""
+
+    options: tuple[Option, ...]
+    on_select: Callable[[discord.Interaction, list[str]], Awaitable[None]]
+    key: str | None = None
+    placeholder: str | None = None
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class RawItem:
     """Escape hatch: a caller-built discord.py item added verbatim.
 
@@ -86,7 +119,7 @@ class RawItem:
 
 @dataclass(frozen=True, slots=True)
 class Row:
-    items: tuple[LinkButton | RawItem, ...]
+    items: tuple[LinkButton | Button | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,4 +149,6 @@ class Panel:
     accent: discord.Colour | int | None = None
 
 
-type Node = Text | Heading | Footer | Code | Lines | Sep | Row | Thumbnail | Gallery | Section | Panel | RawItem
+type Node = (
+    Text | Heading | Footer | Code | Lines | Sep | Row | SelectMenu | Thumbnail | Gallery | Section | Panel | RawItem
+)

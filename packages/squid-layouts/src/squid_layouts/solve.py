@@ -16,6 +16,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.conform import ELLIPSIS
 from squid_layouts.constraints import Drop, Never, Overflow, Spill, Truncate
 from squid_layouts.ir import (
+    Button,
     Code,
     Footer,
     Gallery,
@@ -23,10 +24,12 @@ from squid_layouts.ir import (
     Lines,
     LinkButton,
     Node,
+    Option,
     Panel,
     RawItem,
     Row,
     Section,
+    SelectMenu,
     Sep,
     Text,
     Thumbnail,
@@ -65,7 +68,7 @@ class RPanel:
     accent: discord.Colour | int | None
 
 
-type Realized = RText | RSection | RPanel | Sep | Row | Thumbnail | Gallery | RawItem
+type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | Thumbnail | Gallery | RawItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,9 +158,57 @@ def _trim_keep(text: str, limit: int, keep: str) -> str:
 
 @dataclass(slots=True)
 class _Builder:
+    limits: V2Limits = LIMITS
     notes: list[str] = field(default_factory=list)
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: int = 0
+
+    def _clamp_button(self, button: Button | LinkButton) -> Button | LinkButton:
+        if len(button.label) <= self.limits.button_label:
+            return button
+        self.notes.append(f"button label clamped from {len(button.label)}")
+        trimmed = _trim_keep(button.label, self.limits.button_label, "head")
+        if isinstance(button, LinkButton):
+            return LinkButton(label=trimmed, url=button.url)
+        return Button(
+            label=trimmed,
+            on_click=button.on_click,
+            key=button.key,
+            style=button.style,
+            emoji=button.emoji,
+            disabled=button.disabled,
+        )
+
+    def _clamp_select(self, select: SelectMenu) -> SelectMenu:
+        limits = self.limits
+        options = select.options
+        if len(options) > limits.select_options:
+            self.notes.append(f"{len(options)} select options clamped to {limits.select_options}")
+            options = options[: limits.select_options]
+        clamped_options = []
+        for option in options:
+            label = _trim_keep(option.label, limits.option_label, "head")
+            value = option.value[: limits.option_value]
+            description = option.description
+            if description is not None and len(description) > limits.option_description:
+                description = _trim_keep(description, limits.option_description, "head")
+            if (label, value, description) != (option.label, option.value, option.description):
+                self.notes.append("select option text clamped")
+                option = Option(label=label, value=value, description=description, default=option.default)
+            clamped_options.append(option)
+        placeholder = select.placeholder
+        if placeholder is not None and len(placeholder) > limits.select_placeholder:
+            self.notes.append(f"select placeholder clamped from {len(placeholder)}")
+            placeholder = _trim_keep(placeholder, limits.select_placeholder, "head")
+        return SelectMenu(
+            options=tuple(clamped_options),
+            on_select=select.on_select,
+            key=select.key,
+            placeholder=placeholder,
+            min_values=select.min_values,
+            max_values=min(select.max_values, len(clamped_options) or 1),
+            disabled=select.disabled,
+        )
 
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
         return [self.realize(node) for node in nodes]
@@ -193,7 +244,12 @@ class _Builder:
                 return node
             case Row(items=items):
                 self.raw_text_cost += sum(item.text_cost for item in items if isinstance(item, RawItem))
-                return node
+                clamped = tuple(
+                    self._clamp_button(item) if isinstance(item, Button | LinkButton) else item for item in items
+                )
+                return Row(items=clamped)
+            case SelectMenu():
+                return self._clamp_select(node)
             case RawItem(text_cost=text_cost):
                 self.raw_text_cost += text_cost
                 return node
@@ -323,6 +379,8 @@ def _component_count(children: list[Realized]) -> int:
                 count += 1 + len(texts) + 1
             case Row(items=items):
                 count += 1 + len(items)
+            case SelectMenu():
+                count += 2  # the implicit ActionRow plus the select itself
             case _:
                 count += 1
     return count
@@ -348,7 +406,7 @@ def solve(
     Returns:
         The realized tree plus a note per degradation applied.
     """
-    builder = _Builder()
+    builder = _Builder(limits=limits)
     children = builder.realize_children(nodes)
     notes = builder.notes
 
