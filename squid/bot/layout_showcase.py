@@ -76,7 +76,7 @@ class LayoutShowcase(sl.Component):
             clicks=self.clicks,
         )
 
-    def render(self) -> Sequence[sl.Node]:
+    def render(self) -> Sequence[sl.LayoutNode]:
         controls = (
             sl.SelectMenu(
                 tuple(
@@ -109,7 +109,7 @@ class LayoutShowcase(sl.Component):
         )
         return (header, *self._render_section())
 
-    def _render_section(self) -> Sequence[sl.Node]:
+    def _render_section(self) -> Sequence[sl.LayoutNode]:
         match self.section:
             case "pagination":
                 return self._pagination()
@@ -170,16 +170,10 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _adaptation(self) -> Sequence[sl.Node]:
+    def _adaptation(self) -> Sequence[sl.LayoutNode]:
         actions = tuple(
-            sl.Button(t(self.locale, _("Action {number}"), number=index), self._action_notice, f"action.{index}")
+            sl.Action(f"action.{index}", t(self.locale, _("Action {number}"), number=index), self._action_notice)
             for index in range(1, 37)
-        )
-        fallback = sl.SelectMenu(
-            tuple(sl.Option(t(self.locale, _("Action {number}"), number=index), str(index)) for index in range(1, 21)),
-            self._select_action,
-            "folded-actions",
-            placeholder=t(self.locale, _("The 36-button structure folded into this menu")),
         )
         return (
             sl.card(
@@ -187,13 +181,13 @@ class LayoutShowcase(sl.Component):
                 t(
                     self.locale,
                     _(
-                        "The preferred representation contains 36 buttons and exceeds Discord's component "
-                        "budget. Fold gives the planner this compact select-menu alternate."
+                        "This declares 36 actions, not buttons or menus. The planner preserves all 36 as two "
+                        "pickers of 25 and 11 options because that is the best legal Discord representation."
                     ),
                 ),
                 accent=DISCORD_YELLOW,
             ),
-            sl.Fold(sl.Panel((sl.ActionGroup(actions),)), sl.Panel((fallback,))),
+            sl.Actions(actions, key="showcase-actions"),
         )
 
     def _composition(self) -> Sequence[sl.Node]:
@@ -254,11 +248,8 @@ class LayoutShowcase(sl.Component):
     async def _click(self, event: sl.PressEvent) -> None:
         self.clicks += 1
 
-    async def _action_notice(self, event: sl.PressEvent) -> None:
-        await event.notice(t(self.locale, _("The expanded action representation is active.")))
-
-    async def _select_action(self, event: sl.SelectionEvent) -> None:
-        await event.notice(t(self.locale, _("Compact action {number} selected."), number=event.values[0]))
+    async def _action_notice(self, event: sl.ActionEvent) -> None:
+        await event.notice(t(self.locale, _("The semantic action kept its own callback after adaptation.")))
 
 
 class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -289,7 +280,6 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ctx,
             LayoutShowcase(section=section, entries=entries, locale=locale),
             locale=locale,
-            lock_to=ctx.author.id,
         )
 
 

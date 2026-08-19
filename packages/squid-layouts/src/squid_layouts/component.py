@@ -34,20 +34,21 @@ from squid_layouts.ir import (
     Text,
     Variant,
 )
+from squid_layouts.semantic import LayoutNode
 
 if TYPE_CHECKING:
     from squid_layouts.mount import Mount
 
 
-type RenderNode = Node
-type RenderResult = Node | Sequence[Node]
+type RenderNode = LayoutNode
+type RenderResult = LayoutNode | Sequence[LayoutNode]
 
 
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
     """One expanded render and the component identities that produced it."""
 
-    nodes: tuple[Node, ...]
+    nodes: tuple[LayoutNode, ...]
     components: dict[str, Component]
 
 
@@ -106,13 +107,13 @@ def render_component_tree(root: Component) -> ComponentTree:
     def items(rendered: RenderResult) -> tuple[RenderNode, ...]:
         return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
 
-    def one(expanded: list[Node], path: str) -> Node:
+    def one(expanded: list[LayoutNode], path: str) -> LayoutNode:
         if len(expanded) != 1:
             message = f"{path}: this structural position requires exactly one node"
             raise LayoutInvariantError(message)
         return expanded[0]
 
-    def expand(component: Component, path: str) -> list[Node]:
+    def expand(component: Component, path: str) -> list[LayoutNode]:
         identity = id(component)
         if identity in active:
             message = f"{path}: component embedding cycle"
@@ -125,7 +126,7 @@ def render_component_tree(root: Component) -> ComponentTree:
         active.add(identity)
         embed_keys: set[str] = set()
 
-        def expand_item(item: RenderNode, item_path: str) -> list[Node]:
+        def expand_item(item: RenderNode, item_path: str) -> list[LayoutNode]:
             if isinstance(item, Embed):
                 if item.key in embed_keys:
                     message = f"{item_path}: duplicate Embed key {item.key!r}"
@@ -174,7 +175,7 @@ def render_component_tree(root: Component) -> ComponentTree:
                     return [item]
 
         try:
-            nodes: list[Node] = []
+            nodes: list[LayoutNode] = []
             for index, item in enumerate(items(component.render())):
                 nodes.extend(expand_item(item, f"{path}.{index}"))
             return nodes
