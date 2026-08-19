@@ -14,7 +14,20 @@ from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from squid_layouts.ir import Button, Fold, Node, Panel, Row, Section, SelectMenu, as_nodes
+from squid_layouts.ir import (
+    ActionGroup,
+    Button,
+    Choice,
+    Extension,
+    Fold,
+    Node,
+    Panel,
+    Row,
+    Section,
+    SelectMenu,
+    Variant,
+    as_nodes,
+)
 
 if TYPE_CHECKING:
     from squid_layouts.mount import Mount
@@ -110,12 +123,21 @@ def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
                 return Panel(children=tuple(rewrite(child) for child in children), accent=accent)
             case Row(items=items):
                 return Row(items=tuple(rewrite_item(item) for item in items))
+            case ActionGroup(items=items):
+                return ActionGroup(items=tuple(rewrite_item(item) for item in items))
             case Section(texts=texts, accessory=accessory):
                 return Section(texts=texts, accessory=rewrite_item(accessory))
             case SelectMenu():
                 return replace(node, key=key_for(node))
+            case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
+                return Extension(kind, version, payload, rewrite(fallback))
             case Fold(primary=primary, fallback=fallback, priority=priority):
                 return Fold(primary=rewrite(primary), fallback=rewrite(fallback), priority=priority)
+            case Choice(variants=variants, priority=priority):
+                return Choice(
+                    variants=tuple(Variant(rewrite(variant.node), variant.requires) for variant in variants),
+                    priority=priority,
+                )
             case _:
                 return node
 
