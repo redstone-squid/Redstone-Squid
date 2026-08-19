@@ -23,6 +23,7 @@ NEXT_KEY = "__page_next"
 class PageContext:
     """Where the reader is, and how to move them."""
 
+    key: str
     page: int
     """0-based and already clamped."""
     pages: int
@@ -45,8 +46,15 @@ def page_controls(chrome: Chrome, context: PageContext) -> Row:
     """The Previous/Next row, disabled at the ends rather than hidden."""
     return Row(
         (
-            Button(label=chrome.previous, on_click=context.on_prev, key=PREV_KEY, disabled=context.at_start),
-            Button(label=chrome.next, on_click=context.on_next, key=NEXT_KEY, disabled=context.at_end),
+            Button(
+                label=chrome.previous,
+                on_click=context.on_prev,
+                key=f"{PREV_KEY}.{context.key}",
+                disabled=context.at_start,
+            ),
+            Button(
+                label=chrome.next, on_click=context.on_next, key=f"{NEXT_KEY}.{context.key}", disabled=context.at_end
+            ),
         )
     )
 

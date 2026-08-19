@@ -1,11 +1,12 @@
 """Plan logical documents into immutable target-resolved scenes."""
 
 import hashlib
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.constraints import Paginate
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.ir import (
@@ -21,6 +22,7 @@ from squid_layouts.ir import (
     Panel,
     RawItem,
     Row,
+    Section,
     SelectMenu,
     Sep,
     Thumbnail,
@@ -50,7 +52,17 @@ from squid_layouts.scene import (
     SceneThumbnail,
 )
 from squid_layouts.scene_codec import SceneCodec
-from squid_layouts.solve import LayoutOverflowError, Realized, RPanel, RSection, RText, SolvedLayout, solve
+from squid_layouts.solve import (
+    LayoutOverflowError,
+    PageNav,
+    PageState,
+    Realized,
+    RPanel,
+    RSection,
+    RText,
+    SolvedLayout,
+    solve,
+)
 from squid_layouts.target import ResourceCost, TargetProfile
 
 EMPTY_RESERVATION = ResourceCost()
@@ -210,11 +222,20 @@ def _lower_single(node: Node, target: TargetProfile, limits: V2Limits) -> Node:
 
 
 def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
+    pager_keys: set[str] = set()
+
     def fail(path: str, detail: str) -> None:
         message = f"{path}: {detail}"
         raise LayoutInvariantError(message)
 
     def walk(node: Node, path: str) -> None:
+        overflow = getattr(node, "overflow", None)
+        if isinstance(overflow, Paginate):
+            if overflow.key is None:
+                fail(path, "Paginate requires an explicit key")
+            if overflow.key in pager_keys:
+                fail(path, f"duplicate pager key {overflow.key!r}")
+            pager_keys.add(overflow.key)
         match node:
             case Button(label=label):
                 if len(label) > limits.button_label:
@@ -242,8 +263,16 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
             case Gallery(urls=urls):
                 if len(urls) > limits.gallery_items:
                     fail(path, f"gallery has {len(urls)} items; use MediaCollection")
-            case RSection():
-                return
+            case Section(texts=texts):
+                if len(texts) > limits.section_texts:
+                    fail(path, f"section has {len(texts)} text slots; maximum is {limits.section_texts}")
+                for index, text in enumerate(texts):
+                    if isinstance(text.overflow, Paginate):
+                        fail(
+                            f"{path}.text.{index}",
+                            "Paginate cannot be nested in a Section; place it beside the Section",
+                        )
+                    walk(text, f"{path}.text.{index}")
             case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
@@ -251,9 +280,7 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
                 walk(primary, f"{path}.primary")
                 walk(fallback, f"{path}.fallback")
             case _:
-                texts = getattr(node, "texts", None)
-                if isinstance(texts, tuple) and len(texts) > limits.section_texts:
-                    fail(path, f"section has {len(texts)} text slots; maximum is {limits.section_texts}")
+                return
 
     for index, node in enumerate(nodes):
         walk(node, f"$.{index}")
@@ -266,8 +293,8 @@ def plan(
     chrome: Chrome = DEFAULT_CHROME,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
-    page: int | None = None,
-    nav: Callable[[int, int], Sequence[Node]] | None = None,
+    page: PageState = None,
+    nav: PageNav | None = None,
 ) -> PlanResult:
     """Resolve a complete logical document for one target.
 
@@ -323,11 +350,15 @@ def plan(
 
 
 def _pagers(solved: SolvedLayout) -> tuple[ScenePager, ...]:
-    pager = solved.pager
-    if pager is None:
-        return ()
-    digest = hashlib.blake2s("\\0".join(pager.fragments).encode(), digest_size=16).hexdigest()
-    return (ScenePager("page", solved.page, solved.pages, digest),)
+    return tuple(
+        ScenePager(
+            pager.key,
+            pager.page,
+            pager.pages,
+            hashlib.blake2s("\\0".join(pager.fragments).encode(), digest_size=16).hexdigest(),
+        )
+        for pager in solved.pagers
+    )
 
 
 def _logical_fingerprint(nodes: Sequence[Node]) -> str:

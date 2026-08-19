@@ -20,7 +20,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.component import Component
-from squid_layouts.compositor import compose
+from squid_layouts.compositor import Composition, compose
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
@@ -138,45 +138,70 @@ class Mount:
         self._handlers: dict[str, Callable[..., Awaitable[None]]] = {}
         self._dirty = False
         self._finished = False
-        self._page: int | None = None  # adopts the pager's initial page on first render
-        self._pages = 1
+        self._page: dict[str, int] = {}
+        self._pages: dict[str, int] = {}
+        self._pager_digests: dict[str, str] = {}
         self._staged_attachments: list[discord.File] | None = None
 
     # --- Rendering ---------------------------------------------------------------------
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
         """Render the component's current state into a fresh view."""
-        self._handlers = {}
-        view = MountedView(self, self.timeout)
+        rendered = self.component.render()
 
-        def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
-            key = binding.key
-            self._handlers[key] = binding.handler
-            if isinstance(node, SceneButton):
-                item: discord.ui.Item[Any] = _WiredButton(node, self, key)
-            else:
-                item = _WiredSelect(node, self, key)
-            if disabled:
-                item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
-            return item
+        def draw() -> tuple[MountedView, Composition]:
+            self._handlers = {}
+            fresh = MountedView(self, self.timeout)
 
-        def nav(page: int, pages: int) -> Sequence[Node]:
-            context = PageContext(page=page, pages=pages, on_prev=self._page_prev, on_next=self._page_next)
-            return self.nav(context)
+            def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+                key = binding.key
+                self._handlers[key] = binding.handler
+                if isinstance(node, SceneButton):
+                    item: discord.ui.Item[Any] = _WiredButton(node, self, key)
+                else:
+                    item = _WiredSelect(node, self, key)
+                if disabled:
+                    item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
+                return item
 
-        composition = compose(
-            self.component.render(),
-            into=view,
-            wire=wire,
-            limits=self.limits,
-            chrome=self.chrome,
-            strict=self.strict,
-            page=self._page,
-            nav=nav,
-        )
-        self._pages = composition.pages
-        if composition.plan.scene.pagers:
-            self._page = composition.page
+            def nav(key: str, page: int, pages: int) -> Sequence[Node]:
+                async def previous(interaction: discord.Interaction) -> None:
+                    await self._move_page(key, -1)
+
+                async def next_(interaction: discord.Interaction) -> None:
+                    await self._move_page(key, 1)
+
+                return self.nav(PageContext(key=key, page=page, pages=pages, on_prev=previous, on_next=next_))
+
+            composition = compose(
+                rendered,
+                into=fresh,
+                wire=wire,
+                limits=self.limits,
+                chrome=self.chrome,
+                strict=self.strict,
+                page=self._page,
+                nav=nav,
+            )
+            return fresh, composition
+
+        view, composition = draw()
+        pagers = composition.plan.scene.pagers
+        changed = {
+            pager.key
+            for pager in pagers
+            if (previous := self._pager_digests.get(pager.key)) is not None and previous != pager.content_fingerprint
+        }
+        if changed:
+            for key in changed:
+                self._page.pop(key, None)
+            view.stop()
+            view, composition = draw()
+            pagers = composition.plan.scene.pagers
+
+        self._page = {pager.key: pager.page for pager in pagers}
+        self._pages = {pager.key: pager.pages for pager in pagers}
+        self._pager_digests = {pager.key: pager.content_fingerprint for pager in pagers}
         if disabled:
             _disable_all(view)
         self._dirty = False
@@ -185,19 +210,19 @@ class Mount:
     def invalidate(self) -> None:
         self._dirty = True
 
-    async def _page_prev(self, interaction: discord.Interaction) -> None:
-        if self._page is not None and self._page > 0:
-            self._page -= 1
+    async def _move_page(self, key: str, delta: int) -> None:
+        page = self._page.get(key)
+        pages = self._pages.get(key)
+        if page is not None and pages is not None and 0 <= page + delta < pages:
+            self._page[key] = page + delta
             self.invalidate()
 
-    async def _page_next(self, interaction: discord.Interaction) -> None:
-        if self._page is not None and self._page < self._pages - 1:
-            self._page += 1
-            self.invalidate()
-
-    def reset_page(self) -> None:
-        """Forget the page position, e.g. when the component switches to different content."""
-        self._page = None
+    def reset_page(self, key: str | None = None) -> None:
+        """Forget one page position, or every position when key is omitted."""
+        if key is None:
+            self._page.clear()
+        else:
+            self._page.pop(key, None)
         self.invalidate()
 
     def set_attachments(self, files: Sequence[discord.File] | None) -> None:

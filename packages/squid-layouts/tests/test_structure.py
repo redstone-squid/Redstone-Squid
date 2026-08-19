@@ -151,8 +151,8 @@ class TestFold:
     def test_pagination_controls_participate_in_the_fold_budget(self):
         async def move(interaction) -> None: ...
 
-        def nav(page: int, pages: int):
-            context = PageContext(page=page, pages=pages, on_prev=move, on_next=move)
+        def nav(key: str, page: int, pages: int):
+            context = PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move)
             return default_nav(DEFAULT_CHROME)(context)
 
         entries = tuple(f"entry {index}" for index in range(20))
