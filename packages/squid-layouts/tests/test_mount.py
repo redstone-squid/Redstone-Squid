@@ -19,24 +19,7 @@ from squid_layouts import (
     assert_within_limits,
     state,
 )
-
-
-def make_interaction(user_id: int = 1) -> Any:
-    response = SimpleNamespace(
-        _done=False,
-        is_done=lambda: interaction.response._done,
-        edit_message=AsyncMock(),
-        send_message=AsyncMock(),
-        defer=AsyncMock(),
-    )
-    interaction = SimpleNamespace(
-        user=SimpleNamespace(id=user_id),
-        message=SimpleNamespace(flags=SimpleNamespace(components_v2=True)),
-        response=response,
-        followup=SimpleNamespace(send=AsyncMock()),
-        edit_original_response=AsyncMock(),
-    )
-    return interaction
+from squid_layouts.testing import fake_interaction
 
 
 class Counter(Component):
@@ -70,7 +53,7 @@ class TestRenderAndWire:
         component = Counter()
         mount = Mount(component, timeout=None)
         mount.build_view()
-        interaction = make_interaction()
+        interaction = fake_interaction()
 
         await mount.dispatch("inc", interaction)
 
@@ -86,7 +69,7 @@ class TestRenderAndWire:
 
         mount = Mount(Static(), timeout=None)
         mount.build_view()
-        interaction = make_interaction()
+        interaction = fake_interaction()
 
         await mount.dispatch("inc", interaction)
 
@@ -96,7 +79,7 @@ class TestRenderAndWire:
     async def test_stale_key_is_acknowledged_not_crashed(self):
         mount = Mount(Counter(), timeout=None)
         mount.build_view()
-        interaction = make_interaction()
+        interaction = fake_interaction()
 
         await mount.dispatch("gone", interaction)
 
@@ -108,7 +91,7 @@ class TestAuthorLock:
         component = Counter()
         mount = Mount(component, timeout=None, lock_to=42)
         mount.build_view()
-        interaction = make_interaction(user_id=99)
+        interaction = fake_interaction(user_id=99)
 
         await mount.dispatch("inc", interaction)
 
@@ -121,7 +104,7 @@ class TestAuthorLock:
         mount = Mount(component, timeout=None, lock_to=42)
         mount.build_view()
 
-        await mount.dispatch("inc", make_interaction(user_id=42))
+        await mount.dispatch("inc", fake_interaction(user_id=42))
 
         assert component.count == 1
 
@@ -140,7 +123,7 @@ class TestErrors:
         mount = Mount(Boom(), timeout=None, on_error=hook)
         mount.build_view()
 
-        await mount.dispatch("x", make_interaction())
+        await mount.dispatch("x", fake_interaction())
 
         assert hook.await_args is not None
         (_interaction, error, source), _ = hook.await_args
@@ -169,7 +152,7 @@ class TestSelect:
         view = mount.build_view()
         assert any(isinstance(item, discord.ui.Select) for item in view.walk_children())
 
-        await mount.dispatch("pick", make_interaction(), ["b"])
+        await mount.dispatch("pick", fake_interaction(), ["b"])
 
         assert picked == ["b"]
 
@@ -188,7 +171,7 @@ class TestLifecycle:
 
         disabled_view = message.edit.await_args.kwargs["view"]
         assert _button(disabled_view).disabled
-        interaction = make_interaction()
+        interaction = fake_interaction()
         await mount.dispatch("inc", interaction)  # finished mounts ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
 

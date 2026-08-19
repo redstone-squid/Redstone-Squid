@@ -13,6 +13,10 @@ def _default_and_n_more(count: int) -> str:
     return f"…and {count} more"
 
 
+def _default_page_footer(page: int, pages: int) -> str:
+    return f"Page {page} of {pages}"
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], str] = _default_and_n_more
@@ -21,6 +25,10 @@ class Chrome:
     """Pointer left in place of content that moved to an attached file."""
     not_yours: str = "These controls belong to someone else."
     """Ephemeral rejection shown when an author-locked control is used by another user."""
+    previous: str = "Previous"
+    next: str = "Next"
+    page_footer: Callable[[int, int], str] = _default_page_footer
+    """Small-text footer under paginated content; called with (page, pages), 1-based."""
 
 
 DEFAULT_CHROME = Chrome()

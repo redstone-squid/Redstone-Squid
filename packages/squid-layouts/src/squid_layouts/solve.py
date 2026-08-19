@@ -7,14 +7,14 @@ fall back to document order. Dropped nodes refund their grant and the allocation
 dropped footnote genuinely returns its characters to the body.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 import discord
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.conform import ELLIPSIS
-from squid_layouts.constraints import Drop, Never, Overflow, Spill, Truncate
+from squid_layouts.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.ir import (
     Button,
     Code,
@@ -71,10 +71,42 @@ class RPanel:
 type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | Thumbnail | Gallery | RawItem
 
 
+PAGE_FOOTER_PREFIX = "-# "
+NAV_ROW_COMPONENTS = 3  # the ActionRow plus its Previous/Next buttons
+
+
+@dataclass(slots=True)
+class Pager:
+    """Page state for a document whose Paginate node overflowed."""
+
+    slot: RText
+    prefix: str
+    suffix: str
+    fragments: list[str]
+    footer_slot: RText
+    footer: Callable[[int, int], str]
+
+    @property
+    def pages(self) -> int:
+        return len(self.fragments)
+
+    def select(self, index: int) -> int:
+        """Render page ``index`` (clamped) into the document; returns the page shown."""
+        index = max(0, min(index, self.pages - 1))
+        self.slot.content = self.prefix + self.fragments[index] + self.suffix
+        self.footer_slot.content = PAGE_FOOTER_PREFIX + self.footer(index + 1, self.pages)
+        return index
+
+
 @dataclass(frozen=True, slots=True)
 class SolvedLayout:
     children: list[Realized]
     notes: list[str]
+    pager: Pager | None = None
+
+    @property
+    def pages(self) -> int:
+        return self.pager.pages if self.pager is not None else 1
 
 
 # --- Text units -----------------------------------------------------------------------------
@@ -95,6 +127,7 @@ class _Unit:
     priority: int
     overflow: Overflow
     grant: int = 0
+    fragments: list[str] | None = None
 
     @property
     def chrome_len(self) -> int:
@@ -141,6 +174,43 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
         priority=node.priority,
         overflow=node.overflow,
     )
+
+
+def _hard_split(segment: str, limit: int) -> list[str]:
+    return [segment[start : start + limit] for start in range(0, len(segment), limit)]
+
+
+def split_pages(text: str, limit: int, boundary: str = "\n") -> list[str]:
+    """Split ``text`` into chunks of at most ``limit``, preferring ``boundary`` cuts.
+
+    Ported from the diagnostics view's `_paginate`/`_hard_split`: segments are kept whole
+    where they fit; a single segment longer than a page is hard-split without inserting
+    boundary characters that were never in the text.
+    """
+    pages: list[str] = []
+    current = ""
+
+    def flush() -> None:
+        nonlocal current
+        if current:
+            pages.append(current)
+            current = ""
+
+    for segment in text.split(boundary):
+        if len(segment) > limit:
+            flush()
+            chunks = _hard_split(segment, limit)
+            pages.extend(chunks[:-1])
+            current = chunks[-1]
+            continue
+        candidate = segment if not current else current + boundary + segment
+        if len(candidate) <= limit:
+            current = candidate
+        else:
+            flush()
+            current = segment
+    flush()
+    return pages or [""]
 
 
 def _trim_keep(text: str, limit: int, keep: str) -> str:
@@ -270,6 +340,11 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
             return False
         case Spill() if unit.lines is not None:
             return _apply_spill(unit, usable, chrome, notes)
+        case Paginate(boundary=boundary) if usable >= 1:
+            # Pagination is the policy working as intended, not a degradation: no note.
+            unit.fragments = split_pages(unit.content, usable, boundary)
+            unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
+            return True
         case Truncate(keep=keep) if usable >= 1:
             notes.append(f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
             unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, keep) + unit.suffix
@@ -410,14 +485,38 @@ def solve(
     children = builder.realize_children(nodes)
     notes = builder.notes
 
+    paginate_units = [unit for unit in builder.units if isinstance(unit.overflow, Paginate)]
+    for extra in paginate_units[1:]:
+        extra.overflow = Truncate()
+        notes.append(f"extra Paginate node {extra.index} degraded to Truncate")
+    paginator = paginate_units[0] if paginate_units else None
+
     budget = limits.total_text - builder.raw_text_cost - reserved_text
+    # When pagination can happen, its footer is charged before allocation — this is what
+    # replaces hand-tuned constants like the old PAGE_CHARS.
+    if paginator is not None and sum(unit.need for unit in builder.units) > budget:
+        budget -= len(PAGE_FOOTER_PREFIX) + len(chrome.page_footer(8888, 8888))
     _allocate(builder.units, budget, strict, notes, chrome)
     children = _prune(children)
 
-    count = _component_count(children)
+    pager = None
+    if paginator is not None and paginator.fragments is not None and len(paginator.fragments) > 1:
+        footer_slot = RText()
+        children.append(footer_slot)
+        pager = Pager(
+            slot=paginator.slot,
+            prefix=paginator.prefix,
+            suffix=paginator.suffix,
+            fragments=paginator.fragments,
+            footer_slot=footer_slot,
+            footer=chrome.page_footer,
+        )
+        pager.select(0)
+
+    count = _component_count(children) + (NAV_ROW_COMPONENTS if pager is not None else 0)
     if count > limits.total_components:
         notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
 
     if strict and notes:
         raise LayoutOverflowError(notes)
-    return SolvedLayout(children=children, notes=notes)
+    return SolvedLayout(children=children, notes=notes, pager=pager)
