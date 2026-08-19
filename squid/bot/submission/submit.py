@@ -9,6 +9,7 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
+from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
@@ -28,6 +29,7 @@ from squid.bot.utils.components import (
     text_layout,
 )
 from squid.bot.utils.permissions import enforce
+from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
     BuildInferenceService,
     BuildService,
@@ -59,6 +61,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     builds: BuildService
     inference: BuildInferenceService
     messages: MessageService
+    consent_sticky: StickyMessage
 
     @autocompletes(
         pattern=suggests("approved_patterns", multi=True),
@@ -346,6 +349,19 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         if not self._is_build_log_message(message):
             return
         assert isinstance(message.channel, discord.TextChannel)
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD, str(message.author.id)
+        )
+        if account is None or account.id is None or account.needs_consent_refresh:
+            logger.debug(
+                "Skipping build inference for unconsented author %s in channel %s",
+                message.author.id,
+                message.channel.id,
+            )
+            await self.consent_sticky.trigger(message.channel)
+            return
+
+        self.consent_sticky.record_activity(message.channel.id)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
         builds = await ingest_message_bundle(
@@ -388,5 +404,28 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 ),
             )
             return
+
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD, str(message.author.id)
+        )
+        if account is None or account.id is None or account.needs_consent_refresh:
+            await reply_layout(
+                interaction,
+                error_layout(
+                    t(locale, _("Author has not consented")),
+                    t(
+                        locale,
+                        _(
+                            "The author of this message (<@{user_id}>) has not consented to data storage. "
+                            "They must grant consent before this build can be ingested."
+                        ),
+                        user_id=message.author.id,
+                    ),
+                ),
+            )
+            if isinstance(message.channel, discord.TextChannel):
+                await self.consent_sticky.trigger(message.channel)
+            return
+
         await self.infer_build_from_message(message)
         await reply_layout(interaction, text_layout(t(locale, _("Build recalculated."))))

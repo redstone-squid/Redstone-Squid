@@ -22,14 +22,20 @@ class StubPermissions:
         return tuple(Decision(node=node.name, allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes)
 
 
-def _cog(*, allowed: bool = True) -> BuildSubmitCommands[Any]:
+def _cog(*, allowed: bool = True, account_consented: bool = True) -> BuildSubmitCommands[Any]:
     cog = BuildSubmitCommands.__new__(BuildSubmitCommands)
+    accounts = AsyncMock()
+    if account_consented:
+        accounts.get_account_by_identity.return_value = SimpleNamespace(id=1, needs_consent_refresh=False)
+    else:
+        accounts.get_account_by_identity.return_value = None
+
     cog.bot = cast(
         Any,
         SimpleNamespace(
             services=SimpleNamespace(
                 settings=SimpleNamespace(),
-                accounts=SimpleNamespace(),
+                accounts=accounts,
                 permissions=StubPermissions(allowed=allowed),
             ),
             account_ids=SimpleNamespace(resolve=AsyncMock(return_value=1)),
@@ -37,6 +43,8 @@ def _cog(*, allowed: bool = True) -> BuildSubmitCommands[Any]:
             community_config=SimpleNamespace(build_log_channel_ids={BUILD_LOG_CHANNEL}),
         ),
     )
+    cog.consent_sticky = MagicMock()
+    cog.consent_sticky.trigger = AsyncMock()
     cog.infer_build_from_message = AsyncMock()  # type: ignore[method-assign]
     return cog
 
@@ -67,7 +75,7 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
     channel.id = channel_id
     return cast(
         discord.Message,
-        cast(Any, SimpleNamespace(author=SimpleNamespace(bot=from_bot), channel=channel)),
+        cast(Any, SimpleNamespace(author=SimpleNamespace(id=42, bot=from_bot), channel=channel)),
     )
 
 
@@ -108,3 +116,14 @@ async def test_a_build_log_message_is_recalculated() -> None:
     await _run(cog, message)
 
     cast(Any, cog.infer_build_from_message).assert_awaited_once_with(message)
+
+
+async def test_recalc_refuses_when_author_is_unconsented() -> None:
+    cog = _cog(account_consented=False)
+    message = _message()
+
+    interaction = await _run(cog, message)
+
+    cast(Any, cog.infer_build_from_message).assert_not_awaited()
+    assert cast(Any, interaction).followup.send.await_count == 1
+    cast(Any, cog.consent_sticky).trigger.assert_awaited_once_with(message.channel)
