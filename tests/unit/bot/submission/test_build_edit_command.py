@@ -1,4 +1,4 @@
-"""`/build edit`: typed options in front, the workspace behind them, one gate for both."""
+"""Build edit command tests."""
 
 from types import SimpleNamespace
 from typing import Any, cast
@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import discord
 
 from squid.bot.submission.edit import BuildEditCommands
-from squid.bot.submission.ui.views import BuildEditView
+from squid.bot.submission.ui.views import BuildEditComponent
 from squid.builds.domain import DoorBuild, OtherBuild, Status
 
 
@@ -93,7 +93,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
 
 async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interaction[Any]:
     interaction = _interaction(cog.bot)
-    await BuildEditCommands.edit_build.callback(cog, interaction, build_id=1, **kwargs)  # type: ignore[arg-type]
+    await BuildEditCommands.edit_build.callback(cog, interaction, build_id=1, **kwargs)
     return interaction
 
 
@@ -101,8 +101,14 @@ def _sent_view(interaction: discord.Interaction[Any]) -> Any:
     return cast(Any, interaction).followup.sent[-1]["view"]
 
 
-def _staged(view: BuildEditView[Any]) -> dict[str, Any]:
-    return {item.attribute: item.actual_value for item in view.items if item.modified}
+def _component(view: Any) -> BuildEditComponent[Any] | None:
+    mount = getattr(view, "_mount", None)
+    component = getattr(mount, "component", None)
+    return component if isinstance(component, BuildEditComponent) else None
+
+
+def _staged(component: BuildEditComponent[Any]) -> dict[str, Any]:
+    return {item.attribute: item.actual_value for item in component.items if item.modified}
 
 
 def _door() -> DoorBuild:
@@ -110,27 +116,26 @@ def _door() -> DoorBuild:
 
 
 async def test_typed_options_arrive_staged_in_the_workspace() -> None:
-    """The whole point of the merge: options carry autocomplete, the workspace carries the rest,
-    and both end up in one review prompt rather than in two commands."""
+    """Typed options and the workspace end up in one review prompt."""
     cog = _cog(_door())
 
-    view = _sent_view(await _run(cog, door_size="2x2", creators="Alice, Bob", versions="1.21"))
+    component = _component(_sent_view(await _run(cog, door_size="2x2", creators="Alice, Bob", versions="1.21")))
 
-    assert isinstance(view, BuildEditView)
-    staged = _staged(view)
+    assert component is not None
+    staged = _staged(component)
     assert staged["door_dimensions"] == (2, 2, None)
     assert staged["creators_ign"] == ["Alice", "Bob"]
     assert staged["version_spec"] == "1.21"
 
 
 async def test_one_restrictions_option_is_sorted_into_its_buckets() -> None:
-    """Which bucket a restriction belongs in is a fact about the restriction, so the person
-    editing gives one list and the taxonomy splits it -- as `/build submit` already does."""
+    """The restriction taxonomy is applied before the workspace opens."""
     cog = _cog(_door())
 
-    view = _sent_view(await _run(cog, restrictions="Seamless, Observerless"))
+    component = _component(_sent_view(await _run(cog, restrictions="Seamless, Observerless")))
 
-    staged = _staged(view)
+    assert component is not None
+    staged = _staged(component)
     assert staged["wiring_placement_restrictions"] == ["Seamless"]
     assert staged["component_restrictions"] == ["Observerless"]
 
@@ -138,33 +143,32 @@ async def test_one_restrictions_option_is_sorted_into_its_buckets() -> None:
 async def test_nothing_typed_still_opens_the_workspace() -> None:
     cog = _cog(_door())
 
-    assert isinstance(_sent_view(await _run(cog)), BuildEditView)
+    assert _component(_sent_view(await _run(cog))) is not None
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:
-    """Silently ignoring a typed option is the failure this command was merged to end."""
+    """A field absent from the build is refused rather than silently dropped."""
     cog = _cog(OtherBuild(id=1, submission_status=Status.PENDING, submitter_account_id=1))
 
     view = _sent_view(await _run(cog, door_size="2x2"))
 
-    assert not isinstance(view, BuildEditView)
+    assert _component(view) is None
 
 
 async def test_a_pending_builds_submitter_may_edit_it_without_the_node() -> None:
-    """The command was gated on `build.submission.edit` while the card's Edit button admitted
-    the submitter too, so the same operation had two answers (audit, `/build`)."""
+    """A pending submitter may open the editor without the node permission."""
     cog = _cog(_door(), allowed=False, account_id=1)
 
-    assert isinstance(_sent_view(await _run(cog)), BuildEditView)
+    assert _component(_sent_view(await _run(cog))) is not None
 
 
 async def test_someone_else_without_the_node_is_denied() -> None:
     cog = _cog(_door(), allowed=False, account_id=99)
 
-    assert not isinstance(_sent_view(await _run(cog)), BuildEditView)
+    assert _component(_sent_view(await _run(cog))) is None
 
 
 async def test_a_missing_build_is_an_error_card() -> None:
     cog = _cog(None)
 
-    assert not isinstance(_sent_view(await _run(cog)), BuildEditView)
+    assert _component(_sent_view(await _run(cog))) is None
