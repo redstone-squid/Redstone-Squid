@@ -6,11 +6,13 @@ from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
 from squid_layouts.styles import ActionStyle, Color
+from squid_layouts.text import TextDialect
 
 
 @dataclass(frozen=True, slots=True)
 class SceneText:
     content: str
+    dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,7 +140,7 @@ class SceneDocument:
 
 
 class PlanSeverity(StrEnum):
-    INFO = "info"
+    ADAPTATION = "adaptation"
     DEGRADATION = "degradation"
     WARNING = "warning"
 
@@ -148,7 +150,7 @@ class PlanEvent:
     code: str
     path: str
     message: str
-    severity: PlanSeverity = PlanSeverity.INFO
+    severity: PlanSeverity = PlanSeverity.ADAPTATION
     before: Mapping[str, int] = field(default_factory=dict)
     after: Mapping[str, int] = field(default_factory=dict)
 

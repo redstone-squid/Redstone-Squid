@@ -24,7 +24,7 @@ from squid_layouts.styles import ActionStyle
 
 def _scene() -> SceneDocument:
     return SceneDocument(
-        protocol=0,
+        protocol=SceneCodec.protocol,
         target="discord.components-v2",
         target_version=1,
         children=(
@@ -62,7 +62,7 @@ def test_scene_json_is_canonical_and_round_trips() -> None:
 
 def test_scene_fingerprint_is_stable_and_content_sensitive() -> None:
     first = _scene()
-    second = SceneDocument(0, first.target, first.target_version, (SceneText("different"),))
+    second = SceneDocument(SceneCodec.protocol, first.target, first.target_version, (SceneText("different"),))
     assert SceneCodec.fingerprint(first) == SceneCodec.fingerprint(SceneCodec.loads(SceneCodec.dumps(first)))
     assert SceneCodec.fingerprint(first) != SceneCodec.fingerprint(second)
 

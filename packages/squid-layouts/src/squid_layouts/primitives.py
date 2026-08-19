@@ -1,0 +1,75 @@
+"""Exact target-shaped primitives for layouts that require presentation control.
+
+Most applications should use the semantic nodes exported by :mod:`squid_layouts`. These
+primitives are the escape hatch for target-specific structure and are intentionally grouped
+behind ``squid_layouts.primitives``.
+"""
+
+from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
+from squid_layouts.ir import (
+    ActionGroup,
+    Button,
+    Choice,
+    Code,
+    Embed,
+    Extension,
+    Fold,
+    Footer,
+    Gallery,
+    Heading,
+    Lines,
+    LinkButton,
+    MediaCollection,
+    Node,
+    Option,
+    Panel,
+    RawItem,
+    Row,
+    Section,
+    SelectMenu,
+    Sep,
+    Text,
+    Thumbnail,
+    Variant,
+    as_nodes,
+)
+from squid_layouts.styles import ActionStyle, Color
+
+__all__ = [
+    "ActionGroup",
+    "ActionStyle",
+    "Alt",
+    "Alts",
+    "Button",
+    "Choice",
+    "Code",
+    "Color",
+    "Drop",
+    "Embed",
+    "Extension",
+    "Fold",
+    "Footer",
+    "Gallery",
+    "Heading",
+    "Lines",
+    "LinkButton",
+    "MediaCollection",
+    "Never",
+    "Node",
+    "Option",
+    "Overflow",
+    "Paginate",
+    "Panel",
+    "RawItem",
+    "Row",
+    "Section",
+    "SelectMenu",
+    "Sep",
+    "Spill",
+    "Text",
+    "Thumbnail",
+    "Truncate",
+    "Variant",
+    "alts",
+    "as_nodes",
+]
