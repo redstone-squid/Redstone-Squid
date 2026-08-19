@@ -13,7 +13,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from squid_layouts.chrome import Chrome
-from squid_layouts.ir import Button, Node, Row
+from squid_layouts.primitives.nodes import Button, Node, Row
 
 PREV_KEY = "__page_prev"
 NEXT_KEY = "__page_next"

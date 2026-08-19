@@ -9,7 +9,8 @@ from squid_layouts.actions import ActionBinding
 from squid_layouts.conform import LimitViolationError, conform
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.scene import (
+from squid_layouts.scene.codec import SceneCodec
+from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
     SceneDocument,
@@ -25,7 +26,6 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
-from squid_layouts.scene_codec import SceneCodec
 from squid_layouts.text import discord_text
 
 type Control = SceneButton | SceneSelect

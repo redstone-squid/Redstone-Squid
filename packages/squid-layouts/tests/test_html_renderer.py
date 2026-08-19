@@ -7,7 +7,8 @@ import pytest
 from squid_layouts.actions import ActionPolicy
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.html import HtmlRenderer
-from squid_layouts.scene import (
+from squid_layouts.scene.codec import SceneCodec
+from squid_layouts.scene.model import (
     SceneButton,
     SceneDocument,
     SceneGallery,
@@ -18,7 +19,6 @@ from squid_layouts.scene import (
     SceneSelect,
     SceneText,
 )
-from squid_layouts.scene_codec import SceneCodec
 
 
 def _scene() -> SceneDocument:

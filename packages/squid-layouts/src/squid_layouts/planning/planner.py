@@ -7,12 +7,26 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
 
 from squid_layouts.actions import ActionBinding
-from squid_layouts.cache import CachedPlan, PlanCache
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.constraints import Never, Paginate
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.ir import (
+from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.planning.adaptation import lower_semantics
+from squid_layouts.planning.cache import CachedPlan, PlanCache
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_layouts.planning.solve import (
+    PageNav,
+    PageState,
+    Realized,
+    RPanel,
+    RSection,
+    RText,
+    SolvedLayout,
+    solve,
+)
+from squid_layouts.planning.target import ResourceCost, TargetProfile
+from squid_layouts.primitives.constraints import Never, Paginate
+from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
     Choice,
@@ -32,9 +46,9 @@ from squid_layouts.ir import (
     Sep,
     Thumbnail,
 )
-from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.presentation import PresentationSession
-from squid_layouts.scene import (
+from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.scene.codec import SceneCodec
+from squid_layouts.scene.model import (
     PlanEvent,
     PlanMetrics,
     PlanReport,
@@ -58,20 +72,6 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
-from squid_layouts.scene_codec import SceneCodec
-from squid_layouts.search import DEFAULT_SEARCH_BUDGET
-from squid_layouts.semantic_adapter import lower_semantics
-from squid_layouts.solve import (
-    PageNav,
-    PageState,
-    Realized,
-    RPanel,
-    RSection,
-    RText,
-    SolvedLayout,
-    solve,
-)
-from squid_layouts.target import ResourceCost, TargetProfile
 
 EMPTY_RESERVATION = ResourceCost()
 

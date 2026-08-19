@@ -15,11 +15,11 @@ from squid_layouts import (
     compose,
     plan,
 )
-from squid_layouts.cache import CachedPlan
 from squid_layouts.discord import DISCORD_V2
+from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.primitives import Code
-from squid_layouts.scene import PlanReport, SceneDocument
-from squid_layouts.scene_codec import SceneCodec
+from squid_layouts.scene.codec import SceneCodec
+from squid_layouts.scene.model import PlanReport, SceneDocument
 
 
 async def _first(_event) -> None: ...

@@ -17,8 +17,8 @@ from squid_layouts import (
     render_static,
     solve,
 )
-from squid_layouts.presets import Field
-from squid_layouts.solve import RPanel, RSection, RText, SolvedLayout
+from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
+from squid_layouts.primitives.presets import Field
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:

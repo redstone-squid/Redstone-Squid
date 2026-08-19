@@ -31,9 +31,9 @@ from squid_layouts import (
     default_nav,
     solve,
 )
-from squid_layouts.presets import Field
+from squid_layouts.planning.solve import RText, _component_count, split_pages
 from squid_layouts.primitives import Code, Heading
-from squid_layouts.solve import RText, _component_count, split_pages
+from squid_layouts.primitives.presets import Field
 from squid_layouts.testing import fake_interaction
 
 

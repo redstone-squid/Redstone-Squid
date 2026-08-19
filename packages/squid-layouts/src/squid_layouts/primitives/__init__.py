@@ -5,8 +5,8 @@ primitives are the escape hatch for target-specific structure and are intentiona
 behind ``squid_layouts.primitives``.
 """
 
-from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
-from squid_layouts.ir import (
+from squid_layouts.primitives.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
+from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
     Choice,
@@ -33,7 +33,7 @@ from squid_layouts.ir import (
     Variant,
     as_nodes,
 )
-from squid_layouts.styles import ActionStyle, Color
+from squid_layouts.primitives.styles import ActionStyle, Color
 
 __all__ = [
     "ActionGroup",

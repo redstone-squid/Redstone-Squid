@@ -7,7 +7,8 @@ from copy import deepcopy
 from typing import Any
 
 from squid_layouts.actions import ActionPolicy
-from squid_layouts.scene import (
+from squid_layouts.primitives.styles import ActionStyle
+from squid_layouts.scene.model import (
     SceneAsset,
     SceneButton,
     SceneDocument,
@@ -26,8 +27,7 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
-from squid_layouts.scene_schema import SCENE_SCHEMA
-from squid_layouts.styles import ActionStyle
+from squid_layouts.scene.schema import SCENE_SCHEMA
 from squid_layouts.text import TextDialect
 
 
