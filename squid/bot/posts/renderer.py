@@ -6,7 +6,7 @@ from typing import Protocol
 
 import discord
 
-from squid.bot.utils.components import StaticLayout, no_mentions
+from squid.bot.utils.components import no_mentions
 from squid.posts.domain import ResourceKind, Surface
 
 
@@ -17,7 +17,7 @@ class DesiredPost:
     channel_id: int
     guild_id: int
     surface: Surface
-    layout: StaticLayout
+    layout: discord.ui.LayoutView
     allowed_mentions: discord.AllowedMentions = field(default_factory=no_mentions)
 
 

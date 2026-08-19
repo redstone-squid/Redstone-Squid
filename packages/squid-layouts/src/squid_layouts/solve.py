@@ -88,6 +88,7 @@ class _Unit:
     suffix: str
     content: str
     lines: tuple[str, ...] | None
+    join: str
     priority: int
     overflow: Overflow
     grant: int = 0
@@ -107,7 +108,7 @@ def _escape_fences(content: str) -> str:
 
 
 def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
-    prefix, suffix, lines = "", "", None
+    prefix, suffix, lines, join = "", "", None, "\n"
     match node:
         case Text(content=content):
             pass
@@ -119,9 +120,9 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
             prefix = f"```{lang}\n"
             suffix = "\n```"
             content = _escape_fences(content)
-        case Lines(lines=raw_lines):
+        case Lines(lines=raw_lines, join=join):
             lines = raw_lines
-            content = "\n".join(raw_lines)
+            content = join.join(raw_lines)
     if not content:
         slot.dropped = True
         return None
@@ -133,6 +134,7 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
         suffix=suffix,
         content=content,
         lines=lines,
+        join=join,
         priority=node.priority,
         overflow=node.overflow,
     )
@@ -232,7 +234,7 @@ def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> 
         shown = list(lines[:kept])
         if kept < total:
             shown.append(chrome.and_n_more(total - kept))
-        body = "\n".join(shown)
+        body = unit.join.join(shown)
         if body and len(body) <= usable:
             if kept < total:
                 notes.append(f"spilled node {unit.index}: showing {kept} of {total} lines")
@@ -258,11 +260,27 @@ def _allocate(units: list[_Unit], budget: int, strict: bool, notes: list[str], c
             if strict:
                 raise LayoutOverflowError([*notes, message])
             notes.append(message)
-        for unit in sorted(active, key=lambda u: (-u.priority, u.index)):
-            if isinstance(unit.overflow, Never):
-                continue
-            unit.grant = min(unit.need, max(0, remaining))
-            remaining -= unit.grant
+        flexible = [unit for unit in active if not isinstance(unit.overflow, Never)]
+        for priority in sorted({unit.priority for unit in flexible}, reverse=True):
+            group = [unit for unit in flexible if unit.priority == priority]
+            total_need = sum(unit.need for unit in group)
+            if total_need <= remaining:
+                for unit in group:
+                    unit.grant = unit.need
+            else:
+                # Share the shortfall proportionally to need instead of first-come-take-all,
+                # so document order does not decide which same-priority node starves.
+                share = max(0, remaining)
+                for unit in group:
+                    unit.grant = unit.need * share // total_need
+                leftover = share - sum(unit.grant for unit in group)
+                for unit in sorted(group, key=lambda u: u.index):
+                    if leftover <= 0:
+                        break
+                    top_up = min(leftover, unit.need - unit.grant)
+                    unit.grant += top_up
+                    leftover -= top_up
+            remaining -= sum(unit.grant for unit in group)
         dropped = [unit for unit in active if not _apply(unit, chrome, notes)]
         if not dropped:
             return
