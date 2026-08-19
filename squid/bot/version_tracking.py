@@ -8,9 +8,9 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ext.commands.bot import app_commands
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.ui import PagedList
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import no_mentions, text_layout
-from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
@@ -37,10 +37,9 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
         """List the Minecraft versions the bot recognizes."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         versions_human_readable = await self.version_service.list_display("Java")
-        paginator = ListPaginator(
+        paginator = PagedList(
             t(locale, _("Recognized Java versions")),
             versions_human_readable,
-            author_id=ctx.author.id,
             empty=t(locale, _("No Java versions are recognized yet.")),
             locale=locale,
             # A version is one short token, so a page is a comma-separated run of them rather

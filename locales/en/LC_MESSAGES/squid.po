@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-20 00:28+0000\n"
+"POT-Creation-Date: 2026-08-20 00:53+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -508,7 +508,7 @@ msgstr ""
 msgid "An If-Match build revision is required for this operation."
 msgstr ""
 
-#: squid/bot/errors.py:159
+#: squid/bot/errors.py:160
 msgid ""
 "An administrator has explicitly withheld this from you. Ask them if you "
 "think that is a mistake."
@@ -551,7 +551,7 @@ msgstr ""
 msgid "An internal server error occurred."
 msgstr ""
 
-#: squid/bot/errors.py:239
+#: squid/bot/errors.py:240
 #, python-brace-format
 msgid "An unexpected error occurred. Reference: `{error_id}`"
 msgstr ""
@@ -890,7 +890,7 @@ msgstr ""
 msgid "Check the build ID and try again."
 msgstr ""
 
-#: squid/bot/errors.py:222
+#: squid/bot/errors.py:223
 msgid "Check the command arguments and try again."
 msgstr ""
 
@@ -1003,7 +1003,7 @@ msgstr ""
 msgid "Command Help - `{name}`"
 msgstr ""
 
-#: squid/bot/errors.py:211
+#: squid/bot/errors.py:212
 msgid "Command already running"
 msgstr ""
 
@@ -1015,11 +1015,11 @@ msgstr ""
 msgid "Command not found"
 msgstr ""
 
-#: squid/bot/errors.py:206
+#: squid/bot/errors.py:207
 msgid "Command on cooldown"
 msgstr ""
 
-#: squid/bot/errors.py:216 squid/bot/errors.py:231
+#: squid/bot/errors.py:217 squid/bot/errors.py:232
 msgid "Command unavailable"
 msgstr ""
 
@@ -1059,7 +1059,7 @@ msgstr ""
 msgid "Consent recorded"
 msgstr ""
 
-#: squid/accounts/errors.py:203 squid/bot/errors.py:182
+#: squid/accounts/errors.py:203 squid/bot/errors.py:183
 msgid "Consent required"
 msgstr ""
 
@@ -1349,8 +1349,8 @@ msgstr ""
 #: squid/bot/settings.py:111 squid/bot/settings.py:142
 #: squid/bot/settings.py:185 squid/bot/settings.py:194
 #: squid/bot/settings.py:217 squid/bot/submission/edit.py:84
-#: squid/bot/submission/search.py:274 squid/bot/submission/search.py:289
-#: squid/bot/submission/search.py:352
+#: squid/bot/submission/search.py:273 squid/bot/submission/search.py:288
+#: squid/bot/submission/search.py:351
 msgid "Error"
 msgstr ""
 
@@ -1701,7 +1701,7 @@ msgstr ""
 msgid "Internal server error"
 msgstr ""
 
-#: squid/bot/submission/search.py:361
+#: squid/bot/submission/search.py:360
 #, python-brace-format
 msgid "Internal state for build #{id} is attached."
 msgstr ""
@@ -1711,7 +1711,7 @@ msgstr ""
 msgid "Invalid boolean category value {value!r}."
 msgstr ""
 
-#: squid/bot/errors.py:221 squid/bot/errors.py:226
+#: squid/bot/errors.py:222 squid/bot/errors.py:227
 msgid "Invalid command input"
 msgstr ""
 
@@ -2033,7 +2033,7 @@ msgstr ""
 msgid "Minecraft names, comma separated"
 msgstr ""
 
-#: squid/bot/errors.py:169 squid/bot/errors.py:194
+#: squid/bot/errors.py:170 squid/bot/errors.py:195
 msgid "Missing permission"
 msgstr ""
 
@@ -2046,11 +2046,11 @@ msgid "Multiplier — leave empty to remove this role's weight"
 msgstr ""
 
 #: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:633
-#: squid/bot/utils/pagination.py:142
+#: squid/bot/ui.py:72 squid/bot/ui.py:173 squid/bot/utils/pagination.py:142
 msgid "Next"
 msgstr ""
 
-#: squid/bot/version_tracking.py:44
+#: squid/bot/version_tracking.py:43
 msgid "No Java versions are recognized yet."
 msgstr ""
 
@@ -2071,8 +2071,8 @@ msgstr ""
 msgid "No build credits a creator by that name."
 msgstr ""
 
-#: squid/bot/submission/edit.py:84 squid/bot/submission/search.py:274
-#: squid/bot/submission/search.py:289 squid/bot/submission/search.py:352
+#: squid/bot/submission/edit.py:84 squid/bot/submission/search.py:273
+#: squid/bot/submission/search.py:288 squid/bot/submission/search.py:351
 msgid "No build with that ID."
 msgstr ""
 
@@ -2187,7 +2187,7 @@ msgstr ""
 msgid "Nothing has failed within the retention window."
 msgstr ""
 
-#: squid/bot/submission/search.py:256
+#: squid/bot/submission/search.py:255
 msgid "Nothing is waiting for review."
 msgstr ""
 
@@ -2232,7 +2232,7 @@ msgstr ""
 msgid "One `choice | emoji` per line"
 msgstr ""
 
-#: squid/bot/errors.py:227
+#: squid/bot/errors.py:228
 msgid "One of the command options is invalid."
 msgstr ""
 
@@ -2264,7 +2264,7 @@ msgstr ""
 msgid "Only show nodes containing this text."
 msgstr ""
 
-#: squid/bot/errors.py:200
+#: squid/bot/errors.py:201
 msgid "Only the bot owner can use this command."
 msgstr ""
 
@@ -2385,11 +2385,16 @@ msgstr ""
 msgid "Overall build size"
 msgstr ""
 
-#: squid/bot/errors.py:199
+#: squid/bot/errors.py:200
 msgid "Owner only"
 msgstr ""
 
-#: squid/bot/utils/pagination.py:95
+#: squid/bot/ui.py:73
+#, python-brace-format
+msgid "Page {page} of {pages}"
+msgstr ""
+
+#: squid/bot/ui.py:147 squid/bot/utils/pagination.py:95
 #, python-brace-format
 msgid "Page {page} of {pages} · {total} in total"
 msgstr ""
@@ -2448,7 +2453,7 @@ msgstr ""
 msgid "Permission updated"
 msgstr ""
 
-#: squid/bot/errors.py:156
+#: squid/bot/errors.py:157
 msgid "Permission withheld"
 msgstr ""
 
@@ -2516,7 +2521,7 @@ msgid "Post and manage the Redstoner self-assign panel."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:192 squid/bot/submission/ui/views.py:632
-#: squid/bot/utils/pagination.py:128
+#: squid/bot/ui.py:71 squid/bot/ui.py:167 squid/bot/utils/pagination.py:128
 msgid "Previous"
 msgstr ""
 
@@ -2924,7 +2929,7 @@ msgstr ""
 msgid "Run /account link again with a fresh code from the game."
 msgstr ""
 
-#: squid/bot/errors.py:183
+#: squid/bot/errors.py:184
 msgid "Run `/account consent` to read the privacy notice and accept it."
 msgstr ""
 
@@ -3001,7 +3006,7 @@ msgstr ""
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
 
-#: squid/bot/ui.py:65
+#: squid/bot/ui.py:69
 msgid "See attachment"
 msgstr ""
 
@@ -3009,7 +3014,7 @@ msgstr ""
 msgid "Sent by direct message"
 msgstr ""
 
-#: squid/bot/errors.py:189
+#: squid/bot/errors.py:190
 msgid "Server only"
 msgstr ""
 
@@ -3067,7 +3072,7 @@ msgstr ""
 msgid "Smallest-record builds"
 msgstr ""
 
-#: squid/bot/errors.py:238
+#: squid/bot/errors.py:239
 msgid "Something went wrong"
 msgstr ""
 
@@ -3171,11 +3176,11 @@ msgstr ""
 msgid "Submission form"
 msgstr ""
 
-#: squid/bot/submission/search.py:313
+#: squid/bot/submission/search.py:312
 msgid "Submission has been confirmed."
 msgstr ""
 
-#: squid/bot/submission/search.py:334
+#: squid/bot/submission/search.py:333
 msgid "Submission has been denied."
 msgstr ""
 
@@ -3205,8 +3210,8 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/submission/search.py:242 squid/bot/submission/search.py:313
-#: squid/bot/submission/search.py:334
+#: squid/bot/submission/search.py:242 squid/bot/submission/search.py:312
+#: squid/bot/submission/search.py:333
 msgid "Success"
 msgstr ""
 
@@ -3386,19 +3391,19 @@ msgstr ""
 msgid "The ID of the build to edit."
 msgstr ""
 
-#: squid/bot/submission/search.py:343
+#: squid/bot/submission/search.py:342
 msgid "The ID of the build whose debug details you want to see."
 msgstr ""
 
-#: squid/bot/submission/search.py:304
+#: squid/bot/submission/search.py:303
 msgid "The ID of the build you want to confirm."
 msgstr ""
 
-#: squid/bot/submission/search.py:321
+#: squid/bot/submission/search.py:320
 msgid "The ID of the build you want to deny."
 msgstr ""
 
-#: squid/bot/submission/search.py:264
+#: squid/bot/submission/search.py:263
 msgid "The ID of the build you want to see."
 msgstr ""
 
@@ -3677,7 +3682,7 @@ msgstr ""
 msgid "These error controls belong to someone else."
 msgstr ""
 
-#: squid/bot/utils/pagination.py:80
+#: squid/bot/ui.py:70 squid/bot/utils/pagination.py:80
 msgid "These list controls belong to someone else."
 msgstr ""
 
@@ -3726,7 +3731,7 @@ msgstr ""
 msgid "This build's schematic cannot be previewed."
 msgstr ""
 
-#: squid/bot/errors.py:190
+#: squid/bot/errors.py:191
 msgid "This command cannot be used in a private message."
 msgstr ""
 
@@ -3843,7 +3848,7 @@ msgstr ""
 msgid "Try again in a few minutes."
 msgstr ""
 
-#: squid/bot/errors.py:207
+#: squid/bot/errors.py:208
 #, python-brace-format
 msgid "Try again in {seconds:.1f} seconds."
 msgstr ""
@@ -3908,7 +3913,7 @@ msgstr ""
 msgid "Version"
 msgstr ""
 
-#: squid/bot/version_tracking.py:62 squid/bot/version_tracking.py:79
+#: squid/bot/version_tracking.py:61 squid/bot/version_tracking.py:78
 #, python-brace-format
 msgid "Version added successfully: {version}"
 msgstr ""
@@ -4023,7 +4028,7 @@ msgstr ""
 msgid "Wait for the cooling-off period to pass, then generate a new code in game."
 msgstr ""
 
-#: squid/bot/errors.py:212
+#: squid/bot/errors.py:213
 msgid "Wait for the current operation to finish and try again."
 msgstr ""
 
@@ -4104,7 +4109,7 @@ msgstr ""
 msgid "You cannot unlink your only remaining identity."
 msgstr ""
 
-#: squid/bot/errors.py:217 squid/bot/errors.py:232
+#: squid/bot/errors.py:218 squid/bot/errors.py:233
 msgid "You cannot use this command here."
 msgstr ""
 
@@ -4120,7 +4125,7 @@ msgstr ""
 msgid "You do not have permission to perform this action."
 msgstr ""
 
-#: squid/bot/errors.py:195
+#: squid/bot/errors.py:196
 msgid "You do not have permission to use this command."
 msgstr ""
 
@@ -4135,11 +4140,11 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/errors.py:164
+#: squid/bot/errors.py:165
 msgid "You need any one of these permissions to use this command:"
 msgstr ""
 
-#: squid/bot/errors.py:166
+#: squid/bot/errors.py:167
 msgid "You need these permissions to use this command:"
 msgstr ""
 
@@ -4912,7 +4917,7 @@ msgstr ""
 msgid "{visibility} · verified {age}"
 msgstr ""
 
-#: squid/bot/notifications_view.py:140 squid/bot/ui.py:64
+#: squid/bot/notifications_view.py:140 squid/bot/ui.py:68
 #, python-brace-format
 msgid "…and {count} more."
 msgstr ""

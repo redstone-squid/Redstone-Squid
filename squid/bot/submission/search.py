@@ -22,6 +22,7 @@ from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.submission.ui.views import BuildInfoView
+from squid.bot.ui import PagedList
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
     edit_layout,
@@ -30,7 +31,6 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
-from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
 from squid.builds.domain import Build
@@ -249,10 +249,9 @@ class SearchCog[
         await ctx.defer()
         locale = await resolve_locale(ctx, self.bot.services.settings)
         pending = await self.queries.pending()
-        paginator = ListPaginator(
+        paginator = PagedList(
             t(locale, _("Pending submissions")),
             [_pending_entry(build, locale) for build in pending],
-            author_id=ctx.author.id,
             empty=t(locale, _("Nothing is waiting for review.")),
             locale=locale,
         )
