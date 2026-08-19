@@ -87,11 +87,14 @@ class Alt:
     """One list entry with its degradation ladder: a primary form plus validated fallbacks.
 
     Used as a `Lines` entry. Under budget pressure the solver steps the largest entries down
-    their fallbacks before it spills any entry whole.
+    their fallbacks before it spills any entry whole. ``priority`` decides what disappears
+    when stepping is not enough: the lowest-priority entries spill first, ties from the tail.
+    Plain string entries are priority 0.
     """
 
     primary: str
     fallbacks: tuple[str, ...] = ()
+    priority: int = 0
 
     def __post_init__(self) -> None:
         if not self.primary:

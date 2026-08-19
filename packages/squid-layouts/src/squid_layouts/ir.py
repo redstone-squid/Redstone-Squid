@@ -54,7 +54,8 @@ class Lines:
     Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
     may also be an :class:`~squid_layouts.constraints.Alt` carrying a degradation ladder:
     under pressure the solver steps the largest entries down their fallbacks before it spills
-    any entry.
+    any entry. Each :class:`~squid_layouts.constraints.Alt` may carry a drop priority; lower
+    priorities disappear first, while surviving entries keep document order.
     """
 
     lines: tuple[str | Alt, ...]
@@ -152,8 +153,37 @@ class Panel:
     accent: discord.Colour | int | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class Fold:
+    """A structural alternate: ``primary``, or ``fallback`` when components run short.
+
+    Overflow policies shrink *text*; nothing they do returns a component, so a document with
+    too many components was previously only reportable. A Fold gives the solver something to
+    give up: a button panel folding to one select, a gallery folding to a link row. The
+    lowest-priority folds collapse first, and the choice is made before anything is measured,
+    so it stays out of the text-policy matrix.
+    """
+
+    primary: Node
+    fallback: Node
+    priority: int = 0
+
+
 type Node = (
-    Text | Heading | Footer | Code | Lines | Sep | Row | SelectMenu | Thumbnail | Gallery | Section | Panel | RawItem
+    Text
+    | Heading
+    | Footer
+    | Code
+    | Lines
+    | Sep
+    | Row
+    | SelectMenu
+    | Thumbnail
+    | Gallery
+    | Section
+    | Panel
+    | RawItem
+    | Fold
 )
 
 
