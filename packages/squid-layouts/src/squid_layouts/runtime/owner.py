@@ -14,9 +14,9 @@ import logging
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from squid_layouts.cache import PlanCache
-from squid_layouts.component import Component, ComponentTree, ContextKey, render_component_tree
-from squid_layouts.presentation import PresentationSession
+from squid_layouts.planning.cache import PlanCache
+from squid_layouts.runtime.component import Component, ComponentTree, ContextKey, render_component_tree
+from squid_layouts.runtime.presentation import PresentationSession
 
 if TYPE_CHECKING:
     from squid_layouts.mount import Mount

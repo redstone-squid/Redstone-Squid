@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
-from squid_layouts.styles import ActionStyle, Color
+from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.text import TextDialect
 
 

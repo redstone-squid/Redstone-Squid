@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
-from squid_layouts.ir import Node as PrimitiveNode
+from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.text import TextLike
 
 

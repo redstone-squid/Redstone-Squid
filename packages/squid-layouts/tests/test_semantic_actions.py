@@ -7,8 +7,8 @@ import pytest
 from squid_layouts import ActionDisplay, PresentationSession, plan
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DISCORD_V2
-from squid_layouts.presentation import StrategyState
-from squid_layouts.scene import SceneButton, SceneRow, SceneSelect
+from squid_layouts.runtime.presentation import StrategyState
+from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
 from squid_layouts.semantic import Action, ActionGroup, Actions, Emphasis, Link
 
 

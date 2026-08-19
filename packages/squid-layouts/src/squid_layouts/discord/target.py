@@ -5,9 +5,9 @@ from collections.abc import Callable
 import discord
 
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.ir import Extension, Node
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.target import PreparedExtension, ResourceCost, TargetProfile
+from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
+from squid_layouts.primitives.nodes import Extension, Node
 
 
 class _DiscordItemExtension:

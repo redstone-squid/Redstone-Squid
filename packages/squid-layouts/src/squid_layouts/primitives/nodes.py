@@ -9,8 +9,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
-from squid_layouts.constraints import Alt, Overflow, Spill, Truncate
-from squid_layouts.styles import ActionStyle, Color
+from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
+from squid_layouts.primitives.styles import ActionStyle, Color
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,9 +52,9 @@ class Lines:
     """A list of entries joined by ``join``; spills to "…and N more" by default.
 
     Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
-    may also be an :class:`~squid_layouts.constraints.Alt` carrying a degradation ladder:
+    may also be an :class:`~squid_layouts.primitives.constraints.Alt` carrying a degradation ladder:
     under pressure the solver steps the largest entries down their fallbacks before it spills
-    any entry. Each :class:`~squid_layouts.constraints.Alt` may carry a drop priority; lower
+    any entry. Each :class:`~squid_layouts.primitives.constraints.Alt` may carry a drop priority; lower
     priorities disappear first, while surviving entries keep document order.
     """
 

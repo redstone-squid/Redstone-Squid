@@ -8,14 +8,12 @@ This package must stay free of `squid.*` imports and of `_()` i18n markers: all 
 text enters pre-translated through `Chrome`.
 """
 
-from squid_layouts import deliver, presets, primitives, semantic
+import squid_layouts.deliver as deliver
+from squid_layouts import primitives, semantic
 from squid_layouts.actions import ActionEvent, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent, Visibility
-from squid_layouts.cache import PlanCache
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.component import Component, ContextKey
 from squid_layouts.compositor import Composition, compose, render_static
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
-from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
 from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset, as_document
 from squid_layouts.durability import (
     ComponentRegistry,
@@ -34,7 +32,18 @@ from squid_layouts.durability import (
 )
 from squid_layouts.errors import DrawInvariantError, LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.html import DISCORD_PREVIEW_CSS, HtmlRenderer
-from squid_layouts.ir import (
+from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_layouts.mount import ErrorHook, Mount, MountedView
+from squid_layouts.navigation import Navigator
+from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav, page_controls
+from squid_layouts.planning.planner import plan
+from squid_layouts.planning.solve import LayoutOverflowError, SolvedLayout, solve
+from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
+from squid_layouts.primitives import presets
+from squid_layouts.primitives.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
+from squid_layouts.primitives.nodes import (
     Button,
     Embed,
     Extension,
@@ -56,24 +65,20 @@ from squid_layouts.ir import (
     Variant,
     as_nodes,
 )
-from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_layouts.mount import ErrorHook, Mount, MountedView
-from squid_layouts.navigation import Navigator
-from squid_layouts.pagination import NavFactory, PageContext, default_nav, page_controls
-from squid_layouts.planner import plan
-from squid_layouts.presentation import (
+from squid_layouts.primitives.presets import FieldGroup, banner, card, listing, report
+from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.runtime.component import Component, ContextKey
+from squid_layouts.runtime.owner import ComponentRuntime, Reactor
+from squid_layouts.runtime.presentation import (
     CursorState,
     DisclosureState,
     PresentationSession,
     SelectionState,
     StrategyState,
 )
-from squid_layouts.presets import FieldGroup, banner, card, listing, report
-from squid_layouts.reactivity import ReactiveWriteError, batch, computed, state, transaction
-from squid_layouts.runtime import ComponentRuntime, Reactor
-from squid_layouts.scene import PlanEvent, PlanMetrics, PlanReport, PlanResult, SceneDocument
-from squid_layouts.scene_codec import SceneCodec, SceneCodecError
+from squid_layouts.runtime.reactivity import ReactiveWriteError, batch, computed, state, transaction
+from squid_layouts.scene.codec import SceneCodec, SceneCodecError
+from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, SceneDocument
 from squid_layouts.semantic import (
     Action,
     ActionDisplay,
@@ -127,9 +132,6 @@ from squid_layouts.semantic import (
     spill,
     truncate,
 )
-from squid_layouts.solve import LayoutOverflowError, SolvedLayout, solve
-from squid_layouts.styles import ActionStyle, Color
-from squid_layouts.target import PreparedExtension, ResourceCost, TargetProfile
 from squid_layouts.testing import assert_within_limits
 from squid_layouts.text import RawMarkdown, ResolvedText, TextDialect, md, plain, raw_md
 
