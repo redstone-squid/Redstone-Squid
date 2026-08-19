@@ -21,6 +21,7 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
+from squid_layouts.scene_codec import SceneCodec
 
 DISCORD_PREVIEW_CSS = """
 .squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;
@@ -54,6 +55,9 @@ class HtmlRenderer:
         self.css = css
 
     def draw(self, scene: SceneDocument, *, plan: PlanResult | None = None) -> str:
+        if scene.protocol != SceneCodec.protocol:
+            message = f"HtmlRenderer cannot draw scene protocol {scene.protocol}"
+            raise DrawInvariantError(message)
         pager_data = json.dumps(
             [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in scene.pagers],
             separators=(",", ":"),
@@ -72,8 +76,8 @@ class HtmlRenderer:
 
     def _node(self, node: SceneNode | SceneLink | SceneButton) -> str:
         match node:
-            case SceneText(content=content):
-                return f'<div class="squid-text" data-squid-markdown="true">{escape(content)}</div>'
+            case SceneText(content=content, dialect=dialect):
+                return f'<div class="squid-text" data-squid-dialect="{dialect.value}">{escape(content)}</div>'
             case SceneSeparator(large=large, visible=visible):
                 if not visible:
                     return ""

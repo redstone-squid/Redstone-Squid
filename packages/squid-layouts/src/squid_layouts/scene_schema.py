@@ -14,12 +14,12 @@ def _node(kind: str, properties: dict[str, Any], *required: str) -> dict[str, An
 
 SCENE_SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://schem-at.github.io/squid-layouts/scene-v0.schema.json",
-    "title": "squid-layouts resolved scene protocol 0",
+    "$id": "https://schem-at.github.io/squid-layouts/scene-v1.schema.json",
+    "title": "squid-layouts resolved scene protocol 1",
     "type": "object",
     "additionalProperties": False,
     "properties": {
-        "protocol": {"const": 0},
+        "protocol": {"const": 1},
         "target": {"type": "string"},
         "target_version": {"type": "integer", "minimum": 0},
         "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
@@ -71,7 +71,12 @@ SCENE_SCHEMA: dict[str, Any] = {
                 )
             ]
         },
-        "text": _node("text", {"content": {"type": "string"}}, "content"),
+        "text": _node(
+            "text",
+            {"content": {"type": "string"}, "dialect": {"enum": ["plain", "discord-markdown"]}},
+            "content",
+            "dialect",
+        ),
         "separator": _node(
             "separator",
             {"large": {"type": "boolean"}, "visible": {"type": "boolean"}},

@@ -18,7 +18,7 @@ from squid_layouts.scene_codec import SceneCodec
 
 def _scene() -> SceneDocument:
     return SceneDocument(
-        protocol=0,
+        protocol=SceneCodec.protocol,
         target="discord.components-v2",
         target_version=1,
         children=(
