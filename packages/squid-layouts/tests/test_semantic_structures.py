@@ -1,6 +1,8 @@
 """Semantic structures select legal Discord representations."""
 
-from squid_layouts import PresentationSession, plan
+import pytest
+
+from squid_layouts import LayoutInvariantError, PresentationSession, plan
 from squid_layouts.discord import DISCORD_V2
 from squid_layouts.scene import SceneGallery, SceneRow, SceneSelect, SceneText
 from squid_layouts.semantic import (
@@ -69,6 +71,63 @@ def test_navigation_groups_six_destinations() -> None:
     )
 
     assert isinstance(plan(document, target=DISCORD_V2).scene.children[0], SceneSelect)
+
+
+def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
+    choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)), (), _change)
+    items = Items(
+        "catalog",
+        tuple(Item(str(index), f"Item {index}", (Paragraph(f"Detail {index}"),)) for index in range(36)),
+    )
+    navigation = Navigation(
+        "tabs",
+        tuple(Destination(str(index), f"Tab {index}") for index in range(36)),
+        "0",
+        _change,
+    )
+
+    choice_plan = plan(choices, target=DISCORD_V2, page={"size.choices": 1})
+    item_plan = plan(items, target=DISCORD_V2, page={"catalog.items": 1})
+    navigation_plan = plan(navigation, target=DISCORD_V2, page={"tabs.destinations": 1})
+
+    choice_select = next(node for node in choice_plan.scene.children if isinstance(node, SceneSelect))
+    item_select = next(node for node in item_plan.scene.children if isinstance(node, SceneSelect))
+    navigation_select = next(node for node in navigation_plan.scene.children if isinstance(node, SceneSelect))
+    assert [len(choice_select.options), len(item_select.options), len(navigation_select.options)] == [11, 11, 11]
+    assert [(pager.key, pager.page, pager.pages) for pager in choice_plan.scene.pagers] == [("size.choices", 1, 2)]
+    assert [(pager.key, pager.page, pager.pages) for pager in item_plan.scene.pagers] == [("catalog.items", 1, 2)]
+    assert [(pager.key, pager.page, pager.pages) for pager in navigation_plan.scene.pagers] == [
+        ("tabs.destinations", 1, 2)
+    ]
+
+
+def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
+    session = PresentationSession()
+    original = tuple(Item(str(index), f"Item {index}", (Paragraph("detail"),)) for index in range(36))
+    plan(Items("catalog", original), target=DISCORD_V2, session=session)
+    session.move_cursor("catalog.items", 1)
+    second_page = plan(Items("catalog", original), target=DISCORD_V2, session=session)
+    assert "25" in next(node for node in second_page.scene.children if isinstance(node, SceneSelect)).options[0].value
+
+    inserted = (Item("new", "New", (Paragraph("detail"),)), *original)
+    replanned = plan(Items("catalog", inserted), target=DISCORD_V2, session=session)
+    values = {
+        option.value for node in replanned.scene.children if isinstance(node, SceneSelect) for option in node.options
+    }
+    assert "25" in values
+
+
+def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
+    document = Choices(
+        "many",
+        tuple(Choice(str(index), str(index)) for index in range(36)),
+        (),
+        _change,
+        maximum=2,
+    )
+
+    with pytest.raises(LayoutInvariantError, match="cross-page multi-selection is ambiguous"):
+        plan(document, target=DISCORD_V2)
 
 
 def test_tables_and_media_choose_mechanical_target_shapes() -> None:
