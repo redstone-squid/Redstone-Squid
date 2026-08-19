@@ -11,16 +11,18 @@ control you cannot use should not be offered and a control you can see is still 
 """
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 
+import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import t
 from squid.bot.profile_render import present_claimant
+from squid.bot.ui import create_mount
 from squid.bot.utils.components import DISCORD_BLUE, edit_interaction_layout, reply_layout, text_layout
 from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import enforce
@@ -205,6 +207,205 @@ class ClaimReviewView(ListPaginator):
         itself stays private, because a review queue is a staff read.
         """
         await reply_layout(interaction, text_layout(message), ephemeral=False)
+
+
+class ClaimReviewComponent(sl.Component):
+    """A mounted claim queue whose choices and decisions share one semantic surface."""
+
+    selected_id: int | None = sl.state(None)
+    reassign_armed: int | None = sl.state(None)
+    closed: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        accounts: AccountService,
+        claims: Sequence[AliasClaim],
+        *,
+        author_id: int,
+        locale: str | None = None,
+        can_approve: bool,
+        can_reject: bool,
+        timeout: float = REVIEW_SECONDS,
+    ) -> None:
+        self._accounts = accounts
+        self._claims = tuple(claims)
+        self._author_id = author_id
+        self.locale = locale
+        self._can_approve = can_approve
+        self._can_reject = can_reject
+        self._timeout = timeout
+        self._compat_mount: sl.discord.Mount | None = None
+
+    @property
+    def claims(self) -> tuple[AliasClaim, ...]:
+        return self._claims
+
+    @property
+    def selected(self) -> AliasClaim | None:
+        return next((claim for claim in self._claims if claim.id == self.selected_id), None)
+
+    def render(self) -> Sequence[sl.LayoutNode]:
+        if self.closed:
+            return [
+                sl.primitives.card(
+                    t(self.locale, _("Claims closed")),
+                    t(self.locale, _("This review queue is closed.")),
+                    accent=DISCORD_BLUE,
+                )
+            ]
+        entries = tuple(_claim_entry(claim, self.locale) for claim in self._claims)
+        body: sl.LayoutNode = (
+            sl.primitives.Lines(
+                entries,
+                join="\n\n",
+                overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
+            )
+            if entries
+            else sl.primitives.Text(t(self.locale, _("No creator credit claims are awaiting review.")))
+        )
+        choices: sl.LayoutNode | None = None
+        if self._claims:
+            choices = sl.Choices(
+                key="claim",
+                choices=tuple(
+                    sl.Choice(
+                        str(claim.id),
+                        t(self.locale, _("Claim #{id} — {name}"), id=claim.id, name=claim.alias_name),
+                        present_claimant(claim, self.locale, mention=False),
+                    )
+                    for claim in self._claims
+                ),
+                selected=(str(self.selected_id),) if self.selected_id is not None else (),
+                on_change=self._select_claim,
+                minimum=1,
+                maximum=1,
+            )
+        buttons: list[sl.primitives.Button] = []
+        if self._can_approve:
+            buttons.append(
+                sl.primitives.Button(
+                    t(self.locale, _("Take the name"))
+                    if self.reassign_armed == self.selected_id
+                    else t(self.locale, _("Approve")),
+                    self._approve,
+                    "approve",
+                    style=sl.primitives.ActionStyle.DANGER
+                    if self.reassign_armed == self.selected_id
+                    else sl.primitives.ActionStyle.SUCCESS,
+                    disabled=self.selected is None,
+                )
+            )
+        if self._can_reject:
+            buttons.append(
+                sl.primitives.Button(
+                    t(self.locale, _("Reject")),
+                    self._reject,
+                    "reject",
+                    style=sl.primitives.ActionStyle.SECONDARY,
+                    disabled=self.selected is None,
+                )
+            )
+        buttons.append(
+            sl.primitives.Button(
+                t(self.locale, _("Close")),
+                self._close,
+                "close",
+                style=sl.primitives.ActionStyle.SECONDARY,
+            )
+        )
+        return (
+            sl.primitives.Panel(
+                (
+                    sl.primitives.Heading(t(self.locale, _("Creator credit claims awaiting review"))),
+                    body,
+                    *((choices,) if choices is not None else ()),
+                ),
+                accent=DISCORD_BLUE,
+            ),
+            sl.primitives.Row(tuple(buttons)),
+        )
+
+    def _page_footer(self, page: int, pages: int) -> str:
+        return t(
+            self.locale,
+            _("Page {page} of {pages} · {total} in total"),
+            page=page,
+            pages=pages,
+            total=len(self._claims),
+        )
+
+    async def _select_claim(self, event: sl.ChoiceEvent) -> None:
+        self.selected_id = int(event.selected[0])
+        self.reassign_armed = None
+
+    async def _approve(self, event: sl.PressEvent) -> None:
+        await self._decide(event, approve=True)
+
+    async def _reject(self, event: sl.PressEvent) -> None:
+        await self._decide(event, approve=False)
+
+    async def _decide(self, event: sl.PressEvent, *, approve: bool) -> None:
+        interaction = self._interaction(event)
+        claim = self.selected
+        if interaction is None or claim is None:
+            return
+        await enforce(interaction, ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT)
+        await interaction.response.defer()
+        staff_account_id = await ensure_consented_account(interaction, self._accounts, locale=self.locale)
+        if staff_account_id is None:
+            return
+        try:
+            if approve:
+                resolved = await self._accounts.approve_alias_claim(
+                    claim.id,
+                    staff_account_id=staff_account_id,
+                    reassign=self.reassign_armed == claim.id,
+                )
+            else:
+                resolved = await self._accounts.reject_alias_claim(claim.id, staff_account_id=staff_account_id)
+        except AliasAlreadyClaimedError as conflict:
+            self.reassign_armed = claim.id
+            await event.notice(_conflict_text(conflict, self.locale), visibility=sl.Visibility.PUBLIC)
+            return
+        await self._reload()
+        message = (
+            t(
+                self.locale,
+                _("Credited **{name}** to {claimant}."),
+                name=resolved.alias_name,
+                claimant=present_claimant(resolved, self.locale),
+            )
+            if approve
+            else t(
+                self.locale,
+                _("Closed {claimant}'s claim on **{name}** without crediting it."),
+                name=resolved.alias_name,
+                claimant=present_claimant(resolved, self.locale),
+            )
+        )
+        await event.notice(message, visibility=sl.Visibility.PUBLIC)
+
+    async def _reload(self) -> None:
+        self._claims = tuple(await self._accounts.pending_alias_claims(with_claimants=True))
+        self.selected_id = None
+        self.reassign_armed = None
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        self.closed = True
+        await event.finish()
+
+    @staticmethod
+    def _interaction(event: sl.ActionEvent) -> discord.Interaction[Any] | None:
+        interaction = getattr(event.responder, "interaction", None)
+        return cast(discord.Interaction[Any], interaction) if interaction is not None else None
+
+    def mount(self) -> sl.discord.Mount:
+        return create_mount(
+            self,
+            locale=self.locale,
+            timeout=self._timeout,
+            lock_to=self._author_id,
+        )
 
 
 class ClaimSelect(discord.ui.Select[ClaimReviewView]):
