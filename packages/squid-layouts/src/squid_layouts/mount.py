@@ -204,6 +204,7 @@ class Mount:
                 page={key: cursor.index for key, cursor in self.presentation.cursors.items()},
                 nav=nav,
                 session=self.presentation,
+                cache=self.runtime.plan_cache,
             )
             if not isinstance(composition.view, MountedView):
                 message = "mounted Discord renderer returned the wrong view type"
