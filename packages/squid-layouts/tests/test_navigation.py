@@ -2,7 +2,8 @@
 
 import discord
 
-from squid_layouts import Component, Heading, Mount, Navigator, Text
+from squid_layouts import Component, Mount, Navigator, Text
+from squid_layouts.primitives import Heading
 from squid_layouts.testing import fake_interaction
 
 

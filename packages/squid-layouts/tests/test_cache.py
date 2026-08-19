@@ -2,9 +2,22 @@
 
 from time import perf_counter
 
-from squid_layouts import Action, Actions, List, ListItem, PlanCache, PresentationSession, compose, plan
+from squid_layouts import (
+    Action,
+    Actions,
+    Button,
+    List,
+    ListItem,
+    Paginate,
+    PlanCache,
+    PresentationSession,
+    Row,
+    compose,
+    plan,
+)
 from squid_layouts.cache import CachedPlan
 from squid_layouts.discord import DISCORD_V2
+from squid_layouts.primitives import Code
 from squid_layouts.scene import PlanReport, SceneDocument
 from squid_layouts.scene_codec import SceneCodec
 
@@ -13,6 +26,12 @@ async def _first(_event) -> None: ...
 
 
 async def _second(_event) -> None: ...
+
+
+async def _previous(_event) -> None: ...
+
+
+async def _next(_event) -> None: ...
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
@@ -41,6 +60,21 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
 
     assert cache.get("second") is None
     assert len(cache) == 2
+
+
+def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
+    cache = PlanCache()
+
+    def nav(key: str, _page: int, _pages: int):
+        return (Row((Button("Previous", _previous, f"prev.{key}"), Button("Next", _next, f"next.{key}"))),)
+
+    document = Code("x" * 9000, overflow=Paginate(key="traceback"))
+    plan(document, target=DISCORD_V2, nav=nav, cache=cache)
+    cached = plan(document, target=DISCORD_V2, nav=nav, cache=cache)
+
+    assert cached.metrics.cache_hit
+    assert cached.bindings["prev.traceback"].handler is _previous
+    assert cached.bindings["next.traceback"].handler is _next
 
 
 def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:

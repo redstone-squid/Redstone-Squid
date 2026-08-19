@@ -141,7 +141,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             return sl.FieldGroup(
                 title,
                 tuple(
-                    sl.Field(
+                    sl.presets.Field(
                         name,
                         escape_markdown(value),
                         alts=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),

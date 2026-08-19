@@ -10,7 +10,6 @@ from squid_layouts import (
     Component,
     ContextKey,
     Embed,
-    Heading,
     LayoutInvariantError,
     Lines,
     Mount,
@@ -22,6 +21,7 @@ from squid_layouts import (
     Text,
     state,
 )
+from squid_layouts.primitives import Heading
 from squid_layouts.semantic import Action, Actions
 from squid_layouts.testing import fake_interaction
 
