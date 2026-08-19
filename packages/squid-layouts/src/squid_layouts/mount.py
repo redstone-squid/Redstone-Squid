@@ -166,7 +166,7 @@ class Mount:
         """Render the component's current state into a fresh view."""
         generation = self._generation + 1
         tree = self.runtime.render()
-        rendered = Document(tree.nodes, tree.assets)
+        rendered = Document(tree.nodes, tree.assets, tree.document_key)
 
         def draw() -> tuple[MountedView, Composition]:
             self._handlers = {}

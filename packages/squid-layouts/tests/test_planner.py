@@ -23,11 +23,22 @@ from squid_layouts import (
     plan,
 )
 from squid_layouts.discord import DISCORD_V2, DiscordRenderer, NativeItem
-from squid_layouts.primitives import ActionGroup, Choice, Section
+from squid_layouts.primitives import ActionGroup, Choice, Code, Section
 from squid_layouts.scene import SceneRow, SceneText
 
 
 async def _click(event) -> None: ...
+
+
+def _nav(key: str, page: int, pages: int):
+    return (
+        Row(
+            (
+                Button("Previous", _click, f"prev.{key}", disabled=page == 0),
+                Button("Next", _click, f"next.{key}", disabled=page == pages - 1),
+            )
+        ),
+    )
 
 
 def test_planner_extracts_callbacks_from_the_serializable_scene() -> None:
@@ -79,6 +90,40 @@ def test_action_group_chunks_controls_without_dropping_any() -> None:
     rows = [node for node in result.scene.children if isinstance(node, SceneRow)]
     assert [len(row.items) for row in rows] == [5, 1]
     assert set(result.bindings) == {f"b{index}" for index in range(6)}
+
+
+def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
+    buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
+    document = Document((ActionGroup(buttons),), key="toolbar")
+    first = plan(document, target=DISCORD_V2, nav=_nav)
+
+    assert first.scene.pagers[0].key == "toolbar"
+    assert first.scene.pagers[0].pages > 1
+    assert first.report.events[0].code == "pagination.root"
+
+    visible: set[str] = set()
+    for page_index in range(first.scene.pagers[0].pages):
+        page_result = plan(document, target=DISCORD_V2, nav=_nav, page={"toolbar": page_index})
+        visible.update(key for key in page_result.bindings if key.startswith("b"))
+    assert visible == {f"b{index}" for index in range(41)}
+
+
+def test_root_paging_requires_an_explicit_document_key() -> None:
+    buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
+
+    with pytest.raises(UnsolvableLayoutError, match="give Document an explicit key"):
+        plan(ActionGroup(buttons), target=DISCORD_V2, nav=_nav)
+
+
+def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
+    buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
+    document = Document(
+        (ActionGroup(buttons), Code("x" * 9000, overflow=Paginate(key="detail"))),
+        key="root",
+    )
+
+    with pytest.raises(UnsolvableLayoutError, match="Local and root pagination are never simultaneous"):
+        plan(document, target=DISCORD_V2, nav=_nav)
 
 
 def test_exact_row_overflow_is_a_typed_planning_error() -> None:

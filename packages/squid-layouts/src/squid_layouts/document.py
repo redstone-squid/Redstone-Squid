@@ -39,6 +39,7 @@ class Document:
 
     children: tuple[LayoutNode, ...]
     assets: tuple[Asset, ...] = ()
+    key: str | None = None
 
 
 type DocumentLike = Document | LayoutNode | Sequence[LayoutNode]
