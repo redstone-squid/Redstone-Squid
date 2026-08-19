@@ -10,12 +10,16 @@ HTML, serialized to JSON, and handed to another process.
         |
         | render()
         v
-    authoring IR -- Embed expansion and key namespaces
+    semantic Document -- keyed components, assets, Discord Markdown text
         |
         v
-    plan(target) -- capabilities, limits, degradation, pagination
+    target adapters -- finite lossless strategies plus sticky presentation state
+        |
+        v
+    exact primitives -- measured solve, declared degradation, pagination
         |
         +-- PlanReport (notes and fingerprints)
+        +-- PlanMetrics (search/cache/latency instrumentation)
         +-- ephemeral ActionBindings (never serialized)
         v
     immutable SceneDocument -- SceneCodec JSON and JSON Schema
@@ -42,29 +46,49 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 compose is the Discord convenience path: plan for DiscordV2Target, draw with
 DiscordRenderer, then strictly audit the result. Detached composition can pass
 reserved_text; composing the complete document is preferable because the planner can see
-every cost.
+every cost. It never adopts an arbitrary existing `discord.py` view: renderers own their
+output object, so unknown pre-existing controls cannot undermine measurement.
 
-## Authoring IR and structural adaptation
+## Semantic authoring, adaptation, and exact primitives
 
-Exact nodes such as Row, Gallery, and Section describe a shape that must already obey local
-target limits. Semantic nodes such as ActionGroup, MediaCollection, and Choice let target
-lowering choose or chunk a representation.
+The package root is semantic-first. Structural nodes are `Group`, `Stack`, `Cluster`,
+`Section`, `Article`, and `Aside`; content includes `Heading`, `Paragraph`, `List`, `Fields`,
+`Table`, `Quote`, `Code`, `Media`, `Details`, and measures; interactions are `Actions`,
+`Choices`, `Items`, and `Navigation`. These say what the information means and preserve
+stable string keys, not which Discord widget must appear.
 
-Text overflow is a per-node policy:
+Adapters choose among finite lossless strategies. Actions may be individual controls,
+grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 11 options;
+author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
+windows. Cross-page multi-selection is rejected because a page-local Discord select cannot
+honestly express that domain operation without an explicit grouping or commit model.
 
-- Truncate and Spill shorten content.
-- Alt and Alts provide semantic text ladders and per-entry drop priority.
-- Paginate with an explicit key preserves content across independent pages.
-- Fold returns components under structural pressure.
-- Drop and Never make omission or non-degradation explicit.
+Strategy ranking is lexicographic rather than scalar: representation stability by
+`Flexibility`, author display preference, pager count, transition distance, then stable path
+and strategy identifiers. Per-adapter versions invalidate only that adapter's sticky state.
+The default search budget is 512 states. Budget exhaustion selects a deterministic lossless
+fallback and records `planner.search_fallback`; it never spends an author degradation grant.
 
-Choice is capability selection; Fold is resource-pressure degradation. Capability branches
-lower first, then the solver greedily folds the lowest-priority available alternate until
-the target fits.
+Target-shaped nodes live under `squid_layouts.primitives`. Their policies are explicit:
+
+- `Truncate` and `Spill` shorten content only when the author wraps or configures it.
+- `Alt`/`Alts` supply text ladders and per-entry drop priority.
+- `Paginate` has an explicit key and measured footer/navigation chrome.
+- `Fold` supplies a complete structural alternate for component pressure.
+- `Drop` and `Never` make omission or non-degradation explicit.
+
+Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
+same losses at intent level. Consequential actions, status, and code are never silently lost.
 
 Target-native features use Extension(kind, version, payload, fallback). A target adapter
 prepares and measures the native resource once. Unsupported targets use the mandatory
 portable fallback. Extension payloads in scenes are versioned and JSON-safe.
+
+Discord Markdown is the default text dialect, not a structured inline-content tree. Bare
+strings are trusted author markup. `md(t"Build {title}")` safely escapes Python 3.14 template
+interpolations and neutralizes mentions; `plain()` requests literal text; `raw_md()` opts one
+known-safe interpolation back into trusted markup. Scenes preserve the dialect so every
+renderer can choose an appropriate Markdown implementation.
 
 ## Components and Vue-inspired reactivity
 
@@ -89,14 +113,26 @@ must be JSON-safe.
 Children appear through explicit keyed boundaries:
 
     def render(self):
-        return sl.Panel((
+        return sl.Group((
             self.embed(self.filters, key="filters"),
             self.embed(self.results, key="results"),
         ))
 
-Expansion scopes both action keys and pager keys, detects cycles and duplicate instances, and
-gives Mount deterministic on_mount and on_unmount ownership. A Fold branch accepts only a
-child that expands to one node; a Panel may flatten a multi-node child.
+`ComponentRuntime`, not `Mount`, owns rendering, keyed component identity, lifecycle,
+invalidation, injected context, presentation state, and the bounded plan cache. Expansion
+scopes action keys and pager keys, detects cycles and duplicate instances, and gives the
+runtime deterministic `on_mount`/`on_unmount` ownership. Components have no mount reference;
+the Discord mount is one frontend consumer of the runtime.
+
+Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
+`DisclosureState`, and `StrategyState`. It is per mounted message/viewer session and separate
+from domain state. Generic cursors therefore do not leak into component fields, while apps
+cannot store arbitrary operational objects in presentation snapshots.
+
+Each runtime keeps a small callback-free plan LRU. Cache keys include semantic structure,
+assets, target/version/limits, chrome, reservation, presentation/page state, nav factory
+version, strictness, and search budget. Cache hits always recollect current callbacks,
+including solver-generated pager controls.
 
 ## Actions and frontend adapters
 
@@ -118,21 +154,29 @@ concurrency is deliberately handled elsewhere.
 
 ## Pagination
 
-Every planned Paginate needs an explicit unique key. Mount stores a cursor per key; embedded
-components prefix it automatically. The solver measures all active footers and navigation IR
-to a fixed point, so controls spend real component budget.
+Every paginator has an explicit unique string key. Mount stores a cursor per key; embedded
+components prefix it automatically. The solver measures active footers and navigation IR to
+a fixed point, so controls spend real text and component budgets.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
-Mount resets only that cursor. per=N is count-based pagination; the default fills by target
-text budget. Both use the same NavFactory.
+Mount resets only that cursor; keyed anchors preserve the reader's page across insertions and
+reordering where possible. `per=N` is count-based pagination; the default fills by target text
+budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
+All use the same `NavFactory`.
+
+Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
+component. If top-level structure still exceeds the component limit after lossless adaptation,
+the planner partitions it into measured whole-message pages. Local pagination has precedence.
+If a document needs active local and root pagers simultaneously, planning fails with remedies;
+the engine never presents two competing navigation systems.
 
 ## Scenes and renderers
 
 SceneDocument is immutable and contains no callbacks or native frontend objects.
 PlanResult.bindings and PlanResult.resources are ephemeral side tables for a live frontend.
 
-SceneCodec provides canonical JSON, fingerprints, and a Draft 2020-12 schema through schema
-and schema_json. Protocol 0 is experimental; incompatible changes increment the protocol.
+SceneCodec provides canonical JSON, fingerprints, and a Draft 2020-12 schema through `schema`
+and `schema_json`. Protocol 1 is current; incompatible changes increment the protocol.
 
 HtmlRenderer emits escaped semantic markup, action identifiers, policies, and pager metadata.
 Standalone mode includes Discord-like CSS. It preserves planned structure; pixel-level
@@ -147,10 +191,11 @@ Durability is opt-in:
 3. Checkpoint at a host-chosen durability boundary.
 4. Restore through the registry and a SnapshotStore implementation.
 
-Snapshots contain declared state by keyed component path plus page cursors. They never contain
-callbacks, native items, service objects, or dynamic import instructions. The factory injects
-dependencies. Version or tree-shape mismatches fail with SnapshotError and require an
-explicit host migration.
+Snapshots contain JSON-safe declared state by keyed component path plus the closed
+presentation vocabulary. They never contain callbacks, native items, service objects, or
+dynamic import instructions. The factory injects dependencies. Component and adapter versions
+are independent: an adapter update resets only its sticky strategy. Version or tree-shape
+mismatches fail with `SnapshotError` and require an explicit host migration.
 
 MountManager starts no tasks. Database or Redis storage, checkpoint cadence, expiry, and
 distributed ownership remain host policy.
@@ -159,8 +204,9 @@ distributed ownership remain host policy.
 
 - Modal submission still uses the Discord modal adapter. A portable form protocol is future
   work.
-- Select overflow is an exact planning error. A semantic option-paging component belongs
-  above SelectMenu.
+- Exact `primitives.SelectMenu` overflow is intentionally a planning error; semantic
+  interactions own legal paging. Cross-page multi-select needs an explicit grouping or commit
+  model and is rejected rather than approximated.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
 - The distribution still depends on discord.py because the Discord adapter ships beside the
