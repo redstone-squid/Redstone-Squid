@@ -35,7 +35,6 @@ from squid.bot.utils.components import (
     DISCORD_YELLOW,
     CardField,
     CardSection,
-    StaticLayout,
     card_container,
     edit_interaction_layout,
     error_layout,
@@ -284,7 +283,7 @@ class SubmissionDetailsModal(ErrorHandledModal):
 
 
 class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
-    """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
+    """This modal serves both the compatibility View and the semantic editor component."""
 
     def __init__(
         self,
@@ -955,11 +954,14 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
             await interaction.client.refresh_posts("build", str(self.build.id))
         self.stop()
         heading = t(self.locale, _("## Changes saved"))
-        success = StaticLayout(
-            discord.ui.TextDisplay(heading),
-            await self.get_handler(interaction).render_container(reserved_text=len(heading)),
-        )
-        sl.discord.conform(success)
+        handler = self.get_handler(interaction)
+        render_node = getattr(handler, "render_node", None)
+        if render_node is not None:
+            build_node = await render_node()
+        else:
+            build_container = await handler.render_container(reserved_text=len(heading))
+            build_node = sl.primitives.RawItem(lambda: build_container, kind="discord.item", version=1)
+        success = sl.discord.render_static([sl.primitives.Text(heading), build_node])
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
         # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
         await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
