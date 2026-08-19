@@ -1,4 +1,4 @@
-"""Unit and property tests for the solve/materialize engine."""
+"""Unit and property tests for the measured layout solver."""
 
 import discord
 import pytest
@@ -26,7 +26,6 @@ from squid_layouts import (
     Truncate,
     assert_within_limits,
     conform,
-    materialize,
     render_static,
     solve,
 )
@@ -240,5 +239,6 @@ def test_rendered_documents_always_fit(nodes):
 @given(documents())
 def test_solver_needs_no_conform_interventions(nodes):
     # The engine must measure exactly: the boundary gate should never have to intervene.
-    view = materialize(solve(nodes))
+    solve(nodes)
+    view = render_static(nodes)
     assert conform(view) == []
