@@ -8,7 +8,7 @@ bug this module exists to make unnecessary.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import discord
@@ -52,6 +52,7 @@ def compose(
     strict: bool = False,
     reserved_text: int = 0,
     page: int | None = None,
+    nav: Callable[[int, int], Sequence[Node]] | None = None,
 ) -> Composition:
     """Solve, materialize, and conform ``rendered`` in one pass.
 
@@ -67,6 +68,8 @@ def compose(
             does not see — what a caller composing one card into a larger message must pass.
         page: The page to show when the document paginates; clamped, and ``None`` adopts the
             pager's initial page.
+        nav: Builds the page controls from ``(page, pages)``; only called when the document
+            paginates. Static compositions leave it out and show no controls.
     """
     solved = solve(
         as_nodes(rendered),
@@ -75,6 +78,7 @@ def compose(
         strict=strict,
         reserved_text=reserved_text,
         page=page,
+        nav=nav,
     )
     view = materialize(solved, into=into) if wire is None else materialize(solved, into=into, wire=wire)
     interventions = conform(view, strict=strict, limits=limits)

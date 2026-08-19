@@ -4,6 +4,7 @@ Nodes declare intent, not sizes — the solver measures chrome, allocates Discor
 budgets by priority, and applies the node's policy only when its content does not fit.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -22,16 +23,29 @@ class Spill:
 
 @dataclass(frozen=True, slots=True)
 class Paginate:
-    """Split overflowing content into pages; the mount adds nav controls and a page footer.
+    """Split content into pages; the solver adds nav controls and a page footer.
 
     Splits at ``boundary`` where possible, hard-splitting single oversized segments. One
     Paginate node per document; extras degrade to Truncate with a note. ``initial`` picks the
     page first shown — "end" suits content whose interesting part is its tail, like a
     traceback whose failing frame is the last one.
+
+    ``per`` switches to count-based pages: a `Lines` node paginates every ``per`` entries
+    whether or not the budget is tight, which is the "10 results per page" pin a list command
+    wants. A count-page too large for the budget is split further, so a page always fits.
+    ``footer`` overrides `Chrome.page_footer` for this node — how a list keeps "Page 1 of 3 ·
+    40 in total" while the rest of the framework says "Page 1 of 3".
     """
 
     boundary: str = "\n"
     initial: Literal["start", "end"] = "start"
+    per: int | None = None
+    footer: Callable[[int, int], str] | None = None
+
+    def __post_init__(self) -> None:
+        if self.per is not None and self.per < 1:
+            message = "Paginate(per=...) must be at least 1"
+            raise ValueError(message)
 
 
 def _validate_ladder(steps: tuple[str, ...], *, of: str = "ladder") -> None:

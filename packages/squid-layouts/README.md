@@ -32,23 +32,26 @@ class Counter(sl.Component):
    Discord-shaped, carrying **overflow policies instead of sizes**:
    - `Truncate(keep="head"|"tail")` — ellipsis trim;
    - `Spill()` — show the entries that fit plus "…and N more";
-   - `Paginate(initial="start"|"end")` — split into pages; the mount adds nav controls and a
-     budget-charged page footer;
+   - `Paginate(initial="start"|"end", per=None)` — split into pages, on overflow or every
+     `per` entries; the solver adds a budget-charged footer and the nav factory's controls;
    - `alts(...)` / `Alt(primary, fallbacks)` — degradation ladders: semantically smaller
      alternates beat a mid-string ellipsis;
    - `Drop()`, `Never()` — omit whole, or treat shrinking as a bug.
 3. **Solver** — measures chrome, charges `Never` nodes as fixed costs, grants the display
-   budget by priority (proportionally within a tier), refunds dropped nodes, and applies
-   policies only on overflow.
+   budget by priority (proportionally within a tier), refunds dropped nodes, applies
+   policies only on overflow, and realizes the page controls a `NavFactory` describes.
 4. **`conform()`** — the boundary gate: a final walk of the built view that clamps anything
    the solver missed. Tests treat any intervention as a failure (`assert_within_limits`);
    production degrades to an ugly-but-delivered message.
 
-`Mount` binds a component to a message: every interaction funnels through it (author lock,
-error hook, re-render/edit), timeouts disable controls, `Reactor` coalesces out-of-band
-refreshes, and `Navigator` stacks screens with Back/Home/Close by composition. `render_static`
-is the sessionless path for reconciler-managed posts. `build_modal`/`conform_modal` do the
-same for modals, whose string lengths discord.py does not validate at all.
+`compose()` is the one pipeline through all four, with `reserved_text` for callers whose
+message carries content the engine cannot see. `Mount` binds a component to a message: every
+interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
+controls, `Reactor` coalesces out-of-band refreshes, and `Navigator` stacks screens with
+Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
+any component-bearing nodes built from the `PageContext`. `render_static` is the sessionless
+path for reconciler-managed posts. `build_modal`/`conform_modal` do the same for modals,
+whose string lengths discord.py does not validate at all.
 
 ## Host integration rules
 

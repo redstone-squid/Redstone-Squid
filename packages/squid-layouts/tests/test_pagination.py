@@ -1,28 +1,35 @@
 """Engine pagination and ModalSpec tests."""
 
 import discord
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_layouts import (
+    DEFAULT_CHROME,
     LIMITS,
+    Button,
     Code,
     Component,
     Field,
     Heading,
     LabelSpec,
+    Lines,
     ModalSpec,
     Mount,
+    PageContext,
     Paginate,
+    Row,
     Text,
     TextInputSpec,
     assert_within_limits,
     build_modal,
     card,
     conform,
+    default_nav,
     solve,
 )
-from squid_layouts.solve import split_pages
+from squid_layouts.solve import RText, _component_count, split_pages
 from squid_layouts.testing import fake_interaction
 
 
@@ -114,6 +121,19 @@ class TestMountPagination:
         footers = [c.content for c in edited.walk_children() if isinstance(c, discord.ui.TextDisplay)]
         assert any("Page 2 of" in text for text in footers)
 
+    async def test_a_custom_nav_factory_replaces_the_stock_controls(self):
+        def nav(context):
+            label = f"{context.page + 1}/{context.pages}"
+            return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
+
+        mount = Mount(Browser(), timeout=None, nav=nav)
+        view = mount.build_view()
+        assert [button.label for button in self._nav_buttons(view)] == [f"1/{mount._pages}"]
+
+        await mount.dispatch("jump", fake_interaction())
+
+        assert mount._page == 1
+
     async def test_prev_at_first_page_is_a_clean_noop(self):
         mount = Mount(Browser(), timeout=None)
         mount.build_view()
@@ -122,6 +142,73 @@ class TestMountPagination:
         await mount.dispatch("__page_prev", interaction)
 
         interaction.response.defer.assert_awaited_once()
+
+
+class TestCountPages:
+    def _entries(self, count: int) -> tuple[str, ...]:
+        return tuple(f"entry {index}" for index in range(count))
+
+    def test_a_short_list_paginates_by_count_not_by_pressure(self):
+        solved = solve([Lines(self._entries(25), overflow=Paginate(per=10))])
+        assert solved.pages == 3
+
+    def test_no_entry_is_lost_across_the_pages(self):
+        entries = self._entries(25)
+        solved = solve([Lines(entries, overflow=Paginate(per=10))])
+        assert solved.pager is not None
+        assert "\n".join(solved.pager.fragments).split("\n") == list(entries)
+
+    def test_a_list_that_fits_one_page_has_no_pager(self):
+        solved = solve([Lines(self._entries(4), overflow=Paginate(per=10))])
+        assert solved.pager is None
+
+    def test_an_oversized_count_page_is_split_further_to_fit(self):
+        solved = solve([Lines(tuple("x" * 3000 for _ in range(4)), overflow=Paginate(per=2))])
+        assert solved.pager is not None
+        assert solved.pager.pages > 2
+        for page in range(solved.pager.pages):
+            solved.pager.select(page)
+            assert _total_text(solved) <= LIMITS.total_text
+
+    def test_the_node_footer_overrides_chrome(self):
+        solved = solve([Lines(self._entries(25), overflow=Paginate(per=10, footer=lambda p, n: f"{p}/{n} · 25"))])
+        assert solved.pager is not None
+        assert any("1/3 · 25" in child.content for child in solved.children if isinstance(child, RText))
+
+    def test_count_pages_on_a_non_lines_node_fall_back_to_budget_pages(self):
+        solved = solve([Text("short", overflow=Paginate(per=10))])
+        assert solved.pager is None
+        assert any("not a Lines node" in note for note in solved.notes)
+
+    def test_per_must_be_positive(self):
+        with pytest.raises(ValueError, match="at least 1"):
+            Paginate(per=0)
+
+
+class TestSolverNav:
+    def _paginated(self) -> list:
+        return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate())]
+
+    def _nav(self, page: int, pages: int):
+        async def move(interaction) -> None: ...
+
+        return default_nav(DEFAULT_CHROME)(PageContext(page=page, pages=pages, on_prev=move, on_next=move))
+
+    def test_nav_nodes_are_realized_into_the_document(self):
+        solved = solve(self._paginated(), nav=self._nav)
+        assert isinstance(solved.children[-1], Row)
+
+    def test_an_unpaginated_document_gets_no_nav(self):
+        solved = solve([Text("short")], nav=self._nav)
+        assert not any(isinstance(child, Row) for child in solved.children)
+
+    def test_the_page_is_clamped_and_reported(self):
+        assert solve(self._paginated(), page=999).page == solve(self._paginated()).pages - 1
+        assert solve(self._paginated(), page=-5).page == 0
+
+    def test_a_text_bearing_nav_factory_is_rejected(self):
+        with pytest.raises(ValueError, match="component-bearing"):
+            solve(self._paginated(), nav=lambda page, pages: [Text("page {page}")])
 
 
 class TestBuildModal:
@@ -162,3 +249,27 @@ def test_paginated_documents_fit_on_every_page(body):
     for page in range(solved.pager.pages):
         solved.pager.select(page)
         assert _total_text(solved) <= LIMITS.total_text
+
+
+@given(st.integers(min_value=0, max_value=60), st.integers(min_value=1, max_value=12))
+def test_count_pages_hold_every_entry_exactly_once(count, per):
+    entries = tuple(f"entry {index}" for index in range(count))
+    solved = solve([Lines(entries, overflow=Paginate(per=per))])
+    if solved.pager is None:
+        assert count <= per
+        return
+    assert solved.pager.pages == -(-count // per)
+    assert [line for fragment in solved.pager.fragments for line in fragment.split("\n")] == list(entries)
+
+
+def test_the_solver_counts_the_nav_it_realized():
+    # The assertion that replaced NAV_ROW_COMPONENTS: nav is counted because it is realized,
+    # so the solver's component budget matches what the built view actually contains.
+    async def move(interaction) -> None: ...
+
+    def nav(page: int, pages: int):
+        return default_nav(DEFAULT_CHROME)(PageContext(page=page, pages=pages, on_prev=move, on_next=move))
+
+    view = Mount(Browser(), timeout=None).build_view()
+    solved = solve(Browser().render(), nav=nav)
+    assert _component_count(solved.children) == len(list(view.walk_children()))
