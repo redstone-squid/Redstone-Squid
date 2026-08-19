@@ -14,6 +14,7 @@ import logging
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
+from squid_layouts.cache import PlanCache
 from squid_layouts.component import Component, ComponentTree, ContextKey, render_component_tree
 from squid_layouts.presentation import PresentationSession
 
@@ -39,6 +40,7 @@ class ComponentRuntime:
         self.presentation = presentation if presentation is not None else PresentationSession()
         self.on_invalidate = on_invalidate
         self.context = dict(context or {})
+        self.plan_cache = PlanCache(32)
         self.components: dict[str, Component] = {}
         self.dirty = True
 
