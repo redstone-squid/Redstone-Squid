@@ -25,6 +25,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
+from squid_layouts import conform_modal
 
 logger = logging.getLogger(__name__)
 
@@ -509,6 +510,16 @@ class ExpiringLayoutView(ErrorHandledLayoutView):
 
 class ErrorHandledModal(discord.ui.Modal):
     """Discord modal that delegates submission failures to the shared handler."""
+
+    @override
+    def to_dict(self) -> dict[str, Any]:
+        # Every send_modal serializes through here. discord.py validates no string lengths,
+        # so an oversized title or a default joined from unbounded user data (e.g. a build's
+        # image URLs) would fail at send time with HTTP 50035; clamp instead of crashing.
+        interventions = conform_modal(self)
+        if interventions:
+            logger.warning("modal clamped before send: %s", "; ".join(interventions))
+        return super().to_dict()
 
     @override
     async def on_error[ClientT: discord.Client](

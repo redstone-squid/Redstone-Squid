@@ -121,6 +121,7 @@ class Mount:
         self._handlers: dict[str, Callable[..., Awaitable[None]]] = {}
         self._dirty = False
         self._finished = False
+        self._page = 0
 
     # --- Rendering ---------------------------------------------------------------------
 
@@ -143,7 +144,20 @@ class Mount:
                 item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
             return item
 
+        if solved.pager is not None:
+            self._page = solved.pager.select(self._page)
         materialize(solved, into=view, wire=wire)
+        if solved.pager is not None:
+            prev = Button(
+                label=self.chrome.previous, on_click=self._page_prev, key="__page_prev", disabled=self._page == 0
+            )
+            nxt = Button(
+                label=self.chrome.next,
+                on_click=self._page_next,
+                key="__page_next",
+                disabled=self._page >= solved.pager.pages - 1,
+            )
+            view.add_item(discord.ui.ActionRow(wire(prev, "__page_prev"), wire(nxt, "__page_next")))
         if disabled:
             _disable_all(view)
         interventions = conform(view, strict=self.strict, limits=self.limits)
@@ -154,6 +168,15 @@ class Mount:
 
     def invalidate(self) -> None:
         self._dirty = True
+
+    async def _page_prev(self, interaction: discord.Interaction) -> None:
+        if self._page > 0:
+            self._page -= 1
+            self.invalidate()
+
+    async def _page_next(self, interaction: discord.Interaction) -> None:
+        self._page += 1  # clamped by Pager.select on the next build
+        self.invalidate()
 
     # --- Lifecycle ---------------------------------------------------------------------
 
