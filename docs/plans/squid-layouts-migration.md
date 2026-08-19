@@ -27,10 +27,21 @@ Still on the old machinery, in rough order of value:
   V2-guard carve-out list in `tests/architecture/test_discord_components_v2.py` at the same
   time (deliver.py already carries the framework-side carve-out).
 
-Deferred design decisions (documented in the package):
+Core design debts closed before further migration:
 
-- Select-option overflow renders a clamp note; a *paginated select* preset is future work.
+- Planning and drawing are separate; scenes are serializable and Discord plus HTML are
+  independent renderers.
+- compose is the only Discord plan/draw path. render_item now uses render_static and threads
+  reserved_text, so detached build and vote cards no longer bypass solving or audit.
+- Pagination controls and footers are measured IR, with independently keyed cursors and
+  content-based reset. Count-paged lists share the same controls.
+- Explicit Embed boundaries namespace actions and pagers; Navigator is an ordinary
+  composition consumer.
+- Structural Fold choices make component-count overflow solvable; entry priorities make
+  text spill order semantic.
+
+Remaining design decisions (documented in the package):
+
+- Exact SelectMenu option overflow is a planning error; a semantic option-paging component
+  is future work.
 - `PagedList` pages by count (UX pin); budget-fill paging is available via `Lines`+`Paginate`.
-- Composed containers (vote text appended to a build card) bypass the conform gate exactly as
-  they bypassed the old budget math; give `render_item` a `reserved_text` parameter when a
-  composed card first overflows in practice.

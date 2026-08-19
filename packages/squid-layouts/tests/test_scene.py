@@ -72,3 +72,13 @@ def test_unknown_scene_protocol_fails_explicitly() -> None:
     payload["protocol"] = 99
     with pytest.raises(SceneCodecError, match="unsupported scene protocol"):
         SceneCodec.from_dict(payload)
+
+
+def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
+    schema = SceneCodec.schema()
+
+    assert schema["properties"]["protocol"] == {"const": SceneCodec.protocol}
+    assert "button" in schema["$defs"]
+    assert "data" not in SceneCodec.schema_json()
+    schema["title"] = "mutated by caller"
+    assert SceneCodec.schema()["title"] != "mutated by caller"
