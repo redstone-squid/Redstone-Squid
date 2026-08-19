@@ -7,7 +7,6 @@ from hypothesis import strategies as st
 
 from squid_layouts import (
     Alt,
-    Field,
     FieldGroup,
     Lines,
     Text,
@@ -19,6 +18,7 @@ from squid_layouts import (
     render_static,
     solve,
 )
+from squid_layouts.presets import Field
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:

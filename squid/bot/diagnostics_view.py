@@ -98,15 +98,17 @@ class ErrorReportBrowser(sl.Component):
         assert report is not None
         traceback_text = report.traceback.strip() or t(self.locale, _("No traceback was recorded."))
         children: list[sl.Node] = [
-            sl.Heading(t(self.locale, _("Error {reference}"), reference=report.reference)),
+            sl.primitives.Heading(t(self.locale, _("Error {reference}"), reference=report.reference)),
             # Opens at the end because the failing frame is the last one.
-            sl.Code(traceback_text, overflow=sl.Paginate(key="traceback", initial="end")),
+            sl.primitives.Code(traceback_text, overflow=sl.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
             children.append(sl.Lines((f"**{t(self.locale, _('Log tail'))}**",), priority=2))
-            children.append(sl.Code("\n".join(report.log_tail), overflow=sl.Truncate(keep="tail"), priority=-8))
+            children.append(
+                sl.primitives.Code("\n".join(report.log_tail), overflow=sl.Truncate(keep="tail"), priority=-8)
+            )
         children.append(sl.Lines(tuple(_summary_entries(report, self.matches, self.locale)), priority=5))
         controls: list[sl.Button] = []
         if self._reports:

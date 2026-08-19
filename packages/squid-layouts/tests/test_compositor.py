@@ -8,10 +8,8 @@ from hypothesis import strategies as st
 from squid_layouts import (
     LIMITS,
     Button,
-    Code,
     Drop,
     Footer,
-    Heading,
     Lines,
     Never,
     Panel,
@@ -25,6 +23,7 @@ from squid_layouts import (
     render_static,
 )
 from squid_layouts.compositor import Composition
+from squid_layouts.primitives import Code, Heading
 
 _policies = st.sampled_from([Truncate(), Truncate(keep="tail"), Spill(), Drop(), Never()])
 _content = st.text(max_size=1500)

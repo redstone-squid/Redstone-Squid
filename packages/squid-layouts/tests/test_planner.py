@@ -5,16 +5,16 @@ import pytest
 
 from squid_layouts import (
     LIMITS,
-    ActionGroup,
+    Asset,
     Button,
-    Choice,
+    Document,
+    InlineAsset,
     LayoutInvariantError,
     Lines,
     Paginate,
     Panel,
     Row,
     SceneCodec,
-    Section,
     TargetProfile,
     Text,
     Thumbnail,
@@ -23,6 +23,7 @@ from squid_layouts import (
     plan,
 )
 from squid_layouts.discord import DISCORD_V2, DiscordRenderer, NativeItem
+from squid_layouts.primitives import ActionGroup, Choice, Section
 from squid_layouts.scene import SceneRow, SceneText
 
 
@@ -60,6 +61,15 @@ def test_static_discord_renderer_matches_scene_structure() -> None:
 
     assert isinstance(view, discord.ui.LayoutView)
     assert view.to_components()[0]["type"] == 17
+
+
+def test_assets_are_scene_resources_not_visual_children() -> None:
+    asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"full report"))
+    result = plan(Document((Text("summary"),), (asset,)), target=DISCORD_V2)
+
+    assert result.scene.children == (SceneText("summary"),)
+    assert result.scene.assets[0].key == "report"
+    assert result.resources["asset:report"] is asset
 
 
 def test_action_group_chunks_controls_without_dropping_any() -> None:

@@ -228,7 +228,7 @@ class PagedList(ui.Component):
             if self.entries
             else ui.Text(self.empty)
         )
-        return [ui.Panel(children=(ui.Heading(self.title), body), accent=self.accent_colour)]
+        return [ui.Panel(children=(ui.primitives.Heading(self.title), body), accent=self.accent_colour)]
 
     def _page_footer(self, page: int, pages: int) -> str:
         return t(
@@ -246,8 +246,8 @@ class PagedList(ui.Component):
         )
 
 
-def _fields(fields: Sequence[CardField]) -> tuple[ui.Field, ...]:
-    return tuple(ui.Field(field.name, field.value) for field in fields)
+def _fields(fields: Sequence[CardField]) -> tuple[ui.presets.Field, ...]:
+    return tuple(ui.presets.Field(field.name, field.value) for field in fields)
 
 
 def _groups(sections: Sequence[CardSection]) -> tuple[ui.FieldGroup, ...]:
