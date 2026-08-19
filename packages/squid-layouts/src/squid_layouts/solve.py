@@ -8,7 +8,7 @@ dropped footnote genuinely returns its characters to the body.
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import discord
 
@@ -72,7 +72,6 @@ type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | Thumbnail |
 
 
 PAGE_FOOTER_PREFIX = "-# "
-NAV_ROW_COMPONENTS = 3  # the ActionRow plus its Previous/Next buttons
 
 
 @dataclass(slots=True)
@@ -132,6 +131,8 @@ class _Unit:
     overflow: Overflow
     grant: int = 0
     fragments: list[str] | None = None
+    count_pages: list[str] | None = None
+    """Count-based pages, when the node paginates every N entries rather than on overflow."""
 
     @property
     def chrome_len(self) -> int:
@@ -139,6 +140,9 @@ class _Unit:
 
     @property
     def need(self) -> int:
+        # A count-paginated node only ever shows one page, so that is all it asks for.
+        if self.count_pages is not None:
+            return self.chrome_len + max(len(page) for page in self.count_pages)
         return self.chrome_len + len(self.content)
 
 
@@ -334,6 +338,8 @@ class _Builder:
 
 def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
     """Render the unit into its slot within its grant. Returns False when the node drops."""
+    if unit.count_pages is not None:
+        return _apply_count_pages(unit)
     if unit.grant >= unit.need:
         unit.slot.content = unit.prefix + unit.content + unit.suffix
         return True
@@ -371,6 +377,22 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
         case _:
             notes.append(f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}")
             return False
+
+
+def _apply_count_pages(unit: _Unit) -> bool:
+    """Realize a count-paginated node: N entries per page, budget-split if a page is too big.
+
+    Count pages are the author's UX pin rather than a degradation, so this fires whether or
+    not the budget is tight and adds no note.
+    """
+    pages = unit.count_pages or [""]
+    usable = max(1, unit.grant - unit.chrome_len)
+    fragments: list[str] = []
+    for page in pages:
+        fragments.extend([page] if len(page) <= usable else split_pages(page, usable, unit.join))
+    unit.fragments = fragments
+    unit.slot.content = unit.prefix + fragments[0] + unit.suffix
+    return True
 
 
 def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> bool:
@@ -477,6 +499,42 @@ def _prune(children: list[Realized]) -> list[Realized]:
     return pruned
 
 
+def _count_pages(unit: _Unit, per: int) -> list[str]:
+    """Group a Lines node's entries into pages of ``per`` entries."""
+    entries = [ladder[0] for ladder in unit.ladders or ()]
+    pages = [unit.join.join(entries[start : start + per]) for start in range(0, len(entries), per)]
+    return pages or [unit.content]
+
+
+def _footer_cost(footer: Callable[[int, int], str], content_len: int) -> int:
+    """Characters to hold back for the page footer before anything is allocated.
+
+    Pages never outnumber the characters they hold, so the widest number the footer can be
+    asked to render has at most as many digits as the content length. Measuring the footer
+    there bounds its cost exactly, without a hand-picked sentinel page number.
+    """
+    widest = 10 ** len(str(max(content_len, 1))) - 1
+    return len(PAGE_FOOTER_PREFIX) + len(footer(widest, widest))
+
+
+def _validated_nav(nodes: Sequence[Node]) -> list[Node]:
+    """Check a nav factory's output against the contract that makes late realization exact.
+
+    Nav lands after the display budget is allocated, so it may only carry nodes that cost no
+    display text: rows, selects, separators, media, and zero-cost raw items.
+    """
+    for node in nodes:
+        match node:
+            case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
+                continue
+            case SelectMenu() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
+                continue
+            case _:
+                message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"
+                raise ValueError(message)
+    return list(nodes)
+
+
 def _component_count(children: list[Realized]) -> int:
     count = 0
     for child in children:
@@ -502,6 +560,7 @@ def solve(
     strict: bool = False,
     reserved_text: int = 0,
     page: int | None = None,
+    nav: Callable[[int, int], Sequence[Node]] | None = None,
 ) -> SolvedLayout:
     """Fit ``nodes`` into the message budgets, applying overflow policies where needed.
 
@@ -513,6 +572,9 @@ def solve(
         reserved_text: Characters held back from the budget (e.g. for pagination chrome).
         page: The page to realize when the document paginates, clamped to the page count;
             ``None`` takes the pager's initial page.
+        nav: Called with ``(page, pages)`` when the document paginates; its nodes are
+            realized as the document's last children. It must return component-bearing
+            nodes only — see :func:`_validated_nav`.
 
     Returns:
         The realized tree plus a note per degradation applied.
@@ -527,11 +589,24 @@ def solve(
         notes.append(f"extra Paginate node {extra.index} degraded to Truncate")
     paginator = paginate_units[0] if paginate_units else None
 
+    page_footer = chrome.page_footer
+    if paginator is not None:
+        policy = paginator.overflow
+        assert isinstance(policy, Paginate)
+        page_footer = policy.footer if policy.footer is not None else chrome.page_footer
+        if policy.per is not None:
+            if isinstance(paginator.node, Lines):
+                paginator.count_pages = _count_pages(paginator, policy.per)
+            else:
+                notes.append(f"node {paginator.index} is not a Lines node; paging on overflow instead of per entry")
+                paginator.overflow = replace(policy, per=None)
+
     budget = limits.total_text - builder.raw_text_cost - reserved_text
     # When pagination can happen, its footer is charged before allocation — this is what
     # replaces hand-tuned constants like the old PAGE_CHARS.
-    if paginator is not None and sum(unit.need for unit in builder.units) > budget:
-        budget -= len(PAGE_FOOTER_PREFIX) + len(chrome.page_footer(8888, 8888))
+    count_paginated = paginator is not None and paginator.count_pages is not None and len(paginator.count_pages) > 1
+    if paginator is not None and (count_paginated or sum(unit.need for unit in builder.units) > budget):
+        budget -= _footer_cost(page_footer, len(paginator.content))
     _allocate(builder.units, budget, strict, notes, chrome)
     children = _prune(children)
 
@@ -548,12 +623,14 @@ def solve(
             suffix=paginator.suffix,
             fragments=paginator.fragments,
             footer_slot=footer_slot,
-            footer=chrome.page_footer,
+            footer=page_footer,
             initial=initial,
         )
         shown = pager.select(initial if page is None else page)
+        if nav is not None:
+            children.extend(builder.realize_children(_validated_nav(nav(shown, pager.pages))))
 
-    count = _component_count(children) + (NAV_ROW_COMPONENTS if pager is not None else 0)
+    count = _component_count(children)
     if count > limits.total_components:
         notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
 

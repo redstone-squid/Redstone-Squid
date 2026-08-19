@@ -19,9 +19,9 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.component import Component
 from squid_layouts.compositor import compose
-from squid_layouts.conform import conform
-from squid_layouts.ir import Button, SelectMenu
+from squid_layouts.ir import Button, Node, SelectMenu
 from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.pagination import NavFactory, PageContext, default_nav
 
 logger = logging.getLogger(__name__)
 
@@ -104,11 +104,13 @@ class Mount:
         lock_to: int | None = None,
         on_error: ErrorHook | None = None,
         scheduler: Scheduler | None = None,
+        nav: NavFactory | None = None,
     ) -> None:
         self.id = secrets.token_urlsafe(6)
         self.component = component
         component._mount = self
         self.chrome = chrome
+        self.nav = nav if nav is not None else default_nav(chrome)
         self.limits = limits
         self.strict = strict
         self.timeout = timeout
@@ -142,6 +144,10 @@ class Mount:
                 item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
             return item
 
+        def nav(page: int, pages: int) -> Sequence[Node]:
+            context = PageContext(page=page, pages=pages, on_prev=self._page_prev, on_next=self._page_next)
+            return self.nav(context)
+
         composition = compose(
             self.component.render(),
             into=view,
@@ -150,23 +156,11 @@ class Mount:
             chrome=self.chrome,
             strict=self.strict,
             page=self._page,
+            nav=nav,
         )
-        solved = composition.solved
         self._pages = composition.pages
-        if solved.pager is not None:
+        if composition.solved.pager is not None:
             self._page = composition.page
-            prev = Button(
-                label=self.chrome.previous, on_click=self._page_prev, key="__page_prev", disabled=self._page == 0
-            )
-            nxt = Button(
-                label=self.chrome.next,
-                on_click=self._page_next,
-                key="__page_next",
-                disabled=self._page >= self._pages - 1,
-            )
-            view.add_item(discord.ui.ActionRow(wire(prev, "__page_prev"), wire(nxt, "__page_next")))
-            # The nav row lands after compose ran the gate, so re-gate the finished view.
-            conform(view, strict=self.strict, limits=self.limits)
         if disabled:
             _disable_all(view)
         self._dirty = False
