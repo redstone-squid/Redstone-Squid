@@ -187,11 +187,18 @@ async def edit_interaction_layout(
 
     `attachments` replaces the message's files, so passing `[]` strips them and omitting it
     leaves them alone — a paging button should not re-upload what it is not changing.
+
+    A callback that has already answered cannot edit through the response, so the edit goes
+    through the interaction's original response instead. For a component callback that deferred
+    its update — which is how a callback makes room for a consent prompt — that is the same
+    message either way.
     """
     extra: dict[str, Any] = {} if attachments is None else {"attachments": list(attachments)}
     message = interaction.message
     if message is not None and not _message_uses_components_v2(message):
-        await interaction.response.edit_message(content=None, embed=None, view=layout, **extra)
+        extra |= {"content": None, "embed": None}
+    if interaction.response.is_done():
+        await interaction.edit_original_response(view=layout, **extra)
         return
     await interaction.response.edit_message(view=layout, **extra)
 
