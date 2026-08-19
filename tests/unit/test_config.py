@@ -197,6 +197,28 @@ def test_application_config_groups_and_resolves_settings(
     assert EMBEDDING_DIMENSION == 1536
 
 
+def test_a_process_projection_reads_no_environment_of_its_own(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
+    """Projecting narrows settings that are already loaded, so it may not consult the environment.
+
+    It used to: `BaseSettings` builds its sources in `__init__`, and pydantic routes
+    `model_validate` through `__init__` for any model defining one, so a projection merged whatever
+    the environment said at that moment. Scalars survived on init priority, but dict fields merge
+    key by key — the API process could hold an idempotency key its own configuration never named,
+    and decrypt stored replay rows under it. On a developer machine the repository's own `.env` was
+    enough to trigger it.
+    """
+    _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token", SQUID_API_SECRET="api-secret")
+    config = load_application_config(dotenv_path=dotenv)
+
+    monkeypatch.setenv("SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID", "smuggled-v1")
+    monkeypatch.setenv("SQUID_API_IDEMPOTENCY_KEYS", '{"smuggled-v1":"MTExMTExMTExMTExMTExMTExMTExMTExMTExMTExMTE="}')
+
+    api = config.api_process().api
+
+    assert api.idempotency_active_key_id == BASE_ENVIRONMENT["SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID"]
+    assert set(api.idempotency_keys) == {BASE_ENVIRONMENT["SQUID_API_IDEMPOTENCY_ACTIVE_KEY_ID"]}
+
+
 def test_observability_exports_nowhere_by_default(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
     """Disabled, with no endpoint and no credentials: nothing leaves the process unasked."""
     _set_environment(monkeypatch, SQUID_DISCORD_TOKEN="discord-token")
