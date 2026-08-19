@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 from uuid import UUID
 
 import discord
@@ -156,7 +156,7 @@ async def test_choosing_a_report_attaches_its_full_text() -> None:
     edit = AsyncMock()
     interaction = cast(
         discord.Interaction[discord.Client],
-        SimpleNamespace(response=SimpleNamespace(edit_message=edit), message=None),
+        SimpleNamespace(response=SimpleNamespace(edit_message=edit, is_done=Mock(return_value=False)), message=None),
     )
 
     await select.callback(interaction)

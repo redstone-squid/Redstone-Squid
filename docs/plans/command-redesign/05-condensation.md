@@ -23,9 +23,9 @@ three different ad-hoc truncation schemes standing in for a paginator.
 | 5.1 | The `vote` group disappears: `vote poll` retired, `vote delete` becomes a context menu, `poll close`/`refresh` become buttons on the poll card (C4, C7) | **Delivered** |
 | 5.2 | `/admin` becomes `/records` and drops the `records-` prefix every member carried; `/help` learns to list app-only commands | **Delivered** |
 | 5.3 | `/notifications`: one panel and one `follow`, seven commands down to two (C3, C5) | **Delivered** |
-| 5.4 | `/account` claim review moves onto the `claims` list as buttons | Not started |
+| 5.4 | `/account` claim review moves onto the `claims` list as buttons | **Delivered** |
 | 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into `perm can` | **Delivered** |
-| 5.6 | A shared list paginator, applied to `version list`, `account claims` and the records diagnostics (C6). The module itself lands in phase 6, whose `build queue` needs it first | Not started |
+| 5.6 | A shared list paginator, applied to `version list` and the records diagnostics (C6). The module landed in phase 6, whose `build queue` needed it first; `account claims` took it in 5.4 | Not started |
 | 5.7 | One ephemerality rule, applied bot-wide (C2) | Not started |
 
 Ordering is by independence, not by value: each step is a commit that stands alone, and the
@@ -168,6 +168,62 @@ resolving a creator profile and a record competition from the notifications surf
 crosses into the accounts and records contexts and wants a subject-describing port rather
 than a lookup smuggled into a view. What this step removes is the *retyping*, which was the
 part that actually cost anything.
+
+## 5.4 — the queue is where the decision is made
+
+Three commands became one panel. `claims` printed the queue; `approve-claim` and `reject-claim`
+each took a claim id you read off that queue and typed back — into an autocomplete whose entire
+content was the list you were already looking at (audit C5's retyping half, the same shape 5.3
+removed from notifications).
+
+**The list carries the decision.** `/account claims` is now `ClaimReviewView`
+(`squid/bot/claims_view.py`): the paginated queue, a select whose options *are* the claims on the
+page, and **Approve** and **Reject** acting on the picked one. The claim id never becomes
+something a person handles, and a resolved claim leaves the queue in place rather than needing the
+list to be re-run.
+
+**A transfer is a second click, not a flag.** `approve-claim` took `reassign: bool`, which had to
+be set in advance to credit a name somebody else already holds. The button asks instead: the first
+click attempts the approval, and a contested name comes back naming the holder — the service
+already resolves that for the error message — with the button relabelled **Take the name**.
+Picking a different claim disarms it. Nothing about a transfer became easier; what changed is that
+you now find out *before* deciding rather than by pre-selecting a flag whose description you had to
+read first.
+
+**Decisions stay public; the queue does not.** The two commands answered publicly on purpose, so
+the channel keeps a record of who was credited with what. The panel is a staff read and is
+ephemeral, but each decision it makes still posts its sentence into the channel — the same split
+5.7 then writes down as the bot-wide rule.
+
+**Consent is asked when something is about to be stored, not when the queue is opened.** Resolving
+a claim records the reviewer's account against it, so the gate runs in the button rather than in
+the command: reading a queue stores nothing, and nobody should gain an account row for looking at
+work they leave to somebody else. That is 5.1's argument about poll controls, applied to the one
+case here that really does write. It is also why the action callbacks defer first —
+`edit_interaction_layout` now edits through the interaction's original response when the response
+has already been spent, so a consent prompt and the panel's own redraw fit in one click.
+
+**Which buttons you see is not the gate.** The command reads both nodes once and renders only the
+controls the reviewer holds; every click re-checks with `enforce(...)`, which is what phase 6.3
+added for context menus. This is `hide_unless` and `requires` at the component level, and for the
+same reason: an offered control that always refuses is worse than an absent one, and a visible
+control is still not permission.
+
+### Taxonomy edits
+
+Removed: `account approve-claim`, `account reject-claim`. `/account` is 14 commands down to 12.
+The nodes `account.claim.approve` and `account.claim.reject` are unchanged and are what the
+buttons check.
+
+The `alias_claims_pending` suggestion source stays. Its only *Discord* consumer was the two
+commands' autocomplete, but the registry is a published surface the API answers from as well
+(`docs/plans/autocomplete.md` calls it gateway-only, which the bootstrap has never agreed with),
+so retiring it is a decision about the suggestions API rather than about this panel.
+
+`present_claimant` moved from `verify.py` to `profile_render.py`, which is where the cog's other
+rendering lives, and grew a `mention=False` form: a select option's description renders `<@id>` as
+raw text, so the surfaces Discord builds no chip for now share one function with the surfaces it
+does, rather than reaching for the internal id the way the autocomplete's private copy still does.
 
 ## 5.5 — `perm can`
 

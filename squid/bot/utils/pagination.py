@@ -112,9 +112,9 @@ class ListPaginator(ExpiringLayoutView):
         self.render()
         await edit_interaction_layout(interaction, self)
 
-    async def send(self, ctx: Context[Any]) -> None:
+    async def send(self, ctx: Context[Any], *, ephemeral: bool = False) -> None:
         """Send the first page and bind it, so expiry can disable the controls."""
-        message = await ctx.send(view=self, allowed_mentions=no_mentions())
+        message = await ctx.send(view=self, ephemeral=ephemeral, allowed_mentions=no_mentions())
         self.bind_message(message)
 
 

@@ -27,6 +27,8 @@ the count above, which is the number the redesign was argued from.)*
 - **C2 — Ephemerality has no policy.** Three patterns coexist: always-ephemeral (72 sites),
   `ephemeral=ctx.interaction is not None` (11 sites), and always-public. Near-identical
   commands differ: `account approve-claim` answers publicly, `account claims` ephemerally.
+  *(5.4 kept that difference and gave it a reason — the decision is public, the queue is not —
+  which 5.7 then generalises.)*
   Decide a rule (mutations of shared state public, personal/staff reads ephemeral, errors
   ephemeral) and apply it once.
 - **C3 — Some replies bypass i18n and the layout system entirely.** The `settings voting`
@@ -135,11 +137,13 @@ the count above, which is the number the redesign was argued from.)*
   candidates, which would empty the `poll` group down to `create`.~~ *(Buttons on the poll.
   `create` then had no group left to sit in, so `/poll` is one app-only command.)*
 
-### `/account` *(phase 5)*
-- Self-service (`link`, `unlink`, `refresh`, `claim`) and staff review (`claims`,
+### `/account` *(phase 5.4 took the review trio, 2026-08-19; the rest is phase 7)*
+- ~~Self-service (`link`, `unlink`, `refresh`, `claim`) and staff review (`claims`,
   `approve-claim`, `reject-claim`) share one public group. The review trio should be buttons
   on the `claims` list view — staff currently read a claim ID off a card and retype it into a
-  second command that already autocompletes it. With C1, the split becomes invisible anyway.
+  second command that already autocompletes it.~~ *(Buttons on the list, exactly as described;
+  `reassign` became the second click rather than a flag. With C1 the split is invisible
+  anyway, so the group keeps both halves.)*
 
 ### `/notifications` *(phase 5.3, done 2026-08-19)*
 - ~~`consent` (accept notice + choose channels) and `channels` (choose channels) are
