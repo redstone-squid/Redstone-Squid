@@ -58,6 +58,7 @@ from squid_layouts.scene import (
     SceneThumbnail,
 )
 from squid_layouts.scene_codec import SceneCodec
+from squid_layouts.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.semantic_adapter import lower_semantics
 from squid_layouts.solve import (
     LayoutOverflowError,
@@ -312,12 +313,16 @@ def plan(
     nav: PageNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
+    search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult:
     """Resolve a complete logical document for one target.
 
     Planning owns every fit and fallback decision. The resulting scene contains visual action
     references, while callbacks remain in the plan result for the mounted frontend.
     """
+    if search_budget < 1:
+        message = "planner search budget must be positive"
+        raise ValueError(message)
     document = as_document(rendered)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
@@ -328,6 +333,7 @@ def plan(
         session=presentation,
         page=page,
         nav=nav,
+        search_budget=search_budget,
     )
     lowered = _lower_children(semantic.nodes, target, limits)
     _validate(lowered, limits)
@@ -340,6 +346,7 @@ def plan(
         reservation=reservation,
         strict=strict,
         nav=nav,
+        search_budget=search_budget,
     )
     if cache is not None and _cacheable(lowered) and (cached := cache.get(cache_key)) is not None:
         converter = _collect_cached_bindings(lowered, cached.scene, nav)
@@ -349,7 +356,11 @@ def plan(
             bindings=converter.bindings,
             report=cached.report,
             resources=resources,
-            metrics=PlanMetrics(states_explored=semantic.states_explored, cache_hit=True),
+            metrics=PlanMetrics(
+                states_explored=semantic.states_explored,
+                cache_hit=True,
+                search_fallback=semantic.search_fallback,
+            ),
         )
     try:
         solved = solve(
@@ -400,7 +411,10 @@ def plan(
         bindings=converter.bindings,
         report=report,
         resources=resources,
-        metrics=PlanMetrics(states_explored=semantic.states_explored),
+        metrics=PlanMetrics(
+            states_explored=semantic.states_explored,
+            search_fallback=semantic.search_fallback,
+        ),
     )
     if cache is not None and _cacheable(lowered):
         cache.put(cache_key, CachedPlan(scene, report))
@@ -456,6 +470,7 @@ def _plan_cache_key(
     reservation: ResourceCost,
     strict: bool,
     nav: PageNav | None,
+    search_budget: int,
 ) -> str:
     relevant = {
         "document": _stable_value(nodes),
@@ -473,6 +488,7 @@ def _plan_cache_key(
         ),
         "reservation": _stable_value(reservation),
         "strict": strict,
+        "search_budget": search_budget,
         "nav": (
             None
             if nav is None

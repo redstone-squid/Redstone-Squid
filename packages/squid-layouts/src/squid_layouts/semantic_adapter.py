@@ -34,7 +34,7 @@ from squid_layouts.ir import (
 from squid_layouts.limits import V2Limits
 from squid_layouts.presentation import PresentationSession
 from squid_layouts.scene import PlanEvent, PlanSeverity, ScenePager
-from squid_layouts.search import StrategyCandidate, choose_strategy
+from squid_layouts.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
 from squid_layouts.semantic import (
     Action,
     ActionDisplay,
@@ -91,6 +91,7 @@ class SemanticLowering:
     events: tuple[PlanEvent, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
     states_explored: int = 0
+    search_fallback: bool = False
 
 
 @dataclass(slots=True)
@@ -102,7 +103,9 @@ class _Context:
     nav: PageNav | None
     events: list[PlanEvent]
     pagers: list[ScenePager]
+    search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
+    search_fallback: bool = False
 
 
 def lower_semantics(
@@ -113,13 +116,20 @@ def lower_semantics(
     session: PresentationSession,
     page: PageState = None,
     nav: PageNav | None = None,
+    search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
-    context = _Context(limits, chrome, session, page, nav, [], [])
+    context = _Context(limits, chrome, session, page, nav, [], [], search_budget)
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
-    return SemanticLowering(tuple(lowered), tuple(context.events), tuple(context.pagers), context.states_explored)
+    return SemanticLowering(
+        tuple(lowered),
+        tuple(context.events),
+        tuple(context.pagers),
+        context.states_explored,
+        context.search_fallback,
+    )
 
 
 def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
@@ -539,15 +549,32 @@ def _action_strategy(node: Actions, context: _Context) -> str:
         preferred = "paged"
     baseline = context.session.strategy(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION)
     order = {"individual": 0, "grouped": 1, "paged": 2}
-    choice = choose_strategy(
-        tuple(
-            StrategyCandidate(
-                strategy,
-                active_pagers=int(strategy == "paged"),
-                transition_distance=abs(order[strategy] - order.get(baseline or preferred, order[strategy])),
+    candidates = tuple(
+        StrategyCandidate(
+            strategy,
+            active_pagers=int(strategy == "paged"),
+            transition_distance=abs(order[strategy] - order.get(baseline or preferred, order[strategy])),
+        )
+        for strategy in available
+    )
+    if context.states_explored + len(candidates) > context.search_budget:
+        selected = baseline if baseline in available else preferred if preferred in available else available[-1]
+        context.states_explored += 1
+        context.search_fallback = True
+        context.events.append(
+            PlanEvent(
+                code="planner.search_fallback",
+                path=f"actions:{node.key}",
+                message=(
+                    f"Strategy search reached its {context.search_budget}-state budget; "
+                    f"selected lossless {selected!r} fallback"
+                ),
+                severity=PlanSeverity.WARNING,
             )
-            for strategy in available
-        ),
+        )
+        return selected
+    choice = choose_strategy(
+        candidates,
         path=f"actions:{node.key}",
         flexibility=node.flexibility,
         preferred=preferred,
