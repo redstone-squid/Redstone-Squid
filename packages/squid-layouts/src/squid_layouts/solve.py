@@ -1,0 +1,347 @@
+"""Fit an IR tree to Discord's message budgets.
+
+The solver measures every node's chrome (markdown prefixes, code fences, join characters)
+exactly, grants the shared display-text budget in priority order, and applies each node's
+overflow policy only when its content does not fit. Higher priority is allocated first; ties
+fall back to document order. Dropped nodes refund their grant and the allocation reruns, so a
+dropped footnote genuinely returns its characters to the body.
+"""
+
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+
+import discord
+
+from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.conform import ELLIPSIS
+from squid_layouts.constraints import Drop, Never, Overflow, Spill, Truncate
+from squid_layouts.ir import (
+    Code,
+    Footer,
+    Gallery,
+    Heading,
+    Lines,
+    LinkButton,
+    Node,
+    Panel,
+    RawItem,
+    Row,
+    Section,
+    Sep,
+    Text,
+    Thumbnail,
+)
+from squid_layouts.limits import LIMITS, V2Limits
+
+type TextBearing = Text | Heading | Footer | Code | Lines
+
+
+class LayoutOverflowError(Exception):
+    """The document cannot fit its hard constraints into Discord's budgets."""
+
+    def __init__(self, notes: list[str]) -> None:
+        super().__init__("; ".join(notes))
+        self.notes = notes
+
+
+# --- Realized tree: the same shapes with final strings, consumed by materialize ------------
+
+
+@dataclass(slots=True)
+class RText:
+    content: str = ""
+    dropped: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RSection:
+    texts: list[RText]
+    accessory: Thumbnail | LinkButton | RawItem
+
+
+@dataclass(frozen=True, slots=True)
+class RPanel:
+    children: list[Realized]
+    accent: discord.Colour | int | None
+
+
+type Realized = RText | RSection | RPanel | Sep | Row | Thumbnail | Gallery | RawItem
+
+
+@dataclass(frozen=True, slots=True)
+class SolvedLayout:
+    children: list[Realized]
+    notes: list[str]
+
+
+# --- Text units -----------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class _Unit:
+    """One text-bearing node's mutable allocation state."""
+
+    node: TextBearing
+    slot: RText
+    index: int
+    prefix: str
+    suffix: str
+    content: str
+    lines: tuple[str, ...] | None
+    priority: int
+    overflow: Overflow
+    grant: int = 0
+
+    @property
+    def chrome_len(self) -> int:
+        return len(self.prefix) + len(self.suffix)
+
+    @property
+    def need(self) -> int:
+        return self.chrome_len + len(self.content)
+
+
+def _escape_fences(content: str) -> str:
+    # A closing fence inside the content would end the block early; break it invisibly.
+    return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
+
+
+def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
+    prefix, suffix, lines = "", "", None
+    match node:
+        case Text(content=content):
+            pass
+        case Heading(content=content, level=level):
+            prefix = "#" * level + " "
+        case Footer(content=content):
+            prefix = "-# "
+        case Code(content=content, lang=lang):
+            prefix = f"```{lang}\n"
+            suffix = "\n```"
+            content = _escape_fences(content)
+        case Lines(lines=raw_lines):
+            lines = raw_lines
+            content = "\n".join(raw_lines)
+    if not content:
+        slot.dropped = True
+        return None
+    return _Unit(
+        node=node,
+        slot=slot,
+        index=index,
+        prefix=prefix,
+        suffix=suffix,
+        content=content,
+        lines=lines,
+        priority=node.priority,
+        overflow=node.overflow,
+    )
+
+
+def _trim_keep(text: str, limit: int, keep: str) -> str:
+    if len(text) <= limit:
+        return text
+    if limit <= 1:
+        return ELLIPSIS if limit == 1 else ""
+    if keep == "tail":
+        return ELLIPSIS + text[-(limit - 1) :].lstrip()
+    return text[: limit - 1].rstrip() + ELLIPSIS
+
+
+# --- Solve ----------------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class _Builder:
+    notes: list[str] = field(default_factory=list)
+    units: list[_Unit] = field(default_factory=list)
+    raw_text_cost: int = 0
+
+    def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
+        return [self.realize(node) for node in nodes]
+
+    def realize(self, node: Node) -> Realized:
+        match node:
+            case Text() | Heading() | Footer() | Code() | Lines():
+                slot = RText()
+                unit = _make_unit(node, slot, len(self.units))
+                if unit is not None:
+                    self.units.append(unit)
+                return slot
+            case Section(texts=texts, accessory=accessory):
+                if len(texts) > 3:
+                    self.notes.append(f"section holds {len(texts)} texts; keeping 3")
+                    texts = texts[:3]
+                slots: list[RText] = []
+                for text_node in texts:
+                    slot = RText()
+                    unit = _make_unit(text_node, slot, len(self.units))
+                    if unit is not None:
+                        self.units.append(unit)
+                    slots.append(slot)
+                if isinstance(accessory, RawItem):
+                    self.raw_text_cost += accessory.text_cost
+                return RSection(texts=slots, accessory=accessory)
+            case Panel(children=children, accent=accent):
+                return RPanel(children=self.realize_children(children), accent=accent)
+            case Gallery(urls=urls):
+                if len(urls) > 10:
+                    self.notes.append(f"gallery holds {len(urls)} items; keeping 10")
+                    node = Gallery(urls=urls[:10])
+                return node
+            case Row(items=items):
+                self.raw_text_cost += sum(item.text_cost for item in items if isinstance(item, RawItem))
+                return node
+            case RawItem(text_cost=text_cost):
+                self.raw_text_cost += text_cost
+                return node
+            case _:
+                return node
+
+
+def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
+    """Render the unit into its slot within its grant. Returns False when the node drops."""
+    if unit.grant >= unit.need:
+        unit.slot.content = unit.prefix + unit.content + unit.suffix
+        return True
+
+    usable = unit.grant - unit.chrome_len
+    match unit.overflow:
+        case Drop():
+            notes.append(f"dropped node {unit.index} ({unit.need} chars over budget)")
+            return False
+        case Spill() if unit.lines is not None:
+            return _apply_spill(unit, usable, chrome, notes)
+        case Truncate(keep=keep) if usable >= 1:
+            notes.append(f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
+            unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, keep) + unit.suffix
+            return True
+        case Never() if usable >= 1:
+            notes.append(f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}")
+            unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, "head") + unit.suffix
+            return True
+        case _:
+            notes.append(f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}")
+            return False
+
+
+def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> bool:
+    lines = unit.lines or ()
+    total = len(lines)
+    for kept in range(total, -1, -1):
+        shown = list(lines[:kept])
+        if kept < total:
+            shown.append(chrome.and_n_more(total - kept))
+        body = "\n".join(shown)
+        if body and len(body) <= usable:
+            if kept < total:
+                notes.append(f"spilled node {unit.index}: showing {kept} of {total} lines")
+            unit.slot.content = unit.prefix + body + unit.suffix
+            return True
+    notes.append(f"dropped node {unit.index}: no line fits in {usable}")
+    return False
+
+
+def _allocate(units: list[_Unit], budget: int, strict: bool, notes: list[str], chrome: Chrome) -> None:
+    active = list(units)
+    for _ in range(len(units) + 1):
+        remaining = budget
+        # Never nodes are fixed costs: charge them before any flexible node sees the budget.
+        overdraw = 0
+        for unit in active:
+            if isinstance(unit.overflow, Never):
+                unit.grant = min(unit.need, max(0, remaining))
+                overdraw += unit.need - unit.grant
+                remaining -= unit.grant
+        if overdraw:
+            message = f"Never nodes need {budget + overdraw} of {budget} available characters"
+            if strict:
+                raise LayoutOverflowError([*notes, message])
+            notes.append(message)
+        for unit in sorted(active, key=lambda u: (-u.priority, u.index)):
+            if isinstance(unit.overflow, Never):
+                continue
+            unit.grant = min(unit.need, max(0, remaining))
+            remaining -= unit.grant
+        dropped = [unit for unit in active if not _apply(unit, chrome, notes)]
+        if not dropped:
+            return
+        for unit in dropped:
+            unit.slot.dropped = True
+            active.remove(unit)
+    # The loop always terminates by emptying `active`; each pass removes at least one unit.
+
+
+def _prune(children: list[Realized]) -> list[Realized]:
+    pruned: list[Realized] = []
+    for child in children:
+        match child:
+            case RText(dropped=True):
+                continue
+            case RPanel(children=inner, accent=accent):
+                kept = _prune(inner)
+                if kept:
+                    pruned.append(RPanel(children=kept, accent=accent))
+            case RSection(texts=texts, accessory=accessory):
+                kept_texts = [slot for slot in texts if not slot.dropped]
+                # A Section needs at least one text child, and its accessory cannot stand
+                # alone as a top-level component, so an emptied section drops whole.
+                if kept_texts:
+                    pruned.append(RSection(texts=kept_texts, accessory=accessory))
+            case Gallery(urls=()) | Row(items=()):
+                continue
+            case _:
+                pruned.append(child)
+    return pruned
+
+
+def _component_count(children: list[Realized]) -> int:
+    count = 0
+    for child in children:
+        match child:
+            case RPanel(children=inner):
+                count += 1 + _component_count(inner)
+            case RSection(texts=texts):
+                count += 1 + len(texts) + 1
+            case Row(items=items):
+                count += 1 + len(items)
+            case _:
+                count += 1
+    return count
+
+
+def solve(
+    nodes: Sequence[Node],
+    *,
+    limits: V2Limits = LIMITS,
+    chrome: Chrome = DEFAULT_CHROME,
+    strict: bool = False,
+    reserved_text: int = 0,
+) -> SolvedLayout:
+    """Fit ``nodes`` into the message budgets, applying overflow policies where needed.
+
+    Args:
+        nodes: Top-level IR nodes in document order.
+        limits: The limit table supplying the text and component budgets.
+        chrome: Pre-translated framework strings.
+        strict: Raise :class:`LayoutOverflowError` instead of degrading.
+        reserved_text: Characters held back from the budget (e.g. for pagination chrome).
+
+    Returns:
+        The realized tree plus a note per degradation applied.
+    """
+    builder = _Builder()
+    children = builder.realize_children(nodes)
+    notes = builder.notes
+
+    budget = limits.total_text - builder.raw_text_cost - reserved_text
+    _allocate(builder.units, budget, strict, notes, chrome)
+    children = _prune(children)
+
+    count = _component_count(children)
+    if count > limits.total_components:
+        notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
+
+    if strict and notes:
+        raise LayoutOverflowError(notes)
+    return SolvedLayout(children=children, notes=notes)
