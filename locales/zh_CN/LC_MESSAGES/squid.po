@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 11:49+0000\n"
+"POT-Creation-Date: 2026-08-19 11:55+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -48,15 +48,6 @@ msgstr ""
 "\n"
 "**标签**\n"
 "{tags}"
-
-#: squid/bot/submission/records.py:51 squid/bot/submission/records.py:74
-#, python-brace-format
-msgid ""
-"\n"
-"…and {count} more."
-msgstr ""
-"\n"
-"……还有 {count} 个。"
 
 #: squid/bot/starboard/render.py:48
 #, python-brace-format
@@ -2019,9 +2010,13 @@ msgid "Multiplier — leave empty to remove this role's weight"
 msgstr ""
 
 #: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:633
-#: squid/bot/utils/pagination.py:138
+#: squid/bot/utils/pagination.py:142
 msgid "Next"
 msgstr "下一页"
+
+#: squid/bot/version_tracking.py:44
+msgid "No Java versions are recognized yet."
+msgstr ""
 
 #: squid/accounts/errors.py:334
 msgid "No Minecraft account linked"
@@ -2104,7 +2099,7 @@ msgstr "没有待审核的标签。"
 msgid "No traceback was recorded."
 msgstr ""
 
-#: squid/bot/submission/records.py:53
+#: squid/bot/submission/records.py:56
 msgid "No unresolved active record categories."
 msgstr "没有未解决的活跃记录类别。"
 
@@ -2293,7 +2288,7 @@ msgstr ""
 msgid "Operation conflict"
 msgstr "操作冲突"
 
-#: squid/bot/submission/records.py:88
+#: squid/bot/submission/records.py:86
 msgid "Optional database ID to also compute the pinned current-version records."
 msgstr "可选的数据库 ID，用于同时计算固定当前版本的记录。"
 
@@ -2310,7 +2305,7 @@ msgstr ""
 msgid "Optional name shown in addition to the canonical structured title."
 msgstr ""
 
-#: squid/bot/submission/records.py:132
+#: squid/bot/submission/records.py:130
 msgid "Optional pinned version database ID."
 msgstr "可选的固定版本数据库 ID。"
 
@@ -2318,15 +2313,15 @@ msgstr "可选的固定版本数据库 ID。"
 msgid "Optional search and sort field, for example closing_delay."
 msgstr "可选的搜索和排序字段，例如 closing_delay。"
 
-#: squid/bot/submission/records.py:39
+#: squid/bot/submission/records.py:43
 msgid "Optionally limit gaps to one build kind."
 msgstr "可选：将缺口限制为单一构造类型。"
 
-#: squid/bot/submission/records.py:62
+#: squid/bot/submission/records.py:63
 msgid "Optionally limit title diagnostics to one build kind."
 msgstr "可选：将标题诊断限制为单一构造类型。"
 
-#: squid/bot/submission/records.py:90
+#: squid/bot/submission/records.py:88
 msgid "Optionally rebuild just doors or extenders."
 msgstr "可选：仅重建门或延伸器。"
 
@@ -2354,7 +2349,7 @@ msgstr ""
 msgid "Owner only"
 msgstr "仅限所有者"
 
-#: squid/bot/utils/pagination.py:91
+#: squid/bot/utils/pagination.py:95
 #, python-brace-format
 msgid "Page {page} of {pages} · {total} in total"
 msgstr ""
@@ -2434,7 +2429,7 @@ msgstr "持久化数据与应用程序预期不一致。"
 msgid "Pick a claim to review…"
 msgstr ""
 
-#: squid/bot/submission/records.py:128
+#: squid/bot/submission/records.py:126
 msgid "Pick a record category, or paste a raw base key."
 msgstr ""
 
@@ -2442,13 +2437,13 @@ msgstr ""
 msgid "Pick one of the coordinates listed below."
 msgstr ""
 
-#: squid/bot/submission/records.py:130
+#: squid/bot/submission/records.py:128
 msgid ""
 "Pick restrictions from the list; large exact categories are saved for "
 "reuse."
 msgstr ""
 
-#: squid/bot/submission/records.py:147
+#: squid/bot/submission/records.py:145
 msgid "Pick restrictions from the suggestions rather than typing them."
 msgstr ""
 
@@ -2477,7 +2472,7 @@ msgid "Post and manage the Redstoner self-assign panel."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:192 squid/bot/submission/ui/views.py:632
-#: squid/bot/utils/pagination.py:124
+#: squid/bot/utils/pagination.py:128
 msgid "Previous"
 msgstr "上一页"
 
@@ -2571,7 +2566,7 @@ msgstr ""
 msgid "Recent errors"
 msgstr ""
 
-#: squid/bot/version_tracking.py:37
+#: squid/bot/version_tracking.py:41
 msgid "Recognized Java versions"
 msgstr "已识别的 Java 版本"
 
@@ -2579,7 +2574,7 @@ msgstr "已识别的 Java 版本"
 msgid "Recompute a build's derived attributes."
 msgstr ""
 
-#: squid/bot/submission/records.py:172
+#: squid/bot/submission/records.py:170
 #, python-brace-format
 msgid "Recomputed {definitions} definitions; {resolved} resolved."
 msgstr "已重新计算 {definitions} 个定义；已解决 {resolved} 个。"
@@ -2588,7 +2583,7 @@ msgstr "已重新计算 {definitions} 个定义；已解决 {resolved} 个。"
 msgid "Record"
 msgstr ""
 
-#: squid/bot/submission/records.py:169
+#: squid/bot/submission/records.py:167
 msgid "Record category materialized"
 msgstr "记录类别已具体化"
 
@@ -2612,7 +2607,7 @@ msgid ""
 "parse."
 msgstr ""
 
-#: squid/bot/submission/records.py:55
+#: squid/bot/submission/records.py:50
 msgid "Record evidence gaps"
 msgstr "记录证据缺口"
 
@@ -2628,7 +2623,7 @@ msgstr ""
 msgid "Record not found."
 msgstr ""
 
-#: squid/bot/submission/records.py:78
+#: squid/bot/submission/records.py:70
 msgid "Record title diagnostics"
 msgstr "记录标题诊断"
 
@@ -2637,7 +2632,7 @@ msgstr "记录标题诊断"
 msgid "Records are not supported for {kind}."
 msgstr ""
 
-#: squid/bot/submission/records.py:105
+#: squid/bot/submission/records.py:103
 msgid "Records rebuilt"
 msgstr "记录已重建"
 
@@ -2784,7 +2779,7 @@ msgstr "限制"
 msgid "Restrictions and tags"
 msgstr ""
 
-#: squid/bot/submission/records.py:153
+#: squid/bot/submission/records.py:151
 msgid "Restrictions can only be combined with a hand-typed base key."
 msgstr ""
 
@@ -3596,7 +3591,7 @@ msgstr "提供的值无效。"
 msgid "The tag value, omitted for plain tags."
 msgstr "标签的值，普通标签可省略。"
 
-#: squid/bot/submission/records.py:127
+#: squid/bot/submission/records.py:125
 msgid "The typed record family."
 msgstr "类型化的记录系列。"
 
@@ -3612,7 +3607,7 @@ msgstr ""
 msgid "These error controls belong to someone else."
 msgstr ""
 
-#: squid/bot/utils/pagination.py:76
+#: squid/bot/utils/pagination.py:80
 msgid "These list controls belong to someone else."
 msgstr ""
 
@@ -3840,7 +3835,7 @@ msgstr ""
 msgid "Version"
 msgstr ""
 
-#: squid/bot/version_tracking.py:50 squid/bot/version_tracking.py:67
+#: squid/bot/version_tracking.py:62 squid/bot/version_tracking.py:79
 #, python-brace-format
 msgid "Version added successfully: {version}"
 msgstr "版本添加成功：{version}"
@@ -4672,7 +4667,7 @@ msgstr ""
 msgid "{count} voter(s) could not be resolved, so their cached weight was kept."
 msgstr ""
 
-#: squid/bot/submission/records.py:108
+#: squid/bot/submission/records.py:106
 #, python-brace-format
 msgid ""
 "{definitions} definitions; {resolved} resolved; {unresolved} awaiting "
@@ -5294,4 +5289,11 @@ msgstr ""
 
 #~ msgid "{remaining} more not shown."
 #~ msgstr ""
+
+#~ msgid ""
+#~ "\n"
+#~ "…and {count} more."
+#~ msgstr ""
+#~ "\n"
+#~ "……还有 {count} 个。"
 
