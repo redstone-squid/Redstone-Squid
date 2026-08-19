@@ -25,10 +25,13 @@ class Paginate:
     """Split overflowing content into pages; the mount adds nav controls and a page footer.
 
     Splits at ``boundary`` where possible, hard-splitting single oversized segments. One
-    Paginate node per document; extras degrade to Truncate with a note.
+    Paginate node per document; extras degrade to Truncate with a note. ``initial`` picks the
+    page first shown — "end" suits content whose interesting part is its tail, like a
+    traceback whose failing frame is the last one.
     """
 
     boundary: str = "\n"
+    initial: Literal["start", "end"] = "start"
 
 
 def _validate_ladder(steps: tuple[str, ...], *, of: str = "ladder") -> None:
