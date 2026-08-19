@@ -13,8 +13,10 @@ from squid_layouts import (
     Heading,
     Mount,
     Option,
+    PressEvent,
     Reactor,
     Row,
+    SelectionEvent,
     SelectMenu,
     Text,
     assert_within_limits,
@@ -36,7 +38,7 @@ class Counter(Component):
             Row((Button(label="+1", on_click=self.increment, key="inc"),)),
         ]
 
-    async def increment(self, interaction) -> None:
+    async def increment(self, event: PressEvent) -> None:
         self.count += 1
 
 
@@ -66,9 +68,27 @@ class TestRenderAndWire:
         texts = [i.content for i in edited_view.walk_children() if isinstance(i, discord.ui.TextDisplay)]
         assert "count: 1" in texts
 
+    async def test_press_event_carries_portable_actor_and_frontend_context(self):
+        seen: list[PressEvent] = []
+
+        class Inspect(Component):
+            def render(self):
+                return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
+
+            async def inspect(self, event: PressEvent) -> None:
+                seen.append(event)
+
+        mount = Mount(Inspect(), timeout=None)
+        mount.build_view()
+
+        await mount.dispatch("inspect", fake_interaction(user_id=42))
+
+        assert seen[0].actor.id == "42"
+        assert seen[0].context == {"frontend": "discord"}
+
     async def test_clean_dispatch_defers_instead_of_editing(self):
         class Static(Counter):
-            async def increment(self, interaction) -> None:
+            async def increment(self, event: PressEvent) -> None:
                 pass  # no state change
 
         mount = Mount(Static(), timeout=None)
@@ -174,8 +194,8 @@ class TestSelect:
                     )
                 ]
 
-            async def pick(self, interaction, values) -> None:
-                picked.extend(values)
+            async def pick(self, event: SelectionEvent) -> None:
+                picked.extend(event.values)
 
         mount = Mount(Picker(), timeout=None)
         view = mount.build_view()

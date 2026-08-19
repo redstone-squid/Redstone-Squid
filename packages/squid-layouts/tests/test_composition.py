@@ -16,6 +16,7 @@ from squid_layouts import (
     Node,
     Paginate,
     Panel,
+    PressEvent,
     Row,
     Text,
     state,
@@ -40,10 +41,10 @@ class Counter(Component):
             ),
         ]
 
-    async def increment(self, interaction: discord.Interaction) -> None:
+    async def increment(self, event: PressEvent) -> None:
         self.count += 1
 
-    async def noop(self, interaction: discord.Interaction) -> None: ...
+    async def noop(self, event: PressEvent) -> None: ...
 
 
 class Pair(Component):
@@ -124,7 +125,7 @@ class Nest(Component):
             nodes.append(self.embed(self.child, key=f"level{self.depth}" + "_padding" * 4))
         return [Panel(children=tuple(nodes))]
 
-    async def _click(self, interaction: discord.Interaction) -> None: ...
+    async def _click(self, event: PressEvent) -> None: ...
 
 
 @given(st.integers(min_value=0, max_value=8))

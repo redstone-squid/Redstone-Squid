@@ -92,6 +92,8 @@ class SubmitEvent(ActionEvent):
 
 
 type ActionHandler = Callable[[ActionEvent], Awaitable[None]]
+type PressHandler = Callable[[PressEvent], Awaitable[None]]
+type SelectionHandler = Callable[[SelectionEvent], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,5 +101,5 @@ class ActionBinding:
     """Ephemeral handler data kept out of serializable scenes."""
 
     key: str
-    handler: Callable[..., Awaitable[None]]
+    handler: Callable[[Any], Awaitable[None]]
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE

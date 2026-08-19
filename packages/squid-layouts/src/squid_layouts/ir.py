@@ -5,10 +5,10 @@ are immutable descriptions. `solve` fits them to the message budgets and `materi
 the result into discord.py items — authors never do budget arithmetic.
 """
 
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from squid_layouts.actions import ActionPolicy
+from squid_layouts.actions import ActionPolicy, PressHandler, SelectionHandler
 from squid_layouts.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.styles import ActionStyle, Color
 
@@ -81,7 +81,7 @@ class Button:
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
     label: str
-    on_click: Callable[..., Awaitable[None]]
+    on_click: PressHandler
     key: str
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: str | None = None
@@ -102,7 +102,7 @@ class SelectMenu:
     """A string select; occupies its own row when materialized."""
 
     options: tuple[Option, ...]
-    on_select: Callable[..., Awaitable[None]]
+    on_select: SelectionHandler
     key: str
     placeholder: str | None = None
     min_values: int = 1
