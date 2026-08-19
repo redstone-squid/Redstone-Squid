@@ -25,13 +25,13 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
 )
+from squid.bot.profile_render import present_claimant
 from squid.bot.verify import (
     VerifyCog,
     _link_conflict,
     _link_message,
     _reconciliation_lines,
     _refresh_message,
-    present_claimant,
 )
 from squid.suggestions.infrastructure.providers.records import _claimant_description
 

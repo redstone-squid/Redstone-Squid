@@ -9,6 +9,7 @@ describing the same profile differently.
 from squid.accounts.domain import (
     AccountIdentity,
     AccountProfile,
+    AliasClaim,
     IdentityProvider,
     ProfileLink,
     PublicCreatorProfile,
@@ -129,3 +130,33 @@ def public_profile_fields(profile: PublicCreatorProfile, locale: str) -> list[Ca
             )
         )
     return fields
+
+
+def present_claimant(claim: AliasClaim, locale: str | None = None, *, mention: bool = True) -> str:
+    """Name a claimant by the most recognisable identity loaded for them.
+
+    One function for every surface that shows a claimant — the review queue, its select, an
+    approval and a rejection — so a reviewer reads the same thing everywhere.
+
+    A Discord mention is preferred because it is the only handle a reviewer can click, and because a
+    Discord identity never gets a stored `display_name`; Discord resolves the snowflake client-side.
+    `mention=False` is for the places Discord renders no chip — a select option's description shows
+    `<@id>` as raw text — and falls back to the names a reviewer can actually read. The internal
+    account ID is last and is labelled as a diagnostic, since it identifies a row rather than a
+    person.
+    """
+    claimant = claim.claimant
+    if claimant is not None:
+        discord = claimant.identity(IdentityProvider.DISCORD)
+        if mention and discord is not None and discord.discord_id is not None:
+            return f"<@{discord.discord_id}>"
+        java = claimant.identity(IdentityProvider.JAVA)
+        if java is not None and java.display_name is not None:
+            return java.display_name
+        if claimant.public_creator_id is not None:
+            return t(locale, _("creator `{creator_id}`"), creator_id=claimant.public_creator_id)
+        if discord is not None and discord.discord_id is not None:
+            # Reached only without a mention: the snowflake is the last handle left, and it is a
+            # diagnostic here rather than a name.
+            return t(locale, _("Discord user `{discord_id}`"), discord_id=discord.discord_id)
+    return t(locale, _("unidentified account (internal ID `{account_id}`)"), account_id=claim.account_id)

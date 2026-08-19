@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import discord
 import pytest
@@ -84,6 +84,7 @@ def make_interaction() -> Any:
             edit_message=AsyncMock(),
             send_message=AsyncMock(),
             send_modal=AsyncMock(),
+            is_done=Mock(return_value=False),
         ),
     )
 
