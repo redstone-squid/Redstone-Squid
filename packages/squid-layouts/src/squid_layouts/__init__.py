@@ -18,14 +18,18 @@ from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate
 from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset, as_document
 from squid_layouts.errors import DrawInvariantError, LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.ir import (
+    ActionGroup,
     Button,
+    Choice,
     Code,
+    Extension,
     Fold,
     Footer,
     Gallery,
     Heading,
     Lines,
     LinkButton,
+    MediaCollection,
     Node,
     Option,
     Panel,
@@ -36,6 +40,7 @@ from squid_layouts.ir import (
     Sep,
     Text,
     Thumbnail,
+    Variant,
     as_nodes,
 )
 from squid_layouts.limits import LIMITS, V2Limits
@@ -51,7 +56,7 @@ from squid_layouts.scene import PlanEvent, PlanReport, PlanResult, SceneDocument
 from squid_layouts.scene_codec import SceneCodec, SceneCodecError
 from squid_layouts.solve import LayoutOverflowError, SolvedLayout, solve
 from squid_layouts.styles import ActionStyle, Color
-from squid_layouts.target import ResourceCost, TargetProfile
+from squid_layouts.target import PreparedExtension, ResourceCost, TargetProfile
 from squid_layouts.testing import assert_within_limits
 
 __all__ = [
@@ -59,6 +64,7 @@ __all__ = [
     "ELLIPSIS",
     "LIMITS",
     "ActionEvent",
+    "ActionGroup",
     "ActionPolicy",
     "ActionStyle",
     "Actor",
@@ -66,6 +72,7 @@ __all__ = [
     "Alts",
     "Asset",
     "Button",
+    "Choice",
     "Chrome",
     "Code",
     "Color",
@@ -75,6 +82,7 @@ __all__ = [
     "DrawInvariantError",
     "Drop",
     "ErrorHook",
+    "Extension",
     "Field",
     "FieldGroup",
     "Fold",
@@ -89,6 +97,7 @@ __all__ = [
     "LimitViolationError",
     "Lines",
     "LinkButton",
+    "MediaCollection",
     "ModalSpec",
     "Mount",
     "MountedView",
@@ -104,6 +113,7 @@ __all__ = [
     "PlanEvent",
     "PlanReport",
     "PlanResult",
+    "PreparedExtension",
     "PressEvent",
     "RawItem",
     "Reactor",
@@ -128,6 +138,7 @@ __all__ = [
     "Truncate",
     "UnsolvableLayoutError",
     "V2Limits",
+    "Variant",
     "Visibility",
     "alts",
     "as_document",
