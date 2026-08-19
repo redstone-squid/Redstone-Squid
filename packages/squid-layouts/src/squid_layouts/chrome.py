@@ -27,6 +27,9 @@ class Chrome:
     """Ephemeral rejection shown when an author-locked control is used by another user."""
     previous: str = "Previous"
     next: str = "Next"
+    back: str = "Back"
+    home: str = "Home"
+    close: str = "Close"
     page_footer: Callable[[int, int], str] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
 
