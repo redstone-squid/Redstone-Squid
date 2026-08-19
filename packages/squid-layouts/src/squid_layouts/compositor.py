@@ -43,8 +43,8 @@ class Composition:
 def compose(
     rendered: DocumentLike,
     *,
-    into: discord.ui.LayoutView | None = None,
     wire: Wire | None = None,
+    renderer: DiscordRenderer | None = None,
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     strict: bool = False,
@@ -64,7 +64,8 @@ def compose(
         nav=nav,
         session=session,
     )
-    view = DiscordRenderer(limits=limits).draw(result.scene, plan=result, into=into, wire=wire)
+    drawer = renderer if renderer is not None else DiscordRenderer(limits=limits)
+    view = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
     return Composition(view=view, plan=result)

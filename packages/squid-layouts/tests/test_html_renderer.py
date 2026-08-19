@@ -1,6 +1,11 @@
 """HTML drawing of the same immutable scenes used by Discord."""
 
+from dataclasses import replace
+
+import pytest
+
 from squid_layouts.actions import ActionPolicy
+from squid_layouts.errors import DrawInvariantError
 from squid_layouts.html import HtmlRenderer
 from squid_layouts.scene import (
     SceneButton,
@@ -58,3 +63,8 @@ def test_standalone_preview_includes_discord_like_css() -> None:
     assert rendered.startswith("<!doctype html>")
     assert ".squid-panel" in rendered
     assert "background:#313338" in rendered
+
+
+def test_html_preview_rejects_an_unknown_target_version() -> None:
+    with pytest.raises(DrawInvariantError, match=r"target .* version 99"):
+        HtmlRenderer().draw(replace(_scene(), target_version=99))

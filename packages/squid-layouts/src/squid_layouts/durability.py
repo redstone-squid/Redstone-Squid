@@ -192,12 +192,12 @@ class ComponentRegistry:
         if registration is None:
             message = f"durable component {component_key!r} is not registered"
             raise SnapshotError(message)
-        if not mount._components:
+        if not mount.runtime.components:
             message = "a mount must be built before it can be snapshotted"
             raise SnapshotError(message)
         components = tuple(
             ComponentSnapshot(path, _type_id(component), export_state(component))
-            for path, component in sorted(mount._components.items())
+            for path, component in sorted(mount.runtime.components.items())
         )
         snapshot = MountSnapshot(
             SnapshotCodec.protocol,

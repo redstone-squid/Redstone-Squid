@@ -65,8 +65,10 @@ class ErrorReportBrowser(sl.Component):
             ),
         )
 
-    def render(self) -> Sequence[sl.Node]:
-        return self._render_detail() if self.detail is not None else self._render_list()
+    def render(self) -> sl.Document:
+        nodes = self._render_detail() if self.detail is not None else self._render_list()
+        assets = (report_asset(self.detail),) if self.detail is not None else ()
+        return sl.Document(tuple(nodes), assets)
 
     def _render_list(self) -> Sequence[sl.Node]:
         entries = tuple(_list_line(report) for report in self._reports)
@@ -124,12 +126,9 @@ class ErrorReportBrowser(sl.Component):
         report = self._reports[int(event.values[0])]
         self.detail = report
         self.matches = 1
-        self.mount.set_attachments([report_attachment(report)])
 
     async def _back(self, event: sl.PressEvent) -> None:
         self.detail = None
-        # The list is not about any one report, so its attachment goes with it.
-        self.mount.set_attachments([])
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
@@ -137,6 +136,13 @@ class ErrorReportBrowser(sl.Component):
 
 def report_attachment(report: ErrorReport) -> discord.File:
     """Bundle the traceback and the log tail, for reading outside Discord."""
+    asset = report_asset(report)
+    assert isinstance(asset.source, sl.InlineAsset)
+    return discord.File(io.BytesIO(asset.source.data), filename=asset.name)
+
+
+def report_asset(report: ErrorReport) -> sl.Asset:
+    """Describe the full report as a portable inline text asset."""
     lines = [
         f"reference: {report.reference}",
         f"correlation_id: {report.correlation_id}",
@@ -155,7 +161,12 @@ def report_attachment(report: ErrorReport) -> discord.File:
         "log tail:",
         *report.log_tail,
     ]
-    return discord.File(io.BytesIO("\n".join(lines).encode()), filename=f"error-{report.reference}.txt")
+    return sl.Asset(
+        key="full-report",
+        name=f"error-{report.reference}.txt",
+        media_type="text/plain",
+        source=sl.InlineAsset("\n".join(lines).encode()),
+    )
 
 
 def _summary_entries(report: ErrorReport, matches: int, locale: str | None) -> list[str]:
