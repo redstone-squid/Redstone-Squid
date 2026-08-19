@@ -15,6 +15,7 @@ from squid_layouts import (
     Lines,
     Never,
     Panel,
+    PressEvent,
     Row,
     Sep,
     Spill,
@@ -58,7 +59,7 @@ class TestCompose:
         assert composition.page == 0
 
     def test_static_documents_reject_interactive_nodes(self):
-        async def click(interaction: discord.Interaction) -> None: ...
+        async def click(event: PressEvent) -> None: ...
 
         with pytest.raises(TypeError, match="mounted Discord frontend"):
             compose([Row((Button(label="x", on_click=click, key="x"),))])
