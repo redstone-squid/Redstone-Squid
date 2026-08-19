@@ -49,6 +49,9 @@ Core design debts closed before further migration:
   planning-and-drawing latency acceptance budgets.
 - A keyed root Document may promote structural overflow to whole-message pages. Local pagers
   take precedence and are never displayed simultaneously with root navigation.
+- Durable records carry frontend-neutral message locators and expiry. Optional leased stores
+  support exclusive startup recovery, renewal, and release without putting operational tasks
+  inside the layout package.
 
 Deliberate boundaries (documented in the package):
 
