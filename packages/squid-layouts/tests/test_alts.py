@@ -1,10 +1,12 @@
 """Degradation ladder (alts) tests."""
 
 import discord
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_layouts import (
+    Alt,
     Field,
     FieldGroup,
     Lines,
@@ -49,9 +51,9 @@ class TestAltsPolicy:
 class TestLinesLadders:
     def test_largest_entry_degrades_before_any_entry_spills(self):
         entries = (
-            ("short entry",),
-            ("L" * 3000, "long entry degraded"),
-            ("another short entry",),
+            "short entry",
+            Alt("L" * 3000, ("long entry degraded",)),
+            "another short entry",
         )
         filler = Text("f" * 3000, priority=10)
         solved = solve([filler, Lines(entries)])
@@ -62,11 +64,31 @@ class TestLinesLadders:
         assert "more" not in text  # nothing spilled: degrading sufficed
 
     def test_spill_still_happens_after_ladders_exhaust(self):
-        entries = tuple((f"entry {index} " + "x" * 500, f"entry {index} " + "y" * 200) for index in range(60))
+        entries = tuple(Alt(f"entry {index} " + "x" * 500, (f"entry {index} " + "y" * 200,)) for index in range(60))
         solved = solve([Lines(entries)])
         view = materialize(solved)
         assert any("more" in text for text in _texts(view))
         assert_within_limits(view)
+
+
+class TestConstrainedShapes:
+    def test_alts_rejects_empty_and_growing_ladders(self):
+        with pytest.raises(ValueError, match="at least one step"):
+            alts()
+        with pytest.raises(ValueError, match="non-empty"):
+            alts("ok", "")
+        with pytest.raises(ValueError, match="must not grow"):
+            alts("short", "much much longer")
+
+    def test_alt_rejects_fallbacks_longer_than_the_primary(self):
+        with pytest.raises(ValueError, match="no longer than the primary"):
+            Alt("tiny", ("much longer fallback",))
+
+    def test_presets_normalize_instead_of_raising(self):
+        # A caller-supplied rung that came out longer than its primary is skipped, not fatal.
+        node = card("T", fields=(Field("Creators", "a, b", alts=("a and 3 others",)),))
+        view = render_static([node])
+        assert any("a, b" in text for text in _texts(view))
 
 
 class TestCardFieldLadders:
@@ -100,7 +122,8 @@ class TestCardFieldLadders:
     body=st.text(max_size=5000),
     ladder=st.lists(st.text(min_size=1, max_size=500), min_size=1, max_size=4),
 )
-def test_alts_documents_always_fit(body, ladder):
+def test_alts_documents_always_fit(body: str, ladder: list[str]):
+    ladder = sorted(ladder, key=len, reverse=True)
     view = render_static([Text("pad " * 400), Text(body or "x", overflow=alts(*ladder))])
     assert_within_limits(view)
     assert conform(view) == []
