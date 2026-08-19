@@ -8,10 +8,8 @@ from hypothesis import strategies as st
 from squid_layouts import (
     ELLIPSIS,
     LIMITS,
-    Code,
     Drop,
     Footer,
-    Heading,
     LayoutInvariantError,
     LayoutOverflowError,
     Lines,
@@ -21,7 +19,6 @@ from squid_layouts import (
     Panel,
     RawItem,
     Row,
-    Section,
     Sep,
     Spill,
     Text,
@@ -33,6 +30,7 @@ from squid_layouts import (
     render_static,
     solve,
 )
+from squid_layouts.primitives import Code, Heading, Section
 
 
 def _text_of(view: discord.ui.LayoutView) -> str:

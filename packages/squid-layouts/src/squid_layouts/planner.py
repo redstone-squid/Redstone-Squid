@@ -322,7 +322,7 @@ def plan(
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     semantic = lower_semantics(
-        (*document.children, *document.assets),
+        document.children,
         limits=limits,
         chrome=chrome,
         session=presentation,
@@ -332,7 +332,7 @@ def plan(
     lowered = _lower_children(semantic.nodes, target, limits)
     _validate(lowered, limits)
     cache_key = _plan_cache_key(
-        document.children,
+        (*document.children, *document.assets),
         target=target,
         limits=limits,
         chrome=chrome,
@@ -342,7 +342,7 @@ def plan(
         nav=nav,
     )
     if cache is not None and _cacheable(lowered) and (cached := cache.get(cache_key)) is not None:
-        converter = _collect_bindings(lowered)
+        converter = _collect_cached_bindings(lowered, cached.scene, nav)
         resources = {f"asset:{asset.key}": asset for asset in document.assets}
         return PlanResult(
             scene=cached.scene,
@@ -390,7 +390,7 @@ def plan(
             )
             for note in solved.notes
         ),
-        logical_fingerprint=_logical_fingerprint(document.children),
+        logical_fingerprint=_logical_fingerprint((*document.children, *document.assets)),
         scene_fingerprint=fingerprint,
     )
     resources = dict(converter.resources)
@@ -520,4 +520,19 @@ def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
 
     for node in nodes:
         collect(node)
+    return converter
+
+
+def _collect_cached_bindings(
+    nodes: Sequence[Node],
+    scene: SceneDocument,
+    nav: PageNav | None,
+) -> _Converter:
+    converter = _collect_bindings(nodes)
+    if nav is None:
+        return converter
+    for pager in scene.pagers:
+        generated = _collect_bindings(nav(pager.key, pager.page, pager.pages))
+        for key, binding in generated.bindings.items():
+            converter.bindings.setdefault(key, binding)
     return converter

@@ -3,7 +3,8 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import Field, FieldGroup, assert_within_limits, banner, card, conform, listing, render_static, report
+from squid_layouts import FieldGroup, assert_within_limits, banner, card, conform, listing, render_static, report
+from squid_layouts.presets import Field
 
 
 def _texts(view) -> list[str]:
