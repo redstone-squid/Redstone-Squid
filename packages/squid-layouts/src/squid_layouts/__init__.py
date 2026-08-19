@@ -10,6 +10,7 @@ text enters pre-translated through `Chrome`.
 
 from squid_layouts import deliver, primitives, semantic
 from squid_layouts.actions import ActionEvent, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent, Visibility
+from squid_layouts.cache import PlanCache
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.component import Component, ContextKey
 from squid_layouts.compositor import Composition, compose, render_static
@@ -92,6 +93,7 @@ from squid_layouts.semantic import (
     Items,
     LayoutNode,
     List,
+    ListItem,
     Measure,
     Media,
     Navigation,
@@ -178,6 +180,7 @@ __all__ = [
     "Lines",
     "LinkButton",
     "List",
+    "ListItem",
     "Measure",
     "Media",
     "MediaCollection",
@@ -198,6 +201,7 @@ __all__ = [
     "Paginate",
     "Panel",
     "Paragraph",
+    "PlanCache",
     "PlanEvent",
     "PlanMetrics",
     "PlanReport",

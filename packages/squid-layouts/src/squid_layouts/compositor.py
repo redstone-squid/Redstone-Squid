@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import discord
 
+from squid_layouts.cache import PlanCache
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.renderer import DiscordRenderer, Wire
 from squid_layouts.discord.target import DiscordV2Target
@@ -52,6 +53,7 @@ def compose(
     page: PageState = None,
     nav: PageNav | None = None,
     session: PresentationSession | None = None,
+    cache: PlanCache | None = None,
 ) -> Composition:
     """Plan a logical document, then draw its resolved Discord scene."""
     result = plan_document(
@@ -63,6 +65,7 @@ def compose(
         page=page,
         nav=nav,
         session=session,
+        cache=cache,
     )
     drawer = renderer if renderer is not None else DiscordRenderer(limits=limits)
     view = drawer.draw(result.scene, plan=result, wire=wire)
