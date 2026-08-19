@@ -12,7 +12,7 @@ from squid_layouts import deliver
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.component import Component, state
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
-from squid_layouts.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.constraints import Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
 from squid_layouts.ir import (
     Button,
     Code,
@@ -45,6 +45,7 @@ __all__ = [
     "DEFAULT_CHROME",
     "ELLIPSIS",
     "LIMITS",
+    "Alts",
     "Button",
     "Chrome",
     "Code",
@@ -84,6 +85,7 @@ __all__ = [
     "Thumbnail",
     "Truncate",
     "V2Limits",
+    "alts",
     "assert_within_limits",
     "banner",
     "build_modal",
