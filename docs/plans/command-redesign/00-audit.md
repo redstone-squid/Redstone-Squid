@@ -27,10 +27,11 @@ the count above, which is the number the redesign was argued from.)*
 - **C2 — Ephemerality has no policy.** Three patterns coexist: always-ephemeral (72 sites),
   `ephemeral=ctx.interaction is not None` (11 sites), and always-public. Near-identical
   commands differ: `account approve-claim` answers publicly, `account claims` ephemerally.
-  *(5.4 kept that difference and gave it a reason — the decision is public, the queue is not —
-  which 5.7 then generalises.)*
   Decide a rule (mutations of shared state public, personal/staff reads ephemeral, errors
-  ephemeral) and apply it once.
+  ephemeral) and apply it once. *(5.7: the rule is in `squid/bot/utils/visibility.py`, close to
+  the one suggested here. The claims pair kept its difference and gained a reason — the
+  decision is public, the queue is not. The sweep also found `account merge-code` posting a
+  credential into the channel from its prefix form.)*
 - **C3 — Some replies bypass i18n and the layout system entirely.** The `settings voting`
   subcommands, the notifications cog, and parts of the poll flow send raw untranslated strings
   (`await ctx.send("Voting role weight updated.", ephemeral=True)`) while the rest of the bot

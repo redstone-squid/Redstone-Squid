@@ -37,6 +37,7 @@ from squid.bot.submission.ui.views import ConfirmationView
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import DISCORD_BLUE, CardField, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
+from squid.bot.utils.visibility import deliver_privately, personal
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
@@ -65,7 +66,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def link(self, ctx: Context[BotT], code: str):
         """Link your minecraft account."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = ctx.interaction is not None
+        ephemeral = personal(ctx)
         attempted_by = (IdentityProvider.DISCORD, str(ctx.author.id))
 
         # Read without creating: nobody gets an account row for typing a code that turns out to be
@@ -131,7 +132,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def consent(self, ctx: Context[BotT]) -> None:
         """Read the privacy notice and accept it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = ctx.interaction is not None
+        ephemeral = personal(ctx)
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
         if account is not None and account.id is not None and not account.needs_consent_refresh:
             await ctx.send(
@@ -163,7 +164,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def unlink(self, ctx: Context[BotT], identity: int | None = None):
         """Unlink one of your linked accounts."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = ctx.interaction is not None
+        ephemeral = personal(ctx)
         target = await self._unlink_target(ctx, identity, locale)
         if isinstance(target, str):
             await ctx.send(view=text_layout(target), ephemeral=ephemeral, allowed_mentions=no_mentions())
@@ -247,7 +248,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         if account is None or account.id is None or not account.identities:
             await ctx.send(
                 view=text_layout(t(locale, _("You don't have any linked accounts yet."))),
-                ephemeral=ctx.interaction is not None,
+                ephemeral=personal(ctx),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -277,7 +278,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 ],
                 footer=t(locale, _("Use the id with `/account visibility` or `/account unlink`.")),
             ),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -318,7 +319,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             )
         await ctx.send(
             view=text_layout(message),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -327,7 +328,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
     async def profile(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
         """Show a creator page."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = ctx.interaction is not None
+        ephemeral = personal(ctx)
         target = user or ctx.author
         # Read-only for everyone, including yourself: viewing a page is not evidence that anybody
         # asked to be remembered, so it must not create an account row.
@@ -431,7 +432,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 return
             await ctx.send(
                 view=text_layout(t(locale, _("Thanks. Run `/account profile-edit` again to open the editor."))),
-                ephemeral=True,
+                ephemeral=personal(ctx),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -462,7 +463,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         refresh = await self.account_service.refresh_java_identity(account.id)
         await ctx.send(
             view=text_layout(_refresh_message(refresh, locale)),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -474,8 +475,12 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         if account_id is None:
             return
         code, ticket = await self.account_service.create_merge_code(account_id)
-        await ctx.send(
-            view=card_layout(
+        # The comment here used to say "always ephemeral, even from a prefix invocation", which
+        # `Context.send` cannot honour: it drops the flag without an interaction, so `!account
+        # merge-code` posted an account-takeover credential into the channel.
+        await deliver_privately(
+            ctx,
+            card_layout(
                 t(locale, _("Merge code")),
                 t(
                     locale,
@@ -492,9 +497,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     expiry=discord.utils.format_dt(ticket.expires_at.to_stdlib(), style="R"),
                 ),
             ),
-            # Always ephemeral, even from a prefix invocation, because the code is a credential.
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+            reason=t(locale, _("A merge code hands this account over, so it is never posted in a channel.")),
+            locale=locale,
         )
 
     @account_group.command(name="merge")
@@ -522,7 +526,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             ),
             locale=locale,
         )
-        await ctx.send(view=view, ephemeral=True, allowed_mentions=no_mentions())
+        await ctx.send(view=view, ephemeral=personal(ctx), allowed_mentions=no_mentions())
         await view.wait()
 
         if view.value is None:
@@ -536,7 +540,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 _("Merged. `{redirected}` now redirects to your creator page."),
                 redirected=merge.redirected_public_creator_id,
             )
-        await ctx.send(view=text_layout(message), ephemeral=True, allowed_mentions=no_mentions())
+        await ctx.send(view=text_layout(message), ephemeral=personal(ctx), allowed_mentions=no_mentions())
 
     @autocompletes(name="creators")
     @account_group.command(name="claim")
@@ -557,7 +561,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                     name=claim.alias_name,
                 )
             ),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -579,7 +583,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
-        await view.send(ctx, ephemeral=ctx.interaction is not None)
+        await view.send(ctx, ephemeral=personal(ctx))
 
 
 class ProfileEditModal(ErrorHandledModal):
