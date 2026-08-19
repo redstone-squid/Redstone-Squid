@@ -10,9 +10,9 @@ from discord.ext import commands
 
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.notifications_view import NotificationPanelView
+from squid.bot.notifications_view import NotificationPanel
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import error_layout, info_layout, reply_layout
+from squid.bot.utils.components import error_layout, info_layout, no_mentions, reply_layout
 from squid.core.i18n import _
 from squid.notifications import (
     PendingNotificationDelivery,
@@ -55,16 +55,30 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
-        panel = NotificationPanelView(
+        component = NotificationPanel(
             notifications=self.bot.services.notifications,
             account_id=account_id,
             author_id=interaction.user.id,
             locale=locale,
         )
-        await panel.load()
-        message = await reply_layout(interaction, panel, wait=True)
-        if message is not None:
-            panel.bind_message(message)
+        await component.load()
+        mount = component.mount()
+        rendered = mount.build_view()
+        if interaction.response.is_done():
+            message = await interaction.followup.send(
+                view=rendered,
+                ephemeral=True,
+                wait=True,
+                allowed_mentions=no_mentions(),
+            )
+        else:
+            await interaction.response.send_message(
+                view=rendered,
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            message = await interaction.original_response()
+        mount.bind(message, rendered)
 
     @autocompletes(
         creator="creator_profiles",
