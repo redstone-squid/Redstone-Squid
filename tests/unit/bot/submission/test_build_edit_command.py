@@ -101,13 +101,13 @@ def _sent_view(interaction: discord.Interaction[Any]) -> Any:
     return cast(Any, interaction).followup.sent[-1]["view"]
 
 
-def _component(view: Any) -> BuildEditComponent[Any] | None:
+def _component(view: Any) -> BuildEditComponent | None:
     mount = getattr(view, "_mount", None)
     component = getattr(mount, "component", None)
     return component if isinstance(component, BuildEditComponent) else None
 
 
-def _staged(component: BuildEditComponent[Any]) -> dict[str, Any]:
+def _staged(component: BuildEditComponent) -> dict[str, Any]:
     return {item.attribute: item.actual_value for item in component.items if item.modified}
 
 
