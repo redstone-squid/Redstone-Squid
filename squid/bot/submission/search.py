@@ -14,6 +14,7 @@ from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
@@ -162,6 +163,7 @@ class SearchCog[
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
         self.restrictions = bot.services.restrictions
+        self.consent_sticky = BuildLogConsentStickyMessage()
         self.register_edit_context_menu()
         self.register_recalc_context_menu()
 
