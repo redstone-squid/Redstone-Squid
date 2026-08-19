@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import discord
 from discord import TextChannel
 
-from squid.bot.utils.components import StaticLayout
+import squid_layouts as sl
 from squid.bot.utils.sticky_message import FunctionalStickyMessage, StickyMessage
 
 
@@ -18,7 +18,7 @@ class StubStickyMessage(StickyMessage):
 
     async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
         self.render_count += 1
-        return StaticLayout()
+        return sl.discord.render_static([])
 
 
 def _make_channel(channel_id: int = 12345) -> Any:
@@ -128,7 +128,7 @@ async def test_functional_sticky_message_uses_renderer_callback() -> None:
     async def custom_render(ch: TextChannel) -> discord.ui.LayoutView:
         nonlocal called
         called = True
-        return StaticLayout()
+        return sl.discord.render_static([])
 
     sticky = FunctionalStickyMessage(custom_render)
     channel = _make_channel()

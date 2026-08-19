@@ -14,10 +14,11 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Context
 
+import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import StaticLayout, no_mentions, text_layout
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.bot.utils.visibility import personal
 from squid.builds.application import BuildService
@@ -74,10 +75,12 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         if stored is None:
             return
         await ctx.send(
-            view=StaticLayout(
-                discord.ui.TextDisplay(
-                    _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
-                )
+            view=sl.discord.render_static(
+                [
+                    sl.primitives.Text(
+                        _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
+                    )
+                ]
             ),
             allowed_mentions=no_mentions(),
         )

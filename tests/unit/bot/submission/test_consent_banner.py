@@ -9,8 +9,8 @@ import pytest
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
+from squid.bot.consent import ConsentPrompt
 from squid.bot.submission.consent_banner import (
-    BuildLogConsentPromptView,
     BuildLogConsentStickyMessage,
     DynamicBuildLogConsentButton,
 )
@@ -149,10 +149,10 @@ async def test_dynamic_consent_button_grants_consent_when_user_agrees(
     accounts.get_or_create_identity.return_value = _discord_account(consented=True)
     interaction = _make_interaction(accounts)
 
-    async def mock_wait(self: BuildLogConsentPromptView) -> None:
-        self.consent = AccountConsent.grant_current()
+    async def mock_wait(self: ConsentPrompt) -> None:
+        self._consent = AccountConsent.grant_current()
 
-    monkeypatch.setattr(BuildLogConsentPromptView, "wait", mock_wait)
+    monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
     await button.callback(cast(Any, interaction))
 
@@ -171,10 +171,10 @@ async def test_dynamic_consent_button_cancelling_stores_no_account(
     accounts.get_account_by_identity.return_value = None
     interaction = _make_interaction(accounts)
 
-    async def mock_wait(self: BuildLogConsentPromptView) -> None:
-        self.consent = None
+    async def mock_wait(self: ConsentPrompt) -> None:
+        self._consent = None
 
-    monkeypatch.setattr(BuildLogConsentPromptView, "wait", mock_wait)
+    monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 
     await button.callback(cast(Any, interaction))
 
