@@ -10,8 +10,6 @@ dropped footnote genuinely returns its characters to the body.
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 
-import discord
-
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.conform import ELLIPSIS
 from squid_layouts.constraints import Alts, Drop, Never, Overflow, Paginate, Spill, Truncate
@@ -36,6 +34,7 @@ from squid_layouts.ir import (
     Thumbnail,
 )
 from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.styles import Color
 
 type TextBearing = Text | Heading | Footer | Code | Lines
 
@@ -66,7 +65,7 @@ class RSection:
 @dataclass(frozen=True, slots=True)
 class RPanel:
     children: list[Realized]
-    accent: discord.Colour | int | None
+    accent: Color | None
 
 
 type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | Thumbnail | Gallery | RawItem
@@ -267,6 +266,7 @@ class _Builder:
             style=button.style,
             emoji=button.emoji,
             disabled=button.disabled,
+            policy=button.policy,
         )
 
     def _clamp_select(self, select: SelectMenu) -> SelectMenu:
@@ -298,6 +298,7 @@ class _Builder:
             min_values=select.min_values,
             max_values=min(select.max_values, len(clamped_options) or 1),
             disabled=select.disabled,
+            policy=select.policy,
         )
 
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:

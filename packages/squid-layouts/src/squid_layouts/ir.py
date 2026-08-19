@@ -8,9 +8,9 @@ the result into discord.py items — authors never do budget arithmetic.
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
-import discord
-
+from squid_layouts.actions import ActionPolicy
 from squid_layouts.constraints import Alt, Overflow, Spill, Truncate
+from squid_layouts.styles import ActionStyle, Color
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,11 +81,12 @@ class Button:
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
     label: str
-    on_click: Callable[[discord.Interaction], Awaitable[None]]
-    key: str | None = None
-    style: discord.ButtonStyle = discord.ButtonStyle.secondary
+    on_click: Callable[..., Awaitable[None]]
+    key: str
+    style: ActionStyle = ActionStyle.SECONDARY
     emoji: str | None = None
     disabled: bool = False
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,12 +102,13 @@ class SelectMenu:
     """A string select; occupies its own row when materialized."""
 
     options: tuple[Option, ...]
-    on_select: Callable[[discord.Interaction, list[str]], Awaitable[None]]
-    key: str | None = None
+    on_select: Callable[..., Awaitable[None]]
+    key: str
     placeholder: str | None = None
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +119,7 @@ class RawItem:
     materialization; ``text_cost`` charges any display text the item contributes.
     """
 
-    factory: Callable[[], discord.ui.Item]
+    factory: Callable[[], object]
     text_cost: int = 0
 
 
@@ -150,7 +152,7 @@ class Panel:
     """A Container: children grouped under an optional accent colour."""
 
     children: tuple[Node, ...]
-    accent: discord.Colour | int | None = None
+    accent: Color | None = None
 
 
 @dataclass(frozen=True, slots=True)

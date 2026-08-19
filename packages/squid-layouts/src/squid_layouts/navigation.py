@@ -7,10 +7,9 @@ rewriting subclass constructors to keep controls in order. It is an ordinary con
 their parent rather than through a mount reference the navigator hands out.
 """
 
-import discord
-
 from squid_layouts.component import Component
 from squid_layouts.ir import Button, Node, Row
+from squid_layouts.styles import ActionStyle
 
 
 class Navigator(Component):
@@ -53,16 +52,16 @@ class Navigator(Component):
         if self.depth > 2:
             controls.append(Button(label=chrome.home, on_click=self._home, key="__nav_home"))
         controls.append(
-            Button(label=chrome.close, on_click=self._close, key="__nav_close", style=discord.ButtonStyle.secondary)
+            Button(label=chrome.close, on_click=self._close, key="__nav_close", style=ActionStyle.SECONDARY)
         )
         nodes.append(Row(tuple(controls)))
         return nodes
 
-    async def _back(self, interaction: discord.Interaction) -> None:
+    async def _back(self, interaction) -> None:
         self.pop()
 
-    async def _home(self, interaction: discord.Interaction) -> None:
+    async def _home(self, interaction) -> None:
         self.home()
 
-    async def _close(self, interaction: discord.Interaction) -> None:
+    async def _close(self, interaction) -> None:
         await self.mount.finish_via(interaction)
