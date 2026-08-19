@@ -64,9 +64,9 @@ class BuildInfoComponent(sl.Component):
         interaction = getattr(event.responder, "interaction", None)
         if interaction is None:
             return
-        from squid.bot.submission.ui.views import BuildEditView
+        from squid.bot.submission.ui.views import BuildEditComponent
 
-        await BuildEditView(
+        await BuildEditComponent(
             self.build,
             interaction.client.services.builds,
             locale=self.locale,

@@ -9,12 +9,11 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import render_item
+from squid.bot.ui import render_item, truncate_display_text
 from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
     DISCORD_YELLOW,
-    truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status

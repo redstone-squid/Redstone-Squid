@@ -5,13 +5,13 @@ from typing import cast
 import discord
 import pytest
 
+from squid.bot.ui import truncate_display_text
 from squid.bot.utils.components import (
     CardField,
     card_layout,
     edit_layout,
     link_layout,
     text_layout,
-    truncate_display_text,
 )
 from tests.helpers.discord import make_message
 
