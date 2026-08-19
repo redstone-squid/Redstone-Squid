@@ -21,6 +21,17 @@ class Spill:
 
 
 @dataclass(frozen=True, slots=True)
+class Paginate:
+    """Split overflowing content into pages; the mount adds nav controls and a page footer.
+
+    Splits at ``boundary`` where possible, hard-splitting single oversized segments. One
+    Paginate node per document; extras degrade to Truncate with a note.
+    """
+
+    boundary: str = "\n"
+
+
+@dataclass(frozen=True, slots=True)
 class Drop:
     """Omit the node entirely rather than show it shortened."""
 
@@ -30,4 +41,4 @@ class Never:
     """Shrinking this node is a bug: overflow raises in strict mode."""
 
 
-type Overflow = Truncate | Spill | Drop | Never
+type Overflow = Truncate | Spill | Paginate | Drop | Never

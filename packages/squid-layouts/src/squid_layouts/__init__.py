@@ -12,7 +12,7 @@ from squid_layouts import deliver
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.component import Component, state
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
-from squid_layouts.constraints import Drop, Never, Overflow, Spill, Truncate
+from squid_layouts.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.ir import (
     Button,
     Code,
@@ -34,6 +34,7 @@ from squid_layouts.ir import (
 )
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.materialize import StaticView, materialize, render_static
+from squid_layouts.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_layouts.mount import ErrorHook, Mount, MountedView
 from squid_layouts.presets import Field, FieldGroup, banner, card, listing, report
 from squid_layouts.runtime import Reactor
@@ -55,16 +56,19 @@ __all__ = [
     "Footer",
     "Gallery",
     "Heading",
+    "LabelSpec",
     "LayoutOverflowError",
     "LimitViolationError",
     "Lines",
     "LinkButton",
+    "ModalSpec",
     "Mount",
     "MountedView",
     "Never",
     "Node",
     "Option",
     "Overflow",
+    "Paginate",
     "Panel",
     "RawItem",
     "Reactor",
@@ -76,11 +80,13 @@ __all__ = [
     "Spill",
     "StaticView",
     "Text",
+    "TextInputSpec",
     "Thumbnail",
     "Truncate",
     "V2Limits",
     "assert_within_limits",
     "banner",
+    "build_modal",
     "card",
     "conform",
     "conform_modal",
