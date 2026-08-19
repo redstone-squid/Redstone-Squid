@@ -75,11 +75,15 @@ class TestSolvePagination:
         assert solved.pager is None
         assert solved.pages == 1
 
-    def test_second_paginate_node_degrades_to_truncate(self):
+    def test_multiple_paginate_nodes_are_independent(self):
         solved = solve(
-            [Text("a" * 3000, overflow=Paginate()), Text("b" * 3000, overflow=Paginate())],
+            [
+                Text("a" * 3000, overflow=Paginate(key="alpha")),
+                Text("b" * 3000, overflow=Paginate(key="beta")),
+            ],
+            page={"alpha": 0, "beta": 1},
         )
-        assert any("degraded to Truncate" in note for note in solved.notes)
+        assert [(pager.key, pager.page) for pager in solved.pagers] == [("alpha", 0), ("beta", 1)]
 
 
 def _total_text(solved) -> int:
@@ -92,7 +96,20 @@ def _total_text(solved) -> int:
 class Browser(Component):
     def render(self):
         body = "\n".join(f"entry {index:04d}" for index in range(2000))
-        return [Heading("Entries"), Code(body, overflow=Paginate())]
+        return [Heading("Entries"), Code(body, overflow=Paginate(key="entries"))]
+
+
+class TwoBrowsers(Component):
+    def __init__(self) -> None:
+        self.left_version = "old"
+
+    def render(self):
+        left = tuple(f"{self.left_version} left {index}" for index in range(30))
+        right = tuple(f"right {index}" for index in range(30))
+        return [
+            Lines(left, overflow=Paginate(key="left", per=10)),
+            Lines(right, overflow=Paginate(key="right", per=10)),
+        ]
 
 
 class TestMountPagination:
@@ -113,7 +130,7 @@ class TestMountPagination:
         mount.build_view()
         interaction = fake_interaction()
 
-        await mount.dispatch("__page_next", interaction)
+        await mount.dispatch("__page_next.entries", interaction)
 
         edited = interaction.response.edit_message.await_args.kwargs["view"]
         prev_button, _ = self._nav_buttons(edited)
@@ -128,20 +145,41 @@ class TestMountPagination:
 
         mount = Mount(Browser(), timeout=None, nav=nav)
         view = mount.build_view()
-        assert [button.label for button in self._nav_buttons(view)] == [f"1/{mount._pages}"]
+        assert [button.label for button in self._nav_buttons(view)] == [f"1/{mount._pages['entries']}"]
 
         await mount.dispatch("jump", fake_interaction())
 
-        assert mount._page == 1
+        assert mount._page["entries"] == 1
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
         mount = Mount(Browser(), timeout=None)
         mount.build_view()
         interaction = fake_interaction()
 
-        await mount.dispatch("__page_prev", interaction)
+        await mount.dispatch("__page_prev.entries", interaction)
 
         interaction.response.defer.assert_awaited_once()
+
+    async def test_two_pagers_advance_independently(self):
+        mount = Mount(TwoBrowsers(), timeout=None)
+        mount.build_view()
+
+        await mount.dispatch("__page_next.left", fake_interaction())
+
+        assert mount._page == {"left": 1, "right": 0}
+
+    async def test_changed_content_resets_only_its_pager(self):
+        component = TwoBrowsers()
+        mount = Mount(component, timeout=None)
+        mount.build_view()
+        await mount.dispatch("__page_next.left", fake_interaction())
+        await mount.dispatch("__page_next.right", fake_interaction())
+
+        component.left_version = "new"
+        mount.invalidate()
+        mount.build_view()
+
+        assert mount._page == {"left": 0, "right": 1}
 
 
 class TestCountPages:
@@ -189,10 +227,10 @@ class TestSolverNav:
     def _paginated(self) -> list:
         return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate())]
 
-    def _nav(self, page: int, pages: int):
+    def _nav(self, key: str, page: int, pages: int):
         async def move(interaction) -> None: ...
 
-        return default_nav(DEFAULT_CHROME)(PageContext(page=page, pages=pages, on_prev=move, on_next=move))
+        return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
 
     def test_nav_nodes_are_realized_into_the_document(self):
         solved = solve(self._paginated(), nav=self._nav)
@@ -208,7 +246,7 @@ class TestSolverNav:
 
     def test_a_text_bearing_nav_factory_is_rejected(self):
         with pytest.raises(ValueError, match="component-bearing"):
-            solve(self._paginated(), nav=lambda page, pages: [Text("page {page}")])
+            solve(self._paginated(), nav=lambda key, page, pages: [Text("page {page}")])
 
 
 class TestBuildModal:
@@ -267,8 +305,8 @@ def test_the_solver_counts_the_nav_it_realized():
     # so the solver's component budget matches what the built view actually contains.
     async def move(interaction) -> None: ...
 
-    def nav(page: int, pages: int):
-        return default_nav(DEFAULT_CHROME)(PageContext(page=page, pages=pages, on_prev=move, on_next=move))
+    def nav(key: str, page: int, pages: int):
+        return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
 
     view = Mount(Browser(), timeout=None).build_view()
     solved = solve(Browser().render(), nav=nav)

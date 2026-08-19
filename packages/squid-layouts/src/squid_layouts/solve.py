@@ -7,7 +7,7 @@ fall back to document order. Dropped nodes refund their grant and the allocation
 dropped footnote genuinely returns its characters to the body.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
@@ -76,8 +76,9 @@ PAGE_FOOTER_PREFIX = "-# "
 
 @dataclass(slots=True)
 class Pager:
-    """Page state for a document whose Paginate node overflowed."""
+    """Page state for one keyed Paginate node that overflowed."""
 
+    key: str
     slot: RText
     prefix: str
     suffix: str
@@ -86,6 +87,7 @@ class Pager:
     footer: Callable[[int, int], str]
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""
+    page: int = 0
 
     @property
     def pages(self) -> int:
@@ -96,6 +98,7 @@ class Pager:
         index = max(0, min(index, self.pages - 1))
         self.slot.content = self.prefix + self.fragments[index] + self.suffix
         self.footer_slot.content = PAGE_FOOTER_PREFIX + self.footer(index + 1, self.pages)
+        self.page = index
         return index
 
 
@@ -103,11 +106,18 @@ class Pager:
 class SolvedLayout:
     children: list[Realized]
     notes: list[str]
-    pager: Pager | None = None
-    page: int = 0
-    """The page realized into the children; 0 when the document does not paginate."""
+    pagers: tuple[Pager, ...] = ()
     components: int = 0
-    """Components the built view will hold, nav and page footer included."""
+    """Components the built view will hold, including every pager's controls."""
+
+    @property
+    def pager(self) -> Pager | None:
+        """The first pager, for single-pager callers."""
+        return self.pagers[0] if self.pagers else None
+
+    @property
+    def page(self) -> int:
+        return self.pager.page if self.pager is not None else 0
 
     @property
     def pages(self) -> int:
@@ -619,6 +629,10 @@ def _resolve_folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[Nod
     return [rewrite(node, (index,)) for index, node in enumerate(nodes)]
 
 
+type PageState = Mapping[str, int] | int | None
+type PageNav = Callable[[str, int, int], Sequence[Node]]
+
+
 def solve(
     nodes: Sequence[Node],
     *,
@@ -626,29 +640,10 @@ def solve(
     chrome: Chrome = DEFAULT_CHROME,
     strict: bool = False,
     reserved_text: int = 0,
-    page: int | None = None,
-    nav: Callable[[int, int], Sequence[Node]] | None = None,
+    page: PageState = None,
+    nav: PageNav | None = None,
 ) -> SolvedLayout:
-    """Fit ``nodes`` into the message budgets, applying overflow policies where needed.
-
-    Args:
-        nodes: Top-level IR nodes in document order.
-        limits: The limit table supplying the text and component budgets.
-        chrome: Pre-translated framework strings.
-        strict: Raise :class:`LayoutOverflowError` instead of degrading.
-        reserved_text: Characters held back from the budget (e.g. for pagination chrome).
-        page: The page to realize when the document paginates, clamped to the page count;
-            ``None`` takes the pager's initial page.
-        nav: Called with ``(page, pages)`` when the document paginates; its nodes are
-            realized as the document's last children. It must return component-bearing
-            nodes only — see :func:`_validated_nav`.
-
-    Returns:
-        The realized tree plus a note per degradation applied.
-    """
-    # Structural degradation wraps the measuring pass: solve with every Fold on its primary
-    # branch, and while the document is over the component limit, collapse the lowest-priority
-    # fold and solve again. Each round removes one fold, so the loop is bounded by their count.
+    """Fit nodes into target budgets with independently keyed pagination."""
     tree = list(nodes)
     collapsed: set[_FoldPath] = set()
     fold_notes: list[str] = []
@@ -685,6 +680,51 @@ def solve(
     return solved
 
 
+def _configure_paginators(
+    builder: _Builder,
+    chrome: Chrome,
+) -> tuple[list[_Unit], dict[int, str], dict[int, Callable[[int, int], str]]]:
+    units = [unit for unit in builder.units if isinstance(unit.overflow, Paginate)]
+    keys: dict[int, str] = {}
+    footers: dict[int, Callable[[int, int], str]] = {}
+    used: set[str] = set()
+    for unit in units:
+        policy = unit.overflow
+        assert isinstance(policy, Paginate)
+        key = policy.key or f"page{unit.index}"
+        if key in used:
+            message = f"duplicate pager key {key!r}"
+            raise ValueError(message)
+        used.add(key)
+        keys[unit.index] = key
+        footers[unit.index] = policy.footer if policy.footer is not None else chrome.page_footer
+        if policy.per is not None:
+            if isinstance(unit.node, Lines):
+                unit.count_pages = _count_pages(unit, policy.per)
+            else:
+                builder.notes.append(f"node {unit.index} is not a Lines node; paging on overflow instead of per entry")
+                unit.overflow = replace(policy, per=None)
+    return units, keys, footers
+
+
+def _insert_after(children: list[Realized], target: RText, additions: list[Realized]) -> bool:
+    for index, child in enumerate(children):
+        if child is target:
+            children[index + 1 : index + 1] = additions
+            return True
+        if isinstance(child, RPanel) and _insert_after(child.children, target, additions):
+            return True
+    return False
+
+
+def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
+    if isinstance(state, Mapping):
+        return state.get(key)
+    if isinstance(state, int) and first:
+        return state
+    return None
+
+
 def _solve_once(
     nodes: Sequence[Node],
     *,
@@ -692,63 +732,75 @@ def _solve_once(
     limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    page: int | None,
-    nav: Callable[[int, int], Sequence[Node]] | None,
+    page: PageState,
+    nav: PageNav | None,
     notes: list[str],
 ) -> SolvedLayout:
-    """One measuring pass over a document whose Folds are resolved to a single branch."""
-    builder = _Builder(limits=limits, notes=notes)
-    children = builder.realize_children(_resolve_folds(nodes, collapsed))
+    """One measuring pass, including a fixed point for all measured pager footers."""
+    resolved = _resolve_folds(nodes, collapsed)
+    active: set[int] = set()
+    final: (
+        tuple[
+            _Builder,
+            list[Realized],
+            list[_Unit],
+            dict[int, str],
+            dict[int, Callable[[int, int], str]],
+        ]
+        | None
+    ) = None
 
-    paginate_units = [unit for unit in builder.units if isinstance(unit.overflow, Paginate)]
-    for extra in paginate_units[1:]:
-        extra.overflow = Truncate()
-        notes.append(f"extra Paginate node {extra.index} degraded to Truncate")
-    paginator = paginate_units[0] if paginate_units else None
+    # At least one previously unseen paginator joins active on every non-terminal pass.
+    # The component ceiling is a safe bound even when many paginators are nested in one Panel.
+    for _ in range(limits.total_components + 1):
+        pass_notes = list(notes)
+        builder = _Builder(limits=limits, notes=pass_notes)
+        children = builder.realize_children(resolved)
+        paginate_units, keys, footers = _configure_paginators(builder, chrome)
+        footer_reservation = sum(
+            _footer_cost(footers[unit.index], len(unit.content)) for unit in paginate_units if unit.index in active
+        )
+        budget = limits.total_text - builder.raw_text_cost - reserved_text - footer_reservation
+        _allocate(builder.units, budget, pass_notes, chrome)
+        children = _prune(children)
+        detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
+        final = (builder, children, paginate_units, keys, footers)
+        expanded = active | detected
+        if expanded == active:
+            break
+        active = expanded
 
-    page_footer = chrome.page_footer
-    if paginator is not None:
-        policy = paginator.overflow
+    assert final is not None
+    builder, children, paginate_units, keys, footers = final
+    pagers: list[Pager] = []
+    for unit in paginate_units:
+        if unit.fragments is None or len(unit.fragments) <= 1:
+            continue
+        policy = unit.overflow
         assert isinstance(policy, Paginate)
-        page_footer = policy.footer if policy.footer is not None else chrome.page_footer
-        if policy.per is not None:
-            if isinstance(paginator.node, Lines):
-                paginator.count_pages = _count_pages(paginator, policy.per)
-            else:
-                notes.append(f"node {paginator.index} is not a Lines node; paging on overflow instead of per entry")
-                paginator.overflow = replace(policy, per=None)
-
-    budget = limits.total_text - builder.raw_text_cost - reserved_text
-    # When pagination can happen, its footer is charged before allocation — this is what
-    # replaces hand-tuned constants like the old PAGE_CHARS.
-    count_paginated = paginator is not None and paginator.count_pages is not None and len(paginator.count_pages) > 1
-    if paginator is not None and (count_paginated or sum(unit.need for unit in builder.units) > budget):
-        budget -= _footer_cost(page_footer, len(paginator.content))
-    _allocate(builder.units, budget, notes, chrome)
-    children = _prune(children)
-
-    pager = None
-    shown = 0
-    if paginator is not None and paginator.fragments is not None and len(paginator.fragments) > 1:
+        key = keys[unit.index]
         footer_slot = RText()
-        children.append(footer_slot)
-        assert isinstance(paginator.overflow, Paginate)
-        initial = len(paginator.fragments) - 1 if paginator.overflow.initial == "end" else 0
+        initial = len(unit.fragments) - 1 if policy.initial == "end" else 0
         pager = Pager(
-            slot=paginator.slot,
-            prefix=paginator.prefix,
-            suffix=paginator.suffix,
-            fragments=paginator.fragments,
+            key=key,
+            slot=unit.slot,
+            prefix=unit.prefix,
+            suffix=unit.suffix,
+            fragments=unit.fragments,
             footer_slot=footer_slot,
-            footer=page_footer,
+            footer=footers[unit.index],
             initial=initial,
         )
-        shown = pager.select(initial if page is None else page)
+        requested = _requested_page(page, key, first=not pagers)
+        shown = pager.select(initial if requested is None else requested)
+        additions: list[Realized] = [footer_slot]
         if nav is not None:
-            children.extend(builder.realize_children(_validated_nav(nav(shown, pager.pages))))
+            additions.extend(builder.realize_children(_validated_nav(nav(key, shown, pager.pages))))
+        if not _insert_after(children, unit.slot, additions):
+            children.extend(additions)
+        pagers.append(pager)
 
     count = _component_count(children)
     if count > limits.total_components:
-        notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
-
-    return SolvedLayout(children=children, notes=notes, pager=pager, page=shown, components=count)
+        builder.notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
+    return SolvedLayout(children=children, notes=builder.notes, pagers=tuple(pagers), components=count)
