@@ -8,7 +8,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 # GitHub Actions keeps requirements/base.txt and requirements/dev.txt in sync.
 # To reproduce the export locally, run:
-# 1. uv export --no-dev -o requirements/base.txt
+# 1. uv export --no-dev --no-emit-workspace -o requirements/base.txt
 # 2. uv export --only-dev -o requirements/dev.txt
 dependencies = [
     "alembic>=1.18.5",
@@ -31,8 +31,8 @@ dependencies = [
     "boto3>=1.43.48,<2",
     "cryptography>=50,<51",
     "beartype>=0.19.0",
-    "discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus",
     "rapidfuzz>=3.13.0",
+    "squid-layouts",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
     "advanced-alchemy>=1.11.0",
@@ -111,6 +111,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = []
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+squid-layouts = { workspace = true }
 
 [tool.uv]
 package = false
@@ -263,6 +269,16 @@ ignore = [
 "alembic/versions/*.py" = ["D"]
 "scripts/**.py" = ["INP"]
 
+"packages/*/tests/**.py" = [
+    "F841",
+    "TID251",
+    "EM",
+    "RUF059",
+    "D101",
+    "D102",
+    "D103"
+]
+
 "!tests/**.py" = ["PT"]
 "tests/**.py" = [
     "F841",
@@ -329,7 +345,7 @@ reportAny = false
 enableExperimentalFeatures = true  # For `TypeForm` support
 
 [tool.pyrefly]
-project-includes = ["squid/**/*.py", "tests/**/*.py", "app.py"]
+project-includes = ["squid/**/*.py", "tests/**/*.py", "packages/**/*.py", "app.py"]
 project-excludes = ["alembic/**/*.py", "scripts/migrations/**/*.py"]
 python-version = "3.14"
 # `observability` is an optional extra (see the dependency group below) that isn't installed in
@@ -347,6 +363,7 @@ pythonpath = ["."]
 testpaths = [
     "tests/unit",
     "tests/architecture",
+    "packages/squid-layouts/tests",
 ]
 xfail_strict = true
 addopts = [
@@ -354,6 +371,7 @@ addopts = [
     "--strict-config",
     "-ra",                 # short summary of skips/xfails
     "--cov=squid",
+    "--cov=squid_layouts",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings
 # When a warning matches more than one option in the list, the action for the last matching option is performed.
