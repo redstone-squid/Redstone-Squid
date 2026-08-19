@@ -28,6 +28,7 @@ from squid_layouts.scene import (
 )
 from squid_layouts.scene_schema import SCENE_SCHEMA
 from squid_layouts.styles import ActionStyle
+from squid_layouts.text import TextDialect
 
 
 class SceneCodecError(ValueError):
@@ -35,9 +36,9 @@ class SceneCodecError(ValueError):
 
 
 class SceneCodec:
-    """Encode and decode deterministic experimental scene protocol 0."""
+    """Encode and decode deterministic resolved-scene protocol 1."""
 
-    protocol = 0
+    protocol = 1
 
     @classmethod
     def schema(cls) -> dict[str, Any]:
@@ -131,8 +132,8 @@ class SceneCodec:
 
 def _node_to_dict(node: SceneNode | SceneLink | SceneButton) -> dict[str, Any]:
     match node:
-        case SceneText(content=content):
-            return {"kind": "text", "content": content}
+        case SceneText(content=content, dialect=dialect):
+            return {"kind": "text", "content": content, "dialect": dialect.value}
         case SceneSeparator(large=large, visible=visible):
             return {"kind": "separator", "large": large, "visible": visible}
         case SceneLink(label=label, url=url):
@@ -205,7 +206,7 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
     kind = _string(raw, "kind")
     match kind:
         case "text":
-            return SceneText(_string(raw, "content"))
+            return SceneText(_string(raw, "content"), TextDialect(_string(raw, "dialect")))
         case "separator":
             return SceneSeparator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))
         case "link":

@@ -8,7 +8,7 @@ This package must stay free of `squid.*` imports and of `_()` i18n markers: all 
 text enters pre-translated through `Chrome`.
 """
 
-from squid_layouts import deliver
+from squid_layouts import deliver, primitives, semantic
 from squid_layouts.actions import ActionEvent, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent, Visibility
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.component import Component
@@ -71,6 +71,7 @@ from squid_layouts.solve import LayoutOverflowError, SolvedLayout, solve
 from squid_layouts.styles import ActionStyle, Color
 from squid_layouts.target import PreparedExtension, ResourceCost, TargetProfile
 from squid_layouts.testing import assert_within_limits
+from squid_layouts.text import RawMarkdown, ResolvedText, TextDialect, md, plain, raw_md
 
 __all__ = [
     "DEFAULT_CHROME",
@@ -137,8 +138,10 @@ __all__ = [
     "PreparedExtension",
     "PressEvent",
     "RawItem",
+    "RawMarkdown",
     "ReactiveWriteError",
     "Reactor",
+    "ResolvedText",
     "ResourceCost",
     "Row",
     "SceneCodec",
@@ -158,6 +161,7 @@ __all__ = [
     "SubmitEvent",
     "TargetProfile",
     "Text",
+    "TextDialect",
     "TextInputSpec",
     "Thumbnail",
     "Truncate",
@@ -181,10 +185,15 @@ __all__ = [
     "deliver",
     "listing",
     "materialize",
+    "md",
     "page_controls",
+    "plain",
     "plan",
+    "primitives",
+    "raw_md",
     "render_static",
     "report",
+    "semantic",
     "solve",
     "state",
     "transaction",
