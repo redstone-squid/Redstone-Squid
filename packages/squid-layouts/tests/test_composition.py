@@ -1,10 +1,25 @@
 """Composable components: embedding, key namespacing, and where invalidation travels."""
 
 import discord
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import Button, Component, Heading, Mount, Node, Panel, Row, Text, state
+from squid_layouts import (
+    Button,
+    Component,
+    Embed,
+    Heading,
+    LayoutInvariantError,
+    Lines,
+    Mount,
+    Node,
+    Paginate,
+    Panel,
+    Row,
+    Text,
+    state,
+)
 from squid_layouts.testing import fake_interaction
 
 
@@ -39,7 +54,7 @@ class Pair(Component):
         self.right = Counter("right")
 
     def render(self):
-        return [Heading("Pair"), *self.embed(self.left, key="left"), *self.embed(self.right, key="right")]
+        return [Heading("Pair"), self.embed(self.left, key="left"), self.embed(self.right, key="right")]
 
 
 def _custom_ids(view: discord.ui.LayoutView) -> list[str]:
@@ -104,9 +119,9 @@ class Nest(Component):
         self.child = Nest(depth - 1) if depth else None
 
     def render(self):
-        nodes: list[Node] = [Row((Button(label="x", on_click=self._click, key="click"),))]
+        nodes: list[Node | Embed] = [Row((Button(label="x", on_click=self._click, key="click"),))]
         if self.child is not None:
-            nodes.extend(self.embed(self.child, key=f"level{self.depth}" + "_padding" * 4))
+            nodes.append(self.embed(self.child, key=f"level{self.depth}" + "_padding" * 4))
         return [Panel(children=tuple(nodes))]
 
     async def _click(self, interaction: discord.Interaction) -> None: ...
@@ -122,3 +137,95 @@ def test_nested_embeds_stay_addressable(depth):
     assert len(set(ids)) == len(ids), "two controls in one message may not share a custom_id"
     assert all(len(custom_id) <= 100 for custom_id in ids)
     assert len(mount._handlers) == depth + 1
+
+
+class PagedChild(Component):
+    def render(self):
+        return Lines(tuple(f"entry {index}" for index in range(6)), overflow=Paginate(key="items", per=2))
+
+
+class PagedPair(Component):
+    def __init__(self) -> None:
+        self.left = PagedChild()
+        self.right = PagedChild()
+
+    def render(self):
+        return [self.embed(self.left, key="left"), self.embed(self.right, key="right")]
+
+
+def test_embed_namespaces_pager_state_and_controls() -> None:
+    mount = Mount(PagedPair(), timeout=None)
+    mount.build_view()
+
+    assert mount._page == {"left.items": 0, "right.items": 0}
+    assert "__page_next.left.items" in mount._handlers
+    assert "__page_next.right.items" in mount._handlers
+
+
+def test_duplicate_sibling_embed_keys_are_rejected() -> None:
+    class Duplicate(Component):
+        def render(self):
+            return [self.embed(Counter("one"), key="same"), self.embed(Counter("two"), key="same")]
+
+    with pytest.raises(LayoutInvariantError, match="duplicate Embed key"):
+        Mount(Duplicate(), timeout=None).build_view()
+
+
+def test_one_component_instance_cannot_occupy_two_paths() -> None:
+    child = Counter("shared")
+
+    class Duplicate(Component):
+        def render(self):
+            return [self.embed(child, key="one"), self.embed(child, key="two")]
+
+    with pytest.raises(LayoutInvariantError, match="already embedded"):
+        Mount(Duplicate(), timeout=None).build_view()
+
+
+def test_component_embedding_cycles_are_rejected() -> None:
+    class Cycle(Component):
+        def render(self):
+            return self.embed(self, key="self")
+
+    with pytest.raises(LayoutInvariantError, match="embedding cycle"):
+        Mount(Cycle(), timeout=None).build_view()
+
+
+class Tracked(Component):
+    def __init__(self, name: str, events: list[str]) -> None:
+        self.name = name
+        self.events = events
+
+    def render(self) -> Node:
+        return Text(self.name)
+
+    def on_mount(self) -> None:
+        self.events.append(f"mount:{self.name}")
+
+    def on_unmount(self) -> None:
+        self.events.append(f"unmount:{self.name}")
+
+
+async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None:
+    events: list[str] = []
+
+    class Parent(Tracked):
+        def __init__(self) -> None:
+            super().__init__("parent", events)
+            self.child = Tracked("first", events)
+
+        def render(self):
+            return self.embed(self.child, key="child")
+
+    parent = Parent()
+    mount = Mount(parent, timeout=None)
+    mount.build_view()
+    assert events == ["mount:parent", "mount:first"]
+
+    parent.child = Tracked("second", events)
+    mount.invalidate()
+    mount.build_view()
+    assert events[-2:] == ["unmount:first", "mount:second"]
+
+    await mount.finish(disable=False)
+    assert events[-2:] == ["unmount:second", "unmount:parent"]
