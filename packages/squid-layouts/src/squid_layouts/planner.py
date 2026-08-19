@@ -13,6 +13,7 @@ from squid_layouts.ir import (
     ActionGroup,
     Button,
     Choice,
+    Embed,
     Extension,
     Fold,
     Gallery,
@@ -229,6 +230,8 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
         raise LayoutInvariantError(message)
 
     def walk(node: Node, path: str) -> None:
+        if isinstance(node, Embed):
+            fail(path, "Embed must be expanded by a component mount before planning")
         overflow = getattr(node, "overflow", None)
         if isinstance(overflow, Paginate):
             if overflow.key is None:

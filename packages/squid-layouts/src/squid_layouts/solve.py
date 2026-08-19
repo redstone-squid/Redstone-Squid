@@ -16,6 +16,7 @@ from squid_layouts.constraints import Alts, Drop, Never, Overflow, Paginate, Spi
 from squid_layouts.ir import (
     Button,
     Code,
+    Embed,
     Fold,
     Footer,
     Gallery,
@@ -354,6 +355,9 @@ class _Builder:
             case RawItem(text_cost=text_cost):
                 self.raw_text_cost += text_cost
                 return node
+            case Embed():
+                message = "Embed must be expanded before solving"
+                raise ValueError(message)
             case Fold(primary=primary):
                 # Folds are resolved to a branch before realization; this is belt and braces.
                 return self.realize(primary)
