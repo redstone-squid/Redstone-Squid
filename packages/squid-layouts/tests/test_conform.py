@@ -5,8 +5,17 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import ELLIPSIS, LIMITS, LimitViolationError, assert_within_limits, conform, conform_modal, trim
-from squid_layouts.testing import payload_problems
+from squid_layouts.discord import (
+    DEFAULT_LIMITS as LIMITS,
+)
+from squid_layouts.discord import (
+    ELLIPSIS,
+    LimitViolationError,
+    conform,
+    conform_modal,
+    trim,
+)
+from squid_layouts.discord.testing import assert_within_limits, payload_problems
 
 
 def _view(*items: discord.ui.Item) -> discord.ui.LayoutView:

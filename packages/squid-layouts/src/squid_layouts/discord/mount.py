@@ -17,14 +17,14 @@ from typing import Any, Protocol
 import anyio
 import discord
 
-from squid_layouts import deliver
 from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
-from squid_layouts.compositor import Composition, compose
-from squid_layouts.discord.actions import DiscordActionResponder
-from squid_layouts.discord.renderer import DiscordRenderer
+from squid_layouts.discord import delivery as deliver
+from squid_layouts.discord.actions import ActionResponder
+from squid_layouts.discord.compose import Composition, compose
+from squid_layouts.discord.renderer import Renderer
 from squid_layouts.document import Asset, Document, InlineAsset
-from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav
 from squid_layouts.primitives.nodes import Node
 
@@ -194,7 +194,7 @@ class Mount:
             composition = compose(
                 rendered,
                 wire=wire,
-                renderer=DiscordRenderer(
+                renderer=Renderer(
                     limits=self.limits,
                     view_factory=lambda: MountedView(self, self.timeout),
                 ),
@@ -361,7 +361,7 @@ class Mount:
         values: list[str] | None,
     ) -> None:
         actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
-        responder = DiscordActionResponder(interaction, self)
+        responder = ActionResponder(interaction, self)
         native_locale = getattr(interaction, "locale", None)
         locale = str(native_locale) if native_locale is not None else None
         event = (

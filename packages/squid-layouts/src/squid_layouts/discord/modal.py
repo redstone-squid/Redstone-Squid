@@ -11,8 +11,8 @@ from dataclasses import dataclass
 
 import discord
 
-from squid_layouts.conform import conform_modal
-from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.discord.conform import conform_modal
+from squid_layouts.planning.limits import LIMITS, V2Limits
 
 logger = logging.getLogger(__name__)
 

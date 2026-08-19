@@ -6,24 +6,26 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_layouts import (
-    Button,
     Component,
     ContextKey,
-    Embed,
     LayoutInvariantError,
+    PressEvent,
+    state,
+)
+from squid_layouts.discord import Mount
+from squid_layouts.discord.testing import fake_interaction
+from squid_layouts.primitives import (
+    Button,
+    Embed,
+    Heading,
     Lines,
-    Mount,
     Node,
     Paginate,
     Panel,
-    PressEvent,
     Row,
     Text,
-    state,
 )
-from squid_layouts.primitives import Heading
 from squid_layouts.semantic import Action, Actions, Choice, Choices, Group, List, ListItem
-from squid_layouts.testing import fake_interaction
 
 
 class Counter(Component):

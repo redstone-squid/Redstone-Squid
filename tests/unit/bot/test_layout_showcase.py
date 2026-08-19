@@ -8,8 +8,8 @@ import discord
 from discord.ext import commands
 
 from squid.bot.layout_showcase import LayoutShowcase, LayoutShowcaseCog
-from squid_layouts import Mount, assert_within_limits
-from squid_layouts.testing import fake_interaction
+from squid_layouts.discord import Mount
+from squid_layouts.discord.testing import assert_within_limits, fake_interaction
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:

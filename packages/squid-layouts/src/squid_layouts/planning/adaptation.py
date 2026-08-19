@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.limits import V2Limits
+from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (

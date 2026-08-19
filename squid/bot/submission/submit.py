@@ -241,7 +241,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self.bot.for_build(build).render_container(reserved_text=len(heading)),
             discord.ui.ActionRow(EphemeralBuildEditButton(build)),
         )
-        sl.conform(preview)
+        sl.discord.conform(preview)
         await asyncio.gather(
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
             self.bot.for_build(build).post_for_voting(),
