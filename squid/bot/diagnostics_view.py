@@ -120,19 +120,19 @@ class ErrorReportBrowser(sl.Component):
             style=sl.ActionStyle.SECONDARY,
         )
 
-    async def _open(self, interaction: discord.Interaction, values: list[str]) -> None:
-        report = self._reports[int(values[0])]
+    async def _open(self, event: sl.SelectionEvent) -> None:
+        report = self._reports[int(event.values[0])]
         self.detail = report
         self.matches = 1
         self.mount.set_attachments([report_attachment(report)])
 
-    async def _back(self, interaction: discord.Interaction) -> None:
+    async def _back(self, event: sl.PressEvent) -> None:
         self.detail = None
         # The list is not about any one report, so its attachment goes with it.
         self.mount.set_attachments([])
 
-    async def _close(self, interaction: discord.Interaction) -> None:
-        await self.mount.finish_via(interaction)
+    async def _close(self, event: sl.PressEvent) -> None:
+        await event.finish()
 
 
 def report_attachment(report: ErrorReport) -> discord.File:

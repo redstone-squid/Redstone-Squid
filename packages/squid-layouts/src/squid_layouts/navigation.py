@@ -7,6 +7,7 @@ rewriting subclass constructors to keep controls in order. It is an ordinary con
 their parent rather than through a mount reference the navigator hands out.
 """
 
+from squid_layouts.actions import PressEvent
 from squid_layouts.component import Component
 from squid_layouts.ir import Button, Node, Row
 from squid_layouts.styles import ActionStyle
@@ -57,11 +58,11 @@ class Navigator(Component):
         nodes.append(Row(tuple(controls)))
         return nodes
 
-    async def _back(self, interaction) -> None:
+    async def _back(self, event: PressEvent) -> None:
         self.pop()
 
-    async def _home(self, interaction) -> None:
+    async def _home(self, event: PressEvent) -> None:
         self.home()
 
-    async def _close(self, interaction) -> None:
-        await self.mount.finish_via(interaction)
+    async def _close(self, event: PressEvent) -> None:
+        await event.finish()

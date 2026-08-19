@@ -21,7 +21,7 @@ class Counter(sl.Component):
             sl.Row((sl.Button(label="+1", on_click=self.increment, key="inc"),)),
         ]
 
-    async def increment(self, interaction) -> None:
+    async def increment(self, event: sl.PressEvent) -> None:
         self.count += 1  # the mount re-renders and edits the message
 ```
 
@@ -32,7 +32,7 @@ class Counter(sl.Component):
    Discord-shaped, carrying **overflow policies instead of sizes**:
    - `Truncate(keep="head"|"tail")` — ellipsis trim;
    - `Spill()` — show the entries that fit plus "…and N more";
-   - `Paginate(initial="start"|"end", per=None)` — split into pages, on overflow or every
+   - `Paginate(key="results", initial="start"|"end", per=None)` — split into pages, on overflow or every
      `per` entries; the solver adds a budget-charged footer and the nav factory's controls;
    - `alts(...)` / `Alt(primary, fallbacks, priority=...)` — degradation ladders:
      semantically smaller alternates beat a mid-string ellipsis, then low-priority list
