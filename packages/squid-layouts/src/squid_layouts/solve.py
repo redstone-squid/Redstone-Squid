@@ -14,7 +14,7 @@ import discord
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.conform import ELLIPSIS
-from squid_layouts.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.constraints import Alts, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.ir import (
     Button,
     Code,
@@ -122,7 +122,7 @@ class _Unit:
     prefix: str
     suffix: str
     content: str
-    lines: tuple[str, ...] | None
+    ladders: tuple[tuple[str, ...], ...] | None
     join: str
     priority: int
     overflow: Overflow
@@ -144,7 +144,7 @@ def _escape_fences(content: str) -> str:
 
 
 def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
-    prefix, suffix, lines, join = "", "", None, "\n"
+    prefix, suffix, ladders, join = "", "", None, "\n"
     match node:
         case Text(content=content):
             pass
@@ -157,8 +157,9 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
             suffix = "\n```"
             content = _escape_fences(content)
         case Lines(lines=raw_lines, join=join):
-            lines = raw_lines
-            content = join.join(raw_lines)
+            ladders = tuple((entry,) if isinstance(entry, str) else entry for entry in raw_lines)
+            ladders = tuple(ladder for ladder in ladders if ladder and ladder[0])
+            content = join.join(ladder[0] for ladder in ladders)
     if not content:
         slot.dropped = True
         return None
@@ -169,7 +170,7 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
         prefix=prefix,
         suffix=suffix,
         content=content,
-        lines=lines,
+        ladders=ladders,
         join=join,
         priority=node.priority,
         overflow=node.overflow,
@@ -338,8 +339,18 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
         case Drop():
             notes.append(f"dropped node {unit.index} ({unit.need} chars over budget)")
             return False
-        case Spill() if unit.lines is not None:
+        case Spill() if unit.ladders is not None:
             return _apply_spill(unit, usable, chrome, notes)
+        case Alts(ladder=ladder) if usable >= 1:
+            for alternate in ladder:
+                if alternate and len(alternate) <= usable:
+                    notes.append(f"node {unit.index} degraded to a {len(alternate)}-char alternate")
+                    unit.slot.content = unit.prefix + alternate + unit.suffix
+                    return True
+            fallback = ladder[-1] if ladder else unit.content
+            notes.append(f"node {unit.index} exhausted its ladder; trimming the last alternate")
+            unit.slot.content = unit.prefix + _trim_keep(fallback, usable, "head") + unit.suffix
+            return True
         case Paginate(boundary=boundary) if usable >= 1:
             # Pagination is the policy working as intended, not a degradation: no note.
             unit.fragments = split_pages(unit.content, usable, boundary)
@@ -359,14 +370,32 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
 
 
 def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> bool:
-    lines = unit.lines or ()
-    total = len(lines)
+    ladders = unit.ladders or ()
+    total = len(ladders)
+    # First degrade the largest entries down their ladders; spill whole entries only after
+    # every ladder is exhausted.
+    levels = [0] * total
+    degraded = False
+
+    def entry(index: int) -> str:
+        return ladders[index][levels[index]]
+
+    while sum(len(entry(i)) for i in range(total)) + (total - 1) * len(unit.join) > usable:
+        candidates = [i for i in range(total) if levels[i] + 1 < len(ladders[i])]
+        if not candidates:
+            break
+        largest = max(candidates, key=lambda i: len(entry(i)))
+        levels[largest] += 1
+        degraded = True
+
     for kept in range(total, -1, -1):
-        shown = list(lines[:kept])
+        shown = [entry(i) for i in range(kept)]
         if kept < total:
             shown.append(chrome.and_n_more(total - kept))
         body = unit.join.join(shown)
         if body and len(body) <= usable:
+            if degraded:
+                notes.append(f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders")
             if kept < total:
                 notes.append(f"spilled node {unit.index}: showing {kept} of {total} lines")
             unit.slot.content = unit.prefix + body + unit.suffix
