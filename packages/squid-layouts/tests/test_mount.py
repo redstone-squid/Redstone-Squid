@@ -12,6 +12,7 @@ from squid_layouts import (
     ActionPolicy,
     Button,
     Component,
+    Document,
     Mount,
     Option,
     PressEvent,
@@ -27,7 +28,7 @@ from squid_layouts import (
     state,
     transaction,
 )
-from squid_layouts.primitives import Heading
+from squid_layouts.primitives import ActionGroup, Heading
 from squid_layouts.testing import fake_interaction
 
 
@@ -43,6 +44,16 @@ class Counter(Component):
 
     async def increment(self, event: PressEvent) -> None:
         self.count += 1
+
+
+class RootToolbar(Component):
+    def render(self):
+        return Document(
+            (ActionGroup(tuple(Button(str(index), self.click, f"b{index}") for index in range(41))),),
+            key="toolbar",
+        )
+
+    async def click(self, event: PressEvent) -> None: ...
 
 
 def _button(view: discord.ui.LayoutView) -> discord.ui.Button:
@@ -65,6 +76,14 @@ class TestRenderAndWire:
         second = _button(mount.build_view())
 
         assert first.custom_id != second.custom_id
+
+    async def test_keyed_document_root_pages_are_live_mount_navigation(self):
+        mount = Mount(RootToolbar(), timeout=None)
+        mount.build_view()
+
+        assert mount.presentation.cursor("toolbar").extent > 1
+        await mount.dispatch("__page_next.toolbar", fake_interaction())
+        assert mount.presentation.cursor("toolbar").index == 1
 
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
