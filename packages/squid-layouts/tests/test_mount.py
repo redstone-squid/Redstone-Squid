@@ -4,16 +4,19 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
+import anyio
 import discord
 import pytest
 
 from squid_layouts import (
+    ActionPolicy,
     Button,
     Component,
     Heading,
     Mount,
     Option,
     PressEvent,
+    ReactiveWriteError,
     Reactor,
     Row,
     SelectionEvent,
@@ -131,6 +134,96 @@ class TestAuthorLock:
         await mount.dispatch("inc", fake_interaction(user_id=42))
 
         assert component.count == 1
+
+
+class TestActionPolicy:
+    async def test_exclusive_action_from_a_stale_view_is_acknowledged_without_running(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        mount.build_view()
+        stale_generation = mount._generation
+        mount.build_view()
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction, generation=stale_generation)
+
+        assert component.count == 0
+        interaction.response.defer.assert_awaited_once()
+
+    async def test_rebase_action_uses_the_handler_from_the_current_generation(self):
+        calls: list[str] = []
+
+        class Rebased(Component):
+            current = False
+
+            def render(self):
+                handler = self.new if self.current else self.old
+                return Row((Button("run", handler, "run", policy=ActionPolicy.REBASE),))
+
+            async def old(self, event: PressEvent) -> None:
+                calls.append("old")
+
+            async def new(self, event: PressEvent) -> None:
+                calls.append("new")
+
+        component = Rebased()
+        mount = Mount(component, timeout=None)
+        mount.build_view()
+        stale_generation = mount._generation
+        component.current = True
+        mount.build_view()
+
+        await mount.dispatch("run", fake_interaction(), generation=stale_generation)
+
+        assert calls == ["new"]
+
+    async def test_exclusive_actions_do_not_overlap(self):
+        active = 0
+        maximum = 0
+
+        class Serialized(Component):
+            def render(self):
+                return Row((Button("run", self.run, "run"),))
+
+            async def run(self, event: PressEvent) -> None:
+                nonlocal active, maximum
+                active += 1
+                maximum = max(maximum, active)
+                await anyio.sleep(0)
+                active -= 1
+
+        mount = Mount(Serialized(), timeout=None)
+        mount.build_view()
+
+        async def dispatch(interaction) -> None:
+            await mount.dispatch("run", interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(dispatch, fake_interaction())
+            tasks.start_soon(dispatch, fake_interaction())
+
+        assert maximum == 1
+
+    async def test_parallel_read_rolls_back_and_reports_state_writes(self):
+        class Reader(Component):
+            count: int = state(0)
+
+            def render(self):
+                return Row((Button("read", self.read, "read", policy=ActionPolicy.PARALLEL_READ),))
+
+            async def read(self, event: PressEvent) -> None:
+                self.count += 1
+
+        component = Reader()
+        hook = AsyncMock()
+        mount = Mount(component, timeout=None, on_error=hook)
+        mount.build_view()
+
+        await mount.dispatch("read", fake_interaction())
+
+        assert component.count == 0
+        assert hook.await_args is not None
+        assert isinstance(hook.await_args.args[1], ReactiveWriteError)
 
 
 class TestErrors:
