@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-20 00:53+0000\n"
+"POT-Creation-Date: 2026-08-20 01:14+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -500,7 +500,7 @@ msgstr ""
 msgid "Already added"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:280
+#: squid/bot/diagnostics_view.py:178
 msgid "Ambiguous"
 msgstr ""
 
@@ -526,7 +526,7 @@ msgstr ""
 msgid "An approved user showcase tag is required."
 msgstr ""
 
-#: squid/bot/diagnostics.py:84
+#: squid/bot/diagnostics.py:87 squid/bot/diagnostics.py:104
 msgid "An error report names internal paths, so it is never posted in a channel."
 msgstr ""
 
@@ -643,7 +643,7 @@ msgstr ""
 msgid "Author has not consented"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:217 squid/bot/settings_view.py:542
+#: squid/bot/diagnostics_view.py:111 squid/bot/settings_view.py:542
 #: squid/bot/submission/search_view.py:214
 msgid "Back"
 msgstr ""
@@ -928,7 +928,7 @@ msgstr ""
 msgid "Choose a workflow, then use `/help command` for syntax and details."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:183
+#: squid/bot/diagnostics_view.py:88
 msgid "Choose an error to open"
 msgstr ""
 
@@ -967,7 +967,7 @@ msgstr ""
 msgid "Click **Unlink** again to remove {identity}."
 msgstr ""
 
-#: squid/bot/account_view.py:399 squid/bot/diagnostics_view.py:229
+#: squid/bot/account_view.py:399 squid/bot/diagnostics_view.py:117
 #: squid/bot/notifications_view.py:225 squid/bot/settings_view.py:587
 #: squid/bot/submission/search_view.py:225
 msgid "Close"
@@ -1166,7 +1166,7 @@ msgstr ""
 msgid "Delete every stored error report."
 msgstr ""
 
-#: squid/bot/diagnostics.py:62
+#: squid/bot/diagnostics.py:63
 #, python-brace-format
 msgid "Deleted {count} stored error reports."
 msgstr ""
@@ -1282,7 +1282,7 @@ msgstr ""
 msgid "Each link needs a label and a URL separated by `|`, got {line!r}."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:195
+#: squid/bot/diagnostics_view.py:57
 msgid "Earlier"
 msgstr ""
 
@@ -1362,7 +1362,7 @@ msgstr ""
 msgid "Error report retention must be at least one hour."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:116
+#: squid/bot/diagnostics_view.py:99
 #, python-brace-format
 msgid "Error {reference}"
 msgstr ""
@@ -1371,7 +1371,7 @@ msgstr ""
 msgid "Error."
 msgstr ""
 
-#: squid/bot/diagnostics.py:61
+#: squid/bot/diagnostics.py:62
 msgid "Errors cleared"
 msgstr ""
 
@@ -1399,7 +1399,7 @@ msgstr ""
 msgid "Exact source Minecraft version"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:265
+#: squid/bot/diagnostics_view.py:167
 msgid "Exception"
 msgstr ""
 
@@ -1530,7 +1530,7 @@ msgstr ""
 msgid "Forbidden"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:266
+#: squid/bot/diagnostics_view.py:168
 msgid "Full ID"
 msgstr ""
 
@@ -1764,7 +1764,7 @@ msgstr ""
 msgid "Last identity"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:206
+#: squid/bot/diagnostics_view.py:58
 msgid "Later"
 msgstr ""
 
@@ -1839,7 +1839,7 @@ msgstr ""
 msgid "Locational"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:308
+#: squid/bot/diagnostics_view.py:106
 msgid "Log tail"
 msgstr ""
 
@@ -2046,7 +2046,7 @@ msgid "Multiplier — leave empty to remove this role's weight"
 msgstr ""
 
 #: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:633
-#: squid/bot/ui.py:72 squid/bot/ui.py:173 squid/bot/utils/pagination.py:142
+#: squid/bot/ui.py:73 squid/bot/ui.py:198 squid/bot/utils/pagination.py:142
 msgid "Next"
 msgstr ""
 
@@ -2131,7 +2131,7 @@ msgstr ""
 msgid "No tags are awaiting review."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:304
+#: squid/bot/diagnostics_view.py:97
 msgid "No traceback was recorded."
 msgstr ""
 
@@ -2183,7 +2183,7 @@ msgstr ""
 msgid "Nothing changed"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:92
+#: squid/bot/diagnostics_view.py:73
 msgid "Nothing has failed within the retention window."
 msgstr ""
 
@@ -2389,12 +2389,12 @@ msgstr ""
 msgid "Owner only"
 msgstr ""
 
-#: squid/bot/ui.py:73
+#: squid/bot/ui.py:74
 #, python-brace-format
 msgid "Page {page} of {pages}"
 msgstr ""
 
-#: squid/bot/ui.py:147 squid/bot/utils/pagination.py:95
+#: squid/bot/ui.py:172 squid/bot/utils/pagination.py:95
 #, python-brace-format
 msgid "Page {page} of {pages} · {total} in total"
 msgstr ""
@@ -2521,7 +2521,7 @@ msgid "Post and manage the Redstoner self-assign panel."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:192 squid/bot/submission/ui/views.py:632
-#: squid/bot/ui.py:71 squid/bot/ui.py:167 squid/bot/utils/pagination.py:128
+#: squid/bot/ui.py:72 squid/bot/ui.py:192 squid/bot/utils/pagination.py:128
 msgid "Previous"
 msgstr ""
 
@@ -2615,7 +2615,7 @@ msgstr ""
 msgid "Recent account proof required"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:93
+#: squid/bot/diagnostics_view.py:74
 msgid "Recent errors"
 msgstr ""
 
@@ -3006,7 +3006,7 @@ msgstr ""
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
 
-#: squid/bot/ui.py:69
+#: squid/bot/ui.py:70
 msgid "See attachment"
 msgstr ""
 
@@ -3678,11 +3678,11 @@ msgstr ""
 msgid "These account controls belong to someone else."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:71
+#: squid/bot/diagnostics_view.py:56
 msgid "These error controls belong to someone else."
 msgstr ""
 
-#: squid/bot/ui.py:70 squid/bot/utils/pagination.py:80
+#: squid/bot/ui.py:71 squid/bot/utils/pagination.py:80
 msgid "These list controls belong to someone else."
 msgstr ""
 
@@ -3754,7 +3754,7 @@ msgid ""
 "recognising you here."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:272
+#: squid/bot/diagnostics_view.py:172
 msgid "This job was abandoned; nothing will retry it."
 msgstr ""
 
@@ -3832,7 +3832,7 @@ msgstr ""
 msgid "Too many requests. Please try again later."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:303
+#: squid/bot/diagnostics_view.py:62
 msgid "Traceback"
 msgstr ""
 
@@ -4048,11 +4048,11 @@ msgstr ""
 msgid "What to look through: records, builds, patterns, restrictions, or all."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:263
+#: squid/bot/diagnostics_view.py:165
 msgid "When"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:264
+#: squid/bot/diagnostics_view.py:166
 msgid "Where"
 msgstr ""
 
@@ -4080,7 +4080,7 @@ msgstr ""
 msgid "Width x Height x Depth"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:271
+#: squid/bot/diagnostics_view.py:172
 msgid "Work lost"
 msgstr ""
 
@@ -4691,7 +4691,7 @@ msgstr ""
 msgid "{count} builds"
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:281
+#: squid/bot/diagnostics_view.py:179
 #, python-brace-format
 msgid "{count} reports share this reference; this is the newest."
 msgstr ""
@@ -4875,7 +4875,7 @@ msgstr ""
 msgid "{role} now counts {multiplier}x."
 msgstr ""
 
-#: squid/bot/diagnostics_view.py:121
+#: squid/bot/diagnostics_view.py:61
 #, python-brace-format
 msgid "{section} — page {page} of {pages} · the attachment has the whole report"
 msgstr ""
@@ -4917,7 +4917,7 @@ msgstr ""
 msgid "{visibility} · verified {age}"
 msgstr ""
 
-#: squid/bot/notifications_view.py:140 squid/bot/ui.py:68
+#: squid/bot/notifications_view.py:140 squid/bot/ui.py:69
 #, python-brace-format
 msgid "…and {count} more."
 msgstr ""

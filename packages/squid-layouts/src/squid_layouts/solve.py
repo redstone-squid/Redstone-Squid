@@ -85,6 +85,8 @@ class Pager:
     fragments: list[str]
     footer_slot: RText
     footer: Callable[[int, int], str]
+    initial: int = 0
+    """The page to open on; a mount adopts this before its first render."""
 
     @property
     def pages(self) -> int:
@@ -532,6 +534,8 @@ def solve(
     if paginator is not None and paginator.fragments is not None and len(paginator.fragments) > 1:
         footer_slot = RText()
         children.append(footer_slot)
+        assert isinstance(paginator.overflow, Paginate)
+        initial = len(paginator.fragments) - 1 if paginator.overflow.initial == "end" else 0
         pager = Pager(
             slot=paginator.slot,
             prefix=paginator.prefix,
@@ -539,8 +543,9 @@ def solve(
             fragments=paginator.fragments,
             footer_slot=footer_slot,
             footer=chrome.page_footer,
+            initial=initial,
         )
-        pager.select(0)
+        pager.select(initial)
 
     count = _component_count(children) + (NAV_ROW_COMPONENTS if pager is not None else 0)
     if count > limits.total_components:

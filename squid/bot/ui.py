@@ -36,6 +36,7 @@ __all__ = [
     "PagedList",
     "card_layout",
     "chrome_for",
+    "create_mount",
     "error_layout",
     "help_layout",
     "info_layout",
@@ -93,6 +94,24 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
+def create_mount(
+    component: ui.Component,
+    *,
+    locale: str | None = None,
+    chrome: ui.Chrome | None = None,
+    timeout: float = 180,
+    lock_to: int | None = None,
+) -> ui.Mount:
+    """A mount wired to the bot's chrome and shared interaction error handler."""
+    return ui.Mount(
+        component,
+        chrome=chrome if chrome is not None else chrome_for(locale),
+        timeout=timeout,
+        lock_to=lock_to,
+        on_error=_component_error_hook,
+    )
+
+
 async def send_component(
     ctx: Context[Any],
     component: ui.Component,
@@ -103,13 +122,7 @@ async def send_component(
     ephemeral: bool = False,
 ) -> ui.Mount:
     """Mount a component and send it as the reply to a command."""
-    mount = ui.Mount(
-        component,
-        chrome=chrome_for(locale),
-        timeout=timeout,
-        lock_to=lock_to,
-        on_error=_component_error_hook,
-    )
+    mount = create_mount(component, locale=locale, timeout=timeout, lock_to=lock_to)
     view = mount.build_view()
     message = await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.deliver.no_mentions())
     mount.bind(message, view)
