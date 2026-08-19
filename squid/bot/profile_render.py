@@ -53,25 +53,18 @@ def render_links(links: tuple[ProfileLink, ...]) -> str:
     return "\n".join(f"[{link.label}]({link.url})" for link in links)
 
 
-def own_profile_fields(
-    profile: AccountProfile, identities: tuple[AccountIdentity, ...], locale: str
-) -> list[CardField]:
-    """Describe the caller's own profile, hidden parts included and marked as hidden."""
+def own_profile_fields(profile: AccountProfile, locale: str | None) -> list[CardField]:
+    """Describe the free-text half of the caller's own profile.
+
+    The linked accounts are not here, unlike in the public view: the panel that renders this lists
+    them one field each, because it also has to say whether each is published and offer the
+    controls for it (docs/plans/command-redesign/07-account.md).
+    """
     fields: list[CardField] = []
     if profile.pronouns:
         fields.append(CardField(t(locale, _("Pronouns")), profile.pronouns))
     if profile.links:
         fields.append(CardField(t(locale, _("Links")), render_links(profile.links)))
-    if identities:
-        fields.append(
-            CardField(
-                t(locale, _("Linked accounts")),
-                "\n".join(
-                    identity_label(identity, locale) + ("" if identity.is_public else " " + t(locale, _("(hidden)")))
-                    for identity in identities
-                ),
-            )
-        )
     return fields
 
 

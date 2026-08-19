@@ -9,11 +9,20 @@ from uuid import UUID
 import discord
 from whenever import Instant
 
-from squid.accounts.domain import Account, AccountConsent, AccountIdentity, AccountProfile
+from squid.accounts.domain import (
+    Account,
+    AccountConsent,
+    AccountIdentity,
+    AccountProfile,
+    ProfileUpdate,
+    PublicCreatorProfile,
+)
 from squid.bot.account_view import (
     AccountPanelView,
+    EditPageButton,
     IdentitySelect,
     IdentityVisibilityButton,
+    ProfileEditModal,
     UnlinkIdentityButton,
 )
 from squid.bot.verify import VerifyCog
@@ -42,6 +51,8 @@ async def make_panel(
     *,
     hidden: bool = False,
     consented: bool = True,
+    display_name: str | None = None,
+    bio: str | None = None,
 ) -> tuple[AccountPanelView, Any]:
     account = Account(
         identities,
@@ -49,7 +60,7 @@ async def make_panel(
         ACCOUNT_ID,
         NOW,
     )
-    profile = AccountProfile(account_id=ACCOUNT_ID, hidden=hidden)
+    profile = AccountProfile(account_id=ACCOUNT_ID, hidden=hidden, display_name=display_name, bio=bio)
     accounts = SimpleNamespace(
         get_account_by_id=AsyncMock(return_value=account),
         get_profile=AsyncMock(return_value=profile),
@@ -78,6 +89,7 @@ def make_interaction() -> Any:
             edit_message=AsyncMock(),
             send_message=AsyncMock(),
             defer=AsyncMock(side_effect=defer),
+            send_modal=AsyncMock(),
             is_done=lambda: deferred,
         ),
         followup=SimpleNamespace(send=AsyncMock()),
@@ -102,8 +114,64 @@ async def test_every_linked_account_is_listed_and_pickable_without_its_id() -> N
     panel, _ = await make_panel()
 
     assert "Minecraft (Java) — Notch" in text_of(panel)
+    assert "<@555>" in text_of(panel)
     assert "id `2`" not in text_of(panel)
     assert [option.value for option in select_of(panel).options] == ["1", "2"]
+
+
+async def test_a_hidden_account_is_still_listed_and_says_it_is_hidden() -> None:
+    """You can only unhide what you can see, so the self view shows what strangers do not."""
+    panel, _ = await make_panel((DISCORD, replace(JAVA, is_public=False)))
+
+    assert "Notch" in text_of(panel)
+    assert "hidden" in text_of(panel)
+
+
+async def test_the_card_is_the_creator_page_it_edits() -> None:
+    """`profile` rendered this card and `profile-edit` edited it; both are this panel now."""
+    panel, _ = await make_panel(display_name="Notch", bio="I make doors.")
+
+    assert "Notch" in text_of(panel)
+    assert "I make doors." in text_of(panel)
+
+
+async def test_editing_the_page_opens_the_modal_on_the_button_s_own_interaction() -> None:
+    panel, _ = await make_panel()
+    interaction = make_interaction()
+
+    await panel.edit_page(interaction)
+
+    modal = interaction.response.send_modal.await_args.args[0]
+    assert isinstance(modal, ProfileEditModal)
+
+
+async def test_an_unaccepted_notice_costs_a_second_press_rather_than_a_retyped_command(
+    monkeypatch: Any,
+) -> None:
+    """A modal needs an unspent interaction, and showing the notice spends this one."""
+    import squid.bot.account_view as account_view
+
+    monkeypatch.setattr(account_view, "prompt_for_consent", AsyncMock(return_value=AccountConsent.grant_current()))
+    panel, accounts = await make_panel(consented=False)
+    interaction = make_interaction()
+
+    await panel.edit_page(interaction)
+
+    interaction.response.send_modal.assert_not_awaited()
+    accounts.grant_current_consent.assert_awaited_once_with(ACCOUNT_ID)
+    # The real prompt spends the response, so the reply may be a followup; the stub does not.
+    answered = interaction.followup.send.await_args or interaction.response.send_message.await_args
+    assert "Edit page" in text_of(answered.kwargs["view"])
+
+
+async def test_saving_the_editor_shows_the_page_it_produced() -> None:
+    panel, accounts = await make_panel()
+    interaction = make_interaction()
+
+    await panel.save_profile(interaction, ProfileUpdate(bio="I make doors."))
+
+    accounts.update_profile.assert_awaited_once()
+    assert interaction.response.edit_message.await_count == 1
 
 
 async def test_the_controls_wait_for_an_account_to_be_picked() -> None:
@@ -211,3 +279,40 @@ async def test_someone_with_no_account_is_told_how_to_get_one() -> None:
     await VerifyCog.account_group.callback(cog, cast(Any, ctx))  # type: ignore[arg-type]
 
     assert "/account link" in text_of(ctx.send.await_args.kwargs["view"])
+
+
+async def test_the_panel_offers_the_editor_the_command_used_to_be() -> None:
+    panel, _ = await make_panel()
+
+    assert any(isinstance(child, EditPageButton) for child in panel.walk_children())
+
+
+async def test_somebody_elses_creator_page_is_a_public_read() -> None:
+    """Rule 2 of the ephemerality policy: a read of shared content answers in the channel.
+
+    `profile` answered privately whoever it was about, which the rule 5.7 wrote down does not.
+    """
+    page = UUID(int=7)
+    cog = VerifyCog.__new__(VerifyCog)
+    cog.bot = cast(
+        Any,
+        SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace(get_locale=AsyncMock(return_value=None)))),
+    )
+    cog.account_service = cast(
+        Any,
+        SimpleNamespace(
+            get_account_by_identity=AsyncMock(return_value=Account((JAVA,), None, 9, NOW, page)),
+            get_public_profile=AsyncMock(return_value=PublicCreatorProfile(public_id=page, hidden=False)),
+        ),
+    )
+    ctx = SimpleNamespace(
+        interaction=SimpleNamespace(guild_locale=None, locale="en-US"),
+        guild=SimpleNamespace(id=5, preferred_locale="en-US"),
+        author=SimpleNamespace(id=AUTHOR_ID),
+        send=AsyncMock(),
+    )
+    other = SimpleNamespace(id=999, display_name="Someone")
+
+    await VerifyCog.account_group.callback(cog, cast(Any, ctx), cast(Any, other))  # type: ignore[arg-type]
+
+    assert ctx.send.await_args.kwargs.get("ephemeral") is not True
