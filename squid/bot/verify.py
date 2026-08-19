@@ -16,7 +16,7 @@ from squid.accounts.domain import (
     LinkPreview,
 )
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
-from squid.bot.account_view import AccountPanelView
+from squid.bot.account_view import AccountPanel
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import ensure_consented_account, prompt_for_consent
 from squid.bot.i18n import resolve_locale, t
@@ -68,15 +68,22 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             return
 
         await self._refresh_discord_avatar_key(account, ctx.author)
-        view = AccountPanelView(
+        component = AccountPanel(
             accounts=self.account_service,
             account_id=account.id,
             author_id=ctx.author.id,
             locale=locale,
         )
-        await view.load()
-        message = await ctx.send(view=view, ephemeral=personal(ctx), allowed_mentions=no_mentions())
-        view.bind_message(message)
+        await component.load()
+        mount = component.mount()
+        rendered = mount.build_view()
+        message = await ctx.send(
+            view=rendered,
+            files=mount.attachment_files(),
+            ephemeral=personal(ctx),
+            allowed_mentions=no_mentions(),
+        )
+        mount.bind(message, rendered)
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
