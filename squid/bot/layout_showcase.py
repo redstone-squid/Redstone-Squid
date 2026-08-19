@@ -33,7 +33,7 @@ class DemoCounter(sl.Component):
     def render(self) -> sl.Node:
         return sl.Panel(
             (
-                sl.Heading(self.label, level=3),
+                sl.primitives.Heading(self.label, level=3),
                 sl.Text(t(self.locale, _("Independent count: {count}"), count=self.count)),
                 sl.Row(
                     (
@@ -87,7 +87,7 @@ class LayoutShowcase(sl.Component):
                 "section",
                 placeholder=t(self.locale, _("Choose an engine exhibit")),
             ),
-            sl.ActionGroup(
+            sl.primitives.ActionGroup(
                 (
                     sl.Button(
                         t(self.locale, _("Cycle accent")),
@@ -101,7 +101,7 @@ class LayoutShowcase(sl.Component):
         )
         header = sl.Panel(
             (
-                sl.Heading(t(self.locale, _("squid-layouts engine showcase"))),
+                sl.primitives.Heading(t(self.locale, _("squid-layouts engine showcase"))),
                 sl.Text(self.status),
                 *controls,
             ),
@@ -132,12 +132,14 @@ class LayoutShowcase(sl.Component):
                     ),
                 ),
                 fields=(
-                    sl.Field(t(self.locale, _("Reactivity")), t(self.locale, _("Change state; the view rebuilds."))),
-                    sl.Field(
+                    sl.presets.Field(
+                        t(self.locale, _("Reactivity")), t(self.locale, _("Change state; the view rebuilds."))
+                    ),
+                    sl.presets.Field(
                         t(self.locale, _("Pagination")),
                         t(self.locale, _("Pages are measured from content, footer, and controls together.")),
                     ),
-                    sl.Field(
+                    sl.presets.Field(
                         t(self.locale, _("Composition")),
                         t(self.locale, _("Keyed child components keep state and handlers independent.")),
                     ),
@@ -150,7 +152,7 @@ class LayoutShowcase(sl.Component):
         return (
             sl.Panel(
                 (
-                    sl.Heading(t(self.locale, _("Target-budget pagination"))),
+                    sl.primitives.Heading(t(self.locale, _("Target-budget pagination"))),
                     sl.Text(
                         t(
                             self.locale,
