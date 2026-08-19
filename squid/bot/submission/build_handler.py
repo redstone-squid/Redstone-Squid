@@ -14,7 +14,6 @@ from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
     DISCORD_YELLOW,
-    StaticLayout,
     truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
@@ -96,9 +95,9 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> StaticLayout:
+    async def render_layout(self) -> discord.ui.LayoutView:
         """Render a standalone Components V2 layout for the build."""
-        return StaticLayout(await self.render_container())
+        return sl.discord.render_static([await self.render_node()])
 
     async def render_container(self, *, reserved_text: int = 0) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
