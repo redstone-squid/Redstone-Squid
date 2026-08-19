@@ -62,11 +62,19 @@ from squid_layouts.mount import ErrorHook, Mount, MountedView
 from squid_layouts.navigation import Navigator
 from squid_layouts.pagination import NavFactory, PageContext, default_nav, page_controls
 from squid_layouts.planner import plan
+from squid_layouts.presentation import (
+    CursorState,
+    DisclosureState,
+    PresentationSession,
+    SelectionState,
+    StrategyState,
+)
 from squid_layouts.presets import Field, FieldGroup, banner, card, listing, report
 from squid_layouts.reactivity import ReactiveWriteError, batch, computed, state, transaction
 from squid_layouts.runtime import Reactor
 from squid_layouts.scene import PlanEvent, PlanReport, PlanResult, SceneDocument
 from squid_layouts.scene_codec import SceneCodec, SceneCodecError
+from squid_layouts.semantic import Action, ActionDisplay, Actions, Emphasis, Flexibility, Importance, LayoutNode, Tone
 from squid_layouts.solve import LayoutOverflowError, SolvedLayout, solve
 from squid_layouts.styles import ActionStyle, Color
 from squid_layouts.target import PreparedExtension, ResourceCost, TargetProfile
@@ -78,10 +86,13 @@ __all__ = [
     "DISCORD_PREVIEW_CSS",
     "ELLIPSIS",
     "LIMITS",
+    "Action",
+    "ActionDisplay",
     "ActionEvent",
     "ActionGroup",
     "ActionPolicy",
     "ActionStyle",
+    "Actions",
     "Actor",
     "Alt",
     "Alts",
@@ -95,23 +106,29 @@ __all__ = [
     "ComponentRegistry",
     "ComponentSnapshot",
     "Composition",
+    "CursorState",
+    "DisclosureState",
     "Document",
     "DrawInvariantError",
     "Drop",
     "Embed",
+    "Emphasis",
     "ErrorHook",
     "Extension",
     "Field",
     "FieldGroup",
+    "Flexibility",
     "Fold",
     "Footer",
     "Gallery",
     "Heading",
     "HtmlRenderer",
+    "Importance",
     "InlineAsset",
     "LabelSpec",
     "LayoutDegradedError",
     "LayoutInvariantError",
+    "LayoutNode",
     "LayoutOverflowError",
     "LimitViolationError",
     "Lines",
@@ -136,6 +153,7 @@ __all__ = [
     "PlanReport",
     "PlanResult",
     "PreparedExtension",
+    "PresentationSession",
     "PressEvent",
     "RawItem",
     "RawMarkdown",
@@ -150,6 +168,7 @@ __all__ = [
     "Section",
     "SelectMenu",
     "SelectionEvent",
+    "SelectionState",
     "Sep",
     "SnapshotCodec",
     "SnapshotError",
@@ -158,12 +177,14 @@ __all__ = [
     "Spill",
     "StaticView",
     "StoredAsset",
+    "StrategyState",
     "SubmitEvent",
     "TargetProfile",
     "Text",
     "TextDialect",
     "TextInputSpec",
     "Thumbnail",
+    "Tone",
     "Truncate",
     "UnsolvableLayoutError",
     "V2Limits",

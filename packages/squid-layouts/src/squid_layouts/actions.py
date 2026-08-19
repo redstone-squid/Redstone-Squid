@@ -103,3 +103,12 @@ class ActionBinding:
     key: str
     handler: Callable[[Any], Awaitable[None]]
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    routes: Mapping[str, ActionBinding] = field(default_factory=dict)
+
+    def routed(self, values: tuple[str, ...]) -> ActionBinding | None:
+        """Resolve a grouped control to its logical action binding."""
+        if not self.routes:
+            return self
+        if len(values) != 1:
+            return None
+        return self.routes.get(values[0])

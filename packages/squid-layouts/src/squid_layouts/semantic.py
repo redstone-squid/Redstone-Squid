@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.ir import Node as PrimitiveNode
 from squid_layouts.text import TextLike
 
 
@@ -72,34 +73,34 @@ class Tone(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Group:
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Stack:
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Cluster:
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Section:
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
     heading: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Article:
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
     heading: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Aside:
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
     tone: Tone = Tone.NEUTRAL
 
 
@@ -203,7 +204,7 @@ class Media:
 class Details:
     key: str
     summary: TextLike
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
     open: bool = False
 
 
@@ -293,7 +294,7 @@ class Choices:
 class Item:
     key: str
     label: TextLike
-    children: tuple[SemanticNode, ...]
+    children: tuple[LayoutNode, ...]
     summary: TextLike | None = None
 
 
@@ -353,3 +354,5 @@ type SemanticNode = (
     | Items
     | Navigation
 )
+
+type LayoutNode = SemanticNode | PrimitiveNode

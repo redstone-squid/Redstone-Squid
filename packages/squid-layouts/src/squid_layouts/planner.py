@@ -29,6 +29,7 @@ from squid_layouts.ir import (
     Thumbnail,
 )
 from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.presentation import PresentationSession
 from squid_layouts.scene import (
     PlanEvent,
     PlanReport,
@@ -53,6 +54,7 @@ from squid_layouts.scene import (
     SceneThumbnail,
 )
 from squid_layouts.scene_codec import SceneCodec
+from squid_layouts.semantic_adapter import lower_semantics
 from squid_layouts.solve import (
     LayoutOverflowError,
     PageNav,
@@ -80,7 +82,13 @@ class _Converter:
             message = f"duplicate action key {key!r}"
             raise LayoutInvariantError(message)
         handler = node.on_click if isinstance(node, Button) else node.on_select
-        self.bindings[key] = ActionBinding(key=key, handler=handler, policy=node.policy)
+        routes = node.routes if isinstance(node, SelectMenu) else {}
+        for route_key, binding in routes.items():
+            if route_key in self.bindings:
+                message = f"duplicate action key {route_key!r}"
+                raise LayoutInvariantError(message)
+            self.bindings[route_key] = binding
+        self.bindings[key] = ActionBinding(key=key, handler=handler, policy=node.policy, routes=routes)
         return key
 
     def accessory(self, node: Thumbnail | LinkButton | Button | RawItem, path: str) -> SceneNode:
@@ -298,6 +306,7 @@ def plan(
     reservation: ResourceCost = EMPTY_RESERVATION,
     page: PageState = None,
     nav: PageNav | None = None,
+    session: PresentationSession | None = None,
 ) -> PlanResult:
     """Resolve a complete logical document for one target.
 
@@ -306,7 +315,16 @@ def plan(
     """
     document = as_document(rendered)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
-    lowered = _lower_children(document.children, target, limits)
+    presentation = session if session is not None else PresentationSession()
+    semantic = lower_semantics(
+        document.children,
+        limits=limits,
+        chrome=chrome,
+        session=presentation,
+        page=page,
+        nav=nav,
+    )
+    lowered = _lower_children(semantic.nodes, target, limits)
     _validate(lowered, limits)
     try:
         solved = solve(
@@ -333,11 +351,12 @@ def plan(
         target_version=target.version,
         children=converter.children(solved.children),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in document.assets),
-        pagers=_pagers(solved),
+        pagers=semantic.pagers + _pagers(solved),
     )
     fingerprint = SceneCodec.fingerprint(scene)
     report = PlanReport(
-        events=tuple(
+        events=semantic.events
+        + tuple(
             PlanEvent(
                 code="layout.degraded",
                 path="$",

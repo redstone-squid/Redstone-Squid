@@ -91,7 +91,8 @@ def _code_pages(mount: Mount) -> list[str]:
         )
         if next_button.disabled:
             return pages
-        mount._page["traceback"] += 1
+        cursor = mount.presentation.cursor("traceback")
+        mount.presentation.move_cursor("traceback", cursor.index + 1)
 
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
@@ -131,7 +132,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
     assert footers
     assert "page 1 of" not in footers[0]
 
-    mount._page["traceback"] = 0
+    mount.presentation.move_cursor("traceback", 0)
     earliest = mount.build_view()
     assert "frame0" in "\n".join(_texts(earliest))
 
@@ -172,11 +173,11 @@ async def test_every_page_fits_the_real_display_budget() -> None:
     browser = ErrorReportBrowser(report=make_report(traceback=f"{long_line}\nValueError: boom"))
     mount, _ = mount_browser(browser)
 
-    mount._page["traceback"] = 0
+    mount.presentation.move_cursor("traceback", 0)
     pages = _code_pages(mount)
     assert len(pages) > 1
     for page_index in range(len(pages)):
-        mount._page["traceback"] = page_index
+        mount.presentation.move_cursor("traceback", page_index)
         view = mount.build_view()
         assert_within_limits(view)
         assert sum(len(text) for text in _texts(view)) <= LIMITS.total_text
