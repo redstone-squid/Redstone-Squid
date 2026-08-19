@@ -36,6 +36,7 @@ class V2Limits:
     section_texts: int = 3
     """TextDisplay children per Section, excluding the accessory."""
     gallery_items: int = 10
+    gallery_item_description: int = 256
 
     # Modals.
     modal_title: int = 45
