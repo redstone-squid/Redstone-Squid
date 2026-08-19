@@ -29,6 +29,8 @@ Still on the old machinery, in rough order of value:
 
 Core design debts closed before further migration:
 
+- The package root is semantic-first; exact Discord-shaped nodes live under `primitives`
+  and legacy card fields under `presets`.
 - Planning and drawing are separate; scenes are serializable and Discord plus HTML are
   independent renderers.
 - compose is the only Discord plan/draw path. render_item now uses render_static and threads
@@ -39,9 +41,19 @@ Core design debts closed before further migration:
   composition consumer.
 - Structural Fold choices make component-count overflow solvable; entry priorities make
   text spill order semantic.
+- Semantic Actions, Choices, Items, and Navigation adapt through legal keyed picker windows;
+  36 actions become 25+11 without losing callbacks or merging declared groups.
+- Sticky strategies are versioned per adapter and ranked by coarse lexicographic tiers.
+  Bounded-search exhaustion is reported as `planner.search_fallback`, never degradation.
+- Runtime-local resolved-plan caching rebinds current callbacks and meets the cold/cached
+  planning-and-drawing latency acceptance budgets.
+- A keyed root Document may promote structural overflow to whole-message pages. Local pagers
+  take precedence and are never displayed simultaneously with root navigation.
 
-Remaining design decisions (documented in the package):
+Deliberate boundaries (documented in the package):
 
-- Exact SelectMenu option overflow is a planning error; a semantic option-paging component
-  is future work.
+- Exact SelectMenu option overflow is a planning error; semantic interactions own option
+  paging. Cross-page multi-select requires an explicit grouping or commit model.
 - `PagedList` pages by count (UX pin); budget-fill paging is available via `Lines`+`Paginate`.
+- `compose(into=view)` does not exist. A renderer owns a new output view so arbitrary
+  pre-existing `discord.py` objects cannot bypass measurement.
