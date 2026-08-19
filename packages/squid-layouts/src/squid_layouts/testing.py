@@ -6,7 +6,9 @@ serialization.
 """
 
 from collections.abc import Iterator
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import discord
 
@@ -96,6 +98,28 @@ def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> lis
         problems.append(f"modal holds {len(components)} components (limit {limits.modal_components})")
     problems.extend(payload_problems(components, limits=limits))
     return problems
+
+
+def fake_interaction(user_id: int = 1) -> Any:
+    """A minimal interaction double for exercising mounts without Discord.
+
+    `response.is_done()` starts false; flip `interaction.response._done` to simulate a
+    consumed response. All send/edit surfaces are AsyncMocks.
+    """
+    response = SimpleNamespace(
+        _done=False,
+        is_done=lambda: response._done,
+        edit_message=AsyncMock(),
+        send_message=AsyncMock(),
+        defer=AsyncMock(),
+    )
+    return SimpleNamespace(
+        user=SimpleNamespace(id=user_id),
+        message=SimpleNamespace(flags=SimpleNamespace(components_v2=True)),
+        response=response,
+        followup=SimpleNamespace(send=AsyncMock()),
+        edit_original_response=AsyncMock(),
+    )
 
 
 def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, limits: V2Limits = LIMITS) -> None:
