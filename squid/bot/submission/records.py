@@ -7,9 +7,9 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.ui import PagedList
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import DISCORD_BLUE, info_layout, no_mentions
-from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
@@ -187,7 +187,7 @@ def _diagnostic_list(
     *,
     empty: str,
     locale: str | None,
-) -> ListPaginator:
+) -> PagedList:
     """A page of one-line findings.
 
     Both diagnostics used to print the first 30 findings and count the rest, which is the
@@ -195,10 +195,9 @@ def _diagnostic_list(
     One line per finding, so the entries are joined by a newline rather than by the blank
     line multi-line entries want.
     """
-    return ListPaginator(
+    return PagedList(
         title,
         entries,
-        author_id=ctx.author.id,
         empty=empty,
         locale=locale,
         page_size=DIAGNOSTICS_PER_PAGE,
