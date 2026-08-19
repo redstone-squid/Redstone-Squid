@@ -185,7 +185,7 @@ class SearchOpenBuildButton(discord.ui.Button[SearchResultsView]):
         row.add_item(SearchBackButton(self._search_view))
         row.add_item(SearchStopButton(self._search_view))
         self._search_view.add_item(row)
-        sl.conform(self._search_view)
+        sl.discord.conform(self._search_view)
         await edit_interaction_layout(interaction, self._search_view)
 
 

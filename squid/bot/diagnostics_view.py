@@ -70,15 +70,15 @@ class ErrorReportBrowser(sl.Component):
         assets = (report_asset(self.detail),) if self.detail is not None else ()
         return sl.Document(tuple(nodes), assets)
 
-    def _render_list(self) -> Sequence[sl.Node]:
+    def _render_list(self) -> Sequence[sl.primitives.Node]:
         entries = tuple(_list_line(report) for report in self._reports)
         body = "\n".join(entries) or t(self.locale, _("Nothing has failed within the retention window."))
-        nodes: list[sl.Node] = [sl.card(t(self.locale, _("Recent errors")), body)]
+        nodes: list[sl.primitives.Node] = [sl.primitives.card(t(self.locale, _("Recent errors")), body)]
         if self._reports:
             nodes.append(
-                sl.SelectMenu(
+                sl.primitives.SelectMenu(
                     options=tuple(
-                        sl.Option(
+                        sl.primitives.Option(
                             label=report.reference,
                             value=str(index),
                             description=_list_description(report),
@@ -90,38 +90,40 @@ class ErrorReportBrowser(sl.Component):
                     placeholder=t(self.locale, _("Choose an error to open")),
                 )
             )
-        nodes.append(sl.Row((self._close_button(),)))
+        nodes.append(sl.primitives.Row((self._close_button(),)))
         return nodes
 
-    def _render_detail(self) -> Sequence[sl.Node]:
+    def _render_detail(self) -> Sequence[sl.primitives.Node]:
         report = self.detail
         assert report is not None
         traceback_text = report.traceback.strip() or t(self.locale, _("No traceback was recorded."))
-        children: list[sl.Node] = [
+        children: list[sl.primitives.Node] = [
             sl.primitives.Heading(t(self.locale, _("Error {reference}"), reference=report.reference)),
             # Opens at the end because the failing frame is the last one.
-            sl.primitives.Code(traceback_text, overflow=sl.Paginate(key="traceback", initial="end")),
+            sl.primitives.Code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
-            children.append(sl.Lines((f"**{t(self.locale, _('Log tail'))}**",), priority=2))
+            children.append(sl.primitives.Lines((f"**{t(self.locale, _('Log tail'))}**",), priority=2))
             children.append(
-                sl.primitives.Code("\n".join(report.log_tail), overflow=sl.Truncate(keep="tail"), priority=-8)
+                sl.primitives.Code(
+                    "\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8
+                )
             )
-        children.append(sl.Lines(tuple(_summary_entries(report, self.matches, self.locale)), priority=5))
-        controls: list[sl.Button] = []
+        children.append(sl.primitives.Lines(tuple(_summary_entries(report, self.matches, self.locale)), priority=5))
+        controls: list[sl.primitives.Button] = []
         if self._reports:
-            controls.append(sl.Button(label=t(self.locale, _("Back")), on_click=self._back, key="back"))
+            controls.append(sl.primitives.Button(label=t(self.locale, _("Back")), on_click=self._back, key="back"))
         controls.append(self._close_button())
-        return [sl.Panel(children=tuple(children)), sl.Row(tuple(controls))]
+        return [sl.primitives.Panel(children=tuple(children)), sl.primitives.Row(tuple(controls))]
 
-    def _close_button(self) -> sl.Button:
-        return sl.Button(
+    def _close_button(self) -> sl.primitives.Button:
+        return sl.primitives.Button(
             label=t(self.locale, _("Close")),
             on_click=self._close,
             key="close",
-            style=sl.ActionStyle.SECONDARY,
+            style=sl.primitives.ActionStyle.SECONDARY,
         )
 
     async def _open(self, event: sl.SelectionEvent) -> None:

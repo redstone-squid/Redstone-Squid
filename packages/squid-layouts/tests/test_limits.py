@@ -2,7 +2,7 @@
 
 import dataclasses
 
-from squid_layouts import LIMITS
+from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
 
 
 def test_limits_are_positive():

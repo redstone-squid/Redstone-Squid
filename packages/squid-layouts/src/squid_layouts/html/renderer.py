@@ -23,7 +23,7 @@ from squid_layouts.scene.model import (
     SceneThumbnail,
 )
 
-DISCORD_PREVIEW_CSS = """
+PREVIEW_CSS = """
 .squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;
 font:14px/1.375 system-ui,sans-serif}.squid-view *{box-sizing:border-box}.squid-panel{display:grid;gap:12px;padding:16px;
 border-left:4px solid var(--squid-accent,#4e5058);border-radius:4px;background:#2b2d31}.squid-text{white-space:pre-wrap}
@@ -47,19 +47,19 @@ def _url(value: str) -> str | None:
     return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
 
 
-class HtmlRenderer:
+class Renderer:
     """Draw scenes as semantic HTML suitable for previews or browser adapters."""
 
-    def __init__(self, *, standalone: bool = False, css: str = DISCORD_PREVIEW_CSS) -> None:
+    def __init__(self, *, standalone: bool = False, css: str = PREVIEW_CSS) -> None:
         self.standalone = standalone
         self.css = css
 
     def draw(self, scene: SceneDocument, *, plan: PlanResult | None = None) -> str:
         if scene.protocol != SceneCodec.protocol:
-            message = f"HtmlRenderer cannot draw scene protocol {scene.protocol}"
+            message = f"Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
         if scene.target != "discord.components-v2" or scene.target_version != 1:
-            message = f"HtmlRenderer cannot preview target {scene.target!r} version {scene.target_version}"
+            message = f"Renderer cannot preview target {scene.target!r} version {scene.target_version}"
             raise DrawInvariantError(message)
         pager_data = json.dumps(
             [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in scene.pagers],
@@ -162,5 +162,5 @@ class HtmlRenderer:
                     f'<div class="squid-extension" data-squid-extension="{_attribute(kind)}" '
                     f'data-squid-extension-version="{version}"></div>'
                 )
-        message = f"HtmlRenderer cannot draw scene node {type(node).__name__}"
+        message = f"Renderer cannot draw scene node {type(node).__name__}"
         raise DrawInvariantError(message)

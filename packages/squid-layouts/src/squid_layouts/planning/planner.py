@@ -10,9 +10,9 @@ from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.cache import CachedPlan, PlanCache
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.solve import (
     PageNav,

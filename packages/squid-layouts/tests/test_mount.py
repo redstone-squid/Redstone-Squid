@@ -10,26 +10,30 @@ import pytest
 
 from squid_layouts import (
     ActionPolicy,
-    Button,
     Component,
     Document,
-    Mount,
-    Option,
     PressEvent,
     ReactiveWriteError,
-    Reactor,
-    Row,
     SelectionEvent,
-    SelectMenu,
-    Text,
-    assert_within_limits,
     batch,
     computed,
     state,
     transaction,
 )
-from squid_layouts.primitives import ActionGroup, Heading
-from squid_layouts.testing import fake_interaction
+from squid_layouts.discord import (
+    Mount,
+    Reactor,
+)
+from squid_layouts.discord.testing import assert_within_limits, fake_interaction
+from squid_layouts.primitives import (
+    ActionGroup,
+    Button,
+    Heading,
+    Option,
+    Row,
+    SelectMenu,
+    Text,
+)
 
 
 class Counter(Component):

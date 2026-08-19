@@ -12,29 +12,35 @@ from hypothesis import strategies as st
 
 from squid_layouts import (
     DEFAULT_CHROME,
-    LIMITS,
-    Button,
     Component,
+)
+from squid_layouts.discord import (
+    DEFAULT_LIMITS as LIMITS,
+)
+from squid_layouts.discord import (
     LabelSpec,
-    Lines,
     ModalSpec,
     Mount,
     PageContext,
+    TextInputSpec,
+    build_modal,
+    conform,
+    default_nav,
+)
+from squid_layouts.discord.testing import assert_within_limits, fake_interaction
+from squid_layouts.planning import solve
+from squid_layouts.planning.solve import RText, _component_count, split_pages
+from squid_layouts.primitives import (
+    Button,
+    Code,
+    Heading,
+    Lines,
     Paginate,
     Row,
     Text,
-    TextInputSpec,
-    assert_within_limits,
-    build_modal,
     card,
-    conform,
-    default_nav,
-    solve,
 )
-from squid_layouts.planning.solve import RText, _component_count, split_pages
-from squid_layouts.primitives import Code, Heading
 from squid_layouts.primitives.presets import Field
-from squid_layouts.testing import fake_interaction
 
 
 class TestSplitPages:

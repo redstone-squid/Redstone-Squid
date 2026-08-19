@@ -687,7 +687,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         reserved = display_text_length(self)
         self.add_item(await self.get_handler(interaction).render_container(reserved_text=reserved))
         self.add_item(controls)
-        sl.conform(self)
+        sl.discord.conform(self)
 
     @actions.button(label="Open", style=discord.ButtonStyle.primary)
     async def open(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
@@ -753,7 +753,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
             discord.ui.TextDisplay(heading),
             await self.get_handler(interaction).render_container(reserved_text=len(heading)),
         )
-        sl.conform(success)
+        sl.discord.conform(success)
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
         # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
         await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
@@ -783,7 +783,7 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         self.add_item(await interaction.client.for_build(self.build).render_container())
         self.add_item(self._edit_row)
         self.add_item(self._navigation_row)
-        sl.conform(self)
+        sl.discord.conform(self)
 
     @override
     async def send(self, interaction: discord.Interaction[BotT]) -> None:

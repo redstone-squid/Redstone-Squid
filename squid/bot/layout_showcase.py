@@ -30,18 +30,18 @@ class DemoCounter(sl.Component):
         self.label = label
         self.locale = locale
 
-    def render(self) -> sl.Node:
-        return sl.Panel(
+    def render(self) -> sl.primitives.Node:
+        return sl.primitives.Panel(
             (
                 sl.primitives.Heading(self.label, level=3),
-                sl.Text(t(self.locale, _("Independent count: {count}"), count=self.count)),
-                sl.Row(
+                sl.primitives.Text(t(self.locale, _("Independent count: {count}"), count=self.count)),
+                sl.primitives.Row(
                     (
-                        sl.Button(
+                        sl.primitives.Button(
                             t(self.locale, _("Increment")),
                             self._increment,
                             "increment",
-                            style=sl.ActionStyle.SUCCESS,
+                            style=sl.primitives.ActionStyle.SUCCESS,
                         ),
                     )
                 ),
@@ -78,9 +78,9 @@ class LayoutShowcase(sl.Component):
 
     def render(self) -> Sequence[sl.LayoutNode]:
         controls = (
-            sl.SelectMenu(
+            sl.primitives.SelectMenu(
                 tuple(
-                    sl.Option(label, value, description, default=self.section == value)
+                    sl.primitives.Option(label, value, description, default=self.section == value)
                     for value, label, description in self._sections()
                 ),
                 self._select_section,
@@ -89,20 +89,20 @@ class LayoutShowcase(sl.Component):
             ),
             sl.primitives.ActionGroup(
                 (
-                    sl.Button(
+                    sl.primitives.Button(
                         t(self.locale, _("Cycle accent")),
                         self._cycle_accent,
                         "accent",
-                        style=sl.ActionStyle.PRIMARY,
+                        style=sl.primitives.ActionStyle.PRIMARY,
                     ),
-                    sl.Button(t(self.locale, _("Reactive click")), self._click, "click"),
+                    sl.primitives.Button(t(self.locale, _("Reactive click")), self._click, "click"),
                 )
             ),
         )
-        header = sl.Panel(
+        header = sl.primitives.Panel(
             (
                 sl.primitives.Heading(t(self.locale, _("squid-layouts engine showcase"))),
-                sl.Text(self.status),
+                sl.primitives.Text(self.status),
                 *controls,
             ),
             accent=_ACCENTS[self.accent_index],
@@ -120,9 +120,9 @@ class LayoutShowcase(sl.Component):
             case _:
                 return self._tour()
 
-    def _tour(self) -> Sequence[sl.Node]:
+    def _tour(self) -> Sequence[sl.primitives.Node]:
         return (
-            sl.card(
+            sl.primitives.card(
                 t(self.locale, _("What this message is doing")),
                 t(
                     self.locale,
@@ -132,14 +132,14 @@ class LayoutShowcase(sl.Component):
                     ),
                 ),
                 fields=(
-                    sl.presets.Field(
+                    sl.primitives.presets.Field(
                         t(self.locale, _("Reactivity")), t(self.locale, _("Change state; the view rebuilds."))
                     ),
-                    sl.presets.Field(
+                    sl.primitives.presets.Field(
                         t(self.locale, _("Pagination")),
                         t(self.locale, _("Pages are measured from content, footer, and controls together.")),
                     ),
-                    sl.presets.Field(
+                    sl.primitives.presets.Field(
                         t(self.locale, _("Composition")),
                         t(self.locale, _("Keyed child components keep state and handlers independent.")),
                     ),
@@ -148,12 +148,12 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _pagination(self) -> Sequence[sl.Node]:
+    def _pagination(self) -> Sequence[sl.primitives.Node]:
         return (
-            sl.Panel(
+            sl.primitives.Panel(
                 (
                     sl.primitives.Heading(t(self.locale, _("Target-budget pagination"))),
-                    sl.Text(
+                    sl.primitives.Text(
                         t(
                             self.locale,
                             _(
@@ -162,10 +162,10 @@ class LayoutShowcase(sl.Component):
                             ),
                         )
                     ),
-                    sl.Lines(
+                    sl.primitives.Lines(
                         self.entries,
                         join="\n\n",
-                        overflow=sl.Paginate(key="samples", footer=self._page_footer),
+                        overflow=sl.primitives.Paginate(key="samples", footer=self._page_footer),
                     ),
                 ),
                 accent=DISCORD_BLUE,
@@ -178,7 +178,7 @@ class LayoutShowcase(sl.Component):
             for index in range(1, 37)
         )
         return (
-            sl.card(
+            sl.primitives.card(
                 t(self.locale, _("Structural adaptation")),
                 t(
                     self.locale,
@@ -192,9 +192,9 @@ class LayoutShowcase(sl.Component):
             sl.Actions(actions, key="showcase-actions"),
         )
 
-    def _composition(self) -> Sequence[sl.Node]:
+    def _composition(self) -> Sequence[sl.primitives.Node]:
         return (
-            sl.card(
+            sl.primitives.card(
                 t(self.locale, _("Keyed component composition")),
                 t(
                     self.locale,

@@ -32,7 +32,7 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    card: sl.Node,
+    card: sl.primitives.Node,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> discord.ui.LayoutView:
@@ -65,12 +65,12 @@ def render_build_review(
         )
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
-    state = (sl.Sep(), sl.Text(vote_text, overflow=sl.Never()))
-    if isinstance(card, sl.Panel):
-        post = sl.Panel(children=(*card.children, *state), accent=card.accent)
+    state = (sl.primitives.Sep(), sl.primitives.Text(vote_text, overflow=sl.primitives.Never()))
+    if isinstance(card, sl.primitives.Panel):
+        post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
     else:
-        post = sl.Panel(children=(card, *state))
-    return sl.render_static([post])
+        post = sl.primitives.Panel(children=(card, *state))
+    return sl.discord.render_static([post])
 
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> discord.ui.LayoutView:

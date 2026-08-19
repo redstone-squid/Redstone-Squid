@@ -8,6 +8,8 @@ Body"). Values follow the Discord API docs for Components V2 and modals; the one
 
 from dataclasses import dataclass
 
+ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
+
 
 @dataclass(frozen=True, slots=True)
 class V2Limits:

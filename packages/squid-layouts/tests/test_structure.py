@@ -4,25 +4,31 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import (
-    DEFAULT_CHROME,
-    LIMITS,
+from squid_layouts import DEFAULT_CHROME
+from squid_layouts.discord import (
+    DEFAULT_LIMITS as LIMITS,
+)
+from squid_layouts.discord import (
+    PageContext,
+    default_nav,
+    render_static,
+)
+from squid_layouts.planning import (
+    LayoutOverflowError,
+    solve,
+)
+from squid_layouts.planning.solve import RPanel, RText, SolvedLayout
+from squid_layouts.primitives import (
     Alt,
     Fold,
-    LayoutOverflowError,
     Lines,
     LinkButton,
     Node,
-    PageContext,
     Paginate,
     Panel,
     Row,
     Text,
-    default_nav,
-    render_static,
-    solve,
 )
-from squid_layouts.planning.solve import RPanel, RText, SolvedLayout
 
 
 def _rendered(solved: SolvedLayout) -> str:

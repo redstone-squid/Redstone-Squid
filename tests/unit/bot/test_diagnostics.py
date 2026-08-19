@@ -15,8 +15,14 @@ from squid.bot.diagnostics import Diagnostics
 from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
 from squid.bot.ui import create_mount
 from squid.diagnostics.domain import ErrorReport
-from squid_layouts import LIMITS, Mount, MountedView, assert_within_limits
-from squid_layouts.testing import fake_interaction
+from squid_layouts.discord import (
+    DEFAULT_LIMITS as LIMITS,
+)
+from squid_layouts.discord import (
+    Mount,
+    MountedView,
+)
+from squid_layouts.discord.testing import assert_within_limits, fake_interaction
 
 
 def make_report(

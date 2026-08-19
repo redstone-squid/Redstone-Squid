@@ -2253,7 +2253,7 @@ dependencies = [
     { name = "rapidfuzz" },
     { name = "redis" },
     { name = "sqlalchemy", extra = ["postgresql-asyncpg", "postgresql-psycopg2binary"] },
-    { name = "squid-layouts" },
+    { name = "squid-layouts", extra = ["discord"] },
     { name = "uvicorn" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
     { name = "whenever" },
@@ -2333,7 +2333,7 @@ requires-dist = [
     { name = "rapidfuzz", specifier = ">=3.13.0" },
     { name = "redis", specifier = ">=8,<9" },
     { name = "sqlalchemy", extras = ["postgresql-asyncpg", "postgresql-psycopg2binary"], specifier = ">=2.0.41" },
-    { name = "squid-layouts", editable = "packages/squid-layouts" },
+    { name = "squid-layouts", extras = ["discord"], editable = "packages/squid-layouts" },
     { name = "uvicorn", specifier = ">=0.34.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.21.0" },
     { name = "whenever", specifier = ">=0.10.3" },
@@ -2648,16 +2648,19 @@ postgresql-psycopg2binary = [
 name = "squid-layouts"
 version = "0.1.0"
 source = { editable = "packages/squid-layouts" }
-dependencies = [
+
+[package.optional-dependencies]
+discord = [
     { name = "anyio" },
     { name = "discord-py" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "anyio", specifier = ">=4.14,<5" },
-    { name = "discord-py", specifier = ">=2.7,<3" },
+    { name = "anyio", marker = "extra == 'discord'", specifier = ">=4.14,<5" },
+    { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.7,<3" },
 ]
+provides-extras = ["discord"]
 
 [[package]]
 name = "starlette"

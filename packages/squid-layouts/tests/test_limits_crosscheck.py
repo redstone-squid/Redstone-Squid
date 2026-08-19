@@ -8,7 +8,7 @@ labor) needs a fresh look.
 import discord
 import pytest
 
-from squid_layouts import LIMITS
+from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
 
 
 def test_view_child_count_matches_discordpy():
