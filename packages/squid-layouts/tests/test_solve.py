@@ -88,6 +88,15 @@ class TestFitting:
         assert rendered[0] == "b" * 3900
         assert len(rendered[1]) <= LIMITS.total_text - 3900
 
+    def test_equal_priority_nodes_share_proportionally(self):
+        first = Text("a" * 6000)
+        second = Text("b" * 2000)
+        solved = solve([first, second])
+        lengths = [len(child.content) for child in solved.children]  # pyrefly: ignore
+        assert sum(lengths) <= LIMITS.total_text
+        # Need ratio is 3:1, so the later node keeps ~1000 chars instead of starving at 0.
+        assert lengths[1] >= 900
+
     def test_dropped_node_refunds_its_budget(self):
         # The Drop node cannot fit, so the Truncate node should get everything back.
         keeper = Text("k" * 3999)

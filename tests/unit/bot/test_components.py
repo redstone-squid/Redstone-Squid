@@ -29,9 +29,11 @@ def test_card_layout_serializes_as_components_v2() -> None:
 
     assert layout.has_components_v2()
     assert payload[0]["type"] == discord.ComponentType.container.value
-    assert children[0]["content"] == "## Status\nReady"
-    assert children[2]["content"] == "**Count**\n3"
-    assert children[3]["content"] == "-# Updated now"
+    # Title and body are separate TextDisplays so the body can trim independently.
+    assert children[0]["content"] == "## Status"
+    assert children[1]["content"] == "Ready"
+    assert children[3]["content"] == "**Count**\n3"
+    assert children[4]["content"] == "-# Updated now"
 
 
 def test_link_layout_uses_a_link_button() -> None:

@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 23:28+0000\n"
+"POT-Creation-Date: 2026-08-20 00:28+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -3001,6 +3001,10 @@ msgstr ""
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
 
+#: squid/bot/ui.py:65
+msgid "See attachment"
+msgstr ""
+
 #: squid/bot/utils/visibility.py:89
 msgid "Sent by direct message"
 msgstr ""
@@ -4908,7 +4912,7 @@ msgstr ""
 msgid "{visibility} · verified {age}"
 msgstr ""
 
-#: squid/bot/notifications_view.py:140
+#: squid/bot/notifications_view.py:140 squid/bot/ui.py:64
 #, python-brace-format
 msgid "…and {count} more."
 msgstr ""

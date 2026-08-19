@@ -1,33 +1,60 @@
-"""Components V2 layout and message-boundary helpers."""
+"""Components V2 layout and message-boundary helpers.
+
+The semantic layout builders (`card_layout`, `text_layout`, `error_layout`, …) moved to
+`squid.bot.ui`, which renders through the budget-aware `squid_layouts` engine; they are
+re-exported here so existing call sites keep working until they migrate. What remains native
+to this module is the send/edit mechanics and `card_container`, whose three direct consumers
+migrate with the framework pilots.
+"""
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import Any
 
 import discord
 
-DISCORD_RED = 0xF04747
-DISCORD_YELLOW = 0xFAA61A
-DISCORD_GREEN = 0x43B581
-DISCORD_BLUE = 0x5865F2
-DISCORD_GREY = 0x4F545C
+from squid.bot.ui import (
+    DISCORD_BLUE,
+    DISCORD_GREEN,
+    DISCORD_GREY,
+    DISCORD_RED,
+    DISCORD_YELLOW,
+    CardField,
+    CardSection,
+    card_layout,
+    error_layout,
+    help_layout,
+    info_layout,
+    link_layout,
+    text_layout,
+    warning_layout,
+)
+
+__all__ = [
+    "DISCORD_BLUE",
+    "DISCORD_GREEN",
+    "DISCORD_GREY",
+    "DISCORD_RED",
+    "DISCORD_YELLOW",
+    "MAX_DISPLAY_CHARACTERS",
+    "CardField",
+    "CardSection",
+    "StaticLayout",
+    "card_container",
+    "card_layout",
+    "edit_interaction_layout",
+    "edit_layout",
+    "error_layout",
+    "help_layout",
+    "info_layout",
+    "link_layout",
+    "no_mentions",
+    "reply_layout",
+    "text_layout",
+    "truncate_display_text",
+    "warning_layout",
+]
+
 MAX_DISPLAY_CHARACTERS = 4000
-
-
-@dataclass(frozen=True, slots=True)
-class CardField:
-    """A labelled value rendered inside a card."""
-
-    name: str
-    value: str
-
-
-@dataclass(frozen=True, slots=True)
-class CardSection:
-    """A titled group of related values rendered inside a card."""
-
-    title: str
-    fields: Sequence[CardField]
 
 
 class StaticLayout(discord.ui.LayoutView):
@@ -88,67 +115,6 @@ def card_container(
     if footer_content:
         children.append(discord.ui.TextDisplay(footer_content))
     return discord.ui.Container(*children, accent_colour=accent_colour)
-
-
-def card_layout(
-    title: str,
-    description: str | None = None,
-    *,
-    accent_colour: int = DISCORD_GREEN,
-    fields: Sequence[CardField] = (),
-    sections: Sequence[CardSection] = (),
-    footer: str | None = None,
-    media: Sequence[str] = (),
-) -> StaticLayout:
-    """Create a standalone V2 card."""
-    return StaticLayout(
-        card_container(
-            title,
-            description,
-            accent_colour=accent_colour,
-            fields=fields,
-            sections=sections,
-            footer=footer,
-            media=media,
-        )
-    )
-
-
-def text_layout(content: str, *, accent_colour: int | None = None) -> StaticLayout:
-    """Create a simple V2 text response."""
-    content = truncate_display_text(content, MAX_DISPLAY_CHARACTERS)
-    if accent_colour is None:
-        return StaticLayout(discord.ui.TextDisplay(content))
-    return StaticLayout(discord.ui.Container(discord.ui.TextDisplay(content), accent_colour=accent_colour))
-
-
-def error_layout(title: str, description: str | None) -> StaticLayout:
-    return card_layout(title, f":x: {description or ''}", accent_colour=DISCORD_RED)
-
-
-def warning_layout(title: str, description: str | None) -> StaticLayout:
-    return card_layout(f":warning: {title}", description, accent_colour=DISCORD_YELLOW)
-
-
-def info_layout(title: str, description: str | None) -> StaticLayout:
-    return card_layout(title, description, accent_colour=DISCORD_GREEN)
-
-
-def help_layout(
-    title: str,
-    description: str | None,
-    *,
-    sections: Sequence[CardSection] = (),
-    footer: str | None = None,
-) -> StaticLayout:
-    return card_layout(title, description, accent_colour=DISCORD_BLUE, sections=sections, footer=footer)
-
-
-def link_layout(title: str, url: str, *, description: str | None = None, label: str = "Open link") -> StaticLayout:
-    """Create a card whose primary action opens a URL."""
-    container = card_container(title, description)
-    container.add_item(discord.ui.ActionRow(discord.ui.Button(label=label, url=url)))
-    return StaticLayout(container)
 
 
 def no_mentions() -> discord.AllowedMentions:
