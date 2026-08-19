@@ -32,6 +32,7 @@ from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.presentation import PresentationSession
 from squid_layouts.scene import (
     PlanEvent,
+    PlanMetrics,
     PlanReport,
     PlanResult,
     PlanSeverity,
@@ -370,7 +371,13 @@ def plan(
     )
     resources = dict(converter.resources)
     resources.update({f"asset:{asset.key}": asset for asset in document.assets})
-    return PlanResult(scene=scene, bindings=converter.bindings, report=report, resources=resources)
+    return PlanResult(
+        scene=scene,
+        bindings=converter.bindings,
+        report=report,
+        resources=resources,
+        metrics=PlanMetrics(states_explored=semantic.states_explored),
+    )
 
 
 def _pagers(solved: SolvedLayout) -> tuple[ScenePager, ...]:

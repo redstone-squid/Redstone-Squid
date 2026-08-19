@@ -163,8 +163,17 @@ class PlanReport:
 
 
 @dataclass(frozen=True, slots=True)
+class PlanMetrics:
+    """Planner instrumentation kept outside deterministic reports and scene payloads."""
+
+    states_explored: int = 0
+    cache_hit: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class PlanResult:
     scene: SceneDocument
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
     resources: Mapping[str, object] = field(default_factory=dict)
+    metrics: PlanMetrics = field(default_factory=PlanMetrics)
