@@ -8,10 +8,11 @@ or drop, so looking at it and acting on it belong to the same message (audit C5'
 the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
-from typing import Any, override
+from typing import Any, cast, override
 
 import discord
 
+import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     MAX_BIO_LENGTH,
@@ -28,6 +29,7 @@ from squid.bot.consent import prompt_for_consent
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
+from squid.bot.ui import create_mount
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     CardField,
@@ -306,6 +308,276 @@ class AccountPanelView(ExpiringLayoutView):
         return None
 
 
+class AccountPanel(sl.Component):
+    """A mounted account workspace with semantic identity actions."""
+
+    selected_id: int | None = sl.state(None)
+    unlink_armed: int | None = sl.state(None)
+    closed: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        *,
+        accounts: AccountService,
+        account_id: int,
+        author_id: int,
+        locale: str | None = None,
+        timeout: float = SESSION_SECONDS,
+    ) -> None:
+        self._accounts = accounts
+        self._account_id = account_id
+        self._author_id = author_id
+        self.locale = locale
+        self._timeout = timeout
+        self._identities: tuple[AccountIdentity, ...] = ()
+        self._profile = AccountProfile.empty(account_id)
+        self._needs_consent = False
+        self._mount: sl.discord.Mount | None = None
+
+    async def load(self) -> None:
+        account = await self._accounts.get_account_by_id(self._account_id)
+        if account is None:
+            raise AccountNotFoundError(self._account_id)
+        self._identities = account.identities
+        self._needs_consent = account.needs_consent_refresh
+        self._profile = await self._accounts.get_profile(self._account_id)
+        if self.selected is None:
+            self.selected_id = None
+            self.unlink_armed = None
+
+    @property
+    def identities(self) -> tuple[AccountIdentity, ...]:
+        return self._identities[:MAX_LISTED]
+
+    @property
+    def selected(self) -> AccountIdentity | None:
+        return next((identity for identity in self.identities if identity.id == self.selected_id), None)
+
+    @property
+    def page_hidden(self) -> bool:
+        return self._profile.hidden
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.closed:
+            return (sl.primitives.banner(t(self.locale, _("Account controls closed")), accent=DISCORD_BLUE),)
+        fields = tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._fields())
+        nodes: list[sl.LayoutNode] = [
+            sl.primitives.card(
+                self._profile.display_name or t(self.locale, _("Your account")),
+                self._profile.bio,
+                accent=DISCORD_BLUE,
+                fields=fields,
+                footer=self._footer(),
+                media=own_profile_avatar(self._profile, self._identities),
+            )
+        ]
+        if self.identities:
+            nodes.append(
+                sl.Choices(
+                    key="identity",
+                    choices=tuple(
+                        sl.Choice(
+                            str(identity.id),
+                            identity_label(identity, self.locale),
+                            self.identity_detail(identity),
+                        )
+                        for identity in self.identities
+                        if identity.id is not None
+                    ),
+                    selected=(str(self.selected_id),) if self.selected_id is not None else (),
+                    on_change=self._selection_changed,
+                )
+            )
+        nodes.append(
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Hide from page"))
+                        if self.selected is not None and self.selected.is_public
+                        else t(self.locale, _("Show on page")),
+                        self._toggle_identity,
+                        "identity_visibility",
+                        disabled=self.selected is None,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Unlink for good"))
+                        if self.unlink_armed == self.selected_id
+                        else t(self.locale, _("Unlink")),
+                        self._unlink,
+                        "unlink",
+                        style=sl.primitives.ActionStyle.DANGER,
+                        disabled=self.selected is None,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Edit page")),
+                        self._edit_page,
+                        "edit_page",
+                        style=sl.primitives.ActionStyle.PRIMARY,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Show my page")) if self.page_hidden else t(self.locale, _("Hide my page")),
+                        self._toggle_page,
+                        "page_visibility",
+                    ),
+                    sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),
+                )
+            )
+        )
+        return tuple(nodes)
+
+    async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
+        self.selected_id = int(event.selected[0])
+        self.unlink_armed = None
+
+    async def _toggle_identity(self, event: sl.PressEvent) -> None:
+        identity = self.selected
+        if identity is None or identity.id is None or not await self._consented(event):
+            return
+        await self._accounts.set_identity_visibility(
+            self._account_id,
+            identity.id,
+            is_public=not identity.is_public,
+        )
+        await self._reload()
+
+    async def _toggle_page(self, event: sl.PressEvent) -> None:
+        if not await self._consented(event):
+            return
+        await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=not self.page_hidden))
+        await self._reload()
+
+    async def _unlink(self, event: sl.PressEvent) -> None:
+        identity = self.selected
+        if identity is None or identity.id is None:
+            return
+        if self.unlink_armed != identity.id:
+            self.unlink_armed = identity.id
+            return
+        await event.acknowledge()
+        removed = await self._accounts.unlink_identity(self._account_id, identity.id)
+        self.unlink_armed = None
+        await self._reload()
+        await event.notice(
+            t(
+                self.locale,
+                _("Unlinked {identity}. Any build credit you hold is unaffected."),
+                identity=identity_label(removed, self.locale),
+            )
+        )
+
+    async def _edit_page(self, event: sl.PressEvent) -> None:
+        interaction = self._interaction(event)
+        if interaction is None:
+            return
+        if self._needs_consent:
+            consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+            if consent is None:
+                await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
+                return
+            await self._accounts.grant_current_consent(self._account_id)
+            self._needs_consent = False
+            await event.notice(t(self.locale, _("Thanks. Press **Edit page** again to open the editor.")))
+            return
+        await event.present_form(ProfileEditModal(self, self._profile, locale=self.locale))
+
+    async def save_profile(self, interaction: discord.Interaction[Any], update: ProfileUpdate) -> None:
+        await self._accounts.update_profile(self._account_id, update)
+        await self.load()
+        self.invalidate()
+        if self._mount is None:
+            return
+        rendered = self._mount.build_view()
+        await edit_interaction_layout(interaction, rendered)
+        if self._mount.message is not None:
+            self._mount.bind(self._mount.message, rendered)
+
+    async def _consented(self, event: sl.ActionEvent) -> bool:
+        await event.acknowledge()
+        if not self._needs_consent:
+            return True
+        interaction = self._interaction(event)
+        if interaction is None:
+            return False
+        consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+        if consent is None:
+            await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
+            return False
+        await self._accounts.grant_current_consent(self._account_id)
+        self._needs_consent = False
+        return True
+
+    async def _reload(self) -> None:
+        await self.load()
+        self.invalidate()
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        self.closed = True
+        await event.finish()
+
+    def _fields(self) -> list[CardField]:
+        fields = own_profile_fields(self._profile, self.locale)
+        fields += [
+            CardField(identity_label(identity, self.locale), self.identity_detail(identity))
+            for identity in self.identities
+        ]
+        if not fields:
+            fields.append(CardField(t(self.locale, _("Linked accounts")), t(self.locale, _("_None yet._"))))
+        fields.append(
+            CardField(
+                t(self.locale, _("Creator page")),
+                t(self.locale, _("Hidden")) if self.page_hidden else t(self.locale, _("Public")),
+            )
+        )
+        return fields
+
+    def identity_detail(self, identity: AccountIdentity) -> str:
+        return t(
+            self.locale,
+            _("{visibility} · verified {age}"),
+            visibility=(t(self.locale, _("shown publicly")) if identity.is_public else t(self.locale, _("hidden"))),
+            age=(
+                discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R")
+                if identity.verified_at is not None
+                else t(self.locale, _("unknown"))
+            ),
+        )
+
+    def _footer(self) -> str | None:
+        identity = self.selected
+        if self.unlink_armed == self.selected_id and identity is not None:
+            warning = t(
+                self.locale,
+                _("Click **Unlink** again to remove {identity}."),
+                identity=identity_label(identity, self.locale),
+            )
+            if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
+                warning += " " + t(
+                    self.locale,
+                    _("This is the Discord account you are using now. The bot will stop recognising you here."),
+                )
+            return warning
+        if self.page_hidden:
+            return t(
+                self.locale,
+                "A hidden page still lists the creator names you hold, because that credit is what attributes your builds.",
+            )
+        return None
+
+    @staticmethod
+    def _interaction(event: sl.ActionEvent) -> discord.Interaction[Any] | None:
+        interaction = getattr(event.responder, "interaction", None)
+        return cast(discord.Interaction[Any], interaction) if interaction is not None else None
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            locale=self.locale,
+            timeout=self._timeout,
+            lock_to=self._author_id,
+        )
+        return self._mount
+
+
 class IdentitySelect(discord.ui.Select[AccountPanelView]):
     """Pick the identity the buttons act on, instead of reading its id off a card."""
 
@@ -413,7 +685,7 @@ class ProfileEditModal(ErrorHandledModal):
     valid link is.
     """
 
-    def __init__(self, panel: AccountPanelView, profile: AccountProfile, *, locale: str | None) -> None:
+    def __init__(self, panel: AccountPanelView | AccountPanel, profile: AccountProfile, *, locale: str | None) -> None:
         super().__init__(title=t(locale, _("Edit your creator page")))
         self._panel = panel
         self._locale = locale
