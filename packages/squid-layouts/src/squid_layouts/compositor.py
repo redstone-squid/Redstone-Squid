@@ -1,7 +1,6 @@
 """Discord composition convenience built on the portable plan/draw seam."""
 
 import logging
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import discord
@@ -10,10 +9,10 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.renderer import DiscordRenderer, Wire
 from squid_layouts.discord.target import DiscordV2Target
 from squid_layouts.document import DocumentLike
-from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.planner import plan as plan_document
 from squid_layouts.scene import PlanResult
+from squid_layouts.solve import PageNav, PageState
 from squid_layouts.target import ResourceCost
 
 logger = logging.getLogger(__name__)
@@ -49,8 +48,8 @@ def compose(
     chrome: Chrome = DEFAULT_CHROME,
     strict: bool = False,
     reserved_text: int = 0,
-    page: int | None = None,
-    nav: Callable[[int, int], Sequence[Node]] | None = None,
+    page: PageState = None,
+    nav: PageNav | None = None,
 ) -> Composition:
     """Plan a logical document, then draw its resolved Discord scene."""
     result = plan_document(

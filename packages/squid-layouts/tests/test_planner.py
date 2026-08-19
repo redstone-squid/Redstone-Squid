@@ -9,11 +9,15 @@ from squid_layouts import (
     Button,
     Choice,
     LayoutInvariantError,
+    Lines,
+    Paginate,
     Panel,
     Row,
     SceneCodec,
+    Section,
     TargetProfile,
     Text,
+    Thumbnail,
     UnsolvableLayoutError,
     Variant,
     plan,
@@ -71,6 +75,46 @@ def test_exact_row_overflow_is_a_typed_planning_error() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
     with pytest.raises(LayoutInvariantError, match="row has 6 controls"):
         plan(Row(buttons), target=DISCORD_V2)
+
+
+def test_planner_requires_explicit_unique_pager_keys() -> None:
+    with pytest.raises(LayoutInvariantError, match="requires an explicit key"):
+        plan(Text("content", overflow=Paginate()), target=DISCORD_V2)
+
+    with pytest.raises(LayoutInvariantError, match="duplicate pager key 'results'"):
+        plan(
+            (
+                Lines(("one",), overflow=Paginate(key="results", per=1)),
+                Lines(("two",), overflow=Paginate(key="results", per=1)),
+            ),
+            target=DISCORD_V2,
+        )
+
+
+def test_planner_rejects_pagination_inside_a_section() -> None:
+    section = Section(
+        (Text("content", overflow=Paginate(key="detail")),),
+        Thumbnail("https://example.invalid/image.png"),
+    )
+
+    with pytest.raises(LayoutInvariantError, match="cannot be nested in a Section"):
+        plan(section, target=DISCORD_V2)
+
+
+def test_scene_reports_every_independent_pager() -> None:
+    result = plan(
+        (
+            Lines(tuple(f"left {index}" for index in range(4)), overflow=Paginate(key="left", per=2)),
+            Lines(tuple(f"right {index}" for index in range(6)), overflow=Paginate(key="right", per=2)),
+        ),
+        target=DISCORD_V2,
+        page={"left": 1, "right": 2},
+    )
+
+    assert [(pager.key, pager.page, pager.pages) for pager in result.scene.pagers] == [
+        ("left", 1, 2),
+        ("right", 2, 3),
+    ]
 
 
 def test_choice_selects_by_capability_before_budget_degradation() -> None:
