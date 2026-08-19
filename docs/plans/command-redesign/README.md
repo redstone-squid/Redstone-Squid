@@ -63,7 +63,7 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 | 2 | [02-search.md](02-search.md) | One `/search`: taxonomies named in `scope`, tag kinds indexed, one sort option; `/patterns` removed and `/restrictions` reduced to its staff command | **Delivered** |
 | 3 | [03-diagnostics.md](03-diagnostics.md) | `/error`: reports page inline, `recent` entries open in place, and every reply is private on the prefix side too | **Delivered** |
 | 4 | [04-settings.md](04-settings.md) | `/settings` opens a panel: every key on one screen with a picker each, voting configured where it is displayed; `list`/`get`/`clear`/`voting show`/`voting emojis` removed | **Delivered** |
-| 5 | [05-condensation.md](05-condensation.md) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | In progress (5 of 7 steps) |
+| 5 | [05-condensation.md](05-condensation.md) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | In progress (6 of 7 steps) |
 | 6 | [06-build.md](06-build.md) | `/build`, 15 commands: one edit surface instead of two that disagree about who may edit; `queue` paginated and de-idded; the loose schematic tools moved under `build schematic` | **Delivered** |
 | 7 | 07-account.md (todo) | `/account`, 12 commands: identity and profile management stop making you read an id off one command to type into the next, as claim review already has (5.4) | Not started |
 | 8 | 08-small-groups.md (todo) | `/info` folds into `/help`; `/version`, `/redstoner` and `/tag` polish; the poll wizard's untranslated half of C3; the last C4 message arguments | Not started |
@@ -143,5 +143,5 @@ inferred from whichever plan happened to mention them last.
 | C3 | Replies bypassing i18n and layouts | Settings (4) and notifications (5.3) done; the poll wizard is still entirely untranslated bare strings — phase 8 |
 | C4 | Message arguments where a right-click belongs | Polls done (5.1), `build recalc` done (6.3); `redstoner resync` is phase 8 |
 | C5 | Raw internals in user-facing output | Search done (2), `build queue` done (6.1), claim ids done (5.4); `records lookup`'s restriction ids and notification subject UUIDs are recorded as deliberate deferrals in [05-condensation.md](05-condensation.md) |
-| C6 | Ad-hoc pagination | The paginator landed in phase 6.1, its first caller, and `account claims` took it in 5.4; 5.6 is the remaining call sites, and phases 7–9 use it rather than reinventing one each |
+| C6 | Ad-hoc pagination | **Done** — the paginator landed in phase 6.1 with `build queue`, and 5.4 and 5.6 took the other four call sites. Phases 7–9 use it rather than reinventing one each |
 | C7 | Hybrid commands that are not | **Done** — phase 1 (`build submit-full`), phase 4 (`voting emojis`), phase 5.1 (`/poll`), phase 6.2 (`build edit`, whose prefix half skipped the preview) |

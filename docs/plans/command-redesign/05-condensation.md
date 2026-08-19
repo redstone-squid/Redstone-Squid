@@ -25,7 +25,7 @@ three different ad-hoc truncation schemes standing in for a paginator.
 | 5.3 | `/notifications`: one panel and one `follow`, seven commands down to two (C3, C5) | **Delivered** |
 | 5.4 | `/account` claim review moves onto the `claims` list as buttons | **Delivered** |
 | 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into `perm can` | **Delivered** |
-| 5.6 | A shared list paginator, applied to `version list` and the records diagnostics (C6). The module landed in phase 6, whose `build queue` needed it first; `account claims` took it in 5.4 | Not started |
+| 5.6 | A shared list paginator, applied to `version list` and the records diagnostics (C6). The module landed in phase 6, whose `build queue` needed it first; `account claims` took it in 5.4 | **Delivered** |
 | 5.7 | One ephemerality rule, applied bot-wide (C2) | Not started |
 
 Ordering is by independence, not by value: each step is a commit that stands alone, and the
@@ -245,3 +245,28 @@ else". The group gate admits either, so nobody granted only one of them loses th
 Prose elsewhere referring to `/perm explain` — the resolution domain, the administration
 service, the decision docstrings — now names `perm can`, since that trace is the whole reason
 those modules keep a trace at all.
+
+## 5.6 — three truncation schemes, retired
+
+The audit found four commands with four answers to "the list is too long": `build queue`
+printed everything and let Discord cut the message off, `version list` stopped at 20 with a
+`# TODO: pagination` where the answer should have been, `account claims` stopped at 10 with a
+footer counting the rest, and the two records diagnostics stopped at 30 with the same footer
+(C6). The paginator itself landed in phase 6.1 with `build queue`, its first caller, and 5.4
+took `account claims` while rebuilding it. This step is the two that were left.
+
+**`version list` reads every version it knows.** `list_display`'s `limit` is now optional and
+the command passes none. A version is one short token, so a page joins its entries with `", "`
+rather than with the blank line multi-line entries want — hence `ListPaginator`'s new
+`separator`, which is the only change the shared module needed in order to take a fourth
+caller. Fifty per page is a few years of releases and still reads as a run of tokens rather
+than as a wall.
+
+**`records gaps` and `records title-issues` page their findings.** Both capped at 30 and then
+said "…and N more", which hides the backlog exactly when there is one worth reading; the point
+of a maintenance diagnostic is to show the work. Fifteen one-line findings per page, and both
+build their paginator through one `_diagnostic_list` helper, so the two commands cannot drift
+into presenting the same kind of finding differently.
+
+Both stay ephemeral on the slash path, which is what they already did and what 5.7 turns from a
+habit into a rule.

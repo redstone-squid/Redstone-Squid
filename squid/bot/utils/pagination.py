@@ -37,6 +37,7 @@ class ListPaginator(ExpiringLayoutView):
         empty: str,
         locale: str | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
+        separator: str = "\n\n",
         accent_colour: int = DISCORD_GREEN,
         timeout: float = 180,
     ) -> None:
@@ -49,6 +50,8 @@ class ListPaginator(ExpiringLayoutView):
             empty: What to say instead when there are no entries at all.
             locale: The locale to translate the controls and footer in.
             page_size: How many entries a page holds.
+            separator: What joins the entries on a page. The default suits multi-line entries;
+                a list of one-line entries wants `\n`, and a list of short tokens `, `.
             accent_colour: The card's accent.
             timeout: How long the controls stay live.
         """
@@ -58,6 +61,7 @@ class ListPaginator(ExpiringLayoutView):
         self.empty = empty
         self.locale = locale
         self.page_size = max(1, page_size)
+        self.separator = separator
         self.accent_colour = accent_colour
         self._author_id = author_id
         self.page = 0
@@ -96,7 +100,7 @@ class ListPaginator(ExpiringLayoutView):
         self.add_item(
             card_container(
                 self.title,
-                "\n\n".join(shown) if shown else self.empty,
+                self.separator.join(shown) if shown else self.empty,
                 accent_colour=self.accent_colour,
                 footer=footer,
             )
