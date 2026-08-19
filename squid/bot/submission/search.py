@@ -13,7 +13,9 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
+import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.submission.build_info import BuildInfoComponent
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.groups import BuildCommandGroup
@@ -21,8 +23,7 @@ from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.submission.ui.components import DynamicBuildEditButton
-from squid.bot.submission.ui.views import BuildInfoView
-from squid.bot.ui import PagedList
+from squid.bot.ui import PagedList, create_mount
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
     edit_layout,
@@ -203,13 +204,15 @@ class SearchCog[
             sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
+        queries = getattr(self, "queries", None)
+        load_build = queries.get if queries is not None else None
         view = SearchResultsView(
             self.search,
             request,
             page,
             author_id=ctx.author.id,
             locale=locale,
-            load_build=self.queries.get,
+            load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
         mount = view.mount()
@@ -288,8 +291,17 @@ class SearchCog[
                 )
                 return None
 
-            view = BuildInfoView[BotT](build)
-            await view.send(interaction)
+            node = await self.bot.for_build(build).render_node()
+            navigator = sl.discord.Navigator(BuildInfoComponent(build, node, locale=locale))
+            mount = create_mount(navigator, locale=locale, timeout=300)
+            rendered = mount.build_view()
+            message = await interaction.followup.send(
+                view=rendered,
+                files=mount.attachment_files(),
+                allowed_mentions=no_mentions(),
+                wait=True,
+            )
+            mount.bind(message, rendered)
             return None
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.queries.get(build_id)
