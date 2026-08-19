@@ -87,11 +87,12 @@ async def test_the_card_says_what_the_command_says() -> None:
 
 
 async def test_a_long_queue_is_paged_rather_than_truncated() -> None:
-    view = await _run([_build(index) for index in range(1, 26)])
+    view = await _run([_build(index) for index in range(1, 101)])
     body = _text(view)
 
     assert "**#1**" in body
-    assert "**#25**" not in body
+    assert "**#11**" in body  # budget-filled, not the PagedList default of ten entries
+    assert "**#100**" not in body
     assert any(isinstance(child, discord.ui.Button) for child in view.walk_children())
 
 

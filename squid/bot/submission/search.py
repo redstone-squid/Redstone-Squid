@@ -254,6 +254,7 @@ class SearchCog[
             [_pending_entry(build, locale) for build in pending],
             empty=t(locale, _("Nothing is waiting for review.")),
             locale=locale,
+            page_size=None,
         )
         await paginator.send(ctx)
 
