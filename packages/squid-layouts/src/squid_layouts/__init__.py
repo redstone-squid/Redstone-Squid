@@ -36,6 +36,7 @@ from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.materialize import StaticView, materialize, render_static
 from squid_layouts.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_layouts.mount import ErrorHook, Mount, MountedView
+from squid_layouts.navigation import Navigator
 from squid_layouts.presets import Field, FieldGroup, banner, card, listing, report
 from squid_layouts.runtime import Reactor
 from squid_layouts.solve import LayoutOverflowError, SolvedLayout, solve
@@ -66,6 +67,7 @@ __all__ = [
     "ModalSpec",
     "Mount",
     "MountedView",
+    "Navigator",
     "Never",
     "Node",
     "Option",
