@@ -54,9 +54,17 @@ class TestRenderAndWire:
         mount = Mount(Counter(), timeout=None)
         view = mount.build_view()
         button = _button(view)
-        assert button.custom_id is not None and button.custom_id.startswith(f"ctl:{mount.id}:inc")
+        assert button.custom_id is not None and button.custom_id.startswith(f"ctl:{mount.id}:1:inc")
         assert "inc" in mount._handlers
         assert_within_limits(view)
+
+    def test_render_generations_have_distinct_control_ids(self):
+        mount = Mount(Counter(), timeout=None)
+
+        first = _button(mount.build_view())
+        second = _button(mount.build_view())
+
+        assert first.custom_id != second.custom_id
 
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
