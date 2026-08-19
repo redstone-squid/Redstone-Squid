@@ -32,6 +32,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv:0.11.32@sha256:df4cae8f3a96d175e2e5f992e59
     --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=packages,target=packages \
     if [ "$WITH_SCHEMATICS" = "1" ] && [ "$WITH_OBSERVABILITY" = "1" ]; then \
       uv sync --locked --no-dev --no-editable --extra schematics --extra observability; \
     elif [ "$WITH_SCHEMATICS" = "1" ]; then \
