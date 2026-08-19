@@ -1,0 +1,78 @@
+"""Public dogfood surface for the squid-layouts engine."""
+
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock
+
+import discord
+from discord.ext import commands
+
+from squid.bot.layout_showcase import LayoutShowcase, LayoutShowcaseCog
+from squid_layouts import Mount, assert_within_limits
+from squid_layouts.testing import fake_interaction
+
+
+def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
+    return [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+
+
+def _texts(view: discord.ui.LayoutView) -> str:
+    return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+
+
+def test_pagination_exhibit_uses_the_measured_budget() -> None:
+    mount = Mount(LayoutShowcase(section="pagination", entries=200, locale="en"), timeout=None)
+    view = mount.build_view()
+
+    assert "#011" in _texts(view)
+    assert "#200" not in _texts(view)
+    assert any(button.label == "Next" for button in _buttons(view))
+    assert_within_limits(view)
+
+
+def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
+    view = Mount(LayoutShowcase(section="adaptation", entries=20, locale="en"), timeout=None).build_view()
+
+    assert any(isinstance(item, discord.ui.Select) for item in view.walk_children())
+    assert not any(button.label == "Action 36" for button in _buttons(view))
+    assert_within_limits(view)
+
+
+async def test_composed_children_keep_independent_state_and_keys() -> None:
+    component = LayoutShowcase(section="composition", entries=20, locale="en")
+    mount = Mount(component, timeout=None)
+    view = mount.build_view()
+    ids = {button.custom_id or "" for button in _buttons(view)}
+
+    assert any("left.increment" in custom_id for custom_id in ids)
+    assert any("right.increment" in custom_id for custom_id in ids)
+
+    await mount.dispatch("left.increment", fake_interaction())
+
+    assert component.left.count == 1
+    assert component.right.count == 0
+
+
+async def test_demo_command_is_public_and_author_locks_only_its_controls() -> None:
+    settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
+    cog = LayoutShowcaseCog(cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings))))
+    ctx = cast(
+        commands.Context[Any],
+        cast(
+            Any,
+            SimpleNamespace(
+                interaction=None,
+                guild=None,
+                author=SimpleNamespace(id=7),
+                send=AsyncMock(return_value=SimpleNamespace(id=1, flags=SimpleNamespace(components_v2=True))),
+            ),
+        ),
+    )
+
+    await LayoutShowcaseCog.demo.callback(cog, ctx, "tour", 20)  # type: ignore[arg-type]
+
+    sent = cast(Any, ctx).send.await_args.kwargs
+    assert sent["ephemeral"] is False
+    assert isinstance(sent["view"], discord.ui.LayoutView)
+    demo = next(command for command in cog.__cog_commands__ if command.qualified_name == "layout demo")
+    assert demo.checks == []
