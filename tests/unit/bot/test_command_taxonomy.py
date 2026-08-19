@@ -31,8 +31,6 @@ UNGATED_COMMANDS = frozenset(
         "account link",
         "account merge",
         "account merge-code",
-        "account profile",
-        "account profile-edit",
         # Refreshing your own Minecraft name is default-allow, so the command declares no
         # node. Its `user:` form checks `account.identity.refresh_any` inline instead, which
         # a decorator could not express without gating the self case too.
@@ -89,8 +87,8 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # because the behaviour of a command nobody calls is nothing.
     # Approving and rejecting a claim are buttons on `account claims`, not commands
     # (docs/plans/command-redesign/05-condensation.md). `account` is a hybrid group with a
-    # `show` fallback, so bare `account` opens the panel that `identities`, `visibility` and
-    # `unlink` used to answer an id at a time
+    # `show` fallback, so bare `account` opens the panel that `identities`, `visibility`,
+    # `unlink`, `profile` and `profile-edit` used to answer a piece at a time
     # (docs/plans/command-redesign/07-account.md).
     "account": (
         "claim",
@@ -99,8 +97,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "link",
         "merge",
         "merge-code",
-        "profile",
-        "profile-edit",
         "refresh",
     ),
     "archive": (),
