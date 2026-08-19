@@ -10,7 +10,7 @@ import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
-from functools import cached_property
+from functools import cache, cached_property
 from ipaddress import ip_network
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast, override
@@ -949,6 +949,45 @@ class _FilteredEnvironmentSource(PydanticBaseSettingsSource):
         return filtered
 
 
+@cache
+def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[ConfigT]:
+    """A twin of `config_type` that reads nothing but the values it is handed.
+
+    `BaseSettings` builds its sources in `__init__`, and pydantic routes `model_validate` through
+    `__init__` for any model that defines one — so validating a projection re-read `./.env` and
+    `os.environ` and merged them *over* the values passed in. Scalars survived that, since init has
+    the highest priority, but dict fields merge key by key: an API process projected from a config
+    loaded elsewhere ended up holding the union of both idempotency keyrings, trusting a key its own
+    configuration never named.
+    """
+
+    class _Projection(config_type):  # pyright: ignore[reportUntypedBaseClass]  # pyrefly: ignore[invalid-inheritance]
+        # No `@override`: the base is a type variable here, so neither checker can see the method
+        # it overrides.
+        @classmethod
+        def settings_customise_sources(
+            cls,
+            settings_cls: type[BaseSettings],
+            init_settings: PydanticBaseSettingsSource,
+            env_settings: PydanticBaseSettingsSource,
+            dotenv_settings: PydanticBaseSettingsSource,
+            file_secret_settings: PydanticBaseSettingsSource,
+        ) -> tuple[PydanticBaseSettingsSource, ...]:
+            del settings_cls, env_settings, dotenv_settings, file_secret_settings
+            return (init_settings,)
+
+    return cast(type[ConfigT], _Projection)
+
+
+def _project[ConfigT: BaseSettings](config_type: type[ConfigT], values: Mapping[str, Any]) -> ConfigT:
+    """Narrow already-loaded settings into one process's configuration.
+
+    Validation still runs in full; only the environment lookups are dropped, because these values
+    have already been through them once.
+    """
+    return _projection_type(config_type)(**values)
+
+
 class _ProcessSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SQUID_",
@@ -1104,7 +1143,8 @@ class ApplicationConfig(BotProcessConfig):
 
     def bot_process(self) -> BotProcessConfig:
         """Project the combined settings into the Discord process."""
-        return BotProcessConfig.model_validate(
+        return _project(
+            BotProcessConfig,
             self.model_dump(
                 include={
                     "database",
@@ -1129,12 +1169,13 @@ class ApplicationConfig(BotProcessConfig):
                     "build",
                     "upstream_http",
                 }
-            )
+            ),
         )
 
     def api_process(self) -> ApiProcessConfig:
         """Project the combined settings into the HTTP API process."""
-        return ApiProcessConfig.model_validate(
+        return _project(
+            ApiProcessConfig,
             self.model_dump(
                 include={
                     "database",
@@ -1157,12 +1198,13 @@ class ApplicationConfig(BotProcessConfig):
                     "rate_limit",
                     "upstream_http",
                 }
-            )
+            ),
         )
 
     def worker_process(self) -> WorkerProcessConfig:
         """Project the combined settings into the database worker process."""
-        return WorkerProcessConfig.model_validate(
+        return _project(
+            WorkerProcessConfig,
             self.model_dump(
                 include={
                     "database",
@@ -1183,7 +1225,7 @@ class ApplicationConfig(BotProcessConfig):
                     "worker",
                     "upstream_http",
                 }
-            )
+            ),
         )
 
 
