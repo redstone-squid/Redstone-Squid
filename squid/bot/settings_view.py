@@ -191,12 +191,12 @@ class SettingsPanelView(ExpiringLayoutView):
         )
         if self._capabilities.edit_server:
             for setting in CHANNEL_SETTINGS:
-                self.add_item(discord.ui.ActionRow(SettingChannelSelect(self, setting)))
-            self.add_item(discord.ui.ActionRow(LocaleSelect(self)))
+                self.add_item(discord.ui.ActionRow(SettingChannelSelect(cast(Any, self), setting)))
+            self.add_item(discord.ui.ActionRow(LocaleSelect(cast(Any, self))))
         row = discord.ui.ActionRow()
         if self.shows_voting:
-            row.add_item(VotingPageButton(self))
-        row.add_item(ClosePanelButton(self))
+            row.add_item(VotingPageButton(cast(Any, self)))
+        row.add_item(ClosePanelButton(cast(Any, self)))
         self.add_item(row)
 
     def render_voting(self) -> None:
@@ -210,16 +210,16 @@ class SettingsPanelView(ExpiringLayoutView):
                 footer=self._scope_note(),
             )
         )
-        self.add_item(discord.ui.ActionRow(VoteKindSelect(self)))
+        self.add_item(discord.ui.ActionRow(VoteKindSelect(cast(Any, self))))
         if self._capabilities.edit_voting:
-            self.add_item(discord.ui.ActionRow(RoleWeightSelect(self)))
+            self.add_item(discord.ui.ActionRow(RoleWeightSelect(cast(Any, self))))
         row = discord.ui.ActionRow()
         if self._capabilities.edit_voting:
-            row.add_item(EditEmojisButton(self))
-            row.add_item(ResetVotingButton(self))
+            row.add_item(EditEmojisButton(cast(Any, self)))
+            row.add_item(ResetVotingButton(cast(Any, self)))
         if self.shows_server:
-            row.add_item(ServerPageButton(self))
-        row.add_item(ClosePanelButton(self))
+            row.add_item(ServerPageButton(cast(Any, self)))
+        row.add_item(ClosePanelButton(cast(Any, self)))
         self.add_item(row)
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
@@ -446,7 +446,9 @@ class SettingsPanel(sl.Component):
                     key=f"channel-{setting}",
                     choices=self._channel_choices(setting),
                     selected=(str(self.channel_id(setting)) if self.channel_id(setting) is not None else "clear",),
-                    on_change=lambda event, setting=setting: self._channel_changed(setting, event),
+                    on_change=lambda event, setting=setting: self._channel_changed(
+                        cast(ScalarChannelSetting, setting), event
+                    ),
                 )
                 for setting in CHANNEL_SETTINGS
             )
@@ -582,11 +584,11 @@ class SettingsPanel(sl.Component):
         if role is None:
             await event.notice(t(self.locale, _("That role has been deleted.")))
             return
-        await event.present_form(RoleWeightModal(self, role))
+        await event.present_form(RoleWeightModal(cast(Any, self), role))
 
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
-            await event.present_form(VoteEmojiModal(self))
+            await event.present_form(VoteEmojiModal(cast(Any, self)))
 
     async def _reset(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
@@ -712,16 +714,16 @@ class SettingsPanel(sl.Component):
                     footer=self._scope_note(),
                 )
             )
-            layout.add_item(discord.ui.ActionRow(VoteKindSelect(self)))
+            layout.add_item(discord.ui.ActionRow(VoteKindSelect(cast(Any, self))))
             if self._capabilities.edit_voting:
-                layout.add_item(discord.ui.ActionRow(RoleWeightSelect(self)))
+                layout.add_item(discord.ui.ActionRow(RoleWeightSelect(cast(Any, self))))
             row = discord.ui.ActionRow()
             if self._capabilities.edit_voting:
-                row.add_item(EditEmojisButton(self))
-                row.add_item(ResetVotingButton(self))
+                row.add_item(EditEmojisButton(cast(Any, self)))
+                row.add_item(ResetVotingButton(cast(Any, self)))
             if self.shows_server:
-                row.add_item(ServerPageButton(self))
-            row.add_item(ClosePanelButton(self))
+                row.add_item(ServerPageButton(cast(Any, self)))
+            row.add_item(ClosePanelButton(cast(Any, self)))
             layout.add_item(row)
         else:
             layout.add_item(
@@ -735,12 +737,12 @@ class SettingsPanel(sl.Component):
             )
             if self._capabilities.edit_server:
                 for setting in CHANNEL_SETTINGS:
-                    layout.add_item(discord.ui.ActionRow(SettingChannelSelect(self, setting)))
-                layout.add_item(discord.ui.ActionRow(LocaleSelect(self)))
+                    layout.add_item(discord.ui.ActionRow(SettingChannelSelect(cast(Any, self), setting)))
+                layout.add_item(discord.ui.ActionRow(LocaleSelect(cast(Any, self))))
             row = discord.ui.ActionRow()
             if self.shows_voting:
-                row.add_item(VotingPageButton(self))
-            row.add_item(ClosePanelButton(self))
+                row.add_item(VotingPageButton(cast(Any, self)))
+            row.add_item(ClosePanelButton(cast(Any, self)))
             layout.add_item(row)
         return layout
 
@@ -757,7 +759,7 @@ class SettingsPanel(sl.Component):
         self._compat_disabled = True
         layout = self._compat_layout()
         for child in layout.walk_children():
-            if hasattr(child, "disabled"):
+            if isinstance(child, discord.ui.Button | discord.ui.Select):
                 child.disabled = True
         if self._bound_message is not None:
             await self._bound_message.edit(view=layout)
