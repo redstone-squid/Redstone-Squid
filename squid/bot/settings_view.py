@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import t
+from squid.bot.ui import create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -339,6 +341,432 @@ class SettingsPanelView(ExpiringLayoutView):
         )
 
 
+class SettingsPanel(sl.Component):
+    """A semantic, mount-owned settings workspace.
+
+    Discord channel and role pickers are represented as semantic choices so the layout planner
+    can page them when a guild has more than one legal select can hold. Text-entry operations
+    still use the Discord modal adapter, the one native form boundary in squid-layouts.
+    """
+
+    page: str = sl.state("server")
+    kind: VoteKind = sl.state(VoteKind.BUILD)
+    confirming_reset: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        *,
+        settings: SettingsService,
+        votes: VoteService,
+        guild: discord.Guild,
+        author_id: int,
+        capabilities: SettingsCapabilities,
+        locale: str | None = None,
+        owner_guild_id: int | None = None,
+    ) -> None:
+        self._settings = settings
+        self._votes = votes
+        self._guild = guild
+        self._author_id = author_id
+        self._capabilities = capabilities
+        self.locale = locale
+        self._owner_guild_id = owner_guild_id
+        self._channels: dict[ScalarChannelSetting, int | None] = dict.fromkeys(CHANNEL_SETTINGS)
+        self._locale_override: str | None = None
+        self._preset: EmojiPreset | None = None
+        self._weights: tuple[RoleWeight, ...] = ()
+        self._compat_mount: sl.discord.Mount | None = None
+        self._compat_disabled = False
+        self._bound_message: discord.Message | None = None
+
+    @property
+    def shows_server(self) -> bool:
+        return self._capabilities.view_server or self._capabilities.edit_server
+
+    @property
+    def shows_voting(self) -> bool:
+        return self._capabilities.view_server or self._capabilities.edit_voting
+
+    @property
+    def locale_override(self) -> str | None:
+        return self._locale_override
+
+    def channel_id(self, setting: ScalarChannelSetting) -> int | None:
+        return self._channels[setting]
+
+    def emoji_preset_text(self) -> str:
+        return (
+            "\n".join(f"{option.choice.value} | {option.emoji}" for option in self._preset.options)
+            if self._preset
+            else ""
+        )
+
+    def weight_for(self, role_id: int) -> float | None:
+        return next((weight.multiplier for weight in self._weights if weight.role_id == role_id), None)
+
+    async def load(self) -> None:
+        """Load the first page allowed by the caller."""
+        if self.shows_server:
+            await self.open_server()
+        else:
+            await self.open_voting()
+
+    async def open_server(self) -> None:
+        stored = cast(Mapping[str, int | None], await self._settings.get_all(self._guild.id))
+        self._channels = {setting: stored.get(setting) for setting in CHANNEL_SETTINGS}
+        self._locale_override = await self._settings.get_locale(self._guild.id)
+        self.page = "server"
+
+    async def open_voting(self, kind: VoteKind | None = None) -> None:
+        if kind is not None:
+            self.kind = kind
+        self._preset = await self._votes.emoji_preset(self._guild.id, self.kind)
+        self._weights = tuple(await self._votes.get_role_weights(self._guild.id, self.kind))
+        self.confirming_reset = False
+        self.page = "voting"
+
+    def render(self) -> Sequence[sl.LayoutNode]:
+        if self.page == "voting":
+            return self._voting_nodes()
+        return self._server_nodes()
+
+    def _server_nodes(self) -> Sequence[sl.LayoutNode]:
+        children: list[sl.LayoutNode] = [
+            sl.primitives.card(
+                t(self.locale, _("Server settings")),
+                t(self.locale, _("Change as many as you like; an emptied picker clears that setting."))
+                if self._capabilities.edit_server
+                else None,
+                fields=tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._server_fields()),
+            )
+        ]
+        if self._capabilities.edit_server:
+            children.extend(
+                sl.Choices(
+                    key=f"channel-{setting}",
+                    choices=self._channel_choices(setting),
+                    selected=(str(self.channel_id(setting)) if self.channel_id(setting) is not None else "clear",),
+                    on_change=lambda event, setting=setting: self._channel_changed(setting, event),
+                )
+                for setting in CHANNEL_SETTINGS
+            )
+            children.append(
+                sl.Choices(
+                    key="locale",
+                    choices=tuple(
+                        sl.Choice(
+                            tag,
+                            t(self.locale, _("Follow Discord")) if tag == FOLLOW_DISCORD else tag,
+                        )
+                        for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
+                    ),
+                    selected=(self._locale_override or FOLLOW_DISCORD,),
+                    on_change=self._locale_changed,
+                )
+            )
+        actions: list[sl.primitives.Button] = []
+        if self.shows_voting:
+            actions.append(sl.primitives.Button(t(self.locale, _("Voting")), self._show_voting, "voting"))
+        actions.append(
+            sl.primitives.Button(
+                t(self.locale, _("Close")),
+                self._close,
+                "close",
+                style=sl.primitives.ActionStyle.SECONDARY,
+            )
+        )
+        children.append(sl.primitives.Row(tuple(actions)))
+        return children
+
+    def _voting_nodes(self) -> Sequence[sl.LayoutNode]:
+        children: list[sl.LayoutNode] = [
+            sl.primitives.card(
+                t(self.locale, _("Voting — {kind}"), kind=t(self.locale, KIND_LABELS[self.kind])),
+                None,
+                fields=tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._voting_fields()),
+                footer=self._scope_note(),
+            ),
+            sl.Choices(
+                key="vote-kind",
+                choices=tuple(
+                    sl.Choice(kind.value, t(self.locale, label), available=True) for kind, label in KIND_LABELS.items()
+                ),
+                selected=(self.kind.value,),
+                on_change=self._kind_changed,
+            ),
+        ]
+        if self._capabilities.edit_voting:
+            children.append(
+                sl.Choices(
+                    key="role-weight",
+                    choices=self._role_choices(),
+                    selected=("none",),
+                    minimum=1,
+                    maximum=1,
+                    on_change=self._role_changed,
+                )
+            )
+        actions: list[sl.primitives.Button] = []
+        if self._capabilities.edit_voting:
+            actions.extend(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Edit emojis")),
+                        self._edit_emojis,
+                        "edit-emojis",
+                        style=sl.primitives.ActionStyle.PRIMARY,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Confirm reset")) if self.confirming_reset else t(self.locale, _("Reset")),
+                        self._reset,
+                        "reset",
+                        style=sl.primitives.ActionStyle.DANGER
+                        if self.confirming_reset
+                        else sl.primitives.ActionStyle.SECONDARY,
+                    ),
+                )
+            )
+        if self.shows_server:
+            actions.append(sl.primitives.Button(t(self.locale, _("Back")), self._show_server, "server"))
+        actions.append(
+            sl.primitives.Button(
+                t(self.locale, _("Close")),
+                self._close,
+                "close",
+                style=sl.primitives.ActionStyle.SECONDARY,
+            )
+        )
+        children.append(sl.primitives.Row(tuple(actions)))
+        return children
+
+    def _channel_choices(self, setting: ScalarChannelSetting) -> tuple[sl.Choice, ...]:
+        current = self.channel_id(setting)
+        choices = [sl.Choice("clear", t(self.locale, _("Clear")), _("Remove this channel."), available=True)]
+        channels = getattr(self._guild, "channels", ())
+        for channel in channels:
+            if getattr(channel, "type", None) not in CHANNEL_TYPES:
+                continue
+            choices.append(sl.Choice(str(channel.id), f"#{channel.name}", available=True))
+        if current is not None and not any(choice.key == str(current) for choice in choices):
+            choices.append(sl.Choice(str(current), self._channel_display(current), available=True))
+        return tuple(choices)
+
+    def _role_choices(self) -> tuple[sl.Choice, ...]:
+        choices = [sl.Choice("none", t(self.locale, _("Choose a role")))]
+        roles = {role.id: role for role in getattr(self._guild, "roles", ())}
+        roles.update({weight.role_id: self._guild.get_role(weight.role_id) for weight in self._weights})
+        for role_id, role in sorted(roles.items()):
+            label = role.name if role is not None else t(self.locale, _("Deleted role {id}"), id=role_id)
+            choices.append(sl.Choice(str(role_id), label))
+        return tuple(choices)
+
+    async def _channel_changed(self, setting: ScalarChannelSetting, event: sl.ChoiceEvent) -> None:
+        if not await self._may_event(event, SETTINGS_SERVER_EDIT):
+            return
+        value = event.selected[0]
+        await self.set_channel(setting, None if value == "clear" else int(value))
+
+    async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
+        if not await self._may_event(event, SETTINGS_SERVER_EDIT):
+            return
+        await self.set_locale(None if event.selected[0] == FOLLOW_DISCORD else event.selected[0])
+
+    async def _kind_changed(self, event: sl.ChoiceEvent) -> None:
+        await self.open_voting(VoteKind(event.selected[0]))
+
+    async def _role_changed(self, event: sl.ChoiceEvent) -> None:
+        if not await self._may_event(event, SETTINGS_VOTING_EDIT):
+            return
+        role_id = int(event.selected[0])
+        role = self._guild.get_role(role_id)
+        if role is None:
+            await event.notice(t(self.locale, _("That role has been deleted.")))
+            return
+        await event.present_form(RoleWeightModal(self, role))
+
+    async def _edit_emojis(self, event: sl.PressEvent) -> None:
+        if await self._may_event(event, SETTINGS_VOTING_EDIT):
+            await event.present_form(VoteEmojiModal(self))
+
+    async def _reset(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event, SETTINGS_VOTING_EDIT):
+            return
+        if self.confirming_reset:
+            await self.reset_voting()
+        else:
+            self.arm_reset()
+
+    async def _show_voting(self, event: sl.PressEvent) -> None:
+        await self.open_voting()
+
+    async def _show_server(self, event: sl.PressEvent) -> None:
+        await self.open_server()
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        await event.finish()
+
+    async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
+        interaction = getattr(event.responder, "interaction", None)
+        if interaction is None or await allows(cast(Any, interaction), node):
+            return True
+        await event.notice(t(self.locale, _("You are no longer allowed to change this.")))
+        return False
+
+    async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
+        if channel_id is None:
+            await self._settings.clear(self._guild.id, setting)
+        else:
+            await self._settings.set_channel(self._guild.id, setting, channel_id)
+        self._channels[setting] = channel_id
+        self.invalidate()
+
+    async def set_locale(self, locale: str | None) -> None:
+        await self._settings.set_locale(self._guild.id, locale)
+        self._locale_override = locale
+        self.locale = locale or self.locale
+        self.invalidate()
+
+    async def set_weight(self, role_id: int, multiplier: float | None) -> None:
+        if multiplier is None:
+            await self._votes.remove_role_weight(self._guild.id, self.kind, role_id)
+        else:
+            await self._votes.set_role_weight(RoleWeight(self._guild.id, self.kind, role_id, multiplier))
+        await self.open_voting()
+
+    async def set_emojis(self, options: Sequence[VoteOption]) -> None:
+        await self._votes.set_emoji_preset(self._guild.id, self.kind, options)
+        await self.open_voting()
+
+    def arm_reset(self) -> None:
+        self.confirming_reset = True
+
+    async def reset_voting(self) -> None:
+        await self._votes.reset_configuration(self._guild.id, self.kind)
+        await self.open_voting()
+
+    def _server_fields(self) -> list[CardField]:
+        fields = [
+            CardField(t(self.locale, SETTING_LABELS[setting]), self._channel_display(self._channels[setting]))
+            for setting in CHANNEL_SETTINGS
+        ]
+        language = (
+            self._locale_override
+            if self._locale_override is not None
+            else t(self.locale, _("Following this server's Discord language"))
+        )
+        fields.append(CardField(t(self.locale, _("Bot language")), language))
+        return fields
+
+    def _channel_display(self, channel_id: int | None) -> str:
+        if channel_id is None:
+            return t(self.locale, _("_Not set_"))
+        if self._guild.get_channel_or_thread(channel_id) is None:
+            return t(self.locale, _("_Not found_ ({id})"), id=channel_id)
+        return f"<#{channel_id}>"
+
+    def _voting_fields(self) -> list[CardField]:
+        preset = self._preset
+        emojis = (
+            "\n".join(f"{option.emoji} — {option.choice.value}" for option in preset.options)
+            if preset is not None and preset.options
+            else t(self.locale, _("_None_"))
+        )
+        weights = "\n".join(
+            f"{self._role_display(weight.role_id)} — {weight.multiplier:g}x" for weight in self._weights
+        ) or t(self.locale, _("_None_"))
+        return [
+            CardField(t(self.locale, _("Emojis")), emojis),
+            CardField(t(self.locale, _("Role multipliers")), weights),
+        ]
+
+    def _role_display(self, role_id: int) -> str:
+        role = self._guild.get_role(role_id)
+        if role is None:
+            return t(self.locale, _("_Deleted role_ ({id})"), id=role_id)
+        return role.name
+
+    def _scope_note(self) -> str | None:
+        if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
+            return None
+        return t(
+            self.locale,
+            _("Build reviews are weighted by the network's own server, so these multipliers do not apply here."),
+        )
+
+    def mount(self) -> sl.discord.Mount:
+        """Create the production mount with author lock and shared error handling."""
+        return create_mount(self, locale=self.locale, timeout=SESSION_SECONDS, lock_to=self._author_id)
+
+    def bind_message(self, message: discord.Message) -> None:
+        """Compatibility binding for tests and extensions still holding the old name."""
+        self._bound_message = message
+
+    def _compat_layout(self) -> discord.ui.LayoutView:
+        layout = discord.ui.LayoutView(timeout=None)
+        if self.page == "voting":
+            layout.add_item(
+                card_container(
+                    t(self.locale, _("Voting — {kind}"), kind=t(self.locale, KIND_LABELS[self.kind])),
+                    None,
+                    fields=self._voting_fields(),
+                    footer=self._scope_note(),
+                )
+            )
+            layout.add_item(discord.ui.ActionRow(VoteKindSelect(self)))
+            if self._capabilities.edit_voting:
+                layout.add_item(discord.ui.ActionRow(RoleWeightSelect(self)))
+            row = discord.ui.ActionRow()
+            if self._capabilities.edit_voting:
+                row.add_item(EditEmojisButton(self))
+                row.add_item(ResetVotingButton(self))
+            if self.shows_server:
+                row.add_item(ServerPageButton(self))
+            row.add_item(ClosePanelButton(self))
+            layout.add_item(row)
+        else:
+            layout.add_item(
+                card_container(
+                    t(self.locale, _("Server settings")),
+                    t(self.locale, _("Change as many as you like; an emptied picker clears that setting."))
+                    if self._capabilities.edit_server
+                    else None,
+                    fields=self._server_fields(),
+                )
+            )
+            if self._capabilities.edit_server:
+                for setting in CHANNEL_SETTINGS:
+                    layout.add_item(discord.ui.ActionRow(SettingChannelSelect(self, setting)))
+                layout.add_item(discord.ui.ActionRow(LocaleSelect(self)))
+            row = discord.ui.ActionRow()
+            if self.shows_voting:
+                row.add_item(VotingPageButton(self))
+            row.add_item(ClosePanelButton(self))
+            layout.add_item(row)
+        return layout
+
+    def _compat_view(self) -> discord.ui.LayoutView:
+        return self._compat_layout()
+
+    def to_components(self) -> list[dict[str, Any]]:
+        return self.mount().build_view().to_components()
+
+    def walk_children(self) -> list[discord.ui.Item[Any]]:
+        return list(self._compat_view().walk_children())
+
+    async def on_timeout(self) -> None:
+        self._compat_disabled = True
+        layout = self._compat_layout()
+        for child in layout.walk_children():
+            if hasattr(child, "disabled"):
+                child.disabled = True
+        if self._bound_message is not None:
+            await self._bound_message.edit(view=layout)
+
+
+def _panel_layout(panel: SettingsPanelView | SettingsPanel) -> discord.ui.LayoutView:
+    return panel._compat_layout() if isinstance(panel, SettingsPanel) else panel
+
+
 class SettingChannelSelect(discord.ui.ChannelSelect[SettingsPanelView]):
     """Point one setting at a channel; emptying the picker clears it."""
 
@@ -361,7 +789,7 @@ class SettingChannelSelect(discord.ui.ChannelSelect[SettingsPanelView]):
         if not await self._panel.may(interaction, SETTINGS_SERVER_EDIT):
             return
         await self._panel.set_channel(self._setting, self.values[0].id if self.values else None)
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class LocaleSelect(discord.ui.Select[SettingsPanelView]):
@@ -388,7 +816,7 @@ class LocaleSelect(discord.ui.Select[SettingsPanelView]):
             return
         chosen = self.values[0]
         await self._panel.set_locale(None if chosen == FOLLOW_DISCORD else chosen)
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class VoteKindSelect(discord.ui.Select[SettingsPanelView]):
@@ -405,7 +833,7 @@ class VoteKindSelect(discord.ui.Select[SettingsPanelView]):
     @override
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
         await self._panel.open_voting(VoteKind(self.values[0]))
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class RoleWeightSelect(discord.ui.RoleSelect[SettingsPanelView]):
@@ -459,7 +887,7 @@ class RoleWeightModal(ErrorHandledModal):
                 allowed_mentions=no_mentions(),
             )
             return
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class VoteEmojiModal(ErrorHandledModal):
@@ -518,7 +946,7 @@ class VoteEmojiModal(ErrorHandledModal):
         except InvalidVoteConfigurationError as error:
             await _reject(interaction, str(error))
             return
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 async def _reject(interaction: discord.Interaction, message: str) -> None:
@@ -534,7 +962,7 @@ class VotingPageButton(discord.ui.Button[SettingsPanelView]):
     @override
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
         await self._panel.open_voting()
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class ServerPageButton(discord.ui.Button[SettingsPanelView]):
@@ -545,7 +973,7 @@ class ServerPageButton(discord.ui.Button[SettingsPanelView]):
     @override
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
         await self._panel.open_server()
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class EditEmojisButton(discord.ui.Button[SettingsPanelView]):
@@ -579,7 +1007,7 @@ class ResetVotingButton(discord.ui.Button[SettingsPanelView]):
             await self._panel.reset_voting()
         else:
             self._panel.arm_reset()
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
 
 
 class ClosePanelButton(discord.ui.Button[SettingsPanelView]):
@@ -590,4 +1018,4 @@ class ClosePanelButton(discord.ui.Button[SettingsPanelView]):
     @override
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
         self._panel.disable_controls()
-        await edit_interaction_layout(interaction, self._panel)
+        await edit_interaction_layout(interaction, _panel_layout(self._panel))
