@@ -287,7 +287,11 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
     """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
 
     def __init__(
-        self, parent: BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
+        self,
+        parent: BuildEditView[BotT] | BuildEditComponent,
+        title: str,
+        timeout: float | None = 60,
+        custom_id: str | None = None,
     ):
         self.parent = parent
         if custom_id:
@@ -959,6 +963,288 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
         # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
         await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
+
+
+class BuildEditComponent(sl.Component):
+    """A mounted build editor with semantic pagination and review confirmation."""
+
+    page: int = sl.state(1)
+    confirming: bool = sl.state(default=False)
+    saved: bool = sl.state(default=False)
+    validation_error: str | None = sl.state(None)
+
+    def __init__(
+        self,
+        build: Build,
+        builds: BuildService,
+        items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
+        *,
+        locale: str | None = None,
+        timeout: float = 300,
+        node: sl.LayoutNode | None = None,
+    ) -> None:
+        self.build = build
+        self.builds = builds
+        self.locale = locale
+        self._timeout = timeout
+        self._node = node
+        self.expiry_time = Instant.now().add(seconds=timeout)
+        if items is DEFAULT:
+            items = [
+                get_text_input(build, field.attribute, placeholder=field.placeholder, required=field.required)
+                for field in EDIT_FIELDS
+                if field.applies_to(build)
+            ]
+        self.items = tuple(items)
+        self._mount: sl.discord.Mount | None = None
+
+    @property
+    def max_pages(self) -> int:
+        return max(1, (len(self.items) + 4) // 5)
+
+    def stage(self, attribute: str, text: str) -> bool:
+        for item in self.items:
+            if item.attribute == attribute:
+                item.stage(text)
+                self.validation_error = (
+                    "\n".join(error for error in (self.validation_error, item.validation_error) if error) or None
+                )
+                return True
+        return False
+
+    async def can_edit(self, interaction: discord.Interaction[Any]) -> bool:
+        actor_account_id = await interaction.client.account_ids.resolve(
+            interaction.client.services.accounts,
+            interaction.user.id,
+        )
+        if (
+            self.build.submission_status is Status.PENDING
+            and actor_account_id is not None
+            and self.build.submitter_account_id == actor_account_id
+        ):
+            return True
+        return await allows(interaction, BUILD_SUBMISSION_EDIT)
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.saved:
+            return (
+                sl.primitives.card(
+                    t(self.locale, _("Changes saved")),
+                    t(self.locale, _("The build card has been refreshed.")),
+                    accent=DISCORD_BLUE,
+                ),
+            )
+        summary = self.summary_text()
+        description = (
+            t(
+                self.locale,
+                _("Section {page} of {pages}. Filled dots have unsaved changes."),
+                page=self.page,
+                pages=self.max_pages,
+            )
+            if not self.validation_error
+            else t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
+        )
+        controls: list[sl.primitives.Button] = [
+            sl.primitives.Button(
+                t(self.locale, _("Edit this section")),
+                self._open,
+                "open",
+                style=sl.primitives.ActionStyle.PRIMARY,
+            ),
+            sl.primitives.Button(
+                t(self.locale, _("Previous")),
+                self._previous,
+                "previous",
+                disabled=self.page == 1,
+            ),
+            sl.primitives.Button(
+                t(self.locale, _("Next")),
+                self._next,
+                "next",
+                disabled=self.page == self.max_pages,
+            ),
+        ]
+        if self.confirming:
+            controls.extend(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Apply changes")),
+                        self._apply,
+                        "apply",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                    ),
+                    sl.primitives.Button(t(self.locale, _("Back")), self._unconfirm, "unconfirm"),
+                )
+            )
+        else:
+            controls.append(
+                sl.primitives.Button(
+                    t(self.locale, _("Review changes")),
+                    self._review,
+                    "review",
+                    style=sl.primitives.ActionStyle.SUCCESS,
+                )
+            )
+        controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
+        nodes: list[sl.LayoutNode] = [
+            sl.primitives.card(
+                t(self.locale, _("Edit build")),
+                description,
+                accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
+                fields=(
+                    sl.primitives.presets.Field(
+                        t(self.locale, _("Fields in this section")),
+                        summary,
+                    ),
+                ),
+            )
+        ]
+        if self._node is not None:
+            nodes.append(self._node)
+        nodes.append(sl.primitives.ActionGroup(tuple(controls)))
+        return tuple(nodes)
+
+    def summary_text(self) -> str:
+        page_items = self.items[5 * (self.page - 1) : 5 * self.page]
+        return "\n".join(f"{'●' if item.modified else '○'} {item.summary}" for item in page_items)
+
+    async def _open(self, event: sl.PressEvent) -> None:
+        if await self._may_event(event):
+            await event.present_form(self.get_modal())
+
+    async def _previous(self, event: sl.PressEvent) -> None:
+        if self.page > 1:
+            self.page -= 1
+
+    async def _next(self, event: sl.PressEvent) -> None:
+        if self.page < self.max_pages:
+            self.page += 1
+
+    async def _review(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event):
+            return
+        if self.validation_error:
+            return
+        if not any(item.modified for item in self.items):
+            self.validation_error = t(self.locale, _("No changes to review yet."))
+            return
+        self.confirming = True
+
+    async def _unconfirm(self, event: sl.PressEvent) -> None:
+        self.confirming = False
+
+    async def _apply(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event):
+            return
+        interaction = self._interaction(event)
+        if interaction is None:
+            return
+        changed = [item for item in self.items if item.modified]
+        await event.acknowledge()
+        patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
+        if self.build.id is None:
+            patch.apply(self.build)
+            await self.builds.save(self.build)
+        else:
+            async with self.builds.edit(self.build.id, patch) as edit:
+                self.build = await edit.commit()
+            await interaction.client.refresh_posts("build", str(self.build.id))
+        self.saved = True
+        self.confirming = False
+        self._node = await interaction.client.for_build(self.build).render_node()
+        await event.finish()
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        await event.finish()
+
+    async def _may_event(self, event: sl.ActionEvent) -> bool:
+        interaction = self._interaction(event)
+        if interaction is None:
+            return False
+        if Instant.now() > self.expiry_time:
+            await event.notice(t(self.locale, _("This edit session expired. Reopen the build to start again.")))
+            return False
+        if not await self.can_edit(interaction):
+            await event.notice(
+                t(
+                    self.locale,
+                    _("Only the pending build's submitter or a trusted staff member can edit it."),
+                )
+            )
+            return False
+        return True
+
+    def get_modal(self) -> EditModal:
+        modal = EditModal(
+            parent=self,
+            title=f"Edit Build (Page {self.page})",
+            timeout=max(0.0, (self.expiry_time - Instant.now()).total("seconds")),
+        )
+        for item in self.items[5 * (self.page - 1) : 5 * self.page]:
+            modal.add_item(item.to_label())
+        return modal
+
+    async def update(self, interaction: discord.Interaction[Any]) -> None:
+        self.validation_error = None
+        self._node = await interaction.client.for_build(self.build).render_node()
+        self.invalidate()
+        if self._mount is None:
+            return
+        rendered = self._mount.build_view()
+        await edit_interaction_layout(interaction, rendered)
+        if self._mount.message is not None:
+            self._mount.bind(self._mount.message, rendered)
+
+    async def send(self, interaction: discord.Interaction[Any], ephemeral: bool = True) -> None:
+        self.locale = await resolve_locale(interaction, interaction.client.services.settings)
+        if not await self.can_edit(interaction):
+            message = t(
+                self.locale,
+                _("Only the pending build's submitter or a trusted staff member can edit it."),
+            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    view=error_layout(t(self.locale, _("Cannot edit this build")), message),
+                    ephemeral=True,
+                    allowed_mentions=no_mentions(),
+                )
+            else:
+                await interaction.response.send_message(
+                    view=error_layout(t(self.locale, _("Cannot edit this build")), message),
+                    ephemeral=True,
+                    allowed_mentions=no_mentions(),
+                )
+            return
+        if self._node is None:
+            handler = interaction.client.for_build(self.build)
+            render_node = getattr(handler, "render_node", None)
+            self._node = (
+                await render_node()
+                if render_node is not None
+                else sl.primitives.banner(t(self.locale, _("Build preview unavailable.")))
+            )
+        mount = self.mount()
+        rendered = mount.build_view()
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
+        message = await interaction.followup.send(
+            view=rendered,
+            files=mount.attachment_files(),
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+            wait=True,
+        )
+        mount.bind(message, rendered)
+
+    @staticmethod
+    def _interaction(event: sl.ActionEvent) -> discord.Interaction[Any] | None:
+        interaction = getattr(event.responder, "interaction", None)
+        return cast(discord.Interaction[Any], interaction) if interaction is not None else None
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)
+        return self._mount
 
 
 class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]):
