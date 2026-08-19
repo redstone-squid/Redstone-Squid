@@ -153,3 +153,37 @@ When a user selects `scope: restrictions` or `scope: patterns` (which query `Sea
 `closing_time:`) and build facet values instead of metadata-specific fields (`kind:`, `category:`, etc.).
 `suggests` in `squid/bot/utils/autocomplete.py` needs to extract `scope` from the interaction options, and
 `SearchQueryProvider` / `FieldRegistry` need to scope available fields and facet values to the target `SearchScope`.
+
+## Transient gateway DNS reconnect errors flood `error_reports` and dead-letter sync jobs
+
+During network or DNS hiccups, `discord.client` logs gateway reconnection attempts with attached
+`aiohttp.client_exceptions.ClientConnectorDNSError` exceptions at `ERROR` level ("Attempting a reconnect in Xs").
+Because `ErrorReportLogHandler` captures every logged exception at ERROR level (`surface = log`), normal
+reconnection backoff floods the `error_reports` table — 47 reports filed between 2026-08-19 06:03 and 11:13 UTC
+(references `fc256f2fa85b`, `4ee47ebb17d8`, ..., `ff0faad1da07`).
+
+During the same incident, `squid.bot.sync.reconciler` (`squid/bot/sync/reconciler.py:54`) encountered a DNS timeout
+connecting to `discord.com:443` and dead-lettered a post reconciliation job (reference `3ad3d5bd7b99` on 2026-08-19
+09:59:35 UTC, `work_lost = true`). Transient gateway reconnect chatter should be ignored by the log-capture handler,
+and reconciler jobs need backoff/retry tolerance for transient network outages before dead-lettering.
+
+## Background worker pool checkout fails on transient DNS glitch without retry
+
+On 2026-08-18 13:09:00 UTC, the `schematic-jobs` background job worker crashed during database pool checkout
+when `asyncpg.connect` raised `socket.gaierror: [Errno -3] Temporary failure in name resolution`
+(reference `1da5b8e2f1a8`, `surface = background_job`). The background supervisor logged and captured the failure
+immediately rather than retrying connection acquisition with exponential backoff on transient socket/DNS errors.
+
+## `/help` command does not defer, causing `10062 Unknown interaction` and cascade in error responder
+
+`HelpCog.help` (`squid/bot/help.py:77-125`) performs async work (resolving guild locale overrides via
+`resolve_locale` and inspecting command trees) before calling `interaction.response.send_message`, without
+first calling `interaction.response.defer()`. If database queries or event loop latency push the response past
+Discord's 3-second interaction token deadline, `send_message` fails with `NotFound: 404 Not Found (error code: 10062): Unknown interaction`
+(reference `93240ad042f4` on 2026-08-19 12:56:08 UTC).
+
+The failure then cascades: `squid.bot.errors._handle_discord_error` catches the exception and attempts to send
+an error card via `interaction.response.send_message` (`squid/bot/errors.py:318,369`), which immediately throws
+a second `10062 Unknown interaction` because the interaction is already dead, filing a second error report. `/help`
+should defer immediately, and the error handler should recognize expired interaction tokens instead of attempting
+an invalid response.
