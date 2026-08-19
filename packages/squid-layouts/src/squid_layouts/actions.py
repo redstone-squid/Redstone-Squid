@@ -43,6 +43,8 @@ class ActionResponder(Protocol):
 
     async def finish(self) -> None: ...
 
+    def invalidate(self) -> None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class ActionEvent:
@@ -70,6 +72,10 @@ class ActionEvent:
 
     async def finish(self) -> None:
         await self.responder.finish()
+
+    def invalidate(self) -> None:
+        """Request a redraw after presentation-only state changes."""
+        self.responder.invalidate()
 
 
 @dataclass(frozen=True, slots=True)

@@ -74,6 +74,18 @@ class PresentationSession:
         else:
             self.cursors.pop(key, None)
 
+    def selection(self, key: str) -> SelectionState:
+        return self.selections.get(key, SelectionState())
+
+    def select(self, key: str, selected: tuple[str, ...]) -> None:
+        self.selections[key] = SelectionState(selected)
+
+    def disclosure(self, key: str, *, initial: bool = False) -> DisclosureState:
+        return self.disclosures.get(key, DisclosureState(initial))
+
+    def disclose(self, key: str, open_: bool) -> None:
+        self.disclosures[key] = DisclosureState(open_)
+
     def strategy(self, key: str, adapter_id: str, adapter_version: int) -> str | None:
         state = self.strategies.get(key)
         if state is None or state.adapter_id != adapter_id or state.adapter_version != adapter_version:
