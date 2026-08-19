@@ -17,7 +17,7 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.bot.account_view import AccountPanelView
-from squid.bot.claims_view import ClaimReviewView
+from squid.bot.claims_view import ClaimReviewComponent
 from squid.bot.consent import ensure_consented_account, prompt_for_consent
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
@@ -361,7 +361,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         approve, reject = await self.bot.services.permissions.decisions(
             subject, (ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT)
         )
-        view = ClaimReviewView(
+        component = ClaimReviewComponent(
             self.account_service,
             claims,
             author_id=ctx.author.id,
@@ -369,7 +369,15 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
-        await view.send(ctx, ephemeral=personal(ctx))
+        mount = component.mount()
+        rendered = mount.build_view()
+        message = await ctx.send(
+            view=rendered,
+            files=mount.attachment_files(),
+            ephemeral=personal(ctx),
+            allowed_mentions=no_mentions(),
+        )
+        mount.bind(message, rendered)
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:
