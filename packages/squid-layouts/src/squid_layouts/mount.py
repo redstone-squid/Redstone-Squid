@@ -9,18 +9,19 @@ stopped after a successful edit so dispatch tables do not accumulate.
 import hashlib
 import logging
 import secrets
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Sequence
 from typing import Any, Protocol
 
 import discord
 
 from squid_layouts import deliver
-from squid_layouts.actions import ActionBinding
+from squid_layouts.actions import ActionBinding, Actor, PressEvent, SelectionEvent
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.component import Component, render_component_tree
 from squid_layouts.compositor import Composition, compose
+from squid_layouts.discord.actions import DiscordActionResponder
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
@@ -136,7 +137,7 @@ class Mount:
         self.scheduler = scheduler
         self.message: discord.Message | None = None
         self._view: MountedView | None = None
-        self._handlers: dict[str, Callable[..., Awaitable[None]]] = {}
+        self._handlers: dict[str, ActionBinding] = {}
         self._components: dict[str, Component] = {}
         self._dirty = False
         self._finished = False
@@ -158,7 +159,7 @@ class Mount:
 
             def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
                 key = binding.key
-                self._handlers[key] = binding.handler
+                self._handlers[key] = binding
                 if isinstance(node, SceneButton):
                     item: discord.ui.Item[Any] = _WiredButton(node, self, key)
                 else:
@@ -168,10 +169,10 @@ class Mount:
                 return item
 
             def nav(key: str, page: int, pages: int) -> Sequence[Node]:
-                async def previous(interaction: discord.Interaction) -> None:
+                async def previous(event: PressEvent) -> None:
                     await self._move_page(key, -1)
 
-                async def next_(interaction: discord.Interaction) -> None:
+                async def next_(event: PressEvent) -> None:
                     await self._move_page(key, 1)
 
                 return self.nav(PageContext(key=key, page=page, pages=pages, on_prev=previous, on_next=next_))
@@ -284,17 +285,23 @@ class Mount:
         if self.lock_to is not None and interaction.user.id != self.lock_to:
             await deliver.respond_text(interaction, self.chrome.not_yours, ephemeral=True)
             return
-        handler = self._handlers.get(key)
-        if handler is None:
+        binding = self._handlers.get(key)
+        if binding is None:
             # A click raced a re-render that removed the control; acknowledge and move on.
             await self.flush(interaction)
             return
         try:
+            actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
+            responder = DiscordActionResponder(interaction, self)
+            native_locale = getattr(interaction, "locale", None)
+            locale = str(native_locale) if native_locale is not None else None
+            event = (
+                PressEvent(actor, responder, locale, {"frontend": "discord"})
+                if values is None
+                else SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
+            )
             with transaction():
-                if values is None:
-                    await handler(interaction)
-                else:
-                    await handler(interaction, values)
+                await binding.handler(event)
         except Exception as error:
             await self.handle_error(interaction, error, f"handler:{key}")
             return
