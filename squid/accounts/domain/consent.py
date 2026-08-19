@@ -27,10 +27,10 @@ PRIVACY_NOTICE = _(
     "listed after review. Schematics you attach are parsed, sanitised and rendered; whether one "
     "is publicly downloadable, and under which licence, stays your choice on each "
     "submission.\n\n"
-    "Your creator page is public by default. `/account visibility` hides it, or any linked "
-    "account on it; a hidden page still lists the build credit you hold, because that credit is "
-    "what attributes the builds. Notifications are covered by this notice, but every channel "
-    "stays off until you turn it on.\n\n"
+    "Your creator page is public by default. You can hide it, or any linked account on it; a "
+    "hidden page still lists the build credit you hold, because that credit is what attributes "
+    "the builds. Notifications are covered by this notice, but every channel stays off until "
+    "you turn it on.\n\n"
     "Agreeing records this notice's version and the time. Cancelling stores nothing."
 )
 """The full notice, served over HTTP and shown behind a button in Discord.
@@ -38,6 +38,12 @@ PRIVACY_NOTICE = _(
 One message rather than several so the version recorded in a consent receipt refers to a single
 piece of text. It lives in the domain beside the version that names it, because splitting the two
 is how they drift; every transport renders this same msgid in the caller's locale.
+
+It names no command. The notice is served over HTTP as well as in Discord, and the one command
+name it used to carry outlived the command (`/account visibility`, folded into the `/account`
+panel in phase 7). Dropping it changed no fact the receipt covers, so `CURRENT_CONSENT_VERSION`
+did not move -- a bump asks every user to re-accept, and spending that on a cross-reference is
+how the version stops meaning anything.
 
 It describes submission as well as storage because it now fronts many actions rather than one.
 The submission paragraph deliberately *defers* on licensing rather than stating terms: schematics
