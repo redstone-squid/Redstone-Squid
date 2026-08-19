@@ -8,17 +8,64 @@ This package must stay free of `squid.*` imports and of `_()` i18n markers: all 
 text enters pre-translated through `Chrome`.
 """
 
+from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
+from squid_layouts.constraints import Drop, Never, Overflow, Spill, Truncate
+from squid_layouts.ir import (
+    Code,
+    Footer,
+    Gallery,
+    Heading,
+    Lines,
+    LinkButton,
+    Node,
+    Panel,
+    RawItem,
+    Row,
+    Section,
+    Sep,
+    Text,
+    Thumbnail,
+)
 from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.materialize import StaticView, materialize, render_static
+from squid_layouts.solve import LayoutOverflowError, SolvedLayout, solve
 from squid_layouts.testing import assert_within_limits
 
 __all__ = [
+    "DEFAULT_CHROME",
     "ELLIPSIS",
     "LIMITS",
+    "Chrome",
+    "Code",
+    "Drop",
+    "Footer",
+    "Gallery",
+    "Heading",
+    "LayoutOverflowError",
     "LimitViolationError",
+    "Lines",
+    "LinkButton",
+    "Never",
+    "Node",
+    "Overflow",
+    "Panel",
+    "RawItem",
+    "Row",
+    "Section",
+    "Sep",
+    "SolvedLayout",
+    "Spill",
+    "StaticView",
+    "Text",
+    "Thumbnail",
+    "Truncate",
     "V2Limits",
     "assert_within_limits",
     "conform",
     "conform_modal",
+    "materialize",
+    "render_static",
+    "solve",
     "trim",
 ]

@@ -1,0 +1,238 @@
+"""Unit and property tests for the solve/materialize engine."""
+
+import discord
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from squid_layouts import (
+    ELLIPSIS,
+    LIMITS,
+    Code,
+    Drop,
+    Footer,
+    Gallery,
+    Heading,
+    LayoutOverflowError,
+    Lines,
+    LinkButton,
+    Never,
+    Panel,
+    RawItem,
+    Row,
+    Section,
+    Sep,
+    Spill,
+    Text,
+    Thumbnail,
+    Truncate,
+    assert_within_limits,
+    conform,
+    materialize,
+    render_static,
+    solve,
+)
+
+
+def _text_of(view: discord.ui.LayoutView) -> str:
+    return "\n".join(c["content"] for c in _flat(view.to_components()) if c.get("type") == 10)
+
+
+def _flat(components):
+    for component in components:
+        yield component
+        yield from _flat(component.get("components", []))
+        if component.get("accessory"):
+            yield component["accessory"]
+
+
+class TestFitting:
+    def test_small_document_renders_verbatim(self):
+        view = render_static(
+            [
+                Heading("Build 123"),
+                Text("A very nice piston door."),
+                Sep(),
+                Footer("submitted yesterday"),
+            ]
+        )
+        text = _text_of(view)
+        assert "## Build 123" in text
+        assert "A very nice piston door." in text
+        assert "-# submitted yesterday" in text
+        assert conform(view) == []
+
+    def test_chrome_is_charged_exactly(self):
+        # A code block whose content exactly fills the budget minus its fences must not trim.
+        lang = "py"
+        fence_cost = len(f"```{lang}\n") + len("\n```")
+        content = "x" * (LIMITS.total_text - fence_cost)
+        view = render_static([Code(content, lang=lang)])
+        assert ELLIPSIS not in _text_of(view)
+        assert conform(view) == []
+
+    def test_one_char_over_budget_trims(self):
+        lang = "py"
+        fence_cost = len(f"```{lang}\n") + len("\n```")
+        content = "x" * (LIMITS.total_text - fence_cost + 1)
+        view = render_static([Code(content, lang=lang)])
+        assert ELLIPSIS in _text_of(view)
+        assert conform(view) == []
+
+    def test_priority_orders_the_allocation(self):
+        # Low-priority footer shrinks before the body loses a character.
+        body = Text("b" * 3900)
+        footer = Footer("f" * 400)
+        solved = solve([body, footer])
+        rendered = [child.content for child in solved.children]  # pyrefly: ignore
+        assert rendered[0] == "b" * 3900
+        assert len(rendered[1]) <= LIMITS.total_text - 3900
+
+    def test_dropped_node_refunds_its_budget(self):
+        # The Drop node cannot fit, so the Truncate node should get everything back.
+        keeper = Text("k" * 3999)
+        dropper = Text("d" * 500, overflow=Drop(), priority=-1)
+        solved = solve([keeper, dropper])
+        assert [child.content for child in solved.children] == ["k" * 3999]  # pyrefly: ignore
+        assert any("dropped" in note for note in solved.notes)
+
+    def test_never_wins_over_higher_priority_flexible_nodes(self):
+        pinned = Text("p" * 3500, overflow=Never(), priority=-100)
+        flexible = Text("f" * 3500, priority=100)
+        solved = solve([pinned, flexible])
+        contents = [child.content for child in solved.children]  # pyrefly: ignore
+        assert contents[0] == "p" * 3500
+        assert len(contents[1]) == LIMITS.total_text - 3500
+
+    def test_unsatisfiable_never_raises_in_strict_mode(self):
+        with pytest.raises(LayoutOverflowError):
+            solve([Text("x" * 5000, overflow=Never())], strict=True)
+
+    def test_unsatisfiable_never_clamps_outside_strict_mode(self):
+        solved = solve([Text("x" * 5000, overflow=Never())])
+        assert len(solved.children[0].content) <= LIMITS.total_text  # pyrefly: ignore
+
+    def test_truncate_tail_keeps_the_end(self):
+        view = render_static([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])
+        text = _text_of(view)
+        assert text.startswith(ELLIPSIS)
+        assert text.endswith(" end")
+
+    def test_spill_line_appears_with_count(self):
+        lines = tuple(f"entry {index:03d} " + "x" * 90 for index in range(60))
+        view = render_static([Lines(lines)])
+        text = _text_of(view)
+        assert "entry 000" in text
+        assert "more" in text
+        assert conform(view) == []
+
+    def test_spill_fits_everything_when_it_can(self):
+        view = render_static([Lines(("a", "b", "c"))])
+        assert _text_of(view) == "a\nb\nc"
+
+    def test_code_fences_cannot_be_broken_out_of(self):
+        view = render_static([Code("evil\n```\n@everyone")])
+        assert "\n```\n@everyone" not in _text_of(view)
+
+    def test_empty_nodes_vanish(self):
+        view = render_static([Text(""), Lines(()), Text("real")])
+        assert _text_of(view) == "real"
+
+    def test_raw_item_text_cost_reserves_budget(self):
+        raw = RawItem(factory=lambda: discord.ui.TextDisplay("r" * 100), text_cost=100)
+        solved = solve([Text("x" * 4000), raw])
+        assert len(solved.children[0].content) <= LIMITS.total_text - 100  # pyrefly: ignore
+
+
+class TestStructure:
+    def test_full_card_shape(self):
+        view = render_static(
+            [
+                Panel(
+                    children=(
+                        Section(
+                            texts=(Heading("Title"), Text("Body")),
+                            accessory=Thumbnail("https://example.invalid/a.png"),
+                        ),
+                        Sep(),
+                        Gallery(tuple(f"https://example.invalid/{index}.png" for index in range(12))),
+                        Row((LinkButton("Open", "https://example.invalid"),)),
+                    ),
+                    accent=0x00FF00,
+                )
+            ]
+        )
+        payload = view.to_components()
+        assert payload[0]["type"] == 17
+        types = [c["type"] for c in _flat(payload)]
+        assert types.count(12) == 1  # gallery survived, sliced
+        assert conform(view) == []
+        assert_within_limits(view)
+
+    def test_oversized_section_keeps_three_texts(self):
+        section = Section(
+            texts=(Text("a"), Text("b"), Text("c"), Text("d")),
+            accessory=Thumbnail("https://example.invalid/a.png"),
+        )
+        solved = solve([section])
+        assert any("section" in note for note in solved.notes)
+        view = render_static([section])
+        assert_within_limits(view)
+
+    def test_emptied_section_drops_whole(self):
+        section = Section(texts=(Text(""),), accessory=Thumbnail("https://example.invalid/a.png"))
+        solved = solve([section])
+        assert solved.children == []
+
+
+# --- Property tests ------------------------------------------------------------------------
+
+_policies = st.sampled_from([Truncate(), Truncate(keep="tail"), Spill(), Drop(), Never()])
+_content = st.text(max_size=1500)
+_priority = st.integers(min_value=-10, max_value=10)
+
+
+@st.composite
+def documents(draw) -> list:
+    nodes = []
+    for _ in range(draw(st.integers(min_value=0, max_value=6))):
+        kind = draw(st.sampled_from(["text", "heading", "footer", "code", "lines", "sep", "panel", "section"]))
+        node = _draw_node(draw, kind)
+        if node is not None:
+            nodes.append(node)
+    return nodes
+
+
+def _draw_node(draw, kind: str):
+    if kind == "text":
+        return Text(draw(_content), overflow=draw(_policies), priority=draw(_priority))
+    if kind == "heading":
+        return Heading(draw(_content), priority=draw(_priority))
+    if kind == "footer":
+        return Footer(draw(_content))
+    if kind == "code":
+        return Code(draw(_content), lang=draw(st.sampled_from(["", "py", "json"])))
+    if kind == "lines":
+        return Lines(tuple(draw(st.lists(st.text(min_size=1, max_size=120), max_size=40))))
+    if kind == "sep":
+        return Sep(large=draw(st.booleans()))
+    if kind == "panel":
+        inner = [Text(draw(_content)), Sep()]
+        return Panel(children=tuple(inner))
+    if kind == "section":
+        texts = tuple(Text(draw(st.text(min_size=1, max_size=200))) for _ in range(draw(st.integers(1, 3))))
+        return Section(texts=texts, accessory=Thumbnail("https://example.invalid/a.png"))
+    return None
+
+
+@given(documents())
+def test_rendered_documents_always_fit(nodes):
+    view = render_static(nodes)
+    assert_within_limits(view)
+
+
+@given(documents())
+def test_solver_needs_no_conform_interventions(nodes):
+    # The engine must measure exactly: the boundary gate should never have to intervene.
+    view = materialize(solve(nodes))
+    assert conform(view) == []
