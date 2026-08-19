@@ -11,6 +11,7 @@ text enters pre-translated through `Chrome`.
 from squid_layouts import deliver
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.component import Component, state
+from squid_layouts.compositor import Composition, compose, render_static
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
 from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
 from squid_layouts.ir import (
@@ -31,9 +32,10 @@ from squid_layouts.ir import (
     Sep,
     Text,
     Thumbnail,
+    as_nodes,
 )
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.materialize import StaticView, materialize, render_static
+from squid_layouts.materialize import StaticView, materialize
 from squid_layouts.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_layouts.mount import ErrorHook, Mount, MountedView
 from squid_layouts.navigation import Navigator
@@ -52,6 +54,7 @@ __all__ = [
     "Chrome",
     "Code",
     "Component",
+    "Composition",
     "Drop",
     "ErrorHook",
     "Field",
@@ -89,10 +92,12 @@ __all__ = [
     "Truncate",
     "V2Limits",
     "alts",
+    "as_nodes",
     "assert_within_limits",
     "banner",
     "build_modal",
     "card",
+    "compose",
     "conform",
     "conform_modal",
     "deliver",

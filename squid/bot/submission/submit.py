@@ -9,6 +9,7 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
+import squid_layouts as sl
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
@@ -230,17 +231,17 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         assert submitted is not None, "The form only reports success once the build is persisted."
         build = submitted
 
+        heading = t(
+            locale,
+            _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
+            id=build.id,
+        )
         preview = StaticLayout(
-            discord.ui.TextDisplay(
-                t(
-                    locale,
-                    _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
-                    id=build.id,
-                )
-            ),
-            await self.bot.for_build(build).render_container(),
+            discord.ui.TextDisplay(heading),
+            await self.bot.for_build(build).render_container(reserved_text=len(heading)),
             discord.ui.ActionRow(EphemeralBuildEditButton(build)),
         )
+        sl.conform(preview)
         await asyncio.gather(
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
             self.bot.for_build(build).post_for_voting(),

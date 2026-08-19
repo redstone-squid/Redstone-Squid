@@ -8,7 +8,7 @@ rewriting subclass constructors to keep controls in order.
 import discord
 
 from squid_layouts.component import Component
-from squid_layouts.ir import Button, Node, Row
+from squid_layouts.ir import Button, Node, Row, as_nodes
 
 
 class Navigator(Component):
@@ -44,8 +44,7 @@ class Navigator(Component):
     def render(self) -> list[Node]:
         # Share the mount so a child mutating its own state re-renders the navigator's message.
         self.current._mount = self._mount
-        rendered = self.current.render()
-        nodes = list(rendered) if isinstance(rendered, list | tuple) else [rendered]  # pyrefly: ignore
+        nodes = as_nodes(self.current.render())
         chrome = self.mount.chrome
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),

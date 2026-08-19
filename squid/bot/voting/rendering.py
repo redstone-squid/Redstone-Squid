@@ -10,6 +10,7 @@ from textwrap import dedent
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
@@ -31,12 +32,16 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    container: discord.ui.Container[discord.ui.LayoutView],
+    card: sl.Node,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
-) -> StaticLayout:
-    """Compose a build card with the review vote state beneath it."""
-    container.add_item(discord.ui.Separator())
+) -> discord.ui.LayoutView:
+    """Compose a build card with the review vote state beneath it.
+
+    The card arrives as IR rather than as a built container so the whole post is solved in
+    one pass: the vote text competes for the display budget instead of being appended to an
+    already-solved card and overflowing it.
+    """
     if snapshot.status == "closed":
         result_label = {
             "approved": "Approved",
@@ -58,8 +63,14 @@ def render_build_review(
             f"**Accept:** {snapshot.upvotes:g}/{snapshot.pass_threshold}  •  "
             f"**Deny:** {snapshot.downvotes:g}/{-snapshot.fail_threshold}"
         )
-    container.add_item(discord.ui.TextDisplay(vote_text))
-    return StaticLayout(container)
+    # The vote state is Never: a review whose tallies were trimmed away is worse than a
+    # review whose build description was.
+    state = (sl.Sep(), sl.Text(vote_text, overflow=sl.Never()))
+    if isinstance(card, sl.Panel):
+        post = sl.Panel(children=(*card.children, *state), accent=card.accent)
+    else:
+        post = sl.Panel(children=(card, *state))
+    return sl.render_static([post])
 
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> discord.ui.LayoutView:
