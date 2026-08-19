@@ -24,6 +24,7 @@ from squid_layouts.compositor import Composition, compose
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
+from squid_layouts.reactivity import transaction
 from squid_layouts.scene import SceneButton, SceneSelect
 
 logger = logging.getLogger(__name__)
@@ -289,10 +290,11 @@ class Mount:
             await self.flush(interaction)
             return
         try:
-            if values is None:
-                await handler(interaction)
-            else:
-                await handler(interaction, values)
+            with transaction():
+                if values is None:
+                    await handler(interaction)
+                else:
+                    await handler(interaction, values)
         except Exception as error:
             await self.handle_error(interaction, error, f"handler:{key}")
             return
