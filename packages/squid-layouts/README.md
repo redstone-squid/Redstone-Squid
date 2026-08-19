@@ -34,8 +34,11 @@ class Counter(sl.Component):
    - `Spill()` — show the entries that fit plus "…and N more";
    - `Paginate(initial="start"|"end", per=None)` — split into pages, on overflow or every
      `per` entries; the solver adds a budget-charged footer and the nav factory's controls;
-   - `alts(...)` / `Alt(primary, fallbacks)` — degradation ladders: semantically smaller
-     alternates beat a mid-string ellipsis;
+   - `alts(...)` / `Alt(primary, fallbacks, priority=...)` — degradation ladders:
+     semantically smaller alternates beat a mid-string ellipsis, then low-priority list
+     entries spill first;
+   - `Fold(primary, fallback, priority=...)` — structural alternatives for the 40-component
+     budget, such as a button panel folding to one link;
    - `Drop()`, `Never()` — omit whole, or treat shrinking as a bug.
 3. **Solver** — measures chrome, charges `Never` nodes as fixed costs, grants the display
    budget by priority (proportionally within a tier), refunds dropped nodes, applies
