@@ -49,7 +49,8 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     mount.build_view()
     root.count = 7
     root.child.entries.append("entry 6")
-    mount._page["child.items"] = 2
+    mount.build_view()
+    mount.presentation.move_cursor("child.items", 2)
 
     snapshot = _registry().capture(mount, "counter")
     encoded = SnapshotCodec.dumps(snapshot)
@@ -60,7 +61,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert isinstance(restored_root, DurableRoot)
     assert restored_root.count == 7
     assert restored_root.child.entries[-1] == "entry 6"
-    assert restored._page["child.items"] == 2
+    assert restored.presentation.cursor("child.items").index == 2
     assert "transient" not in next(component.state for component in snapshot.components if component.path == "$")
     assert encoded == SnapshotCodec.dumps(SnapshotCodec.loads(encoded))
 

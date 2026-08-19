@@ -26,6 +26,7 @@ from squid_layouts.discord.actions import DiscordActionResponder
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
+from squid_layouts.presentation import PresentationSession
 from squid_layouts.reactivity import readonly_transaction, transaction
 from squid_layouts.scene import SceneButton, SceneSelect
 
@@ -151,9 +152,7 @@ class Mount:
         self._components: dict[str, Component] = {}
         self._dirty = False
         self._finished = False
-        self._page: dict[str, int] = {}
-        self._pages: dict[str, int] = {}
-        self._pager_digests: dict[str, str] = {}
+        self.presentation = PresentationSession()
         self._staged_attachments: list[discord.File] | None = None
 
     # --- Rendering ---------------------------------------------------------------------
@@ -195,8 +194,9 @@ class Mount:
                 limits=self.limits,
                 chrome=self.chrome,
                 strict=self.strict,
-                page=self._page,
+                page={key: cursor.index for key, cursor in self.presentation.cursors.items()},
                 nav=nav,
+                session=self.presentation,
             )
             return fresh, composition
 
@@ -205,18 +205,30 @@ class Mount:
         changed = {
             pager.key
             for pager in pagers
-            if (previous := self._pager_digests.get(pager.key)) is not None and previous != pager.content_fingerprint
+            if (cursor := self.presentation.cursor(pager.key)).content_fingerprint
+            and cursor.content_fingerprint != pager.content_fingerprint
+            and cursor.anchor is None
         }
         if changed:
             for key in changed:
-                self._page.pop(key, None)
+                self.presentation.reset_cursor(key)
             view.stop()
             view, composition = draw()
             pagers = composition.plan.scene.pagers
 
-        self._page = {pager.key: pager.page for pager in pagers}
-        self._pages = {pager.key: pager.pages for pager in pagers}
-        self._pager_digests = {pager.key: pager.content_fingerprint for pager in pagers}
+        active = {pager.key for pager in pagers}
+        for key in tuple(self.presentation.cursors):
+            if key not in active:
+                self.presentation.reset_cursor(key)
+        for pager in pagers:
+            cursor = self.presentation.cursor(pager.key)
+            self.presentation.anchor_cursor(
+                pager.key,
+                pager.page,
+                cursor.anchor,
+                extent=pager.pages,
+                content_fingerprint=pager.content_fingerprint,
+            )
         self._generation = generation
         self._reconcile_components(tree.components)
         if disabled:
@@ -228,18 +240,17 @@ class Mount:
         self._dirty = True
 
     async def _move_page(self, key: str, delta: int) -> None:
-        page = self._page.get(key)
-        pages = self._pages.get(key)
-        if page is not None and pages is not None and 0 <= page + delta < pages:
-            self._page[key] = page + delta
+        cursor = self.presentation.cursor(key)
+        if 0 <= cursor.index + delta < cursor.extent:
+            self.presentation.move_cursor(key, cursor.index + delta)
             self.invalidate()
 
     def reset_page(self, key: str | None = None) -> None:
         """Forget one page position, or every position when key is omitted."""
         if key is None:
-            self._page.clear()
+            self.presentation.reset_cursor()
         else:
-            self._page.pop(key, None)
+            self.presentation.reset_cursor(key)
         self.invalidate()
 
     def set_attachments(self, files: Sequence[discord.File] | None) -> None:
@@ -309,6 +320,12 @@ class Mount:
             # A click raced a re-render that removed the control; acknowledge and move on.
             await self.flush(interaction)
             return
+        if values is not None:
+            binding = binding.routed(tuple(values))
+            if binding is None:
+                await self._acknowledge(interaction)
+                return
+            key = binding.key
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
             await self._invoke(binding, key, interaction, values)
             return

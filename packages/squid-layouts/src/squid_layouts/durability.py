@@ -7,6 +7,13 @@ from typing import Any, Protocol
 
 from squid_layouts.component import Component, render_component_tree
 from squid_layouts.mount import Mount
+from squid_layouts.presentation import (
+    CursorState,
+    DisclosureState,
+    PresentationSession,
+    SelectionState,
+    StrategyState,
+)
 from squid_layouts.reactivity import export_state, restore_state
 
 
@@ -22,18 +29,26 @@ class ComponentSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class PresentationSnapshot:
+    cursors: Mapping[str, CursorState]
+    selections: Mapping[str, SelectionState]
+    disclosures: Mapping[str, DisclosureState]
+    strategies: Mapping[str, StrategyState]
+
+
+@dataclass(frozen=True, slots=True)
 class MountSnapshot:
     protocol: int
     component_key: str
     component_version: int
     components: tuple[ComponentSnapshot, ...]
-    pages: Mapping[str, int]
+    presentation: PresentationSnapshot
 
 
 class SnapshotCodec:
-    """Canonical JSON codec for durable mount state protocol 0."""
+    """Canonical JSON codec for durable mount state protocol 1."""
 
-    protocol = 0
+    protocol = 1
 
     @classmethod
     def dumps(cls, snapshot: MountSnapshot) -> str:
@@ -48,7 +63,7 @@ class SnapshotCodec:
                 {"path": component.path, "type_id": component.type_id, "state": dict(component.state)}
                 for component in snapshot.components
             ],
-            "pages": dict(snapshot.pages),
+            "presentation": _presentation_to_dict(snapshot.presentation),
         }
         try:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -70,9 +85,9 @@ class SnapshotCodec:
             message = f"unsupported mount snapshot protocol {protocol}"
             raise SnapshotError(message)
         components = raw.get("components")
-        pages = raw.get("pages")
-        if not isinstance(components, list) or not isinstance(pages, dict):
-            message = "mount snapshot components and pages are malformed"
+        presentation = raw.get("presentation")
+        if not isinstance(components, list) or not isinstance(presentation, dict):
+            message = "mount snapshot components or presentation are malformed"
             raise SnapshotError(message)
         decoded_components: list[ComponentSnapshot] = []
         for value in components:
@@ -88,19 +103,67 @@ class SnapshotCodec:
                     state=state,
                 )
             )
-        if not all(
-            isinstance(key, str) and isinstance(value, int) and not isinstance(value, bool)
-            for key, value in pages.items()
-        ):
-            message = "mount snapshot pages must map strings to integers"
-            raise SnapshotError(message)
         return MountSnapshot(
             protocol,
             _string(raw, "component_key"),
             _integer(raw, "component_version"),
             tuple(decoded_components),
-            pages,
+            _presentation_from_dict(presentation),
         )
+
+
+def _presentation_to_dict(snapshot: PresentationSnapshot) -> dict[str, object]:
+    return {
+        "cursors": {
+            key: {
+                "index": cursor.index,
+                "anchor": cursor.anchor,
+                "extent": cursor.extent,
+                "content_fingerprint": cursor.content_fingerprint,
+            }
+            for key, cursor in snapshot.cursors.items()
+        },
+        "selections": {key: {"selected": list(selection.selected)} for key, selection in snapshot.selections.items()},
+        "disclosures": {key: {"open": disclosure.open} for key, disclosure in snapshot.disclosures.items()},
+        "strategies": {
+            key: {
+                "node_key": strategy.node_key,
+                "adapter_id": strategy.adapter_id,
+                "adapter_version": strategy.adapter_version,
+                "strategy_id": strategy.strategy_id,
+            }
+            for key, strategy in snapshot.strategies.items()
+        },
+    }
+
+
+def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
+    cursors = _object(raw.get("cursors"))
+    selections = _object(raw.get("selections"))
+    disclosures = _object(raw.get("disclosures"))
+    strategies = _object(raw.get("strategies"))
+    return PresentationSnapshot(
+        cursors={
+            key: CursorState(
+                _integer(item := _object(value), "index"),
+                _optional_string(item, "anchor"),
+                _integer(item, "extent"),
+                _string(item, "content_fingerprint"),
+            )
+            for key, value in cursors.items()
+        },
+        selections={key: SelectionState(_strings(_object(value), "selected")) for key, value in selections.items()},
+        disclosures={key: DisclosureState(_boolean(_object(value), "open")) for key, value in disclosures.items()},
+        strategies={
+            key: StrategyState(
+                _string(item := _object(value), "node_key"),
+                _string(item, "adapter_id"),
+                _integer(item, "adapter_version"),
+                _string(item, "strategy_id"),
+            )
+            for key, value in strategies.items()
+        },
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,7 +204,12 @@ class ComponentRegistry:
             component_key,
             registration.version,
             components,
-            dict(mount._page),
+            PresentationSnapshot(
+                dict(mount.presentation.cursors),
+                dict(mount.presentation.selections),
+                dict(mount.presentation.disclosures),
+                dict(mount.presentation.strategies),
+            ),
         )
         SnapshotCodec.dumps(snapshot)
         return snapshot
@@ -172,7 +240,12 @@ class ComponentRegistry:
         for path, component in tree.components.items():
             if path != "$":
                 _restore_component(component, by_path[path])
-        mount._page = dict(snapshot.pages)
+        mount.presentation = PresentationSession(
+            cursors=dict(snapshot.presentation.cursors),
+            selections=dict(snapshot.presentation.selections),
+            disclosures=dict(snapshot.presentation.disclosures),
+            strategies=dict(snapshot.presentation.strategies),
+        )
         return mount
 
 
@@ -284,3 +357,27 @@ def _integer(raw: Mapping[str, object], key: str) -> int:
         message = f"snapshot field {key!r} must be an integer"
         raise SnapshotError(message)
     return value
+
+
+def _optional_string(raw: Mapping[str, object], key: str) -> str | None:
+    value = raw.get(key)
+    if value is not None and not isinstance(value, str):
+        message = f"snapshot field {key!r} must be a string or null"
+        raise SnapshotError(message)
+    return value
+
+
+def _boolean(raw: Mapping[str, object], key: str) -> bool:
+    value = raw.get(key)
+    if not isinstance(value, bool):
+        message = f"snapshot field {key!r} must be a boolean"
+        raise SnapshotError(message)
+    return value
+
+
+def _strings(raw: Mapping[str, object], key: str) -> tuple[str, ...]:
+    value = raw.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        message = f"snapshot field {key!r} must be an array of strings"
+        raise SnapshotError(message)
+    return tuple(value)

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from squid_layouts.ir import Node
+from squid_layouts.semantic import LayoutNode
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,11 +37,11 @@ class Asset:
 class Document:
     """Visual nodes and delivery assets derived from one component state snapshot."""
 
-    children: tuple[Node, ...]
+    children: tuple[LayoutNode, ...]
     assets: tuple[Asset, ...] = ()
 
 
-type DocumentLike = Document | Node | Sequence[Node]
+type DocumentLike = Document | LayoutNode | Sequence[LayoutNode]
 
 
 def as_document(rendered: DocumentLike) -> Document:

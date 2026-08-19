@@ -8,7 +8,7 @@ the result into discord.py items — authors never do budget arithmetic.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
-from squid_layouts.actions import ActionPolicy, PressHandler, SelectionHandler
+from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
 from squid_layouts.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.styles import ActionStyle, Color
 
@@ -109,6 +109,7 @@ class SelectMenu:
     max_values: int = 1
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    routes: Mapping[str, ActionBinding] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
