@@ -80,6 +80,7 @@ class ComponentTree:
     nodes: tuple[LayoutNode, ...]
     components: dict[str, Component]
     assets: tuple[Asset, ...] = ()
+    document_key: str | None = None
 
 
 class Component:
@@ -144,11 +145,18 @@ def render_component_tree(
     """Render and expand a component tree, preserving keyed component identity."""
     components: dict[str, Component] = {}
     assets: list[Asset] = []
+    document_key: str | None = None
     identities: dict[int, str] = {}
     active: set[int] = set()
 
-    def items(rendered: RenderResult) -> tuple[RenderNode, ...]:
+    def items(rendered: RenderResult, path: str) -> tuple[RenderNode, ...]:
+        nonlocal document_key
         if isinstance(rendered, Document):
+            if rendered.key is not None:
+                if path != "$":
+                    message = f"{path}: only the root component may return a keyed Document"
+                    raise LayoutInvariantError(message)
+                document_key = rendered.key
             assets.extend(rendered.assets)
             return rendered.children
         return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
@@ -229,14 +237,14 @@ def render_component_tree(
 
         try:
             nodes: list[LayoutNode] = []
-            for index, item in enumerate(items(component.render())):
+            for index, item in enumerate(items(component.render(), path)):
                 nodes.extend(expand_item(item, f"{path}.{index}"))
             return nodes
         finally:
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    return ComponentTree(tuple(expand(root, "$", context or {})), components, tuple(assets))
+    return ComponentTree(tuple(expand(root, "$", context or {})), components, tuple(assets), document_key)
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:

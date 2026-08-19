@@ -9,7 +9,7 @@ from enum import Enum
 from squid_layouts.actions import ActionBinding
 from squid_layouts.cache import CachedPlan, PlanCache
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.constraints import Paginate
+from squid_layouts.constraints import Never, Paginate
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.ir import (
@@ -19,6 +19,7 @@ from squid_layouts.ir import (
     Embed,
     Extension,
     Fold,
+    Footer,
     Gallery,
     LinkButton,
     MediaCollection,
@@ -61,7 +62,6 @@ from squid_layouts.scene_codec import SceneCodec
 from squid_layouts.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.semantic_adapter import lower_semantics
 from squid_layouts.solve import (
-    LayoutOverflowError,
     PageNav,
     PageState,
     Realized,
@@ -338,7 +338,7 @@ def plan(
     lowered = _lower_children(semantic.nodes, target, limits)
     _validate(lowered, limits)
     cache_key = _plan_cache_key(
-        (*document.children, *document.assets),
+        (document,),
         target=target,
         limits=limits,
         chrome=chrome,
@@ -346,6 +346,7 @@ def plan(
         reservation=reservation,
         strict=strict,
         nav=nav,
+        page=page,
         search_budget=search_budget,
     )
     if cache is not None and _cacheable(lowered) and (cached := cache.get(cache_key)) is not None:
@@ -362,21 +363,57 @@ def plan(
                 search_fallback=semantic.search_fallback,
             ),
         )
-    try:
-        solved = solve(
+    solved = solve(
+        lowered,
+        limits=limits,
+        chrome=chrome,
+        strict=False,
+        reserved_text=reservation.get("display_text"),
+        page=page,
+        nav=nav,
+    )
+    root_pagers: tuple[ScenePager, ...] = ()
+    root_events: tuple[PlanEvent, ...] = ()
+    if solved.components > limits.total_components:
+        local_pagers = semantic.pagers + _pagers(solved)
+        if local_pagers:
+            keys = ", ".join(repr(pager.key) for pager in local_pagers)
+            message = (
+                f"{solved.components} components exceed target maximum {limits.total_components} after local "
+                f"pagination ({keys}). Local and root pagination are never simultaneous; fold component groups, "
+                "split the document, or move the long local collection onto its own screen."
+            )
+            raise UnsolvableLayoutError(message)
+        if document.key is None or nav is None:
+            remedy = (
+                "give Document an explicit key and plan with navigation controls to allow root pagination"
+                if document.key is None
+                else "plan with navigation controls or split the static document"
+            )
+            message = f"{solved.components} components exceed target maximum {limits.total_components}; {remedy}"
+            raise UnsolvableLayoutError(message)
+        solved, root_pager = _root_paginate(
             lowered,
-            limits=limits,
+            key=document.key,
+            target_limits=limits,
             chrome=chrome,
-            strict=strict,
             reserved_text=reservation.get("display_text"),
             page=page,
             nav=nav,
+            session=presentation,
         )
-    except LayoutOverflowError as error:
-        raise LayoutDegradedError(str(error)) from error
-    if solved.components > limits.total_components:
-        message = f"{solved.components} components exceed target maximum {limits.total_components}"
-        raise UnsolvableLayoutError(message)
+        root_pagers = (root_pager,)
+        root_events = (
+            PlanEvent(
+                code="pagination.root",
+                path="$",
+                message=f"Document {document.key!r} uses {root_pager.pages} lossless root pages",
+                severity=PlanSeverity.ADAPTATION,
+                after={"pages": root_pager.pages},
+            ),
+        )
+    if strict and solved.notes:
+        raise LayoutDegradedError("; ".join(solved.notes))
     if any(note.startswith("Never nodes need") for note in solved.notes):
         message = "; ".join(note for note in solved.notes if note.startswith("Never nodes need"))
         raise UnsolvableLayoutError(message)
@@ -387,11 +424,12 @@ def plan(
         target_version=target.version,
         children=converter.children(solved.children),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in document.assets),
-        pagers=semantic.pagers + _pagers(solved),
+        pagers=semantic.pagers + root_pagers + _pagers(solved),
     )
     fingerprint = SceneCodec.fingerprint(scene)
     report = PlanReport(
         events=semantic.events
+        + root_events
         + tuple(
             PlanEvent(
                 code="layout.degraded",
@@ -401,7 +439,7 @@ def plan(
             )
             for note in solved.notes
         ),
-        logical_fingerprint=_logical_fingerprint((*document.children, *document.assets)),
+        logical_fingerprint=_logical_fingerprint((document,)),
         scene_fingerprint=fingerprint,
     )
     resources = dict(converter.resources)
@@ -431,6 +469,72 @@ def _pagers(solved: SolvedLayout) -> tuple[ScenePager, ...]:
         )
         for pager in solved.pagers
     )
+
+
+def _root_paginate(
+    nodes: Sequence[Node],
+    *,
+    key: str,
+    target_limits: V2Limits,
+    chrome: Chrome,
+    reserved_text: int,
+    page: PageState,
+    nav: PageNav,
+    session: PresentationSession,
+) -> tuple[SolvedLayout, ScenePager]:
+    maximum_pages = max(1, len(nodes))
+
+    def solve_page(children: Sequence[Node], index: int, pages: int) -> SolvedLayout:
+        chrome_nodes: tuple[Node, ...] = (
+            Footer(chrome.page_footer(index + 1, pages), overflow=Never()),
+            *nav(key, index, pages),
+        )
+        return solve(
+            (*children, *chrome_nodes),
+            limits=target_limits,
+            chrome=chrome,
+            strict=False,
+            reserved_text=reserved_text,
+            page=page,
+            nav=nav,
+        )
+
+    pages: list[tuple[Node, ...]] = []
+    current: tuple[Node, ...] = ()
+    for node in nodes:
+        candidate = (*current, node)
+        probe = solve_page(candidate, 0, maximum_pages)
+        if current and (probe.components > target_limits.total_components or probe.notes):
+            pages.append(current)
+            current = (node,)
+            probe = solve_page(current, 0, maximum_pages)
+        else:
+            current = candidate
+        if probe.components > target_limits.total_components:
+            message = (
+                f"root page {len(pages) + 1} cannot fit node {type(node).__name__}; "
+                "give that node a structural fallback or move it to another screen"
+            )
+            raise UnsolvableLayoutError(message)
+    if current:
+        pages.append(current)
+
+    requested = session.cursor(key).index
+    if isinstance(page, Mapping):
+        requested = page.get(key, requested)
+    elif isinstance(page, int):
+        requested = page
+    selected = max(0, min(requested, len(pages) - 1))
+    solved = solve_page(pages[selected], selected, len(pages))
+    fingerprint = _logical_fingerprint(nodes)
+    session.anchor_cursor(
+        key,
+        selected,
+        None,
+        extent=len(pages),
+        content_fingerprint=fingerprint,
+    )
+    return solved, ScenePager(key, selected, len(pages), fingerprint)
 
 
 def _logical_fingerprint(nodes: Sequence[object]) -> str:
@@ -470,6 +574,7 @@ def _plan_cache_key(
     reservation: ResourceCost,
     strict: bool,
     nav: PageNav | None,
+    page: PageState,
     search_budget: int,
 ) -> str:
     relevant = {
@@ -488,6 +593,7 @@ def _plan_cache_key(
         ),
         "reservation": _stable_value(reservation),
         "strict": strict,
+        "page": _stable_value(page),
         "search_budget": search_budget,
         "nav": (
             None
