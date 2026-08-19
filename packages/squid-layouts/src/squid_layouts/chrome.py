@@ -19,6 +19,8 @@ class Chrome:
     """Spill line appended when a list shows fewer entries than it holds."""
     see_attachment: str = "See attachment"
     """Pointer left in place of content that moved to an attached file."""
+    not_yours: str = "These controls belong to someone else."
+    """Ephemeral rejection shown when an author-locked control is used by another user."""
 
 
 DEFAULT_CHROME = Chrome()
