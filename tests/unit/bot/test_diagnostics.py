@@ -187,7 +187,7 @@ async def test_a_closed_dm_is_reported_rather_than_worked_around() -> None:
     await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
 
     assert not isinstance(ctx.send.await_args.kwargs["view"], ErrorReportView)
-    assert "direct messages" in str(ctx.send.await_args.kwargs["view"].to_components())
+    assert "direct message" in str(ctx.send.await_args.kwargs["view"].to_components())
 
 
 async def test_slash_invocation_stays_ephemeral_in_the_channel() -> None:

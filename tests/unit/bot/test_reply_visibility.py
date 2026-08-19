@@ -88,7 +88,7 @@ async def test_a_closed_dm_delivers_nothing_rather_than_falling_back() -> None:
 
     assert delivered is None
     assert "secret" not in _rendered(ctx.send.await_args)
-    assert "direct messages" in _rendered(ctx.send.await_args)
+    assert "direct message" in _rendered(ctx.send.await_args)
 
 
 async def test_a_direct_message_context_answers_where_it_was_asked() -> None:
