@@ -3,12 +3,19 @@
 A component describes *what the message should say now*. Interaction callbacks just mutate
 state (or call :meth:`Component.invalidate` after in-place mutation); the mount re-renders and
 edits the message. Components never touch discord.py objects directly.
+
+Components compose: :meth:`Component.embed` renders a child into its parent's document under
+a key prefix, so two instances of the same child class can appear in one message without
+their controls cross-wiring. Only the root component is attached to a `Mount`; children reach
+it through their parent, which is also how a child's state change re-renders the message.
 """
 
+import itertools
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from squid_layouts.ir import Node
+from squid_layouts.ir import Button, Node, Panel, Row, Section, SelectMenu, as_nodes
 
 if TYPE_CHECKING:
     from squid_layouts.mount import Mount
@@ -50,20 +57,67 @@ class Component:
     """Base class for mounted, stateful views."""
 
     _mount: Mount | None = None
+    _parent: Component | None = None
 
     def render(self) -> Sequence[Node] | Node:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
+    def embed(self, child: Component, *, key: str) -> list[Node]:
+        """Render ``child`` into this component's document, namespaced under ``key``.
+
+        Every control in the child's subtree gets ``key`` as a prefix, so two instances of
+        one child class stay independently addressable, and a keyless control keeps a stable
+        identity as long as its position within *its own* subtree does not move.
+        """
+        child._parent = self
+        return _namespace(as_nodes(child.render()), key)
+
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
         if self._mount is not None:
             self._mount.invalidate()
+        elif self._parent is not None:
+            self._parent.invalidate()
 
     @property
     def mount(self) -> Mount:
-        """The mount this component is attached to. Only valid after mounting."""
-        if self._mount is None:
+        """The mount this component's tree is attached to. Only valid after mounting."""
+        component: Component = self
+        while component._mount is None and component._parent is not None:
+            component = component._parent
+        if component._mount is None:
             message = "component is not mounted"
             raise RuntimeError(message)
-        return self._mount
+        return component._mount
+
+
+def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
+    """Rewrite an embedded subtree's control keys under ``prefix``.
+
+    Keyless controls are numbered within this subtree only: `materialize` numbers them per
+    document, where inserting a control anywhere earlier renumbers everything after it and a
+    click that raced the re-render lands on the wrong handler.
+    """
+    positions = itertools.count()
+
+    def key_for(node: Button | SelectMenu) -> str:
+        return f"{prefix}.{node.key if node.key else f'auto{next(positions)}'}"
+
+    def rewrite_item[T](item: T) -> T:
+        return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
+
+    def rewrite(node: Node) -> Node:
+        match node:
+            case Panel(children=children, accent=accent):
+                return Panel(children=tuple(rewrite(child) for child in children), accent=accent)
+            case Row(items=items):
+                return Row(items=tuple(rewrite_item(item) for item in items))
+            case Section(texts=texts, accessory=accessory):
+                return Section(texts=texts, accessory=rewrite_item(accessory))
+            case SelectMenu():
+                return replace(node, key=key_for(node))
+            case _:
+                return node
+
+    return [rewrite(node) for node in nodes]
