@@ -5,7 +5,7 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import anyio
 import discord
@@ -199,8 +199,11 @@ class SubmissionModal(ErrorHandledModal):
             await interaction.response.defer()
             return
         self.parent.validation_error = None
-        self.parent.render()
-        await edit_interaction_layout(interaction, self.parent)
+        if isinstance(self.parent, SubmissionFormComponent):
+            await self.parent.refresh(interaction)
+        else:
+            self.parent.render()
+            await edit_interaction_layout(interaction, self.parent)
 
 
 class SubmissionDetailsModal(ErrorHandledModal):
@@ -596,7 +599,7 @@ class SubmissionFormComponent(sl.Component):
         )
 
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
-        self.build.door_orientation = event.selected[0]
+        self.build.door_orientation = cast(Literal["Door", "Skydoor", "Trapdoor"], event.selected[0])
         self.validation_error = None
         self.invalidate()
 

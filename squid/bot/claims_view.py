@@ -244,17 +244,17 @@ class ClaimReviewComponent(sl.Component):
     def selected(self) -> AliasClaim | None:
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
-    def render(self) -> Sequence[sl.LayoutNode]:
+    def render(self) -> tuple[sl.primitives.Node, ...]:
         if self.closed:
-            return [
+            return (
                 sl.primitives.card(
                     t(self.locale, _("Claims closed")),
                     t(self.locale, _("This review queue is closed.")),
                     accent=DISCORD_BLUE,
-                )
-            ]
+                ),
+            )
         entries = tuple(_claim_entry(claim, self.locale) for claim in self._claims)
-        body: sl.LayoutNode = (
+        body: sl.primitives.Node = (
             sl.primitives.Lines(
                 entries,
                 join="\n\n",
@@ -263,22 +263,25 @@ class ClaimReviewComponent(sl.Component):
             if entries
             else sl.primitives.Text(t(self.locale, _("No creator credit claims are awaiting review.")))
         )
-        choices: sl.LayoutNode | None = None
+        choices: sl.primitives.Node | None = None
         if self._claims:
-            choices = sl.Choices(
-                key="claim",
-                choices=tuple(
-                    sl.Choice(
-                        str(claim.id),
-                        t(self.locale, _("Claim #{id} — {name}"), id=claim.id, name=claim.alias_name),
-                        present_claimant(claim, self.locale, mention=False),
-                    )
-                    for claim in self._claims
+            choices = cast(
+                sl.primitives.Node,
+                sl.Choices(
+                    key="claim",
+                    choices=tuple(
+                        sl.Choice(
+                            str(claim.id),
+                            t(self.locale, _("Claim #{id} — {name}"), id=claim.id, name=claim.alias_name),
+                            present_claimant(claim, self.locale, mention=False),
+                        )
+                        for claim in self._claims
+                    ),
+                    selected=(str(self.selected_id),) if self.selected_id is not None else (),
+                    on_change=self._select_claim,
+                    minimum=1,
+                    maximum=1,
                 ),
-                selected=(str(self.selected_id),) if self.selected_id is not None else (),
-                on_change=self._select_claim,
-                minimum=1,
-                maximum=1,
             )
         buttons: list[sl.primitives.Button] = []
         if self._can_approve:
