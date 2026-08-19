@@ -1,7 +1,12 @@
 """Engine pagination and ModalSpec tests."""
 
+from types import SimpleNamespace
+from typing import cast
+
 import discord
 import pytest
+from discord.state import ConnectionState
+from discord.ui.view import ViewStore
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -137,6 +142,21 @@ class TestMountPagination:
         assert not prev_button.disabled
         footers = [c.content for c in edited.walk_children() if isinstance(c, discord.ui.TextDisplay)]
         assert any("Page 2 of" in text for text in footers)
+
+    def test_stopping_replaced_view_keeps_new_paginator_registered(self):
+        """discord.py must retain the new generation after Mount stops the old one."""
+        mount = Mount(Browser(), timeout=None)
+        first = mount.build_view()
+        second = mount.build_view()
+        message_id = 42
+        store = ViewStore(cast(ConnectionState, SimpleNamespace()))
+
+        store.add_view(first, message_id)
+        store.add_view(second, message_id)
+        first.stop()
+
+        next_button = next(button for button in self._nav_buttons(second) if button.label == "Next")
+        assert (next_button.type.value, next_button.custom_id) in store._views[message_id]
 
     async def test_a_custom_nav_factory_replaces_the_stock_controls(self):
         def nav(context):
