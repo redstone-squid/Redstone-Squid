@@ -24,6 +24,7 @@ from squid.bot.utils.permissions import (
     requires,
     subject_for,
 )
+from squid.bot.utils.visibility import personal
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.application.administration import (
@@ -82,7 +83,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=info_layout(t(locale, title), body or t(locale, _("Nothing to show."))),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 

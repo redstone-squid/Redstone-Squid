@@ -1,7 +1,7 @@
 # Phase 5: condensing the long tail
 
-> **Status.** In progress. Unlike phases 1–4 this one is a sweep rather than a single
-> rebuild, so it lands as a sequence of steps; the table below records what has shipped.
+> **Status.** Delivered 2026-08-19. Unlike phases 1–4 this one is a sweep rather than a single
+> rebuild, so it landed as a sequence of steps; the table below records them.
 
 ## Problem
 
@@ -26,7 +26,7 @@ three different ad-hoc truncation schemes standing in for a paginator.
 | 5.4 | `/account` claim review moves onto the `claims` list as buttons | **Delivered** |
 | 5.5 | `/perm`: `whoami`, `test` and `explain` collapse into `perm can` | **Delivered** |
 | 5.6 | A shared list paginator, applied to `version list` and the records diagnostics (C6). The module landed in phase 6, whose `build queue` needed it first; `account claims` took it in 5.4 | **Delivered** |
-| 5.7 | One ephemerality rule, applied bot-wide (C2) | Not started |
+| 5.7 | One ephemerality rule, applied bot-wide (C2) | **Delivered** |
 
 Ordering is by independence, not by value: each step is a commit that stands alone, and the
 two sweeps (5.6, 5.7) come last because they touch what the earlier steps rewrite.
@@ -270,3 +270,59 @@ into presenting the same kind of finding differently.
 
 Both stay ephemeral on the slash path, which is what they already did and what 5.7 turns from a
 habit into a rule.
+
+## 5.7 — one rule for who sees a reply
+
+Three patterns coexisted with nothing behind them (audit C2): always ephemeral at 64 sites,
+`ephemeral=ctx.interaction is not None` at 15, and always public at the rest — so near-identical
+commands disagreed for no recorded reason. The rule now lives in
+`squid/bot/utils/visibility.py`, where the code that applies it is:
+
+1. **A decision about shared content answers publicly.** Approving a build, crediting a creator
+   name, archiving a message: the reply is the record other people need.
+2. **A read of shared content answers publicly.** Anyone could have run it, and it is usually run
+   to show somebody. In practice this is the ungated half of the surface.
+3. **Anything about the person who asked, and any staff working material, answers privately.**
+   Your account, your subscriptions, a review queue, a diagnostic, a settings panel.
+4. **Errors and refusals answer privately**, which the shared error presenter already did.
+
+### `ephemeral=True` on a `Context` is not a promise
+
+`Context.send` forwards to `Messageable.send`, which has no `ephemeral` parameter, so the flag is
+dropped whenever a hybrid command is invoked as a prefix command. Phase 3 found that the hard way:
+every reply in `/error` passed `ephemeral=True` under a comment explaining why the traceback must
+stay private, and the prefix form posted it into the channel anyway.
+
+**`account merge-code` was doing the same thing with a credential.** Its `ephemeral=True` carried
+the comment "always ephemeral, even from a prefix invocation, because the code is a credential" —
+a claim the transport cannot honour. `!account merge-code` posted, in the channel, a code that
+hands the account over to whoever runs `/account merge` with it. It now goes through
+`deliver_privately`, the delivery phase 3 built for tracebacks, generalised out of `Diagnostics`:
+ephemeral with an interaction, a direct message without one, and a line in the channel saying why.
+A closed DM delivers nothing rather than falling back, because the channel is what the payload
+must not reach.
+
+**Everywhere else, the spelling changed rather than the behaviour.** `personal(ctx)` replaces both
+`ephemeral=ctx.interaction is not None` and every literal `ephemeral=True` on a `Context`. The
+value is identical; what changes is that the code no longer claims a privacy it may not get.
+`test_no_context_reply_claims_an_ephemerality_it_may_not_get` walks `squid/bot` for the literal and
+fails on the next one, since this defect is invisible on the path anybody tests by hand.
+
+### The pairs the rule had to break
+
+- **`records lookup` answered publicly while `records rebuild` beside it answered privately.** Both
+  are staff maintenance reporting the same counts. Both are private now.
+- **`build debug` answered publicly.** It attaches a build's internal state, for holders of
+  `build.submission.debug`; that is staff working material by clause 3. `build queue` stays public,
+  and the rule says why: it is ungated, so it is a read of shared content.
+- **`account claims` versus `account approve-claim`**, the pair the audit named, is now clause 1
+  against clause 3 rather than an accident: 5.4 keeps the decision public and the queue private.
+
+### Known gap
+
+Commands that answer through `RunningMessage` — `settings set`, `settings locale`, `restrictions
+add-alias`, `build view` and the rest — are public whatever the rule says, because the context
+manager takes a `Messageable` and sends before the command knows what it will say. Teaching it
+ephemerality is a change to every one of its callers, so it is named here rather than smuggled into
+a sweep: `/settings` is the visible case, where the panel is private and `settings set` beside it is
+not.
