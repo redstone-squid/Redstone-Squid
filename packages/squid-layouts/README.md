@@ -46,28 +46,28 @@ for component composition, planning, renderers, action policies, and durable mou
 5. **Scene protocol 1** is immutable canonical JSON with action references but no callbacks or
    native frontend objects.
 6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
-   `conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
+   `sl.discord.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
 
-`compose()` is the Discord convenience pipeline, with `reserved_text` for callers whose
+`sl.discord.compose()` is the Discord convenience pipeline, with `reserved_text` for callers whose
 message carries content the engine cannot see. It always creates a renderer-owned view;
 adopting an arbitrary existing `discord.py` view is intentionally unsupported. Components nest through explicit
-`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `Mount`
+`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sl.discord.Mount`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
-controls, `Reactor` coalesces out-of-band refreshes, and `Navigator` stacks screens with
+controls, `sl.discord.Reactor` coalesces out-of-band refreshes, and `sl.discord.Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
-any component-bearing nodes built from the `PageContext`. Semantic pickers page through keyed
+any component-bearing nodes built from the `sl.discord.PageContext`. Semantic pickers page through keyed
 25-option windows. A keyed root `Document` may promote structural overflow to whole-message
 pages; local pagination wins, and local plus root navigation are never shown simultaneously.
-`render_static` is the sessionless
-path for reconciler-managed posts. `build_modal`/`conform_modal` do the same for modals,
-whose string lengths discord.py does not validate at all. `SceneCodec` transports plans to
-other processes; `MountManager` provides opt-in versioned state checkpoints.
+`sl.discord.render_static` is the sessionless
+path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_modal` do the same for modals,
+whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
+other processes; `sl.discord.durability.MountManager` provides opt-in versioned state checkpoints.
 
 ## Host integration rules
 
-- The package depends on discord.py and anyio only, and never spawns tasks — start
-  `Reactor.run()` under your own supervisor.
+- The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The adapter never spawns tasks — start
+  `sl.discord.Reactor.run()` under your own supervisor.
 - Bare strings are trusted Discord Markdown. Use `md(t"Build {title}")` for escaped Python
   3.14 template-string interpolation, `plain()` for literal text, and `raw_md()` only for a
   deliberately trusted interpolation.
