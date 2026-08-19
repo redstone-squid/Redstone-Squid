@@ -19,7 +19,7 @@ from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
-from squid_layouts.component import Component
+from squid_layouts.component import Component, render_component_tree
 from squid_layouts.compositor import Composition, compose
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
@@ -136,6 +136,7 @@ class Mount:
         self.message: discord.Message | None = None
         self._view: MountedView | None = None
         self._handlers: dict[str, Callable[..., Awaitable[None]]] = {}
+        self._components: dict[str, Component] = {}
         self._dirty = False
         self._finished = False
         self._page: dict[str, int] = {}
@@ -147,7 +148,8 @@ class Mount:
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
         """Render the component's current state into a fresh view."""
-        rendered = self.component.render()
+        tree = render_component_tree(self.component)
+        rendered = tree.nodes
 
         def draw() -> tuple[MountedView, Composition]:
             self._handlers = {}
@@ -202,6 +204,7 @@ class Mount:
         self._page = {pager.key: pager.page for pager in pagers}
         self._pages = {pager.key: pager.pages for pager in pagers}
         self._pager_digests = {pager.key: pager.content_fingerprint for pager in pagers}
+        self._reconcile_components(tree.components)
         if disabled:
             _disable_all(view)
         self._dirty = False
@@ -232,6 +235,36 @@ class Mount:
         """
         self._staged_attachments = None if files is None else list(files)
         self.invalidate()
+
+    def _reconcile_components(self, current: dict[str, Component]) -> None:
+        removed = [
+            (path, component) for path, component in self._components.items() if current.get(path) is not component
+        ]
+        added = [
+            (path, component) for path, component in current.items() if self._components.get(path) is not component
+        ]
+
+        def depth(path: str) -> int:
+            return 0 if path == "$" else path.count(".") + 1
+
+        for path, component in sorted(removed, key=lambda item: depth(item[0]), reverse=True):
+            component.on_unmount()
+            if path != "$":
+                component._parent = None
+        for _, component in sorted(added, key=lambda item: depth(item[0])):
+            component.on_mount()
+        self._components = dict(current)
+
+    def _unmount_components(self) -> None:
+        for _path, component in sorted(
+            self._components.items(),
+            key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,
+            reverse=True,
+        ):
+            component.on_unmount()
+            component._parent = None
+        self._components.clear()
+        self.component._mount = None
 
     # --- Lifecycle ---------------------------------------------------------------------
 
@@ -289,6 +322,7 @@ class Mount:
         if self._view is not None:
             self._view.stop()
         view.stop()
+        self._unmount_components()
 
     async def refresh(self) -> None:
         """Out-of-band re-render (background state change, not an interaction)."""
@@ -316,6 +350,7 @@ class Mount:
                 logger.debug("could not disable controls on finish", exc_info=True)
         if self._view is not None:
             self._view.stop()
+        self._unmount_components()
 
     async def handle_timeout(self) -> None:
         await self.finish(disable=True)

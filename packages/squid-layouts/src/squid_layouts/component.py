@@ -11,22 +11,29 @@ it through their parent, which is also how a child's state change re-renders the
 """
 
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from squid_layouts.constraints import Paginate
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.ir import (
     ActionGroup,
     Button,
     Choice,
+    Code,
+    Embed,
     Extension,
     Fold,
+    Footer,
+    Heading,
+    Lines,
     Node,
     Panel,
     Row,
     Section,
     SelectMenu,
+    Text,
     Variant,
-    as_nodes,
 )
 
 if TYPE_CHECKING:
@@ -65,25 +72,37 @@ def state(default: Any) -> Any:
     return _State(default)
 
 
+type RenderNode = Node
+type RenderResult = Node | Sequence[Node]
+
+
+@dataclass(frozen=True, slots=True)
+class ComponentTree:
+    """One expanded render and the component identities that produced it."""
+
+    nodes: tuple[Node, ...]
+    components: dict[str, Component]
+
+
 class Component:
     """Base class for mounted, stateful views."""
 
     _mount: Mount | None = None
     _parent: Component | None = None
 
-    def render(self) -> Sequence[Node] | Node:
+    def render(self) -> RenderResult:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
-    def embed(self, child: Component, *, key: str) -> list[Node]:
-        """Render ``child`` into this component's document, namespaced under ``key``.
+    def embed(self, child: Component, *, key: str) -> Embed:
+        """Place child in this render tree under a stable key and namespace."""
+        return Embed(child, key)
 
-        Every control in the child's subtree gets ``key`` as a prefix, so two instances of
-        one child class stay independently addressable, and a keyless control keeps a stable
-        identity as long as its position within *its own* subtree does not move.
-        """
-        child._parent = self
-        return _namespace(as_nodes(child.render()), key)
+    def on_mount(self) -> None:
+        """Run after this component first enters a successfully drawn tree."""
+
+    def on_unmount(self) -> None:
+        """Run after this component leaves a successfully drawn tree."""
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
@@ -104,6 +123,93 @@ class Component:
         return component._mount
 
 
+def render_component_tree(root: Component) -> ComponentTree:
+    """Render and expand a component tree, preserving keyed component identity."""
+    components: dict[str, Component] = {}
+    identities: dict[int, str] = {}
+    active: set[int] = set()
+
+    def items(rendered: RenderResult) -> tuple[RenderNode, ...]:
+        return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
+
+    def one(expanded: list[Node], path: str) -> Node:
+        if len(expanded) != 1:
+            message = f"{path}: this structural position requires exactly one node"
+            raise LayoutInvariantError(message)
+        return expanded[0]
+
+    def expand(component: Component, path: str) -> list[Node]:
+        identity = id(component)
+        if identity in active:
+            message = f"{path}: component embedding cycle"
+            raise LayoutInvariantError(message)
+        if previous := identities.get(identity):
+            message = f"{path}: component instance is already embedded at {previous}"
+            raise LayoutInvariantError(message)
+        identities[identity] = path
+        components[path] = component
+        active.add(identity)
+        embed_keys: set[str] = set()
+
+        def expand_item(item: RenderNode, item_path: str) -> list[Node]:
+            if isinstance(item, Embed):
+                if item.key in embed_keys:
+                    message = f"{item_path}: duplicate Embed key {item.key!r}"
+                    raise LayoutInvariantError(message)
+                embed_keys.add(item.key)
+                if not isinstance(item.component, Component):
+                    message = f"{item_path}: Embed does not contain a Component"
+                    raise LayoutInvariantError(message)
+                item.component._parent = component
+                child_path = item.key if path == "$" else f"{path}.{item.key}"
+                return _namespace(expand(item.component, child_path), item.key)
+            match item:
+                case Panel(children=children, accent=accent):
+                    expanded: list[Node] = []
+                    for index, child in enumerate(children):
+                        expanded.extend(expand_item(child, f"{item_path}.{index}"))  # pyrefly: ignore
+                    return [Panel(tuple(expanded), accent)]
+                case Fold(primary=primary, fallback=fallback, priority=priority):
+                    return [
+                        Fold(
+                            one(expand_item(primary, f"{item_path}.primary"), f"{item_path}.primary"),
+                            one(expand_item(fallback, f"{item_path}.fallback"), f"{item_path}.fallback"),
+                            priority,
+                        )
+                    ]
+                case Choice(variants=variants, priority=priority):
+                    return [
+                        Choice(
+                            tuple(
+                                Variant(
+                                    one(
+                                        expand_item(variant.node, f"{item_path}.variant.{index}"),
+                                        f"{item_path}.variant.{index}",
+                                    ),
+                                    variant.requires,
+                                )
+                                for index, variant in enumerate(variants)
+                            ),
+                            priority,
+                        )
+                    ]
+                case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
+                    expanded = expand_item(fallback, f"{item_path}.fallback")
+                    return [Extension(kind, version, payload, one(expanded, f"{item_path}.fallback"))]
+                case _:
+                    return [item]
+
+        try:
+            nodes: list[Node] = []
+            for index, item in enumerate(items(component.render())):
+                nodes.extend(expand_item(item, f"{path}.{index}"))
+            return nodes
+        finally:
+            active.remove(identity)
+
+    return ComponentTree(tuple(expand(root, "$")), components)
+
+
 def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
     """Rewrite an embedded subtree's control keys under ``prefix``.
 
@@ -114,11 +220,19 @@ def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
     def key_for(node: Button | SelectMenu) -> str:
         return f"{prefix}.{node.key}"
 
+    def rewrite_text[T: (Text, Heading, Footer, Code, Lines)](node: T) -> T:
+        overflow = node.overflow
+        if isinstance(overflow, Paginate) and overflow.key is not None:
+            return replace(node, overflow=replace(overflow, key=f"{prefix}.{overflow.key}"))
+        return node
+
     def rewrite_item[T](item: T) -> T:
         return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
 
     def rewrite(node: Node) -> Node:
         match node:
+            case Text() | Heading() | Footer() | Code() | Lines():
+                return rewrite_text(node)
             case Panel(children=children, accent=accent):
                 return Panel(children=tuple(rewrite(child) for child in children), accent=accent)
             case Row(items=items):
@@ -126,7 +240,7 @@ def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
             case ActionGroup(items=items):
                 return ActionGroup(items=tuple(rewrite_item(item) for item in items))
             case Section(texts=texts, accessory=accessory):
-                return Section(texts=texts, accessory=rewrite_item(accessory))
+                return Section(texts=tuple(rewrite_text(text) for text in texts), accessory=rewrite_item(accessory))
             case SelectMenu():
                 return replace(node, key=key_for(node))
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):

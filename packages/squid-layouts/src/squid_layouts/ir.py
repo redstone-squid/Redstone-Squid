@@ -124,6 +124,22 @@ class RawItem:
 
 
 @dataclass(frozen=True, slots=True)
+class Embed:
+    """A keyed component boundary expanded before portable planning."""
+
+    component: object
+    key: str
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "Embed key must not be empty"
+            raise ValueError(message)
+        if "." in self.key:
+            message = "Embed key must not contain '.'"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
 class Extension:
     """Target extension with a mandatory portable fallback."""
 
@@ -236,6 +252,7 @@ type Node = (
     | Section
     | Panel
     | RawItem
+    | Embed
     | Extension
     | Fold
     | Choice

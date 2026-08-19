@@ -44,7 +44,7 @@ class Navigator(Component):
     def render(self) -> list[Node]:
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
-        nodes = self.embed(self.current, key=f"s{self.depth - 1}")
+        nodes: list = [self.embed(self.current, key=f"s{self.depth - 1}")]
         chrome = self.mount.chrome
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),
