@@ -12,8 +12,9 @@ from dataclasses import dataclass, field, replace
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.conform import ELLIPSIS
-from squid_layouts.constraints import Alts, Drop, Never, Overflow, Paginate, Spill, Truncate
-from squid_layouts.ir import (
+from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.primitives.constraints import Alts, Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.primitives.nodes import (
     Button,
     Code,
     Embed,
@@ -34,8 +35,7 @@ from squid_layouts.ir import (
     Text,
     Thumbnail,
 )
-from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.styles import Color
+from squid_layouts.primitives.styles import Color
 
 type TextBearing = Text | Heading | Footer | Code | Lines
 

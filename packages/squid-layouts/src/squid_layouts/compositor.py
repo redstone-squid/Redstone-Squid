@@ -5,18 +5,18 @@ from dataclasses import dataclass
 
 import discord
 
-from squid_layouts.cache import PlanCache
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.renderer import DiscordRenderer, Wire
 from squid_layouts.discord.target import DiscordV2Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.planner import plan as plan_document
-from squid_layouts.presentation import PresentationSession
-from squid_layouts.scene import PlanResult
-from squid_layouts.search import DEFAULT_SEARCH_BUDGET
-from squid_layouts.solve import PageNav, PageState
-from squid_layouts.target import ResourceCost
+from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.planner import plan as plan_document
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_layouts.planning.solve import PageNav, PageState
+from squid_layouts.planning.target import ResourceCost
+from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.scene.model import PlanResult
 
 logger = logging.getLogger(__name__)
 

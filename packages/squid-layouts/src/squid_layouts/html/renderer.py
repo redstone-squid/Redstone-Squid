@@ -5,7 +5,8 @@ from html import escape
 from urllib.parse import urlsplit
 
 from squid_layouts.errors import DrawInvariantError
-from squid_layouts.scene import (
+from squid_layouts.scene.codec import SceneCodec
+from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
     SceneDocument,
@@ -21,7 +22,6 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
-from squid_layouts.scene_codec import SceneCodec
 
 DISCORD_PREVIEW_CSS = """
 .squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;

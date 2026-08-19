@@ -9,9 +9,9 @@ their parent rather than through a mount reference the navigator hands out.
 
 from squid_layouts.actions import PressEvent
 from squid_layouts.chrome import CHROME_CONTEXT
-from squid_layouts.component import Component
-from squid_layouts.ir import Button, Node, Row
-from squid_layouts.styles import ActionStyle
+from squid_layouts.primitives.nodes import Button, Node, Row
+from squid_layouts.primitives.styles import ActionStyle
+from squid_layouts.runtime.component import Component
 
 
 class Navigator(Component):

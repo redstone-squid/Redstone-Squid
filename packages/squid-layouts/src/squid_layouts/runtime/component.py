@@ -14,10 +14,10 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
-from squid_layouts.constraints import Paginate
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.ir import (
+from squid_layouts.primitives.constraints import Paginate
+from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
     Choice,
@@ -36,6 +36,7 @@ from squid_layouts.ir import (
     Text,
     Variant,
 )
+from squid_layouts.runtime.context import ContextKey
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -112,13 +113,6 @@ type RenderResult = Document | LayoutNode | Sequence[LayoutNode]
 
 class RuntimeOwner(Protocol):
     def invalidate(self) -> None: ...
-
-
-@dataclass(frozen=True, slots=True, eq=False)
-class ContextKey[ValueT]:
-    """Typed identity for ephemeral values provided down a component tree."""
-
-    name: str
 
 
 _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(

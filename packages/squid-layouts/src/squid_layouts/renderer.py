@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from squid_layouts.scene import PlanResult, SceneDocument
+from squid_layouts.scene.model import PlanResult, SceneDocument
 
 
 class Renderer[OutputT](Protocol):

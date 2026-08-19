@@ -8,7 +8,7 @@ build one Chrome per locale; the defaults are untranslated English.
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from squid_layouts.component import ContextKey
+from squid_layouts.runtime.context import ContextKey
 
 
 def _default_and_n_more(count: int) -> str:

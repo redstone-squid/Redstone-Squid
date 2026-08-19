@@ -6,12 +6,14 @@ from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
-from squid_layouts.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.ir import (
+from squid_layouts.limits import V2Limits
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
+from squid_layouts.primitives.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.primitives.nodes import (
     ActionGroup as PrimitiveActionGroup,
 )
-from squid_layouts.ir import (
+from squid_layouts.primitives.nodes import (
     Button,
     Fold,
     Footer,
@@ -25,16 +27,15 @@ from squid_layouts.ir import (
     SelectMenu,
     Text,
 )
-from squid_layouts.ir import (
+from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
 )
-from squid_layouts.ir import (
+from squid_layouts.primitives.nodes import (
     Heading as PrimitiveHeading,
 )
-from squid_layouts.limits import V2Limits
-from squid_layouts.presentation import PresentationSession
-from squid_layouts.scene import PlanEvent, PlanSeverity, ScenePager
-from squid_layouts.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
+from squid_layouts.primitives.styles import ActionStyle
+from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.scene.model import PlanEvent, PlanSeverity, ScenePager
 from squid_layouts.semantic import (
     Action,
     ActionDisplay,
@@ -75,7 +76,6 @@ from squid_layouts.semantic import (
     Tone,
     Truncated,
 )
-from squid_layouts.styles import ActionStyle
 from squid_layouts.text import resolve_text
 
 type PageState = Mapping[str, int] | int | None
