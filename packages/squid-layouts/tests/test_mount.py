@@ -5,6 +5,7 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import discord
+import pytest
 
 from squid_layouts import (
     Button,
@@ -17,7 +18,10 @@ from squid_layouts import (
     SelectMenu,
     Text,
     assert_within_limits,
+    batch,
+    computed,
     state,
+    transaction,
 )
 from squid_layouts.testing import fake_interaction
 
@@ -130,6 +134,31 @@ class TestErrors:
         assert isinstance(error, RuntimeError)
         assert source == "handler:x"
 
+    async def test_failed_handler_rolls_back_all_state_changes(self):
+        class Boom(Component):
+            count: int = state(0)
+            entries: list[str] = state(factory=list)
+
+            def render(self):
+                return [Row((Button(label="x", on_click=self.explode, key="x"),))]
+
+            async def explode(self, interaction) -> None:
+                self.count = 1
+                self.entries.append("partial")
+                message = "boom"
+                raise RuntimeError(message)
+
+        component = Boom()
+        hook = AsyncMock()
+        mount = Mount(component, timeout=None, on_error=hook)
+        mount.build_view()
+
+        await mount.dispatch("x", fake_interaction())
+
+        assert component.count == 0
+        assert component.entries == []
+        assert not mount._dirty
+
 
 class TestSelect:
     async def test_select_handler_receives_values(self):
@@ -213,3 +242,86 @@ class TestStateDescriptor:
         assert not mount._dirty
         component.count = 3
         assert mount._dirty
+
+    def test_mutable_factory_is_per_instance_and_observed(self):
+        class Collection(Component):
+            entries: list[dict[str, int]] = state(factory=list)
+
+            def render(self):
+                return Text(str(self.entries))
+
+        first, second = Collection(), Collection()
+        mount = Mount(first, timeout=None)
+        mount.build_view()
+
+        first.entries.append({"count": 1})
+
+        assert mount._dirty
+        assert second.entries == []
+
+        mount.build_view()
+        first.entries[0]["count"] = 2
+        assert mount._dirty
+
+    def test_computed_values_cache_until_state_changes(self):
+        class Derived(Component):
+            count: int = state(1)
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            @computed
+            def doubled(self) -> int:
+                self.calls += 1
+                return self.count * 2
+
+            def render(self):
+                return Text(str(self.doubled))
+
+        component = Derived()
+        assert component.doubled == 2
+        assert component.doubled == 2
+        assert component.calls == 1
+
+        component.count = 3
+        assert component.doubled == 6
+        assert component.calls == 2
+
+    def test_batch_coalesces_invalidations(self):
+        class Pair(Component):
+            left: int = state(0)
+            right: int = state(0)
+
+            def __init__(self) -> None:
+                self.invalidations = 0
+
+            def invalidate(self) -> None:
+                self.invalidations += 1
+                super().invalidate()
+
+            def render(self):
+                return Text(f"{self.left}:{self.right}")
+
+        component = Pair()
+        with batch():
+            component.left = 1
+            component.right = 2
+
+        assert component.invalidations == 1
+
+    def test_transaction_rolls_back_assignments_and_nested_mutation(self):
+        class Form(Component):
+            name: str = state("before")
+            values: list[int] = state(factory=list)
+
+            def render(self):
+                return Text(self.name)
+
+        component = Form()
+        with pytest.raises(RuntimeError, match="abort"), transaction():
+            component.name = "after"
+            component.values.append(1)
+            raise RuntimeError("abort")
+
+        assert component.name == "before"
+        assert component.values == []
