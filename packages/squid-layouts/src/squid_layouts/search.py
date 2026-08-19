@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from squid_layouts.semantic import Flexibility
 
+DEFAULT_SEARCH_BUDGET = 512
+
 
 @dataclass(frozen=True, slots=True, order=True)
 class CostVector:
