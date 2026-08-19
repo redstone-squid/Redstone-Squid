@@ -6,6 +6,7 @@ discord.py views: each render produces a fresh :class:`MountedView`, and the pre
 stopped after a successful edit so dispatch tables do not accumulate.
 """
 
+import hashlib
 import logging
 import secrets
 from collections.abc import Awaitable, Callable, Sequence
@@ -52,6 +53,19 @@ class MountedView(discord.ui.LayoutView):
         await self._mount.handle_error(interaction, error, f"item:{type(item).__name__}")
 
 
+def _custom_id(mount_id: str, key: str) -> str:
+    """A per-message-unique control id for ``key``, within Discord's 100-char limit.
+
+    Nested components produce long dotted keys, and truncating those makes two controls
+    collide — Discord rejects the message and, worse, a click could route to the wrong
+    handler. Digest the key instead; dispatch itself goes by the in-process key.
+    """
+    custom_id = f"ctl:{mount_id}:{key}"
+    if len(custom_id) <= 100:
+        return custom_id
+    return f"ctl:{mount_id}:#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
+
+
 class _WiredButton(discord.ui.Button[MountedView]):
     def __init__(self, node: Button, mount: Mount, key: str) -> None:
         super().__init__(
@@ -59,7 +73,7 @@ class _WiredButton(discord.ui.Button[MountedView]):
             label=node.label,
             emoji=node.emoji,
             disabled=node.disabled,
-            custom_id=f"ctl:{mount.id}:{key}"[:100],
+            custom_id=_custom_id(mount.id, key),
         )
         self._mount = mount
         self._key = key
@@ -75,7 +89,7 @@ class _WiredSelect(discord.ui.Select[MountedView]):
             min_values=node.min_values,
             max_values=node.max_values,
             disabled=node.disabled,
-            custom_id=f"ctl:{mount.id}:{key}"[:100],
+            custom_id=_custom_id(mount.id, key),
             options=[
                 discord.SelectOption(
                     label=option.label, value=option.value, description=option.description, default=option.default
