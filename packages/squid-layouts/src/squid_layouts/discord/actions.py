@@ -59,3 +59,6 @@ class DiscordActionResponder:
 
     async def finish(self) -> None:
         await self.mount.finish_via(self.interaction)
+
+    def invalidate(self) -> None:
+        self.mount.invalidate()

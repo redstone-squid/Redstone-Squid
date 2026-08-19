@@ -14,6 +14,7 @@ import secrets
 from collections.abc import Awaitable, Sequence
 from typing import Any, Protocol
 
+import anyio
 import discord
 
 from squid_layouts import deliver
@@ -136,12 +137,14 @@ class Mount:
         on_error: ErrorHook | None = None,
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
+        acknowledgement_timeout: float = 2.5,
     ) -> None:
         self.id = secrets.token_urlsafe(6)
         self.component = component
         self.chrome = chrome
         self.runtime = ComponentRuntime(component, on_invalidate=self.invalidate, context={CHROME_CONTEXT: chrome})
         self.nav = nav if nav is not None else default_nav(chrome)
+        self.acknowledgement_timeout = acknowledgement_timeout
         self.limits = limits
         self.strict = strict
         self.timeout = timeout
@@ -334,6 +337,22 @@ class Mount:
             await self._invoke(binding, key, interaction, values)
 
     async def _invoke(
+        self,
+        binding: ActionBinding,
+        key: str,
+        interaction: discord.Interaction,
+        values: list[str] | None,
+    ) -> None:
+        async def watchdog() -> None:
+            await anyio.sleep(self.acknowledgement_timeout)
+            await self._acknowledge(interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(watchdog)
+            await self._invoke_and_flush(binding, key, interaction, values)
+            tasks.cancel_scope.cancel()
+
+    async def _invoke_and_flush(
         self,
         binding: ActionBinding,
         key: str,

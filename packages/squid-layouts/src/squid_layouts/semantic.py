@@ -329,6 +329,34 @@ class Navigation:
     flexibility: Flexibility = Flexibility.STABLE
 
 
+@dataclass(frozen=True, slots=True)
+class Truncated:
+    node: LayoutNode
+    keep: str = "head"
+
+
+@dataclass(frozen=True, slots=True)
+class Spilled:
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class OptionalContent:
+    node: LayoutNode
+    importance: Importance = Importance.LOW
+
+
+@dataclass(frozen=True, slots=True)
+class FallbackContent:
+    primary: LayoutNode
+    alternate: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class BestEffort:
+    node: LayoutNode
+
+
 type SemanticNode = (
     Group
     | Stack
@@ -355,4 +383,30 @@ type SemanticNode = (
     | Navigation
 )
 
-type LayoutNode = SemanticNode | PrimitiveNode
+type Adaptation = Truncated | Spilled | OptionalContent | FallbackContent | BestEffort
+type LayoutNode = SemanticNode | Adaptation | PrimitiveNode
+
+
+def truncate(node: LayoutNode, *, keep: str = "head") -> Truncated:
+    """Allow prose in ``node`` to truncate when no lossless plan fits."""
+    return Truncated(node, keep)
+
+
+def spill(node: LayoutNode) -> Spilled:
+    """Allow a static collection in ``node`` to omit its lowest-priority entries."""
+    return Spilled(node)
+
+
+def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> OptionalContent:
+    """Allow the whole node to disappear as an explicit last resort."""
+    return OptionalContent(node, importance)
+
+
+def fallback(primary: LayoutNode, alternate: LayoutNode) -> FallbackContent:
+    """Declare a complete author-supplied alternate representation."""
+    return FallbackContent(primary, alternate)
+
+
+def best_effort(node: LayoutNode) -> BestEffort:
+    """Allow safe prose truncation and static collection spill, never consequential loss."""
+    return BestEffort(node)
