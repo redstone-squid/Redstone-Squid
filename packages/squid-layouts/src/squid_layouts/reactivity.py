@@ -320,7 +320,13 @@ _MISSING = object()
 
 
 class _State:
-    def __init__(self, default: Any = _MISSING, *, factory: Callable[[], Any] | None = None) -> None:
+    def __init__(
+        self,
+        default: Any = _MISSING,
+        *,
+        factory: Callable[[], Any] | None = None,
+        persist: bool = True,
+    ) -> None:
         if default is not _MISSING and factory is not None:
             message = "state accepts either a default or a factory, not both"
             raise TypeError(message)
@@ -330,9 +336,12 @@ class _State:
         self._default = default
         self._factory = factory
         self._name = ""
+        self.public_name = ""
+        self.persist = persist
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = f"__state_{name}"
+        self.public_name = name
 
     def _initial(self) -> Any:
         return self._factory() if self._factory is not None else deepcopy(self._default)
@@ -352,9 +361,42 @@ class _State:
         _after(instance)
 
 
-def state(default: Any = _MISSING, *, factory: Callable[[], Any] | None = None) -> Any:
+def state(
+    default: Any = _MISSING,
+    *,
+    factory: Callable[[], Any] | None = None,
+    persist: bool = True,
+) -> Any:
     """Declare observed component state with either a default or per-instance factory."""
-    return _State(default, factory=factory)
+    return _State(default, factory=factory, persist=persist)
+
+
+def _state_fields(owner: ReactiveOwner) -> dict[str, _State]:
+    fields: dict[str, _State] = {}
+    for cls in reversed(type(owner).__mro__):
+        fields.update(
+            (name, descriptor)
+            for name, descriptor in vars(cls).items()
+            if isinstance(descriptor, _State) and descriptor.persist
+        )
+    return fields
+
+
+def export_state(owner: ReactiveOwner) -> dict[str, Any]:
+    """Return plain values for every persistent state descriptor on an instance."""
+    return {name: _plain(getattr(owner, name)) for name in _state_fields(owner)}
+
+
+def restore_state(owner: ReactiveOwner, values: Mapping[str, Any]) -> None:
+    """Restore declared persistent state, rejecting stale or misspelled field names."""
+    fields = _state_fields(owner)
+    unknown = set(values) - set(fields)
+    if unknown:
+        message = f"snapshot has unknown state fields: {', '.join(sorted(unknown))}"
+        raise ValueError(message)
+    with transaction():
+        for name, value in values.items():
+            setattr(owner, name, deepcopy(value))
 
 
 class _Computed:
