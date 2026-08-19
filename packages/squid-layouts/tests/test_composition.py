@@ -22,7 +22,7 @@ from squid_layouts import (
     state,
 )
 from squid_layouts.primitives import Heading
-from squid_layouts.semantic import Action, Actions
+from squid_layouts.semantic import Action, Actions, Choice, Choices, Group, List, ListItem
 from squid_layouts.testing import fake_interaction
 
 
@@ -275,3 +275,41 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
     mount.build_view()
 
     assert {"left.run", "right.run"} <= mount._handlers.keys()
+
+
+def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> None:
+    async def change(_event) -> None: ...
+
+    class Child(Component):
+        def render(self):
+            return Group(
+                (
+                    List(
+                        tuple(ListItem(str(index), f"Item {index}") for index in range(6)),
+                        key="entries",
+                        page_size=2,
+                    ),
+                    Choices(
+                        "choice",
+                        tuple(Choice(str(index), f"Choice {index}") for index in range(6)),
+                        (),
+                        change,
+                    ),
+                )
+            )
+
+    class Parent(Component):
+        def __init__(self) -> None:
+            self.left = Child()
+            self.right = Child()
+
+        def render(self):
+            return (self.embed(self.left, key="left"), self.embed(self.right, key="right"))
+
+    mount = Mount(Parent(), timeout=None)
+    mount.build_view()
+
+    assert {"left.entries", "right.entries"} <= mount.presentation.cursors.keys()
+    assert {"left.choice", "right.choice"} <= mount._handlers.keys()
+    assert "__page_next.left.entries" in mount._handlers
+    assert "__page_next.right.entries" in mount._handlers
