@@ -14,6 +14,12 @@ from squid.permissions.domain import Decision, Reason
 BUILD_LOG_CHANNEL = 500
 
 
+@pytest.fixture(autouse=True)
+def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Undo the temporary kill switch so these tests keep covering the sticky."""
+    monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
+
+
 class StubPermissions:
     def __init__(self, *, allowed: bool) -> None:
         self.allowed = allowed
