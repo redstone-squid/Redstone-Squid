@@ -10,12 +10,11 @@ their controls cross-wiring. Only the root component is attached to a `Mount`; c
 it through their parent, which is also how a child's state change re-renders the message.
 """
 
-import itertools
 from collections.abc import Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from squid_layouts.ir import Button, Node, Panel, Row, Section, SelectMenu, as_nodes
+from squid_layouts.ir import Button, Fold, Node, Panel, Row, Section, SelectMenu, as_nodes
 
 if TYPE_CHECKING:
     from squid_layouts.mount import Mount
@@ -95,14 +94,12 @@ class Component:
 def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
     """Rewrite an embedded subtree's control keys under ``prefix``.
 
-    Keyless controls are numbered within this subtree only: `materialize` numbers them per
-    document, where inserting a control anywhere earlier renumbers everything after it and a
-    click that raced the re-render lands on the wrong handler.
+    Explicit control keys are scoped under the embed path, so inserting a sibling cannot
+    change the identity of any existing action.
     """
-    positions = itertools.count()
 
     def key_for(node: Button | SelectMenu) -> str:
-        return f"{prefix}.{node.key if node.key else f'auto{next(positions)}'}"
+        return f"{prefix}.{node.key}"
 
     def rewrite_item[T](item: T) -> T:
         return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
@@ -117,6 +114,8 @@ def _namespace(nodes: list[Node], prefix: str) -> list[Node]:
                 return Section(texts=texts, accessory=rewrite_item(accessory))
             case SelectMenu():
                 return replace(node, key=key_for(node))
+            case Fold(primary=primary, fallback=fallback, priority=priority):
+                return Fold(primary=rewrite(primary), fallback=rewrite(fallback), priority=priority)
             case _:
                 return node
 
