@@ -49,9 +49,13 @@ class Code:
 
 @dataclass(frozen=True, slots=True)
 class Lines:
-    """A list rendered one entry per line; spills to "…and N more" by default."""
+    """A list of entries joined by ``join``; spills to "…and N more" by default.
+
+    Entries may span multiple lines themselves — Spill keeps or drops whole entries.
+    """
 
     lines: tuple[str, ...]
+    join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0
 
