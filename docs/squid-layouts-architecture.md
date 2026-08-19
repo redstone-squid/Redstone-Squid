@@ -198,7 +198,12 @@ are independent: an adapter update resets only its sticky strategy. Version or t
 mismatches fail with `SnapshotError` and require an explicit host migration.
 
 MountManager starts no tasks. Database or Redis storage, checkpoint cadence, expiry, and
-distributed ownership remain host policy.
+reconnection remain host policy. A `DurableMountRecord` may pair the snapshot with a portable
+`MountLocator`, for example Discord channel/message IDs, plus an expiry. Stores that implement
+`LeaseSnapshotStore` add atomic claim, renew, and release operations. `MountManager.recover()`
+claims live records and returns each restored mount beside its locator; the host reconnects the
+frontend and periodically calls `renew_claims()` under its own task supervisor. This prevents
+two workers from dispatching the same visible controls after a restart.
 
 ## Deliberate boundaries and current gaps
 

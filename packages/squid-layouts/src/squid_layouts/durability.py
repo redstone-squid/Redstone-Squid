@@ -1,9 +1,11 @@
 """Opt-in durable component snapshots and host-owned mount management."""
 
 import json
+import secrets
+import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 from squid_layouts.component import Component, render_component_tree
 from squid_layouts.mount import Mount
@@ -43,6 +45,78 @@ class MountSnapshot:
     component_version: int
     components: tuple[ComponentSnapshot, ...]
     presentation: PresentationSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class MountLocator:
+    """Frontend-neutral coordinates needed to reconnect a rendered message."""
+
+    frontend: str
+    values: Mapping[str, str | int]
+
+
+@dataclass(frozen=True, slots=True)
+class DurableMountRecord:
+    """A component snapshot plus operational recovery metadata."""
+
+    protocol: int
+    snapshot: MountSnapshot
+    locator: MountLocator
+    expires_at: float | None = None
+
+
+class DurableMountCodec:
+    """Canonical JSON codec for operational mount record protocol 1."""
+
+    protocol = 1
+
+    @classmethod
+    def dumps(cls, record: DurableMountRecord) -> str:
+        if record.protocol != cls.protocol:
+            message = f"unsupported durable mount record protocol {record.protocol}"
+            raise SnapshotError(message)
+        raw = {
+            "protocol": record.protocol,
+            "snapshot": json.loads(SnapshotCodec.dumps(record.snapshot)),
+            "locator": {
+                "frontend": record.locator.frontend,
+                "values": dict(record.locator.values),
+            },
+            "expires_at": record.expires_at,
+        }
+        try:
+            return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
+        except (TypeError, ValueError) as error:
+            message = f"durable mount metadata is not JSON serializable: {error}"
+            raise SnapshotError(message) from error
+
+    @classmethod
+    def loads(cls, payload: str) -> DurableMountRecord:
+        try:
+            raw = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise SnapshotError(str(error)) from error
+        item = _object(raw)
+        protocol = _integer(item, "protocol")
+        if protocol != cls.protocol or "snapshot" not in item:
+            message = f"unsupported durable mount record protocol {protocol}"
+            raise SnapshotError(message)
+        locator = _object(item.get("locator"))
+        values = _object(locator.get("values"))
+        if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
+            message = "mount locator values must contain string keys and string or integer values"
+            raise SnapshotError(message)
+        expires_at = item.get("expires_at")
+        if expires_at is not None and not isinstance(expires_at, int | float):
+            message = "mount record expires_at must be a number or null"
+            raise SnapshotError(message)
+        snapshot_payload = json.dumps(item.get("snapshot"), ensure_ascii=False, separators=(",", ":"))
+        return DurableMountRecord(
+            protocol,
+            SnapshotCodec.loads(snapshot_payload),
+            MountLocator(_string(locator, "frontend"), values),
+            float(expires_at) if expires_at is not None else None,
+        )
 
 
 class SnapshotCodec:
@@ -259,11 +333,26 @@ class SnapshotStore(Protocol):
     async def delete(self, key: str) -> None: ...
 
 
+@runtime_checkable
+class LeaseSnapshotStore(SnapshotStore, Protocol):
+    """Optional store contract for distributed startup recovery ownership."""
+
+    async def list_keys(self) -> tuple[str, ...]: ...
+
+    async def claim(self, key: str, owner: str, lease_until: float) -> bool: ...
+
+    async def renew(self, key: str, owner: str, lease_until: float) -> bool: ...
+
+    async def release(self, key: str, owner: str) -> None: ...
+
+
 class MemorySnapshotStore:
     """Small store for tests and single-process development."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._payloads: dict[str, str] = {}
+        self._leases: dict[str, tuple[str, float]] = {}
+        self._clock = clock
 
     async def load(self, key: str) -> str | None:
         return self._payloads.get(key)
@@ -273,51 +362,187 @@ class MemorySnapshotStore:
 
     async def delete(self, key: str) -> None:
         self._payloads.pop(key, None)
+        self._leases.pop(key, None)
+
+    async def list_keys(self) -> tuple[str, ...]:
+        return tuple(sorted(self._payloads))
+
+    async def claim(self, key: str, owner: str, lease_until: float) -> bool:
+        if key not in self._payloads:
+            return False
+        current = self._leases.get(key)
+        if current is not None and current[0] != owner and current[1] > self._clock():
+            return False
+        self._leases[key] = (owner, lease_until)
+        return True
+
+    async def renew(self, key: str, owner: str, lease_until: float) -> bool:
+        current = self._leases.get(key)
+        if current is None or current[0] != owner or key not in self._payloads:
+            return False
+        self._leases[key] = (owner, lease_until)
+        return True
+
+    async def release(self, key: str, owner: str) -> None:
+        if (current := self._leases.get(key)) is not None and current[0] == owner:
+            self._leases.pop(key, None)
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveredMount:
+    """A restored mount beside the frontend coordinates the host must reconnect."""
+
+    key: str
+    mount: Mount
+    locator: MountLocator | None
+
+
+@dataclass(slots=True)
+class _ActiveMount:
+    component_key: str
+    mount: Mount
+    locator: MountLocator | None = None
+    expires_at: float | None = None
 
 
 class MountManager:
-    """Own active mounts and explicit checkpoints; it never starts background tasks."""
+    """Own checkpoints and optional leased recovery; it never starts background tasks."""
 
-    def __init__(self, registry: ComponentRegistry, store: SnapshotStore) -> None:
+    def __init__(
+        self,
+        registry: ComponentRegistry,
+        store: SnapshotStore,
+        *,
+        owner: str | None = None,
+        lease_seconds: float = 30.0,
+        clock: Callable[[], float] = time.time,
+    ) -> None:
+        if lease_seconds <= 0:
+            message = "mount recovery lease must be positive"
+            raise ValueError(message)
         self.registry = registry
         self.store = store
-        self._active: dict[str, tuple[str, Mount]] = {}
+        self.owner = owner if owner is not None else secrets.token_urlsafe(12)
+        self.lease_seconds = lease_seconds
+        self.clock = clock
+        self._active: dict[str, _ActiveMount] = {}
+        self._claimed: set[str] = set()
 
-    def attach(self, key: str, component_key: str, mount: Mount) -> None:
+    def attach(
+        self,
+        key: str,
+        component_key: str,
+        mount: Mount,
+        *,
+        locator: MountLocator | None = None,
+        expires_at: float | None = None,
+    ) -> None:
         if key in self._active:
             message = f"mount {key!r} is already active"
             raise ValueError(message)
-        self._active[key] = (component_key, mount)
+        self._active[key] = _ActiveMount(component_key, mount, locator, expires_at)
 
     def get(self, key: str) -> Mount | None:
         active = self._active.get(key)
-        return active[1] if active is not None else None
+        return active.mount if active is not None else None
+
+    def get_locator(self, key: str) -> MountLocator | None:
+        active = self._active.get(key)
+        return active.locator if active is not None else None
 
     async def checkpoint(self, key: str) -> MountSnapshot:
         active = self._active.get(key)
         if active is None:
             message = f"mount {key!r} is not active"
             raise KeyError(message)
-        component_key, mount = active
-        snapshot = self.registry.capture(mount, component_key)
-        await self.store.save(key, SnapshotCodec.dumps(snapshot))
+        if key in self._claimed and not await self._renew(key):
+            message = f"mount {key!r} lost its recovery lease before checkpoint"
+            raise SnapshotError(message)
+        snapshot = self.registry.capture(active.mount, active.component_key)
+        if active.locator is None:
+            payload = SnapshotCodec.dumps(snapshot)
+        else:
+            payload = DurableMountCodec.dumps(
+                DurableMountRecord(DurableMountCodec.protocol, snapshot, active.locator, active.expires_at)
+            )
+        await self.store.save(key, payload)
         return snapshot
 
     async def restore(self, key: str, **mount_options: Any) -> Mount | None:
         payload = await self.store.load(key)
         if payload is None:
             return None
-        snapshot = SnapshotCodec.loads(payload)
+        snapshot, locator, expires_at = _decode_stored_mount(payload)
+        if expires_at is not None and expires_at <= self.clock():
+            await self.store.delete(key)
+            self._claimed.discard(key)
+            return None
         mount = self.registry.restore(snapshot, **mount_options)
-        self._active[key] = (snapshot.component_key, mount)
+        self._active[key] = _ActiveMount(snapshot.component_key, mount, locator, expires_at)
         return mount
+
+    async def recover(self, **mount_options: Any) -> tuple[RecoveredMount, ...]:
+        """Claim and restore every available record for host-driven frontend reconnection."""
+        if not isinstance(self.store, LeaseSnapshotStore):
+            message = "startup recovery requires a LeaseSnapshotStore"
+            raise TypeError(message)
+        recovered: list[RecoveredMount] = []
+        for key in await self.store.list_keys():
+            claimed = await self.store.claim(key, self.owner, self.clock() + self.lease_seconds)
+            if not claimed:
+                continue
+            self._claimed.add(key)
+            try:
+                mount = await self.restore(key, **mount_options)
+            except Exception:
+                self._claimed.discard(key)
+                await self.store.release(key, self.owner)
+                raise
+            if mount is None:
+                self._claimed.discard(key)
+                await self.store.release(key, self.owner)
+                continue
+            recovered.append(RecoveredMount(key, mount, self.get_locator(key)))
+        return tuple(recovered)
+
+    async def renew_claims(self) -> tuple[str, ...]:
+        """Renew owned leases and return keys whose ownership was lost."""
+        if not isinstance(self.store, LeaseSnapshotStore):
+            return ()
+        lost: list[str] = []
+        for key in tuple(sorted(self._claimed)):
+            if not await self._renew(key):
+                self._claimed.discard(key)
+                if (active := self._active.pop(key, None)) is not None:
+                    await active.mount.finish()
+                lost.append(key)
+        return tuple(lost)
+
+    async def _renew(self, key: str) -> bool:
+        if not isinstance(self.store, LeaseSnapshotStore):
+            return False
+        return await self.store.renew(key, self.owner, self.clock() + self.lease_seconds)
 
     async def finish(self, key: str, *, delete: bool = True) -> None:
         active = self._active.pop(key, None)
         if active is not None:
-            await active[1].finish()
+            await active.mount.finish()
         if delete:
             await self.store.delete(key)
+        if key in self._claimed and isinstance(self.store, LeaseSnapshotStore):
+            await self.store.release(key, self.owner)
+        self._claimed.discard(key)
+
+
+def _decode_stored_mount(payload: str) -> tuple[MountSnapshot, MountLocator | None, float | None]:
+    try:
+        raw = json.loads(payload)
+    except json.JSONDecodeError as error:
+        raise SnapshotError(str(error)) from error
+    if isinstance(raw, dict) and "snapshot" in raw:
+        record = DurableMountCodec.loads(payload)
+        return record.snapshot, record.locator, record.expires_at
+    return SnapshotCodec.loads(payload), None, None
 
 
 def _restore_component(component: Component, snapshot: ComponentSnapshot) -> None:

@@ -7,9 +7,11 @@ import pytest
 from squid_layouts import (
     Component,
     ComponentRegistry,
+    DurableMountCodec,
     Lines,
     MemorySnapshotStore,
     Mount,
+    MountLocator,
     MountManager,
     Paginate,
     SnapshotCodec,
@@ -118,3 +120,61 @@ async def test_mount_manager_checkpoints_and_restores_through_a_host_store() -> 
 async def test_restoring_an_absent_session_is_a_clean_miss() -> None:
     manager = MountManager(_registry(), MemorySnapshotStore())
     assert await manager.restore("missing") is None
+
+
+async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locator() -> None:
+    now = [100.0]
+    clock = lambda: now[0]
+    store = MemorySnapshotStore(clock=clock)
+    root = DurableRoot()
+    mount = Mount(root, timeout=None)
+    mount.build_view()
+    writer = MountManager(_registry(), store, owner="writer", clock=clock)
+    locator = MountLocator("discord", {"channel_id": 123, "message_id": 456})
+    writer.attach("session", "counter", mount, locator=locator, expires_at=200.0)
+    await writer.checkpoint("session")
+
+    payload = await store.load("session")
+    assert payload is not None
+    assert DurableMountCodec.loads(payload).locator == locator
+
+    first = MountManager(_registry(), store, owner="first", lease_seconds=10, clock=clock)
+    second = MountManager(_registry(), store, owner="second", lease_seconds=10, clock=clock)
+    recovered = await first.recover(timeout=None)
+
+    assert len(recovered) == 1
+    assert recovered[0].key == "session"
+    assert recovered[0].locator == locator
+    assert await second.recover(timeout=None) == ()
+    assert await first.renew_claims() == ()
+
+    now[0] = 111.0
+    assert len(await second.recover(timeout=None)) == 1
+    assert await first.renew_claims() == ("session",)
+    assert first.get("session") is None
+
+    await second.finish("session", delete=False)
+    third = MountManager(_registry(), store, owner="third", lease_seconds=10, clock=clock)
+    assert len(await third.recover(timeout=None)) == 1
+
+
+async def test_startup_recovery_deletes_expired_records() -> None:
+    now = [100.0]
+    clock = lambda: now[0]
+    store = MemorySnapshotStore(clock=clock)
+    mount = Mount(DurableRoot(), timeout=None)
+    mount.build_view()
+    writer = MountManager(_registry(), store, clock=clock)
+    writer.attach(
+        "expired",
+        "counter",
+        mount,
+        locator=MountLocator("discord", {"message_id": 456}),
+        expires_at=101.0,
+    )
+    await writer.checkpoint("expired")
+    now[0] = 102.0
+
+    reader = MountManager(_registry(), store, clock=clock)
+    assert await reader.recover(timeout=None) == ()
+    assert await store.load("expired") is None
