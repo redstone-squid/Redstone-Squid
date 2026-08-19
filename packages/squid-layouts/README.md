@@ -1,6 +1,6 @@
 # squid-layouts
 
-A declarative, limits-aware UI framework for Discord Components V2, built on discord.py.
+A declarative, limits-aware UI engine with Discord Components V2 and HTML renderers.
 
 Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
 40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
@@ -25,6 +25,9 @@ class Counter(sl.Component):
         self.count += 1  # the mount re-renders and edits the message
 ```
 
+See [the architecture and API interaction guide](../../docs/squid-layouts-architecture.md)
+for component composition, planning, renderers, action policies, and durable mounts.
+
 ## The layers
 
 1. **Presets** (`card`, `listing`, `report`, `banner`) — common shapes, string-in/string-out.
@@ -40,24 +43,25 @@ class Counter(sl.Component):
    - `Fold(primary, fallback, priority=...)` — structural alternatives for the 40-component
      budget, such as a button panel folding to one link;
    - `Drop()`, `Never()` — omit whole, or treat shrinking as a bug.
-3. **Solver** — measures chrome, charges `Never` nodes as fixed costs, grants the display
+3. **Planner and solver** — lower capabilities, measure chrome, charge `Never` nodes as fixed costs, grant the display
    budget by priority (proportionally within a tier), refunds dropped nodes, applies
    policies only on overflow, and realizes the page controls a `NavFactory` describes.
-4. **`conform()`** — the boundary gate: a final walk of the built view that clamps anything
-   the solver missed. Tests treat any intervention as a failure (`assert_within_limits`);
-   production degrades to an ugly-but-delivered message.
+4. **Scene** — immutable canonical JSON with action references but no callbacks or native
+   frontend objects.
+5. **Renderers** — Discord and HTML mechanically draw the same scene. Discord runs
+   `conform(strict=True)` afterward as an invariant audit, not another clamp pass.
 
-`compose()` is the one pipeline through all four, with `reserved_text` for callers whose
-message carries content the engine cannot see. Components nest: `self.embed(child, key=...)`
-renders a child into its parent's document under a key prefix, so two instances of the same
-child class never cross-wire, and a child's state change re-renders the message through its
-parent. `Mount` binds a component to a message: every
+`compose()` is the Discord convenience pipeline, with `reserved_text` for callers whose
+message carries content the engine cannot see. Components nest through explicit
+`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `Mount`
+binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
 controls, `Reactor` coalesces out-of-band refreshes, and `Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
 any component-bearing nodes built from the `PageContext`. `render_static` is the sessionless
 path for reconciler-managed posts. `build_modal`/`conform_modal` do the same for modals,
-whose string lengths discord.py does not validate at all.
+whose string lengths discord.py does not validate at all. `SceneCodec` transports plans to
+other processes; `MountManager` provides opt-in versioned state checkpoints.
 
 ## Host integration rules
 
