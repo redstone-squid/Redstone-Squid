@@ -1,24 +1,17 @@
 """Turn a solved layout into discord.py Components V2 objects.
 
-`render_static` is the sessionless path: it solves, materializes, and runs the conform gate,
-so callers get a `LayoutView` that is guaranteed to fit — suitable for reconciler-managed
-posts, sticky messages, and any send without interaction handlers. Interactive nodes (Button,
-SelectMenu) require a wiring callback, which `Mount` provides.
+This is the mechanical half of the pipeline: no budget arithmetic, no gate. Callers go
+through :func:`~squid_layouts.compositor.compose`, which solves and conforms around it.
+Interactive nodes (Button, SelectMenu) require a wiring callback, which `Mount` provides.
 """
 
 import itertools
-import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 import discord
 
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.conform import conform
-from squid_layouts.ir import Button, Gallery, LinkButton, Node, RawItem, Row, SelectMenu, Sep, Thumbnail
-from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.solve import Realized, RPanel, RSection, RText, SolvedLayout, solve
-
-logger = logging.getLogger(__name__)
+from squid_layouts.ir import Button, Gallery, LinkButton, RawItem, Row, SelectMenu, Sep, Thumbnail
+from squid_layouts.solve import Realized, RPanel, RSection, RText, SolvedLayout
 
 type Wire = Callable[[Button | SelectMenu, str], discord.ui.Item]
 
@@ -88,25 +81,4 @@ def materialize(
 
     for child in solved.children:
         view.add_item(item(child))
-    return view
-
-
-def render_static(
-    nodes: Sequence[Node] | Node,
-    *,
-    limits: V2Limits = LIMITS,
-    chrome: Chrome = DEFAULT_CHROME,
-    strict: bool = False,
-) -> discord.ui.LayoutView:
-    """Solve, materialize, and conform a static document in one call.
-
-    In strict mode any degradation raises; otherwise degradations are logged once and the
-    view is delivered clamped.
-    """
-    node_list = [nodes] if not isinstance(nodes, Sequence) else list(nodes)
-    solved = solve(node_list, limits=limits, chrome=chrome, strict=strict)
-    view = materialize(solved)
-    interventions = conform(view, strict=strict, limits=limits)
-    if solved.notes or interventions:
-        logger.warning("layout degraded: %s", "; ".join((*solved.notes, *interventions)))
     return view

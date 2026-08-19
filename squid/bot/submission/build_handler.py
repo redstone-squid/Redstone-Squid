@@ -100,8 +100,18 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Render a standalone Components V2 layout for the build."""
         return StaticLayout(await self.render_container())
 
-    async def render_container(self) -> discord.ui.Container[discord.ui.LayoutView]:
-        """Render the build card for composition into a larger V2 layout."""
+    async def render_container(self, *, reserved_text: int = 0) -> discord.ui.Container[discord.ui.LayoutView]:
+        """Render the build card as a detached item, for composition into a larger V2 layout.
+
+        ``reserved_text`` withholds display characters the caller spends on the rest of the
+        message, so the card shrinks to leave room for content the solver cannot see.
+        """
+        container = render_item(await self.render_node(), reserved_text=reserved_text)
+        assert isinstance(container, discord.ui.Container)
+        return container
+
+    async def render_node(self) -> sl.Node:
+        """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
         metadata = self.get_metadata_fields()
@@ -152,7 +162,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         rows = ()
         if build.original_link is not None:
             rows = (sl.Row((sl.LinkButton("Original submission", build.original_link),)),)
-        node = sl.card(
+        return sl.card(
             format_build_display_title(build, markdown=True, current_version=current_java_version),
             await self.get_description(),
             accent=status_colours.get(build.submission_status, DISCORD_GREEN),
@@ -167,9 +177,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             media=await self._get_media_urls(),
             rows=rows,
         )
-        container = render_item(node)
-        assert isinstance(container, discord.ui.Container)
-        return container
 
     def _field_ladders(self) -> dict[str, tuple[str, ...]]:
         """Degradation ladders for the fields whose values are unbounded user data.
