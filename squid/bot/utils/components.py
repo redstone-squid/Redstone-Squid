@@ -26,6 +26,7 @@ from squid.bot.ui import (
     info_layout,
     link_layout,
     text_layout,
+    truncate_display_text,
     warning_layout,
 )
 
@@ -38,7 +39,6 @@ __all__ = [
     "MAX_DISPLAY_CHARACTERS",
     "CardField",
     "CardSection",
-    "StaticLayout",
     "card_container",
     "card_layout",
     "edit_interaction_layout",
@@ -50,29 +50,10 @@ __all__ = [
     "no_mentions",
     "reply_layout",
     "text_layout",
-    "truncate_display_text",
     "warning_layout",
 ]
 
 MAX_DISPLAY_CHARACTERS = 4000
-
-
-class StaticLayout(discord.ui.LayoutView):
-    """A non-interactive Components V2 message layout."""
-
-    def __init__(self, *items: discord.ui.Item[Any]) -> None:
-        super().__init__(timeout=None)
-        for item in items:
-            self.add_item(item)
-
-
-def truncate_display_text(content: str, limit: int) -> str:
-    """Fit text into a Discord display budget with an explicit marker."""
-    if len(content) <= limit:
-        return content
-    if limit <= 1:
-        return "…"[:limit]
-    return content[: limit - 1].rstrip() + "…"
 
 
 def card_container(

@@ -48,6 +48,7 @@ __all__ = [
     "reply",
     "send_component",
     "text_layout",
+    "truncate_display_text",
     "warning_layout",
 ]
 
@@ -138,6 +139,15 @@ def display_text_length(view: discord.ui.LayoutView) -> int:
     as `reserved_text` tells the engine how much of the message budget is already gone.
     """
     return sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+
+
+def truncate_display_text(content: str, limit: int) -> str:
+    """Fit text into a Discord display budget with an explicit marker."""
+    if len(content) <= limit:
+        return content
+    if limit <= 1:
+        return "\u2026"[:limit]
+    return content[: limit - 1].rstrip() + "\u2026"
 
 
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:

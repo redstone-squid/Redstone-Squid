@@ -7,10 +7,12 @@ import discord
 from discord import Interaction, TextChannel
 from discord.ui import Item
 
+import squid_layouts as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.bot.consent import ConsentPromptView
+from squid.bot.consent import ConsentPrompt, ConsentPromptView
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.utils.components import StaticLayout, no_mentions, text_layout
+from squid.bot.ui import CardField
+from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
 
@@ -74,19 +76,47 @@ class DynamicBuildLogConsentButton[
             )
             return
 
-        view = BuildLogConsentPromptView(interaction.user.id, locale=locale)
+        component = ConsentPrompt(
+            user_id=interaction.user.id,
+            title=t(locale, _("Enable Automatic Build Ingestion")),
+            summary=t(
+                locale,
+                _(
+                    "Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
+                    "Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
+                    "your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
+                    "your posts ignored by automated ingestion."
+                ),
+            ),
+            fields=(
+                CardField(
+                    t(locale, _("Discord account")),
+                    t(locale, _("<@{user_id}> ({user_id})"), user_id=interaction.user.id),
+                ),
+                CardField(
+                    t(locale, _("Consent recorded")),
+                    t(locale, _("Notice {version}, timed at the moment you agree."), version=CURRENT_CONSENT_VERSION),
+                ),
+            ),
+            accept_label=t(locale, _("Agree & Enable Ingestion")),
+            locale=locale,
+            timeout=120,
+        )
+        mount = component.mount()
+        rendered = mount.build_view()
         msg = await interaction.followup.send(
-            view=view,
+            view=rendered,
+            files=mount.attachment_files(),
             ephemeral=True,
             wait=True,
             allowed_mentions=no_mentions(),
         )
-        view.bind_message(msg)
-        await view.wait()
+        mount.bind(msg, rendered)
+        await component.wait()
 
-        if view.consent is not None:
+        if component.consent is not None:
             await accounts.get_or_create_identity(
-                IdentityProvider.DISCORD, str(interaction.user.id), consent=view.consent
+                IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
             )
             await interaction.followup.send(
                 view=text_layout(
@@ -136,13 +166,19 @@ class BuildLogConsentStickyMessage(StickyMessage):
 
     @override
     async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
-        return StaticLayout(
-            discord.ui.TextDisplay(
-                "## 📋 Build Log Ingestion Consent\n"
-                "Redstone Squid automatically indexes and tracks redstone door and build submissions in this channel. "
-                "To attribute your builds, parse schematics, and record your scores, the bot requires your consent to store "
-                "your Discord user ID.\n\n"
-                "Messages from unconsented users are not ingested. Click below to review permissions and enable automated ingestion."
-            ),
-            discord.ui.ActionRow(DynamicBuildLogConsentButton()),
+        return sl.discord.render_static(
+            [
+                sl.primitives.Text(
+                    "## \U0001f4cb Build Log Ingestion Consent\n"
+                    "Redstone Squid automatically indexes and tracks redstone door and build submissions in this channel. "
+                    "To attribute your builds, parse schematics, and record your scores, the bot requires your consent to store "
+                    "your Discord user ID.\n\n"
+                    "Messages from unconsented users are not ingested. Click below to review permissions and enable automated ingestion."
+                ),
+                sl.primitives.RawItem(
+                    lambda: discord.ui.ActionRow(DynamicBuildLogConsentButton()),
+                    kind="discord.item",
+                    version=1,
+                ),
+            ]
         )
