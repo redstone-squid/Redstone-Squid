@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 import discord
 
+from squid_layouts.constraints import Alt
 from squid_layouts.ir import (
     Code,
     Footer,
@@ -23,6 +24,22 @@ from squid_layouts.ir import (
     Text,
     Thumbnail,
 )
+
+
+def _normalized_alt(primary: str, fallbacks: Sequence[str]) -> Alt:
+    """Build a valid Alt from caller-supplied fallbacks, dropping rungs that cannot help.
+
+    Presets accept loosely-shaped user data (values assembled from formatting and escaping),
+    so a rung that came out empty or longer than what precedes it is skipped rather than
+    rejected — direct `Alt` construction stays strict.
+    """
+    kept: list[str] = []
+    ceiling = len(primary)
+    for rung in fallbacks:
+        if rung and len(rung) <= ceiling:
+            kept.append(rung)
+            ceiling = len(rung)
+    return Alt(primary=primary, fallbacks=tuple(kept))
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,7 +94,13 @@ def card(
             children.append(body)
     if fields:
         children.append(Sep())
-        entries = tuple(tuple(f"**{field.name}**\n{value}" for value in (field.value, *field.alts)) for field in fields)
+        entries = tuple(
+            _normalized_alt(
+                f"**{field.name}**\n{field.value}",
+                tuple(f"**{field.name}**\n{alt}" for alt in field.alts),
+            )
+            for field in fields
+        )
         children.append(Lines(entries, priority=5))
     group_blocks = tuple(_group_ladder(group) for group in groups if group.fields)
     if group_blocks:
@@ -91,7 +114,7 @@ def card(
     return Panel(children=tuple(children), accent=accent)
 
 
-def _group_ladder(group: FieldGroup) -> tuple[str, ...]:
+def _group_ladder(group: FieldGroup) -> Alt:
     """A group block's degradation ladder: every field steps down its own ladder together."""
     depth = max((1 + len(field.alts) for field in group.fields), default=1)
 
@@ -102,7 +125,7 @@ def _group_ladder(group: FieldGroup) -> tuple[str, ...]:
             rendered.append(f"**{field.name}:** {values[min(level, len(values) - 1)]}")
         return f"### {group.title}\n" + "\n".join(rendered)
 
-    return tuple(block(level) for level in range(depth))
+    return _normalized_alt(block(0), tuple(block(level) for level in range(1, depth)))
 
 
 def banner(content: str, *, accent: discord.Colour | int | None = None) -> Node:
