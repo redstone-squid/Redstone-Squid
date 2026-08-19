@@ -23,19 +23,19 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
+from squid.bot.account_view import AccountPanelView
 from squid.bot.claims_view import ClaimReviewView
 from squid.bot.consent import ensure_consented_account, prompt_for_consent
 from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
-    identity_label,
     own_profile_avatar,
     own_profile_fields,
     public_profile_fields,
 )
 from squid.bot.submission.ui.views import ConfirmationView
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import DISCORD_BLUE, CardField, card_layout, no_mentions, text_layout
+from squid.bot.utils.components import DISCORD_BLUE, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.bot.utils.visibility import deliver_privately, personal
 from squid.core.errors import ValidationError
@@ -56,10 +56,32 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         self.bot = bot
         self.account_service = bot.services.accounts
 
-    @hybrid_group(name="account")
+    @hybrid_group(name="account", fallback="show")
     async def account_group(self, ctx: Context[BotT]) -> None:
-        """Link or unlink your Minecraft account."""
-        await ctx.send_help("account")
+        """Show your linked accounts, and choose what your creator page shows."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        # Read without creating: looking at your own account is not evidence that anybody asked
+        # to be remembered, and there is nothing to show for someone with no account anyway.
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is None or account.id is None:
+            await ctx.send(
+                view=text_layout(
+                    t(locale, _("You don't have any linked accounts yet. Link one with `/account link`."))
+                ),
+                ephemeral=personal(ctx),
+                allowed_mentions=no_mentions(),
+            )
+            return
+
+        view = AccountPanelView(
+            accounts=self.account_service,
+            account_id=account.id,
+            author_id=ctx.author.id,
+            locale=locale,
+        )
+        await view.load()
+        message = await ctx.send(view=view, ephemeral=personal(ctx), allowed_mentions=no_mentions())
+        view.bind_message(message)
 
     @account_group.command(name="link")
     @app_commands.describe(code=app_commands.locale_str(_("The code you received by running /link in the game.")))
@@ -154,172 +176,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         await ctx.send(
             view=text_layout(t(locale, _("Thanks. You can use the bot's other commands now."))),
             ephemeral=ephemeral,
-            allowed_mentions=no_mentions(),
-        )
-
-    @account_group.command(name="unlink")
-    @app_commands.describe(
-        identity=app_commands.locale_str(_("Which linked account to unlink. Defaults to your Minecraft account."))
-    )
-    async def unlink(self, ctx: Context[BotT], identity: int | None = None):
-        """Unlink one of your linked accounts."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = personal(ctx)
-        target = await self._unlink_target(ctx, identity, locale)
-        if isinstance(target, str):
-            await ctx.send(view=text_layout(target), ephemeral=ephemeral, allowed_mentions=no_mentions())
-            return
-
-        prompt = t(
-            locale,
-            _("Are you sure you want to unlink {identity}?"),
-            identity=identity_label(target, locale),
-        )
-        if target.provider is IdentityProvider.DISCORD and target.discord_id == ctx.author.id:
-            # Unlinking the identity you are speaking through is legal but startling, so say what
-            # it costs before the button rather than after.
-            prompt += "\n\n" + t(
-                locale,
-                _("This is the Discord account you are using now. The bot will stop recognising you here."),
-            )
-        view = ConfirmationView(prompt, locale=locale)
-        await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
-
-        await view.wait()
-        await ctx.send(
-            view=text_layout(await self._unlink_outcome(ctx, view.value, target, locale)),
-            ephemeral=ephemeral,
-            allowed_mentions=no_mentions(),
-        )
-
-    async def _unlink_target(self, ctx: Context[BotT], identity_id: int | None, locale: str) -> AccountIdentity | str:
-        """Resolve which identity to unlink, or return the message explaining why none was found.
-
-        With no argument this keeps the old behaviour of meaning "my Minecraft account", which is
-        what almost every invocation means; an account holding several Java identities — which
-        only a merge produces — is asked to pick.
-        """
-        # Read rather than get-or-create: someone with no account has nothing to unlink, and
-        # unlinking is no reason to write a row for them.
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is None or account.id is None:
-            return t(locale, _("You don't have any linked accounts, so there was nothing to unlink."))
-        if identity_id is not None:
-            chosen = next((candidate for candidate in account.identities if candidate.id == identity_id), None)
-            if chosen is None:
-                return t(locale, _("That isn't one of your linked accounts. Run `/account identities` to see them."))
-            return chosen
-
-        java = [candidate for candidate in account.identities if candidate.provider is IdentityProvider.JAVA]
-        if not java:
-            return t(locale, _("You don't have a Minecraft account linked, so there was nothing to unlink."))
-        if len(java) > 1:
-            return t(locale, _("You have several Minecraft accounts linked. Name one with the `identity` option."))
-        return java[0]
-
-    async def _unlink_outcome(
-        self, ctx: Context[BotT], confirmed: bool | None, target: AccountIdentity, locale: str
-    ) -> str:
-        """Say what happened for all three answers, including no answer at all.
-
-        A timed-out confirmation used to send nothing, leaving a dead prompt and no way to tell
-        "nothing happened" from "something went wrong".
-        """
-        if confirmed is None:
-            return t(locale, _("The confirmation expired, so nothing was unlinked."))
-        if not confirmed:
-            return t(locale, _("Cancelled. Nothing was unlinked."))
-
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is None or account.id is None or target.id is None:
-            return t(locale, _("You don't have any linked accounts, so there was nothing to unlink."))
-        removed = await self.account_service.unlink_identity(account.id, target.id)
-        return t(
-            locale,
-            _("Unlinked {identity}. Any build credit you hold is unaffected."),
-            identity=identity_label(removed, locale),
-        )
-
-    @account_group.command(name="identities")
-    async def identities(self, ctx: Context[BotT]) -> None:
-        """List the accounts linked to you, and whether each one is shown publicly."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is None or account.id is None or not account.identities:
-            await ctx.send(
-                view=text_layout(t(locale, _("You don't have any linked accounts yet."))),
-                ephemeral=personal(ctx),
-                allowed_mentions=no_mentions(),
-            )
-            return
-
-        await ctx.send(
-            view=card_layout(
-                t(locale, _("Your linked accounts")),
-                accent_colour=DISCORD_BLUE,
-                fields=[
-                    CardField(
-                        identity_label(identity, locale),
-                        t(
-                            locale,
-                            _("{visibility} · verified {age} · id `{id}`"),
-                            visibility=(
-                                t(locale, _("shown publicly")) if identity.is_public else t(locale, _("hidden"))
-                            ),
-                            age=(
-                                discord.utils.format_dt(identity.verified_at.to_stdlib(), style="R")
-                                if identity.verified_at is not None
-                                else t(locale, _("unknown"))
-                            ),
-                            id=identity.id,
-                        ),
-                    )
-                    for identity in account.identities
-                ],
-                footer=t(locale, _("Use the id with `/account visibility` or `/account unlink`.")),
-            ),
-            ephemeral=personal(ctx),
-            allowed_mentions=no_mentions(),
-        )
-
-    @account_group.command(name="visibility")
-    @app_commands.describe(
-        public=app_commands.locale_str(_("Whether to show this on your public creator page.")),
-        identity=app_commands.locale_str(
-            _("Which linked account to show or hide. Omit to show or hide the whole page.")
-        ),
-    )
-    async def visibility(self, ctx: Context[BotT], public: bool, identity: int | None = None) -> None:
-        """Choose what your public creator page shows."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
-        if account_id is None:
-            return
-
-        if identity is None:
-            await self.account_service.update_profile(account_id, ProfileUpdate(hidden=not public))
-            message = (
-                t(locale, _("Your creator page is public again."))
-                if public
-                else t(
-                    locale,
-                    _(
-                        "Your creator page is hidden. It still lists the creator names you hold, "
-                        "because that credit is what attributes your builds."
-                    ),
-                )
-            )
-        else:
-            updated = await self.account_service.set_identity_visibility(account_id, identity, is_public=public)
-            message = t(
-                locale,
-                _("{identity} is now {visibility} on your creator page."),
-                identity=identity_label(updated, locale),
-                visibility=t(locale, _("shown")) if public else t(locale, _("hidden")),
-            )
-        await ctx.send(
-            view=text_layout(message),
-            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 

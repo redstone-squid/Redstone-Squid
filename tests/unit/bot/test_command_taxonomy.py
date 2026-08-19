@@ -28,7 +28,6 @@ UNGATED_COMMANDS = frozenset(
         "account",
         "account claim",
         "account consent",
-        "account identities",
         "account link",
         "account merge",
         "account merge-code",
@@ -38,8 +37,6 @@ UNGATED_COMMANDS = frozenset(
         # node. Its `user:` form checks `account.identity.refresh_any` inline instead, which
         # a decorator could not express without gating the self case too.
         "account refresh",
-        "account unlink",
-        "account visibility",
         "build",
         "build queue",
         "build schematic",
@@ -91,20 +88,20 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # without a plan ships to every guild. Neither shows up in a behavioural test,
     # because the behaviour of a command nobody calls is nothing.
     # Approving and rejecting a claim are buttons on `account claims`, not commands
-    # (docs/plans/command-redesign/05-condensation.md).
+    # (docs/plans/command-redesign/05-condensation.md). `account` is a hybrid group with a
+    # `show` fallback, so bare `account` opens the panel that `identities`, `visibility` and
+    # `unlink` used to answer an id at a time
+    # (docs/plans/command-redesign/07-account.md).
     "account": (
         "claim",
         "claims",
         "consent",
-        "identities",
         "link",
         "merge",
         "merge-code",
         "profile",
         "profile-edit",
         "refresh",
-        "unlink",
-        "visibility",
     ),
     "archive": (),
     # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.

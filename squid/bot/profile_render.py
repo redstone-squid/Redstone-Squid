@@ -26,12 +26,12 @@ _PROVIDER_LABELS = {
 }
 
 
-def provider_label(provider: IdentityProvider, locale: str) -> str:
+def provider_label(provider: IdentityProvider, locale: str | None) -> str:
     """Name a provider the way a player would."""
     return t(locale, _PROVIDER_LABELS[provider])
 
 
-def identity_label(identity: AccountIdentity, locale: str) -> str:
+def identity_label(identity: AccountIdentity, locale: str | None) -> str:
     """Name one identity for a picker or a list.
 
     A Discord identity renders as a mention, which is the only handle a reader can click; every
