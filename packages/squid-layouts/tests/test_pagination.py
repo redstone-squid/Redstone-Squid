@@ -165,11 +165,13 @@ class TestMountPagination:
 
         mount = Mount(Browser(), timeout=None, nav=nav)
         view = mount.build_view()
-        assert [button.label for button in self._nav_buttons(view)] == [f"1/{mount._pages['entries']}"]
+        assert [button.label for button in self._nav_buttons(view)] == [
+            f"1/{mount.presentation.cursor('entries').extent}"
+        ]
 
         await mount.dispatch("jump", fake_interaction())
 
-        assert mount._page["entries"] == 1
+        assert mount.presentation.cursor("entries").index == 1
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
         mount = Mount(Browser(), timeout=None)
@@ -186,7 +188,7 @@ class TestMountPagination:
 
         await mount.dispatch("__page_next.left", fake_interaction())
 
-        assert mount._page == {"left": 1, "right": 0}
+        assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {"left": 1, "right": 0}
 
     async def test_changed_content_resets_only_its_pager(self):
         component = TwoBrowsers()
@@ -199,7 +201,7 @@ class TestMountPagination:
         mount.invalidate()
         mount.build_view()
 
-        assert mount._page == {"left": 0, "right": 1}
+        assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {"left": 0, "right": 1}
 
 
 class TestCountPages:

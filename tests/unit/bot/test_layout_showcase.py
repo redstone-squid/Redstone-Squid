@@ -33,7 +33,13 @@ def test_pagination_exhibit_uses_the_measured_budget() -> None:
 def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
     view = Mount(LayoutShowcase(section="adaptation", entries=20, locale="en"), timeout=None).build_view()
 
-    assert any(isinstance(item, discord.ui.Select) for item in view.walk_children())
+    selects = [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
+    assert [
+        len(select.options) for select in selects if select.custom_id and "showcase-actions" in select.custom_id
+    ] == [
+        25,
+        11,
+    ]
     assert not any(button.label == "Action 36" for button in _buttons(view))
     assert_within_limits(view)
 
@@ -53,7 +59,7 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
     assert component.right.count == 0
 
 
-async def test_demo_command_is_public_and_author_locks_only_its_controls() -> None:
+async def test_demo_command_and_controls_are_public() -> None:
     settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
     cog = LayoutShowcaseCog(cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings))))
     ctx = cast(

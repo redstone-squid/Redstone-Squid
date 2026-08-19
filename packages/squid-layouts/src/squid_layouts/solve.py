@@ -310,6 +310,7 @@ class _Builder:
             max_values=min(select.max_values, len(clamped_options) or 1),
             disabled=select.disabled,
             policy=select.policy,
+            routes=select.routes,
         )
 
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:

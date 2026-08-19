@@ -158,7 +158,10 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
     mount = Mount(PagedPair(), timeout=None)
     mount.build_view()
 
-    assert mount._page == {"left.items": 0, "right.items": 0}
+    assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {
+        "left.items": 0,
+        "right.items": 0,
+    }
     assert "__page_next.left.items" in mount._handlers
     assert "__page_next.right.items" in mount._handlers
 
