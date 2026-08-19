@@ -56,8 +56,9 @@ the count above, which is the number the redesign was argued from.)*
   everything into one card (overflow risk); `version list` truncates at 20 with a TODO;
   `account claims` caps at 10 with a "N more not shown" footer; `admin records-gaps` caps
   at 30. One shared list-paginator applied everywhere would retire three bespoke truncation
-  schemes. *(The paginator landed in phase 6.1, `squid/bot/utils/pagination.py`, applied to
-  `build queue`; the other three call sites are phase 5.6.)*
+  schemes. *(Done. The paginator landed in phase 6.1, `squid/bot/utils/pagination.py`, applied
+  to `build queue`; `account claims` took it in 5.4 and `version list` and both records
+  diagnostics in 5.6.)*
 - **C7 — "Hybrid" commands that aren't.** Several hybrid commands immediately bail without an
   interaction ("Use the slash command to open the editor"): `poll create`,
   `settings voting emojis`, and (until phase 1) `build submit-full`. Each should either work
@@ -181,8 +182,8 @@ the count above, which is the number the redesign was argued from.)*
 - `info` is four static links; a single `/links` (or a section in `/help`) suffices.
   `info form` points at the legacy Google form and should retire or clearly mark itself
   legacy now that `/build submit` is the path.
-- `version list` truncates at 20 with a TODO (C6); `version add` is staff-plus-listener and
-  fine.
+- ~~`version list` truncates at 20 with a TODO (C6)~~ *(5.6: it pages.)*; `version add` is
+  staff-plus-listener and fine.
 - `redstoner panel`'s callback is literally named `abc` (cosmetic, but it will bite grep).
 - `help` duplicates part of `info`'s job already; fold link discovery into it.
 

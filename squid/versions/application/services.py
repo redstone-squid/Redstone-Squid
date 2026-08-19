@@ -25,8 +25,9 @@ class VersionService:
         bedrock = await self.list_versions("Bedrock")
         return [*java, *bedrock]
 
-    async def list_display(self, edition: Edition, *, limit: int = 20) -> list[str]:
-        return [str(version) for version in (await self.list_versions(edition))[:limit]]
+    async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
+        versions = await self.list_versions(edition)
+        return [str(version) for version in (versions if limit is None else versions[:limit])]
 
     async def newest(self, edition: Edition) -> str:
         """Return the newest recognized version for an edition."""

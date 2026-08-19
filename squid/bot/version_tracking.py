@@ -9,13 +9,17 @@ from discord.ext.commands.bot import app_commands
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import info_layout, no_mentions, text_layout
+from squid.bot.utils.components import no_mentions, text_layout
+from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+VERSIONS_PER_PAGE = 50
+"""Versions per page, which is a few years of releases and still a readable run of tokens."""
 
 
 class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTracker"):
@@ -31,12 +35,20 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
     @version_group.command(name="list")
     async def versions(self, ctx: Context[BotT]):
         """List the Minecraft versions the bot recognizes."""
-        versions_human_readable = await self.version_service.list_display("Java", limit=20)  # TODO: pagination
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=info_layout(t(locale, _("Recognized Java versions")), ", ".join(versions_human_readable)),
-            allowed_mentions=no_mentions(),
+        versions_human_readable = await self.version_service.list_display("Java")
+        paginator = ListPaginator(
+            t(locale, _("Recognized Java versions")),
+            versions_human_readable,
+            author_id=ctx.author.id,
+            empty=t(locale, _("No Java versions are recognized yet.")),
+            locale=locale,
+            # A version is one short token, so a page is a comma-separated run of them rather
+            # than fifty paragraphs; the list used to stop at 20 with a TODO in its place.
+            page_size=VERSIONS_PER_PAGE,
+            separator=", ",
         )
+        await paginator.send(ctx)
 
     @autocompletes(version_string="approved_source_versions")
     @version_group.command(name="add")

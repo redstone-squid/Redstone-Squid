@@ -80,5 +80,18 @@ async def test_the_controls_belong_to_whoever_asked() -> None:
     assert await view.interaction_check(_interaction(user_id=7)) is True
 
 
+def test_short_entries_can_read_as_a_run_rather_than_as_paragraphs() -> None:
+    """`version list` is a list of tokens; a blank line between each would be absurd."""
+    view = ListPaginator(
+        "Recognized Java versions",
+        ["1.20", "1.21"],
+        author_id=7,
+        empty="None yet.",
+        separator=", ",
+    )
+
+    assert "1.20, 1.21" in _text(view)
+
+
 def test_an_empty_list_says_so_instead_of_showing_a_blank_card() -> None:
     assert "Nothing here." in _text(_paginator(0))
