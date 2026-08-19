@@ -17,6 +17,7 @@ from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, confor
 from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
 from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset, as_document
 from squid_layouts.errors import DrawInvariantError, LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.html import DISCORD_PREVIEW_CSS, HtmlRenderer
 from squid_layouts.ir import (
     ActionGroup,
     Button,
@@ -63,6 +64,7 @@ from squid_layouts.testing import assert_within_limits
 
 __all__ = [
     "DEFAULT_CHROME",
+    "DISCORD_PREVIEW_CSS",
     "ELLIPSIS",
     "LIMITS",
     "ActionEvent",
@@ -92,6 +94,7 @@ __all__ = [
     "Footer",
     "Gallery",
     "Heading",
+    "HtmlRenderer",
     "InlineAsset",
     "LabelSpec",
     "LayoutDegradedError",
