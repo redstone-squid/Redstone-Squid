@@ -18,6 +18,7 @@ from squid_layouts.constraints import Alts, Drop, Never, Overflow, Paginate, Spi
 from squid_layouts.ir import (
     Button,
     Code,
+    Fold,
     Footer,
     Gallery,
     Heading,
@@ -106,6 +107,8 @@ class SolvedLayout:
     pager: Pager | None = None
     page: int = 0
     """The page realized into the children; 0 when the document does not paginate."""
+    components: int = 0
+    """Components the built view will hold, nav and page footer included."""
 
     @property
     def pages(self) -> int:
@@ -126,6 +129,8 @@ class _Unit:
     suffix: str
     content: str
     ladders: tuple[tuple[str, ...], ...] | None
+    ranks: tuple[int, ...]
+    """One drop priority per ladder; empty for nodes that are not entry lists."""
     join: str
     priority: int
     overflow: Overflow
@@ -153,6 +158,7 @@ def _escape_fences(content: str) -> str:
 
 def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
     prefix, suffix, ladders, join = "", "", None, "\n"
+    ranks: tuple[int, ...] = ()
     match node:
         case Text(content=content):
             pass
@@ -165,8 +171,12 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
             suffix = "\n```"
             content = _escape_fences(content)
         case Lines(lines=raw_lines, join=join):
-            ladders = tuple((entry,) if isinstance(entry, str) else entry.steps for entry in raw_lines)
-            ladders = tuple(ladder for ladder in ladders if ladder[0])
+            entries = [
+                ((entry,), 0) if isinstance(entry, str) else (entry.steps, entry.priority) for entry in raw_lines
+            ]
+            kept = [(ladder, rank) for ladder, rank in entries if ladder[0]]
+            ladders = tuple(ladder for ladder, _ in kept)
+            ranks = tuple(rank for _, rank in kept)
             content = join.join(ladder[0] for ladder in ladders)
     if not content:
         slot.dropped = True
@@ -179,6 +189,7 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
         suffix=suffix,
         content=content,
         ladders=ladders,
+        ranks=ranks,
         join=join,
         priority=node.priority,
         overflow=node.overflow,
@@ -332,6 +343,9 @@ class _Builder:
             case RawItem(text_cost=text_cost):
                 self.raw_text_cost += text_cost
                 return node
+            case Fold(primary=primary):
+                # Folds are resolved to a branch before realization; this is belt and braces.
+                return self.realize(primary)
             case _:
                 return node
 
@@ -414,23 +428,28 @@ def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> 
         levels[largest] += 1
         degraded = True
 
-    for kept in range(total, -1, -1):
-        shown = [entry(i) for i in range(kept)]
-        if kept < total:
-            shown.append(chrome.and_n_more(total - kept))
+    # Stepping is about fitting, so it takes the largest entries first; dropping is about
+    # what the reader can afford to lose, so it takes the lowest priority first (ties from
+    # the tail, which is where a list's least important entries conventionally sit).
+    drop_order = sorted(range(total), key=lambda i: (unit.ranks[i] if unit.ranks else 0, -i))
+    for dropped in range(total + 1):
+        omitted = set(drop_order[:dropped])
+        shown = [entry(i) for i in range(total) if i not in omitted]
+        if dropped:
+            shown.append(chrome.and_n_more(dropped))
         body = unit.join.join(shown)
         if body and len(body) <= usable:
             if degraded:
                 notes.append(f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders")
-            if kept < total:
-                notes.append(f"spilled node {unit.index}: showing {kept} of {total} lines")
+            if dropped:
+                notes.append(f"spilled node {unit.index}: showing {total - dropped} of {total} lines")
             unit.slot.content = unit.prefix + body + unit.suffix
             return True
     notes.append(f"dropped node {unit.index}: no line fits in {usable}")
     return False
 
 
-def _allocate(units: list[_Unit], budget: int, strict: bool, notes: list[str], chrome: Chrome) -> None:
+def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome) -> None:
     active = list(units)
     for _ in range(len(units) + 1):
         remaining = budget
@@ -442,10 +461,7 @@ def _allocate(units: list[_Unit], budget: int, strict: bool, notes: list[str], c
                 overdraw += unit.need - unit.grant
                 remaining -= unit.grant
         if overdraw:
-            message = f"Never nodes need {budget + overdraw} of {budget} available characters"
-            if strict:
-                raise LayoutOverflowError([*notes, message])
-            notes.append(message)
+            notes.append(f"Never nodes need {budget + overdraw} of {budget} available characters")
         flexible = [unit for unit in active if not isinstance(unit.overflow, Never)]
         for priority in sorted({unit.priority for unit in flexible}, reverse=True):
             group = [unit for unit in flexible if unit.priority == priority]
@@ -552,6 +568,50 @@ def _component_count(children: list[Realized]) -> int:
     return count
 
 
+type _FoldPath = tuple[int | str, ...]
+
+
+def _folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[tuple[_FoldPath, Fold]]:
+    """Every available Fold occurrence on the selected branches, in document order."""
+    found: list[tuple[_FoldPath, Fold]] = []
+
+    def walk(node: Node, path: _FoldPath) -> None:
+        match node:
+            case Fold(primary=primary, fallback=fallback):
+                if path in collapsed:
+                    walk(fallback, (*path, "fallback"))
+                else:
+                    found.append((path, node))
+                    walk(primary, (*path, "primary"))
+            case Panel(children=children):
+                for index, child in enumerate(children):
+                    walk(child, (*path, "panel", index))
+            case _:
+                return
+
+    for index, node in enumerate(nodes):
+        walk(node, (index,))
+    return found
+
+
+def _resolve_folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[Node]:
+    """Resolve Fold wrappers to the branches selected for this measuring pass."""
+
+    def rewrite(node: Node, path: _FoldPath) -> Node:
+        match node:
+            case Fold(primary=primary, fallback=fallback):
+                if path in collapsed:
+                    return rewrite(fallback, (*path, "fallback"))
+                return rewrite(primary, (*path, "primary"))
+            case Panel(children=children, accent=accent):
+                rewritten = tuple(rewrite(child, (*path, "panel", index)) for index, child in enumerate(children))
+                return Panel(children=rewritten, accent=accent)
+            case _:
+                return node
+
+    return [rewrite(node, (index,)) for index, node in enumerate(nodes)]
+
+
 def solve(
     nodes: Sequence[Node],
     *,
@@ -579,9 +639,59 @@ def solve(
     Returns:
         The realized tree plus a note per degradation applied.
     """
-    builder = _Builder(limits=limits)
-    children = builder.realize_children(nodes)
-    notes = builder.notes
+    # Structural degradation wraps the measuring pass: solve with every Fold on its primary
+    # branch, and while the document is over the component limit, collapse the lowest-priority
+    # fold and solve again. Each round removes one fold, so the loop is bounded by their count.
+    tree = list(nodes)
+    collapsed: set[_FoldPath] = set()
+    fold_notes: list[str] = []
+    solved = _solve_once(
+        tree,
+        collapsed=collapsed,
+        limits=limits,
+        chrome=chrome,
+        reserved_text=reserved_text,
+        page=page,
+        nav=nav,
+        notes=[],
+    )
+    while solved.components > limits.total_components:
+        remaining = _folds(tree, collapsed)
+        if not remaining:
+            break
+        target_path, target = min(remaining, key=lambda candidate: candidate[1].priority)
+        fold_notes.append(f"folded a priority {target.priority} alternate under component pressure")
+        collapsed.add(target_path)
+        solved = _solve_once(
+            tree,
+            collapsed=collapsed,
+            limits=limits,
+            chrome=chrome,
+            reserved_text=reserved_text,
+            page=page,
+            nav=nav,
+            notes=list(fold_notes),
+        )
+
+    if strict and solved.notes:
+        raise LayoutOverflowError(solved.notes)
+    return solved
+
+
+def _solve_once(
+    nodes: Sequence[Node],
+    *,
+    collapsed: set[_FoldPath],
+    limits: V2Limits,
+    chrome: Chrome,
+    reserved_text: int,
+    page: int | None,
+    nav: Callable[[int, int], Sequence[Node]] | None,
+    notes: list[str],
+) -> SolvedLayout:
+    """One measuring pass over a document whose Folds are resolved to a single branch."""
+    builder = _Builder(limits=limits, notes=notes)
+    children = builder.realize_children(_resolve_folds(nodes, collapsed))
 
     paginate_units = [unit for unit in builder.units if isinstance(unit.overflow, Paginate)]
     for extra in paginate_units[1:]:
@@ -607,7 +717,7 @@ def solve(
     count_paginated = paginator is not None and paginator.count_pages is not None and len(paginator.count_pages) > 1
     if paginator is not None and (count_paginated or sum(unit.need for unit in builder.units) > budget):
         budget -= _footer_cost(page_footer, len(paginator.content))
-    _allocate(builder.units, budget, strict, notes, chrome)
+    _allocate(builder.units, budget, notes, chrome)
     children = _prune(children)
 
     pager = None
@@ -634,6 +744,4 @@ def solve(
     if count > limits.total_components:
         notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
 
-    if strict and notes:
-        raise LayoutOverflowError(notes)
-    return SolvedLayout(children=children, notes=notes, pager=pager, page=shown)
+    return SolvedLayout(children=children, notes=notes, pager=pager, page=shown, components=count)

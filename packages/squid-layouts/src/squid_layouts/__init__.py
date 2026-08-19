@@ -17,6 +17,7 @@ from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate
 from squid_layouts.ir import (
     Button,
     Code,
+    Fold,
     Footer,
     Gallery,
     Heading,
@@ -60,6 +61,7 @@ __all__ = [
     "ErrorHook",
     "Field",
     "FieldGroup",
+    "Fold",
     "Footer",
     "Gallery",
     "Heading",
