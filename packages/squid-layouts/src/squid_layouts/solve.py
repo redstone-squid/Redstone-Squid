@@ -105,6 +105,8 @@ class SolvedLayout:
     children: list[Realized]
     notes: list[str]
     pager: Pager | None = None
+    page: int = 0
+    """The page realized into the children; 0 when the document does not paginate."""
 
     @property
     def pages(self) -> int:
@@ -499,6 +501,7 @@ def solve(
     chrome: Chrome = DEFAULT_CHROME,
     strict: bool = False,
     reserved_text: int = 0,
+    page: int | None = None,
 ) -> SolvedLayout:
     """Fit ``nodes`` into the message budgets, applying overflow policies where needed.
 
@@ -508,6 +511,8 @@ def solve(
         chrome: Pre-translated framework strings.
         strict: Raise :class:`LayoutOverflowError` instead of degrading.
         reserved_text: Characters held back from the budget (e.g. for pagination chrome).
+        page: The page to realize when the document paginates, clamped to the page count;
+            ``None`` takes the pager's initial page.
 
     Returns:
         The realized tree plus a note per degradation applied.
@@ -531,6 +536,7 @@ def solve(
     children = _prune(children)
 
     pager = None
+    shown = 0
     if paginator is not None and paginator.fragments is not None and len(paginator.fragments) > 1:
         footer_slot = RText()
         children.append(footer_slot)
@@ -545,7 +551,7 @@ def solve(
             footer=chrome.page_footer,
             initial=initial,
         )
-        pager.select(initial)
+        shown = pager.select(initial if page is None else page)
 
     count = _component_count(children) + (NAV_ROW_COMPONENTS if pager is not None else 0)
     if count > limits.total_components:
@@ -553,4 +559,4 @@ def solve(
 
     if strict and notes:
         raise LayoutOverflowError(notes)
-    return SolvedLayout(children=children, notes=notes, pager=pager)
+    return SolvedLayout(children=children, notes=notes, pager=pager, page=shown)

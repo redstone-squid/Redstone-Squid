@@ -18,11 +18,10 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.component import Component
+from squid_layouts.compositor import compose
 from squid_layouts.conform import conform
-from squid_layouts.ir import Button, Node, SelectMenu
+from squid_layouts.ir import Button, SelectMenu
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.materialize import materialize
-from squid_layouts.solve import solve
 
 logger = logging.getLogger(__name__)
 
@@ -129,9 +128,6 @@ class Mount:
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
         """Render the component's current state into a fresh view."""
-        rendered = self.component.render()
-        nodes: Sequence[Node] = [rendered] if not isinstance(rendered, Sequence) else rendered
-        solved = solve(list(nodes), limits=self.limits, chrome=self.chrome, strict=self.strict)
         self._handlers = {}
         view = MountedView(self, self.timeout)
 
@@ -146,13 +142,19 @@ class Mount:
                 item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
             return item
 
-        self._pages = solved.pages
+        composition = compose(
+            self.component.render(),
+            into=view,
+            wire=wire,
+            limits=self.limits,
+            chrome=self.chrome,
+            strict=self.strict,
+            page=self._page,
+        )
+        solved = composition.solved
+        self._pages = composition.pages
         if solved.pager is not None:
-            if self._page is None:
-                self._page = solved.pager.initial
-            self._page = solved.pager.select(self._page)
-        materialize(solved, into=view, wire=wire)
-        if solved.pager is not None:
+            self._page = composition.page
             prev = Button(
                 label=self.chrome.previous, on_click=self._page_prev, key="__page_prev", disabled=self._page == 0
             )
@@ -160,14 +162,13 @@ class Mount:
                 label=self.chrome.next,
                 on_click=self._page_next,
                 key="__page_next",
-                disabled=self._page >= solved.pager.pages - 1,
+                disabled=self._page >= self._pages - 1,
             )
             view.add_item(discord.ui.ActionRow(wire(prev, "__page_prev"), wire(nxt, "__page_next")))
+            # The nav row lands after compose ran the gate, so re-gate the finished view.
+            conform(view, strict=self.strict, limits=self.limits)
         if disabled:
             _disable_all(view)
-        interventions = conform(view, strict=self.strict, limits=self.limits)
-        if solved.notes or interventions:
-            logger.warning("layout degraded: %s", "; ".join((*solved.notes, *interventions)))
         self._dirty = False
         return view
 

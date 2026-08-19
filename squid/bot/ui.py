@@ -39,6 +39,7 @@ __all__ = [
     "card_layout",
     "chrome_for",
     "create_mount",
+    "display_text_length",
     "error_layout",
     "help_layout",
     "info_layout",
@@ -116,16 +117,27 @@ async def reply(
     return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.deliver.no_mentions(), **extra)
 
 
-def render_item(node: ui.Node, *, locale: str | None = None) -> discord.ui.Item[Any]:
+def render_item(node: ui.Node, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:
     """Render one node to a detached item, for composition into a larger layout.
 
     The build card uses this: it renders as an engine-solved Container that callers (vote
-    cards, search detail) then embed or extend.
+    cards, search detail) then embed or extend. A detached item escapes the engine's view of
+    the message, so callers pass ``reserved_text`` for whatever else the message will carry;
+    composing the whole document with `ui.render_static` is better still where possible.
     """
-    view = ui.render_static([node], chrome=chrome_for(locale))
+    view = ui.render_static([node], chrome=chrome_for(locale), reserved_text=reserved_text)
     item = view.children[0]
     view.remove_item(item)
     return item
+
+
+def display_text_length(view: discord.ui.LayoutView) -> int:
+    """Display characters already spent in `view`.
+
+    Hand-assembled V1 views compose engine-solved items with items of their own; passing this
+    as `reserved_text` tells the engine how much of the message budget is already gone.
+    """
+    return sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:

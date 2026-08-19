@@ -5,7 +5,7 @@ are immutable descriptions. `solve` fits them to the message budgets and `materi
 the result into discord.py items — authors never do budget arithmetic.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 
 import discord
@@ -155,3 +155,8 @@ class Panel:
 type Node = (
     Text | Heading | Footer | Code | Lines | Sep | Row | SelectMenu | Thumbnail | Gallery | Section | Panel | RawItem
 )
+
+
+def as_nodes(rendered: Node | Sequence[Node]) -> list[Node]:
+    """Normalize a render result — one node or a sequence of them — to a list."""
+    return list(rendered) if isinstance(rendered, Sequence) else [rendered]
