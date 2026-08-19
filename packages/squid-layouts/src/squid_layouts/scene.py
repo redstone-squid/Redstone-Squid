@@ -168,6 +168,7 @@ class PlanMetrics:
 
     states_explored: int = 0
     cache_hit: bool = False
+    search_fallback: bool = False
 
 
 @dataclass(frozen=True, slots=True)

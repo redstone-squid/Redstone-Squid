@@ -2,6 +2,8 @@
 
 from collections.abc import Awaitable, Callable
 
+import pytest
+
 from squid_layouts import ActionDisplay, PresentationSession, plan
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DISCORD_V2
@@ -86,6 +88,45 @@ def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     assert second.report.events[0].code == "actions.grouped"
 
 
+@pytest.mark.parametrize(
+    ("count", "expected"),
+    [(5, "actions.individual"), (36, "actions.grouped"), (76, "actions.paged")],
+)
+def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
+    result = plan(Actions(_actions(count), key="demo"), target=DISCORD_V2, session=PresentationSession())
+
+    assert result.report.events[0].code == expected
+
+
+@pytest.mark.parametrize(
+    ("initial", "changed", "expected"),
+    [
+        (5, 5, "actions.individual"),
+        (5, 36, "actions.grouped"),
+        (36, 5, "actions.grouped"),
+        (36, 76, "actions.grouped"),
+        (76, 36, "actions.grouped"),
+    ],
+)
+def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
+    session = PresentationSession()
+    plan(Actions(_actions(initial), key="demo"), target=DISCORD_V2, session=session)
+
+    result = plan(Actions(_actions(changed), key="demo"), target=DISCORD_V2, session=session)
+
+    assert result.report.events[0].code == expected
+
+
+def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
+    session = PresentationSession()
+    actions = _actions(36)
+    plan(Actions(actions, key="demo"), target=DISCORD_V2, session=session)
+
+    result = plan(Actions(tuple(reversed(actions)), key="demo"), target=DISCORD_V2, session=session)
+
+    assert result.report.events[0].code == "actions.grouped"
+
+
 def test_adapter_version_change_resets_only_that_strategy() -> None:
     session = PresentationSession(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
 
@@ -109,3 +150,14 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     assert first.scene.pagers[0].page == 0
     assert second.scene.pagers[0].page == 1
     assert second_select.options[0].value == "action.25"
+
+
+def test_search_budget_exhaustion_uses_a_reported_lossless_fallback() -> None:
+    result = plan(Actions(_actions(5), key="demo"), target=DISCORD_V2, search_budget=1)
+
+    assert result.metrics.search_fallback
+    assert result.metrics.states_explored == 1
+    assert result.report.events[0].code == "planner.search_fallback"
+    assert result.report.events[0].severity.value == "warning"
+    assert not any(event.severity.value == "degradation" for event in result.report.events)
+    assert len(result.bindings) == 5
