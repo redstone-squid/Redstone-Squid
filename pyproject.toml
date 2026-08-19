@@ -273,6 +273,8 @@ known-first-party = ["squid_layouts"]
 "alembic/versions/*.py" = ["D"]
 "scripts/**.py" = ["INP"]
 
+# INP: unlike tests/, these directories must stay namespace-less -- a second top-level
+# `tests` package would collide with the repo's during a combined pytest run.
 "packages/*/tests/**.py" = [
     "F841",
     "TID251",
@@ -280,7 +282,8 @@ known-first-party = ["squid_layouts"]
     "RUF059",
     "D101",
     "D102",
-    "D103"
+    "D103",
+    "INP"
 ]
 
 "!tests/**.py" = ["PT"]
