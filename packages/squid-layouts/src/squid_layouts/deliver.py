@@ -26,11 +26,13 @@ async def apply(
     view: discord.ui.LayoutView,
     *,
     allowed_mentions: discord.AllowedMentions | None = None,
+    attachments: Sequence[discord.File | discord.Attachment] | None = None,
 ) -> discord.Message:
     """Edit a message to show `view`, clearing legacy fields on first V2 conversion."""
+    extra: dict[str, Any] = {} if attachments is None else {"attachments": list(attachments)}
     if not _uses_components_v2(message):
-        return await message.edit(content=None, embed=None, view=view, allowed_mentions=allowed_mentions)
-    return await message.edit(view=view, allowed_mentions=allowed_mentions)
+        return await message.edit(content=None, embed=None, view=view, allowed_mentions=allowed_mentions, **extra)
+    return await message.edit(view=view, allowed_mentions=allowed_mentions, **extra)
 
 
 async def apply_interaction(

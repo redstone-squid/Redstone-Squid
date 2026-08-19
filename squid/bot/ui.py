@@ -177,7 +177,12 @@ async def send_component(
     """Mount a component and send it as the reply to a command."""
     mount = create_mount(component, locale=locale, timeout=timeout, lock_to=lock_to)
     view = mount.build_view()
-    message = await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.deliver.no_mentions())
+    message = await ctx.send(
+        view=view,
+        files=mount.attachment_files(),
+        ephemeral=ephemeral,
+        allowed_mentions=ui.deliver.no_mentions(),
+    )
     mount.bind(message, view)
     return mount
 
