@@ -25,6 +25,8 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
+from squid_layouts.scene_codec import SceneCodec
+from squid_layouts.text import discord_text
 
 type Control = SceneButton | SceneSelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
@@ -52,6 +54,9 @@ class DiscordRenderer:
         into: discord.ui.LayoutView | None = None,
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
+        if scene.protocol != SceneCodec.protocol:
+            message = f"DiscordRenderer cannot draw scene protocol {scene.protocol}"
+            raise DrawInvariantError(message)
         if scene.target != "discord.components-v2":
             message = f"DiscordRenderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
@@ -92,13 +97,13 @@ class DiscordRenderer:
 
         def item(node: SceneNode) -> discord.ui.Item[Any]:
             match node:
-                case SceneText(content=content):
-                    return discord.ui.TextDisplay(content)
+                case SceneText() as text:
+                    return discord.ui.TextDisplay(discord_text(text))
                 case ScenePanel(children=children, accent=accent):
                     return discord.ui.Container(*(item(child) for child in children), accent_colour=accent)
                 case SceneSection(texts=texts, accessory=side):
                     return discord.ui.Section(
-                        *(discord.ui.TextDisplay(text.content) for text in texts),
+                        *(discord.ui.TextDisplay(discord_text(text)) for text in texts),
                         accessory=accessory(side),
                     )
                 case SceneSeparator(large=large, visible=visible):
