@@ -217,7 +217,7 @@ class PagedList(ui.Component):
             ui.Lines(
                 self.entries,
                 join=self.separator,
-                overflow=ui.Paginate(per=self.page_size, footer=self._page_footer),
+                overflow=ui.Paginate(key="entries", per=self.page_size, footer=self._page_footer),
             )
             if self.entries
             else ui.Text(self.empty)

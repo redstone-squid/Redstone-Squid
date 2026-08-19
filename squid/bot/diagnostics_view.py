@@ -98,7 +98,7 @@ class ErrorReportBrowser(sl.Component):
         children: list[sl.Node] = [
             sl.Heading(t(self.locale, _("Error {reference}"), reference=report.reference)),
             # Opens at the end because the failing frame is the last one.
-            sl.Code(traceback_text, overflow=sl.Paginate(initial="end")),
+            sl.Code(traceback_text, overflow=sl.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
@@ -124,12 +124,10 @@ class ErrorReportBrowser(sl.Component):
         report = self._reports[int(values[0])]
         self.detail = report
         self.matches = 1
-        self.mount.reset_page()
         self.mount.set_attachments([report_attachment(report)])
 
     async def _back(self, interaction: discord.Interaction) -> None:
         self.detail = None
-        self.mount.reset_page()
         # The list is not about any one report, so its attachment goes with it.
         self.mount.set_attachments([])
 
