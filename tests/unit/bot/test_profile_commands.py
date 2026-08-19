@@ -14,8 +14,8 @@ from squid.accounts.domain import (
     PublicCreatorProfile,
     PublicIdentity,
 )
+from squid.bot.account_view import _parse_link_lines
 from squid.bot.profile_render import own_profile_avatar, own_profile_fields, public_profile_fields
-from squid.bot.verify import _parse_link_lines
 from squid.core.errors import ValidationError
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -29,27 +29,13 @@ def _fields_named(fields: list, name: str) -> str | None:
 
 
 class TestOwnProfile:
-    def test_hidden_identities_are_listed_and_marked(self) -> None:
-        """The self view must show what is hidden: you can only unhide what you can see."""
-        identities = (DISCORD, replace(JAVA, is_public=False))
-        fields = own_profile_fields(AccountProfile(account_id=1), identities, LOCALE)
-
-        listed = _fields_named(fields, "Linked accounts")
-        assert listed is not None
-        assert "Notch" in listed
-        assert "(hidden)" in listed
-
-    def test_a_discord_identity_renders_as_a_mention(self) -> None:
-        fields = own_profile_fields(AccountProfile(account_id=1), (DISCORD,), LOCALE)
-
-        listed = _fields_named(fields, "Linked accounts")
-        assert listed is not None
-        assert "<@7>" in listed
+    """The free-text half of your page. The linked accounts are the panel's
+    (`test_account_panel.py`), which lists them one field each so it can offer their controls."""
 
     def test_links_render_as_markdown(self) -> None:
         profile = AccountProfile(account_id=1, links=(ProfileLink("Site", "https://example.com"),))
 
-        fields = own_profile_fields(profile, (), LOCALE)
+        fields = own_profile_fields(profile, LOCALE)
 
         assert _fields_named(fields, "Links") == "[Site](https://example.com)"
 

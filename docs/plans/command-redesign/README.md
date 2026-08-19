@@ -65,7 +65,7 @@ command. See [00-audit.md](00-audit.md) for the per-group breakdown.
 | 4 | [04-settings.md](04-settings.md) | `/settings` opens a panel: every key on one screen with a picker each, voting configured where it is displayed; `list`/`get`/`clear`/`voting show`/`voting emojis` removed | **Delivered** |
 | 5 | [05-condensation.md](05-condensation.md) | Merge, hide, or gate the long tail, with audit items C2–C7 as the checklist | **Delivered** |
 | 6 | [06-build.md](06-build.md) | `/build`, 15 commands: one edit surface instead of two that disagree about who may edit; `queue` paginated and de-idded; the loose schematic tools moved under `build schematic` | **Delivered** |
-| 7 | [07-account.md](07-account.md) | `/account`, 12 commands: identity and profile management stop making you read an id off one command to type into the next, as claim review already has (5.4) | **In progress** |
+| 7 | [07-account.md](07-account.md) | `/account`, 12 commands: identity and profile management stop making you read an id off one command to type into the next, as claim review already has (5.4) | **Delivered** |
 | 8 | 08-small-groups.md (todo) | `/info` folds into `/help`; `/version`, `/redstoner` and `/tag` polish; the poll wizard's untranslated half of C3; the last C4 message arguments | Not started |
 | 9 | 09-starboard.md (todo) | `/starboard`, 14 commands of CRUD across two subgroups, become a board panel | Not started |
 | 10 | 10-permission-admin.md (todo) | `/role` and what is left of `/perm`: 20 staff commands, and a group name that means something else in Discord | Not started |
@@ -107,18 +107,19 @@ groups are what is left of it. Phases 9 and 10 are staff-only groups that C1 alr
 everyone else, so their cost is borne by the few people who can see them; that is why the two
 biggest CRUD piles in the bot come last.
 
-The surface today, for comparison with the audit's opening count: **95 commands under 18
+The surface today, for comparison with the audit's opening count: **91 commands under 18
 top-level entries**, of which 9 entries are hidden from a non-staff picker. The audit measured
 ~108 under 19, but undercounted `/account` badly, so the real reduction is larger than the
 difference suggests — and it is concentrated in what a normal user sees, which was the point.
 
 Counts include app-only members, so `/build`'s 14 is its 12 prefix commands plus the two
-app-only workspaces, `build submit` and `build edit`.
+app-only workspaces, `build submit` and `build edit`, and `/account`'s 8 is its 7 plus the
+`show` fallback that is the panel.
 
 | Group | Commands | Owning phase |
 |-------|---------:|--------------|
 | `/build` | 14 | done (6) |
-| `/account` | 12 | 7 |
+| `/account` | 8 | done (7) |
 | `/starboard` | 14 | 9 |
 | `/role` | 12 | 10 |
 | `/perm` | 8 | 10 |

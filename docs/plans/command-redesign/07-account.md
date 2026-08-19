@@ -36,7 +36,7 @@ half as the audit found it ([00-audit.md](00-audit.md), `/account`):
 | # | Scope | Status |
 |---|-------|--------|
 | 7.1 | `/account` opens a panel: your linked accounts with a picker, **Show**/**Hide** and **Unlink** on the picked one, and the page's own visibility toggle. `identities`, `visibility` and `unlink` removed (C5) | **Delivered** |
-| 7.2 | The creator page is on the same panel: the card becomes your page, **Edit page** opens the modal, and `user:` on the panel command shows somebody else's. `profile` and `profile-edit` removed (C7) | **Planned** |
+| 7.2 | The creator page is on the same panel: the card becomes your page, **Edit page** opens the modal, and `user:` on the panel command shows somebody else's. `profile` and `profile-edit` removed (C7) | **Delivered** |
 
 Ordering is by dependency: 7.1 builds the panel around the data that has controls, 7.2 folds
 into it the two commands that only ever showed and edited the card at the top of it.
@@ -110,3 +110,36 @@ cross-reference is how the version stops meaning anything.
 Removed: `account identities`, `account visibility`, `account unlink`. Added: the `show`
 fallback, which is app-only in the same way `/settings show` is — the prefix tree pins the group
 itself. No permission nodes are involved: all three were ungated, and so is the panel.
+
+## 7.2 — the page is the card the controls hang off
+
+`account profile` rendered the caller's own creator page; `account identities` rendered the list
+of linked accounts that `own_profile_fields` had already put on that page; `account profile-edit`
+edited the first of those. They are one card, and 7.1 had already built the screen it belongs on.
+
+**The panel's card is your page.** Title, bio and avatar come from the profile, and the fields are
+the page's free-text half followed by one field per linked account — the panel's own rendering,
+because it says whether each account is published and offers the control for it. That is why
+`own_profile_fields` no longer takes identities: the only surface that shows it also owns them.
+
+**Editing is a button on the thing being edited.** `profile-edit` was C7's hybrid-that-is-not:
+its prefix half only printed the name of the slash command. **Edit page** opens the same modal on
+its own interaction, and saving redraws the card rather than replying that something changed
+somewhere else. The consent two-step survives — a modal must open on an unspent interaction and
+showing the notice spends it — but step two is pressing the button again rather than retyping a
+command.
+
+**Somebody else's page is the same command's `user:` option.** Principle 1, applied literally:
+the typed option is the entry point, the panel is the workspace. Nothing is offered on a stranger's
+page, because nothing on it is yours to change.
+
+**It also answers publicly, which `profile` never did.** A creator page is shared content and
+anyone could have run the command, so rule 2 of the ephemerality policy (5.7) puts it in the
+channel; your own account stays private under rule 3. `profile` answered privately whoever it was
+about.
+
+### Taxonomy edits
+
+Removed: `account profile`, `account profile-edit`. The `show` fallback gains the `user` option
+that `profile` carried. `ProfileEditModal` and `_parse_link_lines` move to
+`squid/bot/account_view.py`, beside the button that opens them.

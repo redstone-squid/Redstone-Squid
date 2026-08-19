@@ -1,10 +1,11 @@
 """The panel behind `/account`.
 
-Three commands used to answer what one screen shows: `identities` printed the linked accounts
-and their ids, `unlink` took one of those ids back, and `visibility` took it too — or nothing at
-all, in which case it hid the whole creator page instead. An identity is a thing you look at and
-then show, hide or drop, so looking at it and acting on it belong to the same message (audit C5's
-retyping half, the shape 5.3 and 5.4 already removed from notifications and claim review).
+Five commands used to answer what one screen shows: `identities` printed the linked accounts
+and their ids, `unlink` took one of those ids back, `visibility` took it too — or nothing at all,
+in which case it hid the whole creator page instead — and `profile` and `profile-edit` showed and
+edited the card the rest of it hangs off. An identity is a thing you look at and then show, hide
+or drop, so looking at it and acting on it belong to the same message (audit C5's retyping half,
+the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
 from typing import Any, override
@@ -12,12 +13,21 @@ from typing import Any, override
 import discord
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import AccountIdentity, AccountProfile, IdentityProvider, ProfileUpdate
+from squid.accounts.domain import (
+    MAX_BIO_LENGTH,
+    MAX_DISPLAY_NAME_LENGTH,
+    MAX_PRONOUNS_LENGTH,
+    AccountIdentity,
+    AccountProfile,
+    IdentityProvider,
+    ProfileLink,
+    ProfileUpdate,
+)
 from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import prompt_for_consent
-from squid.bot.errors import ExpiringLayoutView
+from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import t
-from squid.bot.profile_render import identity_label
+from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     CardField,
@@ -27,6 +37,7 @@ from squid.bot.utils.components import (
     reply_layout,
     text_layout,
 )
+from squid.core.errors import ValidationError
 from squid.core.i18n import _
 
 SESSION_SECONDS = 300
@@ -115,17 +126,18 @@ class AccountPanelView(ExpiringLayoutView):
         self.clear_items()
         self.add_item(
             card_container(
-                t(self.locale, _("Your account")),
-                t(self.locale, _("Pick a linked account to show, hide, or unlink.")),
+                self._profile.display_name or t(self.locale, _("Your account")),
+                self._profile.bio,
                 accent_colour=DISCORD_BLUE,
                 fields=self._fields(),
                 footer=self._footer(),
+                media=own_profile_avatar(self._profile, self._identities),
             )
         )
         if self.identities:
             self.add_item(discord.ui.ActionRow(IdentitySelect(self)))
             self.add_item(discord.ui.ActionRow(IdentityVisibilityButton(self), UnlinkIdentityButton(self)))
-        self.add_item(discord.ui.ActionRow(PageVisibilityButton(self), ClosePanelButton(self)))
+        self.add_item(discord.ui.ActionRow(EditPageButton(self), PageVisibilityButton(self), ClosePanelButton(self)))
 
     def select(self, identity_id: int | None) -> None:
         """Point the buttons at an identity, disarming an unlink aimed at a different one."""
@@ -183,6 +195,33 @@ class AccountPanelView(ExpiringLayoutView):
             ),
         )
 
+    async def edit_page(self, interaction: discord.Interaction[Any]) -> None:
+        """Open the page editor on this interaction, which a modal needs unspent.
+
+        Showing the notice spends it, so a caller who has yet to accept the current one is asked
+        here and pressed the button again afterwards. `profile-edit` had the same two-step, except
+        that step two was retyping the command.
+        """
+        if self._needs_consent:
+            consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+            if consent is None:
+                await reply_layout(interaction, text_layout(t(self.locale, _("Cancelled. Nothing was changed."))))
+                return
+            await self._accounts.grant_current_consent(self._account_id)
+            self._needs_consent = False
+            await reply_layout(
+                interaction,
+                text_layout(t(self.locale, _("Thanks. Press **Edit page** again to open the editor."))),
+            )
+            return
+        await interaction.response.send_modal(ProfileEditModal(self, self._profile, locale=self.locale))
+
+    async def save_profile(self, interaction: discord.Interaction[Any], update: ProfileUpdate) -> None:
+        """Write what the editor collected and show the page it produced."""
+        await self._accounts.update_profile(self._account_id, update)
+        await self._reload(interaction)
+        await reply_layout(interaction, text_layout(t(self.locale, _("Your creator page has been updated."))))
+
     def disable_controls(self) -> None:
         for child in self.walk_children():
             if isinstance(child, discord.ui.Button | discord.ui.Select):
@@ -212,7 +251,8 @@ class AccountPanelView(ExpiringLayoutView):
         await edit_interaction_layout(interaction, self)
 
     def _fields(self) -> list[CardField]:
-        fields = [
+        fields = own_profile_fields(self._profile, self.locale)
+        fields += [
             CardField(identity_label(identity, self.locale), self.identity_detail(identity))
             for identity in self.identities
         ]
@@ -327,6 +367,18 @@ class UnlinkIdentityButton(discord.ui.Button[AccountPanelView]):
         await self._panel.unlink(interaction)
 
 
+class EditPageButton(discord.ui.Button[AccountPanelView]):
+    """Open the editor for the free-text half of the page."""
+
+    def __init__(self, view: AccountPanelView) -> None:
+        super().__init__(label=t(view.locale, _("Edit page")), style=discord.ButtonStyle.primary)
+        self._panel = view
+
+    @override
+    async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
+        await self._panel.edit_page(interaction)
+
+
 class PageVisibilityButton(discord.ui.Button[AccountPanelView]):
     """Publish or withhold the whole creator page."""
 
@@ -351,3 +403,74 @@ class ClosePanelButton(discord.ui.Button[AccountPanelView]):
     async def callback(self, interaction: discord.Interaction[discord.Client]) -> None:
         self._panel.disable_controls()
         await edit_interaction_layout(interaction, self._panel)
+
+
+class ProfileEditModal(ErrorHandledModal):
+    """Edit the free-text parts of a creator page.
+
+    Links are one `label | url` per line rather than a repeated field because a modal allows five
+    inputs total; the same domain validator parses them, so the bot and the API agree on what a
+    valid link is.
+    """
+
+    def __init__(self, panel: AccountPanelView, profile: AccountProfile, *, locale: str | None) -> None:
+        super().__init__(title=t(locale, _("Edit your creator page")))
+        self._panel = panel
+        self._locale = locale
+        self.display_name = discord.ui.TextInput(
+            label=t(locale, _("Display name")),
+            required=False,
+            max_length=MAX_DISPLAY_NAME_LENGTH,
+            default=profile.display_name,
+        )
+        self.pronouns = discord.ui.TextInput(
+            label=t(locale, _("Pronouns")),
+            required=False,
+            max_length=MAX_PRONOUNS_LENGTH,
+            default=profile.pronouns,
+        )
+        self.bio = discord.ui.TextInput(
+            label=t(locale, _("Bio")),
+            style=discord.TextStyle.paragraph,
+            required=False,
+            max_length=MAX_BIO_LENGTH,
+            default=profile.bio,
+        )
+        self.links = discord.ui.TextInput(
+            label=t(locale, _("Links (one per line: Label | https://...)")),
+            style=discord.TextStyle.paragraph,
+            required=False,
+            default="\n".join(f"{link.label} | {link.url}" for link in profile.links),
+        )
+        for item in (self.display_name, self.pronouns, self.bio, self.links):
+            self.add_item(item)
+
+    @override
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        update = ProfileUpdate(
+            display_name=self.display_name.value or None,
+            pronouns=self.pronouns.value or None,
+            bio=self.bio.value or None,
+            links=_parse_link_lines(self.links.value, self._locale),
+        )
+        await self._panel.save_profile(interaction, update)
+
+
+def _parse_link_lines(raw: str, locale: str | None) -> tuple[ProfileLink, ...]:
+    """Parse `Label | https://...` lines into links, refusing a line that is not one.
+
+    Parsing only splits; `ProfileUpdate.validated` in the service is what accepts or rejects the
+    URL itself, so the modal cannot end up with a laxer idea of a valid link than the API.
+    """
+    links: list[ProfileLink] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        label, separator, url = line.partition("|")
+        if not separator:
+            raise ValidationError(
+                t(locale, _("Each link needs a label and a URL separated by `|`, got {line!r}.")),
+                message_params={"line": line.strip()},
+            )
+        links.append(ProfileLink(label=label.strip(), url=url.strip()))
+    return tuple(links)
