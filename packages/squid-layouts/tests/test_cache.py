@@ -5,19 +5,20 @@ from time import perf_counter
 from squid_layouts import (
     Action,
     Actions,
-    Button,
     List,
     ListItem,
-    Paginate,
-    PlanCache,
-    PresentationSession,
-    Row,
-    compose,
     plan,
 )
-from squid_layouts.discord import DISCORD_V2
+from squid_layouts.discord import DEFAULT_TARGET, compose
+from squid_layouts.planning import PlanCache
 from squid_layouts.planning.cache import CachedPlan
-from squid_layouts.primitives import Code
+from squid_layouts.primitives import (
+    Button,
+    Code,
+    Paginate,
+    Row,
+)
+from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import PlanReport, SceneDocument
 
@@ -37,9 +38,11 @@ async def _next(_event) -> None: ...
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     cache = PlanCache()
     session = PresentationSession()
-    first = plan(Actions((Action("run", "Run", _first),), key="tools"), target=DISCORD_V2, session=session, cache=cache)
+    first = plan(
+        Actions((Action("run", "Run", _first),), key="tools"), target=DEFAULT_TARGET, session=session, cache=cache
+    )
     second = plan(
-        Actions((Action("run", "Run", _second),), key="tools"), target=DISCORD_V2, session=session, cache=cache
+        Actions((Action("run", "Run", _second),), key="tools"), target=DEFAULT_TARGET, session=session, cache=cache
     )
 
     assert not first.metrics.cache_hit
@@ -69,8 +72,8 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
         return (Row((Button("Previous", _previous, f"prev.{key}"), Button("Next", _next, f"next.{key}"))),)
 
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
-    plan(document, target=DISCORD_V2, nav=nav, cache=cache)
-    cached = plan(document, target=DISCORD_V2, nav=nav, cache=cache)
+    plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)
+    cached = plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)
 
     assert cached.metrics.cache_hit
     assert cached.bindings["prev.traceback"].handler is _previous

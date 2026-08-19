@@ -42,7 +42,7 @@ class DiscordUiVisitor(ast.NodeVisitor):
             is_conversion_boundary = (
                 self.path.name == "components.py"
                 and self.function_names[-1:] in [["edit_layout"], ["edit_interaction_layout"]]
-            ) or (self.path.name == "deliver.py" and self.function_names[-1:] in [["apply"], ["apply_interaction"]])
+            ) or (self.path.name == "delivery.py" and self.function_names[-1:] in [["apply"], ["apply_interaction"]])
             if legacy and not is_archive_relay and not is_conversion_boundary:
                 self.violations.append(f"{self.path}:{node.lineno}: legacy message fields {sorted(legacy)}")
         self.generic_visit(node)

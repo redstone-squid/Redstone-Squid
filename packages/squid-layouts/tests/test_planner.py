@@ -4,26 +4,31 @@ import discord
 import pytest
 
 from squid_layouts import (
-    LIMITS,
     Asset,
-    Button,
     Document,
     InlineAsset,
     LayoutInvariantError,
+    UnsolvableLayoutError,
+    plan,
+)
+from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
+from squid_layouts.discord import DEFAULT_TARGET, NativeItem, Renderer
+from squid_layouts.planning import TargetProfile
+from squid_layouts.primitives import (
+    ActionGroup,
+    Button,
+    Choice,
+    Code,
     Lines,
     Paginate,
     Panel,
     Row,
-    SceneCodec,
-    TargetProfile,
+    Section,
     Text,
     Thumbnail,
-    UnsolvableLayoutError,
     Variant,
-    plan,
 )
-from squid_layouts.discord import DISCORD_V2, DiscordRenderer, NativeItem
-from squid_layouts.primitives import ActionGroup, Choice, Code, Section
+from squid_layouts.scene import Codec as SceneCodec
 from squid_layouts.scene.model import SceneRow, SceneText
 
 
@@ -44,7 +49,7 @@ def _nav(key: str, page: int, pages: int):
 def test_planner_extracts_callbacks_from_the_serializable_scene() -> None:
     result = plan(
         Panel((Text("hello"), Row((Button(label="Act", on_click=_click, key="act"),)))),
-        target=DISCORD_V2,
+        target=DEFAULT_TARGET,
     )
 
     assert result.bindings["act"].handler is _click
@@ -62,13 +67,13 @@ def test_duplicate_action_keys_fail_before_drawing() -> None:
                     Button(label="Two", on_click=_click, key="same"),
                 )
             ),
-            target=DISCORD_V2,
+            target=DEFAULT_TARGET,
         )
 
 
 def test_static_discord_renderer_matches_scene_structure() -> None:
-    result = plan(Panel((Text("hello"),)), target=DISCORD_V2)
-    view = DiscordRenderer().draw(result.scene, plan=result)
+    result = plan(Panel((Text("hello"),)), target=DEFAULT_TARGET)
+    view = Renderer().draw(result.scene, plan=result)
 
     assert isinstance(view, discord.ui.LayoutView)
     assert view.to_components()[0]["type"] == 17
@@ -76,7 +81,7 @@ def test_static_discord_renderer_matches_scene_structure() -> None:
 
 def test_assets_are_scene_resources_not_visual_children() -> None:
     asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"full report"))
-    result = plan(Document((Text("summary"),), (asset,)), target=DISCORD_V2)
+    result = plan(Document((Text("summary"),), (asset,)), target=DEFAULT_TARGET)
 
     assert result.scene.children == (SceneText("summary"),)
     assert result.scene.assets[0].key == "report"
@@ -85,7 +90,7 @@ def test_assets_are_scene_resources_not_visual_children() -> None:
 
 def test_action_group_chunks_controls_without_dropping_any() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
-    result = plan(ActionGroup(buttons), target=DISCORD_V2)
+    result = plan(ActionGroup(buttons), target=DEFAULT_TARGET)
 
     rows = [node for node in result.scene.children if isinstance(node, SceneRow)]
     assert [len(row.items) for row in rows] == [5, 1]
@@ -95,7 +100,7 @@ def test_action_group_chunks_controls_without_dropping_any() -> None:
 def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
     document = Document((ActionGroup(buttons),), key="toolbar")
-    first = plan(document, target=DISCORD_V2, nav=_nav)
+    first = plan(document, target=DEFAULT_TARGET, nav=_nav)
 
     assert first.scene.pagers[0].key == "toolbar"
     assert first.scene.pagers[0].pages > 1
@@ -103,7 +108,7 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
 
     visible: set[str] = set()
     for page_index in range(first.scene.pagers[0].pages):
-        page_result = plan(document, target=DISCORD_V2, nav=_nav, page={"toolbar": page_index})
+        page_result = plan(document, target=DEFAULT_TARGET, nav=_nav, page={"toolbar": page_index})
         visible.update(key for key in page_result.bindings if key.startswith("b"))
     assert visible == {f"b{index}" for index in range(41)}
 
@@ -112,7 +117,7 @@ def test_root_paging_requires_an_explicit_document_key() -> None:
     buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
 
     with pytest.raises(UnsolvableLayoutError, match="give Document an explicit key"):
-        plan(ActionGroup(buttons), target=DISCORD_V2, nav=_nav)
+        plan(ActionGroup(buttons), target=DEFAULT_TARGET, nav=_nav)
 
 
 def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
@@ -123,18 +128,18 @@ def test_local_pagination_precedes_root_pagination_instead_of_nesting() -> None:
     )
 
     with pytest.raises(UnsolvableLayoutError, match="Local and root pagination are never simultaneous"):
-        plan(document, target=DISCORD_V2, nav=_nav)
+        plan(document, target=DEFAULT_TARGET, nav=_nav)
 
 
 def test_exact_row_overflow_is_a_typed_planning_error() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
     with pytest.raises(LayoutInvariantError, match="row has 6 controls"):
-        plan(Row(buttons), target=DISCORD_V2)
+        plan(Row(buttons), target=DEFAULT_TARGET)
 
 
 def test_planner_requires_explicit_unique_pager_keys() -> None:
     with pytest.raises(LayoutInvariantError, match="requires an explicit key"):
-        plan(Text("content", overflow=Paginate()), target=DISCORD_V2)
+        plan(Text("content", overflow=Paginate()), target=DEFAULT_TARGET)
 
     with pytest.raises(LayoutInvariantError, match="duplicate pager key 'results'"):
         plan(
@@ -142,7 +147,7 @@ def test_planner_requires_explicit_unique_pager_keys() -> None:
                 Lines(("one",), overflow=Paginate(key="results", per=1)),
                 Lines(("two",), overflow=Paginate(key="results", per=1)),
             ),
-            target=DISCORD_V2,
+            target=DEFAULT_TARGET,
         )
 
 
@@ -153,7 +158,7 @@ def test_planner_rejects_pagination_inside_a_section() -> None:
     )
 
     with pytest.raises(LayoutInvariantError, match="cannot be nested in a Section"):
-        plan(section, target=DISCORD_V2)
+        plan(section, target=DEFAULT_TARGET)
 
 
 def test_scene_reports_every_independent_pager() -> None:
@@ -162,7 +167,7 @@ def test_scene_reports_every_independent_pager() -> None:
             Lines(tuple(f"left {index}" for index in range(4)), overflow=Paginate(key="left", per=2)),
             Lines(tuple(f"right {index}" for index in range(6)), overflow=Paginate(key="right", per=2)),
         ),
-        target=DISCORD_V2,
+        target=DEFAULT_TARGET,
         page={"left": 1, "right": 2},
     )
 
@@ -198,8 +203,8 @@ def test_native_item_is_built_once_measured_recursively_and_reused() -> None:
         calls += 1
         return native
 
-    result = plan(NativeItem(factory, fallback=Text("fallback")), target=DISCORD_V2)
-    view = DiscordRenderer().draw(result.scene, plan=result)
+    result = plan(NativeItem(factory, fallback=Text("fallback")), target=DEFAULT_TARGET)
+    view = Renderer().draw(result.scene, plan=result)
 
     assert calls == 1
     assert view.children[0] is native
@@ -212,7 +217,7 @@ def test_native_nested_component_cost_can_make_a_document_unsolvable() -> None:
     )
 
     with pytest.raises(UnsolvableLayoutError, match="41 components"):
-        plan((native, Text("outside")), target=DISCORD_V2)
+        plan((native, Text("outside")), target=DEFAULT_TARGET)
 
 
 def test_unsupported_native_extension_uses_its_portable_fallback_without_building() -> None:

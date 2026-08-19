@@ -5,7 +5,7 @@ from collections.abc import Callable
 import discord
 
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
 from squid_layouts.primitives.nodes import Extension, Node
 
@@ -33,7 +33,7 @@ class _DiscordItemExtension:
         )
 
 
-class DiscordV2Target(TargetProfile):
+class Target(TargetProfile):
     """Discord Components V2 capabilities and resource limits."""
 
     def __init__(self, limits: V2Limits = LIMITS) -> None:
@@ -61,4 +61,4 @@ def NativeItem(factory: Callable[[], discord.ui.Item], *, fallback: Node) -> Ext
     return Extension(kind="discord.item", version=1, payload=factory, fallback=fallback)
 
 
-DISCORD_V2 = DiscordV2Target()
+DEFAULT_TARGET = Target()

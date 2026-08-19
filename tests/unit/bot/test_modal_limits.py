@@ -8,7 +8,7 @@ exceeded Discord's 4000-char cap, so `send_modal` failed with HTTP 50035 (Invali
 import discord
 
 from squid.bot.errors import ErrorHandledModal
-from squid_layouts import assert_within_limits
+from squid_layouts.discord.testing import assert_within_limits
 
 
 def test_oversized_defaults_and_title_are_clamped_at_serialization():

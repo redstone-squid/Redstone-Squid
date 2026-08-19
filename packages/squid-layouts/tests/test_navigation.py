@@ -2,9 +2,13 @@
 
 import discord
 
-from squid_layouts import Component, Mount, Navigator, Text
-from squid_layouts.primitives import Heading
-from squid_layouts.testing import fake_interaction
+from squid_layouts import Component
+from squid_layouts.discord import (
+    Mount,
+    Navigator,
+)
+from squid_layouts.discord.testing import fake_interaction
+from squid_layouts.primitives import Heading, Text
 
 
 class Screen(Component):

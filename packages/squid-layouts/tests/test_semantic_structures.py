@@ -2,8 +2,12 @@
 
 import pytest
 
-from squid_layouts import LayoutInvariantError, PresentationSession, plan
-from squid_layouts.discord import DISCORD_V2
+from squid_layouts import (
+    LayoutInvariantError,
+    plan,
+)
+from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.model import SceneGallery, SceneRow, SceneSelect, SceneText
 from squid_layouts.semantic import (
     Choice,
@@ -29,8 +33,8 @@ def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None
     small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)), (), _change)
     large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)), (), _change)
 
-    assert isinstance(plan(small, target=DISCORD_V2).scene.children[0], SceneRow)
-    assert isinstance(plan(large, target=DISCORD_V2).scene.children[0], SceneSelect)
+    assert isinstance(plan(small, target=DEFAULT_TARGET).scene.children[0], SceneRow)
+    assert isinstance(plan(large, target=DEFAULT_TARGET).scene.children[0], SceneSelect)
 
 
 def test_items_switch_from_overview_to_focused_content_through_session_state() -> None:
@@ -42,9 +46,9 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
             Item("two", "Two", (Paragraph("second detail"),), "second"),
         ),
     )
-    overview = plan(document, target=DISCORD_V2, session=session)
+    overview = plan(document, target=DEFAULT_TARGET, session=session)
     session.select("catalog", ("two",))
-    focused = plan(document, target=DISCORD_V2, session=session)
+    focused = plan(document, target=DEFAULT_TARGET, session=session)
 
     assert any(isinstance(node, SceneSelect) for node in overview.scene.children)
     assert any(isinstance(node, SceneText) and "second detail" in node.content for node in focused.scene.children)
@@ -54,9 +58,9 @@ def test_details_disclosure_is_presentation_state() -> None:
     session = PresentationSession()
     document = Details("debug", "Debug details", (Paragraph("hidden body"),))
 
-    closed = plan(document, target=DISCORD_V2, session=session)
+    closed = plan(document, target=DEFAULT_TARGET, session=session)
     session.disclose("debug", open_=True)
-    opened = plan(document, target=DISCORD_V2, session=session)
+    opened = plan(document, target=DEFAULT_TARGET, session=session)
 
     assert not any(isinstance(node, SceneText) and "hidden body" in node.content for node in closed.scene.children)
     assert any(isinstance(node, SceneText) and "hidden body" in node.content for node in opened.scene.children)
@@ -70,7 +74,7 @@ def test_navigation_groups_six_destinations() -> None:
         _change,
     )
 
-    assert isinstance(plan(document, target=DISCORD_V2).scene.children[0], SceneSelect)
+    assert isinstance(plan(document, target=DEFAULT_TARGET).scene.children[0], SceneSelect)
 
 
 def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
@@ -86,9 +90,9 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
         _change,
     )
 
-    choice_plan = plan(choices, target=DISCORD_V2, page={"size.choices": 1})
-    item_plan = plan(items, target=DISCORD_V2, page={"catalog.items": 1})
-    navigation_plan = plan(navigation, target=DISCORD_V2, page={"tabs.destinations": 1})
+    choice_plan = plan(choices, target=DEFAULT_TARGET, page={"size.choices": 1})
+    item_plan = plan(items, target=DEFAULT_TARGET, page={"catalog.items": 1})
+    navigation_plan = plan(navigation, target=DEFAULT_TARGET, page={"tabs.destinations": 1})
 
     choice_select = next(node for node in choice_plan.scene.children if isinstance(node, SceneSelect))
     item_select = next(node for node in item_plan.scene.children if isinstance(node, SceneSelect))
@@ -104,13 +108,13 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
     session = PresentationSession()
     original = tuple(Item(str(index), f"Item {index}", (Paragraph("detail"),)) for index in range(36))
-    plan(Items("catalog", original), target=DISCORD_V2, session=session)
+    plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
     session.move_cursor("catalog.items", 1)
-    second_page = plan(Items("catalog", original), target=DISCORD_V2, session=session)
+    second_page = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
     assert "25" in next(node for node in second_page.scene.children if isinstance(node, SceneSelect)).options[0].value
 
     inserted = (Item("new", "New", (Paragraph("detail"),)), *original)
-    replanned = plan(Items("catalog", inserted), target=DISCORD_V2, session=session)
+    replanned = plan(Items("catalog", inserted), target=DEFAULT_TARGET, session=session)
     values = {
         option.value for node in replanned.scene.children if isinstance(node, SceneSelect) for option in node.options
     }
@@ -127,7 +131,7 @@ def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
     )
 
     with pytest.raises(LayoutInvariantError, match="cross-page multi-selection is ambiguous"):
-        plan(document, target=DISCORD_V2)
+        plan(document, target=DEFAULT_TARGET)
 
 
 def test_tables_and_media_choose_mechanical_target_shapes() -> None:
@@ -138,8 +142,8 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     )
     media = Media(tuple(MediaItem(str(index), f"https://example.invalid/{index}.png") for index in range(12)), "shots")
 
-    table_scene = plan(table, target=DISCORD_V2).scene
-    media_scene = plan(media, target=DISCORD_V2).scene
+    table_scene = plan(table, target=DEFAULT_TARGET).scene
+    media_scene = plan(media, target=DEFAULT_TARGET).scene
 
     assert isinstance(table_scene.children[0], SceneText)
     assert table_scene.children[0].content.startswith("```")

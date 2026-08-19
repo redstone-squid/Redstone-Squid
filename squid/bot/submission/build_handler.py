@@ -110,7 +110,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert isinstance(container, discord.ui.Container)
         return container
 
-    async def render_node(self) -> sl.Node:
+    async def render_node(self) -> sl.primitives.Node:
         """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
@@ -137,11 +137,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         ladders = self._field_ladders()
 
-        def section(title: str, names: set[str]) -> sl.FieldGroup:
-            return sl.FieldGroup(
+        def section(title: str, names: set[str]) -> sl.primitives.FieldGroup:
+            return sl.primitives.FieldGroup(
                 title,
                 tuple(
-                    sl.presets.Field(
+                    sl.primitives.presets.Field(
                         name,
                         escape_markdown(value),
                         alts=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
@@ -161,8 +161,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
         rows = ()
         if build.original_link is not None:
-            rows = (sl.Row((sl.LinkButton("Original submission", build.original_link),)),)
-        return sl.card(
+            rows = (sl.primitives.Row((sl.primitives.LinkButton("Original submission", build.original_link),)),)
+        return sl.primitives.card(
             format_build_display_title(build, markdown=True, current_version=current_java_version),
             await self.get_description(),
             accent=status_colours.get(build.submission_status, DISCORD_GREEN),

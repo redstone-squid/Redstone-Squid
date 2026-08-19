@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import discord
 
-from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import LIMITS, V2Limits
 
 type ComponentPayload = dict[str, Any]
 

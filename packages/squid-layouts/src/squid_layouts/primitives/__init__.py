@@ -33,6 +33,7 @@ from squid_layouts.primitives.nodes import (
     Variant,
     as_nodes,
 )
+from squid_layouts.primitives.presets import FieldGroup, banner, card, listing, report
 from squid_layouts.primitives.styles import ActionStyle, Color
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     "Drop",
     "Embed",
     "Extension",
+    "FieldGroup",
     "Fold",
     "Footer",
     "Gallery",
@@ -72,4 +74,8 @@ __all__ = [
     "Variant",
     "alts",
     "as_nodes",
+    "banner",
+    "card",
+    "listing",
+    "report",
 ]

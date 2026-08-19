@@ -6,11 +6,11 @@ from dataclasses import dataclass
 import discord
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.discord.renderer import DiscordRenderer, Wire
-from squid_layouts.discord.target import DiscordV2Target
+from squid_layouts.discord.renderer import Renderer, Wire
+from squid_layouts.discord.target import Target
 from squid_layouts.document import DocumentLike
-from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.solve import PageNav, PageState
@@ -46,7 +46,7 @@ def compose(
     rendered: DocumentLike,
     *,
     wire: Wire | None = None,
-    renderer: DiscordRenderer | None = None,
+    renderer: Renderer | None = None,
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     strict: bool = False,
@@ -60,7 +60,7 @@ def compose(
     """Plan a logical document, then draw its resolved Discord scene."""
     result = plan_document(
         rendered,
-        target=DiscordV2Target(limits),
+        target=Target(limits),
         chrome=chrome,
         strict=strict,
         reservation=ResourceCost({"display_text": reserved_text}),
@@ -70,7 +70,7 @@ def compose(
         cache=cache,
         search_budget=search_budget,
     )
-    drawer = renderer if renderer is not None else DiscordRenderer(limits=limits)
+    drawer = renderer if renderer is not None else Renderer(limits=limits)
     view = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))

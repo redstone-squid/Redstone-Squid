@@ -6,18 +6,22 @@ import pytest
 
 from squid_layouts import (
     Component,
+    state,
+)
+from squid_layouts.discord import Mount
+from squid_layouts.discord.durability import (
     ComponentRegistry,
     DurableMountCodec,
-    Lines,
     MemorySnapshotStore,
-    Mount,
     MountLocator,
     MountManager,
-    Paginate,
     SnapshotCodec,
     SnapshotError,
+)
+from squid_layouts.primitives import (
+    Lines,
+    Paginate,
     Text,
-    state,
 )
 
 

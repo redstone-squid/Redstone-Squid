@@ -3,7 +3,18 @@
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import FieldGroup, assert_within_limits, banner, card, conform, listing, render_static, report
+from squid_layouts.discord import (
+    conform,
+    render_static,
+)
+from squid_layouts.discord.testing import assert_within_limits
+from squid_layouts.primitives import (
+    FieldGroup,
+    banner,
+    card,
+    listing,
+    report,
+)
 from squid_layouts.primitives.presets import Field
 
 

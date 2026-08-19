@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Declarative, limits-aware Discord Components V2 UI framework"
 requires-python = ">=3.14"
 license = "MIT"
-dependencies = [
+dependencies = []
+
+[project.optional-dependencies]
+discord = [
     "discord-py>=2.7,<3",
     "anyio>=4.14,<5",
 ]

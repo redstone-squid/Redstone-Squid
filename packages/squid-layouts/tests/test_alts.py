@@ -5,19 +5,21 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import (
+from squid_layouts.discord import (
+    conform,
+    render_static,
+)
+from squid_layouts.discord.testing import assert_within_limits
+from squid_layouts.planning import solve
+from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
+from squid_layouts.primitives import (
     Alt,
     FieldGroup,
     Lines,
     Text,
     alts,
-    assert_within_limits,
     card,
-    conform,
-    render_static,
-    solve,
 )
-from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
 from squid_layouts.primitives.presets import Field
 
 

@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from squid_layouts.mount import Mount
+from squid_layouts.discord.mount import Mount
 from squid_layouts.runtime.component import Component, render_component_tree
 from squid_layouts.runtime.presentation import (
     CursorState,
