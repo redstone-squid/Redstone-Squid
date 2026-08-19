@@ -74,6 +74,18 @@ def chrome_for(locale: str | None) -> ui.Chrome:
     )
 
 
+def render_item(node: ui.Node, *, locale: str | None = None) -> discord.ui.Item[Any]:
+    """Render one node to a detached item, for composition into a larger layout.
+
+    The build card uses this: it renders as an engine-solved Container that callers (vote
+    cards, search detail) then embed or extend.
+    """
+    view = ui.render_static([node], chrome=chrome_for(locale))
+    item = view.children[0]
+    view.remove_item(item)
+    return item
+
+
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
     # Imported lazily: errors.py -> utils.components -> this module would otherwise cycle.
     from squid.bot.errors import handle_interaction_error
