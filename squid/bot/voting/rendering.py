@@ -11,16 +11,7 @@ from textwrap import dedent
 import discord
 
 import squid_layouts as sl
-from squid.bot.utils.components import (
-    DISCORD_GREEN,
-    DISCORD_RED,
-    DISCORD_YELLOW,
-    MAX_DISPLAY_CHARACTERS,
-    CardField,
-    StaticLayout,
-    card_layout,
-    truncate_display_text,
-)
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -117,18 +108,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> dis
     )
 
 
-def render_generic_poll(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> StaticLayout:
+def render_generic_poll(
+    snapshot: VoteSessionSnapshot,
+    voter_discord_ids: Mapping[int, int] = {},
+) -> discord.ui.LayoutView:
     """Render a user-created poll, honouring its visibility setting.
 
     An open poll carries its own close and refresh controls; a closed one has nothing left
     to do, so its card is inert and stays readable as a record.
     """
-    body = discord.ui.TextDisplay(
-        truncate_display_text(generic_poll_text(snapshot, voter_discord_ids), MAX_DISPLAY_CHARACTERS)
-    )
-    if snapshot.status is VoteStatus.CLOSED:
-        return StaticLayout(body)
-    return StaticLayout(body, poll_controls())
+    nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
+    if snapshot.status is not VoteStatus.CLOSED:
+        nodes.append(sl.primitives.RawItem(poll_controls, kind="discord.item", version=1))
+    return sl.discord.render_static(nodes)
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:
