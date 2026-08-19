@@ -203,12 +203,23 @@ class SearchCog[
             sort=SearchSort.parse(sort),
         )
         page = await self.search.search(request)
-        view = SearchResultsView(self.search, request, page, author_id=ctx.author.id, locale=locale)
+        view = SearchResultsView(
+            self.search,
+            request,
+            page,
+            author_id=ctx.author.id,
+            locale=locale,
+            load_build=self.queries.get,
+            render_build=lambda build: self.bot.for_build(build).render_node(),
+        )
+        mount = view.mount()
+        rendered = mount.build_view()
         message = await ctx.send(
-            view=view,
+            view=rendered,
+            files=mount.attachment_files(),
             allowed_mentions=no_mentions(),
         )
-        view.bind_message(message)
+        mount.bind(message, rendered)
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
