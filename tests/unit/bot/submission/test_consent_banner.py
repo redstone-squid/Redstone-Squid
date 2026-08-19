@@ -21,6 +21,12 @@ USER_ID = 42
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 
 
+@pytest.fixture(autouse=True)
+def _sticky_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Undo the temporary kill switch so these tests keep covering the sticky."""
+    monkeypatch.setattr("squid.bot.submission.submit.CONSENT_STICKY_ENABLED", True)
+
+
 def _discord_account(*, account_id: int = 7, consented: bool) -> Account:
     return Account(
         id=account_id,
