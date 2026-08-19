@@ -73,8 +73,14 @@ async def deliver_privately(
     except discord.Forbidden:
         await ctx.send(
             view=error_layout(
-                t(locale, _("Could not send it to you")),
-                t(locale, _("Allow direct messages from this server, then run the command again.")),
+                t(locale, _("Nowhere private to send this")),
+                t(
+                    locale,
+                    _(
+                        "This reply is too private for a channel, and your DMs from this server are "
+                        "closed. Run the command in a direct message with me, or allow DMs and retry."
+                    ),
+                ),
             ),
             allowed_mentions=no_mentions(),
         )
