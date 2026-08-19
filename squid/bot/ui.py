@@ -186,9 +186,10 @@ class PagedList(ui.Component):
     """A card holding one page of a pre-rendered list, plus the controls to walk it.
 
     The reactive successor to `squid.bot.utils.pagination.ListPaginator`: `page_size` entries
-    per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`, so the
-    mount owns paging, the author lock, and expiry. It does not fetch — every caller holds
-    its whole list before rendering.
+    per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`.
+    Passing ``None`` lets the engine fill each page from the target's measured text budget.
+    The mount owns paging, the author lock, and expiry. It does not fetch — every caller
+    holds its whole list before rendering.
     """
 
     def __init__(
@@ -198,7 +199,7 @@ class PagedList(ui.Component):
         *,
         empty: str,
         locale: str | None = None,
-        page_size: int = 10,
+        page_size: int | None = 10,
         separator: str = "\n\n",
         accent_colour: int = DISCORD_GREEN,
     ) -> None:
@@ -206,7 +207,7 @@ class PagedList(ui.Component):
         self.entries = tuple(entries)
         self.empty = empty
         self.locale = locale
-        self.page_size = max(1, page_size)
+        self.page_size = None if page_size is None else max(1, page_size)
         self.separator = separator
         self.accent_colour = accent_colour
 
