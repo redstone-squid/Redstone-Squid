@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast, override
 import discord
 from discord.utils import escape_markdown
 
+import squid_layouts as sl
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.utils.components import DISCORD_GREEN, edit_interaction_layout, no_mentions
@@ -184,6 +185,7 @@ class SearchOpenBuildButton(discord.ui.Button[SearchResultsView]):
         row.add_item(SearchBackButton(self._search_view))
         row.add_item(SearchStopButton(self._search_view))
         self._search_view.add_item(row)
+        sl.conform(self._search_view)
         await edit_interaction_layout(interaction, self._search_view)
 
 
