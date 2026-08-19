@@ -64,10 +64,9 @@ class TestCompose:
         with pytest.raises(TypeError, match="mounted Discord frontend"):
             compose([Row((Button(label="x", on_click=click, key="x"),))])
 
-    def test_it_fills_a_supplied_view(self):
-        view = discord.ui.LayoutView(timeout=None)
-        composition = compose([Text("hello")], into=view)
-        assert composition.view is view
+    def test_it_rejects_native_view_adoption(self):
+        with pytest.raises(TypeError, match="unexpected keyword argument 'into'"):
+            compose([Text("hello")], into=discord.ui.LayoutView(timeout=None))  # type: ignore[call-arg]
 
 
 @given(documents(), st.integers(min_value=0, max_value=3900))

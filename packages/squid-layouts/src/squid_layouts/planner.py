@@ -368,7 +368,9 @@ def plan(
         logical_fingerprint=_logical_fingerprint(document.children),
         scene_fingerprint=fingerprint,
     )
-    return PlanResult(scene=scene, bindings=converter.bindings, report=report, resources=converter.resources)
+    resources = dict(converter.resources)
+    resources.update({f"asset:{asset.key}": asset for asset in document.assets})
+    return PlanResult(scene=scene, bindings=converter.bindings, report=report, resources=resources)
 
 
 def _pagers(solved: SolvedLayout) -> tuple[ScenePager, ...]:

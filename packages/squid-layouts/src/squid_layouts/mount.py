@@ -8,6 +8,7 @@ stopped after a successful edit so dispatch tables do not accumulate.
 
 import asyncio
 import hashlib
+import io
 import logging
 import secrets
 from collections.abc import Awaitable, Sequence
@@ -17,17 +18,20 @@ import discord
 
 from squid_layouts import deliver
 from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
-from squid_layouts.component import Component, render_component_tree
+from squid_layouts.component import Component
 from squid_layouts.compositor import Composition, compose
 from squid_layouts.discord.actions import DiscordActionResponder
+from squid_layouts.discord.renderer import DiscordRenderer
+from squid_layouts.document import Asset, Document, InlineAsset
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
 from squid_layouts.presentation import PresentationSession
 from squid_layouts.reactivity import readonly_transaction, transaction
+from squid_layouts.runtime import ComponentRuntime
 from squid_layouts.scene import SceneButton, SceneSelect
 
 logger = logging.getLogger(__name__)
@@ -135,8 +139,8 @@ class Mount:
     ) -> None:
         self.id = secrets.token_urlsafe(6)
         self.component = component
-        component._mount = self
         self.chrome = chrome
+        self.runtime = ComponentRuntime(component, on_invalidate=self.invalidate, context={CHROME_CONTEXT: chrome})
         self.nav = nav if nav is not None else default_nav(chrome)
         self.limits = limits
         self.strict = strict
@@ -149,23 +153,20 @@ class Mount:
         self._handlers: dict[str, ActionBinding] = {}
         self._action_lock = asyncio.Lock()
         self._generation = 0
-        self._components: dict[str, Component] = {}
         self._dirty = False
         self._finished = False
-        self.presentation = PresentationSession()
-        self._staged_attachments: list[discord.File] | None = None
+        self._assets: tuple[Asset, ...] = ()
 
     # --- Rendering ---------------------------------------------------------------------
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
         """Render the component's current state into a fresh view."""
         generation = self._generation + 1
-        tree = render_component_tree(self.component)
-        rendered = tree.nodes
+        tree = self.runtime.render()
+        rendered = Document(tree.nodes, tree.assets)
 
         def draw() -> tuple[MountedView, Composition]:
             self._handlers = {}
-            fresh = MountedView(self, self.timeout)
 
             def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
                 key = binding.key
@@ -189,8 +190,11 @@ class Mount:
 
             composition = compose(
                 rendered,
-                into=fresh,
                 wire=wire,
+                renderer=DiscordRenderer(
+                    limits=self.limits,
+                    view_factory=lambda: MountedView(self, self.timeout),
+                ),
                 limits=self.limits,
                 chrome=self.chrome,
                 strict=self.strict,
@@ -198,7 +202,10 @@ class Mount:
                 nav=nav,
                 session=self.presentation,
             )
-            return fresh, composition
+            if not isinstance(composition.view, MountedView):
+                message = "mounted Discord renderer returned the wrong view type"
+                raise TypeError(message)
+            return composition.view, composition
 
         view, composition = draw()
         pagers = composition.plan.scene.pagers
@@ -230,11 +237,24 @@ class Mount:
                 content_fingerprint=pager.content_fingerprint,
             )
         self._generation = generation
-        self._reconcile_components(tree.components)
+        self.runtime.commit(tree)
+        self._assets = tuple(
+            asset
+            for scene_asset in composition.plan.scene.assets
+            if isinstance(asset := composition.plan.resources.get(f"asset:{scene_asset.key}"), Asset)
+        )
         if disabled:
             _disable_all(view)
         self._dirty = False
         return view
+
+    @property
+    def presentation(self) -> PresentationSession:
+        return self.runtime.presentation
+
+    @presentation.setter
+    def presentation(self, value: PresentationSession) -> None:
+        self.runtime.presentation = value
 
     def invalidate(self) -> None:
         self._dirty = True
@@ -253,43 +273,15 @@ class Mount:
             self.presentation.reset_cursor(key)
         self.invalidate()
 
-    def set_attachments(self, files: Sequence[discord.File] | None) -> None:
-        """Stage a replacement for the message's attachments, applied by the next flush.
-
-        `[]` strips existing attachments; `None` (the default state) leaves them alone.
-        """
-        self._staged_attachments = None if files is None else list(files)
-        self.invalidate()
-
-    def _reconcile_components(self, current: dict[str, Component]) -> None:
-        removed = [
-            (path, component) for path, component in self._components.items() if current.get(path) is not component
-        ]
-        added = [
-            (path, component) for path, component in current.items() if self._components.get(path) is not component
-        ]
-
-        def depth(path: str) -> int:
-            return 0 if path == "$" else path.count(".") + 1
-
-        for path, component in sorted(removed, key=lambda item: depth(item[0]), reverse=True):
-            component.on_unmount()
-            if path != "$":
-                component._parent = None
-        for _, component in sorted(added, key=lambda item: depth(item[0])):
-            component.on_mount()
-        self._components = dict(current)
-
-    def _unmount_components(self) -> None:
-        for _path, component in sorted(
-            self._components.items(),
-            key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,
-            reverse=True,
-        ):
-            component.on_unmount()
-            component._parent = None
-        self._components.clear()
-        self.component._mount = None
+    def attachment_files(self) -> list[discord.File]:
+        """Materialize a fresh Discord file set from the current declarative assets."""
+        files: list[discord.File] = []
+        for asset in self._assets:
+            if not isinstance(asset.source, InlineAsset):
+                message = f"Discord mount needs a host resolver for stored asset {asset.key!r}"
+                raise TypeError(message)
+            files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
+        return files
 
     # --- Lifecycle ---------------------------------------------------------------------
 
@@ -379,9 +371,7 @@ class Mount:
                 await interaction.response.defer()
             return
         view = self.build_view()
-        attachments = self._staged_attachments
-        self._staged_attachments = None
-        await deliver.apply_interaction(interaction, view, attachments=attachments)
+        await deliver.apply_interaction(interaction, view, attachments=self.attachment_files())
         self._swap_view(view)
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
@@ -394,7 +384,7 @@ class Mount:
         if self._view is not None:
             self._view.stop()
         view.stop()
-        self._unmount_components()
+        self.runtime.finish()
 
     async def refresh(self) -> None:
         """Out-of-band re-render (background state change, not an interaction)."""
@@ -407,7 +397,7 @@ class Mount:
         if self._finished or self.message is None:
             return
         view = self.build_view()
-        self.message = await deliver.apply(self.message, view)
+        self.message = await deliver.apply(self.message, view, attachments=self.attachment_files())
         self._swap_view(view)
 
     async def finish(self, *, disable: bool = True) -> None:
@@ -422,7 +412,7 @@ class Mount:
                 logger.debug("could not disable controls on finish", exc_info=True)
         if self._view is not None:
             self._view.stop()
-        self._unmount_components()
+        self.runtime.finish()
 
     async def handle_timeout(self) -> None:
         await self.finish(disable=True)

@@ -8,6 +8,8 @@ build one Chrome per locale; the defaults are untranslated English.
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from squid_layouts.component import ContextKey
+
 
 def _default_and_n_more(count: int) -> str:
     return f"…and {count} more"
@@ -35,3 +37,4 @@ class Chrome:
 
 
 DEFAULT_CHROME = Chrome()
+CHROME_CONTEXT = ContextKey[Chrome]("chrome")

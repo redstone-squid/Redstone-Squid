@@ -30,6 +30,7 @@ from squid_layouts.text import discord_text
 
 type Control = SceneButton | SceneSelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
+type ViewFactory = Callable[[], discord.ui.LayoutView]
 
 
 class StaticView(discord.ui.LayoutView):
@@ -42,16 +43,22 @@ class StaticView(discord.ui.LayoutView):
 class DiscordRenderer:
     """Draw a Discord-targeted scene without making layout decisions."""
 
-    def __init__(self, *, limits: V2Limits = LIMITS, audit: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        limits: V2Limits = LIMITS,
+        audit: bool = True,
+        view_factory: ViewFactory = StaticView,
+    ) -> None:
         self.limits = limits
         self.audit = audit
+        self.view_factory = view_factory
 
     def draw(
         self,
         scene: SceneDocument,
         *,
         plan: PlanResult | None = None,
-        into: discord.ui.LayoutView | None = None,
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
         if scene.protocol != SceneCodec.protocol:
@@ -60,8 +67,11 @@ class DiscordRenderer:
         if scene.target != "discord.components-v2":
             message = f"DiscordRenderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
+        if scene.target_version != 1:
+            message = f"DiscordRenderer cannot draw Discord target version {scene.target_version}"
+            raise DrawInvariantError(message)
 
-        view = into if into is not None else StaticView()
+        view = self.view_factory()
 
         def control(node: Control) -> discord.ui.Item[Any]:
             if plan is None or wire is None:

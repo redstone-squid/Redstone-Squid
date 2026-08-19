@@ -11,7 +11,7 @@ text enters pre-translated through `Chrome`.
 from squid_layouts import deliver, primitives, semantic
 from squid_layouts.actions import ActionEvent, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent, Visibility
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.component import Component
+from squid_layouts.component import Component, ContextKey
 from squid_layouts.compositor import Composition, compose, render_static
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
 from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
@@ -71,7 +71,7 @@ from squid_layouts.presentation import (
 )
 from squid_layouts.presets import Field, FieldGroup, banner, card, listing, report
 from squid_layouts.reactivity import ReactiveWriteError, batch, computed, state, transaction
-from squid_layouts.runtime import Reactor
+from squid_layouts.runtime import ComponentRuntime, Reactor
 from squid_layouts.scene import PlanEvent, PlanReport, PlanResult, SceneDocument
 from squid_layouts.scene_codec import SceneCodec, SceneCodecError
 from squid_layouts.semantic import Action, ActionDisplay, Actions, Emphasis, Flexibility, Importance, LayoutNode, Tone
@@ -104,8 +104,10 @@ __all__ = [
     "Color",
     "Component",
     "ComponentRegistry",
+    "ComponentRuntime",
     "ComponentSnapshot",
     "Composition",
+    "ContextKey",
     "CursorState",
     "DisclosureState",
     "Document",

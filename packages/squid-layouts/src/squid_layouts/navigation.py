@@ -8,6 +8,7 @@ their parent rather than through a mount reference the navigator hands out.
 """
 
 from squid_layouts.actions import PressEvent
+from squid_layouts.chrome import CHROME_CONTEXT
 from squid_layouts.component import Component
 from squid_layouts.ir import Button, Node, Row
 from squid_layouts.styles import ActionStyle
@@ -46,7 +47,7 @@ class Navigator(Component):
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
         nodes: list = [self.embed(self.current, key=f"s{self.depth - 1}")]
-        chrome = self.mount.chrome
+        chrome = self.inject(CHROME_CONTEXT)
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),
         ]
