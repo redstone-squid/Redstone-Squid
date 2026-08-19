@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import discord
+import pytest
 from discord.ext import commands
 
 from squid.bot.layout_showcase import LayoutShowcase, LayoutShowcaseCog
@@ -41,6 +42,24 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         11,
     ]
     assert not any(button.label == "Action 36" for button in _buttons(view))
+    assert_within_limits(view)
+
+
+@pytest.mark.parametrize(
+    ("section", "source_marker"),
+    [
+        ("tour", "class Counter(sl.Component)"),
+        ("pagination", "return sl.List("),
+        ("adaptation", 'return sl.Actions(actions, key="showcase-actions")'),
+        ("composition", 'self.embed(self.left, key="left")'),
+    ],
+)
+def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_marker: str) -> None:
+    view = Mount(LayoutShowcase(section=section, entries=20, locale="en"), timeout=None).build_view()  # type: ignore[arg-type]
+    content = _texts(view)
+
+    assert "Declaration source" in content
+    assert source_marker in content
     assert_within_limits(view)
 
 
