@@ -1,7 +1,7 @@
 [project]
 name = "squid-layouts"
 version = "0.1.0"
-description = "Declarative, limits-aware Discord Components V2 UI framework"
+description = "Declarative, limits-aware UI planning with Discord and HTML renderers"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = []

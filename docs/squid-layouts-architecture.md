@@ -22,10 +22,10 @@ HTML, serialized to JSON, and handed to another process.
         +-- PlanMetrics (search/cache/latency instrumentation)
         +-- ephemeral ActionBindings (never serialized)
         v
-    immutable SceneDocument -- SceneCodec JSON and JSON Schema
+    immutable SceneDocument -- `sl.scene.Codec` JSON and JSON Schema
         |
-        +-- DiscordRenderer --> discord.ui.LayoutView
-        +-- HtmlRenderer ----> safe semantic HTML
+        +-- sl.discord.Renderer --> discord.ui.LayoutView
+        +-- sl.html.Renderer ----> safe semantic HTML
 
 The planner is the only layer allowed to choose an alternate, drop content, split a page, or
 spend a target resource. A renderer is mechanical. If Discord drawing needs to clamp after
@@ -35,16 +35,16 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Stateful Discord interaction | Mount(component) | lifecycle, events, paging, edits |
-| Static Discord message | render_static(document) | discord.ui.LayoutView |
-| Discord view plus diagnostics | compose(document) | Composition |
+| Stateful Discord interaction | sl.discord.Mount(component) | lifecycle, events, paging, edits |
+| Static Discord message | sl.discord.render_static(document) | discord.ui.LayoutView |
+| Discord view plus diagnostics | sl.discord.compose(document) | Composition |
 | Portable planning | plan(document, target=...) | PlanResult |
-| Browser or preview drawing | HtmlRenderer.draw(scene) | HTML string |
-| Cross-process transport | SceneCodec.dumps and loads | canonical protocol JSON |
-| Resume an opted-in session | ComponentRegistry and MountManager | restored Mount |
+| Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
+| Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
+| Resume an opted-in session | sl.discord.durability registry and `MountManager` | restored Mount |
 
-compose is the Discord convenience path: plan for DiscordV2Target, draw with
-DiscordRenderer, then strictly audit the result. Detached composition can pass
+sl.discord.compose is the Discord convenience path: plan for sl.discord.Target, draw with
+sl.discord.Renderer, then strictly audit the result. Detached composition can pass
 reserved_text; composing the complete document is preferable because the planner can see
 every cost. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
@@ -104,7 +104,7 @@ and set mutation. Factories avoid shared mutable defaults:
             return f"{len(self.results)} results for {self.query}"
 
 computed caches until the component tree invalidates. batch coalesces related writes.
-transaction also restores every touched field if an exception escapes. Mount dispatch wraps
+transaction also restores every touched field if an exception escapes. `sl.discord.Mount` dispatch wraps
 mutating actions in a transaction, so a failed callback cannot leave state half-applied.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
@@ -118,7 +118,7 @@ Children appear through explicit keyed boundaries:
             self.embed(self.results, key="results"),
         ))
 
-`ComponentRuntime`, not `Mount`, owns rendering, keyed component identity, lifecycle,
+`sl.runtime.ComponentRuntime`, not `sl.discord.Mount`, owns rendering, keyed component identity, lifecycle,
 invalidation, injected context, presentation state, and the bounded plan cache. Expansion
 scopes action keys and pager keys, detects cycles and duplicate instances, and gives the
 runtime deterministic `on_mount`/`on_unmount` ownership. Components have no mount reference;
@@ -139,7 +139,7 @@ including solver-generated pager controls.
 Components receive PressEvent or SelectionEvent, not discord.Interaction. Events expose
 portable actor facts and response intents: notice, present_form, download, redirect, and
 finish. Each frontend implements ActionResponder; Discord details live in
-DiscordActionResponder.
+sl.discord.ActionResponder.
 
 | Policy | Concurrency | Stale control | State writes |
 |---|---|---|---|
@@ -154,12 +154,12 @@ concurrency is deliberately handled elsewhere.
 
 ## Pagination
 
-Every paginator has an explicit unique string key. Mount stores a cursor per key; embedded
+Every paginator has an explicit unique string key. `sl.discord.Mount` stores a cursor per key; embedded
 components prefix it automatically. The solver measures active footers and navigation IR to
 a fixed point, so controls spend real text and component budgets.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
-Mount resets only that cursor; keyed anchors preserve the reader's page across insertions and
+`sl.discord.Mount` resets only that cursor; keyed anchors preserve the reader's page across insertions and
 reordering where possible. `per=N` is count-based pagination; the default fills by target text
 budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
 All use the same `NavFactory`.
@@ -175,10 +175,10 @@ the engine never presents two competing navigation systems.
 SceneDocument is immutable and contains no callbacks or native frontend objects.
 PlanResult.bindings and PlanResult.resources are ephemeral side tables for a live frontend.
 
-SceneCodec provides canonical JSON, fingerprints, and a Draft 2020-12 schema through `schema`
+`sl.scene.Codec` provides canonical JSON, fingerprints, and a Draft 2020-12 schema through `schema`
 and `schema_json`. Protocol 1 is current; incompatible changes increment the protocol.
 
-HtmlRenderer emits escaped semantic markup, action identifiers, policies, and pager metadata.
+sl.html.Renderer emits escaped semantic markup, action identifiers, policies, and pager metadata.
 Standalone mode includes Discord-like CSS. It preserves planned structure; pixel-level
 fidelity also needs the website's chosen Discord-markdown and emoji renderer.
 
@@ -214,5 +214,4 @@ two workers from dispatching the same visible controls after a restart.
   model and is rejected rather than approximated.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
-- The distribution still depends on discord.py because the Discord adapter ships beside the
-  portable core.
+- The base distribution is dependency-free; `squid-layouts[discord]` installs discord.py and anyio for the adapter.
