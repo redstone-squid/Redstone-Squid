@@ -7,12 +7,14 @@ on:
   push:
     paths:
       - pyproject.toml
+      - packages/*/pyproject.toml
       - uv.lock
       - requirements/**
       - .github/workflows/requirements-sync.yml
   pull_request:
     paths:
       - pyproject.toml
+      - packages/*/pyproject.toml
       - uv.lock
       - requirements/**
       - .github/workflows/requirements-sync.yml
@@ -45,7 +47,7 @@ jobs:
 
     - name: Regenerate exported requirements
       run: |
-        uv export --locked --no-dev -o requirements/base.txt --quiet
+        uv export --locked --no-dev --no-emit-workspace -o requirements/base.txt --quiet
         uv export --locked --only-dev -o requirements/dev.txt --quiet
 
     - name: Assert production requirements exclude development packages
