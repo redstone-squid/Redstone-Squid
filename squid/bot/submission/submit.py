@@ -46,6 +46,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Kill switch while ingestion is not live yet; flip to True to bring the sticky back.
+# Typed `bool`, not the inferred `Literal[False]`, so the guarded branches are not unreachable.
+CONSENT_STICKY_ENABLED: bool = False
+
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
@@ -358,10 +362,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 message.author.id,
                 message.channel.id,
             )
-            await self.consent_sticky.trigger(message.channel)
+            if CONSENT_STICKY_ENABLED:
+                await self.consent_sticky.trigger(message.channel)
             return
 
-        self.consent_sticky.record_activity(message.channel.id)
+        if CONSENT_STICKY_ENABLED:
+            self.consent_sticky.record_activity(message.channel.id)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
         builds = await ingest_message_bundle(
@@ -423,7 +429,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                     ),
                 ),
             )
-            if isinstance(message.channel, discord.TextChannel):
+            if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return
 
