@@ -31,6 +31,7 @@ from squid.bot.utils.components import (
 )
 from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.visibility import personal
 from squid.builds.domain import Build
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
@@ -341,12 +342,13 @@ class SearchCog[
     )
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
-        await ctx.defer()
+        await ctx.defer(ephemeral=personal(ctx))
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
         if build is None:
             await ctx.send(
                 view=error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                ephemeral=personal(ctx),
                 allowed_mentions=no_mentions(),
             )
             return
@@ -356,6 +358,7 @@ class SearchCog[
         await ctx.send(
             view=text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
             file=discord.File(io.BytesIO(_debug_dump(build).encode()), filename=f"build-{build_id}-debug.json"),
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
