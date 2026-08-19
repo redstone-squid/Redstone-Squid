@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 
 import discord
 
-from squid_layouts.constraints import Overflow, Spill, Truncate
+from squid_layouts.constraints import Alt, Overflow, Spill, Truncate
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,11 +52,12 @@ class Lines:
     """A list of entries joined by ``join``; spills to "…and N more" by default.
 
     Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
-    may also be a degradation ladder (a tuple of alternates, preferred first): under pressure
-    the solver degrades the largest entries down their ladders before it spills any entry.
+    may also be an :class:`~squid_layouts.constraints.Alt` carrying a degradation ladder:
+    under pressure the solver steps the largest entries down their fallbacks before it spills
+    any entry.
     """
 
-    lines: tuple[str | tuple[str, ...], ...]
+    lines: tuple[str | Alt, ...]
     join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0

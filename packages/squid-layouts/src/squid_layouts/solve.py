@@ -157,8 +157,8 @@ def _make_unit(node: TextBearing, slot: RText, index: int) -> _Unit | None:
             suffix = "\n```"
             content = _escape_fences(content)
         case Lines(lines=raw_lines, join=join):
-            ladders = tuple((entry,) if isinstance(entry, str) else entry for entry in raw_lines)
-            ladders = tuple(ladder for ladder in ladders if ladder and ladder[0])
+            ladders = tuple((entry,) if isinstance(entry, str) else entry.steps for entry in raw_lines)
+            ladders = tuple(ladder for ladder in ladders if ladder[0])
             content = join.join(ladder[0] for ladder in ladders)
     if not content:
         slot.dropped = True

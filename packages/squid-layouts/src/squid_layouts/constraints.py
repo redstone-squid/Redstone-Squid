@@ -31,21 +31,64 @@ class Paginate:
     boundary: str = "\n"
 
 
+def _validate_ladder(steps: tuple[str, ...], *, of: str = "ladder") -> None:
+    if not steps:
+        message = f"{of} needs at least one step"
+        raise ValueError(message)
+    if any(not step for step in steps):
+        message = f"{of} steps must be non-empty strings"
+        raise ValueError(message)
+    lengths = [len(step) for step in steps]
+    if lengths != sorted(lengths, reverse=True):
+        message = f"{of} steps must not grow: each fallback should be no longer than the one before it"
+        raise ValueError(message)
+
+
 @dataclass(frozen=True, slots=True)
 class Alts:
-    """A degradation ladder: alternates tried in order when the node's content does not fit.
+    """A degradation ladder: fallbacks tried in order when the node's content does not fit.
 
     Semantically-aware shrinking beats mid-string trimming: `[all links] → [count + first
     link] → [count]` degrades meaningfully where an ellipsis would leave `https://exampl…`.
-    The node's own content is the preferred form; the last alternate that still does not fit
-    is ellipsis-trimmed as the final fallback.
+    The node's own content is the preferred form; the last fallback that still does not fit
+    is ellipsis-trimmed as the final resort. Validated at construction: at least one step,
+    no empty steps, non-increasing lengths.
     """
 
     ladder: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        _validate_ladder(self.ladder, of="Alts ladder")
+
 
 def alts(*ladder: str) -> Alts:
     return Alts(ladder=ladder)
+
+
+@dataclass(frozen=True, slots=True)
+class Alt:
+    """One list entry with its degradation ladder: a primary form plus validated fallbacks.
+
+    Used as a `Lines` entry. Under budget pressure the solver steps the largest entries down
+    their fallbacks before it spills any entry whole.
+    """
+
+    primary: str
+    fallbacks: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.primary:
+            message = "Alt primary must be a non-empty string"
+            raise ValueError(message)
+        if self.fallbacks:
+            _validate_ladder(self.fallbacks, of="Alt fallbacks")
+            if len(self.fallbacks[0]) > len(self.primary):
+                message = "Alt fallbacks must be no longer than the primary form"
+                raise ValueError(message)
+
+    @property
+    def steps(self) -> tuple[str, ...]:
+        return (self.primary, *self.fallbacks)
 
 
 @dataclass(frozen=True, slots=True)
