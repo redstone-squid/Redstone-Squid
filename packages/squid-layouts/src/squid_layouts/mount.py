@@ -58,17 +58,22 @@ class MountedView(discord.ui.LayoutView):
         await self._mount.handle_error(interaction, error, f"item:{type(item).__name__}")
 
 
-def _custom_id(mount_id: str, key: str) -> str:
-    """A per-message-unique control id for ``key``, within Discord's 100-char limit.
+def _custom_id(mount_id: str, generation: int, key: str) -> str:
+    """A per-render-unique control id for ``key``, within Discord's 100-char limit.
 
     Nested components produce long dotted keys, and truncating those makes two controls
     collide — Discord rejects the message and, worse, a click could route to the wrong
     handler. Digest the key instead; dispatch itself goes by the in-process key.
+
+    The generation is part of the id because discord.py registers a replacement view before
+    the mount stops its predecessor. Reusing ids lets the predecessor unregister the new
+    view's controls when it stops, leaving visible buttons with no callback.
     """
-    custom_id = f"ctl:{mount_id}:{key}"
+    prefix = f"ctl:{mount_id}:{generation}:"
+    custom_id = f"{prefix}{key}"
     if len(custom_id) <= 100:
         return custom_id
-    return f"ctl:{mount_id}:#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
+    return f"{prefix}#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
 
 
 class _WiredButton(discord.ui.Button[MountedView]):
@@ -78,7 +83,7 @@ class _WiredButton(discord.ui.Button[MountedView]):
             label=node.label,
             emoji=node.emoji,
             disabled=node.disabled,
-            custom_id=_custom_id(mount.id, key),
+            custom_id=_custom_id(mount.id, generation, key),
         )
         self._mount = mount
         self._key = key
@@ -95,7 +100,7 @@ class _WiredSelect(discord.ui.Select[MountedView]):
             min_values=node.min_values,
             max_values=node.max_values,
             disabled=node.disabled,
-            custom_id=_custom_id(mount.id, key),
+            custom_id=_custom_id(mount.id, generation, key),
             options=[
                 discord.SelectOption(
                     label=option.label, value=option.value, description=option.description, default=option.default
