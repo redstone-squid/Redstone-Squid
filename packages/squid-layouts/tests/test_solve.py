@@ -11,11 +11,12 @@ from squid_layouts import (
     Code,
     Drop,
     Footer,
-    Gallery,
     Heading,
+    LayoutInvariantError,
     LayoutOverflowError,
     Lines,
     LinkButton,
+    MediaCollection,
     Never,
     Panel,
     RawItem,
@@ -164,7 +165,7 @@ class TestStructure:
                             accessory=Thumbnail("https://example.invalid/a.png"),
                         ),
                         Sep(),
-                        Gallery(tuple(f"https://example.invalid/{index}.png" for index in range(12))),
+                        MediaCollection(tuple(f"https://example.invalid/{index}.png" for index in range(12))),
                         Row((LinkButton("Open", "https://example.invalid"),)),
                     ),
                     accent=0x00FF00,
@@ -174,7 +175,7 @@ class TestStructure:
         payload = view.to_components()
         assert payload[0]["type"] == 17
         types = [c["type"] for c in _flat(payload)]
-        assert types.count(12) == 1  # gallery survived, sliced
+        assert types.count(12) == 2  # semantic media collection lowered to two valid galleries
         assert conform(view) == []
         assert_within_limits(view)
 
@@ -183,10 +184,8 @@ class TestStructure:
             texts=(Text("a"), Text("b"), Text("c"), Text("d")),
             accessory=Thumbnail("https://example.invalid/a.png"),
         )
-        solved = solve([section])
-        assert any("section" in note for note in solved.notes)
-        view = render_static([section])
-        assert_within_limits(view)
+        with pytest.raises(LayoutInvariantError, match="section has 4 text slots"):
+            render_static([section])
 
     def test_emptied_section_drops_whole(self):
         section = Section(texts=(Text(""),), accessory=Thumbnail("https://example.invalid/a.png"))

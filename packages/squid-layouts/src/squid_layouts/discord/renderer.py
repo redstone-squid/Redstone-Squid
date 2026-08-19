@@ -69,7 +69,7 @@ class DiscordRenderer:
             return wire(node, binding)
 
         def extension(node: SceneExtension) -> discord.ui.Item[Any]:
-            if node.kind != "discord.raw" or plan is None:
+            if plan is None:
                 message = f"unsupported Discord scene extension {node.kind!r}"
                 raise DrawInvariantError(message)
             key = node.payload.get("resource")
