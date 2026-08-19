@@ -260,6 +260,10 @@ ignore = [
     "FBT002",
 ]
 
+[tool.ruff.lint.isort]
+# The workspace member's src layout is outside ruff's first-party detection at the repo root.
+known-first-party = ["squid_layouts"]
+
 [tool.ruff.lint.per-file-ignores]
 # Ignore `E402` (import violations) in all `__init__.py` files.
 "__init__.py" = ["E402"]
