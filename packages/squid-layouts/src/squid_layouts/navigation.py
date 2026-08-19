@@ -1,14 +1,16 @@
 """Stack navigation by composition.
 
-`Navigator` renders whichever child component is on top of its stack and appends the
+`Navigator` embeds whichever child component is on top of its stack and appends the
 Back/Home/Close row *last, because it renders last* — no `__init_subclass__` machinery
-rewriting subclass constructors to keep controls in order.
+rewriting subclass constructors to keep controls in order. It is an ordinary consumer of
+`Component.embed`: the screens are children in the component tree, reaching the mount through
+their parent rather than through a mount reference the navigator hands out.
 """
 
 import discord
 
 from squid_layouts.component import Component
-from squid_layouts.ir import Button, Node, Row, as_nodes
+from squid_layouts.ir import Button, Node, Row
 
 
 class Navigator(Component):
@@ -27,7 +29,6 @@ class Navigator(Component):
 
     def push(self, child: Component) -> None:
         """Show ``child``, with Back leading to the current screen."""
-        child._mount = self._mount
         self._stack.append(child)
         self.invalidate()
 
@@ -42,9 +43,9 @@ class Navigator(Component):
             self.invalidate()
 
     def render(self) -> list[Node]:
-        # Share the mount so a child mutating its own state re-renders the navigator's message.
-        self.current._mount = self._mount
-        nodes = as_nodes(self.current.render())
+        # Keyed by depth: each screen owns its control namespace, so pushing the same child
+        # class twice does not make the two copies share handlers.
+        nodes = self.embed(self.current, key=f"s{self.depth - 1}")
         chrome = self.mount.chrome
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),
