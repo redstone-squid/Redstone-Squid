@@ -7,8 +7,6 @@ preset returns IR, so callers can post-process (append rows, wrap further) befor
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-import discord
-
 from squid_layouts.constraints import Alt
 from squid_layouts.ir import (
     Code,
@@ -24,6 +22,7 @@ from squid_layouts.ir import (
     Text,
     Thumbnail,
 )
+from squid_layouts.styles import Color
 
 
 def _normalized_alt(primary: str, fallbacks: Sequence[str]) -> Alt:
@@ -67,7 +66,7 @@ def card(
     title: str,
     description: str | None = None,
     *,
-    accent: discord.Colour | int | None = None,
+    accent: Color | None = None,
     fields: Sequence[Field] = (),
     groups: Sequence[FieldGroup] = (),
     footer: str | None = None,
@@ -128,7 +127,7 @@ def _group_ladder(group: FieldGroup) -> Alt:
     return _normalized_alt(block(0), tuple(block(level) for level in range(1, depth)))
 
 
-def banner(content: str, *, accent: discord.Colour | int | None = None) -> Node:
+def banner(content: str, *, accent: Color | None = None) -> Node:
     """A plain text message, optionally wrapped in an accent-coloured container."""
     text = Text(content)
     if accent is None:
@@ -141,7 +140,7 @@ def listing(
     entries: Sequence[str],
     *,
     footer: str | None = None,
-    accent: discord.Colour | int | None = None,
+    accent: Color | None = None,
     rows: Sequence[Row] = (),
 ) -> Panel:
     """A titled list of entries; overflow spills to "…and N more"."""
@@ -159,7 +158,7 @@ def report(
     lang: str = "",
     fields: Sequence[Field] = (),
     footer: str | None = None,
-    accent: discord.Colour | int | None = None,
+    accent: Color | None = None,
 ) -> Panel:
     """A titled code-fenced report with optional labelled fields."""
     children: list[Node] = [Heading(title), Code(body, lang=lang)]

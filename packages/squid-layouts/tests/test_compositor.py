@@ -53,15 +53,15 @@ class TestCompose:
         composition = compose([Text("hello")])
         assert isinstance(composition, Composition)
         assert composition.interventions == []
-        assert composition.solved.notes == []
+        assert composition.plan.report.events == ()
         assert composition.pages == 1
         assert composition.page == 0
 
     def test_static_documents_reject_interactive_nodes(self):
         async def click(interaction: discord.Interaction) -> None: ...
 
-        with pytest.raises(TypeError, match="Mount"):
-            compose([Row((Button(label="x", on_click=click),))])
+        with pytest.raises(TypeError, match="mounted Discord frontend"):
+            compose([Row((Button(label="x", on_click=click, key="x"),))])
 
     def test_it_fills_a_supplied_view(self):
         view = discord.ui.LayoutView(timeout=None)

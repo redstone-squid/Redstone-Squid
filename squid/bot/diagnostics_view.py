@@ -117,7 +117,7 @@ class ErrorReportBrowser(sl.Component):
             label=t(self.locale, _("Close")),
             on_click=self._close,
             key="close",
-            style=discord.ButtonStyle.secondary,
+            style=sl.ActionStyle.SECONDARY,
         )
 
     async def _open(self, interaction: discord.Interaction, values: list[str]) -> None:

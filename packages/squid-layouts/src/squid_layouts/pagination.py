@@ -12,8 +12,6 @@ text, which is what lets the solver add them after it has allocated the text bud
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
-import discord
-
 from squid_layouts.chrome import Chrome
 from squid_layouts.ir import Button, Node, Row
 
@@ -28,8 +26,8 @@ class PageContext:
     page: int
     """0-based and already clamped."""
     pages: int
-    on_prev: Callable[[discord.Interaction], Awaitable[None]]
-    on_next: Callable[[discord.Interaction], Awaitable[None]]
+    on_prev: Callable[..., Awaitable[None]]
+    on_next: Callable[..., Awaitable[None]]
 
     @property
     def at_start(self) -> bool:
