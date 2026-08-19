@@ -61,6 +61,7 @@ EXTENSIONS = (
     "squid.bot.reactions",
     "squid.bot.messages",
     "squid.bot.misc_commands",
+    "squid.bot.layout_showcase",
     "squid.bot.settings",
     "squid.bot.submission",
     "squid.bot.log",
