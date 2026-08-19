@@ -32,6 +32,23 @@ class Paginate:
 
 
 @dataclass(frozen=True, slots=True)
+class Alts:
+    """A degradation ladder: alternates tried in order when the node's content does not fit.
+
+    Semantically-aware shrinking beats mid-string trimming: `[all links] → [count + first
+    link] → [count]` degrades meaningfully where an ellipsis would leave `https://exampl…`.
+    The node's own content is the preferred form; the last alternate that still does not fit
+    is ellipsis-trimmed as the final fallback.
+    """
+
+    ladder: tuple[str, ...]
+
+
+def alts(*ladder: str) -> Alts:
+    return Alts(ladder=ladder)
+
+
+@dataclass(frozen=True, slots=True)
 class Drop:
     """Omit the node entirely rather than show it shortened."""
 
@@ -41,4 +58,4 @@ class Never:
     """Shrinking this node is a bug: overflow raises in strict mode."""
 
 
-type Overflow = Truncate | Spill | Paginate | Drop | Never
+type Overflow = Truncate | Spill | Paginate | Alts | Drop | Never
