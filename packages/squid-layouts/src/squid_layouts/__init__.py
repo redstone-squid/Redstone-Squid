@@ -8,6 +8,17 @@ This package must stay free of `squid.*` imports and of `_()` i18n markers: all 
 text enters pre-translated through `Chrome`.
 """
 
+from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
 from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.testing import assert_within_limits
 
-__all__ = ["LIMITS", "V2Limits"]
+__all__ = [
+    "ELLIPSIS",
+    "LIMITS",
+    "LimitViolationError",
+    "V2Limits",
+    "assert_within_limits",
+    "conform",
+    "conform_modal",
+    "trim",
+]
