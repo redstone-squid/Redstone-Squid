@@ -17,7 +17,12 @@ class Counter(Component):
     def render(self):
         return [
             Text(f"{self.name}: {self.count}"),
-            Row((Button(label="+1", on_click=self.increment, key="inc"), Button(label="?", on_click=self.noop))),
+            Row(
+                (
+                    Button(label="+1", on_click=self.increment, key="inc"),
+                    Button(label="?", on_click=self.noop, key="help"),
+                )
+            ),
         ]
 
     async def increment(self, interaction: discord.Interaction) -> None:
@@ -59,10 +64,10 @@ class TestEmbedding:
 
         assert (pair.left.count, pair.right.count) == (1, 1)
 
-    def test_controls_are_namespaced_including_the_keyless_ones(self):
+    def test_controls_are_namespaced_including_every_explicit_key(self):
         mount = Mount(Pair(), timeout=None)
         mount.build_view()
-        assert set(mount._handlers) == {"left.inc", "left.auto0", "right.inc", "right.auto0"}
+        assert set(mount._handlers) == {"left.inc", "left.help", "right.inc", "right.help"}
 
     def test_a_childs_state_change_re_renders_the_root_message(self):
         pair = Pair()
@@ -99,7 +104,7 @@ class Nest(Component):
         self.child = Nest(depth - 1) if depth else None
 
     def render(self):
-        nodes: list[Node] = [Row((Button(label="x", on_click=self._click),))]
+        nodes: list[Node] = [Row((Button(label="x", on_click=self._click, key="click"),))]
         if self.child is not None:
             nodes.extend(self.embed(self.child, key=f"level{self.depth}" + "_padding" * 4))
         return [Panel(children=tuple(nodes))]

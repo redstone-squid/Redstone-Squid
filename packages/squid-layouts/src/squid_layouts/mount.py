@@ -15,14 +15,16 @@ from typing import Any, Protocol
 import discord
 
 from squid_layouts import deliver
+from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.component import Component
 from squid_layouts.compositor import compose
-from squid_layouts.ir import Button, Node, SelectMenu
+from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
+from squid_layouts.scene import SceneButton, SceneSelect
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +69,9 @@ def _custom_id(mount_id: str, key: str) -> str:
 
 
 class _WiredButton(discord.ui.Button[MountedView]):
-    def __init__(self, node: Button, mount: Mount, key: str) -> None:
+    def __init__(self, node: SceneButton, mount: Mount, key: str) -> None:
         super().__init__(
-            style=node.style,
+            style=getattr(discord.ButtonStyle, node.style.value),
             label=node.label,
             emoji=node.emoji,
             disabled=node.disabled,
@@ -83,7 +85,7 @@ class _WiredButton(discord.ui.Button[MountedView]):
 
 
 class _WiredSelect(discord.ui.Select[MountedView]):
-    def __init__(self, node: SelectMenu, mount: Mount, key: str) -> None:
+    def __init__(self, node: SceneSelect, mount: Mount, key: str) -> None:
         super().__init__(
             placeholder=node.placeholder,
             min_values=node.min_values,
@@ -147,12 +149,12 @@ class Mount:
         self._handlers = {}
         view = MountedView(self, self.timeout)
 
-        def wire(node: Button | SelectMenu, key: str) -> discord.ui.Item[Any]:
-            if isinstance(node, Button):
-                self._handlers[key] = node.on_click
+        def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            key = binding.key
+            self._handlers[key] = binding.handler
+            if isinstance(node, SceneButton):
                 item: discord.ui.Item[Any] = _WiredButton(node, self, key)
             else:
-                self._handlers[key] = node.on_select
                 item = _WiredSelect(node, self, key)
             if disabled:
                 item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
@@ -173,7 +175,7 @@ class Mount:
             nav=nav,
         )
         self._pages = composition.pages
-        if composition.solved.pager is not None:
+        if composition.plan.scene.pagers:
             self._page = composition.page
         if disabled:
             _disable_all(view)

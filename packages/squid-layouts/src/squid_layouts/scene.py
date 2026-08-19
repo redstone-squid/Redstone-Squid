@@ -165,3 +165,4 @@ class PlanResult:
     scene: SceneDocument
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
+    resources: Mapping[str, object] = field(default_factory=dict)
