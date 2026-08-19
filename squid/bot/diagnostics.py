@@ -6,8 +6,9 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
-from squid.bot.diagnostics_view import ErrorReportView, report_attachment
+from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser, report_attachment
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.ui import create_mount
 from squid.bot.utils.components import info_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
@@ -34,8 +35,8 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Show the stored error behind a reference someone reported."""
         report, matches = await self.error_reports.lookup(reference)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        view = ErrorReportView(author_id=ctx.author.id, locale=locale, report=report, matches=matches)
-        await self._deliver(ctx, view, locale, file=report_attachment(report))
+        browser = ErrorReportBrowser(locale=locale, report=report, matches=matches)
+        await self._deliver_browser(ctx, browser, locale, file=report_attachment(report))
 
     @error_group.command(name="recent")
     @requires(DIAGNOSTICS_ERROR_READ)
@@ -47,7 +48,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """
         reports = await self.error_reports.recent(limit=RECENT_LIMIT, work_lost_only=work_lost)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await self._deliver(ctx, ErrorReportView(author_id=ctx.author.id, locale=locale, reports=reports), locale)
+        await self._deliver_browser(ctx, ErrorReportBrowser(reports, locale=locale), locale)
 
     @error_group.command(name="clear")
     @requires(DIAGNOSTICS_ERROR_CLEAR)
@@ -64,29 +65,45 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             locale,
         )
 
-    async def _deliver(
+    async def _deliver_browser(
         self,
         ctx: Context[BotT],
-        layout: discord.ui.LayoutView,
+        browser: ErrorReportBrowser,
         locale: str | None,
         *,
         file: discord.File | None = None,
     ) -> None:
-        """Answer where only the caller can read it, whatever the transport invoked us.
+        """Mount the browser and answer where only the caller can read it.
 
         A report carries a traceback naming internal paths and the unredacted message every
         other surface withholds, which is the payload class `deliver_privately` exists for:
         ephemeral on the slash side, direct messages on the prefix side, never the channel.
         """
+        mount = create_mount(browser, chrome=browser.chrome(), timeout=SESSION_SECONDS, lock_to=ctx.author.id)
+        view = mount.build_view()
         message = await deliver_privately(
             ctx,
-            layout,
+            view,
             reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
             locale=locale,
             file=file,
         )
-        if message is not None and isinstance(layout, ErrorReportView):
-            layout.bind_message(message)
+        if message is not None:
+            mount.bind(message, view)
+
+    async def _deliver(
+        self,
+        ctx: Context[BotT],
+        layout: discord.ui.LayoutView,
+        locale: str | None,
+    ) -> None:
+        """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""
+        await deliver_privately(
+            ctx,
+            layout,
+            reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
+            locale=locale,
+        )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

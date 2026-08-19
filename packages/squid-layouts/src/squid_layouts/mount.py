@@ -121,7 +121,9 @@ class Mount:
         self._handlers: dict[str, Callable[..., Awaitable[None]]] = {}
         self._dirty = False
         self._finished = False
-        self._page = 0
+        self._page: int | None = None  # adopts the pager's initial page on first render
+        self._pages = 1
+        self._staged_attachments: list[discord.File] | None = None
 
     # --- Rendering ---------------------------------------------------------------------
 
@@ -144,7 +146,10 @@ class Mount:
                 item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
             return item
 
+        self._pages = solved.pages
         if solved.pager is not None:
+            if self._page is None:
+                self._page = solved.pager.initial
             self._page = solved.pager.select(self._page)
         materialize(solved, into=view, wire=wire)
         if solved.pager is not None:
@@ -170,12 +175,26 @@ class Mount:
         self._dirty = True
 
     async def _page_prev(self, interaction: discord.Interaction) -> None:
-        if self._page > 0:
+        if self._page is not None and self._page > 0:
             self._page -= 1
             self.invalidate()
 
     async def _page_next(self, interaction: discord.Interaction) -> None:
-        self._page += 1  # clamped by Pager.select on the next build
+        if self._page is not None and self._page < self._pages - 1:
+            self._page += 1
+            self.invalidate()
+
+    def reset_page(self) -> None:
+        """Forget the page position, e.g. when the component switches to different content."""
+        self._page = None
+        self.invalidate()
+
+    def set_attachments(self, files: Sequence[discord.File] | None) -> None:
+        """Stage a replacement for the message's attachments, applied by the next flush.
+
+        `[]` strips existing attachments; `None` (the default state) leaves them alone.
+        """
+        self._staged_attachments = None if files is None else list(files)
         self.invalidate()
 
     # --- Lifecycle ---------------------------------------------------------------------
@@ -219,8 +238,21 @@ class Mount:
                 await interaction.response.defer()
             return
         view = self.build_view()
-        await deliver.apply_interaction(interaction, view)
+        attachments = self._staged_attachments
+        self._staged_attachments = None
+        await deliver.apply_interaction(interaction, view, attachments=attachments)
         self._swap_view(view)
+
+    async def finish_via(self, interaction: discord.Interaction) -> None:
+        """Finish through an interaction edit — the shape a Close button wants."""
+        if self._finished:
+            return
+        self._finished = True
+        view = self.build_view(disabled=True)
+        await deliver.apply_interaction(interaction, view)
+        if self._view is not None:
+            self._view.stop()
+        view.stop()
 
     async def refresh(self) -> None:
         """Out-of-band re-render (background state change, not an interaction)."""
