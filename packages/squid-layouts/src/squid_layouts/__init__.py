@@ -16,6 +16,16 @@ from squid_layouts.compositor import Composition, compose, render_static
 from squid_layouts.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
 from squid_layouts.constraints import Alt, Alts, Drop, Never, Overflow, Paginate, Spill, Truncate, alts
 from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset, as_document
+from squid_layouts.durability import (
+    ComponentRegistry,
+    ComponentSnapshot,
+    MemorySnapshotStore,
+    MountManager,
+    MountSnapshot,
+    SnapshotCodec,
+    SnapshotError,
+    SnapshotStore,
+)
 from squid_layouts.errors import DrawInvariantError, LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.html import DISCORD_PREVIEW_CSS, HtmlRenderer
 from squid_layouts.ir import (
@@ -81,6 +91,8 @@ __all__ = [
     "Code",
     "Color",
     "Component",
+    "ComponentRegistry",
+    "ComponentSnapshot",
     "Composition",
     "Document",
     "DrawInvariantError",
@@ -104,8 +116,11 @@ __all__ = [
     "Lines",
     "LinkButton",
     "MediaCollection",
+    "MemorySnapshotStore",
     "ModalSpec",
     "Mount",
+    "MountManager",
+    "MountSnapshot",
     "MountedView",
     "NavFactory",
     "Navigator",
@@ -133,6 +148,9 @@ __all__ = [
     "SelectMenu",
     "SelectionEvent",
     "Sep",
+    "SnapshotCodec",
+    "SnapshotError",
+    "SnapshotStore",
     "SolvedLayout",
     "Spill",
     "StaticView",
