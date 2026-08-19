@@ -15,11 +15,13 @@ class Counter(sl.Component):
     count: int = sl.state(0)
 
     def render(self):
-        return [
-            sl.Heading("Counter"),
-            sl.Text(f"count: {self.count}"),
-            sl.Row((sl.Button(label="+1", on_click=self.increment, key="inc"),)),
-        ]
+        return sl.Section(
+            (
+                sl.Paragraph(sl.md(t"Count: {self.count}")),
+                sl.Actions((sl.Action("increment", "+1", self.increment),), key="counter-actions"),
+            ),
+            heading="Counter",
+        )
 
     async def increment(self, event: sl.PressEvent) -> None:
         self.count += 1  # the mount re-renders and edits the message
@@ -30,35 +32,34 @@ for component composition, planning, renderers, action policies, and durable mou
 
 ## The layers
 
-1. **Presets** (`card`, `listing`, `report`, `banner`) — common shapes, string-in/string-out.
-2. **IR nodes** (`Text`, `Heading`, `Code`, `Lines`, `Section`, `Panel`, `SelectMenu`, …) —
-   Discord-shaped, carrying **overflow policies instead of sizes**:
-   - `Truncate(keep="head"|"tail")` — ellipsis trim;
-   - `Spill()` — show the entries that fit plus "…and N more";
-   - `Paginate(key="results", initial="start"|"end", per=None)` — split into pages, on overflow or every
-     `per` entries; the solver adds a budget-charged footer and the nav factory's controls;
-   - `alts(...)` / `Alt(primary, fallbacks, priority=...)` — degradation ladders:
-     semantically smaller alternates beat a mid-string ellipsis, then low-priority list
-     entries spill first;
-   - `Fold(primary, fallback, priority=...)` — structural alternatives for the 40-component
-     budget, such as a button panel folding to one link;
-   - `Drop()`, `Never()` — omit whole, or treat shrinking as a bug.
-3. **Planner and solver** — lower capabilities, measure chrome, charge `Never` nodes as fixed costs, grant the display
-   budget by priority (proportionally within a tier), refunds dropped nodes, applies
-   policies only on overflow, and realizes the page controls a `NavFactory` describes.
-4. **Scene** — immutable canonical JSON with action references but no callbacks or native
-   frontend objects.
-5. **Renderers** — Discord and HTML mechanically draw the same scene. Discord runs
-   `conform(strict=True)` afterward as an invariant audit, not another clamp pass.
+1. **Semantic documents** describe author intent with `Section`, `Paragraph`, `List`,
+   `Fields`, `Table`, `Media`, `Details`, `Actions`, `Choices`, `Items`, and `Navigation`.
+   Authors may express a display preference and flexibility, but never an exact Discord shape.
+2. **Target adapters** select lossless representations. For example, 36 semantic actions become
+   two pickers containing 25 and 11 options; explicit action groups never merge. Strategy state
+   supplies hysteresis, so small data changes do not reshuffle a familiar UI.
+3. **Exact primitives** live under `squid_layouts.primitives`. `Row`, `SelectMenu`, `Panel`,
+   and their overflow policies are the deliberate target-shaped escape hatch, not the primary API.
+4. **Planner and solver** rank strategies by coarse lexicographic tiers, measure every target
+   resource, apply only author-granted loss, and produce a `PlanReport`. Search has a bounded
+   512-state default; exhaustion emits `planner.search_fallback` and keeps a lossless plan.
+5. **Scene protocol 1** is immutable canonical JSON with action references but no callbacks or
+   native frontend objects.
+6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
+   `conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
 
 `compose()` is the Discord convenience pipeline, with `reserved_text` for callers whose
-message carries content the engine cannot see. Components nest through explicit
+message carries content the engine cannot see. It always creates a renderer-owned view;
+adopting an arbitrary existing `discord.py` view is intentionally unsupported. Components nest through explicit
 `self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `Mount`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
 controls, `Reactor` coalesces out-of-band refreshes, and `Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
-any component-bearing nodes built from the `PageContext`. `render_static` is the sessionless
+any component-bearing nodes built from the `PageContext`. Semantic pickers page through keyed
+25-option windows. A keyed root `Document` may promote structural overflow to whole-message
+pages; local pagination wins, and local plus root navigation are never shown simultaneously.
+`render_static` is the sessionless
 path for reconciler-managed posts. `build_modal`/`conform_modal` do the same for modals,
 whose string lengths discord.py does not validate at all. `SceneCodec` transports plans to
 other processes; `MountManager` provides opt-in versioned state checkpoints.
@@ -67,6 +68,9 @@ other processes; `MountManager` provides opt-in versioned state checkpoints.
 
 - The package depends on discord.py and anyio only, and never spawns tasks — start
   `Reactor.run()` under your own supervisor.
+- Bare strings are trusted Discord Markdown. Use `md(t"Build {title}")` for escaped Python
+  3.14 template-string interpolation, `plain()` for literal text, and `raw_md()` only for a
+  deliberately trusted interpolation.
 - It contains no translation markers. All user-facing chrome (nav labels, spill lines, page
   footers) enters pre-translated through `Chrome`; build one per locale.
 - If it ever grows `_()` markers, the host's Babel config must add
