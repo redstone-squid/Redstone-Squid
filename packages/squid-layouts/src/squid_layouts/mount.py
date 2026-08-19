@@ -6,6 +6,7 @@ discord.py views: each render produces a fresh :class:`MountedView`, and the pre
 stopped after a successful edit so dispatch tables do not accumulate.
 """
 
+import asyncio
 import hashlib
 import logging
 import secrets
@@ -15,7 +16,7 @@ from typing import Any, Protocol
 import discord
 
 from squid_layouts import deliver
-from squid_layouts.actions import ActionBinding, Actor, PressEvent, SelectionEvent
+from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
@@ -25,7 +26,7 @@ from squid_layouts.discord.actions import DiscordActionResponder
 from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.pagination import NavFactory, PageContext, default_nav
-from squid_layouts.reactivity import transaction
+from squid_layouts.reactivity import readonly_transaction, transaction
 from squid_layouts.scene import SceneButton, SceneSelect
 
 logger = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ def _custom_id(mount_id: str, key: str) -> str:
 
 
 class _WiredButton(discord.ui.Button[MountedView]):
-    def __init__(self, node: SceneButton, mount: Mount, key: str) -> None:
+    def __init__(self, node: SceneButton, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
             label=node.label,
@@ -81,13 +82,14 @@ class _WiredButton(discord.ui.Button[MountedView]):
         )
         self._mount = mount
         self._key = key
+        self._generation = generation
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self._mount.dispatch(self._key, interaction)
+        await self._mount.dispatch(self._key, interaction, generation=self._generation)
 
 
 class _WiredSelect(discord.ui.Select[MountedView]):
-    def __init__(self, node: SceneSelect, mount: Mount, key: str) -> None:
+    def __init__(self, node: SceneSelect, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             placeholder=node.placeholder,
             min_values=node.min_values,
@@ -103,9 +105,10 @@ class _WiredSelect(discord.ui.Select[MountedView]):
         )
         self._mount = mount
         self._key = key
+        self._generation = generation
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        await self._mount.dispatch(self._key, interaction, self.values)
+        await self._mount.dispatch(self._key, interaction, self.values, generation=self._generation)
 
 
 class Mount:
@@ -138,6 +141,8 @@ class Mount:
         self.message: discord.Message | None = None
         self._view: MountedView | None = None
         self._handlers: dict[str, ActionBinding] = {}
+        self._action_lock = asyncio.Lock()
+        self._generation = 0
         self._components: dict[str, Component] = {}
         self._dirty = False
         self._finished = False
@@ -150,6 +155,7 @@ class Mount:
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
         """Render the component's current state into a fresh view."""
+        generation = self._generation + 1
         tree = render_component_tree(self.component)
         rendered = tree.nodes
 
@@ -161,9 +167,9 @@ class Mount:
                 key = binding.key
                 self._handlers[key] = binding
                 if isinstance(node, SceneButton):
-                    item: discord.ui.Item[Any] = _WiredButton(node, self, key)
+                    item: discord.ui.Item[Any] = _WiredButton(node, self, key, generation)
                 else:
-                    item = _WiredSelect(node, self, key)
+                    item = _WiredSelect(node, self, key, generation)
                 if disabled:
                     item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
                 return item
@@ -206,6 +212,7 @@ class Mount:
         self._page = {pager.key: pager.page for pager in pagers}
         self._pages = {pager.key: pager.pages for pager in pagers}
         self._pager_digests = {pager.key: pager.content_fingerprint for pager in pagers}
+        self._generation = generation
         self._reconcile_components(tree.components)
         if disabled:
             _disable_all(view)
@@ -280,7 +287,14 @@ class Mount:
             self._view.stop()
         self._view = view
 
-    async def dispatch(self, key: str, interaction: discord.Interaction, values: list[str] | None = None) -> None:
+    async def dispatch(
+        self,
+        key: str,
+        interaction: discord.Interaction,
+        values: list[str] | None = None,
+        *,
+        generation: int | None = None,
+    ) -> None:
         """The funnel: author lock -> handler -> flush."""
         if self.lock_to is not None and interaction.user.id != self.lock_to:
             await deliver.respond_text(interaction, self.chrome.not_yours, ephemeral=True)
@@ -290,22 +304,49 @@ class Mount:
             # A click raced a re-render that removed the control; acknowledge and move on.
             await self.flush(interaction)
             return
+        if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
+            await self._invoke(binding, key, interaction, values)
+            return
+
+        async with self._action_lock:
+            if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
+                await self._acknowledge(interaction)
+                return
+            if binding.policy is ActionPolicy.REBASE:
+                binding = self._handlers.get(key)
+                if binding is None:
+                    await self._acknowledge(interaction)
+                    return
+            await self._invoke(binding, key, interaction, values)
+
+    async def _invoke(
+        self,
+        binding: ActionBinding,
+        key: str,
+        interaction: discord.Interaction,
+        values: list[str] | None,
+    ) -> None:
+        actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
+        responder = DiscordActionResponder(interaction, self)
+        native_locale = getattr(interaction, "locale", None)
+        locale = str(native_locale) if native_locale is not None else None
+        event = (
+            PressEvent(actor, responder, locale, {"frontend": "discord"})
+            if values is None
+            else SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
+        )
         try:
-            actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
-            responder = DiscordActionResponder(interaction, self)
-            native_locale = getattr(interaction, "locale", None)
-            locale = str(native_locale) if native_locale is not None else None
-            event = (
-                PressEvent(actor, responder, locale, {"frontend": "discord"})
-                if values is None
-                else SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
-            )
-            with transaction():
+            context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
+            with context:
                 await binding.handler(event)
         except Exception as error:
             await self.handle_error(interaction, error, f"handler:{key}")
             return
         await self.flush(interaction)
+
+    async def _acknowledge(self, interaction: discord.Interaction) -> None:
+        if not interaction.response.is_done():
+            await interaction.response.defer()
 
     async def flush(self, interaction: discord.Interaction) -> None:
         """Apply pending state changes as an interaction edit, or just acknowledge."""
