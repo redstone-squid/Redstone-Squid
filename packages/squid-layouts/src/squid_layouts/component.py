@@ -46,10 +46,64 @@ from squid_layouts.semantic import (
     Actions as SemanticActions,
 )
 from squid_layouts.semantic import (
+    Article as SemanticArticle,
+)
+from squid_layouts.semantic import (
+    Aside as SemanticAside,
+)
+from squid_layouts.semantic import (
+    BestEffort as SemanticBestEffort,
+)
+from squid_layouts.semantic import (
+    Choices as SemanticChoices,
+)
+from squid_layouts.semantic import (
+    Cluster as SemanticCluster,
+)
+from squid_layouts.semantic import (
+    Details as SemanticDetails,
+)
+from squid_layouts.semantic import (
+    FallbackContent as SemanticFallbackContent,
+)
+from squid_layouts.semantic import (
+    Group as SemanticGroup,
+)
+from squid_layouts.semantic import (
+    Items as SemanticItems,
+)
+from squid_layouts.semantic import (
     LayoutNode,
 )
 from squid_layouts.semantic import (
     Link as SemanticLink,
+)
+from squid_layouts.semantic import (
+    List as SemanticList,
+)
+from squid_layouts.semantic import (
+    Media as SemanticMedia,
+)
+from squid_layouts.semantic import (
+    Navigation as SemanticNavigation,
+)
+from squid_layouts.semantic import (
+    OptionalContent as SemanticOptionalContent,
+)
+from squid_layouts.semantic import (
+    Section as SemanticSection,
+)
+from squid_layouts.semantic import (
+    Spilled as SemanticSpilled,
+)
+from squid_layouts.semantic import (
+    Stack as SemanticStack,
+)
+from squid_layouts.semantic import (
+    Table as SemanticTable,
+)
+from squid_layouts.semantic import (
+    Truncated as SemanticTruncated,
 )
 
 type RenderNode = LayoutNode
@@ -285,6 +339,47 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                     key=f"{prefix}.{key}",
                     items=tuple(rewrite_semantic_action(item) for item in items),
                 )
+            case (
+                SemanticGroup(children=children) | SemanticStack(children=children) | SemanticCluster(children=children)
+            ):
+                return replace(node, children=tuple(rewrite(child) for child in children))
+            case (
+                SemanticSection(children=children)
+                | SemanticArticle(children=children)
+                | SemanticAside(children=children)
+            ):
+                return replace(node, children=tuple(rewrite(child) for child in children))
+            case SemanticDetails(key=key, children=children):
+                return replace(
+                    node,
+                    key=f"{prefix}.{key}",
+                    children=tuple(rewrite(child) for child in children),
+                )
+            case SemanticItems(key=key, items=items):
+                return replace(
+                    node,
+                    key=f"{prefix}.{key}",
+                    items=tuple(
+                        replace(item, children=tuple(rewrite(child) for child in item.children)) for item in items
+                    ),
+                )
+            case (
+                SemanticList(key=key)
+                | SemanticChoices(key=key)
+                | SemanticNavigation(key=key)
+                | SemanticTable(key=key)
+                | SemanticMedia(key=key)
+            ):
+                return replace(node, key=f"{prefix}.{key}")
+            case (
+                SemanticTruncated(node=child)
+                | SemanticSpilled(node=child)
+                | SemanticOptionalContent(node=child)
+                | SemanticBestEffort(node=child)
+            ):
+                return replace(node, node=rewrite(child))
+            case SemanticFallbackContent(primary=primary, alternate=alternate):
+                return replace(node, primary=rewrite(primary), alternate=rewrite(alternate))
             case Text() | Heading() | Footer() | Code() | Lines():
                 return rewrite_text(node)
             case Panel(children=children, accent=accent):
