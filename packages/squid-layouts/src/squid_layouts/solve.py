@@ -552,18 +552,24 @@ def _validated_nav(nodes: Sequence[Node]) -> list[Node]:
     return list(nodes)
 
 
+def _item_component_cost(item: object) -> int:
+    return item.component_cost if isinstance(item, RawItem) else 1
+
+
 def _component_count(children: list[Realized]) -> int:
     count = 0
     for child in children:
         match child:
             case RPanel(children=inner):
                 count += 1 + _component_count(inner)
-            case RSection(texts=texts):
-                count += 1 + len(texts) + 1
+            case RSection(texts=texts, accessory=accessory):
+                count += 1 + len(texts) + _item_component_cost(accessory)
             case Row(items=items):
-                count += 1 + len(items)
+                count += 1 + sum(_item_component_cost(item) for item in items)
             case SelectMenu():
                 count += 2  # the implicit ActionRow plus the select itself
+            case RawItem(component_cost=component_cost):
+                count += component_cost
             case _:
                 count += 1
     return count

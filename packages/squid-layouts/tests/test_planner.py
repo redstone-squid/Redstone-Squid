@@ -4,15 +4,22 @@ import discord
 import pytest
 
 from squid_layouts import (
+    LIMITS,
+    ActionGroup,
     Button,
+    Choice,
     LayoutInvariantError,
     Panel,
     Row,
     SceneCodec,
+    TargetProfile,
     Text,
+    UnsolvableLayoutError,
+    Variant,
     plan,
 )
-from squid_layouts.discord import DISCORD_V2, DiscordRenderer
+from squid_layouts.discord import DISCORD_V2, DiscordRenderer, NativeItem
+from squid_layouts.scene import SceneRow, SceneText
 
 
 async def _click(event) -> None: ...
@@ -49,3 +56,76 @@ def test_static_discord_renderer_matches_scene_structure() -> None:
 
     assert isinstance(view, discord.ui.LayoutView)
     assert view.to_components()[0]["type"] == 17
+
+
+def test_action_group_chunks_controls_without_dropping_any() -> None:
+    buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
+    result = plan(ActionGroup(buttons), target=DISCORD_V2)
+
+    rows = [node for node in result.scene.children if isinstance(node, SceneRow)]
+    assert [len(row.items) for row in rows] == [5, 1]
+    assert set(result.bindings) == {f"b{index}" for index in range(6)}
+
+
+def test_exact_row_overflow_is_a_typed_planning_error() -> None:
+    buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
+    with pytest.raises(LayoutInvariantError, match="row has 6 controls"):
+        plan(Row(buttons), target=DISCORD_V2)
+
+
+def test_choice_selects_by_capability_before_budget_degradation() -> None:
+    choice = Choice(
+        (
+            Variant(Text("rich"), requires=frozenset({"rich-text"})),
+            Variant(Text("plain")),
+        )
+    )
+    basic = TargetProfile("test", 1, limits=LIMITS)
+    rich = TargetProfile("test", 1, capabilities=frozenset({"rich-text"}), limits=LIMITS)
+
+    basic_scene = plan(choice, target=basic).scene
+    rich_scene = plan(choice, target=rich).scene
+
+    assert basic_scene.children == (SceneText("plain"),)
+    assert rich_scene.children == (SceneText("rich"),)
+
+
+def test_native_item_is_built_once_measured_recursively_and_reused() -> None:
+    calls = 0
+    native = discord.ui.Container(*(discord.ui.TextDisplay(str(index)) for index in range(39)))
+
+    def factory() -> discord.ui.Item:
+        nonlocal calls
+        calls += 1
+        return native
+
+    result = plan(NativeItem(factory, fallback=Text("fallback")), target=DISCORD_V2)
+    view = DiscordRenderer().draw(result.scene, plan=result)
+
+    assert calls == 1
+    assert view.children[0] is native
+
+
+def test_native_nested_component_cost_can_make_a_document_unsolvable() -> None:
+    native = NativeItem(
+        lambda: discord.ui.Container(*(discord.ui.TextDisplay(str(index)) for index in range(39))),
+        fallback=Text("fallback"),
+    )
+
+    with pytest.raises(UnsolvableLayoutError, match="41 components"):
+        plan((native, Text("outside")), target=DISCORD_V2)
+
+
+def test_unsupported_native_extension_uses_its_portable_fallback_without_building() -> None:
+    called = False
+
+    def factory() -> discord.ui.Item:
+        nonlocal called
+        called = True
+        return discord.ui.TextDisplay("native")
+
+    target = TargetProfile("portable.test", 1, limits=LIMITS)
+    result = plan(NativeItem(factory, fallback=Text("portable")), target=target)
+
+    assert result.scene.children == (SceneText("portable"),)
+    assert not called

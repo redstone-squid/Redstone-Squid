@@ -5,7 +5,7 @@ are immutable descriptions. `solve` fits them to the message budgets and `materi
 the result into discord.py items — authors never do budget arithmetic.
 """
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from squid_layouts.actions import ActionPolicy
@@ -113,18 +113,37 @@ class SelectMenu:
 
 @dataclass(frozen=True, slots=True)
 class RawItem:
-    """Escape hatch: a caller-built discord.py item added verbatim.
-
-    This is how persistent DynamicItems enter a layout. The factory is called once per
-    materialization; ``text_cost`` charges any display text the item contributes.
-    """
+    """Internal prepared target item retained until scene drawing."""
 
     factory: Callable[[], object]
     text_cost: int = 0
+    component_cost: int = 1
+    kind: str = "discord.raw"
+    version: int = 0
+    payload: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class Extension:
+    """Target extension with a mandatory portable fallback."""
+
+    kind: str
+    version: int
+    payload: object
+    fallback: Node
 
 
 @dataclass(frozen=True, slots=True)
 class Row:
+    """An exact target row; invalid local structure is a planning error."""
+
+    items: tuple[LinkButton | Button | RawItem, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ActionGroup:
+    """Buttons automatically arranged into as many valid target rows as needed."""
+
     items: tuple[LinkButton | Button | RawItem, ...]
 
 
@@ -136,6 +155,15 @@ class Thumbnail:
 
 @dataclass(frozen=True, slots=True)
 class Gallery:
+    """One exact target gallery."""
+
+    urls: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MediaCollection:
+    """Media automatically arranged into valid target galleries."""
+
     urls: tuple[str, ...]
 
 
@@ -153,6 +181,27 @@ class Panel:
 
     children: tuple[Node, ...]
     accent: Color | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Variant:
+    """One structural representation and the capabilities it requires."""
+
+    node: Node
+    requires: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True, slots=True)
+class Choice:
+    """Ordered structural and capability fallback ladder."""
+
+    variants: tuple[Variant, ...]
+    priority: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.variants:
+            message = "Choice needs at least one variant"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,13 +228,17 @@ type Node = (
     | Lines
     | Sep
     | Row
+    | ActionGroup
     | SelectMenu
     | Thumbnail
     | Gallery
+    | MediaCollection
     | Section
     | Panel
     | RawItem
+    | Extension
     | Fold
+    | Choice
 )
 
 

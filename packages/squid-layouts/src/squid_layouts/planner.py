@@ -7,11 +7,16 @@ from dataclasses import dataclass, field
 from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import DocumentLike, as_document
-from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.ir import (
+    ActionGroup,
     Button,
+    Choice,
+    Extension,
+    Fold,
     Gallery,
     LinkButton,
+    MediaCollection,
     Node,
     Panel,
     RawItem,
@@ -45,7 +50,7 @@ from squid_layouts.scene import (
     SceneThumbnail,
 )
 from squid_layouts.scene_codec import SceneCodec
-from squid_layouts.solve import Realized, RPanel, RSection, RText, SolvedLayout, solve
+from squid_layouts.solve import LayoutOverflowError, Realized, RPanel, RSection, RText, SolvedLayout, solve
 from squid_layouts.target import ResourceCost, TargetProfile
 
 EMPTY_RESERVATION = ResourceCost()
@@ -80,10 +85,10 @@ class _Converter:
                     disabled=node.disabled,
                     policy=node.policy,
                 )
-            case RawItem(factory=factory):
+            case RawItem(factory=factory, kind=kind, version=version, payload=payload):
                 resource = f"native:{path}"
                 self.resources[resource] = factory()
-                return SceneExtension("discord.raw", 0, {"resource": resource})
+                return SceneExtension(kind, version, {**payload, "resource": resource})
 
     def node(self, node: Realized, path: str) -> SceneNode:
         match node:
@@ -132,6 +137,128 @@ class _Converter:
         return tuple(self.node(child, str(index)) for index, child in enumerate(children))
 
 
+def _lower_children(
+    nodes: Sequence[Node],
+    target: TargetProfile,
+    limits: V2Limits,
+) -> tuple[Node, ...]:
+    lowered: list[Node] = []
+    for node in nodes:
+        match node:
+            case ActionGroup(items=items):
+                lowered.extend(
+                    Row(tuple(items[start : start + limits.row_buttons]))
+                    for start in range(0, len(items), limits.row_buttons)
+                )
+            case MediaCollection(urls=urls):
+                lowered.extend(
+                    Gallery(tuple(urls[start : start + limits.gallery_items]))
+                    for start in range(0, len(urls), limits.gallery_items)
+                )
+            case Panel(children=children, accent=accent):
+                lowered.append(Panel(_lower_children(children, target, limits), accent))
+            case Fold(primary=primary, fallback=fallback, priority=priority):
+                lowered.append(
+                    Fold(
+                        _lower_single(primary, target, limits),
+                        _lower_single(fallback, target, limits),
+                        priority,
+                    )
+                )
+            case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
+                adapter = target.extensions.get(kind)
+                if adapter is None:
+                    lowered.extend(_lower_children((fallback,), target, limits))
+                    continue
+                prepared = adapter.prepare(payload)
+                component_cost = prepared.cost.get("components")
+                text_cost = prepared.cost.get("display_text")
+                if component_cost < 1 or text_cost < 0:
+                    message = f"extension adapter {kind!r} returned an invalid resource cost"
+                    raise LayoutInvariantError(message)
+                resource = prepared.resource
+                lowered.append(
+                    RawItem(
+                        factory=lambda resource=resource: resource,
+                        text_cost=text_cost,
+                        component_cost=component_cost,
+                        kind=kind,
+                        version=version,
+                        payload=prepared.scene_payload,
+                    )
+                )
+            case Choice(variants=variants, priority=priority):
+                supported = [variant for variant in variants if variant.requires <= target.capabilities]
+                if not supported:
+                    message = "Choice has no variant supported by the selected target"
+                    raise LayoutInvariantError(message)
+                branch = _lower_single(supported[-1].node, target, limits)
+                for variant in reversed(supported[:-1]):
+                    branch = Fold(_lower_single(variant.node, target, limits), branch, priority)
+                lowered.append(branch)
+            case _:
+                lowered.append(node)
+    return tuple(lowered)
+
+
+def _lower_single(node: Node, target: TargetProfile, limits: V2Limits) -> Node:
+    lowered = _lower_children((node,), target, limits)
+    if len(lowered) != 1:
+        message = "a structural choice variant must lower to one node"
+        raise LayoutInvariantError(message)
+    return lowered[0]
+
+
+def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
+    def fail(path: str, detail: str) -> None:
+        message = f"{path}: {detail}"
+        raise LayoutInvariantError(message)
+
+    def walk(node: Node, path: str) -> None:
+        match node:
+            case Button(label=label):
+                if len(label) > limits.button_label:
+                    fail(path, f"button label exceeds {limits.button_label}")
+            case Row(items=items):
+                if len(items) > limits.row_buttons:
+                    fail(path, f"row has {len(items)} controls; maximum is {limits.row_buttons}")
+                for index, item in enumerate(items):
+                    if isinstance(item, Button):
+                        walk(item, f"{path}.{index}")
+            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum):
+                if len(options) > limits.select_options:
+                    fail(path, f"select has {len(options)} options; use an option-paging semantic node")
+                if placeholder is not None and len(placeholder) > limits.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
+                if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
+                    fail(path, "select value bounds are invalid")
+                for index, option in enumerate(options):
+                    if len(option.label) > limits.option_label:
+                        fail(f"{path}.option.{index}", f"label exceeds {limits.option_label}")
+                    if len(option.value) > limits.option_value:
+                        fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
+                    if option.description is not None and len(option.description) > limits.option_description:
+                        fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
+            case Gallery(urls=urls):
+                if len(urls) > limits.gallery_items:
+                    fail(path, f"gallery has {len(urls)} items; use MediaCollection")
+            case RSection():
+                return
+            case Panel(children=children):
+                for index, child in enumerate(children):
+                    walk(child, f"{path}.{index}")
+            case Fold(primary=primary, fallback=fallback):
+                walk(primary, f"{path}.primary")
+                walk(fallback, f"{path}.fallback")
+            case _:
+                texts = getattr(node, "texts", None)
+                if isinstance(texts, tuple) and len(texts) > limits.section_texts:
+                    fail(path, f"section has {len(texts)} text slots; maximum is {limits.section_texts}")
+
+    for index, node in enumerate(nodes):
+        walk(node, f"$.{index}")
+
+
 def plan(
     rendered: DocumentLike,
     *,
@@ -149,15 +276,26 @@ def plan(
     """
     document = as_document(rendered)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
-    solved = solve(
-        document.children,
-        limits=limits,
-        chrome=chrome,
-        strict=strict,
-        reserved_text=reservation.get("display_text"),
-        page=page,
-        nav=nav,
-    )
+    lowered = _lower_children(document.children, target, limits)
+    _validate(lowered, limits)
+    try:
+        solved = solve(
+            lowered,
+            limits=limits,
+            chrome=chrome,
+            strict=strict,
+            reserved_text=reservation.get("display_text"),
+            page=page,
+            nav=nav,
+        )
+    except LayoutOverflowError as error:
+        raise LayoutDegradedError(str(error)) from error
+    if solved.components > limits.total_components:
+        message = f"{solved.components} components exceed target maximum {limits.total_components}"
+        raise UnsolvableLayoutError(message)
+    if any(note.startswith("Never nodes need") for note in solved.notes):
+        message = "; ".join(note for note in solved.notes if note.startswith("Never nodes need"))
+        raise UnsolvableLayoutError(message)
     converter = _Converter()
     scene = SceneDocument(
         protocol=SceneCodec.protocol,
