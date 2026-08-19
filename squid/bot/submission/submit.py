@@ -19,10 +19,9 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
-from squid.bot.submission.ui.views import BuildSubmissionForm
+from squid.bot.submission.ui.views import SubmissionFormComponent
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import (
-    StaticLayout,
     edit_layout,
     error_layout,
     no_mentions,
@@ -199,28 +198,32 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
             submitted = build
 
-        view = BuildSubmissionForm(
+        component = SubmissionFormComponent(
             draft,
             self.builds,
             author_id=interaction.user.id,
             locale=locale,
             on_submit=persist_draft,
         )
+        mount = component.mount()
+        rendered = mount.build_view()
         workspace_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
-            view=view,
+            view=rendered,
+            files=mount.attachment_files(),
             ephemeral=True,
             wait=True,
             allowed_mentions=no_mentions(),
         )
-        await view.wait()
-        if view.value is None:
+        mount.bind(workspace_message, rendered)
+        await component.wait()
+        if component.value is None:
             await edit_layout(
                 workspace_message,
                 text_layout(t(locale, _("Submission expired. Nothing was saved."))),
                 allowed_mentions=no_mentions(),
             )
             return
-        if view.value is False:
+        if component.value is False:
             await edit_layout(
                 workspace_message,
                 text_layout(t(locale, _("Submission cancelled. Nothing was saved."))),
@@ -236,12 +239,21 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = StaticLayout(
-            discord.ui.TextDisplay(heading),
-            await self.bot.for_build(build).render_container(reserved_text=len(heading)),
-            discord.ui.ActionRow(EphemeralBuildEditButton(build)),
+        preview = sl.discord.render_static(
+            [
+                sl.primitives.Text(heading),
+                await self.bot.for_build(build).render_node(),
+                sl.primitives.Row(
+                    (
+                        sl.primitives.RawItem(
+                            lambda: EphemeralBuildEditButton(build),
+                            kind="discord.item",
+                            version=1,
+                        ),
+                    )
+                ),
+            ]
         )
-        sl.discord.conform(preview)
         await asyncio.gather(
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
             self.bot.for_build(build).post_for_voting(),

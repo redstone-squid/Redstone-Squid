@@ -7,6 +7,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast, override
 
+import anyio
 import discord
 from discord import Interaction
 from whenever import Instant
@@ -28,7 +29,7 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     get_text_input,
 )
-from squid.bot.ui import display_text_length
+from squid.bot.ui import create_mount, display_text_length
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
@@ -44,7 +45,7 @@ from squid.bot.utils.components import (
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import Build, BuildCategory, BuildDraft, Status
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
@@ -124,7 +125,7 @@ class SubmissionModal(ErrorHandledModal):
         self,
         build: BuildDraft,
         builds: BuildService,
-        parent: BuildSubmissionForm | None = None,
+        parent: BuildSubmissionForm | SubmissionFormComponent | None = None,
         *,
         locale: str | None = None,
     ) -> None:
@@ -206,7 +207,7 @@ class SubmissionModal(ErrorHandledModal):
 class SubmissionDetailsModal(ErrorHandledModal):
     """Collect optional restrictions, links, and notes in an explicit format."""
 
-    def __init__(self, parent: BuildSubmissionForm) -> None:
+    def __init__(self, parent: BuildSubmissionForm | SubmissionFormComponent) -> None:
         super().__init__(title=t(parent.locale, _("Links and optional details")))
         self.parent = parent
         build = parent.build
@@ -464,6 +465,207 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         await interaction.response.defer()
         self.value = False
         self.stop()
+
+
+class SubmissionFormComponent(sl.Component):
+    """A semantic, resumable submission workspace around the native detail modals."""
+
+    value: bool | None = sl.state(None)
+    validation_error: str | None = sl.state(None)
+    submitting: bool = sl.state(default=False)
+    closed: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        build: BuildDraft,
+        builds: BuildService,
+        *,
+        author_id: int | None = None,
+        locale: str | None = None,
+        timeout: float = 300,
+        on_submit: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        build.submission_status = Status.PENDING
+        build.category = BuildCategory.DOOR
+        build.patterns = build.patterns or ["Regular"]
+        self.build = build
+        self.builds = builds
+        self.author_id = author_id
+        self.locale = locale
+        self._timeout = timeout
+        self.on_submit = on_submit
+        self._done = anyio.Event()
+        self._mount: sl.discord.Mount | None = None
+
+    @property
+    def is_ready(self) -> bool:
+        width, height, _depth = self.build.door_dimensions
+        return self.build.door_orientation is not None and width is not None and height is not None
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.closed:
+            return (sl.primitives.banner(t(self.locale, _("Submission closed")), accent=DISCORD_BLUE),)
+        missing = []
+        if self.build.door_orientation is None:
+            missing.append(t(self.locale, _("door type")))
+        if not self.build.door_width or not self.build.door_height:
+            missing.append(t(self.locale, _("door opening size")))
+        guidance = self.validation_error
+        if guidance is None and missing:
+            guidance = t(self.locale, _("Required before review: {fields}."), fields=", ".join(missing))
+        if guidance is None:
+            guidance = t(self.locale, _("Ready to submit. Optional details can be added later."))
+        fields = (
+            sl.primitives.presets.Field(
+                t(self.locale, _("Door type")),
+                self.build.door_orientation or "—",
+            ),
+            sl.primitives.presets.Field(
+                t(self.locale, _("Opening size")),
+                _format_dimensions(self.build.door_dimensions) or "—",
+            ),
+            sl.primitives.presets.Field(t(self.locale, _("Pattern")), ", ".join(self.build.patterns)),
+            sl.primitives.presets.Field(
+                t(self.locale, _("Build size")),
+                _format_dimensions(self.build.dimensions) or "—",
+            ),
+            sl.primitives.presets.Field(t(self.locale, _("Versions")), self.build.version_spec or "—"),
+            sl.primitives.presets.Field(t(self.locale, _("Creators")), ", ".join(self.build.creators_ign) or "—"),
+        )
+        return (
+            sl.primitives.card(
+                t(self.locale, _("Submit a build")),
+                guidance,
+                accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
+                fields=fields,
+                footer=t(self.locale, _("Only the door type and opening size are required.")),
+            ),
+            sl.Choices(
+                key="door_type",
+                choices=tuple(sl.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
+                selected=(self.build.door_orientation,) if self.build.door_orientation is not None else (),
+                on_change=self._door_changed,
+            ),
+            sl.Choices(
+                key="location",
+                choices=(
+                    sl.Choice(
+                        "Directional",
+                        t(self.locale, _("Directional")),
+                        t(self.locale, _("May depend on the direction it faces")),
+                    ),
+                    sl.Choice(
+                        "Locational",
+                        t(self.locale, _("Locational")),
+                        t(self.locale, _("May depend on its position in the world")),
+                    ),
+                ),
+                selected=tuple(
+                    value for value in ("Directional", "Locational") if value in self.build.miscellaneous_restrictions
+                ),
+                on_change=self._location_changed,
+                minimum=0,
+                maximum=2,
+            ),
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Edit basics")),
+                        self._edit_basics,
+                        "edit_basics",
+                        style=sl.primitives.ActionStyle.PRIMARY,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Add links & details")),
+                        self._edit_details,
+                        "edit_details",
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Submit for review")),
+                        self._submit,
+                        "submit",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                        disabled=self.submitting,
+                    ),
+                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
+                )
+            ),
+        )
+
+    async def _door_changed(self, event: sl.ChoiceEvent) -> None:
+        self.build.door_orientation = event.selected[0]
+        self.validation_error = None
+        self.invalidate()
+
+    async def _location_changed(self, event: sl.ChoiceEvent) -> None:
+        self.build.miscellaneous_restrictions = list(event.selected)
+        self.invalidate()
+
+    async def _edit_basics(self, event: sl.PressEvent) -> None:
+        await event.present_form(SubmissionModal(self.build, self.builds, self, locale=self.locale))
+
+    async def _edit_details(self, event: sl.PressEvent) -> None:
+        await event.present_form(SubmissionDetailsModal(self))
+
+    async def _submit(self, event: sl.PressEvent) -> None:
+        if not self.is_ready:
+            self.validation_error = t(
+                self.locale,
+                _("Choose a door type and add an opening size such as \x602x2\x60 before submitting."),
+            )
+            self.invalidate()
+            return
+        if self.submitting:
+            await event.notice(t(self.locale, _("This build is still being submitted. Give it a moment.")))
+            return
+        self.submitting = True
+        await event.acknowledge()
+        try:
+            if self.on_submit is not None:
+                await self.on_submit()
+        except Exception:
+            self.submitting = False
+            self.validation_error = t(
+                self.locale,
+                _("Submitting failed and nothing was saved. Press “Submit for review” to try again."),
+            )
+            self.invalidate()
+            raise
+        self.submitting = False
+        self.value = True
+        self.closed = True
+        self._done.set()
+        await event.finish()
+
+    async def _cancel(self, event: sl.PressEvent) -> None:
+        self.value = False
+        self.closed = True
+        self._done.set()
+        await event.finish()
+
+    async def refresh(self, interaction: discord.Interaction[Any]) -> None:
+        self.validation_error = None
+        self.invalidate()
+        if self._mount is None:
+            return
+        rendered = self._mount.build_view()
+        await edit_interaction_layout(interaction, rendered)
+        if self._mount.message is not None:
+            self._mount.bind(self._mount.message, rendered)
+
+    async def wait(self) -> bool | None:
+        with anyio.move_on_after(self._timeout) as scope:
+            await self._done.wait()
+        return None if scope.cancel_called else self.value
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            locale=self.locale,
+            timeout=self._timeout,
+            lock_to=self.author_id,
+        )
+        return self._mount
 
 
 class ConfirmationView(ErrorHandledLayoutView):
