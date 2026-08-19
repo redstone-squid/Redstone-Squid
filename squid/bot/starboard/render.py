@@ -19,7 +19,7 @@ def starboard_layout(
     heading = f"**{author_name}**"
     if config.ping_author:
         heading = f"{message.author.mention} · {heading}"
-    children: list[sl.LayoutNode] = [
+    children: list[sl.primitives.Node] = [
         sl.primitives.Section(
             (sl.primitives.Text(f"{heading}\n{message.content or t(locale, _('-# (no text content)'))}"),),
             sl.primitives.Thumbnail(avatar_url),

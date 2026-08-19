@@ -1,7 +1,7 @@
 """Build log ingestion consent banner and ephemeral permission flow."""
 
 import logging
-from typing import TYPE_CHECKING, Any, Self, override
+from typing import TYPE_CHECKING, Any, Self, cast, override
 
 import discord
 from discord import Interaction, TextChannel
@@ -176,7 +176,9 @@ class BuildLogConsentStickyMessage(StickyMessage):
                     "Messages from unconsented users are not ingested. Click below to review permissions and enable automated ingestion."
                 ),
                 sl.primitives.RawItem(
-                    lambda: discord.ui.ActionRow(DynamicBuildLogConsentButton()),
+                    lambda: discord.ui.ActionRow(
+                        cast(discord.ui.Item[discord.ui.LayoutView], DynamicBuildLogConsentButton())
+                    ),
                     kind="discord.item",
                     version=1,
                 ),
