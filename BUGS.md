@@ -51,7 +51,8 @@ version resolution, not just this one; `infer_build_from_message` needs the same
 boundary the app-command surfaces already have.
 
 Still firing: five more in the 2026-08-18 error reports, between 04:10 and 11:09 UTC (references
-`d9b016be8c19`, `c0b62ea509e8`, `5887677059b6`, `d8c413752442`, `c5e9d013946d`). All five came
+`d9b016be8c19`, `c0b62ea509e8`, `5887677059b6`, `d8c413752442`, `c5e9d013946d`), and two more
+on 2026-08-18 20:13 UTC and 2026-08-19 11:34 UTC (`23c7639b6fe5`, `b7f54dc478c8`). All seven came
 through the bare-`ValueError` hole below rather than `_edition_from_spec`, which makes that the
 dominant trigger in practice — but the missing boundary is what turns any of them into a silent
 drop, so it is still the fix that matters.
@@ -85,7 +86,8 @@ inference actually emits.
 channel has its first line fed straight to `VersionService.add`, which calls `parse_version_string`
 and raises `InvalidVersionError` for anything that is not a version — so ordinary chatter in that
 channel raises out of the listener and discord.py logs "Ignoring exception in on_message". Caught
-in production on 2026-08-17 17:48:21 UTC (reference `fac83e0a8fe3`). Unlike the build-inference
+in production on 2026-08-17 17:48:21 UTC (reference `fac83e0a8fe3`) and again on 2026-08-18 16:53:43 UTC
+(reference `6e8919db2951`). Unlike the build-inference
 case nothing is silently lost, but the poster gets no feedback that their line was rejected, and
 every non-version message files an error report, so the channel's normal traffic is indistinguishable
 from real failures in the store.
@@ -120,3 +122,34 @@ The model declares no `__table_args__`, so every redemption's lookup on the pepp
 (`repository.py:429-437`) is a sequential scan. Harmless at the table's current size and masked by
 the ten-minute expiry, but it compounds with the unbounded growth above, and
 `01-consent-verification-ux.md` §1 adds a second lookup per link.
+
+## `_ServerSettingModelRepository` assumes default `id` attribute, crashing all `ServerSetting` updates
+
+`ServerSetting` (`squid/settings/infrastructure/models.py:18`) defines `server_id` as its primary key.
+`_ServerSettingModelRepository` (`squid/settings/infrastructure/repository.py:13-15`) subclasses
+`BaseAsyncRepository[ServerSetting]` (Advanced-Alchemy's `SQLAlchemyAsyncRepository`), which defaults
+`id_attribute = "id"`. When `repository.update(row)` is called (`SettingsRepository.set`, `set_locale`,
+or `on_guild_remove`), Advanced-Alchemy calls `self.get_id_attribute_value(data, id_attribute=id_attribute)`
+and inspects `row.id`, raising `AttributeError: 'ServerSetting' object has no attribute 'id'`, which
+Advanced-Alchemy wraps and re-raises as `advanced_alchemy.exceptions.RepositoryError: There was an error during data processing`.
+
+Caught in production on 2026-08-19 04:30:30 UTC (reference `e6125caaa758`) when changing a setting channel
+via `SettingChannelSelect` (`squid/bot/settings_view.py:363`). Any update to existing server settings or
+locale configuration fails. Fix by setting `id_attribute = "server_id"` on `_ServerSettingModelRepository`.
+
+## `/search query:...` autocomplete only suggests build search syntax and is unaware of `scope`
+
+The `/search` command (`squid/bot/submission/search.py:175-191`) accepts a `scope` option
+(`SearchTarget`: `records`, `builds`, `patterns`, `restrictions`, `everything`) alongside `query`, `sort`,
+and `mode`. Autocomplete for `query` is wired with `@autocompletes(sort="search_sorts", query="search_query")`.
+
+`SearchQueryProvider` (`squid/suggestions/infrastructure/providers/search_query.py:42-105`) completes query
+tokens against `DEFAULT_FIELD_REGISTRY` (`squid/search/application/fields.py:97-132`) and queries `build`
+facet values. It receives no `scope` context from the Discord interaction options, nor does `SearchQueryProvider`
+or `FieldRegistry` filter fields and facet completions by `SearchScope`.
+
+When a user selects `scope: restrictions` or `scope: patterns` (which query `SearchScope.METADATA`), or
+`scope: records`, autocomplete still offers build-only fields (such as `width:`, `height:`, `volume:`,
+`closing_time:`) and build facet values instead of metadata-specific fields (`kind:`, `category:`, etc.).
+`suggests` in `squid/bot/utils/autocomplete.py` needs to extract `scope` from the interaction options, and
+`SearchQueryProvider` / `FieldRegistry` need to scope available fields and facet values to the target `SearchScope`.
