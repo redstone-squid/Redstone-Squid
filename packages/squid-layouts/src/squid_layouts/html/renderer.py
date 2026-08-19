@@ -58,6 +58,9 @@ class HtmlRenderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"HtmlRenderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
+        if scene.target != "discord.components-v2" or scene.target_version != 1:
+            message = f"HtmlRenderer cannot preview target {scene.target!r} version {scene.target_version}"
+            raise DrawInvariantError(message)
         pager_data = json.dumps(
             [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in scene.pagers],
             separators=(",", ":"),

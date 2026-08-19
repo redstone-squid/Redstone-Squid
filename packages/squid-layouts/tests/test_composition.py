@@ -8,6 +8,7 @@ from hypothesis import strategies as st
 from squid_layouts import (
     Button,
     Component,
+    ContextKey,
     Embed,
     Heading,
     LayoutInvariantError,
@@ -21,6 +22,7 @@ from squid_layouts import (
     Text,
     state,
 )
+from squid_layouts.semantic import Action, Actions
 from squid_layouts.testing import fake_interaction
 
 
@@ -95,11 +97,10 @@ class TestEmbedding:
         assert mount._dirty
         assert "right: 3" in _texts(mount.build_view())
 
-    def test_a_child_reaches_the_mount_through_its_parent(self):
+    def test_components_do_not_expose_the_frontend_mount(self):
         pair = Pair()
-        mount = Mount(pair, timeout=None)
-        mount.build_view()
-        assert pair.left.mount is mount
+        Mount(pair, timeout=None).build_view()
+        assert not hasattr(pair.left, "mount")
 
     def test_embedding_does_not_mutate_the_childs_own_keys(self):
         # render() stays pure: namespacing rewrites the returned tree, not the component.
@@ -233,3 +234,44 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
 
     await mount.finish(disable=False)
     assert events[-2:] == ["unmount:second", "unmount:parent"]
+
+
+def test_typed_context_flows_to_descendants_without_entering_component_state() -> None:
+    greeting = ContextKey[str]("greeting")
+
+    class Child(Component):
+        def render(self) -> Node:
+            return Text(self.inject(greeting))
+
+    class Parent(Component):
+        def __init__(self) -> None:
+            self.child = Child()
+
+        def render(self):
+            self.provide(greeting, "hello from context")
+            return self.embed(self.child, key="child")
+
+    view = Mount(Parent(), timeout=None).build_view()
+
+    assert "hello from context" in _texts(view)
+
+
+def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
+    async def run(_event) -> None: ...
+
+    class Child(Component):
+        def render(self):
+            return Actions((Action("run", "Run", run),), key="toolbar")
+
+    class Parent(Component):
+        def __init__(self) -> None:
+            self.left = Child()
+            self.right = Child()
+
+        def render(self):
+            return (self.embed(self.left, key="left"), self.embed(self.right, key="right"))
+
+    mount = Mount(Parent(), timeout=None)
+    mount.build_view()
+
+    assert {"left.run", "right.run"} <= mount._handlers.keys()
