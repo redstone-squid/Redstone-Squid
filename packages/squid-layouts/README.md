@@ -45,7 +45,10 @@ class Counter(sl.Component):
    production degrades to an ugly-but-delivered message.
 
 `compose()` is the one pipeline through all four, with `reserved_text` for callers whose
-message carries content the engine cannot see. `Mount` binds a component to a message: every
+message carries content the engine cannot see. Components nest: `self.embed(child, key=...)`
+renders a child into its parent's document under a key prefix, so two instances of the same
+child class never cross-wire, and a child's state change re-renders the message through its
+parent. `Mount` binds a component to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
 controls, `Reactor` coalesces out-of-band refreshes, and `Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
