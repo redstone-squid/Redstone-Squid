@@ -264,9 +264,14 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
                 )
             )
         return [PrimitiveActionGroup(tuple(buttons))]
-    if len(available) > context.limits.select_options:
-        message = f"{path}: Choices has {len(available)} options; split the choice set or use Items"
+    page_key = f"{node.key}.choices"
+    if len(available) > context.limits.select_options and node.maximum != 1:
+        message = (
+            f"{path}: Choices has {len(available)} options and selects up to {node.maximum}; "
+            "cross-page multi-selection is ambiguous, so group the choices or use Items"
+        )
         raise LayoutInvariantError(message)
+    visible, page, pages = _page_items(available, page_key, context, identity=lambda choice: choice.key)
 
     async def choose_values(event: SelectionEvent) -> None:
         selected = tuple(event.values)
@@ -289,9 +294,9 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
             resolve_text(choice.description).content if choice.description is not None else None,
             choice.key in previous,
         )
-        for choice in available
+        for choice in visible
     )
-    return [
+    result: list[Node] = [
         SelectMenu(
             options,
             choose_values,
@@ -300,6 +305,8 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
             max_values=min(node.maximum, len(options)),
         )
     ]
+    result.extend(_page_chrome(page_key, page, pages, context))
+    return result
 
 
 def _items(node: Items, path: str, context: _Context) -> list[Node]:
@@ -329,23 +336,24 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
         context.session.select(node.key, tuple(event.values[:1]))
         event.invalidate()
 
+    page_key = f"{node.key}.items"
+    visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
     summaries = tuple(
         f"**{resolve_text(item.label).content}**"
         + (f" — {resolve_text(item.summary).content}" if item.summary is not None else "")
-        for item in node.items
+        for item in visible
     )
-    if len(node.items) > context.limits.select_options:
-        message = f"{path}: Items has {len(node.items)} entries; local item pagination is required"
-        raise LayoutInvariantError(message)
-    return [
+    result: list[Node] = [
         Lines(summaries, overflow=Never()),
         SelectMenu(
-            tuple(Option(resolve_text(item.label).content, item.key) for item in node.items),
+            tuple(Option(resolve_text(item.label).content, item.key) for item in visible),
             focus,
             f"{node.key}.focus",
             placeholder="Choose an item",
         ),
     ]
+    result.extend(_page_chrome(page_key, page, pages, context))
+    return result
 
 
 def _navigation(node: Navigation, context: _Context) -> list[Node]:
@@ -358,12 +366,14 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
         await node.on_navigate(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
 
     if grouped:
+        page_key = f"{node.key}.destinations"
+        visible, page, pages = _page_items(available, page_key, context, identity=lambda item: item.key)
 
         async def select_destination(event: SelectionEvent) -> None:
             if event.values:
                 await navigate(event, event.values[0])
 
-        return [
+        result: list[Node] = [
             SelectMenu(
                 tuple(
                     Option(
@@ -371,12 +381,14 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
                         destination.key,
                         default=destination.key == node.current,
                     )
-                    for destination in available
+                    for destination in visible
                 ),
                 select_destination,
                 node.key,
             )
         ]
+        result.extend(_page_chrome(page_key, page, pages, context))
+        return result
     buttons: list[Button] = []
     for destination in available:
 
@@ -601,6 +613,46 @@ def _paged_picker(actions: Sequence[Action], key: str, label: str | None, contex
     result.append(Footer(context.chrome.page_footer(index + 1, pages)))
     if context.nav is not None:
         result.extend(context.nav(key, index, pages))
+    return result
+
+
+def _page_items[T](
+    items: Sequence[T],
+    pager_key: str,
+    context: _Context,
+    *,
+    identity: Callable[[T], str],
+) -> tuple[tuple[T, ...], int, int]:
+    per = context.limits.select_options
+    pages = max(1, (len(items) + per - 1) // per)
+    cursor = context.session.cursor(pager_key)
+    index = cursor.index
+    keys = [identity(item) for item in items]
+    if cursor.anchor in keys:
+        index = keys.index(cursor.anchor) // per
+    if isinstance(context.page, Mapping):
+        index = context.page.get(pager_key, index)
+    index = max(0, min(index, pages - 1))
+    visible = tuple(items[index * per : (index + 1) * per])
+    fingerprint = hashlib.blake2s("\0".join(keys).encode(), digest_size=16).hexdigest()
+    context.session.anchor_cursor(
+        pager_key,
+        index,
+        identity(visible[0]) if visible else None,
+        extent=pages,
+        content_fingerprint=fingerprint,
+    )
+    if pages > 1:
+        context.pagers.append(ScenePager(pager_key, index, pages, fingerprint))
+    return visible, index, pages
+
+
+def _page_chrome(key: str, page: int, pages: int, context: _Context) -> list[Node]:
+    if pages <= 1:
+        return []
+    result: list[Node] = [Footer(context.chrome.page_footer(page + 1, pages))]
+    if context.nav is not None:
+        result.extend(context.nav(key, page, pages))
     return result
 
 
