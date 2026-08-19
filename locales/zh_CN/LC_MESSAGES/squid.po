@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 12:06+0000\n"
+"POT-Creation-Date: 2026-08-19 12:09+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -480,10 +480,6 @@ msgstr "该别名已存在于此限制中。"
 #: squid/builds/errors.py:121
 msgid "Alias in use"
 msgstr "别名已被使用"
-
-#: squid/bot/utils/visibility.py:77
-msgid "Allow direct messages from this server, then run the command again."
-msgstr ""
 
 #: squid/bot/submission/search.py:234
 msgid "Already added"
@@ -1058,10 +1054,6 @@ msgstr "找不到该频道。"
 #: squid/bot/give_redstoner.py:155
 msgid "Could not find the redstoner role."
 msgstr "找不到红石玩家（redstoner）身份组。"
-
-#: squid/bot/utils/visibility.py:76
-msgid "Could not send it to you"
-msgstr ""
 
 #: squid/permissions/domain/catalogue.py:443
 msgid "Create a poll carded in every server's vote channel."
@@ -2180,6 +2172,10 @@ msgstr ""
 msgid "Notifications"
 msgstr ""
 
+#: squid/bot/utils/visibility.py:76
+msgid "Nowhere private to send this"
+msgstr ""
+
 #: squid/media/errors.py:177
 msgid "Object storage did not confirm a normalized media artifact."
 msgstr ""
@@ -2948,7 +2944,7 @@ msgstr "搜索文本和过滤条件，例如 `width:5`。"
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
 
-#: squid/bot/utils/visibility.py:83
+#: squid/bot/utils/visibility.py:89
 msgid "Sent by direct message"
 msgstr ""
 
@@ -3689,6 +3685,13 @@ msgstr ""
 
 #: squid/bot/verify.py:359
 msgid "This page is hidden. Only your creator names are public."
+msgstr ""
+
+#: squid/bot/utils/visibility.py:80
+msgid ""
+"This reply is too private for a channel, and your DMs from this server "
+"are closed. Run the command in a direct message with me, or allow DMs and"
+" retry."
 msgstr ""
 
 #: squid/schematics/application/queries.py:159
@@ -5302,5 +5305,11 @@ msgstr ""
 #~ "……还有 {count} 个。"
 
 #~ msgid "Could not send you the report"
+#~ msgstr ""
+
+#~ msgid "Allow direct messages from this server, then run the command again."
+#~ msgstr ""
+
+#~ msgid "Could not send it to you"
 #~ msgstr ""
 
