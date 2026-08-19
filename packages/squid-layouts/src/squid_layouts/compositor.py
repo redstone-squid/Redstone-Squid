@@ -14,6 +14,7 @@ from squid_layouts.limits import LIMITS, V2Limits
 from squid_layouts.planner import plan as plan_document
 from squid_layouts.presentation import PresentationSession
 from squid_layouts.scene import PlanResult
+from squid_layouts.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.solve import PageNav, PageState
 from squid_layouts.target import ResourceCost
 
@@ -54,6 +55,7 @@ def compose(
     nav: PageNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
+    search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> Composition:
     """Plan a logical document, then draw its resolved Discord scene."""
     result = plan_document(
@@ -66,6 +68,7 @@ def compose(
         nav=nav,
         session=session,
         cache=cache,
+        search_budget=search_budget,
     )
     drawer = renderer if renderer is not None else DiscordRenderer(limits=limits)
     view = drawer.draw(result.scene, plan=result, wire=wire)
