@@ -185,12 +185,11 @@ async def send_component(
 class PagedList(ui.Component):
     """A card holding one page of a pre-rendered list, plus the controls to walk it.
 
-    The reactive successor to `squid.bot.utils.pagination.ListPaginator`: count-based pages
-    (a deliberate UX pin), author lock and expiry handled by the mount. It does not fetch —
-    every caller holds its whole list before rendering.
+    The reactive successor to `squid.bot.utils.pagination.ListPaginator`: `page_size` entries
+    per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`, so the
+    mount owns paging, the author lock, and expiry. It does not fetch — every caller holds
+    its whole list before rendering.
     """
-
-    page: int = ui.state(0)
 
     def __init__(
         self,
@@ -211,58 +210,28 @@ class PagedList(ui.Component):
         self.separator = separator
         self.accent_colour = accent_colour
 
-    @property
-    def page_count(self) -> int:
-        return max(1, -(-len(self.entries) // self.page_size))
-
     def render(self) -> Sequence[ui.Node]:
-        start = self.page * self.page_size
-        shown = self.entries[start : start + self.page_size]
-        footer = None
-        if self.page_count > 1:
-            footer = t(
-                self.locale,
-                _("Page {page} of {pages} · {total} in total"),
-                page=self.page + 1,
-                pages=self.page_count,
-                total=len(self.entries),
+        # An entry list that fits on one page produces no pager, and so no controls: a row of
+        # two dead buttons reads as a broken control rather than as an absent one.
+        body: ui.Node = (
+            ui.Lines(
+                self.entries,
+                join=self.separator,
+                overflow=ui.Paginate(per=self.page_size, footer=self._page_footer),
             )
-        nodes: list[ui.Node] = [
-            ui.card(
-                self.title,
-                self.separator.join(shown) if shown else self.empty,
-                accent=self.accent_colour,
-                footer=footer,
-            )
-        ]
-        # A single page has nothing to page through, and a row of two dead buttons reads as
-        # a broken control rather than as an absent one.
-        if self.page_count > 1:
-            nodes.append(
-                ui.Row(
-                    (
-                        ui.Button(
-                            label=t(self.locale, _("Previous")),
-                            on_click=self._previous,
-                            key="prev",
-                            disabled=self.page == 0,
-                        ),
-                        ui.Button(
-                            label=t(self.locale, _("Next")),
-                            on_click=self._next,
-                            key="next",
-                            disabled=self.page >= self.page_count - 1,
-                        ),
-                    )
-                )
-            )
-        return nodes
+            if self.entries
+            else ui.Text(self.empty)
+        )
+        return [ui.Panel(children=(ui.Heading(self.title), body), accent=self.accent_colour)]
 
-    async def _previous(self, interaction: discord.Interaction) -> None:
-        self.page = max(0, self.page - 1)
-
-    async def _next(self, interaction: discord.Interaction) -> None:
-        self.page = min(self.page + 1, self.page_count - 1)
+    def _page_footer(self, page: int, pages: int) -> str:
+        return t(
+            self.locale,
+            _("Page {page} of {pages} · {total} in total"),
+            page=page,
+            pages=pages,
+            total=len(self.entries),
+        )
 
     async def send(self, ctx: Context[Any], *, ephemeral: bool = False) -> ui.Mount:
         """Send the first page bound to a mount that owns paging, locking, and expiry."""

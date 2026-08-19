@@ -4,10 +4,44 @@ import discord
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
-from test_solve import documents
 
-from squid_layouts import LIMITS, Button, Panel, Row, Text, compose, render_static
+from squid_layouts import (
+    LIMITS,
+    Button,
+    Code,
+    Drop,
+    Footer,
+    Heading,
+    Lines,
+    Never,
+    Panel,
+    Row,
+    Sep,
+    Spill,
+    Text,
+    Truncate,
+    compose,
+    render_static,
+)
 from squid_layouts.compositor import Composition
+
+_policies = st.sampled_from([Truncate(), Truncate(keep="tail"), Spill(), Drop(), Never()])
+_content = st.text(max_size=1500)
+
+
+@st.composite
+def documents(draw) -> list:
+    """Small mixed documents: enough shapes to exercise every allocation path."""
+    node = st.one_of(
+        st.builds(Text, _content, overflow=_policies, priority=st.integers(-10, 10)),
+        st.builds(Heading, _content),
+        st.builds(Footer, _content),
+        st.builds(Code, _content, lang=st.sampled_from(["", "py"])),
+        st.builds(Lines, st.lists(st.text(min_size=1, max_size=120), max_size=40).map(tuple)),
+        st.builds(Sep),
+        st.builds(lambda content: Panel(children=(Text(content), Sep())), _content),
+    )
+    return draw(st.lists(node, max_size=6))
 
 
 def _display_text(view: discord.ui.LayoutView) -> int:
