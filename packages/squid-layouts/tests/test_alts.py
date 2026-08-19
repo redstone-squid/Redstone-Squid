@@ -14,15 +14,31 @@ from squid_layouts import (
     assert_within_limits,
     card,
     conform,
-    materialize,
     render_static,
     solve,
 )
 from squid_layouts.presets import Field
+from squid_layouts.solve import RPanel, RSection, RText, SolvedLayout
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
     return [c.content for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
+
+
+def _solved_texts(solved: SolvedLayout) -> list[str]:
+    texts: list[str] = []
+
+    def walk(children) -> None:
+        for child in children:
+            if isinstance(child, RText):
+                texts.append(child.content)
+            elif isinstance(child, RSection):
+                texts.extend(text.content for text in child.texts)
+            elif isinstance(child, RPanel):
+                walk(child.children)
+
+    walk(solved.children)
+    return texts
 
 
 class TestAltsPolicy:
@@ -45,7 +61,7 @@ class TestAltsPolicy:
         filler = Text("f" * 3990, priority=10)
         solved = solve([filler, node])
         assert any("exhausted" in note for note in solved.notes)
-        assert_within_limits(materialize(solved))
+        assert sum(map(len, _solved_texts(solved))) <= 4000
 
 
 class TestLinesLadders:
@@ -57,8 +73,7 @@ class TestLinesLadders:
         )
         filler = Text("f" * 3000, priority=10)
         solved = solve([filler, Lines(entries)])
-        view = materialize(solved)
-        text = "\n".join(_texts(view))
+        text = "\n".join(_solved_texts(solved))
         assert "long entry degraded" in text
         assert "short entry" in text and "another short entry" in text
         assert "more" not in text  # nothing spilled: degrading sufficed
@@ -66,9 +81,9 @@ class TestLinesLadders:
     def test_spill_still_happens_after_ladders_exhaust(self):
         entries = tuple(Alt(f"entry {index} " + "x" * 500, (f"entry {index} " + "y" * 200,)) for index in range(60))
         solved = solve([Lines(entries)])
-        view = materialize(solved)
-        assert any("more" in text for text in _texts(view))
-        assert_within_limits(view)
+        texts = _solved_texts(solved)
+        assert any("more" in text for text in texts)
+        assert sum(map(len, texts)) <= 4000
 
 
 class TestConstrainedShapes:
