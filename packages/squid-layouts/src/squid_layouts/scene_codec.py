@@ -3,6 +3,7 @@
 import hashlib
 import json
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import Any
 
 from squid_layouts.actions import ActionPolicy
@@ -25,6 +26,7 @@ from squid_layouts.scene import (
     SceneText,
     SceneThumbnail,
 )
+from squid_layouts.scene_schema import SCENE_SCHEMA
 from squid_layouts.styles import ActionStyle
 
 
@@ -36,6 +38,16 @@ class SceneCodec:
     """Encode and decode deterministic experimental scene protocol 0."""
 
     protocol = 0
+
+    @classmethod
+    def schema(cls) -> dict[str, Any]:
+        """Return an isolated JSON Schema for cross-language scene consumers."""
+        return deepcopy(SCENE_SCHEMA)
+
+    @classmethod
+    def schema_json(cls) -> str:
+        """Return the scene schema in deterministic JSON form."""
+        return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
 
     @classmethod
     def dumps(cls, scene: SceneDocument) -> str:
