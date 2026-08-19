@@ -1,36 +1,26 @@
 """A cog for verifying minecraft accounts."""
 
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
-from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
-    MAX_BIO_LENGTH,
-    MAX_DISPLAY_NAME_LENGTH,
-    MAX_PRONOUNS_LENGTH,
     Account,
     AccountIdentity,
-    AccountProfile,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
-    ProfileLink,
-    ProfileUpdate,
 )
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.bot.account_view import AccountPanelView
 from squid.bot.claims_view import ClaimReviewView
 from squid.bot.consent import ensure_consented_account, prompt_for_consent
-from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
-    own_profile_avatar,
-    own_profile_fields,
     public_profile_fields,
 )
 from squid.bot.submission.ui.views import ConfirmationView
@@ -38,7 +28,6 @@ from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import DISCORD_BLUE, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.bot.utils.visibility import deliver_privately, personal
-from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
@@ -57,9 +46,14 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         self.account_service = bot.services.accounts
 
     @hybrid_group(name="account", fallback="show")
-    async def account_group(self, ctx: Context[BotT]) -> None:
-        """Show your linked accounts, and choose what your creator page shows."""
+    @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to your own account.")))
+    async def account_group(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
+        """Show your account, or somebody else's creator page."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        if user is not None and user.id != ctx.author.id:
+            await self._show_creator_page(ctx, user, locale)
+            return
+
         # Read without creating: looking at your own account is not evidence that anybody asked
         # to be remembered, and there is nothing to show for someone with no account anyway.
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
@@ -73,6 +67,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             )
             return
 
+        await self._refresh_discord_avatar_key(account, ctx.author)
         view = AccountPanelView(
             accounts=self.account_service,
             account_id=account.id,
@@ -82,6 +77,19 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         await view.load()
         message = await ctx.send(view=view, ephemeral=personal(ctx), allowed_mentions=no_mentions())
         view.bind_message(message)
+
+    async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
+        """Show somebody else's page, which is shared content and answers where the channel sees it."""
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
+        if account is None or account.public_creator_id is None:
+            await ctx.send(
+                view=text_layout(t(locale, _("{user} doesn't have a creator page."), user=user.display_name)),
+                ephemeral=personal(ctx),
+                allowed_mentions=no_mentions(),
+            )
+            return
+        view = await self._public_profile_card(account.public_creator_id, user.display_name, locale)
+        await ctx.send(view=view, allowed_mentions=no_mentions())
 
     @account_group.command(name="link")
     @app_commands.describe(code=app_commands.locale_str(_("The code you received by running /link in the game.")))
@@ -179,52 +187,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             allowed_mentions=no_mentions(),
         )
 
-    @account_group.command(name="profile")
-    @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to you.")))
-    async def profile(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
-        """Show a creator page."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        ephemeral = personal(ctx)
-        target = user or ctx.author
-        # Read-only for everyone, including yourself: viewing a page is not evidence that anybody
-        # asked to be remembered, so it must not create an account row.
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(target.id))
-        if account is None or account.id is None or account.public_creator_id is None:
-            await ctx.send(
-                view=text_layout(
-                    t(locale, _("You don't have a creator page yet. Link an account to get one."))
-                    if target.id == ctx.author.id
-                    else t(locale, _("{user} doesn't have a creator page."), user=target.display_name)
-                ),
-                ephemeral=ephemeral,
-                allowed_mentions=no_mentions(),
-            )
-            return
-
-        if target.id == ctx.author.id:
-            await self._refresh_discord_avatar_key(account, target)
-            view = await self._own_profile_card(account.id, account.identities, locale)
-        else:
-            view = await self._public_profile_card(account.public_creator_id, target.display_name, locale)
-        await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
-
-    async def _own_profile_card(self, account_id: int, identities: tuple[AccountIdentity, ...], locale: str):
-        """Render the caller's own page, showing what is hidden as well as what is not."""
-        profile = await self.account_service.get_profile(account_id)
-        footer = (
-            t(locale, _("This page is hidden. Only your creator names are public."))
-            if profile.hidden
-            else t(locale, _("Edit it with `/account profile-edit`."))
-        )
-        return card_layout(
-            profile.display_name or t(locale, _("Your creator page")),
-            profile.bio,
-            accent_colour=DISCORD_BLUE,
-            fields=own_profile_fields(profile, identities, locale),
-            footer=footer,
-            media=own_profile_avatar(profile, identities),
-        )
-
     async def _public_profile_card(self, public_id: UUID, fallback_name: str, locale: str):
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
@@ -265,38 +227,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         key = user.avatar.key if user.avatar is not None else None
         if key != identity.avatar_key:
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
-
-    @account_group.command(name="profile-edit")
-    async def profile_edit(self, ctx: Context[BotT]) -> None:
-        """Edit your creator page."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        if ctx.interaction is None:
-            # A modal needs an interaction to open in, which a prefix invocation does not have.
-            await ctx.send(
-                view=text_layout(t(locale, _("Use the `/account profile-edit` slash command to edit your page."))),
-                allowed_mentions=no_mentions(),
-            )
-            return
-        # A modal has to open on an unspent interaction, and showing the notice spends this one.
-        # So the gate runs first and, when it had to ask, the command ends by confirming the
-        # receipt: re-running is one keystroke, and the alternative is an interaction token that
-        # cannot open anything.
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is None or account.id is None or account.needs_consent_refresh:
-            account_id = await ensure_consented_account(ctx, self.account_service, locale=locale)
-            if account_id is None:
-                return
-            await ctx.send(
-                view=text_layout(t(locale, _("Thanks. Run `/account profile-edit` again to open the editor."))),
-                ephemeral=personal(ctx),
-                allowed_mentions=no_mentions(),
-            )
-            return
-
-        profile = await self.account_service.get_profile(account.id)
-        await ctx.interaction.response.send_modal(
-            ProfileEditModal(self.account_service, account.id, profile, locale=locale)
-        )
 
     @account_group.command(name="refresh")
     @app_commands.describe(
@@ -440,90 +370,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_reject=reject.allowed,
         )
         await view.send(ctx, ephemeral=personal(ctx))
-
-
-class ProfileEditModal(ErrorHandledModal):
-    """Edit the free-text parts of a creator page.
-
-    Links are one `label | url` per line rather than a repeated field because a modal allows five
-    inputs total; the same domain validator parses them, so the bot and the API agree on what a
-    valid link is.
-    """
-
-    def __init__(
-        self,
-        account_service: AccountService,
-        account_id: int,
-        profile: AccountProfile,
-        *,
-        locale: str,
-    ) -> None:
-        super().__init__(title=t(locale, _("Edit your creator page")))
-        self._account_service = account_service
-        self._account_id = account_id
-        self._locale = locale
-        self.display_name = discord.ui.TextInput(
-            label=t(locale, _("Display name")),
-            required=False,
-            max_length=MAX_DISPLAY_NAME_LENGTH,
-            default=profile.display_name,
-        )
-        self.pronouns = discord.ui.TextInput(
-            label=t(locale, _("Pronouns")),
-            required=False,
-            max_length=MAX_PRONOUNS_LENGTH,
-            default=profile.pronouns,
-        )
-        self.bio = discord.ui.TextInput(
-            label=t(locale, _("Bio")),
-            style=discord.TextStyle.paragraph,
-            required=False,
-            max_length=MAX_BIO_LENGTH,
-            default=profile.bio,
-        )
-        self.links = discord.ui.TextInput(
-            label=t(locale, _("Links (one per line: Label | https://...)")),
-            style=discord.TextStyle.paragraph,
-            required=False,
-            default="\n".join(f"{link.label} | {link.url}" for link in profile.links),
-        )
-        for item in (self.display_name, self.pronouns, self.bio, self.links):
-            self.add_item(item)
-
-    @override
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        update = ProfileUpdate(
-            display_name=self.display_name.value or None,
-            pronouns=self.pronouns.value or None,
-            bio=self.bio.value or None,
-            links=_parse_link_lines(self.links.value, self._locale),
-        )
-        await self._account_service.update_profile(self._account_id, update)
-        await interaction.response.send_message(
-            view=text_layout(t(self._locale, _("Your creator page has been updated."))),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
-        )
-
-
-def _parse_link_lines(raw: str, locale: str) -> tuple[ProfileLink, ...]:
-    """Parse `Label | https://...` lines into links, refusing a line that is not one.
-
-    Parsing only splits; `ProfileUpdate.validated` in the service is what accepts or rejects the
-    URL itself, so the modal cannot end up with a laxer idea of a valid link than the API.
-    """
-    links: list[ProfileLink] = []
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        label, separator, url = line.partition("|")
-        if not separator:
-            raise ValidationError(
-                t(locale, _("Each link needs a label and a URL separated by `|`, got {line!r}.")),
-                message_params={"line": line.strip()},
-            )
-        links.append(ProfileLink(label=label.strip(), url=url.strip()))
-    return tuple(links)
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

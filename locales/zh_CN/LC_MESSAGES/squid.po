@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-19 23:21+0000\n"
+"POT-Creation-Date: 2026-08-19 23:28+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -121,10 +121,6 @@ msgstr ""
 
 #: squid/bot/submission/schematics.py:347
 msgid "### Simulation input not resolved"
-msgstr ""
-
-#: squid/bot/profile_render.py:70
-msgid "(hidden)"
 msgstr ""
 
 #: squid/bot/submission/search.py:114
@@ -274,7 +270,7 @@ msgid ""
 " moves nothing and opens a claim for staff to review."
 msgstr ""
 
-#: squid/bot/verify.py:597
+#: squid/bot/verify.py:443
 #, python-brace-format
 msgid ""
 "**{name}** is already credited to another account, so it was not moved. "
@@ -294,7 +290,7 @@ msgid ""
 "Emojis: {emojis}"
 msgstr ""
 
-#: squid/bot/profile_render.py:124
+#: squid/bot/profile_render.py:117
 #, python-brace-format
 msgid "**{name}** — {count} build(s)"
 msgstr ""
@@ -352,11 +348,11 @@ msgstr ""
 msgid "A build you submitted."
 msgstr "你提交的构造。"
 
-#: squid/bot/verify.py:361
+#: squid/bot/verify.py:291
 msgid "A code from `/account merge-code` on your other account."
 msgstr ""
 
-#: squid/bot/verify.py:403
+#: squid/bot/verify.py:333
 msgid "A creator name credited on builds you worked on."
 msgstr ""
 
@@ -364,13 +360,13 @@ msgstr ""
 msgid "A creator profile to follow."
 msgstr ""
 
-#: squid/bot/account_view.py:262
+#: squid/bot/account_view.py:302
 msgid ""
 "A hidden page still lists the creator names you hold, because that credit"
 " is what attributes your builds."
 msgstr ""
 
-#: squid/bot/verify.py:356
+#: squid/bot/verify.py:286
 msgid "A merge code hands this account over, so it is never posted in a channel."
 msgstr ""
 
@@ -449,7 +445,7 @@ msgstr ""
 msgid "Account already linked"
 msgstr "账户已关联"
 
-#: squid/bot/verify.py:117
+#: squid/bot/verify.py:125
 msgid "Account linking cancelled. No user account information was stored."
 msgstr ""
 
@@ -679,7 +675,7 @@ msgstr ""
 msgid "Before Redstone Squid stores anything about you"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:184 squid/bot/verify.py:478
+#: squid/accounts/domain/profiles.py:184 squid/bot/account_view.py:433
 msgid "Bio"
 msgstr ""
 
@@ -726,7 +722,7 @@ msgstr ""
 msgid "Build credit"
 msgstr ""
 
-#: squid/bot/verify.py:588
+#: squid/bot/verify.py:434
 #, python-brace-format
 msgid "Build credits under **{name}** are attributed to your account."
 msgstr ""
@@ -854,11 +850,11 @@ msgstr "取消"
 msgid "Cancelled. No account information was stored."
 msgstr ""
 
-#: squid/bot/account_view.py:204
+#: squid/bot/account_view.py:208 squid/bot/account_view.py:243
 msgid "Cancelled. Nothing was changed."
 msgstr ""
 
-#: squid/bot/verify.py:391
+#: squid/bot/verify.py:321
 msgid "Cancelled. Nothing was merged."
 msgstr ""
 
@@ -958,7 +954,7 @@ msgstr ""
 msgid "Choose the door type (required)"
 msgstr ""
 
-#: squid/bot/verify.py:415
+#: squid/bot/verify.py:345
 #, python-brace-format
 msgid "Claim #{id} for **{name}** is awaiting staff approval."
 msgstr ""
@@ -980,12 +976,12 @@ msgstr ""
 msgid "Clear another user's public profile."
 msgstr ""
 
-#: squid/bot/account_view.py:248
+#: squid/bot/account_view.py:288
 #, python-brace-format
 msgid "Click **Unlink** again to remove {identity}."
 msgstr ""
 
-#: squid/bot/account_view.py:347 squid/bot/diagnostics_view.py:229
+#: squid/bot/account_view.py:399 squid/bot/diagnostics_view.py:229
 #: squid/bot/notifications_view.py:225 squid/bot/settings_view.py:587
 #: squid/bot/submission/search_view.py:225
 msgid "Close"
@@ -1122,7 +1118,7 @@ msgstr ""
 msgid "Creator"
 msgstr ""
 
-#: squid/bot/profile_render.py:120
+#: squid/bot/profile_render.py:113
 msgid "Creator credit"
 msgstr ""
 
@@ -1146,7 +1142,7 @@ msgstr ""
 msgid "Creator not found."
 msgstr ""
 
-#: squid/bot/account_view.py:223
+#: squid/bot/account_view.py:263
 msgid "Creator page"
 msgstr ""
 
@@ -1240,7 +1236,7 @@ msgstr ""
 msgid "Discord rejected a DM, so DMs are suspended until you re-enable them."
 msgstr ""
 
-#: squid/bot/profile_render.py:161
+#: squid/bot/profile_render.py:154
 #, python-brace-format
 msgid "Discord user `{discord_id}`"
 msgstr ""
@@ -1249,7 +1245,7 @@ msgstr ""
 msgid "Discover"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:181 squid/bot/verify.py:466
+#: squid/accounts/domain/profiles.py:181 squid/bot/account_view.py:421
 #: squid/submissions/application/forms.py:116
 msgid "Display name"
 msgstr ""
@@ -1295,7 +1291,7 @@ msgstr ""
 msgid "Each line must read `choice | emoji`."
 msgstr ""
 
-#: squid/bot/verify.py:522
+#: squid/bot/account_view.py:472
 #, python-brace-format
 msgid "Each link needs a label and a URL separated by `|`, got {line!r}."
 msgstr ""
@@ -1320,15 +1316,15 @@ msgstr ""
 msgid "Edit emojis"
 msgstr ""
 
-#: squid/bot/verify.py:217
-msgid "Edit it with `/account profile-edit`."
+#: squid/bot/account_view.py:374
+msgid "Edit page"
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:631
 msgid "Edit this section"
 msgstr ""
 
-#: squid/bot/verify.py:461
+#: squid/bot/account_view.py:417
 msgid "Edit your creator page"
 msgstr ""
 
@@ -1421,7 +1417,7 @@ msgstr ""
 msgid "Exception"
 msgstr ""
 
-#: squid/bot/verify.py:352
+#: squid/bot/verify.py:282
 #, python-brace-format
 msgid ""
 "Expires {expiry}. Give it to nobody but yourself: it hands this account "
@@ -1606,19 +1602,19 @@ msgid ""
 "{url}."
 msgstr "你好 {member}，你在 {url} 中获得了 15 个赞后，获得了 {role} 身份组。"
 
-#: squid/bot/account_view.py:224
+#: squid/bot/account_view.py:264
 msgid "Hidden"
 msgstr ""
 
-#: squid/bot/verify.py:235
+#: squid/bot/verify.py:197
 msgid "Hidden creator page"
 msgstr ""
 
-#: squid/bot/account_view.py:299
+#: squid/bot/account_view.py:339
 msgid "Hide from page"
 msgstr ""
 
-#: squid/bot/account_view.py:335
+#: squid/bot/account_view.py:387
 msgid "Hide my page"
 msgstr ""
 
@@ -1812,16 +1808,15 @@ msgstr ""
 msgid "Link {username} to your Discord account"
 msgstr ""
 
-#: squid/bot/account_view.py:220 squid/bot/profile_render.py:68
-#: squid/bot/profile_render.py:105
+#: squid/bot/account_view.py:260 squid/bot/profile_render.py:98
 msgid "Linked accounts"
 msgstr ""
 
-#: squid/bot/profile_render.py:64 squid/bot/profile_render.py:101
+#: squid/bot/profile_render.py:67 squid/bot/profile_render.py:94
 msgid "Links"
 msgstr ""
 
-#: squid/bot/verify.py:485
+#: squid/bot/account_view.py:440
 msgid "Links (one per line: Label | https://...)"
 msgstr ""
 
@@ -2005,16 +2000,16 @@ msgstr ""
 msgid "Media uploads must be staged as regular files."
 msgstr ""
 
-#: squid/bot/verify.py:340
+#: squid/bot/verify.py:270
 msgid "Merge code"
 msgstr ""
 
-#: squid/bot/verify.py:396
+#: squid/bot/verify.py:326
 #, python-brace-format
 msgid "Merged. `{redirected}` now redirects to your creator page."
 msgstr ""
 
-#: squid/bot/verify.py:374
+#: squid/bot/verify.py:304
 #, python-brace-format
 msgid ""
 "Merging will move {aliases} creator name(s) and {identities} linked "
@@ -2488,11 +2483,7 @@ msgstr "持久化数据与应用程序预期不一致。"
 msgid "Pick a claim to review…"
 msgstr ""
 
-#: squid/bot/account_view.py:119
-msgid "Pick a linked account to show, hide, or unlink."
-msgstr ""
-
-#: squid/bot/account_view.py:283
+#: squid/bot/account_view.py:323
 msgid "Pick a linked account…"
 msgstr ""
 
@@ -2555,8 +2546,8 @@ msgstr ""
 msgid "Prompt expired"
 msgstr ""
 
-#: squid/accounts/domain/profiles.py:186 squid/bot/profile_render.py:62
-#: squid/bot/profile_render.py:99 squid/bot/verify.py:472
+#: squid/accounts/domain/profiles.py:186 squid/bot/account_view.py:427
+#: squid/bot/profile_render.py:65 squid/bot/profile_render.py:92
 msgid "Pronouns"
 msgstr ""
 
@@ -2572,7 +2563,7 @@ msgstr ""
 msgid "Provenance"
 msgstr ""
 
-#: squid/bot/account_view.py:224
+#: squid/bot/account_view.py:264
 msgid "Public"
 msgstr ""
 
@@ -2951,7 +2942,7 @@ msgstr ""
 msgid "Run `/account consent` to read the privacy notice and accept it."
 msgstr ""
 
-#: squid/bot/verify.py:344
+#: squid/bot/verify.py:274
 #, python-brace-format
 msgid ""
 "Run `/account merge {code}` while signed in as the account you want to "
@@ -3054,11 +3045,11 @@ msgstr "设置已更新"
 msgid "Settings updated"
 msgstr "设置已更新"
 
-#: squid/bot/account_view.py:335
+#: squid/bot/account_view.py:387
 msgid "Show my page"
 msgstr ""
 
-#: squid/bot/account_view.py:301
+#: squid/bot/account_view.py:341
 msgid "Show on page"
 msgstr ""
 
@@ -3293,15 +3284,15 @@ msgstr "标签已拒绝"
 msgid "Take the name"
 msgstr ""
 
-#: squid/bot/verify.py:290
-msgid "Thanks. Run `/account profile-edit` again to open the editor."
+#: squid/bot/account_view.py:214
+msgid "Thanks. Press **Edit page** again to open the editor."
 msgstr ""
 
 #: squid/bot/voting/vote.py:206
 msgid "Thanks. Run `/poll` again to open the editor."
 msgstr ""
 
-#: squid/bot/verify.py:177
+#: squid/bot/verify.py:185
 msgid "Thanks. You can use the bot's other commands now."
 msgstr ""
 
@@ -3321,7 +3312,7 @@ msgstr ""
 msgid "That creator name is already claimed by another account."
 msgstr ""
 
-#: squid/bot/verify.py:232
+#: squid/bot/verify.py:194
 msgid "That creator page could not be found."
 msgstr ""
 
@@ -3504,7 +3495,7 @@ msgstr ""
 msgid "The channel to use. Leave it out to clear this setting."
 msgstr ""
 
-#: squid/bot/verify.py:87
+#: squid/bot/verify.py:95
 msgid "The code you received by running /link in the game."
 msgstr "你在游戏中运行 /link 后收到的验证码。"
 
@@ -3516,7 +3507,7 @@ msgstr "要获取帮助的命令。"
 msgid "The configured embedding provider did not return a vector."
 msgstr ""
 
-#: squid/bot/verify.py:389
+#: squid/bot/verify.py:319
 msgid "The confirmation expired, so nothing was merged."
 msgstr ""
 
@@ -3688,7 +3679,7 @@ msgstr "验证码无效或已过期。"
 msgid "The whole build, e.g. `5x7x4`. Width x height (x depth)."
 msgstr ""
 
-#: squid/bot/account_view.py:83
+#: squid/bot/account_view.py:94
 msgid "These account controls belong to someone else."
 msgstr ""
 
@@ -3749,7 +3740,7 @@ msgstr ""
 msgid "This command cannot be used in a private message."
 msgstr "此命令不能在私信中使用。"
 
-#: squid/bot/verify.py:236
+#: squid/bot/verify.py:198
 msgid "This creator has hidden their page. Their build credit is still listed."
 msgstr ""
 
@@ -3762,7 +3753,7 @@ msgstr "这看起来不像是一个构造。"
 msgid "This edit session expired. Reopen the build to start again."
 msgstr ""
 
-#: squid/bot/account_view.py:255
+#: squid/bot/account_view.py:295
 msgid ""
 "This is the Discord account you are using now. The bot will stop "
 "recognising you here."
@@ -3770,10 +3761,6 @@ msgstr ""
 
 #: squid/bot/diagnostics_view.py:272
 msgid "This job was abandoned; nothing will retry it."
-msgstr ""
-
-#: squid/bot/verify.py:215
-msgid "This page is hidden. Only your creator names are public."
 msgstr ""
 
 #: squid/bot/utils/visibility.py:80
@@ -3890,11 +3877,11 @@ msgstr "未授权。"
 msgid "Unfollow…"
 msgstr ""
 
-#: squid/bot/account_view.py:319
+#: squid/bot/account_view.py:359
 msgid "Unlink"
 msgstr ""
 
-#: squid/bot/account_view.py:319
+#: squid/bot/account_view.py:359
 msgid "Unlink for good"
 msgstr ""
 
@@ -3902,7 +3889,7 @@ msgstr ""
 msgid "Unlink the current account before linking a new one."
 msgstr "请先取消关联当前账户，再关联新账户。"
 
-#: squid/bot/account_view.py:180
+#: squid/bot/account_view.py:192
 #, python-brace-format
 msgid "Unlinked {identity}. Any build credit you hold is unaffected."
 msgstr ""
@@ -3922,10 +3909,6 @@ msgstr "请使用受支持的 Minecraft 版本格式后重试。"
 #: squid/bot/submission/search.py:183
 msgid "Use keyword matching or smart meaning-based matching."
 msgstr "使用关键词匹配或基于语义的智能匹配。"
-
-#: squid/bot/verify.py:276
-msgid "Use the `/account profile-edit` slash command to edit your page."
-msgstr ""
 
 #: squid/submissions/application/forms.py:289
 msgid "Utility"
@@ -4086,11 +4069,11 @@ msgstr ""
 msgid "Whether the tag carries a number, text, yes/no value, or no value."
 msgstr "该标签是否带有数字、文本、是/否值，或不带值。"
 
-#: squid/bot/verify.py:183
-msgid "Whose creator page to show. Defaults to you."
+#: squid/bot/verify.py:49
+msgid "Whose creator page to show. Defaults to your own account."
 msgstr ""
 
-#: squid/bot/verify.py:303
+#: squid/bot/verify.py:233
 msgid "Whose linked account to refresh. Staff only; defaults to you."
 msgstr ""
 
@@ -4122,7 +4105,7 @@ msgstr ""
 msgid "You are no longer allowed to change this."
 msgstr ""
 
-#: squid/bot/verify.py:609
+#: squid/bot/verify.py:455
 #, python-brace-format
 msgid "You are still credited under: {names}."
 msgstr ""
@@ -4151,15 +4134,11 @@ msgstr "你没有权限执行此操作。"
 msgid "You do not have permission to use this command."
 msgstr "你没有权限使用此命令。"
 
-#: squid/bot/verify.py:195
-msgid "You don't have a creator page yet. Link an account to get one."
-msgstr ""
-
-#: squid/bot/verify.py:69
+#: squid/bot/verify.py:63
 msgid "You don't have any linked accounts yet. Link one with `/account link`."
 msgstr ""
 
-#: squid/bot/verify.py:164
+#: squid/bot/verify.py:172
 #, python-brace-format
 msgid ""
 "You have already accepted notice `{version}`. Press the button to read it"
@@ -4180,22 +4159,22 @@ msgid ""
 "action."
 msgstr ""
 
-#: squid/bot/verify.py:556
+#: squid/bot/verify.py:402
 #, python-brace-format
 msgid "Your Discord account is now linked to **{name}**."
 msgstr ""
 
-#: squid/bot/verify.py:572
+#: squid/bot/verify.py:418
 #, python-brace-format
 msgid "Your Minecraft name changed from **{old}** to **{new}**."
 msgstr ""
 
-#: squid/bot/verify.py:567
+#: squid/bot/verify.py:413
 #, python-brace-format
 msgid "Your Minecraft name is still **{name}**. Nothing changed."
 msgstr ""
 
-#: squid/bot/account_view.py:118
+#: squid/bot/account_view.py:129
 msgid "Your account"
 msgstr ""
 
@@ -4203,11 +4182,7 @@ msgstr ""
 msgid "Your account is already linked to a different Minecraft account."
 msgstr ""
 
-#: squid/bot/verify.py:220
-msgid "Your creator page"
-msgstr ""
-
-#: squid/bot/verify.py:503
+#: squid/bot/account_view.py:223
 msgid "Your creator page has been updated."
 msgstr ""
 
@@ -4216,7 +4191,7 @@ msgstr ""
 msgid "_Deleted role_ (`{id}`)"
 msgstr ""
 
-#: squid/bot/account_view.py:220
+#: squid/bot/account_view.py:260
 msgid "_None yet._"
 msgstr ""
 
@@ -4306,7 +4281,7 @@ msgstr ""
 msgid "consumer must be a non-empty name"
 msgstr ""
 
-#: squid/bot/profile_render.py:157
+#: squid/bot/profile_render.py:150
 #, python-brace-format
 msgid "creator `{creator_id}`"
 msgstr ""
@@ -4451,7 +4426,7 @@ msgstr ""
 msgid "globally"
 msgstr "全局"
 
-#: squid/bot/account_view.py:234
+#: squid/bot/account_view.py:274
 msgid "hidden"
 msgstr ""
 
@@ -4598,7 +4573,7 @@ msgstr ""
 msgid "section {section_id} has a blank title"
 msgstr ""
 
-#: squid/bot/account_view.py:234
+#: squid/bot/account_view.py:274
 msgid "shown publicly"
 msgstr ""
 
@@ -4642,12 +4617,12 @@ msgstr ""
 msgid "to the current guild"
 msgstr "向当前服务器"
 
-#: squid/bot/profile_render.py:162
+#: squid/bot/profile_render.py:155
 #, python-brace-format
 msgid "unidentified account (internal ID `{account_id}`)"
 msgstr ""
 
-#: squid/bot/account_view.py:238 squid/bot/submission/search.py:117
+#: squid/bot/account_view.py:278 squid/bot/submission/search.py:117
 msgid "unknown"
 msgstr ""
 
@@ -4900,7 +4875,7 @@ msgstr "{owner}，{member} 已移除了自己的红石玩家身份组。"
 msgid "{provider} — <@{subject}>"
 msgstr ""
 
-#: squid/bot/profile_render.py:45 squid/bot/profile_render.py:109
+#: squid/bot/profile_render.py:45 squid/bot/profile_render.py:102
 #, python-brace-format
 msgid "{provider} — {name}"
 msgstr ""
@@ -4947,7 +4922,7 @@ msgid ""
 "requires_node"
 msgstr ""
 
-#: squid/bot/verify.py:197
+#: squid/bot/verify.py:86
 #, python-brace-format
 msgid "{user} doesn't have a creator page."
 msgstr ""
@@ -4957,7 +4932,7 @@ msgstr ""
 msgid "{user}, voting stores your Discord user ID. Run `/account consent` first."
 msgstr ""
 
-#: squid/bot/account_view.py:233
+#: squid/bot/account_view.py:273
 #, python-brace-format
 msgid "{visibility} · verified {age}"
 msgstr ""
@@ -5471,5 +5446,32 @@ msgstr ""
 #~ msgstr ""
 
 #~ msgid "{visibility} · verified {age} · id `{id}`"
+#~ msgstr ""
+
+#~ msgid "(hidden)"
+#~ msgstr ""
+
+#~ msgid "Edit it with `/account profile-edit`."
+#~ msgstr ""
+
+#~ msgid "Pick a linked account to show, hide, or unlink."
+#~ msgstr ""
+
+#~ msgid "Thanks. Run `/account profile-edit` again to open the editor."
+#~ msgstr ""
+
+#~ msgid "This page is hidden. Only your creator names are public."
+#~ msgstr ""
+
+#~ msgid "Use the `/account profile-edit` slash command to edit your page."
+#~ msgstr ""
+
+#~ msgid "Whose creator page to show. Defaults to you."
+#~ msgstr ""
+
+#~ msgid "You don't have a creator page yet. Link an account to get one."
+#~ msgstr ""
+
+#~ msgid "Your creator page"
 #~ msgstr ""
 
