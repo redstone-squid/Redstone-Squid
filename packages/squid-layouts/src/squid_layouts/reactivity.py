@@ -16,6 +16,10 @@ class ReactiveOwner(Protocol):
     def _state_rolled_back(self) -> None: ...
 
 
+class ReactiveWriteError(RuntimeError):
+    """A state mutation was attempted inside a read-only action."""
+
+
 def _plain(value: Any) -> Any:
     if isinstance(value, list):
         return [_plain(item) for item in value]
@@ -36,6 +40,7 @@ class _Snapshot:
 
 @dataclass(slots=True)
 class _Transaction:
+    readonly: bool = False
     snapshots: dict[tuple[int, str], _Snapshot] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
 
@@ -48,6 +53,9 @@ class _Transaction:
         self.snapshots[key] = _Snapshot(owner, name, existed, value)
 
     def mark_changed(self, owner: ReactiveOwner) -> None:
+        if self.readonly:
+            message = "parallel-read actions cannot mutate component state"
+            raise ReactiveWriteError(message)
         self.changed[id(owner)] = owner
 
     def commit(self) -> None:
@@ -102,6 +110,25 @@ def batch() -> Iterator[None]:
     """Coalesce related state writes into one invalidation per component."""
     with transaction():
         yield
+
+
+@contextmanager
+def readonly_transaction() -> Iterator[None]:
+    """Roll back and reject any state mutation within the block."""
+    if _CURRENT.get() is not None:
+        message = "a read-only transaction cannot nest inside a writable transaction"
+        raise RuntimeError(message)
+    current = _Transaction(readonly=True)
+    token = _CURRENT.set(current)
+    try:
+        yield
+    except BaseException:
+        _CURRENT.reset(token)
+        current.rollback()
+        raise
+    else:
+        _CURRENT.reset(token)
+        current.commit()
 
 
 class _ReactiveMixin:

@@ -53,7 +53,7 @@ from squid_layouts.navigation import Navigator
 from squid_layouts.pagination import NavFactory, PageContext, default_nav, page_controls
 from squid_layouts.planner import plan
 from squid_layouts.presets import Field, FieldGroup, banner, card, listing, report
-from squid_layouts.reactivity import batch, computed, state, transaction
+from squid_layouts.reactivity import ReactiveWriteError, batch, computed, state, transaction
 from squid_layouts.runtime import Reactor
 from squid_layouts.scene import PlanEvent, PlanReport, PlanResult, SceneDocument
 from squid_layouts.scene_codec import SceneCodec, SceneCodecError
@@ -122,6 +122,7 @@ __all__ = [
     "PreparedExtension",
     "PressEvent",
     "RawItem",
+    "ReactiveWriteError",
     "Reactor",
     "ResourceCost",
     "Row",
