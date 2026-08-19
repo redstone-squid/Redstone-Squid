@@ -27,6 +27,7 @@ def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> Non
     }
     assert {f"action.{index}" for index in range(36)} <= result.bindings.keys()
     assert result.report.events[0].code == "actions.grouped"
+    assert result.metrics.states_explored == 1
 
 
 def test_explicit_action_groups_never_merge() -> None:

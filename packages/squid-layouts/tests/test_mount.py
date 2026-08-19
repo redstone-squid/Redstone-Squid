@@ -120,6 +120,33 @@ class TestRenderAndWire:
 
         interaction.response.defer.assert_awaited_once()
 
+    async def test_slow_handler_is_acknowledged_by_the_runtime_watchdog(self):
+        started = anyio.Event()
+        release = anyio.Event()
+
+        class Slow(Component):
+            def render(self):
+                return Row((Button("slow", self.slow, "slow"),))
+
+            async def slow(self, event: PressEvent) -> None:
+                started.set()
+                await release.wait()
+
+        mount = Mount(Slow(), timeout=None, acknowledgement_timeout=0.01)
+        mount.build_view()
+        interaction = fake_interaction()
+
+        async def dispatch() -> None:
+            await mount.dispatch("slow", interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(dispatch)
+            await started.wait()
+            await anyio.sleep(0.02)
+            interaction.response.defer.assert_awaited_once()
+            interaction.response._done = True
+            release.set()
+
 
 class TestAuthorLock:
     async def test_wrong_user_is_rejected_ephemerally(self):
