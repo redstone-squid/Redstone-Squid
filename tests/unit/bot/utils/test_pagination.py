@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import discord
 
@@ -31,7 +31,9 @@ def _interaction(user_id: int = 7) -> discord.Interaction[Any]:
             SimpleNamespace(
                 user=SimpleNamespace(id=user_id),
                 message=None,
-                response=SimpleNamespace(edit_message=AsyncMock(), send_message=AsyncMock()),
+                response=SimpleNamespace(
+                    edit_message=AsyncMock(), send_message=AsyncMock(), is_done=Mock(return_value=False)
+                ),
             ),
         ),
     )

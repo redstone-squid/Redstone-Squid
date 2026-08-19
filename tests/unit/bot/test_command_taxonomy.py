@@ -90,8 +90,9 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # takes a documented entry point away with no failing test, and a command added
     # without a plan ships to every guild. Neither shows up in a behavioural test,
     # because the behaviour of a command nobody calls is nothing.
+    # Approving and rejecting a claim are buttons on `account claims`, not commands
+    # (docs/plans/command-redesign/05-condensation.md).
     "account": (
-        "approve-claim",
         "claim",
         "claims",
         "consent",
@@ -102,7 +103,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "profile",
         "profile-edit",
         "refresh",
-        "reject-claim",
         "unlink",
         "visibility",
     ),
