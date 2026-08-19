@@ -51,10 +51,12 @@ class Code:
 class Lines:
     """A list of entries joined by ``join``; spills to "…and N more" by default.
 
-    Entries may span multiple lines themselves — Spill keeps or drops whole entries.
+    Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
+    may also be a degradation ladder (a tuple of alternates, preferred first): under pressure
+    the solver degrades the largest entries down their ladders before it spills any entry.
     """
 
-    lines: tuple[str, ...]
+    lines: tuple[str | tuple[str, ...], ...]
     join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0
