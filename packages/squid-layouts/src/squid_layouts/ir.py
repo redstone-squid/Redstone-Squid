@@ -1,8 +1,8 @@
 """Widget-level IR: Discord-shaped nodes carrying overflow policies.
 
 The semantic layer compiles to these; views needing exact control write them directly. Nodes
-are immutable descriptions. `solve` fits them to the message budgets and `materialize` turns
-the result into discord.py items — authors never do budget arithmetic.
+are immutable descriptions. The planner fits them to target budgets and renderers draw the
+resulting scene — authors never do budget arithmetic.
 """
 
 from collections.abc import Callable, Mapping, Sequence

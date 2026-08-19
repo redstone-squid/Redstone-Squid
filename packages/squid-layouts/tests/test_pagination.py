@@ -91,10 +91,18 @@ class TestSolvePagination:
 
 
 def _total_text(solved) -> int:
-    from squid_layouts.materialize import materialize
+    def walk(children) -> int:
+        total = 0
+        for child in children:
+            if isinstance(child, RText):
+                total += len(child.content)
+            elif hasattr(child, "texts"):
+                total += sum(len(text.content) for text in child.texts)
+            elif hasattr(child, "children"):
+                total += walk(child.children)
+        return total
 
-    view = materialize(solved)
-    return sum(len(c.content) for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay))
+    return walk(solved.children)
 
 
 class Browser(Component):

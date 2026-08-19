@@ -18,10 +18,8 @@ from squid_layouts import (
     Panel,
     Row,
     Text,
-    assert_within_limits,
-    conform,
     default_nav,
-    materialize,
+    render_static,
     solve,
 )
 from squid_layouts.solve import RPanel, RText, SolvedLayout
@@ -169,7 +167,5 @@ class TestFold:
 @given(st.integers(min_value=1, max_value=20))
 def test_enough_folds_always_bring_the_document_within_limits(count):
     solved = solve(_folded_document(count))
-    view = materialize(solved)
     assert solved.components <= LIMITS.total_components
-    assert conform(view) == []
-    assert_within_limits(view)
+    render_static(_folded_document(count))
