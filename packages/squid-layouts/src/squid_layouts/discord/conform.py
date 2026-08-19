@@ -10,9 +10,7 @@ a failure; production degrades to an ugly-but-delivered message.
 import discord
 from discord.ui.select import BaseSelect
 
-from squid_layouts.limits import LIMITS, V2Limits
-
-ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
+from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 
 
 class LimitViolationError(Exception):

@@ -32,7 +32,7 @@ dependencies = [
     "cryptography>=50,<51",
     "beartype>=0.19.0",
     "rapidfuzz>=3.13.0",
-    "squid-layouts",
+    "squid-layouts[discord]",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
     "advanced-alchemy>=1.11.0",

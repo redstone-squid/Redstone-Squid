@@ -5,13 +5,25 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import (
+from squid_layouts import LayoutInvariantError
+from squid_layouts.discord import (
+    DEFAULT_LIMITS as LIMITS,
+)
+from squid_layouts.discord import (
     ELLIPSIS,
-    LIMITS,
+    conform,
+    render_static,
+)
+from squid_layouts.discord.testing import assert_within_limits
+from squid_layouts.planning import (
+    LayoutOverflowError,
+    solve,
+)
+from squid_layouts.primitives import (
+    Code,
     Drop,
     Footer,
-    LayoutInvariantError,
-    LayoutOverflowError,
+    Heading,
     Lines,
     LinkButton,
     MediaCollection,
@@ -19,17 +31,13 @@ from squid_layouts import (
     Panel,
     RawItem,
     Row,
+    Section,
     Sep,
     Spill,
     Text,
     Thumbnail,
     Truncate,
-    assert_within_limits,
-    conform,
-    render_static,
-    solve,
 )
-from squid_layouts.primitives import Code, Heading, Section
 
 
 def _text_of(view: discord.ui.LayoutView) -> str:

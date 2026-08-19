@@ -5,16 +5,16 @@ from typing import TYPE_CHECKING
 
 import discord
 
-from squid_layouts import deliver
 from squid_layouts.actions import Visibility
+from squid_layouts.discord import delivery as deliver
+from squid_layouts.discord.modal import ModalSpec, build_modal
 from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.modal import ModalSpec, build_modal
 
 if TYPE_CHECKING:
-    from squid_layouts.mount import Mount
+    from squid_layouts.discord.mount import Mount
 
 
-class DiscordActionResponder:
+class ActionResponder:
     """Translate portable response intents onto one Discord interaction."""
 
     def __init__(self, interaction: discord.Interaction, mount: Mount) -> None:

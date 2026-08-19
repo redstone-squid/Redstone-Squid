@@ -6,9 +6,9 @@ from typing import Any
 import discord
 
 from squid_layouts.actions import ActionBinding
-from squid_layouts.conform import LimitViolationError, conform
+from squid_layouts.discord.conform import LimitViolationError, conform
 from squid_layouts.errors import DrawInvariantError
-from squid_layouts.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -40,7 +40,7 @@ class StaticView(discord.ui.LayoutView):
         super().__init__(timeout=None)
 
 
-class DiscordRenderer:
+class Renderer:
     """Draw a Discord-targeted scene without making layout decisions."""
 
     def __init__(
@@ -62,13 +62,13 @@ class DiscordRenderer:
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
         if scene.protocol != SceneCodec.protocol:
-            message = f"DiscordRenderer cannot draw scene protocol {scene.protocol}"
+            message = f"Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
         if scene.target != "discord.components-v2":
-            message = f"DiscordRenderer cannot draw target {scene.target!r}"
+            message = f"Renderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
         if scene.target_version != 1:
-            message = f"DiscordRenderer cannot draw Discord target version {scene.target_version}"
+            message = f"Renderer cannot draw Discord target version {scene.target_version}"
             raise DrawInvariantError(message)
 
         view = self.view_factory()

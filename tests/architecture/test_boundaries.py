@@ -15,7 +15,7 @@ def _scanned_files() -> list[Path]:
 def test_layouts_package_stays_standalone() -> None:
     """The UI framework package must remain publishable: no host-project or adapter imports."""
     (
-        archrule("squid-layouts depends only on discord.py and anyio")
+        archrule("squid-layouts stays independent from the host application")
         .match("squid_layouts*")
         .should_not_import("squid")
         .should_not_import("squid.*")
@@ -403,3 +403,23 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
         if counts.get(key, 0) < allowed
     }
     assert stale == {}, f"lower or drop these BARE_RAISE_ALLOWLIST entries (allowed, found): {stale}"
+
+
+def test_only_the_discord_adapter_imports_adapter_dependencies() -> None:
+    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install."""
+    root = Path("packages/squid-layouts/src/squid_layouts")
+    violations: list[str] = []
+    for path in root.rglob("*.py"):
+        if path.relative_to(root).parts[0] == "discord":
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                imported = {alias.name.split(".", 1)[0] for alias in node.names}
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imported = {node.module.split(".", 1)[0]}
+            else:
+                continue
+            if blocked := imported & {"anyio", "discord"}:
+                violations.append(f"{path}:{node.lineno}: {sorted(blocked)}")
+
+    assert violations == []
