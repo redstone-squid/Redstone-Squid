@@ -11,8 +11,10 @@ from typing import TYPE_CHECKING, override
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
+from squid.bot.ui import DISCORD_BLUE, create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions
 from squid.core.i18n import _
 from squid.notifications import (
@@ -160,6 +162,177 @@ class NotificationPanelView(ExpiringLayoutView):
         if self._preferences is None or self._preferences.dm_suspended_at is None:
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
+
+
+class NotificationPanel(sl.Component):
+    """A mounted notification workspace with semantic choices and actions."""
+
+    selected_ids: tuple[str, ...] = sl.state(())
+    closed: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        *,
+        notifications: NotificationService,
+        account_id: int,
+        author_id: int,
+        locale: str | None = None,
+    ) -> None:
+        self._notifications = notifications
+        self._account_id = account_id
+        self._author_id = author_id
+        self.locale = locale
+        self._preferences: NotificationPreferences | None = None
+        self._subscriptions: tuple[NotificationSubscription, ...] = ()
+
+    async def load(self) -> None:
+        self._preferences = await self._notifications.preferences(self._account_id)
+        self._subscriptions = tuple(await self._notifications.subscriptions(self._account_id))
+        self.selected_ids = tuple(
+            selected for selected in self.selected_ids if any(str(item.id) == selected for item in self.subscriptions)
+        )
+
+    @property
+    def web_enabled(self) -> bool:
+        return self._preferences is not None and self._preferences.web_enabled
+
+    @property
+    def dm_enabled(self) -> bool:
+        return self._preferences is not None and self._preferences.dm_enabled
+
+    @property
+    def subscriptions(self) -> tuple[NotificationSubscription, ...]:
+        return self._subscriptions[:MAX_LISTED]
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.closed:
+            return (sl.primitives.banner(t(self.locale, _("Notifications closed")), accent=DISCORD_BLUE),)
+        on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
+        fields = (
+            sl.primitives.presets.Field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),
+            sl.primitives.presets.Field(t(self.locale, _("Discord DMs")), on if self.dm_enabled else off),
+            sl.primitives.presets.Field(t(self.locale, _("Following")), self._subscription_list()),
+        )
+        nodes: list[sl.LayoutNode] = [
+            sl.primitives.card(
+                t(self.locale, _("Notifications")),
+                t(self.locale, _("Toggle where notifications arrive, and unfollow what you no longer want.")),
+                fields=fields,
+                footer=self._suspension_note(),
+            )
+        ]
+        if self.subscriptions:
+            nodes.append(
+                sl.Choices(
+                    key="unfollow",
+                    choices=tuple(
+                        sl.Choice(
+                            str(subscription.id),
+                            self.describe(subscription),
+                            self.detail(subscription),
+                        )
+                        for subscription in self.subscriptions
+                    ),
+                    selected=self.selected_ids,
+                    on_change=self._selection_changed,
+                    minimum=0,
+                    maximum=len(self.subscriptions),
+                )
+            )
+        nodes.append(
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Web inbox")),
+                        self._toggle_web,
+                        "web",
+                        style=sl.primitives.ActionStyle.SUCCESS
+                        if self.web_enabled
+                        else sl.primitives.ActionStyle.SECONDARY,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Discord DMs")),
+                        self._toggle_dm,
+                        "dm",
+                        style=sl.primitives.ActionStyle.SUCCESS
+                        if self.dm_enabled
+                        else sl.primitives.ActionStyle.SECONDARY,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Unfollow selected")),
+                        self._unfollow,
+                        "unfollow_selected",
+                        style=sl.primitives.ActionStyle.DANGER,
+                        disabled=not self.selected_ids,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Close")),
+                        self._close,
+                        "close",
+                    ),
+                )
+            )
+        )
+        return tuple(nodes)
+
+    async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
+        self.selected_ids = event.selected
+
+    async def _toggle_web(self, event: sl.PressEvent) -> None:
+        await event.acknowledge()
+        self._preferences = await self._notifications.set_preferences(
+            self._account_id,
+            web_enabled=not self.web_enabled,
+            dm_enabled=self.dm_enabled,
+        )
+        self.invalidate()
+
+    async def _toggle_dm(self, event: sl.PressEvent) -> None:
+        await event.acknowledge()
+        self._preferences = await self._notifications.set_preferences(
+            self._account_id,
+            web_enabled=self.web_enabled,
+            dm_enabled=not self.dm_enabled,
+        )
+        self.invalidate()
+
+    async def _unfollow(self, event: sl.PressEvent) -> None:
+        await event.acknowledge()
+        for subscription_id in self.selected_ids:
+            await self._notifications.unsubscribe(self._account_id, int(subscription_id))
+        await self.load()
+        self.invalidate()
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        self.closed = True
+        await event.finish()
+
+    def _subscription_list(self) -> str:
+        if not self._subscriptions:
+            return t(self.locale, _("_Nothing yet._"))
+        lines = [
+            f"**{self.describe(subscription)}**\n{self.detail(subscription)}" for subscription in self.subscriptions
+        ]
+        hidden = len(self._subscriptions) - len(self.subscriptions)
+        if hidden > 0:
+            lines.append(t(self.locale, _("…and {count} more."), count=hidden))
+        return "\n".join(lines)
+
+    def describe(self, subscription: NotificationSubscription) -> str:
+        return t(self.locale, KIND_LABELS[subscription.kind])
+
+    def detail(self, subscription: NotificationSubscription) -> str:
+        if subscription.record_filter is not None:
+            return _filter_text(subscription.record_filter)
+        return f"\x60{subscription.subject_id}\x60"
+
+    def _suspension_note(self) -> str | None:
+        if self._preferences is None or self._preferences.dm_suspended_at is None:
+            return None
+        return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
+
+    def mount(self) -> sl.discord.Mount:
+        return create_mount(self, locale=self.locale, timeout=SESSION_SECONDS, lock_to=self._author_id)
 
 
 class UnfollowSelect(discord.ui.Select[NotificationPanelView]):
