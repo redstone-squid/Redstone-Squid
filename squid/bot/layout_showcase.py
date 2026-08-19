@@ -20,6 +20,38 @@ type DemoSection = Literal["tour", "pagination", "adaptation", "composition"]
 
 _ACCENTS = (DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW)
 
+_SOURCE_EXAMPLES = {
+    "tour": """class Counter(sl.Component):
+    count: int = sl.state(0)
+
+    def render(self):
+        return sl.Section(
+            (
+                sl.Paragraph(f"Count: {self.count}"),
+                sl.Actions((sl.Action("increment", "+1", self.increment),), key="counter"),
+            ),
+            heading="Counter",
+        )""",
+    "pagination": """return sl.List(
+    tuple(sl.ListItem(str(index), entry) for index, entry in enumerate(entries)),
+    key="samples",
+)
+# The target adapter chooses and measures the pages and controls.""",
+    "adaptation": """actions = tuple(
+    sl.Action(f"action.{index}", f"Action {index}", on_action)
+    for index in range(1, 37)
+)
+return sl.Actions(actions, key="showcase-actions")
+# Discord planning preserves them as pickers of 25 and 11.""",
+    "composition": """def render(self):
+    return sl.Stack(
+        (
+            self.embed(self.left, key="left"),
+            self.embed(self.right, key="right"),
+        )
+    )""",
+}
+
 
 class DemoCounter(sl.Component):
     """A tiny child component used twice to demonstrate keyed composition."""
@@ -112,13 +144,14 @@ class LayoutShowcase(sl.Component):
     def _render_section(self) -> Sequence[sl.LayoutNode]:
         match self.section:
             case "pagination":
-                return self._pagination()
+                exhibit = self._pagination()
             case "adaptation":
-                return self._adaptation()
+                exhibit = self._adaptation()
             case "composition":
-                return self._composition()
+                exhibit = self._composition()
             case _:
-                return self._tour()
+                exhibit = self._tour()
+        return (*exhibit, self._source_example())
 
     def _tour(self) -> Sequence[sl.primitives.Node]:
         return (
@@ -206,6 +239,20 @@ class LayoutShowcase(sl.Component):
             ),
             self.embed(self.left, key="left"),
             self.embed(self.right, key="right"),
+        )
+
+    def _source_example(self) -> sl.Section:
+        return sl.Section(
+            (
+                sl.Paragraph(
+                    t(
+                        self.locale,
+                        _("This is the author-facing declaration; planning chooses the legal Discord shape."),
+                    )
+                ),
+                sl.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
+            ),
+            heading=t(self.locale, _("Declaration source")),
         )
 
     def _sections(self) -> tuple[tuple[str, str, str], ...]:
