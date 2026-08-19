@@ -11,6 +11,7 @@ from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import DISCORD_BLUE, info_layout, no_mentions
 from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RecordLookupRequest
@@ -56,7 +57,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No unresolved active record categories.")),
             locale=locale,
         )
-        await paginator.send(ctx, ephemeral=ctx.interaction is not None)
+        await paginator.send(ctx, ephemeral=personal(ctx))
 
     @records_group.command(name="title-issues")
     @requires(RECORD_ENTRY_INSPECT)
@@ -76,7 +77,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No active record titles require taxonomy review.")),
             locale=locale,
         )
-        await paginator.send(ctx, ephemeral=ctx.interaction is not None)
+        await paginator.send(ctx, ephemeral=personal(ctx))
 
     @autocompletes(current_version_id="version_ids")
     @records_group.command(name="rebuild")
@@ -94,7 +95,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         kind: BuildKind | None = None,
     ) -> None:
         """Recompute records from confirmed build facts."""
-        await ctx.defer(ephemeral=ctx.interaction is not None)
+        await ctx.defer(ephemeral=personal(ctx))
         locale = await resolve_locale(ctx, self.bot.services.settings)
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self.computation.rebuild(current_version_id=current_version_id, kinds=kinds)
@@ -109,7 +110,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     unresolved=summary.unresolved,
                 ),
             ),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -172,6 +173,9 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     resolved=summary.resolved,
                 ),
             ),
+            # Staff maintenance, like `records rebuild` beside it: the two answered differently
+            # for no reason anybody recorded, which is the pair audit C2 pointed at.
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
