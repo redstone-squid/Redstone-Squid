@@ -1,6 +1,6 @@
 """Discord commands for querying and managing computed records."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from discord import app_commands
 from discord.ext import commands
@@ -8,7 +8,8 @@ from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import info_layout, no_mentions
+from squid.bot.utils.components import DISCORD_BLUE, info_layout, no_mentions
+from squid.bot.utils.pagination import ListPaginator
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
@@ -17,6 +18,9 @@ from squid.records.domain import BuildKind
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+DIAGNOSTICS_PER_PAGE = 15
+"""Findings per page. Each is one long line, so a page is a screenful rather than a wall."""
 
 
 class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -41,21 +45,18 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """List categories whose winner needs more factual evidence."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         gaps = await self.records.gaps(kind=kind)
-        if gaps:
-            description = "\n".join(
+        paginator = _diagnostic_list(
+            ctx,
+            t(locale, _("Record evidence gaps")),
+            [
                 f"`{gap.definition_id}` **{gap.title}** — builds {', '.join(map(str, gap.build_ids))}; "
                 f"missing {', '.join(gap.fields)}"
-                for gap in gaps[:30]
-            )
-            if len(gaps) > 30:
-                description += t(locale, _("\n…and {count} more."), count=len(gaps) - 30)
-        else:
-            description = t(locale, _("No unresolved active record categories."))
-        await ctx.send(
-            view=info_layout(t(locale, _("Record evidence gaps")), description),
-            ephemeral=ctx.interaction is not None,
-            allowed_mentions=no_mentions(),
+                for gap in gaps
+            ],
+            empty=t(locale, _("No unresolved active record categories.")),
+            locale=locale,
         )
+        await paginator.send(ctx, ephemeral=ctx.interaction is not None)
 
     @records_group.command(name="title-issues")
     @requires(RECORD_ENTRY_INSPECT)
@@ -64,21 +65,18 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """List canonical titles containing unknown or contradictory taxonomy."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         gaps = await self.records.title_gaps(kind=kind)
-        if gaps:
-            lines: list[str] = []
-            for gap in gaps[:30]:
-                codes = ", ".join(str(diagnostic.get("code", "unknown")) for diagnostic in gap.diagnostics)
-                lines.append(f"`{gap.definition_id}` **{gap.title}** — {codes}")
-            description = "\n".join(lines)
-            if len(gaps) > 30:
-                description += t(locale, _("\n…and {count} more."), count=len(gaps) - 30)
-        else:
-            description = t(locale, _("No active record titles require taxonomy review."))
-        await ctx.send(
-            view=info_layout(t(locale, _("Record title diagnostics")), description),
-            ephemeral=ctx.interaction is not None,
-            allowed_mentions=no_mentions(),
+        paginator = _diagnostic_list(
+            ctx,
+            t(locale, _("Record title diagnostics")),
+            [
+                f"`{gap.definition_id}` **{gap.title}** — "
+                + ", ".join(str(diagnostic.get("code", "unknown")) for diagnostic in gap.diagnostics)
+                for gap in gaps
+            ],
+            empty=t(locale, _("No active record titles require taxonomy review.")),
+            locale=locale,
         )
+        await paginator.send(ctx, ephemeral=ctx.interaction is not None)
 
     @autocompletes(current_version_id="version_ids")
     @records_group.command(name="rebuild")
@@ -176,3 +174,30 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ),
             allowed_mentions=no_mentions(),
         )
+
+
+def _diagnostic_list(
+    ctx: Context[Any],
+    title: str,
+    entries: list[str],
+    *,
+    empty: str,
+    locale: str | None,
+) -> ListPaginator:
+    """A page of one-line findings.
+
+    Both diagnostics used to print the first 30 findings and count the rest, which is the
+    cap the reader hits exactly when the maintenance backlog is worth reading (audit C6).
+    One line per finding, so the entries are joined by a newline rather than by the blank
+    line multi-line entries want.
+    """
+    return ListPaginator(
+        title,
+        entries,
+        author_id=ctx.author.id,
+        empty=empty,
+        locale=locale,
+        page_size=DIAGNOSTICS_PER_PAGE,
+        separator="\n",
+        accent_colour=DISCORD_BLUE,
+    )
