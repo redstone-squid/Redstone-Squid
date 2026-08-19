@@ -10,7 +10,7 @@ predecessors, so call sites migrate by changing an import line.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import discord
 from discord.ext.commands import Context
@@ -34,6 +34,8 @@ __all__ = [
     "CardField",
     "CardSection",
     "PagedList",
+    "Private",
+    "Visibility",
     "card_layout",
     "chrome_for",
     "create_mount",
@@ -41,6 +43,8 @@ __all__ = [
     "help_layout",
     "info_layout",
     "link_layout",
+    "render_item",
+    "reply",
     "send_component",
     "text_layout",
     "warning_layout",
@@ -71,8 +75,45 @@ def chrome_for(locale: str | None) -> ui.Chrome:
         not_yours=t(locale, _("These list controls belong to someone else.")),
         previous=t(locale, _("Previous")),
         next=t(locale, _("Next")),
+        back=t(locale, _("Back")),
+        home=t(locale, _("Home")),
+        close=t(locale, _("Close")),
         page_footer=lambda page, pages: t(locale, _("Page {page} of {pages}"), page=page, pages=pages),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Private:
+    """Deliver where a channel can never see it: ephemeral or DM, with `reason` explaining why."""
+
+    reason: str
+
+
+type Visibility = Private | Literal["public", "personal"]
+
+
+async def reply(
+    ctx: Context[Any],
+    view: discord.ui.LayoutView,
+    *,
+    visibility: Visibility = "public",
+    locale: str | None = None,
+    file: discord.File | None = None,
+) -> discord.Message | None:
+    """The one reply entry point: send `view` with an explicit audience.
+
+    "public" answers in the channel; "personal" is ephemeral where the transport allows it
+    (see `squid.bot.utils.visibility.personal`); `Private(reason)` must never reach a channel
+    and falls back to a DM on the prefix side.
+    """
+    # Imported lazily: visibility -> utils.components -> this module would otherwise cycle.
+    from squid.bot.utils.visibility import deliver_privately, personal
+
+    if isinstance(visibility, Private):
+        return await deliver_privately(ctx, view, reason=visibility.reason, locale=locale, file=file)
+    extra: dict[str, Any] = {"file": file} if file is not None else {}
+    ephemeral = visibility == "personal" and personal(ctx)
+    return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.deliver.no_mentions(), **extra)
 
 
 def render_item(node: ui.Node, *, locale: str | None = None) -> discord.ui.Item[Any]:

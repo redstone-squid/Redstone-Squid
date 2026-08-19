@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-20 01:14+0000\n"
+"POT-Creation-Date: 2026-08-20 01:16+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -658,7 +658,7 @@ msgid "Author has not consented"
 msgstr ""
 
 #: squid/bot/diagnostics_view.py:111 squid/bot/settings_view.py:542
-#: squid/bot/submission/search_view.py:214
+#: squid/bot/submission/search_view.py:214 squid/bot/ui.py:78
 msgid "Back"
 msgstr "返回"
 
@@ -983,7 +983,7 @@ msgstr ""
 
 #: squid/bot/account_view.py:399 squid/bot/diagnostics_view.py:117
 #: squid/bot/notifications_view.py:225 squid/bot/settings_view.py:587
-#: squid/bot/submission/search_view.py:225
+#: squid/bot/submission/search_view.py:225 squid/bot/ui.py:80
 msgid "Close"
 msgstr ""
 
@@ -1618,6 +1618,10 @@ msgstr ""
 msgid "Hide my page"
 msgstr ""
 
+#: squid/bot/ui.py:79
+msgid "Home"
+msgstr ""
+
 #: squid/submissions/application/forms.py:353
 msgid "Horizontal"
 msgstr ""
@@ -2060,7 +2064,7 @@ msgid "Multiplier — leave empty to remove this role's weight"
 msgstr ""
 
 #: squid/bot/submission/search_view.py:203 squid/bot/submission/ui/views.py:633
-#: squid/bot/ui.py:73 squid/bot/ui.py:198 squid/bot/utils/pagination.py:142
+#: squid/bot/ui.py:77 squid/bot/ui.py:239 squid/bot/utils/pagination.py:142
 msgid "Next"
 msgstr "下一页"
 
@@ -2403,12 +2407,12 @@ msgstr ""
 msgid "Owner only"
 msgstr "仅限所有者"
 
-#: squid/bot/ui.py:74
+#: squid/bot/ui.py:81
 #, python-brace-format
 msgid "Page {page} of {pages}"
 msgstr ""
 
-#: squid/bot/ui.py:172 squid/bot/utils/pagination.py:95
+#: squid/bot/ui.py:213 squid/bot/utils/pagination.py:95
 #, python-brace-format
 msgid "Page {page} of {pages} · {total} in total"
 msgstr ""
@@ -2535,7 +2539,7 @@ msgid "Post and manage the Redstoner self-assign panel."
 msgstr ""
 
 #: squid/bot/submission/search_view.py:192 squid/bot/submission/ui/views.py:632
-#: squid/bot/ui.py:72 squid/bot/ui.py:192 squid/bot/utils/pagination.py:128
+#: squid/bot/ui.py:76 squid/bot/ui.py:233 squid/bot/utils/pagination.py:128
 msgid "Previous"
 msgstr "上一页"
 
@@ -3020,7 +3024,7 @@ msgstr "搜索文本和过滤条件，例如 `width:5`。"
 msgid "Section {page} of {pages}. Filled dots have unsaved changes."
 msgstr ""
 
-#: squid/bot/ui.py:70
+#: squid/bot/ui.py:74
 msgid "See attachment"
 msgstr ""
 
@@ -3696,7 +3700,7 @@ msgstr ""
 msgid "These error controls belong to someone else."
 msgstr ""
 
-#: squid/bot/ui.py:71 squid/bot/utils/pagination.py:80
+#: squid/bot/ui.py:75 squid/bot/utils/pagination.py:80
 msgid "These list controls belong to someone else."
 msgstr ""
 
@@ -4946,7 +4950,7 @@ msgstr ""
 msgid "{visibility} · verified {age}"
 msgstr ""
 
-#: squid/bot/notifications_view.py:140 squid/bot/ui.py:69
+#: squid/bot/notifications_view.py:140 squid/bot/ui.py:73
 #, python-brace-format
 msgid "…and {count} more."
 msgstr ""
