@@ -7,8 +7,8 @@ preset returns IR, so callers can post-process (append rows, wrap further) befor
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from squid_layouts.constraints import Alt
-from squid_layouts.ir import (
+from squid_layouts.primitives.constraints import Alt
+from squid_layouts.primitives.nodes import (
     Code,
     Footer,
     Gallery,
@@ -22,7 +22,7 @@ from squid_layouts.ir import (
     Text,
     Thumbnail,
 )
-from squid_layouts.styles import Color
+from squid_layouts.primitives.styles import Color
 
 
 def _normalized_alt(primary: str, fallbacks: Sequence[str]) -> Alt:

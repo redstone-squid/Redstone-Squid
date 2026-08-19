@@ -4,7 +4,7 @@ import pytest
 
 from squid_layouts import LayoutInvariantError, PresentationSession, plan
 from squid_layouts.discord import DISCORD_V2
-from squid_layouts.scene import SceneGallery, SceneRow, SceneSelect, SceneText
+from squid_layouts.scene.model import SceneGallery, SceneRow, SceneSelect, SceneText
 from squid_layouts.semantic import (
     Choice,
     Choices,

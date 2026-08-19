@@ -1,6 +1,6 @@
 """Planner strategy costs are coarse, lexicographic, and deterministic."""
 
-from squid_layouts.search import StrategyCandidate, choose_strategy
+from squid_layouts.planning.search import StrategyCandidate, choose_strategy
 from squid_layouts.semantic import Flexibility
 
 

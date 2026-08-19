@@ -24,7 +24,7 @@ from squid_layouts import (
 )
 from squid_layouts.discord import DISCORD_V2, DiscordRenderer, NativeItem
 from squid_layouts.primitives import ActionGroup, Choice, Code, Section
-from squid_layouts.scene import SceneRow, SceneText
+from squid_layouts.scene.model import SceneRow, SceneText
 
 
 async def _click(event) -> None: ...

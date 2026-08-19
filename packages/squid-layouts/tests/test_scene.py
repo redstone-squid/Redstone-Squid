@@ -6,8 +6,10 @@ import pytest
 
 from squid_layouts.actions import ActionPolicy
 from squid_layouts.document import Asset, Document, InlineAsset, as_document
-from squid_layouts.ir import Text
-from squid_layouts.scene import (
+from squid_layouts.primitives.nodes import Text
+from squid_layouts.primitives.styles import ActionStyle
+from squid_layouts.scene.codec import SceneCodec, SceneCodecError
+from squid_layouts.scene.model import (
     SceneAsset,
     SceneButton,
     SceneDocument,
@@ -18,8 +20,6 @@ from squid_layouts.scene import (
     SceneSelect,
     SceneText,
 )
-from squid_layouts.scene_codec import SceneCodec, SceneCodecError
-from squid_layouts.styles import ActionStyle
 
 
 def _scene() -> SceneDocument:

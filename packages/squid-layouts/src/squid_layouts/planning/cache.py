@@ -3,7 +3,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 
-from squid_layouts.scene import PlanReport, SceneDocument
+from squid_layouts.scene.model import PlanReport, SceneDocument
 
 
 @dataclass(frozen=True, slots=True)

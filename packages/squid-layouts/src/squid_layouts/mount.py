@@ -20,20 +20,20 @@ import discord
 from squid_layouts import deliver
 from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
-
-# (deliver is imported as a module so tests can monkeypatch its functions.)
-from squid_layouts.component import Component
 from squid_layouts.compositor import Composition, compose
 from squid_layouts.discord.actions import DiscordActionResponder
 from squid_layouts.discord.renderer import DiscordRenderer
 from squid_layouts.document import Asset, Document, InlineAsset
-from squid_layouts.ir import Node
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.pagination import NavFactory, PageContext, default_nav
-from squid_layouts.presentation import PresentationSession
-from squid_layouts.reactivity import readonly_transaction, transaction
-from squid_layouts.runtime import ComponentRuntime
-from squid_layouts.scene import SceneButton, SceneSelect
+from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav
+from squid_layouts.primitives.nodes import Node
+
+# (deliver is imported as a module so tests can monkeypatch its functions.)
+from squid_layouts.runtime.component import Component
+from squid_layouts.runtime.owner import ComponentRuntime
+from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.runtime.reactivity import readonly_transaction, transaction
+from squid_layouts.scene.model import SceneButton, SceneSelect
 
 logger = logging.getLogger(__name__)
 

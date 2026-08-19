@@ -22,7 +22,7 @@ from squid_layouts import (
     render_static,
     solve,
 )
-from squid_layouts.solve import RPanel, RText, SolvedLayout
+from squid_layouts.planning.solve import RPanel, RText, SolvedLayout
 
 
 def _rendered(solved: SolvedLayout) -> str:
