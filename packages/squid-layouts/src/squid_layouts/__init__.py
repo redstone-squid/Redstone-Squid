@@ -57,7 +57,6 @@ from squid_layouts.ir import (
     as_nodes,
 )
 from squid_layouts.limits import LIMITS, V2Limits
-from squid_layouts.materialize import StaticView, materialize
 from squid_layouts.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_layouts.mount import ErrorHook, Mount, MountedView
 from squid_layouts.navigation import Navigator
@@ -265,7 +264,6 @@ __all__ = [
     "SolvedLayout",
     "Spill",
     "Stack",
-    "StaticView",
     "Status",
     "StoredAsset",
     "StrategyState",
@@ -301,7 +299,6 @@ __all__ = [
     "deliver",
     "fallback",
     "listing",
-    "materialize",
     "md",
     "optional",
     "page_controls",

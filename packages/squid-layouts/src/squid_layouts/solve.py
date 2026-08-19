@@ -48,7 +48,7 @@ class LayoutOverflowError(Exception):
         self.notes = notes
 
 
-# --- Realized tree: the same shapes with final strings, consumed by materialize ------------
+# --- Realized tree: the same shapes with final strings, consumed by scene conversion -------
 
 
 @dataclass(slots=True)
