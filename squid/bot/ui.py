@@ -137,9 +137,7 @@ def display_text_length(view: discord.ui.LayoutView) -> int:
     Hand-assembled V1 views compose engine-solved items with items of their own; passing this
     as `reserved_text` tells the engine how much of the message budget is already gone.
     """
-    return sum(
-        len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.primitives.TextDisplay)
-    )
+    return sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
