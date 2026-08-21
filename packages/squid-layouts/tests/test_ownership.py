@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 
-from squid_layouts import plan
+from squid_layouts import TextLike, plan
 from squid_layouts.actions import Actor, SelectionEvent, Visibility
 from squid_layouts.discord import DEFAULT_TARGET
 from squid_layouts.runtime import PresentationSession
@@ -27,7 +27,7 @@ class _Responder:
 
     async def acknowledge(self) -> None: ...
 
-    async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
 
     async def redirect(self, url: str) -> None: ...
 
