@@ -92,7 +92,7 @@ async def test_menu_drills_down_and_owns_back_home_and_close() -> None:
 
     view = commit_render(mount)
     assert _texts(view) == ["## Settings"]
-    assert "Close" in _labels(view)
+    assert _labels(view)[-2:] == ["Back", "Close"]
 
     await mount.dispatch("settings.administration", fake_interaction())
     view = commit_render(mount)
