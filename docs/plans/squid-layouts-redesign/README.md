@@ -21,7 +21,7 @@ is not re-derived later.
 | 03 | [Factory layer for composition](03-factory-layer.md) | Small, additive. Must land before 04: 04's migration snippets are factory-style and rely on `None`-filtering that does not exist today. |
 | 04 | [Semantic parity, retire presets](04-semantic-parity-presets.md) | Closes the capability gaps (`Ladder`, accent, footer, lead media) keeping nine files on `primitives.presets`, migrates them, deletes the module. With 03, attacks the 15:1 semantic-bypass ratio from both ends. |
 | 05 | [Variant ladders](05-variant-ladders.md) | `Fold` and `Choice` merge into one `Variants` node; self-contained solver change that simplifies the collapse loop before 06 reworks the same code. |
-| 06 | [Pagination unification](06-pagination-unification.md) | Three paging engines become one; planner owns cursor reconciliation, deleting the mount's double draw. Biggest and riskiest; lands on the merged-ladder solver and retires 01's cursor-snapshot workaround. |
+| 06 | [Pagination](06-pagination.md) | One cursor ladder under three slicers; the page index becomes a projection, so planning owns reconciliation and the mount draws once. Retires 01's cursor-snapshot workaround. |
 | 07 | [Ephemeral mount lifetime](07-ephemeral-lifetime.md) | Independent operational fix (token-expiry cap + graceful degradation); any time after 01. |
 
 ## Second tier (order flexible)
