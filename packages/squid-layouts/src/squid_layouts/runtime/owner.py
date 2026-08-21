@@ -35,6 +35,10 @@ class ComponentRuntime:
         if self.on_invalidate is not None:
             self.on_invalidate()
 
+    def set_context[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
+        """Replace one root context value for subsequent renders."""
+        self.context[key] = value
+
     def render(self, *, defer: Callable[[Component], bool] | None = None) -> ComponentTree:
         """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
 
