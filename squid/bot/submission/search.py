@@ -22,7 +22,6 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid.bot.submission.ui.components import DynamicBuildEditButton
 from squid.bot.ui import PagedList, create_mount
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
@@ -427,5 +426,4 @@ class SearchCog[
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

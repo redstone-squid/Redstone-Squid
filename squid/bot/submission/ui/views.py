@@ -15,6 +15,7 @@ from whenever import Instant
 import squid_layouts as sl
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.routes import BUILD_EDIT
 from squid.bot.submission.navigation_view import (
     BaseNavigableView,
     MaybeAwaitableBaseNavigableViewFunc,
@@ -25,7 +26,6 @@ from squid.bot.submission.ui.components import (
     BuildField,
     DirectonalityLocationalitySelect,
     DoorTypeSelect,
-    DynamicBuildEditButton,
     EphemeralBuildEditButton,
     get_text_input,
 )
@@ -1254,13 +1254,18 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         super().__init__(parent=parent, timeout=BUILD_INFO_TIMEOUT_SECONDS)
         self.build = build
         self._message: discord.Message | None = None
-        if build.id is None:
-            edit_button = EphemeralBuildEditButton(build)
-        else:
-            edit_button = DynamicBuildEditButton(build)
-        self._edit_row = discord.ui.ActionRow(
-            cast(discord.ui.Item[discord.ui.LayoutView], edit_button),
+        # A stored build's edit button is routed, so it keeps working on a card this
+        # process did not draw; an unsaved one has nothing to point at and stays in-session.
+        edit_button: discord.ui.Button[discord.ui.LayoutView] = (
+            EphemeralBuildEditButton(build)
+            if build.id is None
+            else discord.ui.Button(
+                label="Edit",
+                style=discord.ButtonStyle.secondary,
+                custom_id=BUILD_EDIT.id(build_id=build.id),
+            )
         )
+        self._edit_row = discord.ui.ActionRow(edit_button)
         self.add_item(self._edit_row)
 
     async def _render(self, interaction: discord.Interaction[BotT]) -> None:

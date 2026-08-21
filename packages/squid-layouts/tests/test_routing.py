@@ -98,21 +98,36 @@ class TestRouter:
     def test_an_empty_router_matches_nothing(self) -> None:
         assert not Router().template().fullmatch("anything")
 
-    def test_shadowing_routes_are_rejected_at_registration(self) -> None:
+    def test_shadowing_routes_are_rejected(self) -> None:
         router = Router()
         router.add(POLL_CLOSE, _noop)
 
         with pytest.raises(ValueError, match="overlaps"):
             router.add(sl.Route("poll:{action}"), _noop)
-        with pytest.raises(ValueError, match="already registered"):
-            router.add(sl.Route("poll:close"), _noop)
 
-    def test_routes_may_not_be_added_after_registration(self) -> None:
+    async def test_re_registering_a_route_replaces_its_handler(self) -> None:
+        # Loading an extension re-executes its module, so a reload registers again.
+        seen: list[str] = []
         router = Router()
+        router.add(POLL_CLOSE, _noop)
+
+        async def replacement(_interaction, _params) -> None:
+            seen.append("replacement")
+
+        router.add(sl.Route("poll:close"), replacement)
+        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+
+        assert seen == ["replacement"]
+        assert router.template().pattern == "(?:poll:close)"
+
+    async def test_a_reload_still_works_once_the_template_is_built(self) -> None:
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
         router._registered = True
 
+        router.add(sl.Route("poll:close"), _noop)  # a reload leaves the template unchanged
         with pytest.raises(RuntimeError, match=r"before Router\.register"):
-            router.add(POLL_CLOSE, _noop)
+            router.add(EDIT_BUILD, _noop)
 
     def test_the_generated_dispatch_item_accepts_its_own_ids(self) -> None:
         router = Router()

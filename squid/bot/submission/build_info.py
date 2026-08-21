@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.submission.ui.components import DynamicBuildEditButton, EphemeralBuildEditButton
+from squid.bot.routes import BUILD_EDIT
 from squid.bot.ui import create_mount
 from squid.core.i18n import _
 
@@ -33,31 +33,14 @@ class BuildInfoComponent(sl.Component):
         self._lock_to = lock_to
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
-        edit_fallback = sl.primitives.Button(
-            t(self.locale, _("Edit")),
-            self._edit,
-            "edit",
-        )
-        native_edit = sl.primitives.Section(
-            (sl.primitives.Text(t(self.locale, _("Edit this build.")), priority=-10),),
-            sl.primitives.RawItem(
-                lambda: (
-                    EphemeralBuildEditButton(self.build)
-                    if self.build.id is None
-                    else DynamicBuildEditButton(self.build)
-                ),
-                kind="discord.item",
-                version=1,
-            ),
-        )
-        edit = sl.primitives.Choice(
-            (
-                sl.primitives.Variant(native_edit, frozenset({"extension.discord.item"})),
-                sl.primitives.Variant(
-                    sl.primitives.Row((edit_fallback,)),
-                ),
+        if self.build.id is None:
+            # Nothing stored to point a route at yet, so the control lives in this session.
+            edit = sl.primitives.Row((sl.primitives.Button(t(self.locale, _("Edit")), self._edit, "edit"),))
+        else:
+            edit = sl.primitives.Section(
+                (sl.primitives.Text(t(self.locale, _("Edit this build.")), priority=-10),),
+                sl.primitives.RoutedButton(t(self.locale, _("Edit")), BUILD_EDIT.id(build_id=self.build.id)),
             )
-        )
         return (self._node, edit)
 
     async def _edit(self, event: sl.PressEvent) -> None:

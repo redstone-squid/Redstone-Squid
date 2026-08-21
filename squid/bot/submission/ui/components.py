@@ -2,17 +2,17 @@
 
 import logging
 import os
-import re
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Self, cast, override
+from collections.abc import Callable, Mapping
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 from beartype.door import is_bearable
 from discord import Interaction, TextStyle
-from discord.ui import Item
 
-from squid.bot.i18n import t
+from squid.bot.i18n import resolve_locale, t
+from squid.bot.routes import BUILD_EDIT, ROUTER
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
+from squid.bot.utils.components import reply_layout, text_layout
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildDraft, DoorBuild
 from squid.core.i18n import _
 
@@ -266,35 +266,19 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
-class DynamicBuildEditButton[
-    BotT: "squid.bot.app.RedstoneSquid",
-    V: discord.ui.LayoutView,
-](discord.ui.DynamicItem[discord.ui.Button[V]], template=r"edit:build:(\d+)"):
-    def __init__(self, build: Build):
-        self.build = build
-        super().__init__(
-            discord.ui.Button(
-                label="Edit",
-                style=discord.ButtonStyle.secondary,
-                custom_id=f"edit:build:{build.id}",
-            )
-        )
+@ROUTER.route(BUILD_EDIT)
+async def edit_build(interaction: Interaction[Any], params: Mapping[str, str]) -> None:
+    """Open the build editor for the build a posted card points at."""
+    # FIXME: circular import
+    from squid.bot.submission.ui.views import BuildEditComponent
 
-    @classmethod
-    @override
-    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-        cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: re.Match[str], /
-    ) -> Self:
-        build = await interaction.client.services.builds.get(int(match.group(1)))
-        assert build is not None
-        return cls(build)
-
-    @override
-    async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-        # FIXME: circular import
-        from squid.bot.submission.ui.views import BuildEditComponent
-
-        await BuildEditComponent(self.build, interaction.client.services.builds).send(interaction)
+    build = await interaction.client.services.builds.get(int(params["build_id"]))
+    if build is None:
+        # The card outlived its build; say so rather than failing the interaction silently.
+        locale = await resolve_locale(interaction, interaction.client.services.settings)
+        await reply_layout(interaction, text_layout(t(locale, _("That build no longer exists."))))
+        return
+    await BuildEditComponent(build, interaction.client.services.builds).send(interaction)
 
 
 class EphemeralBuildEditButton[
