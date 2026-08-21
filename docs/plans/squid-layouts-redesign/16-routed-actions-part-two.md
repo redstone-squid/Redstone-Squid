@@ -130,6 +130,112 @@ Two findings worth keeping:
   check parameter *names* against a format string no checker parses, which is why the
   runtime check exists.
 
+## Corrections from external review
+
+An outside review of plan 14 raised seven points. Each was checked against the shipped
+code rather than reasoned about; two were already handled, one is moot, and four are real.
+
+### Already handled
+
+**Routed actions must not fold into a select, and planning must fail honestly.** Correct,
+and this is how plan 14 shipped. `planning/adaptation.py` routes `Link` and `RoutedAction`
+into a `direct` list that becomes plain buttons, never `_picker()` — a routed control's
+identity is its own custom id, and a select would replace that with
+`(select custom id, option value)`, which is a different operation. 35 routed actions
+raise `UnsolvableLayoutError` ("42 components exceed target maximum 40") rather than
+silently changing transport.
+
+**`register()` must freeze the table.** It does: `_registered` makes a genuinely new route
+after registration a `RuntimeError`. Re-registering an *existing* format is deliberately
+still allowed, because loading an extension re-executes its module and a reload must keep
+working; the route set is unchanged, so the generated template cannot go stale.
+
+**Legacy `DynamicItem` classes coexisting with the router.** Moot — `f8622b03` deleted all
+five, and no `DynamicItem` subclass remains in `squid/`. A guard against two `Router`
+instances registering on one client is still absent, but with no second router in the tree
+this is hardening, not a live hazard.
+
+### C1 — Route overlap detection is not exact
+
+Verified open. The probe check compares one sample id per route, so a mid-segment
+intersection escapes it:
+
+    a = Route("foo:{x}:baz")     # matches foo:bar:baz -> {"x": "bar"}
+    b = Route("foo:bar:{y}")     # matches foo:bar:baz -> {"y": "baz"}
+    router.add(a, h); router.add(b, h)   # both accepted today
+
+`foo:bar:baz` then dispatches to whichever registered first, silently. No current route
+pair overlaps, so nothing is broken today — but stage 4's aliases multiply the surface,
+which makes this worth closing first.
+
+The fix is to stop trying to decide regex intersection and shrink the grammar instead: a
+route is colon-separated segments, each one *exactly* a literal or `{name}` /
+`{name:conv}`. All five production routes already satisfy that, as do the stage 4
+namespaced formats. Overlap then decides exactly, per position:
+
+- literal vs literal — overlap iff equal
+- literal vs parameter — overlap iff the converter's pattern matches the literal, so
+  `remove:role:redstoner` and `remove:role:{id:int}` are correctly disjoint
+- parameter vs parameter — overlap (`int` ⊂ `str`, and every converter's language is
+  non-empty)
+
+with routes of different segment counts trivially disjoint. Ambiguity becomes structurally
+impossible rather than order-dependent, and the router can then be a literal/parameter trie
+instead of N regexes re-run after the master template matched.
+
+### C2 — A routed click extends its mount's timeout
+
+Verified open, and live today: `submission/ui/views.py:1284` puts a routed Edit button in a
+`LayoutView`.
+
+discord.py's `dispatch_view` calls `dispatch_dynamic_items` *and then* looks the item up in
+the stored view. Plan 14 checked that the second path cannot double-respond — the stored
+item is a plain `Button` whose callback is `Item`'s no-op — but not that it is inert.
+`BaseView._scheduled_task` runs `self.__timeout_expiry = time.monotonic() + self.timeout`
+*before* awaiting that no-op. With `Mount`'s default `timeout=900`, a routed click therefore
+keeps the surrounding mount alive, and the mount's own `_active` does not move, so devtools
+under-report the mount's age.
+
+So plan 14's "dispatch bypasses the mount's funnel entirely" is too strong: it bypasses
+`Mount.dispatch`, not discord.py's stored-view machinery.
+
+The clean fix is a `discord.ui.Button` subclass overriding `is_dispatchable()` to return
+`False`. `ViewStore.add_view` only files an item into `dispatch_info` when
+`is_dispatchable()` is true, so the outgoing button is never stored and there is exactly
+one dispatch path. Dynamic dispatch is unaffected: it rebuilds the view with
+`LayoutView.from_message`, which produces stock `Button`s, and finds the base item by
+`component_type + custom_id` there. The wire payload is an ordinary button either way.
+
+Alternative, if the subclass is judged too clever: document that routed clicks count as
+mount activity. That is a decision, not a fix, and it should be made explicitly.
+
+### C3 — The custom-id budget is bypassable
+
+Verified open:
+
+    RoutedButton("Edit", "x" * 500)   # renders through render_static, no complaint
+
+`Route.id()` checks `LIMITS.custom_id`, but a hand-built or codec-deserialized
+`RoutedButton` never passes through it, and `conform` does not check custom-id length —
+only `discord/testing.py`'s `payload_problems` does, which is a test helper. So an invalid
+state is representable and surfaces as a 50035 at send time, which is exactly the hole the
+planner exists to close.
+
+Validate twice: `Route.id()` keeps its early friendly error, and the planner or `conform`
+enforces the invariant regardless of how the node was constructed. `conform` is the better
+home, since it already walks the built payload and would also cover `Button` and
+`SelectMenu` custom ids.
+
+### C4 — `custom_id` is Discord vocabulary in a portable protocol
+
+`SceneRoutedButton.custom_id` and the codec's `"custom_id"` key put a frontend's word in
+the scene protocol. `route_id` is the honest name: Discord maps it to `custom_id`, HTML can
+emit `data-route-id`, and the semantic layer keeps saying "opaque stable routed-interaction
+identity".
+
+Cosmetic, and it is a codec-format change, so it belongs with stage 4's format churn rather
+than on its own.
+
 ## Not shipped
 
 ### Stage 4 — Aliases and a reserved namespace
@@ -203,7 +309,12 @@ a real message rather than a synthetic id.
 
 ## Sequencing
 
-0-3 landed together. 4 depends on 1 (aliases carry converters). 5 is independent. 6 is
-independent and largest. 7 wants 4 to be interesting. Remaining order: **5, then 4, then 7,
-then 6** — 5 before 4 because the middleware seam makes the namespace's gone-handler a
-one-liner, and 6 last because its demand is the least established.
+0-3 landed together. Remaining order: **C1, C2, C3, then 5, then 4 (with C4), then 7,
+then 6**.
+
+The corrections come first because two are correctness and all three are small. C1
+especially precedes stage 4: aliases enlarge the route table, so exact overlap detection
+should exist before there is more to be ambiguous about. Then 5 before 4, because the
+middleware seam makes the namespace's gone-handler a one-liner; C4 rides along with 4's
+format churn since both change the codec; and 6 stays last because its demand is the
+least established.
