@@ -134,11 +134,11 @@ to, and the handler passes those values to `RouterShell.transition`. Routed form
 prefilled schema from the pattern's `form_for` method. This distinction prevents a routed shell from
 smuggling an in-process callback into a supposedly restart-surviving control.
 
-Explicit pattern windows use `PageBroker.overrides`, so a route-carried page outranks any cursor and
-is clamped by the same pagination policy as planner-owned lists. The current pattern catalogue is:
+Explicit pattern windows use `CursorCoordinator` position overrides, so route-carried positions outrank
+stored cursors and are clamped by the same policy as planner-owned lists. The current pattern catalogue is:
 
 - `TabsState.selected` and `MenuState.path` keep navigation stable by key.
-- `RankedListState.page` preserves global rank numbers across explicit windows.
+- `RankedListState.position` preserves global rank numbers across explicit windows.
 - `WizardState` retains answers by step key. Computed steps may hide answers without deleting them;
   returning to the branch restores their prefill, while `live_answers` excludes those orphans from
   Finish. A content-to-form Next can present the modal directly. Consecutive form steps necessarily
@@ -148,6 +148,13 @@ is clamped by the same pagination policy as planner-owned lists. The current pat
   window's membership, group exclusions are applied during the merge, validation gates Apply, and an
   Apply edge dispatches only when the committed set changes. Panels with at most five options expose
   a form alternate to the planner.
+
+`SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
+declared state owns one immutable `LoadedWindow`; `WindowLoader` owns only request ordering. Its
+`SourceCapabilities` determine whether navigation is backward, whether numeric ranges are meaningful,
+and whether totals are absent, approximate, or exact. A source always returns its resolved `Position`,
+so anchor fallback is explicit. The mount's one `NavigationContext` factory renders controls for both
+these windows and materialized planner cursors.
 
 Route state still has to fit the target's custom-id budget. Large domain drafts should be represented
 by a compact stored identifier; the shell deliberately does not hide a database or persistence
@@ -249,11 +256,13 @@ belongs in declared state with a render branch, refreshed by a handler.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
 `DisclosureState`, and `StrategyState`. It is per mounted message/viewer session and separate
-from domain state. Generic cursors therefore do not leak into component fields, while apps
-cannot store arbitrary operational objects in presentation snapshots.
+from domain state. Materialized cursors therefore do not leak into component fields, while apps
+cannot store arbitrary operational objects in presentation snapshots. An async source component
+owns its loaded window explicitly because that data is an input to synchronous rendering, not
+generic presentation metadata.
 
 Each runtime keeps a small callback-free plan LRU. Cache keys include semantic structure,
-assets, target/version/limits, chrome, reservation, presentation/page state, nav factory
+assets, target/version/limits, chrome, reservation, presentation/position state, nav factory
 version, strictness, and search budget. Cache hits always recollect current callbacks,
 including solver-generated pager controls.
 
@@ -347,7 +356,7 @@ two workers from dispatching the same visible controls after a restart.
 ## Library binding: discord.py, not Discord alone
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
-solver, `PageBroker`, components — binds to Discord's *shape* (budgets, option windows,
+solver, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
 row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
 `renderer`, `mount`, `delivery`, `routing` — is a **discord.py adapter**, not a
 Discord-protocol adapter, and its dependencies sort into three strata:

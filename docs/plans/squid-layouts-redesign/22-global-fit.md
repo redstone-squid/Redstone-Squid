@@ -63,7 +63,7 @@ one axis at a time. Assignment costs sum the six numeric tiers and use the compl
 path/strategy tuple for deterministic ties. This is best-first without materializing an
 exponential product.
 
-One attempted assignment owns one fresh `PageBroker`, semantic lowering, target lowering,
+One attempted assignment owns one fresh `CursorCoordinator`, semantic lowering, target lowering,
 validation, and exact solve. Nothing from a rejected attempt is committed or reused. The
 planner keeps the first component-feasible degraded result but continues looking for an
 assignment whose solve did not consume a degradation rung. Therefore the observable

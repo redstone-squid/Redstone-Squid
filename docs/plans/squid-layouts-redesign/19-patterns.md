@@ -18,7 +18,7 @@ Three pieces; the first is a rule, not code.
    injects `sl.action` closures; the router shell stores state in route parameters and
    injects `sl.routed_action`, rebuilding the whole document per interaction — the
    message is its own session, every control encoding the next state.
-   `PageBroker.overrides` (the explicit page that outranks the stored cursor) is the
+   `CursorCoordinator.overrides` (the explicit position that outranks the stored cursor) is the
    stateless render's pagination entry, since no stored cursor exists. The rule binds
    Tabs/Menu/RankedList (tracked separately) as much as the two patterns below.
 
@@ -83,5 +83,5 @@ select or form input (`input`). There is no parallel `PersistentFoo` class hiera
 - `MultiChoiceGroup` declares explicit group exclusions. `MultiChoiceState` carries staged,
   committed, and per-group page state; `MultiChoicePanel.form_for()` supplies the small-cardinality
   modal alternate.
-- Explicit RankedList and MultiChoicePanel windows resolve their route/component page through
-  `PageBroker.overrides`, rather than growing a second clamping policy.
+- Explicit RankedList and MultiChoicePanel windows resolve their route/component position through
+  `CursorCoordinator.overrides`, rather than growing a second clamping policy.

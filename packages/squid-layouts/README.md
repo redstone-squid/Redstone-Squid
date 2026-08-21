@@ -56,7 +56,8 @@ binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
 controls, `sl.discord.Reactor` coalesces out-of-band refreshes, and `sl.discord.Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
-any component-bearing nodes built from the `sl.discord.PageContext`. Semantic pickers page through keyed
+controls built from `sl.discord.NavigationContext`; the same factory receives materialized pages and
+asynchronously loaded windows. Semantic pickers page through keyed
 25-option windows. A keyed root `Document` may promote structural overflow to whole-message
 pages; local pagination wins, and local plus root navigation are never shown simultaneously.
 Authors can size a region with `sl.budget(node, min=..., prefer=..., stretch=...)` or page a
@@ -103,36 +104,37 @@ instances, but a process-independent route cannot carry an in-memory component i
 
 ### Async cursor sources
 
-A ranking too large to materialize may instead use `source=`. A source declares only what it can
-prove and fetches one window at a time:
+A ranking too large to materialize uses the distinct `SourceRankedList` component. A source declares
+only what it can prove and fetches one window at a time:
 
 ```python
 class BuildSource:
-    countable = False
-    bidirectional = True
-    jumpable = False
+    capabilities = sl.SourceCapabilities(backward=True)
 
     async def fetch(self, position: sl.Position, extent: int) -> sl.Window[Build]:
-        rows, has_previous, has_more = await builds.window(position, extent)
-        return sl.Window(tuple(rows), has_previous, has_more)
+        resolved, rows, has_previous, has_more = await builds.window(position, extent)
+        return sl.Window(resolved, tuple(rows), has_previous, has_more)
 
-ranking = sl.RankedList(
-    source=BuildSource(),
+ranking = sl.SourceRankedList(
+    BuildSource(),
     key="builds",
     label=lambda build: build.title,
     value=lambda build: build.score,
     identity=lambda build: str(build.id),
     page_size=10,
-).component()
+)
 ```
 
-`position.direction` is `"around"` for an anchor-preserving refresh, `"forward"` for rows after the
-anchor, and `"backward"` for rows before it. Return `Window.position` when an absent anchor makes the
-source choose a nearest key, newest row, or start. The component fingerprints only visible identities
-and drops a fetch that completes after a newer request. Count and range chrome follows
-`countable`/`jumpable`; an uncountable source never exposes the `Window.total` it may accidentally
-return. Source-backed rankings require the component shell because fetching stays outside planning and
-cannot run in `RouterShell.render()`.
+`position.direction` is `Direction.AROUND` for an anchor-preserving refresh, `FORWARD` for rows after
+the anchor, and `BACKWARD` for rows before it. Every `Window` returns the source's resolved
+`Direction.AROUND` position, including its fallback when an anchor disappeared. The component
+fingerprints only visible identities and drops a fetch that completes after a newer request.
+
+`SourceCapabilities` separately declares backward traversal, known offsets, arbitrary jumps, and
+`CountPrecision`. Exact jumpable sources get page counts; exact or approximate sequential sources get
+range totals; offset-only sources get a range; keyset-only sources get no numeric footer. A source that
+declares no count must return `total=None`. Source-backed rankings are components because fetching stays
+outside planning and cannot run in `RouterShell.render()`.
 
 ## Host integration rules
 
