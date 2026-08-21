@@ -40,6 +40,7 @@ from squid_layouts.primitives.nodes import (
     Node,
     Panel,
     RawItem,
+    RoutedButton,
     Row,
     Section,
     SelectMenu,
@@ -65,6 +66,7 @@ from squid_layouts.scene.model import (
     SceneOption,
     ScenePager,
     ScenePanel,
+    SceneRoutedButton,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -96,12 +98,21 @@ class _Converter:
         self.bindings[key] = ActionBinding(key=key, handler=handler, policy=node.policy, routes=routes)
         return key
 
-    def accessory(self, node: Thumbnail | LinkButton | Button | RawItem, path: str) -> SceneNode:
+    def accessory(self, node: Thumbnail | LinkButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
         match node:
             case Thumbnail(url=url, description=description):
                 return SceneThumbnail(url, description)
             case LinkButton(label=label, url=url):
                 return SceneLink(label, url)
+            case RoutedButton(label=label, custom_id=custom_id):
+                # No binding: the router owns dispatch, so the scene is complete without one.
+                return SceneRoutedButton(
+                    label=label,
+                    custom_id=custom_id,
+                    style=node.style,
+                    emoji=node.emoji,
+                    disabled=node.disabled,
+                )
             case Button():
                 return SceneButton(
                     label=node.label,
@@ -133,7 +144,9 @@ class _Converter:
                 return SceneSeparator(large, visible)
             case Row(items=items):
                 converted = tuple(self.accessory(item, f"{path}.{index}") for index, item in enumerate(items))
-                if not all(isinstance(item, SceneLink | SceneButton | SceneExtension) for item in converted):
+                if not all(
+                    isinstance(item, SceneLink | SceneButton | SceneRoutedButton | SceneExtension) for item in converted
+                ):
                     message = f"row {path} contains an unsupported item"
                     raise LayoutInvariantError(message)
                 return SceneRow(converted)
@@ -156,7 +169,7 @@ class _Converter:
                 return SceneGallery(tuple(SceneGalleryItem(url) for url in urls))
             case RawItem():
                 return self.accessory(node, path)
-            case LinkButton():
+            case LinkButton() | RoutedButton():
                 return self.accessory(node, path)
 
     def children(self, children: Sequence[Realized]) -> tuple[SceneNode, ...]:

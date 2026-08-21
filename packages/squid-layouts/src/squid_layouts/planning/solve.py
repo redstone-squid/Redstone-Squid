@@ -27,6 +27,7 @@ from squid_layouts.primitives.nodes import (
     Option,
     Panel,
     RawItem,
+    RoutedButton,
     Row,
     Section,
     SelectMenu,
@@ -262,22 +263,12 @@ class _Builder:
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: int = 0
 
-    def _clamp_button(self, button: Button | LinkButton) -> Button | LinkButton:
+    def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
             return button
         self.notes.append(f"button label clamped from {len(button.label)}")
         trimmed = _trim_keep(button.label, self.limits.button_label, "head")
-        if isinstance(button, LinkButton):
-            return LinkButton(label=trimmed, url=button.url)
-        return Button(
-            label=trimmed,
-            on_click=button.on_click,
-            key=button.key,
-            style=button.style,
-            emoji=button.emoji,
-            disabled=button.disabled,
-            policy=button.policy,
-        )
+        return replace(button, label=trimmed)
 
     def _clamp_select(self, select: SelectMenu) -> SelectMenu:
         limits = self.limits
@@ -347,7 +338,8 @@ class _Builder:
             case Row(items=items):
                 self.raw_text_cost += sum(item.text_cost for item in items if isinstance(item, RawItem))
                 clamped = tuple(
-                    self._clamp_button(item) if isinstance(item, Button | LinkButton) else item for item in items
+                    self._clamp_button(item) if isinstance(item, Button | LinkButton | RoutedButton) else item
+                    for item in items
                 )
                 return Row(items=clamped)
             case SelectMenu():

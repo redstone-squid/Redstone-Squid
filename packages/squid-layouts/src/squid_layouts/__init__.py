@@ -56,6 +56,7 @@ from squid_layouts.factories import (
     paragraph,
     progress,
     quote,
+    routed_action,
     section,
     stack,
     status,
@@ -63,6 +64,7 @@ from squid_layouts.factories import (
     table_row,
 )
 from squid_layouts.planning.planner import plan
+from squid_layouts.routing import Route
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.reactivity import ReactiveWriteError, batch, computed, state, transaction
@@ -113,6 +115,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Progress,
     Quote,
+    RoutedAction,
     Section,
     SemanticNode,
     Spilled,
@@ -209,6 +212,8 @@ __all__ = [
     "RawMarkdown",
     "ReactiveWriteError",
     "ResolvedText",
+    "Route",
+    "RoutedAction",
     "SceneDocument",
     "Section",
     "SelectionEvent",
@@ -270,6 +275,7 @@ __all__ = [
     "progress",
     "quote",
     "raw_md",
+    "routed_action",
     "runtime",
     "scene",
     "section",
