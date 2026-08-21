@@ -44,16 +44,27 @@ are not re-derived or accidentally adopted later.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
-  surface they would be built on. Revisit after the presets migration lands.
+  surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
+  plans [18](18-forms.md)/[19](19-patterns.md) now cover Form, Wizard and
+  MultiChoicePanel; Tabs/Menu/RankedList proceed separately under 19's two-shell rule.
+- **Grid / matrix interaction** (added 2026-08-21) — content grids are a `Table`
+  display strategy (`MATRIX`), not a new node; interactive grids start as an
+  `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
+  non-degradability free. The degradation ladder (button grid → text grid +
+  coordinate select → paged select) is the semantic-node promotion, and it waits for
+  a real consumer.
 - **`sl.resource` descriptor** (declared `pending | ready | failed` state with
   `.reload()`), cut from plan 09. Under awaited `on_load` the pending state is never
   observable at first paint, and without a dependency model it worsens its motivating
   consumer: `SettingsPanel` fetches `_preset`/`_weights` as a function of `self._kind`,
   which needs declared deps and an optimistic set before `.reload()` beats the explicit
   `open_voting` method. Revisit only with a dependency design (declared deps or tracked
-  reads during the fetch), plus a staleness guard for out-of-order reloads.
+  reads during the fetch), plus a staleness guard for out-of-order reloads. Plan
+  [21](21-cursor-sources.md) extracts the position policy without touching this; its
+  §5 commits cursor fetching and the load-phase/dependency design to be designed
+  together.
 - **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
-  in the architecture doc's gaps; unchanged priority.
+  in the architecture doc's gaps; superseded by plan [18](18-forms.md) (2026-08-21).
 - **Multi-message rendering** (one logical UI spanning several messages). Two features
   hiding in one thought, with opposite verdicts. *Branching* — a click spawns an
   additional message — is not deferred: it ships today as the consent pattern
@@ -73,8 +84,11 @@ are not re-derived or accidentally adopted later.
   `EditHandle`/`Destination` being per-message is what makes the coordinator cheap; keep
   `on_load`, context, and session policy free of any root-component-equals-session
   assumption so it stays that way.
-- **Cross-page multi-select** — still rejected pending an explicit grouping/commit
-  model, per the documented boundary.
+- **Cross-page multi-select** — resolved 2026-08-21: the grouping/commit model the
+  rejection demanded turned out to be Form's submission model, and plan
+  [19](19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
+  per-window merge, gated Apply). The rejection of engine-side `Managed` merging
+  stands.
 - **Statically checking a route handler's parameters against its route** (plan 16 stage 2)
   — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
   `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
