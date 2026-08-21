@@ -430,9 +430,12 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
         case Controlled(value=value):
             current = value
         case Managed(initial=initial):
+            # A remembered destination that has since gone unavailable is the engine's own
+            # stale data, so drop it. An author's value is theirs to be wrong about.
+            keys = {destination.key for destination in available}
             seed = () if initial is None else (initial,)
             remembered = context.session.selection(node.key, initial=seed).selected
-            current = remembered[0] if remembered else None
+            current = remembered[0] if remembered and remembered[0] in keys else None
     if current is None and available:
         current = available[0].key
 
