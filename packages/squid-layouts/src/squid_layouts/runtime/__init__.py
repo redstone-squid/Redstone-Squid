@@ -14,7 +14,15 @@ from squid_layouts.runtime.presentation import (
     StrategyUpdate,
     apply_updates,
 )
-from squid_layouts.runtime.reactivity import ReactiveWriteError, batch, computed, state, transaction
+from squid_layouts.runtime.reactivity import (
+    ReactiveWriteError,
+    UndeclaredStateError,
+    batch,
+    computed,
+    state,
+    strict_state,
+    transaction,
+)
 
 
 def __getattr__(name: str):
@@ -39,9 +47,11 @@ __all__ = [
     "SessionUpdate",
     "StrategyState",
     "StrategyUpdate",
+    "UndeclaredStateError",
     "apply_updates",
     "batch",
     "computed",
     "state",
+    "strict_state",
     "transaction",
 ]

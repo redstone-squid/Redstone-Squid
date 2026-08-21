@@ -1,11 +1,16 @@
 """Transactional reactive state for component trees."""
 
+import logging
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, overload
+
+type CopyMode = Literal["deep", "ref"]
+
+_log = logging.getLogger(__name__)
 
 
 class ReactiveOwner(Protocol):
@@ -15,9 +20,15 @@ class ReactiveOwner(Protocol):
 
     def _state_rolled_back(self) -> None: ...
 
+    def _state_tracked(self) -> bool: ...
+
 
 class ReactiveWriteError(RuntimeError):
     """A state mutation was attempted inside a read-only action."""
+
+
+class UndeclaredStateError(RuntimeError):
+    """An undeclared attribute was written inside a transaction under strict mode."""
 
 
 def _plain(value: Any) -> Any:
@@ -36,6 +47,7 @@ class _Snapshot:
     name: str
     existed: bool
     value: Any
+    copy: CopyMode = "deep"
 
 
 @dataclass(slots=True)
@@ -44,16 +56,25 @@ class _Transaction:
     snapshots: dict[tuple[int, str], _Snapshot] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
 
-    def record(self, owner: ReactiveOwner, name: str) -> None:
+    def record(self, owner: ReactiveOwner, name: str, copy: CopyMode = "deep") -> None:
         key = (id(owner), name)
         if key in self.snapshots:
             return
         existed = name in owner.__dict__
-        value = _plain(owner.__dict__[name]) if existed else None
-        self.snapshots[key] = _Snapshot(owner, name, existed, value)
+        if not existed:
+            value = None
+        elif copy == "ref":
+            value = owner.__dict__[name]
+        else:
+            value = _plain(owner.__dict__[name])
+        self.snapshots[key] = _Snapshot(owner, name, existed, value, copy)
 
     def mark_changed(self, owner: ReactiveOwner) -> None:
         if self.readonly:
+            # Building an object is not mutating the view, and a read-only handler is allowed
+            # to build one. Only owners already in the tree are what this rule protects.
+            if not owner._state_tracked():
+                return
             message = "parallel-read actions cannot mutate component state"
             raise ReactiveWriteError(message)
         self.changed[id(owner)] = owner
@@ -65,18 +86,55 @@ class _Transaction:
     def rollback(self) -> None:
         for snapshot in reversed(tuple(self.snapshots.values())):
             if snapshot.existed:
-                snapshot.owner.__dict__[snapshot.name] = _observe(snapshot.value, snapshot.owner, snapshot.name)
+                value = snapshot.value
+                if snapshot.copy != "ref":
+                    value = _observe(value, snapshot.owner, snapshot.name)
+                snapshot.owner.__dict__[snapshot.name] = value
             else:
                 snapshot.owner.__dict__.pop(snapshot.name, None)
             snapshot.owner._state_rolled_back()
 
 
 _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_layouts_transaction", default=None)
+_STRICT: ContextVar[bool] = ContextVar("squid_layouts_strict_state", default=False)
 
 
-def _before(owner: ReactiveOwner, name: str) -> None:
+@contextmanager
+def strict_state(*, enabled: bool = True) -> Iterator[None]:
+    """Turn transaction-time writes to undeclared attributes into errors."""
+    token = _STRICT.set(enabled)
+    try:
+        yield
+    finally:
+        _STRICT.reset(token)
+
+
+def report_undeclared_write(owner: object, name: str) -> None:
+    """Report a transaction-time write to an attribute that is not declared state.
+
+    Read-only actions reject it. Writable ones let the write land but say it is uncovered,
+    rather than pretending a half-guarantee reaches it.
+    """
+    current = _CURRENT.get()
+    if current is None:
+        return
+    label = f"{type(owner).__name__}.{name}"
+    if current.readonly:
+        message = f"parallel-read actions cannot mutate component state ({label})"
+        raise ReactiveWriteError(message)
+    message = (
+        f"{label} was assigned inside a transaction but is not declared state: it will not be "
+        f"rolled back if the action fails, and it will not trigger a re-render. "
+        f"Declare it with sl.state()."
+    )
+    if _STRICT.get():
+        raise UndeclaredStateError(message)
+    _log.warning(message)
+
+
+def _before(owner: ReactiveOwner, name: str, copy: CopyMode = "deep") -> None:
     if current := _CURRENT.get():
-        current.record(owner, name)
+        current.record(owner, name, copy)
 
 
 def _after(owner: ReactiveOwner) -> None:
@@ -325,50 +383,92 @@ class _State:
         default: Any = _MISSING,
         *,
         factory: Callable[[], Any] | None = None,
-        persist: bool = True,
+        persist: bool | None = None,
+        copy: CopyMode = "deep",
     ) -> None:
         if default is not _MISSING and factory is not None:
             message = "state accepts either a default or a factory, not both"
             raise TypeError(message)
-        if default is _MISSING and factory is None:
-            message = "state requires a default or factory"
+        if copy == "ref" and persist:
+            message = "reference-copied state cannot be persisted; it is not serializable by assumption"
             raise TypeError(message)
         self._default = default
         self._factory = factory
         self._name = ""
         self.public_name = ""
-        self.persist = persist
+        self.copy = copy
+        self.persist = (copy == "deep") if persist is None else persist
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = f"__state_{name}"
         self.public_name = name
 
+    @property
+    def has_initial(self) -> bool:
+        return self._default is not _MISSING or self._factory is not None
+
     def _initial(self) -> Any:
         return self._factory() if self._factory is not None else deepcopy(self._default)
+
+    def _wrap(self, instance: ReactiveOwner, value: Any) -> Any:
+        # Reference-copied fields hold things we promised not to copy, so they are not proxied
+        # either: a ReactiveDict would deep-copy on every in-place write.
+        return value if self.copy == "ref" else _observe(value, instance, self._name)
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
         if instance is None:
             return self
         if self._name not in instance.__dict__:
-            instance.__dict__[self._name] = _observe(self._initial(), instance, self._name)
+            if not self.has_initial:
+                message = f"{type(instance).__name__}.{self.public_name} was never assigned"
+                raise AttributeError(message)
+            instance.__dict__[self._name] = self._wrap(instance, self._initial())
         return instance.__dict__[self._name]
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
         if instance.__dict__.get(self._name, _MISSING) is value:
             return
-        _before(instance, self._name)
-        instance.__dict__[self._name] = _observe(value, instance, self._name)
+        _before(instance, self._name, self.copy)
+        instance.__dict__[self._name] = self._wrap(instance, value)
         _after(instance)
+
+
+@overload
+def state[ValueT](
+    default: ValueT,
+    *,
+    persist: bool | None = None,
+    copy: CopyMode = "deep",
+) -> ValueT: ...
+
+
+@overload
+def state[ValueT](
+    *,
+    factory: Callable[[], ValueT],
+    persist: bool | None = None,
+    copy: CopyMode = "deep",
+) -> ValueT: ...
+
+
+@overload
+def state(*, persist: bool | None = None, copy: CopyMode = "deep") -> Any: ...
 
 
 def state(
     default: Any = _MISSING,
     *,
     factory: Callable[[], Any] | None = None,
-    persist: bool = True,
+    persist: bool | None = None,
+    copy: CopyMode = "deep",
 ) -> Any:
-    """Declare observed component state with either a default or per-instance factory."""
-    return _State(default, factory=factory, persist=persist)
+    """Declare observed component state.
+
+    Pass a default or a factory for a field the class owns, or neither for one ``__init__``
+    assigns. ``copy="ref"`` snapshots the reference instead of a deep copy, so services,
+    guilds, and other non-copyable collaborators can still be declared.
+    """
+    return _State(default, factory=factory, persist=persist, copy=copy)
 
 
 def _state_fields(owner: ReactiveOwner) -> dict[str, _State]:
@@ -383,8 +483,12 @@ def _state_fields(owner: ReactiveOwner) -> dict[str, _State]:
 
 
 def export_state(owner: ReactiveOwner) -> dict[str, Any]:
-    """Return plain values for every persistent state descriptor on an instance."""
-    return {name: _plain(getattr(owner, name)) for name in _state_fields(owner)}
+    """Return plain values for every persistent state descriptor that currently has a value."""
+    return {
+        name: _plain(getattr(owner, name))
+        for name, descriptor in _state_fields(owner).items()
+        if descriptor.has_initial or descriptor._name in owner.__dict__
+    }
 
 
 def restore_state(owner: ReactiveOwner, values: Mapping[str, Any]) -> None:
