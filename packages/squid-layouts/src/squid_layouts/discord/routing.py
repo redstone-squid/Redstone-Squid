@@ -64,6 +64,18 @@ class RouteComponent(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class RouteDescription:
+    """A stable, read-only description of one registered routed control."""
+
+    component: RouteComponent
+    format: str
+    params: tuple[tuple[str, str], ...]
+    aliases: tuple[str, ...]
+    handler_module: str
+    handler_qualname: str
+
+
+@dataclass(frozen=True, slots=True)
 class _Registration:
     route: Route
     handler: RouteHandler
@@ -122,6 +134,23 @@ class Router[BotT: discord.Client]:
         self.namespace = namespace
         self.on_gone = on_gone
         self.on_error = on_error
+
+    def describe(self) -> tuple[RouteDescription, ...]:
+        """Describe the current route table without exposing mutable registrations."""
+        return tuple(
+            RouteDescription(
+                component=registration.component,
+                format=registration.route.format,
+                params=tuple(
+                    (name, converter.name)
+                    for name, converter in zip(registration.route.params, registration.route.converters, strict=True)
+                ),
+                aliases=registration.route.aliases,
+                handler_module=registration.handler.__module__,
+                handler_qualname=registration.handler.__qualname__,
+            )
+            for registration in self._routes
+        )
 
     def route[**P](
         self, route: RouteLike

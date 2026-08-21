@@ -18,6 +18,7 @@ from discord.ext.commands import Context
 
 import squid_layouts as sl
 from squid.bot.devtools_view import SESSION_SECONDS, MountInspector, scene_attachment
+from squid.bot.routes import router
 from squid.bot.ui import Private, create_mount, destination, error_layout, render_static
 from squid.bot.utils.visibility import deliver_privately
 
@@ -79,6 +80,22 @@ class DevTools[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             render_static([sl.primitives.Text(f"Scene for mount `{mount_id}` — {len(asset.source.data)} bytes.")]),
             reason=_REASON,
             files=[discord.File(io.BytesIO(asset.source.data), filename=asset.name)],
+        )
+
+    @dev_group.command(name="routes")
+    async def list_routes(self, ctx: Context[BotT]) -> None:
+        """List stateless routed controls registered in this process."""
+        descriptions = router.describe()
+        lines: list[str] = []
+        for route in descriptions:
+            lines.append(f"{route.component.value:6} {route.format} -> {route.handler_module}.{route.handler_qualname}")
+            if route.aliases:
+                lines.append(f"       aliases: {', '.join(route.aliases)}")
+        body = "No routed controls are registered." if not lines else "\n".join(lines)
+        await deliver_privately(
+            ctx,
+            render_static([sl.primitives.Heading("Routed controls"), sl.primitives.Text(body)]),
+            reason=_REASON,
         )
 
     async def _open(self, ctx: Context[BotT], *, focus: str | None) -> None:

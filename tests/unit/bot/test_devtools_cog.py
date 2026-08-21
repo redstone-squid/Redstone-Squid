@@ -11,6 +11,7 @@ import squid.bot.app
 import squid_layouts as sl
 from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS
 from squid.bot.devtools import DevTools
+from squid.bot.routes import router
 from squid_layouts.discord import Mount, live
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Heading
@@ -97,6 +98,19 @@ class TestScene:
         await run(cog.dump_scene, cog, ctx, subject.id)
 
         assert "no scene" in str(ctx.author.send.await_args.kwargs["view"].to_components())
+
+
+class TestRoutes:
+    async def test_route_table_is_delivered_privately(self) -> None:
+        ctx = make_context()
+
+        cog = make_cog()
+        await run(cog.list_routes, cog, ctx)
+
+        ctx.author.send.assert_awaited_once()
+        rendered = str(ctx.author.send.await_args.kwargs["view"].to_components())
+        assert router.describe()[0].format in rendered
+        assert router.describe()[0].handler_qualname in rendered
 
 
 class TestOpen:
