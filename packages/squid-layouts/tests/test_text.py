@@ -60,3 +60,12 @@ def test_plural_message_uses_catalog_plural_lookup() -> None:
 def test_plural_message_requires_integer_count() -> None:
     with pytest.raises(ValueError, match="integer 'count'"):
         resolve_text(Message("one", {"count": "many"}, plural="many"), Localization())
+
+
+def test_message_can_interpolate_another_deferred_message() -> None:
+    translations = {"Section": "Sektion", "{section} page": "{section} Seite"}
+    localization = Localization("de", gettext=lambda message: translations[message])
+
+    text = resolve_text(Message("{section} page", {"section": Message("Section")}), localization)
+
+    assert text.content == "Sektion Seite"

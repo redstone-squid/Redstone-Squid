@@ -4,11 +4,14 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
+import discord
 import pytest
 
+import squid.bot.settings_view as settings_view
 import squid_layouts as sl
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.voting.domain import VoteKind
+from squid_layouts.discord.testing import commit_render
 from squid_layouts.runtime.reactivity import readonly_transaction
 
 GUILD_ID = 7
@@ -100,3 +103,25 @@ async def test_a_read_only_action_cannot_change_a_channel() -> None:
     with pytest.raises(sl.ReactiveWriteError), readonly_transaction():
         await panel.set_channel("Vote", 12)
     assert panel.channel_id("Vote") == 3
+
+
+async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.MonkeyPatch) -> None:
+    panel, _ = make_component_panel()
+    mount = panel._mount
+    assert mount is not None
+    commit_render(mount)
+    translations = {"Server settings": "Paramètres du serveur", "Close": "Fermer"}
+    monkeypatch.setattr(
+        settings_view,
+        "localization_for",
+        lambda locale: sl.Localization(locale, gettext=lambda message: translations.get(message, message)),
+    )
+
+    with sl.transaction():
+        await panel.set_locale("fr")
+    view = commit_render(mount)
+
+    text = "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    labels = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+    assert "Paramètres du serveur" in text
+    assert "Fermer" in labels
