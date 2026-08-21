@@ -15,6 +15,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
 from squid.bot.utils.mount_registry import MountRegistry, SessionKey
+from squid_layouts.discord.testing import fake_message
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123
@@ -43,7 +44,7 @@ def make_context() -> Any:
         SimpleNamespace(
             author=SimpleNamespace(id=USER_ID),
             interaction=None,
-            send=AsyncMock(return_value=SimpleNamespace(id=1)),
+            send=AsyncMock(return_value=fake_message(message_id=1)),
             bot=SimpleNamespace(mounts=MountRegistry()),
         ),
     )
@@ -53,8 +54,8 @@ def make_interaction(*, response_done: bool) -> Any:
     return SimpleNamespace(
         user=SimpleNamespace(id=USER_ID),
         response=SimpleNamespace(is_done=lambda: response_done, send_message=AsyncMock()),
-        followup=SimpleNamespace(send=AsyncMock(return_value=SimpleNamespace(id=1))),
-        original_response=AsyncMock(return_value=SimpleNamespace(id=1)),
+        followup=SimpleNamespace(send=AsyncMock(return_value=fake_message(message_id=1))),
+        original_response=AsyncMock(return_value=fake_message(message_id=1)),
     )
 
 
