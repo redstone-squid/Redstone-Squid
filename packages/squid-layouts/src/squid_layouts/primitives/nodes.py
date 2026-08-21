@@ -231,6 +231,26 @@ class Panel:
 
 
 @dataclass(frozen=True, slots=True)
+class Budget:
+    """Transparent group carrying an author-sized character reservation and ceiling."""
+
+    children: tuple[Node, ...]
+    minimum: int
+    preferred: int
+    stretch: int = 0
+    best_effort: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Break:
+    """Transparent group carrying region-break annotations through semantic lowering."""
+
+    children: tuple[Node, ...]
+    unbreakable: bool = False
+    keep_with_next: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Variant:
     """One structural representation of a region and the capabilities it requires.
 
@@ -300,6 +320,8 @@ type Node = (
     | MediaCollection
     | Section
     | Panel
+    | Budget
+    | Break
     | RawItem
     | Embed
     | Extension
