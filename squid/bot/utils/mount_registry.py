@@ -164,11 +164,11 @@ class MountRegistry:
         """
         delivered = False
 
-        async def watched(view: discord.ui.LayoutView, files: list[discord.File]) -> discord.Message | None:
+        async def watched(view: discord.ui.LayoutView, files: list[discord.File]) -> sl.discord.DeliveryReceipt:
             nonlocal delivered
-            message = await destination(view, files)
+            receipt = await destination(view, files)
             delivered = True
-            return message
+            return receipt
 
         await mount.send(watched)
         if not delivered:

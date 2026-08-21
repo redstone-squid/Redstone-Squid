@@ -6,6 +6,7 @@ from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
 from squid_layouts.discord.delivery import (
     DeliveryAbandoned,
+    DeliveryReceipt,
     Destination,
     EditHandle,
     StaleHandleError,
@@ -53,6 +54,7 @@ __all__ = [
     "ActionResponder",
     "Composition",
     "DeliveryAbandoned",
+    "DeliveryReceipt",
     "Destination",
     "EditHandle",
     "EntityField",
