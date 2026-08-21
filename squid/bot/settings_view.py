@@ -355,9 +355,7 @@ class SettingsPanel(sl.Component):
     locale: str | None = sl.state(None, persist=False)
     # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
     # them stale.
-    _channels: dict[ScalarChannelSetting, int | None] = sl.state(
-        factory=lambda: dict.fromkeys(CHANNEL_SETTINGS), persist=False
-    )
+    _channels: dict[ScalarChannelSetting, int | None] = sl.state(dict.fromkeys(CHANNEL_SETTINGS), persist=False)
     _locale_override: str | None = sl.state(None, persist=False)
     _preset: EmojiPreset | None = sl.state(None, persist=False)
     _weights: tuple[RoleWeight, ...] = sl.state((), persist=False)
