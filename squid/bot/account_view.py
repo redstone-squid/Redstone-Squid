@@ -359,16 +359,25 @@ class AccountPanel(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            return (sl.primitives.banner(t(self.locale, _("Account controls closed")), accent=DISCORD_BLUE),)
-        fields = tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._fields())
+            # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
+            # rather than sl.status's fixed tone palette.
+            return (sl.section(sl.paragraph(t(self.locale, _("Account controls closed"))), accent=DISCORD_BLUE),)
+        fields = tuple(sl.field(field.name, field.value) for field in self._fields())
+        footer = self._footer()
+        media = own_profile_avatar(self._profile, self._identities)
+        extra_media = media[1:]
         nodes: list[sl.LayoutNode] = [
-            sl.primitives.card(
-                self._profile.display_name or t(self.locale, _("Your account")),
-                self._profile.bio,
+            sl.section(
+                # The bio is the card's shock absorber: sl.truncate lets it give up characters
+                # under pressure before the fields or footer lose any, mirroring
+                # presets.card's fixed field/footer priority over the description.
+                self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
+                sl.fields(*fields),
+                bool(extra_media) and sl.media(*extra_media, key="media"),
+                footer and sl.note(footer),
+                heading=self._profile.display_name or t(self.locale, _("Your account")),
                 accent=DISCORD_BLUE,
-                fields=fields,
-                footer=self._footer(),
-                media=own_profile_avatar(self._profile, self._identities),
+                thumbnail=media[0] if media else None,
             )
         ]
         if self.identities:
