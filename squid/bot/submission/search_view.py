@@ -84,7 +84,12 @@ class SearchResultsView(sl.Component):
     def render(self) -> Sequence[sl.LayoutNode]:
         """Describe the current search page or selected result."""
         if self.closed:
-            return [sl.primitives.card(t(self.locale, _("Search closed")), t(self.locale, _("This search is closed.")))]
+            return [
+                sl.section(
+                    sl.truncate(sl.paragraph(t(self.locale, _("This search is closed.")))),
+                    heading=t(self.locale, _("Search closed")),
+                )
+            ]
         if self.detail_index is not None:
             return self._render_detail(self.hits[self.detail_index])
         return self._render_results()
@@ -104,7 +109,9 @@ class SearchResultsView(sl.Component):
         if self._page.warnings:
             body += "\n" + "\n".join(f"-# ⚠ {escape_markdown(item)}" for item in self._page.warnings)
         nodes: list[sl.LayoutNode] = [
-            sl.primitives.card(t(self.locale, _("Search results")), body, accent=DISCORD_GREEN)
+            sl.section(
+                sl.truncate(sl.paragraph(body)), heading=t(self.locale, _("Search results")), accent=DISCORD_GREEN
+            )
         ]
         if self.hits:
             nodes.append(
@@ -126,8 +133,8 @@ class SearchResultsView(sl.Component):
         return nodes
 
     def _render_detail(self, hit: SearchHit) -> Sequence[sl.LayoutNode]:
-        detail: sl.LayoutNode = self._build_node or sl.primitives.card(
-            _detail_title(hit), _detail_text(hit, self.locale), accent=DISCORD_GREEN
+        detail: sl.LayoutNode = self._build_node or sl.section(
+            sl.truncate(sl.paragraph(_detail_text(hit, self.locale))), heading=_detail_title(hit), accent=DISCORD_GREEN
         )
         buttons: list[sl.primitives.Button] = []
         if _build_id(hit) is not None:
