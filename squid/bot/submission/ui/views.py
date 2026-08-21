@@ -982,6 +982,11 @@ class BuildEditComponent(sl.Component):
     confirming: bool = sl.state(default=False)
     saved: bool = sl.state(default=False)
     validation_error: str | None = sl.state(None)
+    locale: str | None = sl.state(persist=False)
+    # Both are large object graphs the editor replaces wholesale, so they snapshot by reference:
+    # assignment rolls back, in-place mutation of the Build does not.
+    build: Build = sl.state(copy="ref")
+    _node: sl.LayoutNode | None = sl.state(copy="ref")
 
     def __init__(
         self,

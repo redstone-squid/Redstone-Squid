@@ -352,6 +352,13 @@ class SettingsPanel(sl.Component):
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
     confirming_reset: bool = sl.state(default=False)
+    locale: str | None = sl.state(persist=False)
+    # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
+    # them stale.
+    _channels: dict[ScalarChannelSetting, int | None] = sl.state(persist=False)
+    _locale_override: str | None = sl.state(persist=False)
+    _preset: EmojiPreset | None = sl.state(persist=False)
+    _weights: tuple[RoleWeight, ...] = sl.state(persist=False)
 
     def __init__(
         self,
@@ -371,10 +378,10 @@ class SettingsPanel(sl.Component):
         self._capabilities = capabilities
         self.locale = locale
         self._owner_guild_id = owner_guild_id
-        self._channels: dict[ScalarChannelSetting, int | None] = dict.fromkeys(CHANNEL_SETTINGS)
-        self._locale_override: str | None = None
-        self._preset: EmojiPreset | None = None
-        self._weights: tuple[RoleWeight, ...] = ()
+        self._channels = dict.fromkeys(CHANNEL_SETTINGS)
+        self._locale_override = None
+        self._preset = None
+        self._weights = ()
         self._compat_mount: sl.discord.Mount | None = None
         self._compat_disabled = False
         self._bound_message: discord.Message | None = None
@@ -622,13 +629,11 @@ class SettingsPanel(sl.Component):
         else:
             await self._settings.set_channel(self._guild.id, setting, channel_id)
         self._channels[setting] = channel_id
-        self.invalidate()
 
     async def set_locale(self, locale: str | None) -> None:
         await self._settings.set_locale(self._guild.id, locale)
         self._locale_override = locale
         self.locale = locale or self.locale
-        self.invalidate()
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
         if multiplier is None:
