@@ -49,6 +49,7 @@ class RankedList[EntryT]:
         key: str,
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
+        identity: Projector[EntryT] | None = None,
         heading: TextLike | None = None,
         header: ContentHook | None = None,
         footer: ContentHook | None = None,
@@ -88,6 +89,7 @@ class RankedList[EntryT]:
         self.source = source
         self.label = label
         self.value = value
+        self.identity = identity
         self.heading = heading
         self.header = header
         self.footer = footer
@@ -177,7 +179,7 @@ class RankedList[EntryT]:
                 page=state.page,
                 per_page=self.page_size,
                 chrome=controls.chrome,
-                identity=lambda entry: self._row_values(entry)[2] or repr(entry),
+                identity=self._identity,
             )
         offset = page * (self.page_size or max(1, total))
         body = (
@@ -222,7 +224,11 @@ class RankedList[EntryT]:
         )
 
     def _identity(self, entry: RankedEntry | EntryT) -> str:
-        return self._row_values(entry)[2] or repr(entry)
+        if isinstance(entry, RankedEntry) and entry.key:
+            return entry.key
+        if self.identity is not None and not isinstance(entry, RankedEntry):
+            return str(self._project(entry, self.identity))
+        return repr(entry)
 
     def _source_hook(
         self,

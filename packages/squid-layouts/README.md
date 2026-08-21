@@ -71,9 +71,9 @@ other processes; `sl.discord.durability.MountManager` provides opt-in versioned 
 
 ## Interaction patterns and two shells
 
-`Tabs`, `Menu`, `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines. They do not
-choose between in-memory callbacks and restart-surviving routes. Instead, a shell injects that
-control construction:
+`Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines.
+They do not choose between in-memory callbacks and restart-surviving routes. Instead, a shell injects
+that control construction:
 
 ```python
 tabs = sl.Tabs(
@@ -100,6 +100,39 @@ input action should present. The route builder owns compact state encoding and r
 
 Routed patterns accept frontend-neutral content only. A mounted shell may embed child `Component`
 instances, but a process-independent route cannot carry an in-memory component identity.
+
+### Async cursor sources
+
+A ranking too large to materialize may instead use `source=`. A source declares only what it can
+prove and fetches one window at a time:
+
+```python
+class BuildSource:
+    countable = False
+    bidirectional = True
+    jumpable = False
+
+    async def fetch(self, position: sl.Position, extent: int) -> sl.Window[Build]:
+        rows, has_previous, has_more = await builds.window(position, extent)
+        return sl.Window(tuple(rows), has_previous, has_more)
+
+ranking = sl.RankedList(
+    source=BuildSource(),
+    key="builds",
+    label=lambda build: build.title,
+    value=lambda build: build.score,
+    identity=lambda build: str(build.id),
+    page_size=10,
+).component()
+```
+
+`position.direction` is `"around"` for an anchor-preserving refresh, `"forward"` for rows after the
+anchor, and `"backward"` for rows before it. Return `Window.position` when an absent anchor makes the
+source choose a nearest key, newest row, or start. The component fingerprints only visible identities
+and drops a fetch that completes after a newer request. Count and range chrome follows
+`countable`/`jumpable`; an uncountable source never exposes the `Window.total` it may accidentally
+return. Source-backed rankings require the component shell because fetching stays outside planning and
+cannot run in `RouterShell.render()`.
 
 ## Host integration rules
 
