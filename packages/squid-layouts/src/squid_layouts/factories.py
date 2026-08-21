@@ -423,7 +423,7 @@ def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.
 
 def routed_action(
     label: TextValue,
-    custom_id: str,
+    route_id: str,
     *,
     key: str,
     tone: Tone = Tone.NEUTRAL,
@@ -432,10 +432,10 @@ def routed_action(
 ) -> RoutedAction:
     """A control the router dispatches, surviving the process that drew it.
 
-    Build ``custom_id`` with a `squid_layouts.routing.Route` rather than by hand, so an id
+    Build ``route_id`` with a `squid_layouts.routing.Route` rather than by hand, so an id
     over Discord's budget fails here and not at send time.
     """
-    return RoutedAction(key, _text(label), custom_id, tone, emphasis, available)
+    return RoutedAction(key, _text(label), route_id, tone, emphasis, available)
 
 
 def action_group(
