@@ -51,27 +51,34 @@ class Router:
         return decorate
 
     def add(self, route: Route, handler: RouteHandler) -> None:
-        """Register ``route``'s handler.
+        """Register ``route``'s handler; re-registering the same route replaces it.
 
-        Rejects a route that shadows one already registered. The check substitutes a probe
+        Replacement rather than rejection because loading an extension re-executes its
+        module, so a reload registers every route in it a second time with a fresh function
+        object. The newest handler wins, exactly as it did when these were `DynamicItem`
+        classes keyed by template. It also leaves the template unchanged, which is why a
+        reload is allowed after `register` while a genuinely new route is not.
+
+        A route that *shadows* another is still rejected. That check substitutes a probe
         value for every parameter and tries each route's sample id against the other's
         pattern, which catches the shapes that occur in practice (a literal id under a
-        parameterized one, and the reverse) without claiming to decide regex intersection
-        in general. Resolution is first-match-wins in registration order, so an overlap
-        this misses shadows a later route rather than dispatching a click twice.
+        parameterized one, and the reverse) without claiming to decide regex intersection in
+        general. Resolution is first-match-wins in registration order, so an overlap this
+        misses shadows a later route rather than dispatching a click twice.
         """
-        if self._registered:
-            message = "routes must be registered before Router.register(client)"
-            raise RuntimeError(message)
+        for index, (existing, _handler) in enumerate(self._routes):
+            if existing.format == route.format:
+                self._routes[index] = (route, handler)
+                return
         sample = route.id(**dict.fromkeys(route.params, _PROBE))
         for existing, _handler in self._routes:
-            if existing.format == route.format:
-                message = f"route {route.format!r} is already registered"
-                raise ValueError(message)
             other = existing.id(**dict.fromkeys(existing.params, _PROBE))
             if existing.pattern.fullmatch(sample) or route.pattern.fullmatch(other):
                 message = f"route {route.format!r} overlaps the already-registered {existing.format!r}"
                 raise ValueError(message)
+        if self._registered:
+            message = f"new route {route.format!r} must be added before Router.register(client) builds the template"
+            raise RuntimeError(message)
         self._routes.append((route, handler))
 
     def resolve(self, custom_id: str) -> tuple[RouteHandler, dict[str, str]] | None:
@@ -98,10 +105,11 @@ class Router:
         return re.compile("|".join(f"(?:{route.anonymous})" for route, _handler in self._routes))
 
     def register(self, client: discord.Client) -> None:
-        """Install this router's dispatch item on ``client``. Call once, at startup."""
-        if self._registered:
-            message = "this Router is already registered"
-            raise RuntimeError(message)
+        """Install this router's dispatch item on ``client``, freezing the route table.
+
+        Safe to call for more than one client — a test suite builds a fresh bot per case —
+        but not before every route is added, since the template is built here.
+        """
         self._registered = True
         client.add_dynamic_items(_dispatch_item(self))
 
