@@ -17,7 +17,6 @@ from squid_layouts.primitives.nodes import (
     Button,
     Code,
     Embed,
-    Fold,
     Footer,
     Gallery,
     Heading,
@@ -34,6 +33,7 @@ from squid_layouts.primitives.nodes import (
     Sep,
     Text,
     Thumbnail,
+    Variants,
 )
 from squid_layouts.primitives.styles import Color
 
@@ -350,9 +350,9 @@ class _Builder:
             case Embed():
                 message = "Embed must be expanded before solving"
                 raise ValueError(message)
-            case Fold(primary=primary):
-                # Folds are resolved to a branch before realization; this is belt and braces.
-                return self.realize(primary)
+            case Variants():
+                message = "Variants must be resolved before solving"
+                raise ValueError(message)
             case _:
                 return node
 
@@ -618,21 +618,33 @@ def _component_count(children: list[Realized]) -> int:
     return count
 
 
-type _FoldPath = tuple[int | str, ...]
+type _VariantPath = tuple[int | str, ...]
+type _Positions = Mapping[_VariantPath, int]
+"""Which rung each ladder occurrence currently sits on; absent means rung 0."""
 
 
-def _folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[tuple[_FoldPath, Fold]]:
-    """Every available Fold occurrence on the selected branches, in document order."""
-    found: list[tuple[_FoldPath, Fold]] = []
+def _format_path(path: _VariantPath) -> str:
+    """Render a ladder's path for a note. A reader's landmark, not an addressing scheme."""
+    return "$." + ".".join(str(part) for part in path if part != "panel")
 
-    def walk(node: Node, path: _FoldPath) -> None:
+
+def _walk_ladders(nodes: Sequence[Node], positions: _Positions, visit) -> None:
+    """Visit every node reachable through the currently selected rungs, in document order.
+
+    Ladders only occur at the top level, inside a Panel, or inside another ladder's rung:
+    `Section.texts`, `Row.items` and `ActionGroup.items` are typed to exclude them, so these
+    two recursive arms are exhaustive.
+    """
+
+    def walk(node: Node, path: _VariantPath) -> None:
         match node:
-            case Fold(primary=primary, fallback=fallback):
-                if path in collapsed:
-                    walk(fallback, (*path, "fallback"))
-                else:
-                    found.append((path, node))
-                    walk(primary, (*path, "primary"))
+            case Variants(variants=variants):
+                rung = min(positions.get(path, 0), len(variants) - 1)
+                visit(path, node, rung)
+                # The rung is part of the descendants' path, so stepping this ladder abandons
+                # their positions rather than reinterpreting them against a different subtree.
+                for index, child in enumerate(variants[rung].nodes):
+                    walk(child, (*path, rung, index))
             case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, (*path, "panel", index))
@@ -641,25 +653,43 @@ def _folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[tuple[_Fold
 
     for index, node in enumerate(nodes):
         walk(node, (index,))
+
+
+def _steppable(nodes: Sequence[Node], positions: _Positions) -> list[tuple[_VariantPath, Variants, int]]:
+    """Every reachable ladder that still has a rung left, in document order."""
+    found: list[tuple[_VariantPath, Variants, int]] = []
+
+    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
+        if rung + 1 < len(node.variants):
+            found.append((path, node, rung))
+
+    _walk_ladders(nodes, positions, visit)
     return found
 
 
-def _resolve_folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[Node]:
-    """Resolve Fold wrappers to the branches selected for this measuring pass."""
+def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node]:
+    """Splice each ladder's selected rung into its parent for this measuring pass."""
 
-    def rewrite(node: Node, path: _FoldPath) -> Node:
+    def rewrite(node: Node, path: _VariantPath) -> list[Node]:
         match node:
-            case Fold(primary=primary, fallback=fallback):
-                if path in collapsed:
-                    return rewrite(fallback, (*path, "fallback"))
-                return rewrite(primary, (*path, "primary"))
+            case Variants(variants=variants):
+                rung = min(positions.get(path, 0), len(variants) - 1)
+                resolved: list[Node] = []
+                for index, child in enumerate(variants[rung].nodes):
+                    resolved.extend(rewrite(child, (*path, rung, index)))
+                return resolved
             case Panel(children=children, accent=accent):
-                rewritten = tuple(rewrite(child, (*path, "panel", index)) for index, child in enumerate(children))
-                return Panel(children=rewritten, accent=accent)
+                inner: list[Node] = []
+                for index, child in enumerate(children):
+                    inner.extend(rewrite(child, (*path, "panel", index)))
+                return [Panel(children=tuple(inner), accent=accent)]
             case _:
-                return node
+                return [node]
 
-    return [rewrite(node, (index,)) for index, node in enumerate(nodes)]
+    resolved: list[Node] = []
+    for index, node in enumerate(nodes):
+        resolved.extend(rewrite(node, (index,)))
+    return resolved
 
 
 type PageState = Mapping[str, int] | int | None
@@ -676,13 +706,18 @@ def solve(
     page: PageState = None,
     nav: PageNav | None = None,
 ) -> SolvedLayout:
-    """Fit nodes into target budgets with independently keyed pagination."""
+    """Fit nodes into target budgets with independently keyed pagination.
+
+    `Variant.requires` is not consulted here: capability filtering belongs to the planner,
+    which is the only layer that knows the target. A ladder reaching the solver is a pure
+    budget ladder whose rungs are all available.
+    """
     tree = list(nodes)
-    collapsed: set[_FoldPath] = set()
-    fold_notes: list[str] = []
+    positions: dict[_VariantPath, int] = {}
+    step_notes: list[str] = []
     solved = _solve_once(
         tree,
-        collapsed=collapsed,
+        positions=positions,
         limits=limits,
         chrome=chrome,
         reserved_text=reserved_text,
@@ -691,21 +726,28 @@ def solve(
         notes=[],
     )
     while solved.components > limits.total_components:
-        remaining = _folds(tree, collapsed)
+        remaining = _steppable(tree, positions)
         if not remaining:
             break
-        target_path, target = min(remaining, key=lambda candidate: candidate[1].priority)
-        fold_notes.append(f"folded a priority {target.priority} alternate under component pressure")
-        collapsed.add(target_path)
+        # Priority decides which ladder gives way; the rung it already sits on decides which
+        # of several equals gives way next, so equal-priority ladders step breadth-first
+        # rather than one collapsing to nothing while its twin stays whole. `min` is stable,
+        # so a full tie still falls to document order.
+        path, ladder, rung = min(remaining, key=lambda candidate: (candidate[1].priority, candidate[2]))
+        step_notes.append(
+            f"{_format_path(path)} stepped to variant {rung + 2} of {len(ladder.variants)} "
+            f"(priority {ladder.priority}) under component pressure"
+        )
+        positions[path] = rung + 1
         solved = _solve_once(
             tree,
-            collapsed=collapsed,
+            positions=positions,
             limits=limits,
             chrome=chrome,
             reserved_text=reserved_text,
             page=page,
             nav=nav,
-            notes=list(fold_notes),
+            notes=list(step_notes),
         )
 
     if strict and solved.notes:
@@ -761,7 +803,7 @@ def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
 def _solve_once(
     nodes: Sequence[Node],
     *,
-    collapsed: set[_FoldPath],
+    positions: _Positions,
     limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
@@ -770,7 +812,7 @@ def _solve_once(
     notes: list[str],
 ) -> SolvedLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
-    resolved = _resolve_folds(nodes, collapsed)
+    resolved = _resolve_variants(nodes, positions)
     active: set[int] = set()
     final: (
         tuple[
