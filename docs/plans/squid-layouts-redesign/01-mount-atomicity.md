@@ -40,7 +40,11 @@ it too early. Restructure `Mount` around an explicit candidate:
 2. Presentation cursors: snapshot `dict(self.presentation.cursors)` before drawing and
    restore it if delivery fails. (Plan 06 later moves cursor reconciliation into the
    planner, which retires this snapshot/restore workaround — note the cross-reference in
-   both directions but do not block on it.)
+   both directions but do not block on it.) Known gap as landed: planning also writes
+   strategy hysteresis (`remember_strategy`), which the snapshot does not restore, so a
+   discarded candidate leaves its adapter choices behind. Benign — it is a per-node
+   stickiness cache the next render re-derives from — and 06a closes it by staging the
+   whole session, which that plan now states as a requirement.
 3. `_commit(candidate)` runs only after `deliver.apply*` returns: swap handlers, advance
    `_generation`, `runtime.commit(tree)`, store assets, clear `_dirty`, `_swap_view`.
 4. On delivery failure: discard the candidate, `candidate.view.stop()`, restore the

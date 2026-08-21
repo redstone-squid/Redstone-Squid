@@ -34,6 +34,16 @@ double draw and retires plan 01's cursor snapshot/restore workaround (delivery f
 then needs only candidate-tree discard; session writes happen during planning of the
 delivered candidate — stage them alongside the candidate until commit).
 
+The staged session must cover *every* planning-time write, not just cursors, or this is a
+regression against what plan 01 landed: 01's rollback restores the whole cursor dict, so
+buffering only cursors here would leave `remember_strategy` writing straight through.
+Planning writes exactly five places today — `adaptation.py:438`, `:468`, `:483`
+(strategy hysteresis) and `adaptation.py:636`, `:665` (cursor anchoring) — plus the
+anchoring 06a moves out of `build_view`. Handler-time writes stay outside the staging:
+`select` (`adaptation.py:335`, `:346`) and `disclose` (`:425`) run inside action
+closures, and like component state they must survive a failed edit, since the click that
+made them really happened.
+
 **06b — one paged-region concept.** Introduce a single solver-level "keyed paged
 region" (name: `PagedRegion` or extend `Paginate`) that the semantic option windows
 compile to instead of reimplementing windowing: adaptation emits a paged region of
