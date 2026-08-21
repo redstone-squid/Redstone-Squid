@@ -1,14 +1,15 @@
-"""Structural degradation: entry drop priorities and Fold, the component-budget policy."""
+"""Structural degradation: entry drop priorities and Variants, the component-budget policy."""
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import DEFAULT_CHROME
+from squid_layouts import DEFAULT_CHROME, plan
 from squid_layouts.discord import (
     DEFAULT_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
+    DEFAULT_TARGET,
     PageContext,
     default_nav,
     render_static,
@@ -19,16 +20,20 @@ from squid_layouts.planning import (
 )
 from squid_layouts.planning.solve import RPanel, RText, SolvedLayout
 from squid_layouts.primitives import (
+    ActionGroup,
     Alt,
-    Fold,
     Lines,
     LinkButton,
     Node,
+    Option,
     Paginate,
     Panel,
     Row,
+    SelectMenu,
     Text,
+    Variants,
 )
+from squid_layouts.scene.model import SceneRow
 
 
 def _rendered(solved: SolvedLayout) -> str:
@@ -81,47 +86,51 @@ class TestEntryPriorities:
         assert rendered.splitlines()[-3:] == ["tail", "head", "middle"]
 
 
-def _folded_document(count: int, *, priorities: list[int] | None = None) -> list[Node]:
-    """`count` panels, each folding to a single line of text.
+def _ladder_document(count: int, *, priorities: list[int] | None = None) -> list[Node]:
+    """`count` panels, each stepping to a single line of text.
 
-    A panel here is 4 components (container, text, row, button) and its fallback is 1, so
-    every fold frees three.
+    A panel here is 4 components (container, text, row, button) and its last rung is 1, so
+    every step frees three.
     """
     ranks = priorities if priorities is not None else [0] * count
     return [
-        Fold(
-            primary=Panel(children=(Text(f"panel {index}"), Row((LinkButton("open", "https://e.invalid"),)))),
-            fallback=Text(f"line {index}"),
+        Variants.of(
+            Panel(children=(Text(f"panel {index}"), Row((LinkButton("open", "https://e.invalid"),)))),
+            Text(f"line {index}"),
             priority=rank,
         )
         for index, rank in enumerate(ranks)
     ]
 
 
-class TestFold:
-    def test_a_document_that_fits_keeps_every_primary(self):
-        solved = solve(_folded_document(3))
+def _steps(solved: SolvedLayout) -> int:
+    return sum(1 for note in solved.notes if "stepped" in note)
+
+
+class TestVariants:
+    def test_a_document_that_fits_keeps_every_first_rung(self):
+        solved = solve(_ladder_document(3))
         assert solved.notes == []
         assert solved.components == 3 * 4
         assert "panel 0" in _rendered(solved)
 
-    def test_folding_brings_an_oversized_document_under_the_limit(self):
-        solved = solve(_folded_document(12))
+    def test_stepping_brings_an_oversized_document_under_the_limit(self):
+        solved = solve(_ladder_document(12))
         assert solved.components <= LIMITS.total_components
-        assert any("folded" in note for note in solved.notes)
+        assert _steps(solved)
 
-    def test_it_folds_the_lowest_priority_alternates_first(self):
-        solved = solve(_folded_document(12, priorities=list(range(12))))
+    def test_it_steps_the_lowest_priority_ladders_first(self):
+        solved = solve(_ladder_document(12, priorities=list(range(12))))
         rendered = _rendered(solved)
-        assert "line 0" in rendered  # lowest priority: folded
+        assert "line 0" in rendered  # lowest priority: stepped
         assert "panel 11" in rendered  # highest priority: kept whole
 
-    def test_folding_stops_as_soon_as_the_document_fits(self):
-        # 11 panels is 44 components; one fold frees three, which is not enough for 40.
-        solved = solve(_folded_document(11))
-        assert sum(1 for note in solved.notes if "folded" in note) == 2
+    def test_stepping_stops_as_soon_as_the_document_fits(self):
+        # 11 panels is 44 components; one step frees three, which is not enough for 40.
+        solved = solve(_ladder_document(11))
+        assert _steps(solved) == 2
 
-    def test_a_document_with_nothing_left_to_fold_still_reports_the_overflow(self):
+    def test_a_document_with_nothing_left_to_step_still_reports_the_overflow(self):
         panels = [
             Panel(children=(Text(f"panel {index}"), Row((LinkButton("open", "https://e.invalid"),))))
             for index in range(12)
@@ -129,30 +138,30 @@ class TestFold:
         solved = solve(panels)
         assert any("exceed" in note for note in solved.notes)
 
-    def test_reused_fold_values_still_collapse_one_occurrence_at_a_time(self):
-        shared = _folded_document(1)[0]
+    def test_reused_ladder_values_still_step_one_occurrence_at_a_time(self):
+        shared = _ladder_document(1)[0]
         solved = solve([shared] * 11)
-        assert sum("folded" in note for note in solved.notes) == 2
+        assert _steps(solved) == 2
         assert _rendered(solved).count("line 0") == 2
         assert _rendered(solved).count("panel 0") == 9
 
-    def test_a_fallback_can_expose_another_fold(self):
-        regular = _folded_document(9, priorities=[10] * 9)
-        inner = Fold(
-            primary=Panel(children=(Text("inner panel"), Row((LinkButton("open", "https://e.invalid"),)))),
-            fallback=Text("inner line"),
+    def test_a_later_rung_can_expose_another_ladder(self):
+        regular = _ladder_document(9, priorities=[10] * 9)
+        inner = Variants.of(
+            Panel(children=(Text("inner panel"), Row((LinkButton("open", "https://e.invalid"),)))),
+            Text("inner line"),
         )
-        outer = Fold(
-            primary=Panel(children=tuple(_folded_document(2))),
-            fallback=Panel(children=(inner,)),
+        outer = Variants.of(
+            Panel(children=tuple(_ladder_document(2))),
+            Panel(children=(inner,)),
             priority=-1,
         )
         solved = solve([*regular, outer])
         assert solved.components <= LIMITS.total_components
         assert "inner line" in _rendered(solved)
-        assert sum("folded" in note for note in solved.notes) == 2
+        assert _steps(solved) == 2
 
-    def test_pagination_controls_participate_in_the_fold_budget(self):
+    def test_pagination_controls_participate_in_the_ladder_budget(self):
         async def move(interaction) -> None: ...
 
         def nav(key: str, page: int, pages: int):
@@ -160,18 +169,90 @@ class TestFold:
             return default_nav(DEFAULT_CHROME)(context)
 
         entries = tuple(f"entry {index}" for index in range(20))
-        solved = solve([*_folded_document(9), Lines(entries, overflow=Paginate(per=10))], nav=nav)
+        solved = solve([*_ladder_document(9), Lines(entries, overflow=Paginate(per=10))], nav=nav)
         assert solved.pages == 2
         assert solved.components <= LIMITS.total_components
-        assert any("folded" in note for note in solved.notes)
+        assert _steps(solved)
 
-    def test_strict_mode_rejects_a_required_fold(self):
-        with pytest.raises(LayoutOverflowError, match="folded"):
-            solve(_folded_document(11), strict=True)
+    def test_strict_mode_rejects_a_required_step(self):
+        with pytest.raises(LayoutOverflowError, match="stepped"):
+            solve(_ladder_document(11), strict=True)
+
+
+class TestVariantLadders:
+    """Behaviour that only exists once a ladder can be longer than two rungs."""
+
+    @staticmethod
+    def _rungs(index: int) -> Variants:
+        """A three-rung ladder costing 5, 3 and 1 components."""
+        return Variants.of(
+            Panel(children=tuple(Text(f"p{index}.{step}") for step in range(4))),
+            Panel(children=tuple(Text(f"h{index}.{step}") for step in range(2))),
+            Text(f"line {index}"),
+        )
+
+    def test_a_ladder_steps_one_rung_per_iteration(self):
+        # Nine ladders at 5 components each is 45; the limit is 40, and the first step of
+        # each ladder frees two, so exactly three ladders reach their middle rung.
+        solved = solve([self._rungs(index) for index in range(9)])
+        rendered = _rendered(solved)
+        assert solved.components <= LIMITS.total_components
+        assert "h0.0" in rendered  # stepped once, not straight to the last rung
+        assert "line 0" not in rendered
+
+    def test_equal_priority_ladders_step_breadth_first(self):
+        solved = solve([self._rungs(index) for index in range(9)])
+        rendered = _rendered(solved)
+        # Three ladders take rung 1; none takes rung 2 while a sibling is still at rung 0.
+        assert sum(f"h{index}.0" in rendered for index in range(9)) == 3
+        assert not any(f"line {index}" in rendered for index in range(9))
+
+    def test_priority_still_outranks_rung_depth(self):
+        # Eight ladders at 5 plus four filler texts is 44 against a ceiling of 40, and each
+        # step frees two — so the cheapest ladder is walked to its last rung before any
+        # equal-priority sibling gives up its first.
+        ladders = [self._rungs(index) for index in range(8)]
+        ladders[0] = Variants.of(*ladders[0].variants, priority=-10)
+        filler = [Text(f"filler {index}") for index in range(4)]
+        solved = solve([*ladders, *filler])
+        rendered = _rendered(solved)
+        assert "line 0" in rendered  # the low-priority ladder is exhausted first
+        assert all(f"p{index}.0" in rendered for index in range(1, 8))
+
+    def test_the_note_names_the_stepped_ladder_and_its_rung(self):
+        solved = solve([self._rungs(index) for index in range(9)])
+        steps = [note for note in solved.notes if "stepped" in note]
+        assert steps[0] == "$.0 stepped to variant 2 of 3 (priority 0) under component pressure"
+        assert [note.split()[0] for note in steps] == ["$.0", "$.1", "$.2"]
+
+
+def test_a_bare_ladder_solves_to_its_first_rung() -> None:
+    """`solve()` resolves ladders itself; it must never leak one into the realized tree."""
+    solved = solve([Variants.of(Text("rich"), Text("plain"))])
+    assert _rendered(solved) == "rich"
+    assert solved.components == 1
+    assert all(not isinstance(child, Variants) for child in solved.children)
+
+
+def test_a_rung_may_lower_to_several_nodes() -> None:
+    """An ActionGroup rung becomes one Row per five buttons, spliced without a wrapper."""
+    buttons = tuple(LinkButton(f"b{index}", "https://e.invalid") for index in range(8))
+
+    async def choose(event) -> None: ...
+
+    ladder = Variants.of(
+        ActionGroup(buttons),
+        SelectMenu(tuple(Option(f"b{index}", str(index)) for index in range(8)), choose, key="k"),
+    )
+    scene = plan([ladder], target=DEFAULT_TARGET).scene
+    # Two rows of five and three spliced in place, not wrapped in a Panel that would cost
+    # the very container component the ladder exists to save.
+    assert [len(child.items) for child in scene.children if isinstance(child, SceneRow)] == [5, 3]
+    assert len(scene.children) == 2
 
 
 @given(st.integers(min_value=1, max_value=20))
-def test_enough_folds_always_bring_the_document_within_limits(count):
-    solved = solve(_folded_document(count))
+def test_enough_steps_always_bring_the_document_within_limits(count):
+    solved = solve(_ladder_document(count))
     assert solved.components <= LIMITS.total_components
-    render_static(_folded_document(count))
+    render_static(_ladder_document(count))

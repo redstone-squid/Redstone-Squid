@@ -20,11 +20,9 @@ from squid_layouts.primitives.constraints import (
 from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
-    Choice,
     Code,
     Embed,
     Extension,
-    Fold,
     Footer,
     Gallery,
     Heading,
@@ -43,6 +41,7 @@ from squid_layouts.primitives.nodes import (
     Text,
     Thumbnail,
     Variant,
+    Variants,
     as_nodes,
 )
 from squid_layouts.primitives.styles import ActionStyle, Color
@@ -53,14 +52,12 @@ __all__ = [
     "Alt",
     "Alts",
     "Button",
-    "Choice",
     "Code",
     "Color",
     "Condense",
     "Drop",
     "Embed",
     "Extension",
-    "Fold",
     "Footer",
     "Gallery",
     "Heading",
@@ -84,6 +81,7 @@ __all__ = [
     "Thumbnail",
     "Truncate",
     "Variant",
+    "Variants",
     "alts",
     "as_nodes",
 ]

@@ -20,11 +20,9 @@ from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
-    Choice,
     Code,
     Embed,
     Extension,
-    Fold,
     Footer,
     Heading,
     Lines,
@@ -35,6 +33,7 @@ from squid_layouts.primitives.nodes import (
     SelectMenu,
     Text,
     Variant,
+    Variants,
 )
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.semantic import (
@@ -253,30 +252,14 @@ def render_component_tree(
                     for index, child in enumerate(children):
                         expanded.extend(expand_item(child, f"{item_path}.{index}"))  # pyrefly: ignore
                     return [Panel(tuple(expanded), accent)]
-                case Fold(primary=primary, fallback=fallback, priority=priority):
-                    return [
-                        Fold(
-                            one(expand_item(primary, f"{item_path}.primary"), f"{item_path}.primary"),
-                            one(expand_item(fallback, f"{item_path}.fallback"), f"{item_path}.fallback"),
-                            priority,
-                        )
-                    ]
-                case Choice(variants=variants, priority=priority):
-                    return [
-                        Choice(
-                            tuple(
-                                Variant(
-                                    one(
-                                        expand_item(variant.node, f"{item_path}.variant.{index}"),
-                                        f"{item_path}.variant.{index}",
-                                    ),
-                                    variant.requires,
-                                )
-                                for index, variant in enumerate(variants)
-                            ),
-                            priority,
-                        )
-                    ]
+                case Variants(variants=variants, priority=priority):
+                    rungs: list[Variant] = []
+                    for index, variant in enumerate(variants):
+                        expanded_rung: list[Node] = []
+                        for child_index, child in enumerate(variant.nodes):
+                            expanded_rung.extend(expand_item(child, f"{item_path}.variant.{index}.{child_index}"))  # pyrefly: ignore
+                        rungs.append(Variant(tuple(expanded_rung), variant.requires))
+                    return [Variants(tuple(rungs), priority)]
                 case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                     expanded = expand_item(fallback, f"{item_path}.fallback")
                     return [Extension(kind, version, payload, one(expanded, f"{item_path}.fallback"))]
@@ -372,8 +355,12 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticBestEffort(node=child)
             ):
                 return replace(node, node=rewrite(child))
-            case SemanticFallbackContent(primary=primary, alternate=alternate):
-                return replace(node, primary=rewrite(primary), alternate=rewrite(alternate))
+            case SemanticFallbackContent(primary=primary, alternates=alternates):
+                return replace(
+                    node,
+                    primary=rewrite(primary),
+                    alternates=tuple(rewrite(alternate) for alternate in alternates),
+                )
             case Text() | Heading() | Footer() | Code() | Lines():
                 return rewrite_text(node)
             case Panel(children=children, accent=accent):
@@ -388,11 +375,12 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 return replace(node, key=key_for(node))
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                 return Extension(kind, version, payload, rewrite(fallback))
-            case Fold(primary=primary, fallback=fallback, priority=priority):
-                return Fold(primary=rewrite(primary), fallback=rewrite(fallback), priority=priority)
-            case Choice(variants=variants, priority=priority):
-                return Choice(
-                    variants=tuple(Variant(rewrite(variant.node), variant.requires) for variant in variants),
+            case Variants(variants=variants, priority=priority):
+                return Variants(
+                    variants=tuple(
+                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires)
+                        for variant in variants
+                    ),
                     priority=priority,
                 )
             case _:
