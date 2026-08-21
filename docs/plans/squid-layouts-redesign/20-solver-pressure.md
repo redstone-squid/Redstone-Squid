@@ -64,7 +64,8 @@ dual priorities and priority *levels* — the last converging independently on
    visible. Expected convergence: every node's size is a ladder of candidate
    renderings × lexicographic cost — `Field.fallbacks` and `Variants` are already
    discrete shrink rungs of that model, and continuous stretch is a ladder with fine
-   rungs over a small range.
+   rungs over a small range. Plan [22](22-global-fit.md) is that pass's charter for
+   strategy selection, and lands before or with this plan.
 
 ## Staging
 
