@@ -51,5 +51,22 @@ are not re-derived or accidentally adopted later.
   reads during the fetch), plus a staleness guard for out-of-order reloads.
 - **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
   in the architecture doc's gaps; unchanged priority.
+- **Multi-message rendering** (one logical UI spanning several messages). Two features
+  hiding in one thought, with opposite verdicts. *Branching* — a click spawns an
+  additional message — is not deferred: it ships today as the consent pattern
+  (`account_view.py` mounts `prompt_for_consent` as its own ephemeral message), and its
+  missing piece is lifecycle, which is plan 12's registry (`finish_children_of`) plus at
+  most a spawn-child-from-`ActionEvent` helper. *Spanning* — one root component rendered
+  across N messages — is deferred until a consumer exists (the audit found none; search
+  and leaderboards fit one message with plan 06). When it comes, the shape is decided:
+  Discord's message sequence is append-only, so content cannot reflow between slots —
+  growth in slot 1 means rewriting every later slot with no batch edit, no cross-message
+  atomicity, and controls migrating between messages. Build *fixed author-declared
+  partitions*, each independently budgeted, as a coordinator over per-message mounts
+  (sharing services/session, routing invalidation) — never a multi-handle `Mount`, which
+  would smear message identity through planner, generations, dispatch, and durability.
+  `EditHandle`/`SendTarget` being per-message is what makes the coordinator cheap; keep
+  `on_load`, context, and session policy free of any root-component-equals-session
+  assumption so it stays that way.
 - **Cross-page multi-select** — still rejected pending an explicit grouping/commit
   model, per the documented boundary.
