@@ -149,11 +149,11 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton)
                 "disabled": disabled,
                 "policy": policy.value,
             }
-        case SceneRoutedButton(label=label, custom_id=custom_id, style=style, emoji=emoji, disabled=disabled):
+        case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
             return {
                 "kind": "routed_button",
                 "label": label,
-                "custom_id": custom_id,
+                "route_id": route_id,
                 "style": style.value,
                 "emoji": emoji,
                 "disabled": disabled,
@@ -233,7 +233,7 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
         case "routed_button":
             return SceneRoutedButton(
                 label=_string(raw, "label"),
-                custom_id=_string(raw, "custom_id"),
+                route_id=_string(raw, "route_id"),
                 style=ActionStyle(_string(raw, "style")),
                 emoji=_optional_string(raw, "emoji"),
                 disabled=_boolean(raw, "disabled"),

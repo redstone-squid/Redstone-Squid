@@ -812,7 +812,7 @@ def _unbound_button(item: Link | RoutedAction, context: _Context) -> LinkButton 
     if isinstance(item, Link):
         return LinkButton(label, item.url)
     return RoutedButton(
-        label, item.custom_id, style=_button_style(item.tone, item.emphasis), disabled=not item.available
+        label, item.route_id, style=_button_style(item.tone, item.emphasis), disabled=not item.available
     )
 
 

@@ -112,12 +112,12 @@ class Renderer:
                     f'data-squid-action="{_attribute(action)}" data-squid-policy="{policy.value}"'
                     f"{disabled_attribute}>{icon}{escape(label)}</button>"
                 )
-            case SceneRoutedButton(label=label, custom_id=custom_id, style=style, emoji=emoji, disabled=disabled):
+            case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
                 disabled_attribute = " disabled" if disabled else ""
                 icon = f'<span class="squid-button__emoji">{escape(emoji)}</span> ' if emoji else ""
                 return (
                     f'<button type="button" class="squid-button squid-button--{style.value}" '
-                    f'data-squid-route="{_attribute(custom_id)}"'
+                    f'data-route-id="{_attribute(route_id)}"'
                     f"{disabled_attribute}>{icon}{escape(label)}</button>"
                 )
             case SceneLink(label=label, url=url):
