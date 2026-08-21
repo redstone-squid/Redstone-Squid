@@ -175,8 +175,8 @@ class TestRenderAndWire:
         commit_render(mount)
 
         assert mount.presentation.cursor("toolbar").extent > 1
-        await mount.dispatch("__page_next.toolbar", fake_interaction())
-        assert mount.presentation.cursor("toolbar").index == 1
+        await mount.dispatch("__cursor_next.toolbar", fake_interaction())
+        assert mount.presentation.cursor("toolbar").position.offset == 1
 
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
@@ -734,8 +734,8 @@ class TestDeliveryAtomicity:
         panel = Panel(mounted)
         mount = Mount(panel, timeout=None)
         commit_render(mount)
-        await mount.dispatch("__page_next.entries", fake_interaction())
-        assert mount.presentation.cursor("entries").index == 1
+        await mount.dispatch("__cursor_next.entries", fake_interaction())
+        assert mount.presentation.cursor("entries").position.offset == 1
 
         live_generation = mount._generation
         live_handlers = mount._handlers
@@ -751,7 +751,7 @@ class TestDeliveryAtomicity:
         assert mount._handlers is live_handlers
         assert mount._dirty
         assert mounted == []
-        assert mount.presentation.cursor("entries").index == 1
+        assert mount.presentation.cursor("entries").position.offset == 1
         # Planning only reads the session, so a discarded candidate leaves behind none of
         # its writes — not just the cursors the old snapshot happened to restore.
         assert mount.presentation.strategies == live_strategies

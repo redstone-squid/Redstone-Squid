@@ -23,6 +23,7 @@ from squid_layouts.discord import (
     MountedView,
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_layouts.sources import Position
 
 
 def make_report(
@@ -93,12 +94,12 @@ def _code_pages(mount: Mount) -> list[str]:
         next_button = next(
             item
             for item in view.walk_children()
-            if isinstance(item, discord.ui.Button) and item.custom_id and ":__page_next" in item.custom_id
+            if isinstance(item, discord.ui.Button) and item.custom_id and ":__cursor_next" in item.custom_id
         )
         if next_button.disabled:
             return pages
         cursor = mount.presentation.cursor("traceback")
-        mount.presentation.move_cursor("traceback", cursor.index + 1)
+        mount.presentation.move_cursor("traceback", Position(offset=cursor.position.offset + 1))
 
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
@@ -138,7 +139,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
     assert footers
     assert "page 1 of" not in footers[0]
 
-    mount.presentation.move_cursor("traceback", 0)
+    mount.presentation.move_cursor("traceback", Position())
     earliest = commit_render(mount)
     assert "frame0" in "\n".join(_texts(earliest))
 
@@ -157,10 +158,10 @@ async def test_paging_stops_at_both_ends() -> None:
     mount, view = mount_browser(browser)
 
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
-    later = next(item for item in nav if ":__page_next" in (item.custom_id or ""))
+    later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
     assert later.disabled  # opened at the end
     interaction = fake_interaction()
-    await mount.dispatch("__page_next.traceback", interaction)
+    await mount.dispatch("__cursor_next.traceback", interaction)
     interaction.response.defer.assert_awaited_once()  # nothing to advance to
 
 
@@ -179,11 +180,11 @@ async def test_every_page_fits_the_real_display_budget() -> None:
     browser = ErrorReportBrowser(report=make_report(traceback=f"{long_line}\nValueError: boom"))
     mount, _ = mount_browser(browser)
 
-    mount.presentation.move_cursor("traceback", 0)
+    mount.presentation.move_cursor("traceback", Position())
     pages = _code_pages(mount)
     assert len(pages) > 1
     for page_index in range(len(pages)):
-        mount.presentation.move_cursor("traceback", page_index)
+        mount.presentation.move_cursor("traceback", Position(offset=page_index))
         view = commit_render(mount)
         assert_within_limits(view)
         assert sum(len(text) for text in _texts(view)) <= LIMITS.total_text

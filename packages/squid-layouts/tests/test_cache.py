@@ -101,8 +101,15 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
 def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
     cache = PlanCache()
 
-    def nav(key: str, _page: int, _pages: int):
-        return (Row((Button("Previous", _previous, f"prev.{key}"), Button("Next", _next, f"next.{key}"))),)
+    def nav(state):
+        return (
+            Row(
+                (
+                    Button("Previous", _previous, f"prev.{state.key}"),
+                    Button("Next", _next, f"next.{state.key}"),
+                )
+            ),
+        )
 
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
     plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)

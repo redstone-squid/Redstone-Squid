@@ -8,7 +8,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Mount
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts.primitives import Lines
+from squid_layouts.primitives import Button, Lines, Row
 from squid_layouts.scene import SceneRoutedButton, SceneRoutedSelect
 from squid_layouts.semantic import Stack
 from squid_layouts.sources import Position, Window
@@ -159,14 +159,10 @@ class ScoreSource:
         self,
         entries: tuple[tuple[str, int], ...],
         *,
-        countable: bool,
-        bidirectional: bool,
-        jumpable: bool,
+        capabilities: sl.SourceCapabilities,
     ) -> None:
         self.entries = entries
-        self.countable = countable
-        self.bidirectional = bidirectional
-        self.jumpable = jumpable
+        self.capabilities = capabilities
         self.requests: list[Position] = []
 
     async def fetch(self, position: Position, extent: int) -> Window[tuple[str, int]]:
@@ -174,22 +170,23 @@ class ScoreSource:
         keys = tuple(label for label, _score in self.entries)
         if position.anchor in keys:
             anchor = keys.index(position.anchor)
-            if position.direction == "forward":
+            if position.direction is sl.Direction.FORWARD:
                 offset = anchor + 1
-            elif position.direction == "backward":
+            elif position.direction is sl.Direction.BACKWARD:
                 offset = max(0, anchor - extent)
             else:
                 offset = anchor
         else:
             offset = position.offset
         visible = self.entries[offset : offset + extent]
-        total = len(self.entries) if self.countable else 999
+        total = len(self.entries) if self.capabilities.count is not sl.CountPrecision.NONE else None
+        resolved_anchor = visible[0][0] if visible else None
         return Window(
+            Position(resolved_anchor, offset),
             visible,
-            has_prev=offset > 0,
+            has_previous=offset > 0 and self.capabilities.backward,
             has_next=offset + extent < len(self.entries),
             total=total,
-            position=Position(offset=offset),
         )
 
 
@@ -216,24 +213,23 @@ def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
 
 
 @pytest.mark.parametrize(
-    ("countable", "jumpable", "expected"),
+    ("capabilities", "expected"),
     [
-        (True, True, "-# Page 1 of 2"),
-        (True, False, "-# 1\N{EN DASH}2 of ~3"),
-        (False, True, "-# 1\N{EN DASH}2"),
-        (False, False, None),
+        (sl.SourceCapabilities(offsets=True, jumpable=True, count=sl.CountPrecision.EXACT), "-# Page 1 of 2"),
+        (sl.SourceCapabilities(offsets=True, count=sl.CountPrecision.EXACT), "-# 1\N{EN DASH}2 of 3"),
+        (sl.SourceCapabilities(offsets=True, count=sl.CountPrecision.APPROXIMATE), "-# 1\N{EN DASH}2 of ~3"),
+        (sl.SourceCapabilities(offsets=True), "-# 1\N{EN DASH}2"),
+        (sl.SourceCapabilities(), None),
     ],
 )
 async def test_source_ranked_list_gates_numeric_chrome_by_capability(
-    countable: bool, jumpable: bool, expected: str | None
+    capabilities: sl.SourceCapabilities, expected: str | None
 ) -> None:
     source = ScoreSource(
         (("Ada", 30), ("Grace", 20), ("Edsger", 10)),
-        countable=countable,
-        bidirectional=True,
-        jumpable=jumpable,
+        capabilities=capabilities,
     )
-    ranked = sl.RankedList(source=source, key="leaderboard", identity=lambda entry: entry[0], page_size=2).component()
+    ranked = sl.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
     mount = Mount(ranked, timeout=None)
 
     await mount.send(delivered_to(fake_message()))
@@ -241,17 +237,19 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
     assert mount._view is not None
     numeric = [text for text in _texts(mount._view) if text.startswith("-#")]
     assert numeric == ([] if expected is None else [expected])
-    assert "999" not in "".join(numeric)
 
 
 async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation() -> None:
     source = ScoreSource(
         (("Ada", 30), ("Grace", 20), ("Edsger", 10), ("Barbara", 5), ("Donald", 1)),
-        countable=True,
-        bidirectional=False,
-        jumpable=True,
+        capabilities=sl.SourceCapabilities(
+            backward=False,
+            offsets=True,
+            jumpable=True,
+            count=sl.CountPrecision.EXACT,
+        ),
     )
-    ranked = sl.RankedList(source=source, key="stream", identity=lambda entry: entry[0], page_size=2).component()
+    ranked = sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
     mount = Mount(ranked, timeout=None)
     await mount.send(delivered_to(fake_message()))
 
@@ -261,17 +259,33 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     await mount.dispatch("stream.next", interaction)
 
     edited = interaction.response.edit_message.await_args.kwargs["view"]
-    assert source.requests[-1] == Position("Grace", 2, "forward")
+    assert source.requests[-1] == Position("Grace", 2, sl.Direction.FORWARD)
     assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(edited)
     assert "-# Page 2 of 3" in _texts(edited)
 
 
-def test_source_ranked_list_rejects_the_stateless_router_shell() -> None:
-    source = ScoreSource((("Ada", 30),), countable=True, bidirectional=True, jumpable=True)
-    ranked = sl.RankedList(source=source, key="source", identity=lambda entry: entry[0], page_size=1)
+async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
+    source = ScoreSource(
+        (("Ada", 30), ("Grace", 20), ("Edsger", 10)),
+        capabilities=sl.SourceCapabilities(offsets=True, count=sl.CountPrecision.EXACT),
+    )
+    seen = []
 
-    with pytest.raises(TypeError, match="requires component"):
-        sl.RouterShell(lambda _request: "route").render(ranked, ranked.initial_state)
+    def nav(context):
+        seen.append(context.state)
+        return (Row((Button("More", context.on_next, "more"),)),)
+
+    mount = Mount(
+        sl.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2),
+        timeout=None,
+        nav=nav,
+    )
+    await mount.send(delivered_to(fake_message()))
+
+    assert seen[-1].key == "leaderboard"
+    assert seen[-1].visible_range == (1, 2)
+    assert seen[-1].total == 3
+    assert mount._view is not None and _labels(mount._view) == ["More"]
 
 
 async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
@@ -281,7 +295,7 @@ async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
 
     await mount.dispatch("leaderboard.next", fake_interaction())
     view = commit_render(mount)
-    assert ranked.pattern_state == sl.RankedListState(1)
+    assert ranked.pattern_state == sl.RankedListState(Position(offset=1))
     assert "3. **Edsger** — 10" in _texts(view)
 
 

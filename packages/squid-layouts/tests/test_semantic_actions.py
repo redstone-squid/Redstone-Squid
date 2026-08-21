@@ -7,6 +7,7 @@ import pytest
 from squid_layouts import (
     ActionDisplay,
     Paragraph,
+    Position,
     plan,
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
@@ -184,7 +185,7 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     document = Actions(_actions(76), key="demo")
     first = plan(document, target=DEFAULT_TARGET, session=session)
     apply_updates(session, first.session_updates)
-    session.move_cursor("demo.default", 1)
+    session.move_cursor("demo.default", Position(offset=1))
     second = plan(document, target=DEFAULT_TARGET, session=session)
 
     first_select = next(node for node in first.scene.children if isinstance(node, SceneSelect))

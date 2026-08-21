@@ -12,15 +12,14 @@ from squid_layouts.planning.search import (
 )
 from squid_layouts.planning.solve import LayoutOverflowError, SolvedLayout, solve
 from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
-from squid_layouts.sources import DEFAULT_POSITION_POLICY, Position, PositionDirection, PositionPolicy
+from squid_layouts.sources import POSITION_POLICY, Position, PositionPolicy
 
 __all__ = [
-    "DEFAULT_POSITION_POLICY",
     "DEFAULT_SEARCH_BUDGET",
+    "POSITION_POLICY",
     "LayoutOverflowError",
     "PlanCache",
     "Position",
-    "PositionDirection",
     "PositionPolicy",
     "PreparedExtension",
     "ResourceCost",
