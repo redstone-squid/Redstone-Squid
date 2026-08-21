@@ -12,6 +12,7 @@ import io
 import logging
 import secrets
 from collections.abc import Awaitable, Sequence
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 import anyio
@@ -29,9 +30,9 @@ from squid_layouts.planning.pagination import NavFactory, PageContext, default_n
 from squid_layouts.primitives.nodes import Node
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
-from squid_layouts.runtime.component import Component
+from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
-from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.runtime.presentation import CursorState, PresentationSession
 from squid_layouts.runtime.reactivity import readonly_transaction, transaction
 from squid_layouts.scene.model import SceneButton, SceneSelect
 
@@ -122,6 +123,20 @@ class _WiredSelect(discord.ui.Select[MountedView]):
         await self._mount.dispatch(self._key, interaction, self.values, generation=self._generation)
 
 
+@dataclass(slots=True)
+class _Candidate:
+    """One staged render generation, which becomes the mount's state only when committed."""
+
+    view: MountedView
+    composition: Composition
+    tree: ComponentTree
+    handlers: dict[str, ActionBinding]
+    generation: int
+    assets: tuple[Asset, ...]
+    # Page positions as of the last commit; drawing moves them, a failed delivery restores them.
+    cursors: dict[str, CursorState]
+
+
 class Mount:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
@@ -156,6 +171,10 @@ class Mount:
         self._handlers: dict[str, ActionBinding] = {}
         self._action_lock = asyncio.Lock()
         self._generation = 0
+        # Generations handed to staged renders: a candidate whose delivery failed must not
+        # hand its control ids to the next one.
+        self._issued = 0
+        self._pending: _Candidate | None = None
         self._dirty = False
         self._finished = False
         self._assets: tuple[Asset, ...] = ()
@@ -163,17 +182,36 @@ class Mount:
     # --- Rendering ---------------------------------------------------------------------
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
-        """Render the component's current state into a fresh view."""
-        generation = self._generation + 1
+        """Stage a render of the component's current state into a fresh view.
+
+        Staging is not committing: handlers, lifecycle hooks and the live generation only
+        move in :meth:`bind`, once the host's own delivery has landed. It is not
+        side-effect free either — the component tree is rendered and page cursors advance.
+        """
+        pending = self._pending
+        candidate = self._stage(disabled=disabled, cursors=pending.cursors if pending is not None else None)
+        if pending is not None:
+            pending.view.stop()
+        self._pending = candidate
+        return candidate.view
+
+    def _stage(self, *, disabled: bool = False, cursors: dict[str, CursorState] | None = None) -> _Candidate:
+        """Render and draw one candidate generation, publishing none of it."""
+        self._issued += 1
+        generation = self._issued
+        # Baseline to return to if delivery fails; a caller staging over an undelivered
+        # candidate passes that candidate's baseline rather than its half-moved cursors.
+        baseline = dict(self.presentation.cursors) if cursors is None else cursors
         tree = self.runtime.render()
         rendered = Document(tree.nodes, tree.assets, tree.document_key)
+        handlers: dict[str, ActionBinding] = {}
 
         def draw() -> tuple[MountedView, Composition]:
-            self._handlers = {}
+            handlers.clear()
 
             def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
                 key = binding.key
-                self._handlers[key] = binding
+                handlers[key] = binding
                 if isinstance(node, SceneButton):
                     item: discord.ui.Item[Any] = _WiredButton(node, self, key, generation)
                 else:
@@ -240,17 +278,33 @@ class Mount:
                 extent=pager.pages,
                 content_fingerprint=pager.content_fingerprint,
             )
-        self._generation = generation
-        self.runtime.commit(tree)
-        self._assets = tuple(
+        assets = tuple(
             asset
             for scene_asset in composition.plan.scene.assets
             if isinstance(asset := composition.plan.resources.get(f"asset:{scene_asset.key}"), Asset)
         )
         if disabled:
             _disable_all(view)
+        return _Candidate(view, composition, tree, handlers, generation, assets, baseline)
+
+    def _commit(self, candidate: _Candidate) -> None:
+        """Publish a delivered candidate — the one place a render becomes the mount's state."""
+        self._handlers = candidate.handlers
+        self._generation = candidate.generation
+        self.runtime.commit(candidate.tree)
+        self._assets = candidate.assets
         self._dirty = False
-        return view
+        self._pending = None
+        self._swap_view(candidate.view)
+
+    def _rollback(self, candidate: _Candidate) -> None:
+        """Discard an undelivered candidate; the message still shows the live generation."""
+        candidate.view.stop()
+        self.presentation.cursors.clear()
+        self.presentation.cursors.update(candidate.cursors)
+        self._dirty = True
+        if self._pending is candidate:
+            self._pending = None
 
     @property
     def presentation(self) -> PresentationSession:
@@ -278,20 +332,31 @@ class Mount:
         self.invalidate()
 
     def attachment_files(self) -> list[discord.File]:
-        """Materialize a fresh Discord file set from the current declarative assets."""
-        files: list[discord.File] = []
-        for asset in self._assets:
-            if not isinstance(asset.source, InlineAsset):
-                message = f"Discord mount needs a host resolver for stored asset {asset.key!r}"
-                raise TypeError(message)
-            files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
-        return files
+        """Materialize a fresh Discord file set from the current declarative assets.
+
+        A staged render's assets win, so a host can send `build_view()` and its files
+        together before the delivery that :meth:`bind` commits.
+        """
+        return _attachment_files(self._pending.assets if self._pending is not None else self._assets)
 
     # --- Lifecycle ---------------------------------------------------------------------
 
-    def bind(self, message: discord.Message, view: MountedView) -> None:
-        """Record the sent message and the view generation currently live on it."""
-        self.message = message
+    def bind(self, message: discord.Message | None, view: MountedView) -> None:
+        """Record the sent message and commit the render it carries.
+
+        This is the commit point for the host-owned initial send: `build_view` stages only,
+        so a delivery that never happened leaves the mount on its previous generation. Pass
+        `None` for a view that reached Discord without giving the host a message handle; an
+        already-recorded message is kept.
+        """
+        if message is not None:
+            self.message = message
+        pending = self._pending
+        if pending is not None and pending.view is view:
+            self._commit(pending)
+            return
+        # A view this mount did not stage, or one a later stage superseded: it can be
+        # recorded as live, but there is no candidate state to publish with it.
         self._swap_view(view)
 
     def _swap_view(self, view: MountedView) -> None:
@@ -390,21 +455,32 @@ class Mount:
             if not interaction.response.is_done():
                 await interaction.response.defer()
             return
-        view = self.build_view()
-        await deliver.apply_interaction(interaction, view, attachments=self.attachment_files())
-        self._swap_view(view)
+        candidate = self._stage()
+        try:
+            await deliver.apply_interaction(
+                interaction, candidate.view, attachments=_attachment_files(candidate.assets)
+            )
+        except Exception:
+            self._rollback(candidate)
+            raise
+        self._commit(candidate)
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
         """Finish through an interaction edit — the shape a Close button wants."""
         if self._finished:
             return
+        # Marked before delivery: a failed disable-edit must not resurrect the mount.
         self._finished = True
-        view = self.build_view(disabled=True)
-        await deliver.apply_interaction(interaction, view)
-        if self._view is not None:
-            self._view.stop()
-        view.stop()
-        self.runtime.finish()
+        candidate = self._stage(disabled=True)
+        try:
+            await deliver.apply_interaction(interaction, candidate.view)
+        except Exception:
+            self._rollback(candidate)
+            raise
+        finally:
+            # The terminal tree is never committed, so `finish` unmounts the live one once.
+            candidate.view.stop()
+            self._teardown()
 
     async def refresh(self) -> None:
         """Out-of-band re-render (background state change, not an interaction)."""
@@ -416,9 +492,14 @@ class Mount:
     async def refresh_now(self) -> None:
         if self._finished or self.message is None:
             return
-        view = self.build_view()
-        self.message = await deliver.apply(self.message, view, attachments=self.attachment_files())
-        self._swap_view(view)
+        candidate = self._stage()
+        try:
+            message = await deliver.apply(self.message, candidate.view, attachments=_attachment_files(candidate.assets))
+        except Exception:
+            self._rollback(candidate)
+            raise
+        self.message = message
+        self._commit(candidate)
 
     async def finish(self, *, disable: bool = True) -> None:
         """Stop dispatching; optionally leave the message with its controls disabled."""
@@ -426,12 +507,21 @@ class Mount:
             return
         self._finished = True
         if disable and self.message is not None:
+            candidate = self._stage(disabled=True)
             try:
-                await deliver.apply(self.message, self.build_view(disabled=True))
+                await deliver.apply(self.message, candidate.view)
             except discord.HTTPException:
                 logger.debug("could not disable controls on finish", exc_info=True)
+                self._rollback(candidate)
+            finally:
+                candidate.view.stop()
+        self._teardown()
+
+    def _teardown(self) -> None:
+        """Stop the live view and unmount the committed tree, once."""
         if self._view is not None:
             self._view.stop()
+            self._view = None
         self.runtime.finish()
 
     async def handle_timeout(self) -> None:
@@ -442,6 +532,16 @@ class Mount:
             await self.on_error(interaction, error, source)
             return
         logger.error("unhandled component error in %s", source, exc_info=error)
+
+
+def _attachment_files(assets: Sequence[Asset]) -> list[discord.File]:
+    files: list[discord.File] = []
+    for asset in assets:
+        if not isinstance(asset.source, InlineAsset):
+            message = f"Discord mount needs a host resolver for stored asset {asset.key!r}"
+            raise TypeError(message)
+        files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
+    return files
 
 
 def _disable_all(view: discord.ui.LayoutView) -> None:

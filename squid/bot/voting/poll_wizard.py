@@ -554,8 +554,8 @@ class PollConfirmationComponent(sl.Component):
             return
         rendered = self._mount.build_view()
         await edit_interaction_layout(interaction, rendered)
-        if self._mount.message is not None:
-            self._mount.bind(self._mount.message, rendered)
+        # bind is the commit point, so it runs whether or not this mount holds a message.
+        self._mount.bind(self._mount.message, rendered)
 
     async def _publish(self, event: sl.PressEvent) -> None:
         interaction = self._interaction(event)

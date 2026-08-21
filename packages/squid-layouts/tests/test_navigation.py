@@ -7,7 +7,7 @@ from squid_layouts.discord import (
     Mount,
     Navigator,
 )
-from squid_layouts.discord.testing import fake_interaction
+from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Heading, Text
 
 
@@ -30,7 +30,7 @@ def _labels(view: discord.ui.LayoutView) -> list[str | None]:
 async def test_push_pop_and_controls_render_last():
     navigator = Navigator(Screen("root"))
     mount = Mount(navigator, timeout=None)
-    view = mount.build_view()
+    view = commit_render(mount)
     assert "## root" in _texts(view)
     assert _labels(view) == ["Back", "Close"]
 
@@ -49,7 +49,7 @@ async def test_home_appears_only_when_deep():
     mount = Mount(navigator, timeout=None)
     navigator.push(Screen("a"))
     navigator.push(Screen("b"))
-    view = mount.build_view()
+    view = commit_render(mount)
     assert "Home" in _labels(view)
 
     await mount.dispatch("__nav_home", fake_interaction())
@@ -68,20 +68,20 @@ async def test_child_state_changes_rerender_through_the_shared_mount():
     child = Counting()
     navigator = Navigator(Screen("root"))
     mount = Mount(navigator, timeout=None)
-    mount.build_view()
+    commit_render(mount)
     navigator.push(child)
-    mount.build_view()
+    commit_render(mount)
 
     child.count = 5
 
     assert mount._dirty
-    assert "count 5" in _texts(mount.build_view())
+    assert "count 5" in _texts(commit_render(mount))
 
 
 async def test_close_finishes_the_mount():
     navigator = Navigator(Screen("root"))
     mount = Mount(navigator, timeout=None)
-    mount.build_view()
+    commit_render(mount)
 
     await mount.dispatch("__nav_close", fake_interaction())
 
