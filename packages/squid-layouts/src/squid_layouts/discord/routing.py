@@ -35,6 +35,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Concatenate, Self, override
 
 import discord
@@ -55,29 +56,39 @@ type GoneHook = Callable[[discord.Interaction[Any]], Awaitable[None]]
 """A friendly response for a control retired from a reserved router namespace."""
 
 
+class RouteComponent(StrEnum):
+    """The Discord component type playing the role of an HTTP method."""
+
+    BUTTON = "button"
+    SELECT = "select"
+
+
 @dataclass(frozen=True, slots=True)
 class _Registration:
     route: Route
     handler: RouteHandler
+    component: RouteComponent
     accepts: frozenset[str] | None
     """Parameter names to pass, or None for a handler taking `**kwargs`."""
 
 
-def _accepted(route: Route, handler: RouteHandler) -> frozenset[str] | None:
+def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) -> frozenset[str] | None:
     """Which of ``route``'s parameters ``handler`` asked for, rejecting names it invented."""
     # FORWARDREF, because evaluating a handler's annotations here would resurrect the
     # TYPE_CHECKING-only client import that PEP 649 exists to keep deferred. Only names and
     # kinds are wanted anyway.
     signature = inspect.signature(handler, annotation_format=annotationlib.Format.FORWARDREF)
     parameters = list(signature.parameters.values())
-    if not parameters:
-        message = f"route handler {handler.__qualname__!r} must take the interaction as its first argument"
+    required = 2 if component is RouteComponent.SELECT else 1
+    if len(parameters) < required:
+        detail = "the interaction and selected values" if component is RouteComponent.SELECT else "the interaction"
+        message = f"route handler {handler.__qualname__!r} must take {detail} first"
         raise ValueError(message)
     if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters):
         return None
     named = {
         parameter.name
-        for parameter in parameters[1:]
+        for parameter in parameters[required:]
         if parameter.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
     }
     unknown = named - set(route.params)
@@ -134,7 +145,29 @@ class Router[BotT: discord.Client]:
 
         return decorate
 
-    def add(self, route: RouteLike, handler: RouteHandler) -> None:
+    def select[**P](
+        self, route: RouteLike
+    ) -> Callable[
+        [Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]]],
+        Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
+    ]:
+        """Register a routed string-select handler receiving values before path parameters."""
+
+        def decorate(
+            handler: Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
+        ) -> Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]]:
+            self.add(route, handler, component=RouteComponent.SELECT)
+            return handler
+
+        return decorate
+
+    def add(
+        self,
+        route: RouteLike,
+        handler: RouteHandler,
+        *,
+        component: RouteComponent = RouteComponent.BUTTON,
+    ) -> None:
         """Register ``route``'s handler; re-registering the same route replaces it.
 
         Replacement rather than rejection because loading an extension re-executes its
@@ -155,16 +188,16 @@ class Router[BotT: discord.Client]:
         if self.namespace is not None and (not route.canonical_starts_with(self.namespace) or len(route.segments) == 1):
             message = f"route {route.format!r} must live under the reserved namespace {self.namespace!r}"
             raise ValueError(message)
-        registration = _Registration(route, handler, _accepted(route, handler))
+        registration = _Registration(route, handler, component, _accepted(route, handler, component))
         replaced: int | None = None
         for index, existing in enumerate(self._routes):
-            if existing.route.format == route.format:
+            if existing.component is component and existing.route.format == route.format:
                 replaced = index
                 break
         for index, existing in enumerate(self._routes):
             if index == replaced:
                 continue
-            if route.overlaps(existing.route):
+            if existing.component is component and route.overlaps(existing.route):
                 message = f"route {route.format!r} overlaps the already-registered {existing.route.format!r}"
                 raise ValueError(message)
         if replaced is not None:
@@ -181,9 +214,16 @@ class Router[BotT: discord.Client]:
             raise RuntimeError(message)
         self._routes.append(registration)
 
-    def resolve(self, custom_id: str) -> tuple[_Registration, Mapping[str, Any]] | None:
+    def resolve(
+        self,
+        custom_id: str,
+        *,
+        component: RouteComponent = RouteComponent.BUTTON,
+    ) -> tuple[_Registration, Mapping[str, Any]] | None:
         """The registration owning ``custom_id`` and the parameters it carries, if any."""
         for registration in self._routes:
+            if registration.component is not component:
+                continue
             params = registration.route.match(custom_id)
             if params is not None:
                 return registration, params
@@ -217,9 +257,16 @@ class Router[BotT: discord.Client]:
         self._registered = True
         client.add_dynamic_items(_dispatch_item(self))
 
-    async def dispatch(self, interaction: discord.Interaction[Any], custom_id: str) -> None:
+    async def dispatch(
+        self,
+        interaction: discord.Interaction[Any],
+        custom_id: str,
+        *,
+        component: RouteComponent = RouteComponent.BUTTON,
+        values: tuple[str, ...] = (),
+    ) -> None:
         """Run the handler owning ``custom_id``; a retired route is logged, never raised."""
-        found = self.resolve(custom_id)
+        found = self.resolve(custom_id, component=component)
         if found is None:
             if self._in_namespace(custom_id):
                 assert self.on_gone is not None
@@ -232,7 +279,10 @@ class Router[BotT: discord.Client]:
         accepts = registration.accepts
         wanted = params if accepts is None else {name: params[name] for name in accepts}
         try:
-            await registration.handler(interaction, **wanted)
+            if component is RouteComponent.SELECT:
+                await registration.handler(interaction, values, **wanted)
+            else:
+                await registration.handler(interaction, **wanted)
         except Exception as error:
             if self.on_error is None:
                 logger.exception("routed handler for %r failed", custom_id)
@@ -244,11 +294,11 @@ class Router[BotT: discord.Client]:
         return self.namespace is not None and custom_id.startswith(f"{self.namespace}:")
 
 
-def _dispatch_item(router: Router[Any]) -> type[discord.ui.DynamicItem[discord.ui.Button[Any]]]:
+def _dispatch_item(router: Router[Any]) -> type[discord.ui.DynamicItem[discord.ui.Item[Any]]]:
     """Build the one `DynamicItem` subclass that carries ``router``'s whole route table."""
 
     class RoutedDispatch(  # pyrefly: ignore[invalid-inheritance]
-        discord.ui.DynamicItem[discord.ui.Button[Any]],
+        discord.ui.DynamicItem[discord.ui.Item[Any]],
         template=router.template(),
     ):
         @classmethod
@@ -260,12 +310,18 @@ def _dispatch_item(router: Router[Any]) -> type[discord.ui.DynamicItem[discord.u
             match: re.Match[str],
             /,
         ) -> Self:
-            # The wrapped button is a dispatch stub: discord.py swaps it into a view rebuilt
-            # from the message, and only its custom id is ever read.
-            return cls(discord.ui.Button(label="\N{ZERO WIDTH SPACE}", custom_id=match.string))
+            return cls(item)
 
         @override
         async def callback(self, interaction: discord.Interaction[Any]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
+            if isinstance(self.item, discord.ui.Select):
+                await router.dispatch(
+                    interaction,
+                    self.custom_id,
+                    component=RouteComponent.SELECT,
+                    values=tuple(self.item.values),
+                )
+                return
             await router.dispatch(interaction, self.custom_id)
 
     return RoutedDispatch

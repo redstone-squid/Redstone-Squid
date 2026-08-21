@@ -40,6 +40,7 @@ from squid_layouts.primitives.nodes import (
     Panel,
     RawItem,
     RoutedButton,
+    RoutedSelect,
     Row,
     Section,
     SelectMenu,
@@ -67,6 +68,7 @@ from squid_layouts.scene.model import (
     SceneOption,
     ScenePanel,
     SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -163,6 +165,18 @@ class _Converter:
                     max_values=node.max_values,
                     disabled=node.disabled,
                     policy=node.policy,
+                )
+            case RoutedSelect(options=options):
+                return SceneRoutedSelect(
+                    options=tuple(
+                        SceneOption(option.label, option.value, option.description, option.default)
+                        for option in options
+                    ),
+                    route_id=node.route_id,
+                    placeholder=node.placeholder,
+                    min_values=node.min_values,
+                    max_values=node.max_values,
+                    disabled=node.disabled,
                 )
             case Thumbnail(url=url, description=description):
                 return SceneThumbnail(url, description)
@@ -264,9 +278,18 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
                 for index, item in enumerate(items):
                     if isinstance(item, Button):
                         walk(item, f"{path}.{index}")
-            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum):
+            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
+                RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
+            ):
+                if not options:
+                    fail(path, "select needs at least one option")
                 if len(options) > limits.select_options:
-                    fail(path, f"select has {len(options)} options; use an option-paging semantic node")
+                    remedy = (
+                        "split the routed picker into separate routes"
+                        if isinstance(node, RoutedSelect)
+                        else "use an option-paging semantic node"
+                    )
+                    fail(path, f"select has {len(options)} options; {remedy}")
                 if placeholder is not None and len(placeholder) > limits.select_placeholder:
                     fail(path, f"select placeholder exceeds {limits.select_placeholder}")
                 if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):

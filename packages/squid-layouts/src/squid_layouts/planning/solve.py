@@ -29,6 +29,7 @@ from squid_layouts.primitives.nodes import (
     Panel,
     RawItem,
     RoutedButton,
+    RoutedSelect,
     Row,
     Section,
     SelectMenu,
@@ -72,7 +73,7 @@ class RPanel:
     accent: Color | None
 
 
-type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | Thumbnail | Gallery | RawItem
+type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
 
 
 PAGE_FOOTER_PREFIX = "-# "
@@ -317,7 +318,7 @@ class _Builder:
         trimmed = _trim_keep(button.label, self.limits.button_label, "head")
         return replace(button, label=trimmed)
 
-    def _clamp_select(self, select: SelectMenu) -> SelectMenu:
+    def _clamp_select[SelectT: SelectMenu | RoutedSelect](self, select: SelectT) -> SelectT:
         limits = self.limits
         options = select.options
         if len(options) > limits.select_options:
@@ -338,16 +339,11 @@ class _Builder:
         if placeholder is not None and len(placeholder) > limits.select_placeholder:
             self.notes.append(f"select placeholder clamped from {len(placeholder)}")
             placeholder = _trim_keep(placeholder, limits.select_placeholder, "head")
-        return SelectMenu(
+        return replace(
+            select,
             options=tuple(clamped_options),
-            on_select=select.on_select,
-            key=select.key,
             placeholder=placeholder,
-            min_values=select.min_values,
             max_values=min(select.max_values, len(clamped_options) or 1),
-            disabled=select.disabled,
-            policy=select.policy,
-            routes=select.routes,
         )
 
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
@@ -389,7 +385,7 @@ class _Builder:
                     for item in items
                 )
                 return Row(items=clamped)
-            case SelectMenu():
+            case SelectMenu() | RoutedSelect():
                 return self._clamp_select(node)
             case RawItem(text_cost=text_cost):
                 self.raw_text_cost += text_cost
@@ -635,7 +631,7 @@ def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
         match node:
             case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
                 continue
-            case SelectMenu() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
+            case SelectMenu() | RoutedSelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
                 continue
             case _:
                 message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"
@@ -657,7 +653,7 @@ def _component_count(children: list[Realized]) -> int:
                 count += 1 + len(texts) + _item_component_cost(accessory)
             case Row(items=items):
                 count += 1 + sum(_item_component_cost(item) for item in items)
-            case SelectMenu():
+            case SelectMenu() | RoutedSelect():
                 count += 2  # the implicit ActionRow plus the select itself
             case RawItem(component_cost=component_cost):
                 count += component_cost

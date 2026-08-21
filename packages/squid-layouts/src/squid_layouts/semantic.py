@@ -402,6 +402,19 @@ class Choices:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutedChoices:
+    """An explicitly stateless picker whose values are submitted to one route."""
+
+    key: str
+    choices: tuple[Choice, ...]
+    route_id: str
+    placeholder: TextLike | None = None
+    minimum: int = 1
+    maximum: int = 1
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class Item:
     key: str
     label: TextLike
@@ -498,6 +511,7 @@ type SemanticNode = (
     | Measure
     | Actions
     | Choices
+    | RoutedChoices
     | Items
     | Navigation
 )

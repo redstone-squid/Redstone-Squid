@@ -7,8 +7,8 @@ import squid_layouts as sl
 from squid_layouts.discord import Router, render_static
 from squid_layouts.discord.routing import _dispatch_item
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
-from squid_layouts.primitives import Panel, RoutedButton, Row
-from squid_layouts.scene.model import SceneRoutedButton, SceneRow
+from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
+from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
 
 EDIT_BUILD = sl.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.Route("poll:close")
@@ -125,6 +125,52 @@ class TestRouter:
 
         await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
         assert seen == [{"build_id": 42}]
+
+    async def test_a_select_handler_receives_values_then_route_parameters(self) -> None:
+        seen: list[tuple[tuple[str, ...], int]] = []
+        router = Router()
+
+        @router.select(EDIT_BUILD)
+        async def edit(_interaction, values: tuple[str, ...], build_id: int) -> None:
+            seen.append((values, build_id))
+
+        await router.dispatch(
+            None,
+            "edit:build:42",
+            component=sl.discord.RouteComponent.SELECT,
+            values=("one", "two"),
+        )  # type: ignore[arg-type]
+        assert seen == [(("one", "two"), 42)]
+
+    def test_a_select_handler_must_accept_selected_values(self) -> None:
+        router = Router()
+
+        with pytest.raises(ValueError, match="selected values"):
+
+            @router.select(POLL_CLOSE)
+            async def close(_interaction) -> None: ...
+
+    async def test_button_and_select_registrations_may_share_one_route_id(self) -> None:
+        seen: list[str] = []
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def close_button(_interaction) -> None:
+            seen.append("button")
+
+        @router.select(POLL_CLOSE)
+        async def close_select(_interaction, _values: tuple[str, ...]) -> None:
+            seen.append("select")
+
+        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(
+            None,
+            "poll:close",
+            component=sl.discord.RouteComponent.SELECT,
+            values=("now",),
+        )  # type: ignore[arg-type]
+
+        assert seen == ["button", "select"]
 
     def test_a_handler_asking_for_a_parameter_the_route_lacks_fails_at_import(self) -> None:
         # The typo that would otherwise surface as a failed click in production.
@@ -333,6 +379,24 @@ class TestRouter:
 
         assert item.custom_id == "edit:build:7"
 
+    async def test_one_generated_dispatch_item_carries_select_values(self) -> None:
+        seen: list[tuple[str, ...]] = []
+        router = Router()
+
+        @router.select(POLL_CLOSE)
+        async def close(_interaction, values: tuple[str, ...]) -> None:
+            seen.append(values)
+
+        select = discord.ui.Select(
+            custom_id="poll:close",
+            options=[discord.SelectOption(label="Now", value="now")],
+        )
+        select._values = ["now"]
+        item = _dispatch_item(router)(select)
+        await item.callback(None)  # type: ignore[arg-type]
+
+        assert seen == [("now",)]
+
 
 class TestDrawing:
     def test_a_sessionless_document_may_carry_a_routed_control(self) -> None:
@@ -407,6 +471,62 @@ class TestDrawing:
         html = sl.html.Renderer().draw(sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene)
 
         assert 'data-route-id="poll:close"' in html
+
+    def test_explicit_routed_choices_draw_a_sessionless_select(self) -> None:
+        document = sl.routed_choices(
+            sl.choice("One", key="one", description="First"),
+            sl.choice("Two", key="two"),
+            route_id="pick:build:3",
+            key="picker",
+            placeholder="Choose",
+        )
+
+        scene = sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene
+        assert scene.children == (
+            SceneRoutedSelect(
+                (sl.scene.SceneOption("One", "one", "First"), sl.scene.SceneOption("Two", "two")),
+                "pick:build:3",
+                "Choose",
+            ),
+        )
+        payload = sl.scene.Codec.dumps(scene)
+        assert '"kind":"routed_select"' in payload
+        assert sl.scene.Codec.loads(payload) == scene
+
+        view = render_static(document)
+        select = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
+        assert select.custom_id == "pick:build:3"
+        assert [option.value for option in select.options] == ["one", "two"]
+        assert not select.is_dispatchable()
+
+        html = sl.html.Renderer().draw(scene)
+        assert 'data-route-id="pick:build:3"' in html
+
+    def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:
+        document = RoutedSelect((Option("One", "one"),), "pick:one")
+
+        select = next(item for item in render_static(document).walk_children() if isinstance(item, discord.ui.Select))
+        assert select.custom_id == "pick:one"
+
+    def test_routed_choices_do_not_invent_session_pagination(self) -> None:
+        document = sl.routed_choices(
+            *(sl.choice(str(index), key=str(index)) for index in range(26)),
+            route_id="pick:many",
+            key="picker",
+        )
+
+        with pytest.raises(LayoutInvariantError, match="split the routed picker"):
+            sl.plan(document, target=sl.discord.DEFAULT_TARGET)
+
+    def test_routed_choices_need_an_available_option(self) -> None:
+        document = sl.routed_choices(
+            sl.choice("Gone", key="gone", available=False),
+            route_id="pick:none",
+            key="picker",
+        )
+
+        with pytest.raises(LayoutInvariantError, match="at least one available"):
+            sl.plan(document, target=sl.discord.DEFAULT_TARGET)
 
 
 async def _noop(_interaction) -> None: ...

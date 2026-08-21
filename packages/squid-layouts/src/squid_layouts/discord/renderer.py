@@ -20,6 +20,7 @@ from squid_layouts.scene.model import (
     SceneNode,
     ScenePanel,
     SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -50,6 +51,14 @@ class RoutedItem(discord.ui.Button[Any]):
     `LayoutView.from_message` and finds the base item by component type and custom id there,
     on stock `Button` objects this class never touches.
     """
+
+    @override
+    def is_dispatchable(self) -> bool:
+        return False
+
+
+class RoutedSelectItem(discord.ui.Select[Any]):
+    """A stateless select kept out of a surrounding mount's stored dispatch table."""
 
     @override
     def is_dispatchable(self) -> bool:
@@ -159,6 +168,31 @@ class Renderer:
                     return discord.ui.ActionRow(*(accessory(entry) for entry in items))
                 case SceneSelect():
                     return discord.ui.ActionRow(control(node))
+                case SceneRoutedSelect(
+                    options=options,
+                    route_id=route_id,
+                    placeholder=placeholder,
+                    min_values=minimum,
+                    max_values=maximum,
+                    disabled=disabled,
+                ):
+                    select = RoutedSelectItem(
+                        options=[
+                            discord.SelectOption(
+                                label=option.label,
+                                value=option.value,
+                                description=option.description,
+                                default=option.default,
+                            )
+                            for option in options
+                        ],
+                        custom_id=route_id,
+                        placeholder=placeholder,
+                        min_values=minimum,
+                        max_values=maximum,
+                        disabled=disabled,
+                    )
+                    return discord.ui.ActionRow(select)
                 case SceneGallery(items=items):
                     return discord.ui.MediaGallery(
                         *(discord.MediaGalleryItem(entry.url, description=entry.description) for entry in items)
