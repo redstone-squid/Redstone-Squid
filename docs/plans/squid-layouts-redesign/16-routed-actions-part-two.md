@@ -133,7 +133,8 @@ Two findings worth keeping:
 ## Corrections from external review
 
 An outside review of plan 14 raised seven points. Each was checked against the shipped
-code rather than reasoned about; two were already handled, one is moot, and four are real.
+code rather than reasoned about; two were already handled, one is moot, and four were real.
+C1-C3 have since shipped; C4 remains.
 
 ### Already handled
 
@@ -155,20 +156,18 @@ five, and no `DynamicItem` subclass remains in `squid/`. A guard against two `Ro
 instances registering on one client is still absent, but with no second router in the tree
 this is hardening, not a live hazard.
 
-### C1 — Route overlap detection is not exact
+### C1 — Route overlap detection is not exact (`21aac8c1`)
 
-Verified open. The probe check compares one sample id per route, so a mid-segment
+Was open; fixed. The probe check compares one sample id per route, so a mid-segment
 intersection escapes it:
 
     a = Route("foo:{x}:baz")     # matches foo:bar:baz -> {"x": "bar"}
     b = Route("foo:bar:{y}")     # matches foo:bar:baz -> {"y": "baz"}
     router.add(a, h); router.add(b, h)   # both accepted today
 
-`foo:bar:baz` then dispatches to whichever registered first, silently. No current route
-pair overlaps, so nothing is broken today — but stage 4's aliases multiply the surface,
-which makes this worth closing first.
+`foo:bar:baz` then dispatched to whichever registered first, silently.
 
-The fix is to stop trying to decide regex intersection and shrink the grammar instead: a
+The fix was to stop trying to decide regex intersection and shrink the grammar instead: a
 route is colon-separated segments, each one *exactly* a literal or `{name}` /
 `{name:conv}`. All five production routes already satisfy that, as do the stage 4
 namespaced formats. Overlap then decides exactly, per position:
@@ -179,13 +178,21 @@ namespaced formats. Overlap then decides exactly, per position:
 - parameter vs parameter — overlap (`int` ⊂ `str`, and every converter's language is
   non-empty)
 
-with routes of different segment counts trivially disjoint. Ambiguity becomes structurally
-impossible rather than order-dependent, and the router can then be a literal/parameter trie
-instead of N regexes re-run after the master template matched.
+with routes of different segment counts trivially disjoint. Ambiguity is now structurally
+impossible rather than order-dependent, so `add` rejects it and `resolve`'s first-match-wins
+is a formality.
 
-### C2 — A routed click extends its mount's timeout
+Two notes from doing it. Splitting has to respect braces, since `{build_id:int}` carries a
+separator of its own — the naive `str.split` broke the very format stage 1 added. And the
+literal-vs-parameter rule has to consult the converter, or `remove:role:redstoner` and
+`remove:role:{id:int}` would be refused as overlapping when they are disjoint.
 
-Verified open, and live today: `submission/ui/views.py:1284` puts a routed Edit button in a
+Still available if the table ever grows: a literal/parameter trie instead of N regexes
+re-run after the master template matches. Not worth it at five routes.
+
+### C2 — A routed click extends its mount's timeout (`ab4969e1`)
+
+Was open and live: `submission/ui/views.py:1284` puts a routed Edit button in a
 `LayoutView`.
 
 discord.py's `dispatch_view` calls `dispatch_dynamic_items` *and then* looks the item up in
@@ -199,19 +206,24 @@ under-report the mount's age.
 So plan 14's "dispatch bypasses the mount's funnel entirely" is too strong: it bypasses
 `Mount.dispatch`, not discord.py's stored-view machinery.
 
-The clean fix is a `discord.ui.Button` subclass overriding `is_dispatchable()` to return
-`False`. `ViewStore.add_view` only files an item into `dispatch_info` when
+Fixed with `sl.discord.RoutedItem`, a `discord.ui.Button` subclass overriding
+`is_dispatchable()` to return `False`. `ViewStore.add_view` only files an item into `dispatch_info` when
 `is_dispatchable()` is true, so the outgoing button is never stored and there is exactly
 one dispatch path. Dynamic dispatch is unaffected: it rebuilds the view with
 `LayoutView.from_message`, which produces stock `Button`s, and finds the base item by
 `component_type + custom_id` there. The wire payload is an ordinary button either way.
 
-Alternative, if the subclass is judged too clever: document that routed clicks count as
-mount activity. That is a decision, not a fix, and it should be made explicitly.
+One consequence found while implementing: `store_view` is called only when the *view* has
+some dispatchable child, and `add_view` is what starts the timeout task. A document of
+nothing but routed controls would therefore have stopped being stored and never timed out,
+so `MountedView.is_dispatchable()` answers True for itself regardless of what it draws.
 
-### C3 — The custom-id budget is bypassable
+The hand-built button at `submission/ui/views.py` needed the same treatment; it does not go
+through the renderer.
 
-Verified open:
+### C3 — The custom-id budget is bypassable (`b6001481`)
+
+Was open:
 
     RoutedButton("Edit", "x" * 500)   # renders through render_static, no complaint
 
@@ -221,10 +233,10 @@ only `discord/testing.py`'s `payload_problems` does, which is a test helper. So 
 state is representable and surfaces as a 50035 at send time, which is exactly the hole the
 planner exists to close.
 
-Validate twice: `Route.id()` keeps its early friendly error, and the planner or `conform`
-enforces the invariant regardless of how the node was constructed. `conform` is the better
-home, since it already walks the built payload and would also cover `Button` and
-`SelectMenu` custom ids.
+Validated twice now: `Route.id()` keeps its early friendly error, and `conform` enforces the
+invariant regardless of how the node was constructed, covering `Button` and select custom
+ids alike. Reported, never clamped — every other string there degrades acceptably when
+trimmed, but a shortened custom id routes to a different handler or to none.
 
 ### C4 — `custom_id` is Discord vocabulary in a portable protocol
 
@@ -299,7 +311,7 @@ auditable.
 
 ## Verification
 
-Stages 0-3 verified: `packages/squid-layouts/tests/test_routing.py` (38), `tests/unit/bot`
+Stages 0-3 and C1-C3 verified: `packages/squid-layouts/tests` (408), `tests/unit/bot`
 (647), `pyrefly --config pyproject.toml` at 0 errors. `tests/unit` as a whole is CI's job.
 
 Remaining stages want, on top of their own unit tests: the alias identity guard above, and
@@ -309,12 +321,7 @@ a real message rather than a synthetic id.
 
 ## Sequencing
 
-0-3 landed together. Remaining order: **C1, C2, C3, then 5, then 4 (with C4), then 7,
-then 6**.
-
-The corrections come first because two are correctness and all three are small. C1
-especially precedes stage 4: aliases enlarge the route table, so exact overlap detection
-should exist before there is more to be ambiguous about. Then 5 before 4, because the
-middleware seam makes the namespace's gone-handler a one-liner; C4 rides along with 4's
-format churn since both change the codec; and 6 stays last because its demand is the
-least established.
+0-3 landed together, then C1-C3. Remaining order: **5, then 4 (with C4), then 7, then 6** —
+5 before 4 because the middleware seam makes the namespace's gone-handler a one-liner; C4
+rides along with 4's format churn since both change the codec; and 6 stays last because its
+demand is the least established.
