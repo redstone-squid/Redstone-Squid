@@ -75,3 +75,17 @@ are not re-derived or accidentally adopted later.
   assumption so it stays that way.
 - **Cross-page multi-select** — still rejected pending an explicit grouping/commit
   model, per the documented boundary.
+- **Statically checking a route handler's parameters against its route** (plan 16 stage 2)
+  — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
+  `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
+  inferred from whatever was written, so `biuld_id: int` typechecks fine. The only
+  construction that would check it is a `Route[ParamsTypedDict]` plus PEP 692
+  `**params: Unpack[TD]` in a `Protocol.__call__`. **Pyrefly 1.2 rejects `Unpack` on a
+  TypeVar** — "`Unpack` in \*\*kwargs annotation must be used only with a `TypedDict`" —
+  including when the TypeVar is bound to a TypedDict base, so the protocol cannot even be
+  spelled. The concrete-TypedDict form (`squid/settings/application/ports.py`) is the
+  supported case and is not what this needs. It would also reintroduce the drift `Route`
+  exists to eliminate, with parameter names and types living in two places, and three of
+  five routes carry no parameters at all. Registration-time `inspect.signature` checking
+  is the substitute, and it is stricter than Flask's, which waits for the first request.
+  Revisit only if pyrefly gains generic `Unpack` support.
