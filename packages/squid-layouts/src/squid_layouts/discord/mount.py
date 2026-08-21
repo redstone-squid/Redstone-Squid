@@ -49,7 +49,9 @@ class ErrorHook(Protocol):
 class FinishHook(Protocol):
     """Observer told that a mount has finished, after its teardown."""
 
-    def __call__(self, mount: Mount) -> Awaitable[None]: ...
+    # Positional-only, as `Destination` is: a named parameter would make the protocol demand
+    # that every observer spell the argument `mount`.
+    def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
 
 
 class Scheduler(Protocol):
@@ -621,19 +623,24 @@ class Mount:
         if self._finished:
             return
         self._finished = True
-        if disable and self._handle is not None:
-            candidate = self._stage(disabled=True)
-            try:
-                if await self._deliver(candidate, files=False) is None:
-                    logger.debug("could not disable controls on finish: no live edit handle")
+        try:
+            if disable and self._handle is not None:
+                candidate = self._stage(disabled=True)
+                try:
+                    if await self._deliver(candidate, files=False) is None:
+                        logger.debug("could not disable controls on finish: no live edit handle")
+                        self._rollback(candidate)
+                except discord.HTTPException:
+                    logger.debug("could not disable controls on finish", exc_info=True)
                     self._rollback(candidate)
-            except discord.HTTPException:
-                logger.debug("could not disable controls on finish", exc_info=True)
-                self._rollback(candidate)
-            finally:
-                candidate.view.stop()
-        self._teardown()
-        await self._run_finish_hooks()
+                finally:
+                    candidate.view.stop()
+        finally:
+            # Neither the teardown nor the hooks are conditional on the disable-edit working,
+            # or even on it failing in a way this anticipated. The mount is finished either
+            # way, and an observer that never heard so would hold a dead mount forever.
+            self._teardown()
+            await self._run_finish_hooks()
 
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""
