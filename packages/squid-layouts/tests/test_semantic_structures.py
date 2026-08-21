@@ -4,6 +4,7 @@ import pytest
 
 from squid_layouts import (
     LayoutInvariantError,
+    Position,
     plan,
 )
 from squid_layouts.discord import DEFAULT_TARGET
@@ -101,9 +102,9 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     )
     navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
 
-    choice_plan = plan(choices, target=DEFAULT_TARGET, page={"size.choices": 1})
-    item_plan = plan(items, target=DEFAULT_TARGET, page={"catalog.items": 1})
-    navigation_plan = plan(navigation, target=DEFAULT_TARGET, page={"tabs.destinations": 1})
+    choice_plan = plan(choices, target=DEFAULT_TARGET, positions={"size.choices": Position(offset=1)})
+    item_plan = plan(items, target=DEFAULT_TARGET, positions={"catalog.items": Position(offset=1)})
+    navigation_plan = plan(navigation, target=DEFAULT_TARGET, positions={"tabs.destinations": Position(offset=1)})
 
     choice_select = next(node for node in choice_plan.scene.children if isinstance(node, SceneSelect))
     item_select = next(node for node in item_plan.scene.children if isinstance(node, SceneSelect))
@@ -121,7 +122,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     original = tuple(Item(str(index), f"Item {index}", (Paragraph("detail"),)) for index in range(36))
     first = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
     apply_updates(session, first.session_updates)
-    session.move_cursor("catalog.items", 1)
+    session.move_cursor("catalog.items", Position(offset=1))
     second_page = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
     apply_updates(session, second_page.session_updates)
     assert "25" in next(node for node in second_page.scene.children if isinstance(node, SceneSelect)).options[0].value

@@ -9,13 +9,12 @@ from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
-from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
+from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAssignment, iter_assignments
 from squid_layouts.planning.solve import (
-    PageNav,
-    PageState,
     Realized,
     RPanel,
     RSection,
@@ -76,6 +75,7 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
 )
+from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
@@ -340,7 +340,7 @@ class _StrategyAttempt:
     semantic: SemanticLowering
     lowered: tuple[Node, ...]
     solved: SolvedLayout
-    broker: PageBroker
+    broker: CursorCoordinator
 
 
 def _attempt_strategy(
@@ -353,10 +353,10 @@ def _attempt_strategy(
     localization: Localization,
     presentation: PresentationSession,
     reservation: ResourceCost,
-    page: PageState,
-    nav: PageNav | None,
+    positions: Mapping[str, Position] | None,
+    nav: PlannedNav | None,
 ) -> _StrategyAttempt:
-    broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
+    broker = CursorCoordinator(presentation, chrome, nav, positions)
     semantic = lower_semantics(
         document.children,
         limits=limits,
@@ -389,8 +389,8 @@ def _search_strategies(
     localization: Localization,
     presentation: PresentationSession,
     reservation: ResourceCost,
-    page: PageState,
-    nav: PageNav | None,
+    positions: Mapping[str, Position] | None,
+    nav: PlannedNav | None,
     search_budget: int,
 ) -> _StrategyAttempt:
     axes = nominate_strategies(document.children, limits=limits, session=presentation)
@@ -412,7 +412,7 @@ def _search_strategies(
             localization=localization,
             presentation=presentation,
             reservation=reservation,
-            page=page,
+            positions=positions,
             nav=nav,
         )
         states_explored += 1
@@ -465,8 +465,8 @@ def plan(
     localization: Localization = NEUTRAL,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    positions: Mapping[str, Position] | None = None,
+    nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
@@ -493,12 +493,12 @@ def plan(
         reservation=reservation,
         strict=strict,
         nav=nav,
-        page=page,
+        positions=positions,
         search_budget=search_budget,
     )
     cached = cache.get(cache_key) if cache is not None else None
     if cached is not None:
-        broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
+        broker = CursorCoordinator(presentation, chrome, nav, positions)
         semantic = lower_semantics(
             document.children,
             limits=limits,
@@ -511,7 +511,7 @@ def plan(
         )
         lowered = _lower_children(semantic.nodes, target, limits)
         _validate(lowered, limits)
-        converter = _collect_cached_bindings(lowered, cached.scene, nav)
+        converter = _collect_cached_bindings(lowered, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in document.assets}
         return PlanResult(
             scene=cached.scene,
@@ -534,7 +534,7 @@ def plan(
         localization=localization,
         presentation=presentation,
         reservation=reservation,
-        page=page,
+        positions=positions,
         nav=nav,
         search_budget=search_budget,
     )
@@ -642,7 +642,7 @@ def plan(
     return result
 
 
-def _reconcile_pagers(solved: SolvedLayout, broker: PageBroker) -> None:
+def _reconcile_pagers(solved: SolvedLayout, broker: CursorCoordinator) -> None:
     """Move each solved pager to the page its reader belongs on.
 
     The solver has to render *some* page to measure one, and it picks before anyone knows
@@ -651,18 +651,18 @@ def _reconcile_pagers(solved: SolvedLayout, broker: PageBroker) -> None:
     costs a slot rewrite rather than a second solve. The mount used to do this by drawing
     twice.
     """
-    indices: dict[str, int] = {}
+    positions: dict[str, Position] = {}
     for pager in solved.pagers:
-        request = PageRequest(
+        request = MaterializedCursorRequest(
             key=pager.key,
-            pages=pager.pages,
+            extent=pager.pages,
             fingerprint=content_fingerprint(pager.fragments),
             initial="end" if pager.initial else "start",
         )
         grant = broker.grant(request)
-        broker.record(request, grant.index)
-        indices[pager.key] = grant.index
-    solved.repage(indices)
+        broker.record(request, grant.position)
+        positions[pager.key] = grant.position
+    solved.reposition(positions)
 
 
 def _root_paginate(
@@ -672,15 +672,15 @@ def _root_paginate(
     target_limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    nav: PageNav,
-    broker: PageBroker,
+    nav: PlannedNav,
+    broker: CursorCoordinator,
 ) -> tuple[SolvedLayout, int]:
     maximum_pages = max(1, len(nodes))
 
     def solve_page(children: Sequence[Node], index: int, pages: int) -> SolvedLayout:
         chrome_nodes: tuple[Node, ...] = (
             Footer(chrome.page_footer(index + 1, pages), overflow=Never()),
-            *nav(key, index, pages),
+            *nav(materialized_navigation_state(key, Position(offset=index), pages, chrome)),
         )
         return solve(
             (*children, *chrome_nodes),
@@ -714,10 +714,11 @@ def _root_paginate(
     if current:
         pages.append(current)
 
-    request = PageRequest(key=key, pages=len(pages), fingerprint=stable_fingerprint(nodes))
+    request = MaterializedCursorRequest(key=key, extent=len(pages), fingerprint=stable_fingerprint(nodes))
     grant = broker.grant(request)
-    broker.record(request, grant.index)
-    return solve_page(pages[grant.index], grant.index, grant.pages), grant.pages
+    broker.record(request, grant.position)
+    index = grant.position.offset
+    return solve_page(pages[index], index, grant.extent), grant.extent
 
 
 def _plan_cache_key(
@@ -730,8 +731,8 @@ def _plan_cache_key(
     presentation: PresentationSession,
     reservation: ResourceCost,
     strict: bool,
-    nav: PageNav | None,
-    page: PageState,
+    nav: PlannedNav | None,
+    positions: Mapping[str, Position] | None,
     search_budget: int,
 ) -> str:
     relevant = {
@@ -751,7 +752,7 @@ def _plan_cache_key(
         "locale": localization.locale,
         "reservation": stable_value(reservation),
         "strict": strict,
-        "page": stable_value(page),
+        "positions": stable_value(positions),
         "search_budget": search_budget,
         "nav": (
             None
@@ -805,13 +806,16 @@ def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
 def _collect_cached_bindings(
     nodes: Sequence[Node],
     scene: SceneDocument,
-    nav: PageNav | None,
+    nav: PlannedNav | None,
+    chrome: Chrome,
 ) -> _Converter:
     converter = _collect_bindings(nodes)
     if nav is None:
         return converter
     for pager in scene.pagers:
-        generated = _collect_bindings(nav(pager.key, pager.page, pager.pages))
+        generated = _collect_bindings(
+            nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
+        )
         for key, binding in generated.bindings.items():
             converter.bindings.setdefault(key, binding)
     return converter

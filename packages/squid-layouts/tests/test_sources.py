@@ -1,11 +1,19 @@
-"""Cursor position and async window-source contracts."""
+"""Position policy and asynchronous window loading contracts."""
 
 import asyncio
 from dataclasses import dataclass
 
 import anyio
+import pytest
 
-from squid_layouts import Position, Window, WindowCursor
+from squid_layouts import (
+    CountPrecision,
+    Direction,
+    Position,
+    SourceCapabilities,
+    Window,
+    WindowLoader,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,9 +22,7 @@ class Entry:
 
 
 class ListSource:
-    countable = True
-    bidirectional = True
-    jumpable = True
+    capabilities = SourceCapabilities(backward=True, offsets=True, jumpable=True, count=CountPrecision.EXACT)
 
     def __init__(self, keys: tuple[str, ...]) -> None:
         self.keys = keys
@@ -26,55 +32,64 @@ class ListSource:
         self.requests.append(position)
         if position.anchor in self.keys:
             anchor = self.keys.index(position.anchor)
-            if position.direction == "forward":
+            if position.direction is Direction.FORWARD:
                 offset = anchor + 1
-            elif position.direction == "backward":
+            elif position.direction is Direction.BACKWARD:
                 offset = max(0, anchor - extent)
             else:
                 offset = anchor
         else:
             offset = min(position.offset, max(0, len(self.keys) - 1))
         items = tuple(Entry(key) for key in self.keys[offset : offset + extent])
-        return Window(items, offset > 0, offset + extent < len(self.keys), len(self.keys), Position(offset=offset))
+        anchor = items[0].key if items else None
+        return Window(
+            Position(anchor, offset),
+            items,
+            has_previous=offset > 0,
+            has_next=offset + extent < len(self.keys),
+            total=len(self.keys),
+        )
 
 
-async def test_cursor_navigates_by_boundaries_and_keeps_offsets() -> None:
+async def test_loader_navigates_by_boundaries_and_accepts_resolved_positions() -> None:
     source = ListSource(("a", "b", "c", "d", "e"))
-    cursor = WindowCursor(source, 2, lambda entry: entry.key)
+    loader = WindowLoader(source, 2, lambda entry: entry.key)
 
-    assert await cursor.fetch()
-    assert cursor.window is not None and cursor.window.items == (Entry("a"), Entry("b"))
-    assert cursor.position == Position("a", 0)
+    first = await loader.load()
+    assert first is not None
+    assert first.window.items == (Entry("a"), Entry("b"))
+    assert first.position == Position("a", 0)
 
-    assert await cursor.next()
-    assert source.requests[-1] == Position("b", 2, "forward")
-    assert cursor.window.items == (Entry("c"), Entry("d"))
-    assert cursor.position == Position("c", 2)
+    second = await loader.next(first)
+    assert second is not None
+    assert source.requests[-1] == Position("b", 2, Direction.FORWARD)
+    assert second.window.items == (Entry("c"), Entry("d"))
+    assert second.position == Position("c", 2)
 
-    assert await cursor.previous()
-    assert source.requests[-1] == Position("c", 0, "backward")
-    assert cursor.window.items == (Entry("a"), Entry("b"))
+    returned = await loader.previous(second)
+    assert returned is not None
+    assert source.requests[-1] == Position("c", 0, Direction.BACKWARD)
+    assert returned.window.items == (Entry("a"), Entry("b"))
 
 
-async def test_refresh_is_window_scoped_and_source_owns_anchor_gone_fallback() -> None:
+async def test_refresh_delegates_anchor_gone_fallback_to_the_source() -> None:
     source = ListSource(("a", "b", "c"))
-    cursor = WindowCursor(source, 2, lambda entry: entry.key)
-    await cursor.fetch()
-    previous = cursor.fingerprint
+    loader = WindowLoader(source, 2, lambda entry: entry.key)
+    first = await loader.load()
+    assert first is not None
 
     source.keys = ("b", "c")
-    assert await cursor.refresh()
+    refreshed = await loader.load(previous=first)
 
+    assert refreshed is not None
     assert source.requests[-1] == Position("a", 0)
-    assert cursor.window is not None and cursor.window.items == (Entry("b"), Entry("c"))
-    assert cursor.position == Position("b", 0)
-    assert cursor.fingerprint != previous
+    assert refreshed.window.items == (Entry("b"), Entry("c"))
+    assert refreshed.position == Position("b", 0)
+    assert refreshed.fingerprint != first.fingerprint
 
 
 class RacingSource:
-    countable = False
-    bidirectional = True
-    jumpable = False
+    capabilities = SourceCapabilities(backward=True)
 
     def __init__(self) -> None:
         self.started = {"old": asyncio.Event(), "new": asyncio.Event()}
@@ -85,40 +100,70 @@ class RacingSource:
         assert position.anchor is not None
         self.started[position.anchor].set()
         await self.release[position.anchor].wait()
-        return Window((position.anchor,), has_prev=True, has_next=True)
+        return Window(Position(position.anchor), (position.anchor,), has_previous=True, has_next=True)
 
 
-async def test_out_of_order_fetch_result_is_dropped() -> None:
+async def test_out_of_order_result_cannot_publish_state() -> None:
     source = RacingSource()
-    cursor = WindowCursor(source, 1, lambda item: item)
-    results: dict[str, bool] = {}
+    loader = WindowLoader(source, 1, lambda item: item)
+    results = {}
     finished = {"old": asyncio.Event(), "new": asyncio.Event()}
 
     async def fetch(name: str, position: Position) -> None:
-        results[name] = await cursor.fetch(position)
+        results[name] = await loader.load(position)
         finished[name].set()
 
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(fetch, "old", Position("old", 1, "forward"))
+        tasks.start_soon(fetch, "old", Position("old", 1, Direction.FORWARD))
         await source.started["old"].wait()
-        tasks.start_soon(fetch, "new", Position("new", 2, "forward"))
+        tasks.start_soon(fetch, "new", Position("new", 2, Direction.FORWARD))
         await source.started["new"].wait()
         source.release["new"].set()
         await finished["new"].wait()
         source.release["old"].set()
 
-    assert results == {"new": True, "old": False}
-
-    assert cursor.window is not None and cursor.window.items == ("new",)
-    assert cursor.position == Position("new", 2)
+    assert results["old"] is None
+    assert results["new"] is not None and results["new"].window.items == ("new",)
 
 
-async def test_forward_only_source_refuses_previous_without_fetching() -> None:
-    source = ListSource(("a", "b", "c"))
-    source.bidirectional = False
-    cursor = WindowCursor(source, 1, lambda entry: entry.key, initial=Position(offset=1))
-    await cursor.fetch()
-    requests = len(source.requests)
+@pytest.mark.parametrize(
+    "capabilities",
+    [
+        SourceCapabilities(offsets=False, jumpable=False),
+        SourceCapabilities(offsets=True, count=CountPrecision.APPROXIMATE),
+        SourceCapabilities(offsets=True, jumpable=True, count=CountPrecision.EXACT),
+    ],
+)
+def test_valid_capability_shapes(capabilities: SourceCapabilities) -> None:
+    assert capabilities
 
-    assert not await cursor.previous()
-    assert len(source.requests) == requests
+
+def test_capabilities_reject_claims_that_require_unknown_offsets() -> None:
+    with pytest.raises(ValueError, match="jumpable"):
+        SourceCapabilities(jumpable=True)
+    with pytest.raises(ValueError, match="countable"):
+        SourceCapabilities(count=CountPrecision.EXACT)
+
+
+def test_window_requires_a_resolved_position() -> None:
+    with pytest.raises(ValueError, match="AROUND"):
+        Window(Position("a", direction=Direction.FORWARD), ("a",), has_previous=False, has_next=False)
+    with pytest.raises(ValueError, match="negative offset"):
+        Window(Position("a", offset=-1), ("a",), has_previous=False, has_next=False)
+
+
+async def test_loader_rejects_results_that_contradict_capabilities() -> None:
+    source = ListSource(("a", "b"))
+    source.capabilities = SourceCapabilities()
+    with pytest.raises(ValueError, match="uncountable source returned a total"):
+        await WindowLoader(source, 2, lambda entry: entry.key).load()
+
+    class InvalidExactSource:
+        capabilities = SourceCapabilities(offsets=True, count=CountPrecision.EXACT)
+
+        async def fetch(self, position: Position, extent: int) -> Window[Entry]:
+            del position, extent
+            return Window(Position(offset=1), (Entry("a"),), has_previous=False, has_next=False, total=1)
+
+    with pytest.raises(ValueError, match="beyond its total"):
+        await WindowLoader(InvalidExactSource(), 2, lambda entry: entry.key).load(Position(offset=1))

@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
+from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
@@ -107,6 +107,7 @@ from squid_layouts.semantic import (
     Truncated,
     Unbreakable,
 )
+from squid_layouts.sources import Position
 from squid_layouts.text import Localization, TextLike, resolve_text
 
 ACTIONS_ADAPTER_ID = "discord.actions"
@@ -138,7 +139,7 @@ class _Context:
     chrome: Chrome
     localization: Localization
     session: PresentationSession
-    pages: PageBroker
+    pages: CursorCoordinator
     capabilities: frozenset[str]
     events: list[PlanEvent]
     updates: list[SessionUpdate]
@@ -231,13 +232,13 @@ def lower_semantics(
     chrome: Chrome,
     localization: Localization,
     session: PresentationSession,
-    pages: PageBroker | None = None,
+    pages: CursorCoordinator | None = None,
     capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     strategies: Mapping[str, str] | None = None,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
-    broker = pages if pages is not None else PageBroker(session, chrome)
+    broker = pages if pages is not None else CursorCoordinator(session, chrome)
     context = _Context(
         limits,
         chrome,
@@ -683,15 +684,15 @@ def _paged_region(
         limits=context.limits,
         path=path,
     )
-    request = PageRequest(
+    request = MaterializedCursorRequest(
         key=node.key,
-        pages=len(pages),
+        extent=len(pages),
         fingerprint=stable_fingerprint(children),
         initial=node.initial,
     )
     grant = context.pages.grant(request)
-    context.pages.record(request, grant.index)
-    selected = [primitive for item in pages[grant.index] for primitive in item.nodes]
+    context.pages.record(request, grant.position)
+    selected = [primitive for item in pages[grant.position.offset] for primitive in item.nodes]
     budgeted = Budget(
         tuple(selected),
         minimum,
@@ -699,17 +700,17 @@ def _paged_region(
         stretch,
         best_effort=isinstance(node.node, BestEffort),
     )
-    controls = context.pages.controls(node.key, grant.index, grant.pages)
+    controls = context.pages.controls(node.key, grant.position, grant.extent)
     if controls and node.footer is not None:
-        controls[0] = Footer(_resolve(node.footer(grant.index + 1, grant.pages), context), overflow=Never())
-    if grant.pages > 1:
+        controls[0] = Footer(_resolve(node.footer(grant.position.offset + 1, grant.extent), context), overflow=Never())
+    if grant.extent > 1:
         context.events.append(
             PlanEvent(
                 code="pagination.region",
                 path=path,
-                message=f"Region {node.key!r} uses {grant.pages} balanced pages",
+                message=f"Region {node.key!r} uses {grant.extent} balanced pages",
                 severity=PlanSeverity.ADAPTATION,
-                after={"pages": grant.pages},
+                after={"pages": grant.extent},
             )
         )
     if shell is not None:
@@ -837,7 +838,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
             max_values=min(node.maximum, len(options)),
         )
     ]
-    result.extend(context.pages.controls(page_key, page, pages))
+    result.extend(context.pages.controls(page_key, Position(offset=page), pages))
     return result
 
 
@@ -960,7 +961,7 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
             placeholder="Choose an item",
         ),
     ]
-    result.extend(context.pages.controls(page_key, page, pages))
+    result.extend(context.pages.controls(page_key, Position(offset=page), pages))
     return result
 
 
@@ -1047,7 +1048,7 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
                 node.key,
             )
         ]
-        result.extend(context.pages.controls(page_key, page, pages))
+        result.extend(context.pages.controls(page_key, Position(offset=page), pages))
         return result
     buttons: list[Button] = []
     for destination in available:
@@ -1291,7 +1292,10 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
 
 def _paged_picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> list[Node]:
     chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
-    return [_picker(chunk, f"{key}.page", label, context), *context.pages.controls(key, index, pages)]
+    return [
+        _picker(chunk, f"{key}.page", label, context),
+        *context.pages.controls(key, Position(offset=index), pages),
+    ]
 
 
 def _page_items[T](
@@ -1307,16 +1311,17 @@ def _page_items[T](
     anchors: dict[str, int] = {}
     for position, key in enumerate(keys):
         anchors.setdefault(key, position // per)
-    request = PageRequest(
+    request = MaterializedCursorRequest(
         key=pager_key,
-        pages=max(1, (len(items) + per - 1) // per),
+        extent=max(1, (len(items) + per - 1) // per),
         fingerprint=content_fingerprint(keys),
         anchors=anchors,
     )
     grant = context.pages.grant(request)
-    visible = tuple(items[grant.index * per : (grant.index + 1) * per])
-    context.pages.record(request, grant.index, anchor=identity(visible[0]) if visible else None)
-    return visible, grant.index, grant.pages
+    index = grant.position.offset
+    visible = tuple(items[index * per : (index + 1) * per])
+    context.pages.record(request, grant.position, anchor=identity(visible[0]) if visible else None)
+    return visible, index, grant.extent
 
 
 def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:

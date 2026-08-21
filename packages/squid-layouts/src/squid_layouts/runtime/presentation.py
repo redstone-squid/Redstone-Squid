@@ -3,15 +3,16 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
+from squid_layouts.sources import ORIGIN, POSITION_POLICY, Direction, Position
+
 
 @dataclass(frozen=True, slots=True)
 class CursorState:
     """A position in keyed presentation content."""
 
-    index: int = 0
-    anchor: str | None = None
+    position: Position = ORIGIN
     extent: int = 1
-    content_fingerprint: str = ""
+    fingerprint: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,29 +45,14 @@ class PresentationSession:
     def cursor(self, key: str) -> CursorState:
         return self.cursors.get(key, CursorState())
 
-    def move_cursor(self, key: str, index: int) -> None:
+    def move_cursor(self, key: str, position: Position) -> None:
+        """Store one resolved position within the cursor's known extent."""
         current = self.cursor(key)
+        selected = POSITION_POLICY.resolve(override=position, upper_bound=current.extent - 1)
         self.cursors[key] = CursorState(
-            max(0, min(index, current.extent - 1)),
+            Position(selected.anchor, selected.offset, Direction.AROUND),
             extent=current.extent,
-            content_fingerprint=current.content_fingerprint,
-        )
-
-    def anchor_cursor(
-        self,
-        key: str,
-        index: int,
-        anchor: str | None,
-        *,
-        extent: int | None = None,
-        content_fingerprint: str | None = None,
-    ) -> None:
-        current = self.cursor(key)
-        self.cursors[key] = CursorState(
-            max(0, index),
-            anchor,
-            max(1, extent if extent is not None else current.extent),
-            current.content_fingerprint if content_fingerprint is None else content_fingerprint,
+            fingerprint=current.fingerprint,
         )
 
     def reset_cursor(self, key: str | None = None) -> None:
