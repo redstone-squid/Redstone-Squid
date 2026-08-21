@@ -29,7 +29,13 @@ from squid_layouts.discord import (
     delivery,
 )
 from squid_layouts.discord.mount import _custom_id
-from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction, fake_message
+from squid_layouts.discord.testing import (
+    assert_within_limits,
+    commit_render,
+    delivered_to,
+    fake_interaction,
+    fake_message,
+)
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
@@ -436,12 +442,11 @@ class TestSelect:
 class TestLifecycle:
     async def test_finish_disables_controls(self):
         mount = Mount(Counter(), timeout=None)
-        view = commit_render(mount)
         message: Any = SimpleNamespace(
             flags=SimpleNamespace(components_v2=True),
             edit=AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True))),
         )
-        mount.bind(message, view)
+        await mount.send(delivered_to(message))
 
         await mount.finish()
 
@@ -454,12 +459,11 @@ class TestLifecycle:
     async def test_refresh_now_edits_bound_message(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        view = commit_render(mount)
         message: Any = SimpleNamespace(
             flags=SimpleNamespace(components_v2=True),
             edit=AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True))),
         )
-        mount.bind(message, view)
+        await mount.send(delivered_to(message))
         component.count = 7
 
         await mount.refresh_now()
@@ -479,19 +483,18 @@ class TestLifecycle:
 class TestDeliveryAtomicity:
     """A render becomes the mount's state only once Discord has accepted it."""
 
-    def test_build_view_stages_and_bind_commits(self):
+    def test_build_view_stages_without_committing(self):
+        """The stage-only escape hatch renders the tree and publishes none of it.
+
+        Committing is `send`'s and `flush`'s job; `TestSend` covers the other half.
+        """
         mount = Mount(Counter(), timeout=None)
 
-        view = mount.build_view()
+        mount.build_view()
 
         assert mount._handlers == {}
         assert mount._generation == 0
         assert mount._assets == ()
-
-        mount.bind(None, view)
-
-        assert "inc" in mount._handlers
-        assert mount._generation == 1
 
     async def test_failed_edit_keeps_the_visible_generation_live(self, monkeypatch):
         mounted: list[str] = []
@@ -547,12 +550,11 @@ class TestDeliveryAtomicity:
     async def test_failed_refresh_leaves_the_mount_repairable(self, monkeypatch):
         component = Counter()
         mount = Mount(component, timeout=None)
-        view = commit_render(mount)
         message: Any = SimpleNamespace(
             flags=SimpleNamespace(components_v2=True),
             edit=AsyncMock(side_effect=_http_error()),
         )
-        mount.bind(message, view)
+        await mount.send(delivered_to(message))
         component.count = 7
         live_generation = mount._generation
 
@@ -844,7 +846,7 @@ class TestEditHandles:
         # the panel stale, so the mount falls back to the message it holds.
         message = fake_message()
         mount = Mount(Notifier(), timeout=None)
-        mount.bind(message, mount.build_view())
+        await mount.send(delivered_to(message))
 
         interaction = fake_interaction()
         await mount.dispatch("go", interaction)
@@ -855,10 +857,30 @@ class TestEditHandles:
         message.edit.assert_awaited_once()
         assert not mount.pending
 
+    async def test_a_flush_through_the_standing_handle_still_answers_the_click(self):
+        # A modal submitted from a command rather than from a component carries no message,
+        # so `handle_from` has nothing to build on and the edit goes through the mount's own
+        # handle. Only the interaction's handle answers the click by editing through it, so
+        # the flush owes an acknowledgement -- without one Discord reports a failure at 3s.
+        message = fake_message()
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        await mount.send(delivered_to(message))
+
+        component.count = 3
+        interaction = fake_interaction()
+        interaction.message = None
+
+        await mount.flush(interaction)
+
+        message.edit.assert_awaited_once()
+        interaction.response.defer.assert_awaited_once()
+        assert not mount.pending
+
     async def test_a_click_renews_an_ephemeral_mount_for_background_refreshes(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        mount.bind(fake_message(ephemeral=True), mount.build_view())
+        await mount.send(delivered_to(fake_message(ephemeral=True)))
         assert mount.handle is not None and not mount.handle.permanent
 
         interaction = fake_interaction()
@@ -876,7 +898,7 @@ class TestEditHandles:
     async def test_a_click_does_not_trade_away_the_bots_own_credentials(self):
         message = fake_message()
         mount = Mount(Counter(), timeout=None)
-        mount.bind(message, mount.build_view())
+        await mount.send(delivered_to(message))
         permanent = mount.handle
 
         await mount.dispatch("inc", fake_interaction())
@@ -886,7 +908,7 @@ class TestEditHandles:
     async def test_an_unreachable_mount_holds_its_render_for_the_next_click(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        mount.bind(fake_message(ephemeral=True), mount.build_view())
+        await mount.send(delivered_to(fake_message(ephemeral=True)))
         mount._handle = delivery.handle_from(fake_interaction(expired=True))
         component.count += 1
 
@@ -919,7 +941,7 @@ class TestEditHandles:
 
         component = Counter()
         mount = Mount(component, timeout=None)
-        mount.bind(fake_message(ephemeral=True), mount.build_view())
+        await mount.send(delivered_to(fake_message(ephemeral=True)))
         mount._handle = _Stale()
         component.count += 1
 

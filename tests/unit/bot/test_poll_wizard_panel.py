@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from squid.bot.voting.poll_wizard import PollConfirmationComponent, PollDraft
-from squid_layouts.discord.testing import fake_interaction, fake_message
+from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from tests.helpers.voting import GENERIC_OPTIONS
 
 OWNER_ID = 11
@@ -24,7 +24,7 @@ async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> N
     """
     mount = make_wizard().mount()
     message = fake_message()
-    mount.bind(message, mount.build_view())
+    await mount.send(delivered_to(message))
 
     interaction = fake_interaction(user_id=OWNER_ID)
     await mount.dispatch("cancel", interaction)

@@ -496,10 +496,7 @@ class AccountPanel(sl.Component):
         self.invalidate()
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point: it publishes the render the edit above delivered.
-        self._mount.bind(None, rendered)
+        await self._mount.flush(interaction)
 
     async def _consented(self, event: sl.ActionEvent) -> bool:
         await event.acknowledge()
