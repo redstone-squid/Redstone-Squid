@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.routes import BUILD_EDIT
+from squid.bot.routes import build_edit
 from squid.bot.ui import create_mount
 from squid.core.i18n import _
 
@@ -39,7 +39,7 @@ class BuildInfoComponent(sl.Component):
         else:
             edit = sl.primitives.Section(
                 (sl.primitives.Text(t(self.locale, _("Edit this build.")), priority=-10),),
-                sl.primitives.RoutedButton(t(self.locale, _("Edit")), BUILD_EDIT.id(build_id=self.build.id)),
+                sl.primitives.RoutedButton(t(self.locale, _("Edit")), build_edit.id(build_id=self.build.id)),
             )
         return (self._node, edit)
 

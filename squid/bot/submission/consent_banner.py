@@ -11,7 +11,7 @@ import squid_layouts as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import ConsentPrompt, ConsentPromptView
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import BUILD_LOG_CONSENT, ROUTER
+from squid.bot.routes import build_log_consent, router
 from squid.bot.ui import CardField
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.mount_registry import SessionKey, WhenOpen
@@ -24,10 +24,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-CONSENT_BUTTON_CUSTOM_ID = BUILD_LOG_CONSENT.id()
+CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
 
-@ROUTER.route(BUILD_LOG_CONSENT)
+@router.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[Any], _params: Mapping[str, str]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
     await interaction.response.defer(ephemeral=True)
