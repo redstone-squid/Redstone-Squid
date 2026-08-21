@@ -10,7 +10,7 @@ from discord.ext import commands
 
 from squid.bot.layout_showcase import LayoutShowcase, LayoutShowcaseCog
 from squid_layouts.discord import Mount
-from squid_layouts.discord.testing import assert_within_limits, fake_interaction
+from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
@@ -23,7 +23,7 @@ def _texts(view: discord.ui.LayoutView) -> str:
 
 def test_pagination_exhibit_uses_the_measured_budget() -> None:
     mount = Mount(LayoutShowcase(section="pagination", entries=200, locale="en"), timeout=None)
-    view = mount.build_view()
+    view = commit_render(mount)
 
     assert "#011" in _texts(view)
     assert "#200" not in _texts(view)
@@ -32,7 +32,7 @@ def test_pagination_exhibit_uses_the_measured_budget() -> None:
 
 
 def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
-    view = Mount(LayoutShowcase(section="adaptation", entries=20, locale="en"), timeout=None).build_view()
+    view = commit_render(Mount(LayoutShowcase(section="adaptation", entries=20, locale="en"), timeout=None))
 
     selects = [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
     assert [
@@ -55,7 +55,7 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
     ],
 )
 def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_marker: str) -> None:
-    view = Mount(LayoutShowcase(section=section, entries=20, locale="en"), timeout=None).build_view()  # type: ignore[arg-type]
+    view = commit_render(Mount(LayoutShowcase(section=section, entries=20, locale="en"), timeout=None))  # type: ignore[arg-type]
     content = _texts(view)
 
     assert "Declaration source" in content
@@ -66,7 +66,7 @@ def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_m
 async def test_composed_children_keep_independent_state_and_keys() -> None:
     component = LayoutShowcase(section="composition", entries=20, locale="en")
     mount = Mount(component, timeout=None)
-    view = mount.build_view()
+    view = commit_render(mount)
     ids = {button.custom_id or "" for button in _buttons(view)}
 
     assert any("left.increment" in custom_id for custom_id in ids)

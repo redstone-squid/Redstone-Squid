@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock
 
 import discord
 
+from squid_layouts.discord.mount import Mount, MountedView
 from squid_layouts.planning.limits import LIMITS, V2Limits
 
 type ComponentPayload = dict[str, Any]
@@ -120,6 +121,17 @@ def fake_interaction(user_id: int = 1) -> Any:
         followup=SimpleNamespace(send=AsyncMock()),
         edit_original_response=AsyncMock(),
     )
+
+
+def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
+    """Stage a render and commit it with no Discord delivery — the test-side `bind`.
+
+    `Mount.build_view` only stages; handlers and the live generation move when the host
+    reports a successful delivery. Tests that never touch Discord say so with this.
+    """
+    view = mount.build_view(disabled=disabled)
+    mount.bind(None, view)
+    return view
 
 
 def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, limits: V2Limits = LIMITS) -> None:

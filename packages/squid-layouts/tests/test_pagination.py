@@ -27,7 +27,7 @@ from squid_layouts.discord import (
     conform,
     default_nav,
 )
-from squid_layouts.discord.testing import assert_within_limits, fake_interaction
+from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.planning import solve
 from squid_layouts.planning.solve import RText, _component_count, split_pages
 from squid_layouts.primitives import (
@@ -136,7 +136,7 @@ class TestMountPagination:
 
     def test_nav_row_is_synthesized(self):
         mount = Mount(Browser(), timeout=None)
-        view = mount.build_view()
+        view = commit_render(mount)
         prev_button, next_button = self._nav_buttons(view)
         assert prev_button.disabled  # first page
         assert not next_button.disabled
@@ -145,7 +145,7 @@ class TestMountPagination:
 
     async def test_next_advances_and_edges_disable(self):
         mount = Mount(Browser(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         await mount.dispatch("__page_next.entries", interaction)
@@ -159,8 +159,8 @@ class TestMountPagination:
     def test_stopping_replaced_view_keeps_new_paginator_registered(self):
         """discord.py must retain the new generation after Mount stops the old one."""
         mount = Mount(Browser(), timeout=None)
-        first = mount.build_view()
-        second = mount.build_view()
+        first = commit_render(mount)
+        second = commit_render(mount)
         message_id = 42
         store = ViewStore(cast(ConnectionState, SimpleNamespace()))
 
@@ -177,7 +177,7 @@ class TestMountPagination:
             return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
 
         mount = Mount(Browser(), timeout=None, nav=nav)
-        view = mount.build_view()
+        view = commit_render(mount)
         assert [button.label for button in self._nav_buttons(view)] == [
             f"1/{mount.presentation.cursor('entries').extent}"
         ]
@@ -188,7 +188,7 @@ class TestMountPagination:
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
         mount = Mount(Browser(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         await mount.dispatch("__page_prev.entries", interaction)
@@ -197,7 +197,7 @@ class TestMountPagination:
 
     async def test_two_pagers_advance_independently(self):
         mount = Mount(TwoBrowsers(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("__page_next.left", fake_interaction())
 
@@ -206,13 +206,13 @@ class TestMountPagination:
     async def test_changed_content_resets_only_its_pager(self):
         component = TwoBrowsers()
         mount = Mount(component, timeout=None)
-        mount.build_view()
+        commit_render(mount)
         await mount.dispatch("__page_next.left", fake_interaction())
         await mount.dispatch("__page_next.right", fake_interaction())
 
         component.left_version = "new"
         mount.invalidate()
-        mount.build_view()
+        commit_render(mount)
 
         assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {"left": 0, "right": 1}
 
@@ -343,6 +343,6 @@ def test_the_solver_counts_the_nav_it_realized():
     def nav(key: str, page: int, pages: int):
         return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
 
-    view = Mount(Browser(), timeout=None).build_view()
+    view = commit_render(Mount(Browser(), timeout=None))
     solved = solve(Browser().render(), nav=nav)
     assert _component_count(solved.children) == len(list(view.walk_children()))
