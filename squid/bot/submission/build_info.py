@@ -61,9 +61,7 @@ class BuildInfoComponent(sl.Component):
         return (self._node, edit)
 
     async def _edit(self, event: sl.PressEvent) -> None:
-        interaction = getattr(event.responder, "interaction", None)
-        if interaction is None:
-            return
+        interaction = sl.discord.native(event)
         from squid.bot.submission.ui.views import BuildEditComponent
 
         await BuildEditComponent(

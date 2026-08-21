@@ -8,7 +8,7 @@ or drop, so looking at it and acting on it belong to the same message (audit C5'
 the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
-from typing import Any, cast, override
+from typing import Any, override
 
 import discord
 
@@ -466,9 +466,7 @@ class AccountPanel(sl.Component):
         )
 
     async def _edit_page(self, event: sl.PressEvent) -> None:
-        interaction = self._interaction(event)
-        if interaction is None:
-            return
+        interaction = sl.discord.native(event)
         if self._needs_consent:
             consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
             if consent is None:
@@ -495,10 +493,7 @@ class AccountPanel(sl.Component):
         await event.acknowledge()
         if not self._needs_consent:
             return True
-        interaction = self._interaction(event)
-        if interaction is None:
-            return False
-        consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+        consent = await prompt_for_consent(sl.discord.native(event), user_id=self._author_id, locale=self.locale)
         if consent is None:
             await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
             return False
@@ -562,11 +557,6 @@ class AccountPanel(sl.Component):
                 "A hidden page still lists the creator names you hold, because that credit is what attributes your builds.",
             )
         return None
-
-    @staticmethod
-    def _interaction(event: sl.ActionEvent) -> discord.Interaction[Any] | None:
-        interaction = getattr(event.responder, "interaction", None)
-        return cast(discord.Interaction[Any], interaction) if interaction is not None else None
 
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(

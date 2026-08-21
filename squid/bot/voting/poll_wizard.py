@@ -558,8 +558,8 @@ class PollConfirmationComponent(sl.Component):
         self._mount.bind(self._mount.message, rendered)
 
     async def _publish(self, event: sl.PressEvent) -> None:
-        interaction = self._interaction(event)
-        if interaction is None or interaction.guild is None or interaction.channel is None:
+        interaction = sl.discord.native(event)
+        if interaction.guild is None or interaction.channel is None:
             await event.notice("Polls can only be published in a server.")
             return
         if self.draft.scope is PollScope.NETWORK and not (
@@ -605,11 +605,6 @@ class PollConfirmationComponent(sl.Component):
 
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
-
-    @staticmethod
-    def _interaction(event: sl.ActionEvent) -> discord.Interaction | None:
-        interaction = getattr(event.responder, "interaction", None)
-        return cast(discord.Interaction, interaction) if interaction is not None else None
 
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(self, timeout=self._timeout, lock_to=self.owner_id)
