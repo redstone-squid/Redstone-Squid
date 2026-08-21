@@ -108,7 +108,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert isinstance(container, discord.ui.Container)
         return container
 
-    async def render_node(self) -> sl.primitives.Node:
+    async def render_node(self) -> sl.LayoutNode:
         """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
@@ -135,19 +135,20 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         ladders = self._field_ladders()
 
-        def section(title: str, names: set[str]) -> sl.primitives.FieldGroup:
-            return sl.primitives.FieldGroup(
-                title,
-                tuple(
-                    sl.primitives.presets.Field(
-                        name,
-                        escape_markdown(value),
-                        alts=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
-                    )
-                    for name, value in metadata.items()
-                    if name in names
-                ),
+        # A nested section per group: each field steps its own Condense ladder independently,
+        # rather than in the lockstep the old FieldGroup ladder gave a whole group — finer
+        # granularity, not a regression. Groups with no matching fields render as nothing.
+        def group(title: str, names: set[str]) -> sl.LayoutNode | None:
+            entries = tuple(
+                sl.field(
+                    name,
+                    escape_markdown(value),
+                    fallbacks=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
+                )
+                for name, value in metadata.items()
+                if name in names
             )
+            return sl.section(sl.fields(*entries), heading=title) if entries else None
 
         status_colours: dict[Status | None, int] = {
             Status.PENDING: DISCORD_YELLOW,
@@ -160,20 +161,25 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         rows = ()
         if build.original_link is not None:
             rows = (sl.primitives.Row((sl.primitives.LinkButton("Original submission", build.original_link),)),)
-        return sl.primitives.card(
-            format_build_display_title(build, markdown=True, current_version=current_java_version),
-            await self.get_description(),
+        description = await self.get_description()
+        media = await self._get_media_urls()
+        extra_media = media[1:]
+        return sl.section(
+            # The body is the card's shock absorber: sl.truncate lets it give up characters
+            # under pressure before a field group, media, or the footer loses any, mirroring
+            # presets.card's fixed field/footer priority over the description.
+            description and sl.truncate(sl.paragraph(description)),
+            group("Review warnings", review_names),
+            group("Size & performance", performance_names),
+            group("Compatibility", {"Versions"}),
+            group("Credits", credit_names),
+            group("Resources", resource_names),
+            bool(extra_media) and sl.media(*extra_media, key="media"),
+            sl.note(footer),
+            *rows,
+            heading=format_build_display_title(build, markdown=True, current_version=current_java_version),
             accent=status_colours.get(build.submission_status, DISCORD_GREEN),
-            groups=(
-                section("Review warnings", review_names),
-                section("Size & performance", performance_names),
-                section("Compatibility", {"Versions"}),
-                section("Credits", credit_names),
-                section("Resources", resource_names),
-            ),
-            footer=footer,
-            media=await self._get_media_urls(),
-            rows=rows,
+            thumbnail=media[0] if media else None,
         )
 
     def _field_ladders(self) -> dict[str, tuple[str, ...]]:

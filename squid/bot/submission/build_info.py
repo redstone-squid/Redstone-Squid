@@ -18,7 +18,7 @@ class BuildInfoComponent(sl.Component):
     def __init__(
         self,
         build: Build,
-        node: sl.primitives.Node,
+        node: sl.LayoutNode,
         *,
         locale: str | None = None,
         ephemeral: bool = False,
