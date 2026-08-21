@@ -6,6 +6,7 @@ serialization.
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -101,26 +102,49 @@ def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> lis
     return problems
 
 
-def fake_interaction(user_id: int = 1) -> Any:
+def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = False) -> Any:
     """A minimal interaction double for exercising mounts without Discord.
 
     `response.is_done()` starts false; flip `interaction.response._done` to simulate a
-    consumed response. All send/edit surfaces are AsyncMocks.
+    consumed response, and set `interaction.response.type` to say what consumed it — a
+    non-update type is what makes `delivery.handle_from` refuse the interaction. All
+    send/edit surfaces are AsyncMocks.
     """
-    response = SimpleNamespace(
-        _done=False,
-        is_done=lambda: response._done,
-        edit_message=AsyncMock(),
-        send_message=AsyncMock(),
-        defer=AsyncMock(),
-    )
+    response = SimpleNamespace(_done=False, is_done=lambda: response._done, type=None)
+
+    def _responds(kind: discord.InteractionResponseType) -> AsyncMock:
+        """A response surface that consumes the response the way discord.py's does."""
+
+        async def record(*args: Any, **kwargs: Any) -> None:
+            response._done = True
+            response.type = kind
+
+        return AsyncMock(side_effect=record)
+
+    response.edit_message = _responds(discord.InteractionResponseType.message_update)
+    response.defer = _responds(discord.InteractionResponseType.deferred_message_update)
+    response.send_message = _responds(discord.InteractionResponseType.channel_message)
+    response.send_modal = _responds(discord.InteractionResponseType.modal)
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
-        message=SimpleNamespace(flags=SimpleNamespace(components_v2=True)),
+        message=SimpleNamespace(id=message_id, flags=SimpleNamespace(components_v2=True, ephemeral=False)),
         response=response,
-        followup=SimpleNamespace(send=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock()),
         edit_original_response=AsyncMock(),
+        expires_at=datetime.now(UTC) + timedelta(minutes=15),
+        is_expired=lambda: expired,
     )
+
+
+def fake_message(*, message_id: int = 99, ephemeral: bool = False) -> Any:
+    """A minimal message double whose `edit` returns itself, as Discord's does."""
+    message = SimpleNamespace(
+        id=message_id,
+        flags=SimpleNamespace(components_v2=True, ephemeral=ephemeral),
+        edit=AsyncMock(),
+    )
+    message.edit.return_value = message
+    return message
 
 
 def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
