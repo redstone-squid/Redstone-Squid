@@ -5,6 +5,7 @@ Rendering used to be a method that also fetched and edited its own messages, whi
 why every session had to track the messages it had sent.
 """
 
+import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
@@ -23,7 +24,7 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    card: sl.primitives.Node,
+    card: sl.LayoutNode,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> discord.ui.LayoutView:
@@ -57,10 +58,17 @@ def render_build_review(
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
     state = (sl.primitives.Sep(), sl.primitives.Text(vote_text, overflow=sl.primitives.Never()))
-    if isinstance(card, sl.primitives.Panel):
+    # The build card is now sl.section()'s semantic Section rather than a bare primitive
+    # Panel, so splice into its own children instead of nesting a second container — one
+    # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
+    if isinstance(card, sl.Section):
+        post: sl.LayoutNode = dataclasses.replace(card, children=(*card.children, *state))
+    elif isinstance(card, sl.primitives.Panel):
         post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
     else:
-        post = sl.primitives.Panel(children=(card, *state))
+        # Not currently reachable — render_node() always returns a Section — kept as a safe
+        # fallback for any future card producer that returns something else entirely.
+        post = sl.group(card, *state)
     return sl.discord.render_static([post])
 
 
