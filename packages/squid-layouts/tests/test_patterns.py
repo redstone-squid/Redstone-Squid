@@ -8,7 +8,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
-from squid_layouts.semantic import List
+from squid_layouts.semantic import List, Stack
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
@@ -142,7 +142,8 @@ def test_ranked_list_preserves_global_numbering_and_projects_entries() -> None:
         page_size=2,
     )
     rendered = ranked.render()
-    listing = next(node for node in rendered if isinstance(node, List))
+    assert isinstance(rendered, Stack)
+    listing = next(node for node in rendered.children if isinstance(node, List))
     assert listing.ordered
     assert listing.page_size == 2
     assert [item.content for item in listing.items] == [
@@ -177,7 +178,9 @@ def test_ranked_list_top_n_and_explicit_entries() -> None:
         key="top",
         top_n=2,
     )
-    listing = next(node for node in ranked.render() if isinstance(node, List))
+    rendered = ranked.render()
+    assert isinstance(rendered, Stack)
+    listing = next(node for node in rendered.children if isinstance(node, List))
     assert [item.key for item in listing.items] == ["ada", "grace"]
 
 

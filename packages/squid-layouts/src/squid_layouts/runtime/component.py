@@ -366,6 +366,52 @@ def render_component_tree(
                 child_path = item.key if path == "$" else f"{path}.{item.key}"
                 return _namespace(expand(item.component, child_path, context), item.key)
             match item:
+                case (
+                    SemanticGroup(children=children)
+                    | SemanticStack(children=children)
+                    | SemanticCluster(children=children)
+                    | SemanticSection(children=children)
+                    | SemanticArticle(children=children)
+                    | SemanticAside(children=children)
+                    | SemanticDetails(children=children)
+                ):
+                    return [replace(item, children=expand_children(children, item_path))]
+                case SemanticItems(items=items):
+                    return [
+                        replace(
+                            item,
+                            items=tuple(
+                                replace(
+                                    entry,
+                                    children=expand_children(entry.children, f"{item_path}.item.{index}"),
+                                )
+                                for index, entry in enumerate(items)
+                            ),
+                        )
+                    ]
+                case (
+                    SemanticTruncated(node=child)
+                    | SemanticSpilled(node=child)
+                    | SemanticOptionalContent(node=child)
+                    | SemanticBestEffort(node=child)
+                ):
+                    node_path = f"{item_path}.node"
+                    return [replace(item, node=one(expand_item(child, node_path), node_path))]
+                case SemanticFallbackContent(primary=primary, alternates=alternates):
+                    primary_path = f"{item_path}.primary"
+                    return [
+                        replace(
+                            item,
+                            primary=one(expand_item(primary, primary_path), primary_path),
+                            alternates=tuple(
+                                one(
+                                    expand_item(alternate, f"{item_path}.alternate.{index}"),
+                                    f"{item_path}.alternate.{index}",
+                                )
+                                for index, alternate in enumerate(alternates)
+                            ),
+                        )
+                    ]
                 case Panel(children=children, accent=accent):
                     expanded: list[Node] = []
                     for index, child in enumerate(children):
@@ -384,6 +430,12 @@ def render_component_tree(
                     return [Extension(kind, version, payload, one(expanded, f"{item_path}.fallback"))]
                 case _:
                     return [item]
+
+        def expand_children(children: Sequence[RenderNode], parent_path: str) -> tuple[LayoutNode, ...]:
+            expanded: list[LayoutNode] = []
+            for index, child in enumerate(children):
+                expanded.extend(expand_item(child, f"{parent_path}.{index}"))
+            return tuple(expanded)
 
         try:
             nodes: list[LayoutNode] = []

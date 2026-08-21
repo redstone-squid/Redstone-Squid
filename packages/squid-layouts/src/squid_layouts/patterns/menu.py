@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from squid_layouts.actions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_layouts.factories import action, actions, controlled, destination, heading, navigation, stack
 from squid_layouts.patterns._content import (
     ContentItem,
     ContentLike,
@@ -15,18 +16,7 @@ from squid_layouts.patterns._content import (
 )
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.reactivity import state
-from squid_layouts.semantic import (
-    Action,
-    ActionDisplay,
-    Actions,
-    Controlled,
-    Destination,
-    Heading,
-    LayoutNode,
-    NavigateEvent,
-    Navigation,
-    NavigationDisplay,
-)
+from squid_layouts.semantic import Action, ActionDisplay, LayoutNode, NavigateEvent, NavigationDisplay
 from squid_layouts.text import Message, ResolvedText, TextLike
 
 _MISSING = object()
@@ -154,37 +144,38 @@ class Menu(Component):
     async def _close(self, event: ActionEvent) -> None:
         await event.finish()
 
-    def _chrome(self) -> list[Action]:
+    def _chrome(self) -> tuple[Action, ...]:
         try:
             chrome = self.inject(CHROME_CONTEXT)
         except LookupError:
             chrome = DEFAULT_CHROME
-        actions: list[Action] = [Action(f"{self.key}.back", chrome.back, self._back, available=bool(self.path))]
-        if len(self.path) > 1:
-            actions.append(Action(f"{self.key}.home", chrome.home, self._home))
-        actions.append(Action(f"{self.key}.close", chrome.close, self._close))
-        return actions
+        return (
+            action(chrome.back, self._back, key=f"{self.key}.back", available=bool(self.path)),
+            *((action(chrome.home, self._home, key=f"{self.key}.home"),) if len(self.path) > 1 else ()),
+            action(chrome.close, self._close, key=f"{self.key}.close"),
+        )
 
-    def render(self) -> list[LayoutNode]:
+    def render(self) -> LayoutNode:
         current, entries = self._resolve_path(self.path)
-        nodes: list[LayoutNode] = [Heading(self.title)]
-        if current is not None:
-            nodes.append(Heading(current.label, level=3))
-            nodes.extend(render_content(self, current.content, prefix="content"))
-        if entries:
-            nodes.append(
-                Navigation(
-                    self.key,
-                    tuple(Destination(entry.key, entry.label) for entry in entries),
-                    Controlled(None, self._open),
-                    display=self.display,
-                )
+        content = render_content(self, current.content, prefix="content") if current is not None else ()
+        destinations = (
+            navigation(
+                *(destination(entry.label, key=entry.key) for entry in entries),
+                key=self.key,
+                current=controlled(None, self._open),
+                display=self.display,
             )
-        nodes.append(
-            Actions(
-                tuple(self._chrome()),
+            if entries
+            else None
+        )
+        return stack(
+            heading(self.title),
+            heading(current.label, level=3) if current is not None else None,
+            *content,
+            destinations,
+            actions(
+                *self._chrome(),
                 key=f"{self.key}.chrome",
                 display=ActionDisplay.INDIVIDUAL,
-            )
+            ),
         )
-        return nodes
