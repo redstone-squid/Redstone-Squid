@@ -75,8 +75,13 @@ class PresentationSession:
         else:
             self.cursors.pop(key, None)
 
-    def selection(self, key: str) -> SelectionState:
-        return self.selections.get(key, SelectionState())
+    def selection(self, key: str, *, initial: tuple[str, ...] = ()) -> SelectionState:
+        """The stored selection, or ``initial`` when this key was never written.
+
+        The miss has to stay distinguishable from an explicit empty selection: a reader who
+        backed out of an item chose ``()``, and re-seeding them into it would trap them.
+        """
+        return self.selections.get(key, SelectionState(initial))
 
     def select(self, key: str, selected: tuple[str, ...]) -> None:
         self.selections[key] = SelectionState(selected)
