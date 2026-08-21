@@ -8,7 +8,7 @@ from enum import Enum
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
-from squid_layouts.document import DocumentLike, as_document
+from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
@@ -344,7 +344,7 @@ class _StrategyAttempt:
 def _attempt_strategy(
     assignment: StrategyAssignment,
     *,
-    document,
+    document: Document,
     target: TargetProfile,
     limits: V2Limits,
     chrome: Chrome,
@@ -380,7 +380,7 @@ def _attempt_strategy(
 
 def _search_strategies(
     *,
-    document,
+    document: Document,
     target: TargetProfile,
     limits: V2Limits,
     chrome: Chrome,
@@ -481,6 +481,49 @@ def plan(
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
+    cache_key = _plan_cache_key(
+        (document,),
+        target=target,
+        limits=limits,
+        chrome=chrome,
+        localization=localization,
+        presentation=presentation,
+        reservation=reservation,
+        strict=strict,
+        nav=nav,
+        page=page,
+        search_budget=search_budget,
+    )
+    cached = cache.get(cache_key) if cache is not None else None
+    if cached is not None:
+        broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
+        semantic = lower_semantics(
+            document.children,
+            limits=limits,
+            chrome=chrome,
+            localization=localization,
+            session=presentation,
+            pages=broker,
+            capabilities=target.capabilities,
+            strategies=dict(cached.strategies),
+        )
+        lowered = _lower_children(semantic.nodes, target, limits)
+        _validate(lowered, limits)
+        converter = _collect_cached_bindings(lowered, cached.scene, nav)
+        resources = {f"asset:{asset.key}": asset for asset in document.assets}
+        return PlanResult(
+            scene=cached.scene,
+            bindings=converter.bindings,
+            report=cached.report,
+            resources=resources,
+            metrics=PlanMetrics(
+                states_explored=cached.states_explored,
+                cache_hit=True,
+                search_fallback=cached.search_fallback,
+            ),
+            session_updates=cached.session_updates,
+        )
+
     attempt = _search_strategies(
         document=document,
         target=target,
@@ -497,34 +540,6 @@ def plan(
     semantic = attempt.semantic
     lowered = attempt.lowered
     solved = attempt.solved
-    cache_key = _plan_cache_key(
-        (document,),
-        target=target,
-        limits=limits,
-        chrome=chrome,
-        localization=localization,
-        presentation=presentation,
-        reservation=reservation,
-        strict=strict,
-        nav=nav,
-        page=page,
-        search_budget=search_budget,
-    )
-    if cache is not None and _cacheable(lowered) and (cached := cache.get(cache_key)) is not None:
-        converter = _collect_cached_bindings(lowered, cached.scene, nav)
-        resources = {f"asset:{asset.key}": asset for asset in document.assets}
-        return PlanResult(
-            scene=cached.scene,
-            bindings=converter.bindings,
-            report=cached.report,
-            resources=resources,
-            metrics=PlanMetrics(
-                states_explored=semantic.states_explored,
-                cache_hit=True,
-                search_fallback=semantic.search_fallback,
-            ),
-            session_updates=cached.session_updates,
-        )
     root_events: tuple[PlanEvent, ...] = ()
     if solved.components > limits.total_components:
         local_pagers = [*broker.pagers, *solved.pagers]
@@ -608,7 +623,17 @@ def plan(
         session_updates=updates,
     )
     if cache is not None and _cacheable(lowered):
-        cache.put(cache_key, CachedPlan(scene, report, updates))
+        cache.put(
+            cache_key,
+            CachedPlan(
+                scene,
+                report,
+                updates,
+                attempt.assignment.strategies,
+                semantic.states_explored,
+                semantic.search_fallback,
+            ),
+        )
     return result
 
 
