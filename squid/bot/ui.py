@@ -9,6 +9,7 @@ predecessors, so call sites migrate by changing an import line.
 """
 
 from collections.abc import Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -76,6 +77,7 @@ def chrome_for(locale: str | None) -> ui.Chrome:
         and_n_more=lambda count: t(locale, _("…and {count} more."), count=count),
         see_attachment=t(locale, _("See attachment")),
         not_yours=t(locale, _("These list controls belong to someone else.")),
+        session_ended=t(locale, _("This session has ended.")),
         previous=t(locale, _("Previous")),
         next=t(locale, _("Next")),
         back=t(locale, _("Back")),
@@ -208,7 +210,7 @@ def create_mount(
     locale: str | None = None,
     chrome: ui.Chrome | None = None,
     timeout: float = 180,
-    lock_to: int | None = None,
+    lock_to: int | AbstractSet[int] | None = None,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
     return ui.discord.Mount(
@@ -226,7 +228,7 @@ async def send_component(
     *,
     locale: str | None = None,
     timeout: float = 180,
-    lock_to: int | None = None,
+    lock_to: int | AbstractSet[int] | None = None,
     visibility: Visibility = "public",
 ) -> ui.discord.Mount:
     """Mount a component and send it as the reply to a command."""

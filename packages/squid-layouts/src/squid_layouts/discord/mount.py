@@ -12,6 +12,7 @@ import io
 import logging
 import secrets
 from collections.abc import Awaitable, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -43,6 +44,12 @@ class ErrorHook(Protocol):
     """Host-provided handler for exceptions escaping a component callback."""
 
     def __call__(self, interaction: discord.Interaction, error: Exception, source: str) -> Awaitable[None]: ...
+
+
+class FinishHook(Protocol):
+    """Observer told that a mount has finished, after its teardown."""
+
+    def __call__(self, mount: Mount) -> Awaitable[None]: ...
 
 
 class Scheduler(Protocol):
@@ -148,7 +155,7 @@ class Mount:
         limits: V2Limits = LIMITS,
         strict: bool = False,
         timeout: float | None = 900,
-        lock_to: int | None = None,
+        lock_to: int | AbstractSet[int] | None = None,
         on_error: ErrorHook | None = None,
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
@@ -163,7 +170,11 @@ class Mount:
         self.limits = limits
         self.strict = strict
         self.timeout = timeout
-        self.lock_to = lock_to
+        # Normalized so dispatch has one shape to check. The single-owner call sites pass a
+        # bare id and never see the difference.
+        self.lock_to: frozenset[int] | None = (
+            None if lock_to is None else frozenset((lock_to,) if isinstance(lock_to, int) else lock_to)
+        )
         self.on_error = on_error
         self.scheduler = scheduler
         self._handle: deliver.EditHandle | None = None
@@ -177,6 +188,8 @@ class Mount:
         self._pending: _Candidate | None = None
         self._dirty = False
         self._finished = False
+        self._finish_hooks: list[FinishHook] = []
+        self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
 
     @property
@@ -188,6 +201,11 @@ class Mount:
     def pending(self) -> bool:
         """Whether a render is staged that Discord has not seen."""
         return self._dirty
+
+    @property
+    def finished(self) -> bool:
+        """Whether this mount has stopped dispatching, by close, timeout or error."""
+        return self._finished
 
     # --- Rendering ---------------------------------------------------------------------
 
@@ -409,8 +427,15 @@ class Mount:
         *,
         generation: int | None = None,
     ) -> None:
-        """The funnel: author lock -> handler -> flush."""
-        if self.lock_to is not None and interaction.user.id != self.lock_to:
+        """The funnel: finished check -> author lock -> handler -> flush."""
+        if self._finished:
+            # A finished mount can still be on screen with live controls: its disable-edit
+            # may have failed, or a replacement may have taken over the session while this
+            # message stayed visible. Say so rather than running a handler against state
+            # nobody will see again.
+            await deliver.respond_text(interaction, self.chrome.session_ended, ephemeral=True)
+            return
+        if self.lock_to is not None and interaction.user.id not in self.lock_to:
             await deliver.respond_text(interaction, self.chrome.not_yours, ephemeral=True)
             return
         binding = self._handlers.get(key)
@@ -532,6 +557,10 @@ class Mount:
             # The terminal tree is never committed, so `finish` unmounts the live one once.
             candidate.view.stop()
             self._teardown()
+            # In the `finally` rather than after it: a raising disable-edit propagates past
+            # this block, and the mount is finished and torn down either way. An observer
+            # that missed it would hold a dead mount forever.
+            await self._run_finish_hooks()
 
     async def refresh(self) -> None:
         """Out-of-band re-render (background state change, not an interaction).
@@ -562,6 +591,31 @@ class Mount:
             return
         self._commit(candidate)
 
+    def on_finish(self, callback: FinishHook) -> None:
+        """Call `callback` once this mount has finished, after its teardown.
+
+        Fires from every terminal path -- `finish`, `finish_via`, and the timeout that
+        delegates to `finish` -- including one whose disable-edit failed. Callbacks run in
+        registration order, and an exception is logged and swallowed: a broken observer must
+        not abort another's cleanup, nor teardown itself.
+
+        Calling `finish` from inside a hook is a no-op, so an observer that cascades to other
+        mounts cannot loop back into this one. A hook registered on an already-finished mount
+        never fires -- `finished` is the caller's to check first.
+        """
+        self._finish_hooks.append(callback)
+
+    async def _run_finish_hooks(self) -> None:
+        # Snapshotted because a hook may register another, which belongs to no firing.
+        if self._hooks_fired:
+            return
+        self._hooks_fired = True
+        for hook in tuple(self._finish_hooks):
+            try:
+                await hook(self)
+            except Exception:
+                logger.exception("finish hook failed for mount %s", self.id)
+
     async def finish(self, *, disable: bool = True) -> None:
         """Stop dispatching; optionally leave the message with its controls disabled."""
         if self._finished:
@@ -579,6 +633,7 @@ class Mount:
             finally:
                 candidate.view.stop()
         self._teardown()
+        await self._run_finish_hooks()
 
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""

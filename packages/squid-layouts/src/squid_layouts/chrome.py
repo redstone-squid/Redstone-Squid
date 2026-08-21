@@ -27,6 +27,8 @@ class Chrome:
     """Pointer left in place of content that moved to an attached file."""
     not_yours: str = "These controls belong to someone else."
     """Ephemeral rejection shown when an author-locked control is used by another user."""
+    session_ended: str = "This session has ended."
+    """Ephemeral rejection shown when a control on a finished mount is clicked anyway."""
     previous: str = "Previous"
     next: str = "Next"
     back: str = "Back"
