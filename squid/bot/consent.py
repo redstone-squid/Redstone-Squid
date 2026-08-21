@@ -329,18 +329,21 @@ def _is_context(target: ConsentTarget) -> bool:
     return hasattr(target, "author")
 
 
-async def _send(target: ConsentTarget, view: discord.ui.LayoutView, *, ephemeral: bool) -> discord.Message:
-    """Send one view through whichever surface the caller arrived on."""
+def _destination(target: ConsentTarget) -> sl.discord.Destination:
+    """Where a consent prompt goes, through whichever surface the caller arrived on.
+
+    Both surfaces hand a message back: the prompt is waited on, so it needs credentials to
+    edit itself with when the answer lands or the timeout expires.
+    """
+    ephemeral = _default_ephemeral(target)
     if _is_context(target):
-        context = cast(commands.Context[Any], target)
-        return await context.send(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
-    interaction = cast(discord.Interaction[Any], target)
-    if interaction.response.is_done():
-        return await interaction.followup.send(
-            view=view, ephemeral=ephemeral, wait=True, allowed_mentions=no_mentions()
-        )
-    await interaction.response.send_message(view=view, ephemeral=ephemeral, allowed_mentions=no_mentions())
-    return await interaction.original_response()
+        return sl.discord.reply_to(cast(commands.Context[Any], target), ephemeral=ephemeral)
+    return sl.discord.respond_to(cast(discord.Interaction[Any], target), ephemeral=ephemeral, wait=True)
+
+
+async def _send(target: ConsentTarget, view: discord.ui.LayoutView) -> None:
+    """Send one plain layout where the prompt itself would have gone."""
+    await _destination(target)(view, [])
 
 
 def _default_ephemeral(target: ConsentTarget) -> bool:
@@ -471,9 +474,7 @@ async def prompt_for_consent(
             timeout=timeout,
         )
     mount = component.mount()
-    rendered = mount.build_view()
-    message = await _send(target, rendered, ephemeral=_default_ephemeral(target))
-    mount.bind(message, rendered)
+    await mount.send(_destination(target))
     return await component.wait()
 
 
@@ -501,11 +502,7 @@ async def ensure_consented_account(
 
     consent = await prompt_for_consent(target, user_id=user.id, locale=locale, timeout=timeout)
     if consent is None:
-        await _send(
-            target,
-            text_layout(t(locale, _("Cancelled. No account information was stored."))),
-            ephemeral=_default_ephemeral(target),
-        )
+        await _send(target, text_layout(t(locale, _("Cancelled. No account information was stored."))))
         return None
 
     # One write, so a receipt is never separated from the row it belongs to.

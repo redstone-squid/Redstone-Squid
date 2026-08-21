@@ -1243,17 +1243,7 @@ class BuildEditComponent(sl.Component):
                 else sl.status(t(self.locale, _("Build preview unavailable.")))
             )
         mount = self.mount()
-        rendered = mount.build_view()
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=ephemeral)
-        message = await interaction.followup.send(
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=ephemeral,
-            allowed_mentions=no_mentions(),
-            wait=True,
-        )
-        mount.bind(message, rendered)
+        await mount.send(sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True))
 
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)

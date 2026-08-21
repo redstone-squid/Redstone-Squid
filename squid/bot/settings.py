@@ -9,6 +9,7 @@ from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
+from squid.bot.ui import destination
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
@@ -50,13 +51,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         )
         await view.load()
         mount = view.mount()
-        rendered = mount.build_view()
-        message = await ctx.send(
-            view=rendered,
-            allowed_mentions=no_mentions(),
-            ephemeral=personal(ctx),
-        )
-        mount.bind(message, rendered)
+        await mount.send(destination(ctx, visibility="personal", locale=locale))
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
         """What this caller may do, asked once so the panel can render only that.
