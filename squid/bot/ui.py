@@ -118,7 +118,7 @@ async def reply(
     return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.discord.delivery.no_mentions(), **extra)
 
 
-def render_item(node: ui.primitives.Node, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:
+def render_item(node: ui.LayoutNode, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:
     """Render one node to a detached item, for composition into a larger layout.
 
     The build card uses this: it renders as an engine-solved Container that callers (vote

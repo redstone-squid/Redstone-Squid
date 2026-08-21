@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-BuildRenderer = Callable[[Build], Awaitable[sl.primitives.Node]]
+BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode]]
 
 
 class SearchResultsView(sl.Component):
@@ -51,7 +51,7 @@ class SearchResultsView(sl.Component):
         self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
-        self._build_node: sl.primitives.Node | None = None
+        self._build_node: sl.LayoutNode | None = None
         self._compat_mount: sl.discord.Mount | None = None
         self._compat_disabled = False
         self._bound_message: discord.Message | None = None
