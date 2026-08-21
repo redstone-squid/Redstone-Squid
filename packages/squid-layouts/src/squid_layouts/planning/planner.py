@@ -12,7 +12,7 @@ from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.cache import CachedPlan, PlanCache
-from squid_layouts.planning.cursors import PageBroker
+from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.solve import (
@@ -65,7 +65,6 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneNode,
     SceneOption,
-    ScenePager,
     ScenePanel,
     SceneRoutedButton,
     SceneRow,
@@ -370,20 +369,20 @@ def plan(
                 cache_hit=True,
                 search_fallback=semantic.search_fallback,
             ),
+            session_updates=cached.session_updates,
         )
+    # No `page=`: which page shows is settled below, once the page count exists.
     solved = solve(
         lowered,
         limits=limits,
         chrome=chrome,
         strict=False,
         reserved_text=reservation.get("display_text"),
-        page=page,
         nav=nav,
     )
-    root_pagers: tuple[ScenePager, ...] = ()
     root_events: tuple[PlanEvent, ...] = ()
     if solved.components > limits.total_components:
-        local_pagers = semantic.pagers + _pagers(solved)
+        local_pagers = [*broker.pagers, *solved.pagers]
         if local_pagers:
             keys = ", ".join(repr(pager.key) for pager in local_pagers)
             message = (
@@ -400,26 +399,25 @@ def plan(
             )
             message = f"{solved.components} components exceed target maximum {limits.total_components}; {remedy}"
             raise UnsolvableLayoutError(message)
-        solved, root_pager = _root_paginate(
+        solved, root_pages = _root_paginate(
             lowered,
             key=document.key,
             target_limits=limits,
             chrome=chrome,
             reserved_text=reservation.get("display_text"),
-            page=page,
             nav=nav,
-            session=presentation,
+            broker=broker,
         )
-        root_pagers = (root_pager,)
         root_events = (
             PlanEvent(
                 code="pagination.root",
                 path="$",
-                message=f"Document {document.key!r} uses {root_pager.pages} lossless root pages",
+                message=f"Document {document.key!r} uses {root_pages} lossless root pages",
                 severity=PlanSeverity.ADAPTATION,
-                after={"pages": root_pager.pages},
+                after={"pages": root_pages},
             ),
         )
+    _reconcile_pagers(solved, broker)
     if strict and solved.notes:
         raise LayoutDegradedError("; ".join(solved.notes))
     if any(note.startswith("Never nodes need") for note in solved.notes):
@@ -432,7 +430,7 @@ def plan(
         target_version=target.version,
         children=converter.children(solved.children),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in document.assets),
-        pagers=semantic.pagers + root_pagers + _pagers(solved),
+        pagers=broker.pagers,
     )
     fingerprint = SceneCodec.fingerprint(scene)
     report = PlanReport(
@@ -452,6 +450,7 @@ def plan(
     )
     resources = dict(converter.resources)
     resources.update({f"asset:{asset.key}": asset for asset in document.assets})
+    updates = semantic.updates + broker.updates
     result = PlanResult(
         scene=scene,
         bindings=converter.bindings,
@@ -461,22 +460,34 @@ def plan(
             states_explored=semantic.states_explored,
             search_fallback=semantic.search_fallback,
         ),
+        session_updates=updates,
     )
     if cache is not None and _cacheable(lowered):
-        cache.put(cache_key, CachedPlan(scene, report))
+        cache.put(cache_key, CachedPlan(scene, report, updates))
     return result
 
 
-def _pagers(solved: SolvedLayout) -> tuple[ScenePager, ...]:
-    return tuple(
-        ScenePager(
-            pager.key,
-            pager.page,
-            pager.pages,
-            hashlib.blake2s("\\0".join(pager.fragments).encode(), digest_size=16).hexdigest(),
+def _reconcile_pagers(solved: SolvedLayout, broker: PageBroker) -> None:
+    """Move each solved pager to the page its reader belongs on.
+
+    The solver has to render *some* page to measure one, and it picks before anyone knows
+    how many there are — the count is an output of fitting. This is the first moment a
+    stored cursor can be reconciled against it, and because the page is a projection it
+    costs a slot rewrite rather than a second solve. The mount used to do this by drawing
+    twice.
+    """
+    indices: dict[str, int] = {}
+    for pager in solved.pagers:
+        request = PageRequest(
+            key=pager.key,
+            pages=pager.pages,
+            fingerprint=content_fingerprint(pager.fragments),
+            initial="end" if pager.initial else "start",
         )
-        for pager in solved.pagers
-    )
+        grant = broker.grant(request)
+        broker.record(request, grant.index)
+        indices[pager.key] = grant.index
+    solved.repage(indices)
 
 
 def _root_paginate(
@@ -486,10 +497,9 @@ def _root_paginate(
     target_limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    page: PageState,
     nav: PageNav,
-    session: PresentationSession,
-) -> tuple[SolvedLayout, ScenePager]:
+    broker: PageBroker,
+) -> tuple[SolvedLayout, int]:
     maximum_pages = max(1, len(nodes))
 
     def solve_page(children: Sequence[Node], index: int, pages: int) -> SolvedLayout:
@@ -503,7 +513,6 @@ def _root_paginate(
             chrome=chrome,
             strict=False,
             reserved_text=reserved_text,
-            page=page,
             nav=nav,
         )
 
@@ -527,22 +536,10 @@ def _root_paginate(
     if current:
         pages.append(current)
 
-    requested = session.cursor(key).index
-    if isinstance(page, Mapping):
-        requested = page.get(key, requested)
-    elif isinstance(page, int):
-        requested = page
-    selected = max(0, min(requested, len(pages) - 1))
-    solved = solve_page(pages[selected], selected, len(pages))
-    fingerprint = _logical_fingerprint(nodes)
-    session.anchor_cursor(
-        key,
-        selected,
-        None,
-        extent=len(pages),
-        content_fingerprint=fingerprint,
-    )
-    return solved, ScenePager(key, selected, len(pages), fingerprint)
+    request = PageRequest(key=key, pages=len(pages), fingerprint=_logical_fingerprint(nodes))
+    grant = broker.grant(request)
+    broker.record(request, grant.index)
+    return solve_page(pages[grant.index], grant.index, grant.pages), grant.pages
 
 
 def _logical_fingerprint(nodes: Sequence[object]) -> str:

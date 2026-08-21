@@ -474,6 +474,7 @@ class TestDeliveryAtomicity:
 
         live_generation = mount._generation
         live_handlers = mount._handlers
+        live_strategies = dict(mount.presentation.strategies)
         panel.entries.append("entry 6")  # a new fingerprint: the staged render resets the cursor
         panel.show_child = True  # a component the failed generation must not mount
 
@@ -486,6 +487,9 @@ class TestDeliveryAtomicity:
         assert mount._dirty
         assert mounted == []
         assert mount.presentation.cursor("entries").index == 1
+        # Planning only reads the session, so a discarded candidate leaves behind none of
+        # its writes — not just the cursors the old snapshot happened to restore.
+        assert mount.presentation.strategies == live_strategies
 
     async def test_a_click_after_a_failed_edit_still_runs_and_repairs_the_message(self, monkeypatch):
         mounted: list[str] = []
