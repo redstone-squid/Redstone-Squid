@@ -41,6 +41,9 @@ class PageContext:
 
 type NavFactory = Callable[[PageContext], Sequence[Node]]
 
+type PageNav = Callable[[str, int, int], Sequence[Node]]
+"""The planner-facing form: a mount adapts its `NavFactory` to this before planning."""
+
 
 def page_controls(chrome: Chrome, context: PageContext) -> Row:
     """The Previous/Next row, disabled at the ends rather than hidden."""
