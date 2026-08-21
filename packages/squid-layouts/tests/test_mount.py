@@ -14,6 +14,7 @@ from squid_layouts import (
     Component,
     Document,
     InlineAsset,
+    LayoutInvariantError,
     LayoutNode,
     PressEvent,
     ReactiveWriteError,
@@ -47,6 +48,7 @@ from squid_layouts.primitives import (
     SelectMenu,
     Text,
 )
+from squid_layouts.runtime import ComponentRuntime
 
 
 class Counter(Component):
@@ -1116,3 +1118,96 @@ class TestEditHandles:
         assert _Stale.writes == 1
         assert mount.handle is None
         assert mount.pending
+
+
+class Leaf(Component):
+    """A component that only knows what it renders once its `on_load` has run."""
+
+    label: str = state("")
+
+    def __init__(self, log: list[str], name: str = "leaf") -> None:
+        self.log = log
+        self.name = name
+
+    async def on_load(self) -> None:
+        self.log.append(f"load:{self.name}")
+        self.label = f"{self.name} loaded"
+
+    def render(self):
+        self.log.append(f"render:{self.name}")
+        return Text(self.label)
+
+
+class Host(Component):
+    """A loading parent whose child is only reachable through its loaded render."""
+
+    ready: bool = state(default=False)
+
+    def __init__(self, log: list[str], child: Component) -> None:
+        self.log = log
+        self.child = child
+
+    async def on_load(self) -> None:
+        self.log.append("load:host")
+        self.ready = True
+
+    def render(self):
+        self.log.append("render:host")
+        nodes: list[LayoutNode] = [Text("host")]
+        if self.ready:
+            nodes.append(self.embed(self.child, key="child"))
+        return nodes
+
+
+class TestDeferredExpansion:
+    """A discovery render: what `on_load` needs to run before anything renders."""
+
+    def test_expansion_stops_at_a_deferred_child(self):
+        log: list[str] = []
+        child = Leaf(log, "child")
+        host = Host(log, child)
+        host.ready = True
+        runtime = ComponentRuntime(host)
+
+        tree = runtime.render(defer=lambda component: component is child)
+
+        assert tree.deferred == (child,)
+        assert "render:child" not in log
+        # Set before the defer check, so a deferred child's on_load still invalidates.
+        assert child._parent is host
+
+    def test_a_deferred_child_still_invalidates_through_its_parent(self):
+        log: list[str] = []
+        child = Leaf(log, "child")
+        host = Host(log, child)
+        host.ready = True
+        invalidated: list[bool] = []
+        runtime = ComponentRuntime(host, on_invalidate=lambda: invalidated.append(True))
+        runtime.render(defer=lambda component: component is child)
+
+        child.label = "written by a load"
+
+        assert invalidated
+
+    def test_a_discovery_tree_cannot_be_committed(self):
+        log: list[str] = []
+        child = Leaf(log, "child")
+        host = Host(log, child)
+        host.ready = True
+        runtime = ComponentRuntime(host)
+        tree = runtime.render(defer=lambda component: component is child)
+
+        with pytest.raises(LayoutInvariantError, match="discovery render"):
+            runtime.commit(tree)
+
+    def test_no_defer_predicate_expands_everything(self):
+        log: list[str] = []
+        child = Leaf(log, "child")
+        host = Host(log, child)
+        host.ready = True
+        runtime = ComponentRuntime(host)
+
+        tree = runtime.render()
+
+        assert tree.deferred == ()
+        assert "render:child" in log
