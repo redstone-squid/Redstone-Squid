@@ -3,6 +3,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 
+from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.scene.model import PlanReport, SceneDocument
 
 
@@ -10,6 +11,8 @@ from squid_layouts.scene.model import PlanReport, SceneDocument
 class CachedPlan:
     scene: SceneDocument
     report: PlanReport
+    session_updates: tuple[SessionUpdate, ...] = ()
+    """Replayed on a hit: the session is part of the key, so these stay correct."""
 
 
 class PlanCache:

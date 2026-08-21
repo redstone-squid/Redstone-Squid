@@ -32,7 +32,7 @@ from squid_layouts.primitives.nodes import Node
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
-from squid_layouts.runtime.presentation import CursorState, PresentationSession
+from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import readonly_transaction, transaction
 from squid_layouts.scene.model import SceneButton, SceneSelect
 
@@ -133,8 +133,8 @@ class _Candidate:
     handlers: dict[str, ActionBinding]
     generation: int
     assets: tuple[Asset, ...]
-    # Page positions as of the last commit; drawing moves them, a failed delivery restores them.
-    cursors: dict[str, CursorState]
+    # Presentation writes this render earned; a failed delivery simply drops them.
+    session_updates: tuple[SessionUpdate, ...]
 
 
 class Mount:
@@ -184,24 +184,21 @@ class Mount:
     def build_view(self, *, disabled: bool = False) -> MountedView:
         """Stage a render of the component's current state into a fresh view.
 
-        Staging is not committing: handlers, lifecycle hooks and the live generation only
-        move in :meth:`bind`, once the host's own delivery has landed. It is not
-        side-effect free either — the component tree is rendered and page cursors advance.
+        Staging is not committing: handlers, lifecycle hooks, page positions and the live
+        generation only move in :meth:`bind`, once the host's own delivery has landed.
+        Rendering the component tree is the one side effect staging cannot avoid.
         """
         pending = self._pending
-        candidate = self._stage(disabled=disabled, cursors=pending.cursors if pending is not None else None)
+        candidate = self._stage(disabled=disabled)
         if pending is not None:
             pending.view.stop()
         self._pending = candidate
         return candidate.view
 
-    def _stage(self, *, disabled: bool = False, cursors: dict[str, CursorState] | None = None) -> _Candidate:
+    def _stage(self, *, disabled: bool = False) -> _Candidate:
         """Render and draw one candidate generation, publishing none of it."""
         self._issued += 1
         generation = self._issued
-        # Baseline to return to if delivery fails; a caller staging over an undelivered
-        # candidate passes that candidate's baseline rather than its half-moved cursors.
-        baseline = dict(self.presentation.cursors) if cursors is None else cursors
         tree = self.runtime.render()
         rendered = Document(tree.nodes, tree.assets, tree.document_key)
         handlers: dict[str, ActionBinding] = {}
@@ -239,7 +236,6 @@ class Mount:
                 limits=self.limits,
                 chrome=self.chrome,
                 strict=self.strict,
-                page={key: cursor.index for key, cursor in self.presentation.cursors.items()},
                 nav=nav,
                 session=self.presentation,
                 cache=self.runtime.plan_cache,
@@ -250,34 +246,6 @@ class Mount:
             return composition.view, composition
 
         view, composition = draw()
-        pagers = composition.plan.scene.pagers
-        changed = {
-            pager.key
-            for pager in pagers
-            if (cursor := self.presentation.cursor(pager.key)).content_fingerprint
-            and cursor.content_fingerprint != pager.content_fingerprint
-            and cursor.anchor is None
-        }
-        if changed:
-            for key in changed:
-                self.presentation.reset_cursor(key)
-            view.stop()
-            view, composition = draw()
-            pagers = composition.plan.scene.pagers
-
-        active = {pager.key for pager in pagers}
-        for key in tuple(self.presentation.cursors):
-            if key not in active:
-                self.presentation.reset_cursor(key)
-        for pager in pagers:
-            cursor = self.presentation.cursor(pager.key)
-            self.presentation.anchor_cursor(
-                pager.key,
-                pager.page,
-                cursor.anchor,
-                extent=pager.pages,
-                content_fingerprint=pager.content_fingerprint,
-            )
         assets = tuple(
             asset
             for scene_asset in composition.plan.scene.assets
@@ -285,10 +253,11 @@ class Mount:
         )
         if disabled:
             _disable_all(view)
-        return _Candidate(view, composition, tree, handlers, generation, assets, baseline)
+        return _Candidate(view, composition, tree, handlers, generation, assets, composition.plan.session_updates)
 
     def _commit(self, candidate: _Candidate) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
+        apply_updates(self.presentation, candidate.session_updates)
         self._handlers = candidate.handlers
         self._generation = candidate.generation
         self.runtime.commit(candidate.tree)
@@ -298,10 +267,12 @@ class Mount:
         self._swap_view(candidate.view)
 
     def _rollback(self, candidate: _Candidate) -> None:
-        """Discard an undelivered candidate; the message still shows the live generation."""
+        """Discard an undelivered candidate; the message still shows the live generation.
+
+        Nothing to unwind: planning only read the session, so dropping the candidate drops
+        its presentation writes with it.
+        """
         candidate.view.stop()
-        self.presentation.cursors.clear()
-        self.presentation.cursors.update(candidate.cursors)
         self._dirty = True
         if self._pending is candidate:
             self._pending = None

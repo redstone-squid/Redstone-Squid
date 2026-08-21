@@ -1,5 +1,6 @@
 """Closed, frontend-neutral vocabulary for presentation-only state."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 
@@ -87,11 +88,61 @@ class PresentationSession:
         self.disclosures[key] = DisclosureState(open_)
 
     def strategy(self, key: str, adapter_id: str, adapter_version: int) -> str | None:
+        """The remembered choice, or None when it was made by a different adapter.
+
+        A miss leaves the stale entry alone: whoever asked is about to choose again and
+        overwrite it, and reading is not a good enough reason to mutate a session the
+        caller may yet decide to throw away.
+        """
         state = self.strategies.get(key)
         if state is None or state.adapter_id != adapter_id or state.adapter_version != adapter_version:
-            self.strategies.pop(key, None)
             return None
         return state.strategy_id
 
     def remember_strategy(self, key: str, adapter_id: str, adapter_version: int, strategy_id: str) -> None:
         self.strategies[key] = StrategyState(key, adapter_id, adapter_version, strategy_id)
+
+
+# --- Planning's writes, staged ------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class CursorUpdate:
+    key: str
+    state: CursorState
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyUpdate:
+    key: str
+    state: StrategyState
+
+
+@dataclass(frozen=True, slots=True)
+class ActivePagers:
+    """The keys still backed by a pager; every other cursor is forgotten."""
+
+    keys: frozenset[str]
+
+
+type SessionUpdate = CursorUpdate | StrategyUpdate | ActivePagers
+"""One presentation write that planning decided on but did not perform.
+
+Planning only reads the session, and returns what it would have written. A frontend
+applies these once its render has actually reached the user, so a failed delivery leaves
+the reader exactly where the message still shows them.
+"""
+
+
+def apply_updates(session: PresentationSession, updates: Sequence[SessionUpdate]) -> None:
+    """Commit planning's presentation writes, in the order planning made them."""
+    for update in updates:
+        match update:
+            case CursorUpdate(key=key, state=cursor):
+                session.cursors[key] = cursor
+            case StrategyUpdate(key=key, state=strategy):
+                session.strategies[key] = strategy
+            case ActivePagers(keys=keys):
+                for stale in tuple(session.cursors):
+                    if stale not in keys:
+                        del session.cursors[stale]

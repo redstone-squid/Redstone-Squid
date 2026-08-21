@@ -3,11 +3,16 @@
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.presentation import (
+    ActivePagers,
     CursorState,
+    CursorUpdate,
     DisclosureState,
     PresentationSession,
     SelectionState,
+    SessionUpdate,
     StrategyState,
+    StrategyUpdate,
+    apply_updates,
 )
 from squid_layouts.runtime.reactivity import ReactiveWriteError, batch, computed, state, transaction
 
@@ -21,15 +26,20 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "ActivePagers",
     "Component",
     "ComponentRuntime",
     "ContextKey",
     "CursorState",
+    "CursorUpdate",
     "DisclosureState",
     "PresentationSession",
     "ReactiveWriteError",
     "SelectionState",
+    "SessionUpdate",
     "StrategyState",
+    "StrategyUpdate",
+    "apply_updates",
     "batch",
     "computed",
     "state",

@@ -8,6 +8,9 @@ before it runs, so they cannot share a slicer.
 What they can share is everything around the slice — where the reader was, whether the
 content still matches what they were reading, what chrome to draw, and what to write back.
 That is this module. A slicer asks `grant` where to cut, cuts, then `record`s what it did.
+
+The broker never writes to the session. It reads, and collects the writes it would have
+made, so the frontend can apply them only once the render has reached the reader.
 """
 
 from collections.abc import Mapping, Sequence
@@ -20,7 +23,13 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.pagination import PageNav
 from squid_layouts.primitives.constraints import Never
 from squid_layouts.primitives.nodes import Footer, Node
-from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.runtime.presentation import (
+    ActivePagers,
+    CursorState,
+    CursorUpdate,
+    PresentationSession,
+    SessionUpdate,
+)
 from squid_layouts.scene.model import ScenePager
 
 
@@ -59,6 +68,7 @@ class PageBroker:
     """Explicit `page=` from the caller: "show page N", outranking the stored position."""
     _pagers: list[ScenePager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
+    _updates: list[SessionUpdate] = field(default_factory=list, init=False)
 
     def grant(self, request: PageRequest) -> PageGrant:
         """Resolve one keyed position. The precedence here is the whole policy.
@@ -95,13 +105,7 @@ class PageBroker:
         if pages <= 1:
             return
         self._pagers.append(ScenePager(request.key, index, pages, request.fingerprint))
-        self.session.anchor_cursor(
-            request.key,
-            index,
-            anchor,
-            extent=pages,
-            content_fingerprint=request.fingerprint,
-        )
+        self._updates.append(CursorUpdate(request.key, CursorState(index, anchor, pages, request.fingerprint)))
 
     def controls(self, key: str, index: int, pages: int) -> list[Node]:
         """The footer and nav for one pager, identical wherever the slice came from.
@@ -119,3 +123,13 @@ class PageBroker:
     @property
     def pagers(self) -> tuple[ScenePager, ...]:
         return tuple(self._pagers)
+
+    @property
+    def updates(self) -> tuple[SessionUpdate, ...]:
+        """The cursor writes this plan earned, ending with what is still on screen.
+
+        The trailing `ActivePagers` is the garbage collection: a cursor whose pager is
+        gone — the list shrank to one page, the node left the document — is forgotten
+        rather than left to strand a position nothing can reach.
+        """
+        return (*self._updates, ActivePagers(frozenset(pager.key for pager in self._pagers)))
