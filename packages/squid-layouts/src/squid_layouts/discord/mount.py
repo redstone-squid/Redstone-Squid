@@ -620,7 +620,7 @@ class Mount:
         # paint. A raise here delivered nothing and staged nothing.
         candidate = await self._stage_loaded()
         try:
-            message = await destination(candidate.view, _attachment_files(candidate.assets))
+            receipt = await destination(candidate.view, _attachment_files(candidate.assets))
         except deliver.DeliveryAbandoned:
             logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
             self._rollback(candidate)
@@ -628,11 +628,11 @@ class Mount:
         except Exception:
             self._rollback(candidate)
             raise
-        if message is not None:
-            self._handle = deliver.handle_for(message)
-            self._note_address(message)
+        self._handle = receipt.handle
+        if receipt.message is not None:
+            self._note_address(receipt.message)
         self._commit(candidate)
-        return message
+        return receipt.message
 
     def _swap_view(self, view: MountedView) -> None:
         if self._view is not None and self._view is not view:

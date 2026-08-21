@@ -169,28 +169,21 @@ def destination(
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
+        if ctx.interaction is not None:
+            return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(view: discord.ui.LayoutView, rendered: list[discord.File]) -> discord.Message | None:
+        async def privately(view: discord.ui.LayoutView, rendered: list[discord.File]) -> ui.discord.DeliveryReceipt:
             message = await deliver_privately(
                 ctx, view, reason=visibility.reason, locale=locale, files=[*files, *rendered]
             )
             if message is None:
                 raise ui.discord.DeliveryAbandoned
-            return message
+            return ui.discord.DeliveryReceipt(message, ui.discord.delivery.handle_for(message))
 
         return privately
 
     ephemeral = visibility == "personal" and personal(ctx)
-
-    async def openly(view: discord.ui.LayoutView, rendered: list[discord.File]) -> discord.Message | None:
-        return await ctx.send(
-            view=view,
-            files=[*files, *rendered],
-            ephemeral=ephemeral,
-            allowed_mentions=ui.discord.delivery.no_mentions(),
-        )
-
-    return openly
+    return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
 
 
 def render_item(node: ui.LayoutNode, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:

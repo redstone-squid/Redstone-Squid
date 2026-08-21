@@ -5,7 +5,7 @@ import gc
 import pytest
 
 from squid_layouts import Component, PressEvent, state
-from squid_layouts.discord import Mount, live
+from squid_layouts.discord import DeliveryReceipt, Mount, live
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row, Text
 
@@ -135,5 +135,5 @@ class TestSnapshot:
         assert mount.snapshot().pending
 
 
-async def _none() -> None:
-    return None
+async def _none() -> DeliveryReceipt:
+    return DeliveryReceipt(None, None)
