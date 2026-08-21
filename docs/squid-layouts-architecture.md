@@ -64,6 +64,21 @@ identity and configuration are keyword-only, `None`/`False` children are skipped
 `Paragraph`. Collections are unpacked by the caller. The dataclasses remain the IR and remain
 public; the factories only normalize what authors write.
 
+`Choices`, `Items`, `Details`, and `Navigation` each hold a value, and one rule says who
+owns it. Every one of them takes an `Ownership`: `sl.controlled(value, on_change)` means the
+author owns it — their value wins on every render and the engine never touches the session —
+and `sl.managed(initial)` means the engine owns it in the presentation session under the
+node's key. `Managed.initial` is a seed, not a value: it applies on a session miss and is
+ignored from then on, so an author who needs their value to keep winning wants `controlled`.
+Ownership is a value rather than an inference from which fields were passed, so a node
+cannot be half-controlled and the mode is readable at the call site.
+
+The two paths persist differently, which matters when a snapshot is restored. Managed values
+travel in the presentation vocabulary and are gated by the framework's protocol and adapter
+versions; controlled values travel in the owning component's declared state and are gated by
+the host's `component_version`. Both survive a restore; they fail incompatible restores
+under different version gates.
+
 Adapters choose among finite lossless strategies. Actions may be individual controls,
 grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 11 options;
 author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
