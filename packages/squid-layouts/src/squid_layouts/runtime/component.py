@@ -36,6 +36,7 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
+from squid_layouts.runtime.reactivity import _CURRENT, _State, report_undeclared_write
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -119,6 +120,9 @@ _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
 )
 _MISSING = object()
 
+# Written by the tree walker, not by authors, so they are never an author's state change.
+_FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent"})
+
 
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
@@ -136,11 +140,26 @@ class Component:
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        # Fast path: one contextvar read when no action is in flight, which is almost always.
+        if (
+            _CURRENT.get() is not None
+            and name not in _FRAMEWORK_ATTRIBUTES
+            and self._state_tracked()
+            and not isinstance(getattr(type(self), name, None), _State)
+        ):
+            report_undeclared_write(self, name)
+        object.__setattr__(self, name, value)
+
     def _state_changed(self) -> None:
         self.invalidate()
 
     def _state_rolled_back(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+
+    def _state_tracked(self) -> bool:
+        """Whether this component is in the tree. One still under construction is not."""
+        return self._runtime is not None or self._parent is not None
 
     def render(self) -> RenderResult:
         """Describe the message for the current state. Pure and synchronous."""
