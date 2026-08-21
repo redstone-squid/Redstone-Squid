@@ -122,7 +122,7 @@ _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
 _MISSING = object()
 
 # Written by the tree walker, not by authors, so they are never an author's state change.
-_FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent"})
+_FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent", "_loaded"})
 
 
 def _is_abstract(cls: type) -> bool:
@@ -166,6 +166,13 @@ class ComponentTree:
     components: dict[str, Component]
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
+    deferred: tuple[Component, ...] = ()
+    """Embedded components expansion stopped at, in the order it met them.
+
+    Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
+    Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
+    never plan it, draw it, or commit it.
+    """
 
 
 class Component:
@@ -173,6 +180,8 @@ class Component:
 
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
+    _loaded: bool = False
+    """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _state_names: ClassVar[frozenset[str]] = frozenset()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -219,6 +228,19 @@ class Component:
     def embed(self, child: Component, *, key: str) -> Embed:
         """Place child in this render tree under a stable key and namespace."""
         return Embed(child, key)
+
+    async def on_load(self) -> None:
+        """Fetch what this component cannot render without, before its first render.
+
+        Runs once per instance, before the first delivery that would show it, and before
+        :meth:`render` is ever called on it: a frontend stops expanding at an unloaded
+        component rather than rendering it empty. Writes are ordinary pre-delivery state, so
+        the delivered view is the loaded one -- there is no loading paint to design for.
+
+        A raise leaves the instance eligible to retry on the next delivery attempt, and
+        nothing is delivered in the meantime. Data the component can degrade without belongs
+        in declared state with a render branch, refreshed by a handler, not here.
+        """
 
     def on_mount(self) -> None:
         """Run after this component first enters a successfully drawn tree."""
@@ -271,13 +293,22 @@ def render_component_tree(
     *,
     runtime: RuntimeOwner | None = None,
     context: dict[ContextKey[Any], object] | None = None,
+    defer: Callable[[Component], bool] | None = None,
 ) -> ComponentTree:
-    """Render and expand a component tree, preserving keyed component identity."""
+    """Render and expand a component tree, preserving keyed component identity.
+
+    ``defer`` makes this a *discovery* render: an embedded component it selects is recorded in
+    :attr:`ComponentTree.deferred` and not expanded, so its :meth:`Component.render` is not
+    called. That is what lets a frontend run :meth:`Component.on_load` before a component
+    renders for the first time. The resulting tree is incomplete by construction; see
+    :attr:`ComponentTree.deferred`.
+    """
     components: dict[str, Component] = {}
     assets: list[Asset] = []
     document_key: str | None = None
     identities: dict[int, str] = {}
     active: set[int] = set()
+    deferred: list[Component] = []
 
     def items(rendered: RenderResult, path: str) -> tuple[RenderNode, ...]:
         nonlocal document_key
@@ -326,7 +357,12 @@ def render_component_tree(
                 if not isinstance(item.component, Component):
                     message = f"{item_path}: Embed does not contain a Component"
                     raise LayoutInvariantError(message)
+                # Before the defer check: a deferred child still reaches the mount through
+                # its parent when its on_load writes state.
                 item.component._parent = component
+                if defer is not None and defer(item.component):
+                    deferred.append(item.component)
+                    return []
                 child_path = item.key if path == "$" else f"{path}.{item.key}"
                 return _namespace(expand(item.component, child_path, context), item.key)
             match item:
@@ -358,7 +394,8 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    return ComponentTree(tuple(expand(root, "$", context or {})), components, tuple(assets), document_key)
+    nodes = tuple(expand(root, "$", context or {}))
+    return ComponentTree(nodes, components, tuple(assets), document_key, tuple(deferred))
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
