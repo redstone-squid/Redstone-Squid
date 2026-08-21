@@ -2,10 +2,10 @@
 
 These are the controls that must still work on a card posted by a past run of the bot:
 the id encodes what the click refers to and the database owns the rest, so no session,
-generation, or in-memory handler is involved. Route constants live here rather than beside
-their handlers so the card that draws a button and the code that answers it cannot drift.
+generation, or in-memory handler is involved. The routes live here rather than beside their
+handlers so the card that draws a button and the code that answers it cannot drift.
 
-Handlers register themselves with `ROUTER` from their own modules; `RedstoneSquid` installs
+Handlers register themselves with `router` from their own modules; `RedstoneSquid` installs
 the router once every extension has loaded, which is what freezes the table.
 """
 
@@ -13,11 +13,11 @@ import discord
 
 import squid_layouts as sl
 
-POLL_CLOSE = sl.Route("poll:close")
-POLL_REFRESH = sl.Route("poll:refresh")
-BUILD_EDIT = sl.Route("edit:build:{build_id}")
-BUILD_LOG_CONSENT = sl.Route("build_log:consent")
-REMOVE_REDSTONER_ROLE = sl.Route("remove:role:redstoner")
+poll_close = sl.Route("poll:close")
+poll_refresh = sl.Route("poll:refresh")
+build_edit = sl.Route("edit:build:{build_id}")
+build_log_consent = sl.Route("build_log:consent")
+remove_redstoner_role = sl.Route("remove:role:redstoner")
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
@@ -27,4 +27,4 @@ async def _route_error_hook(interaction: discord.Interaction, error: Exception, 
     await handle_interaction_error(interaction, error, surface=source)
 
 
-ROUTER = sl.discord.Router(on_error=_route_error_hook)
+router = sl.discord.Router(on_error=_route_error_hook)
