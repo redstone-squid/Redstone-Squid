@@ -297,6 +297,54 @@ claims live records and returns each restored mount beside its locator; the host
 frontend and periodically calls `renew_claims()` under its own task supervisor. This prevents
 two workers from dispatching the same visible controls after a restart.
 
+## Library binding: discord.py, not Discord alone
+
+The portable seam is the scene. Everything above it — semantic vocabulary, planner,
+solver, `PageBroker`, components — binds to Discord's *shape* (budgets, option windows,
+row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
+`renderer`, `mount`, `delivery`, `routing` — is a **discord.py adapter**, not a
+Discord-protocol adapter, and its dependencies sort into three strata:
+
+- **Protocol facts** — component budgets, token lifetimes, callback-type restrictions,
+  custom-id length, error codes 10015/10062/50027/50035. Depending on these is the
+  adapter's job.
+- **Library object model** — `Message`, `LayoutView`, `DynamicItem`, passed through as
+  transport without interpretation. Mostly harmless.
+- **Library behaviours** — the semantics of how discord.py *mediates* the protocol. This
+  is the dangerous stratum: every externally audited defect to date lived here
+  (`InteractionMessage.edit`'s hidden token routing, ViewStore scheduling), while the
+  scene and planner layers, which touch only protocol facts, have produced none.
+
+Stratum-3 inventory. Each entry is owed a pin test that exercises the real library, so a
+discord.py upgrade breaks in the suite rather than in production — the same discipline
+CLAUDE.md mandates for Nucleation, applied to discord.py:
+
+| Behaviour relied on | Where | Pin |
+|---|---|---|
+| ViewStore schedules one call per matching dynamic-item class | Router's one-class design, exact-overlap rejection, register idempotence (plan 16) | overlap tests in `test_routing.py`; idempotence pin lands with 16's remaining work |
+| `is_dispatchable() == False` keeps mounted routed controls out of ViewStore | single dispatch path for mounted controls | `test_routing.py` mounted double-dispatch assertions |
+| `InteractionMessage.edit`/`WebhookMessage.edit` route through the interaction token | edit-authority semantics; plan 23's defect and fix | lands with plan 23 |
+| every modal send serializes through `Modal.to_dict` | the host `ErrorHandledModal` clamp gate | host modal tests |
+| `interaction.response.is_done()` switches response vs followup writes | `_InteractionHandle.write`, `respond_to` | mount handle tests |
+
+Policy:
+
+- A discord.py version bump is a defined event: run the pins, review this inventory.
+  `uv.lock` pins exactly, so bumps are always deliberate.
+- **Durable artifacts speak protocol; in-process machinery may speak discord.py.** A
+  routed custom id lives in posted messages for years, so route *identity* is
+  protocol-only (plan 16 built it so); route *dispatch* is re-established at startup and
+  may bind to the library.
+- Feature ceilings are `min(protocol, discord.py)`, and the two release trains are
+  independent. The modal field inventory (plan 18) is protocol-complete on discord.py
+  2.7.1 (`Label`, modal selects, `FileUpload`, `RadioGroup`, `CheckboxGroup` all ship);
+  re-verify both sides whenever a plan leans on a new component type.
+- No library-abstraction layer. A second-library adapter has zero consumers, and the
+  scene is already the seam one would attach to; below it the binding is admitted, not
+  abstracted. The DynamicItem binding in particular is chosen, not accidental: a raw
+  `on_interaction` router would have to peek into ViewStore to avoid double-handling
+  live views, so the sanctioned hook wins and gets pinned instead.
+
 ## Deliberate boundaries and current gaps
 
 - Modal submission still uses the Discord modal adapter. A portable form protocol is future
