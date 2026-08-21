@@ -322,7 +322,7 @@ def respond_to(interaction: discord.Interaction[Any], *, ephemeral: bool = True,
             message = await interaction.followup.send(
                 view=view, files=files, ephemeral=ephemeral, wait=wait, allowed_mentions=no_mentions()
             )
-            if not wait:
+            if message is None:
                 return DeliveryReceipt(None, None)
             return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message))
         await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
