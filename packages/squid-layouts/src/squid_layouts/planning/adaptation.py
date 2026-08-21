@@ -67,6 +67,7 @@ from squid_layouts.semantic import (
     Field,
     Fields,
     Figure,
+    FormTrigger,
     Group,
     Heading,
     ItemDisplay,
@@ -120,6 +121,7 @@ class _Context:
     localization: Localization
     session: PresentationSession
     pages: PageBroker
+    capabilities: frozenset[str]
     events: list[PlanEvent]
     updates: list[SessionUpdate]
     search_budget: int = DEFAULT_SEARCH_BUDGET
@@ -135,11 +137,12 @@ def lower_semantics(
     localization: Localization,
     session: PresentationSession,
     pages: PageBroker | None = None,
+    capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
     broker = pages if pages is not None else PageBroker(session, chrome)
-    context = _Context(limits, chrome, localization, session, broker, [], [], search_budget)
+    context = _Context(limits, chrome, localization, session, broker, capabilities, [], [], search_budget)
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
@@ -237,6 +240,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Measure(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
             return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
+        case FormTrigger():
+            return _form(node, context)
         case Choices():
             return _choices(node, path, context)
         case RoutedChoices():
@@ -335,6 +340,31 @@ def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> l
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))
     return lowered
+
+
+def _form(node: FormTrigger, context: _Context) -> list[Node]:
+    if not {"forms.modal", "forms.inline"} & context.capabilities:
+        message = "target does not support forms"
+        raise LayoutInvariantError(message)
+    maximum = context.limits.modal_components if "forms.modal" in context.capabilities else None
+    spec = node.spec.adapt(context.capabilities, maximum_fields=maximum)
+
+    async def present(event: PressEvent) -> None:
+        await event.present_form(spec, key=node.key, on_submit=node.on_submit, policy=node.policy)
+
+    return [
+        PrimitiveActionGroup(
+            (
+                Button(
+                    _resolve(node.label, context),
+                    present,
+                    node.key,
+                    style=_button_style(node.tone, node.emphasis),
+                    policy=node.policy,
+                ),
+            )
+        )
+    ]
 
 
 def _with_overflow(node: Node, overflow: Overflow) -> Node:

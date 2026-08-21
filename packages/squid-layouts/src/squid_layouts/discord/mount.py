@@ -12,7 +12,7 @@ import io
 import logging
 import secrets
 import time
-from collections.abc import Awaitable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -21,7 +21,7 @@ from typing import Any, Protocol, override
 import anyio
 import discord
 
-from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
+from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
@@ -30,6 +30,7 @@ from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
 from squid_layouts.document import Asset, Document, InlineAsset
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.forms import FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav
 from squid_layouts.primitives.nodes import Node
@@ -333,6 +334,11 @@ class Mount:
     def pending(self) -> bool:
         """Whether a render is staged that Discord has not seen."""
         return self._dirty
+
+    @property
+    def generation(self) -> int:
+        """The live render generation used to reject stale interactions."""
+        return self._generation
 
     @property
     def finished(self) -> bool:
@@ -673,21 +679,7 @@ class Mount:
         generation: int | None = None,
     ) -> None:
         """The funnel: finished check -> author lock -> handler -> flush."""
-        self._active = time.monotonic()
-        # A mount sent through an unwaited interaction response never saw its own message; the
-        # click is where it finally learns where it lives.
-        self._note_address(interaction.message)
-        if self._finished:
-            # A finished mount can still be on screen with live controls: its disable-edit
-            # may have failed, or a replacement may have taken over the session while this
-            # message stayed visible. Say so rather than running a handler against state
-            # nobody will see again.
-            text = resolve_text(self.chrome.session_ended, self.localization).content
-            await deliver.respond_text(interaction, text, ephemeral=True)
-            return
-        if self.lock_to is not None and interaction.user.id not in self.lock_to:
-            text = resolve_text(self.chrome.not_yours, self.localization).content
-            await deliver.respond_text(interaction, text, ephemeral=True)
+        if not await self._begin_dispatch(interaction):
             return
         binding = self._handlers.get(key)
         if binding is None:
@@ -700,20 +692,77 @@ class Mount:
                 await self._acknowledge(interaction)
                 return
             key = binding.key
+
+        async def invoke(current: ActionBinding) -> None:
+            await self._invoke(current, key, interaction, values)
+
+        await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=True)
+
+    async def dispatch_submit(
+        self,
+        key: str,
+        interaction: discord.Interaction,
+        spec: FormSpec,
+        values: Mapping[str, object],
+        handler: SubmitHandler,
+        *,
+        policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+        generation: int | None = None,
+    ) -> None:
+        """Route a modal submission through the same stale, lock, policy, and flush funnel."""
+        if not await self._begin_dispatch(interaction):
+            return
+        binding = ActionBinding(key, handler, policy)
+
+        async def invoke(current: ActionBinding) -> None:
+            await self._invoke_submit(current, key, interaction, spec, values, generation)
+
+        await self._dispatch_binding(binding, key, interaction, generation, invoke)
+
+    async def _begin_dispatch(self, interaction: discord.Interaction) -> bool:
+        self._active = time.monotonic()
+        # A mount sent through an unwaited interaction response never saw its own message; the
+        # click is where it finally learns where it lives.
+        self._note_address(interaction.message)
+        if self._finished:
+            # A finished mount can still be on screen with live controls: its disable-edit
+            # may have failed, or a replacement may have taken over the session while this
+            # message stayed visible. Say so rather than running a handler against state
+            # nobody will see again.
+            text = resolve_text(self.chrome.session_ended, self.localization).content
+            await deliver.respond_text(interaction, text, ephemeral=True)
+            return False
+        if self.lock_to is not None and interaction.user.id not in self.lock_to:
+            text = resolve_text(self.chrome.not_yours, self.localization).content
+            await deliver.respond_text(interaction, text, ephemeral=True)
+            return False
+        return True
+
+    async def _dispatch_binding(
+        self,
+        binding: ActionBinding,
+        key: str,
+        interaction: discord.Interaction,
+        generation: int | None,
+        invoke: Callable[[ActionBinding], Awaitable[None]],
+        *,
+        rebase: bool = False,
+    ) -> None:
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
-            await self._invoke(binding, key, interaction, values)
+            await invoke(binding)
             return
 
         async with self._action_lock:
             if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
                 await self._acknowledge(interaction)
                 return
-            if binding.policy is ActionPolicy.REBASE:
-                binding = self._handlers.get(key)
-                if binding is None:
+            if binding.policy is ActionPolicy.REBASE and rebase:
+                refreshed = self._handlers.get(key)
+                if refreshed is None:
                     await self._acknowledge(interaction)
                     return
-            await self._invoke(binding, key, interaction, values)
+                binding = refreshed
+            await invoke(binding)
 
     async def _invoke(
         self,
@@ -753,6 +802,67 @@ class Mount:
                 await binding.handler(event)
         except Exception as error:
             await self.handle_error(interaction, error, f"handler:{key}")
+            return
+        self._renew(interaction)
+        await self.flush(interaction)
+
+    async def _invoke_submit(
+        self,
+        binding: ActionBinding,
+        key: str,
+        interaction: discord.Interaction,
+        spec: FormSpec,
+        values: Mapping[str, object],
+        generation: int | None,
+    ) -> None:
+        async def watchdog() -> None:
+            await anyio.sleep(self.acknowledgement_timeout)
+            await self._acknowledge(interaction)
+
+        with _unwrapped():
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(watchdog)
+                await self._invoke_submit_and_flush(binding, key, interaction, spec, values, generation)
+                tasks.cancel_scope.cancel()
+
+    async def _invoke_submit_and_flush(
+        self,
+        binding: ActionBinding,
+        key: str,
+        interaction: discord.Interaction,
+        spec: FormSpec,
+        values: Mapping[str, object],
+        generation: int | None,
+    ) -> None:
+        try:
+            evaluation = await spec.evaluate(values)
+            actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
+            responder = ActionResponder(interaction, self)
+            event = SubmitEvent(
+                actor,
+                responder,
+                self.localization.locale,
+                {"frontend": "discord"},
+                evaluation.values,
+                evaluation.attempted,
+                evaluation.errors,
+            )
+            if evaluation.errors and spec.validation_policy is FormValidationPolicy.RETRY:
+                await responder.retry_form(
+                    spec.with_prefill(evaluation.attempted),
+                    evaluation.errors,
+                    key=key,
+                    handler=binding.handler,
+                    policy=binding.policy,
+                    generation=self._generation if generation is None else generation,
+                    actor_id=interaction.user.id,
+                )
+            else:
+                context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
+                with context:
+                    await binding.handler(event)
+        except Exception as error:
+            await self.handle_error(interaction, error, f"form:{key}")
             return
         self._renew(interaction)
         await self.flush(interaction)

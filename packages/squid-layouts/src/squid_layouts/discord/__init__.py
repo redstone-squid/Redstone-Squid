@@ -13,7 +13,16 @@ from squid_layouts.discord.delivery import (
     respond_to,
 )
 from squid_layouts.discord.live import mounts
-from squid_layouts.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_layouts.discord.modal import (
+    EntityField,
+    EntityType,
+    FileField,
+    LabelSpec,
+    ModalSpec,
+    TextInputSpec,
+    build_form_modal,
+    build_modal,
+)
 from squid_layouts.discord.mount import (
     ErrorHook,
     FinishHook,
@@ -40,7 +49,10 @@ __all__ = [
     "DeliveryAbandoned",
     "Destination",
     "EditHandle",
+    "EntityField",
+    "EntityType",
     "ErrorHook",
+    "FileField",
     "FinishHook",
     "LabelSpec",
     "LimitViolationError",
@@ -67,6 +79,7 @@ __all__ = [
     "Target",
     "TextInputSpec",
     "Wire",
+    "build_form_modal",
     "build_modal",
     "compose",
     "conform",
