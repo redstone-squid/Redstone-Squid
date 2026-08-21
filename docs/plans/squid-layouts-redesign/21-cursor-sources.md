@@ -48,32 +48,40 @@
    the two-shell rule's stateless entry (plan 19): a routed panel carries its position
    in the custom id and passes it as an override, having no session to consult.
 
-## Resolved API
+## Final API
 
-- `Position(anchor, offset, direction)` is the portable token. `direction` is
-  `"around"`, `"forward"`, or `"backward"`: refresh around an inclusive anchor, fetch
-  after the trailing anchor, or fetch before the leading anchor. `offset` is a
-  zero-based hint and becomes authoritative only for a jumpable source.
-- `PositionPolicy.resolve(...)` accepts an override, a resolved anchor position, the
-  stale bit, stored and initial positions, a reset position, and an optional upper
-  bound. It has no session or source dependency. `PageBroker` projects its integer
-  cursors into these inputs and projects the result back to a page index.
-- `Window(items, has_prev, has_next, total, position)` may return a corrected position
-  after an anchor-gone fallback. `WindowSource` declares `countable`,
-  `bidirectional`, and `jumpable` and implements `fetch(position, extent)`.
-- `WindowCursor` owns source reconciliation outside planning. It fingerprints only the
-  returned item identities, refreshes around the visible anchor, and uses a monotonic
-  request token so only the newest fetch may publish. Sources therefore own the choice
-  of nearest key, newest item, or start when an anchor disappears.
-- `RankedList(..., source=...)` is the first async consumer. Its component shell loads
-  the first window in `on_load`; navigation handlers fetch and invalidate. Async
-  sources are intentionally unavailable through `RouterShell`, whose route handler
-  must fetch before rendering a materialized ranking.
-- Countable+jumpable sources use the existing page footer. Countable sequential
-  sources show a range plus approximate total, jumpable uncountable sources show only
-  a range, and sources with neither capability show no numeric footer. Older is
-  omitted for forward-only sources and every control follows the returned `has_*`
-  flags.
+This implementation deliberately breaks the transitional page-shaped API. The package
+is still on its development branch, so preserving internal compatibility would make the
+temporary bridge permanent.
+
+There are no external consumers. Superseded public names and snapshot fields are removed
+rather than deprecated or aliased; every in-repository caller moves in the same change.
+
+- `Position(anchor, offset, direction)` is the only cursor token. `Direction` is an
+  enum (`AROUND`, `FORWARD`, `BACKWARD`), and `CursorState` stores the position directly
+  instead of splitting it into index and anchor fields.
+- `PositionPolicy.resolve(...)` remains the pure precedence function. A
+  `CursorCoordinator` adapts materialized slicers to it; slicers project the resolved
+  offset only at their actual cut boundary.
+- `SourceCapabilities(backward, offsets, jumpable, count)` replaces three unrelated
+  booleans. `CountPrecision` is `NONE`, `APPROXIMATE`, or `EXACT`; validation rejects
+  jump/count claims from a source that cannot know offsets.
+- `Window(position, items, has_previous, has_next, total)` always returns its resolved
+  position. Anchor-gone fallback is therefore explicit rather than hidden behind an
+  optional correction.
+- `WindowLoader` returns an immutable `LoadedWindow`. It owns only the monotonic request
+  token; the component owns the loaded value as declared state. A stale completion can
+  never mutate the visible cursor behind the component's back.
+- `NavigationContext` and one `NavFactory` serve materialized and source windows. The
+  mount injects its factory into components, so a custom navigation factory applies to
+  both paths. The context carries proven boundaries, position, extent/range/total facts,
+  labels, and handlers rather than assuming every cursor has a page count.
+- `RankedList` returns to being a materialized, pure two-shell pattern.
+  `SourceRankedList` is an explicit async component. Its distinct type makes loading,
+  durability, and router limitations visible in the API rather than constructor modes.
+- Numeric chrome derives from `SourceCapabilities`: exact+jumpable becomes a page
+  count, known offsets plus a count become a range and total, offsets alone become a
+  range, and keyset-only navigation has no numeric footer.
 
 ## Verification
 
