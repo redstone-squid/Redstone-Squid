@@ -15,6 +15,7 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.utils.mount_registry import MountRegistry
 
 BUILD_LOG_CHANNEL = 500
 USER_ID = 42
@@ -118,7 +119,8 @@ def _make_interaction(accounts: Any) -> Any:
             services=SimpleNamespace(
                 settings=SimpleNamespace(),
                 accounts=accounts,
-            )
+            ),
+            mounts=MountRegistry(),
         ),
         response=SimpleNamespace(defer=AsyncMock(), is_done=lambda: True),
         followup=SimpleNamespace(send=AsyncMock(return_value=SimpleNamespace(id=999))),

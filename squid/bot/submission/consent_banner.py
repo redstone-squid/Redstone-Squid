@@ -14,6 +14,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes import BUILD_LOG_CONSENT, ROUTER
 from squid.bot.ui import CardField
 from squid.bot.utils.components import no_mentions, text_layout
+from squid.bot.utils.mount_registry import SessionKey, WhenOpen
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
 
@@ -80,7 +81,26 @@ async def open_consent_prompt(interaction: Interaction[Any], _params: Mapping[st
         timeout=120,
     )
     mount = component.mount()
-    await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
+    mount.on_finish(component.abandon)
+    # The same key `prompt_for_consent` uses, so the banner button and the account panel share
+    # one prompt between them rather than each opening their own. The button is on a public
+    # sticky message with nothing guarding a double click.
+    registry = interaction.client.mounts
+    key = SessionKey("consent", interaction.user.id)
+    opened = await registry.open(
+        mount,
+        sl.discord.respond_to(interaction, ephemeral=True, wait=True),
+        key=key,
+        policy=WhenOpen.REJECT,
+    )
+    if opened is None:
+        if registry.get(key) is not None:
+            await interaction.followup.send(
+                view=text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+        return
     await component.wait()
 
     if component.consent is not None:
