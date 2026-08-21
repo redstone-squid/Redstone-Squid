@@ -5,10 +5,12 @@ from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
-from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
+from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
+from squid_layouts.planning.solve import measure_nodes, split_text_node
 from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup as PrimitiveActionGroup,
@@ -273,6 +275,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             policy: Overflow = Spill() if isinstance(child, List | Fields) else Truncate()
             return [_with_best_effort(_with_overflow(item, policy)) for item in _node(child, path, context)]
         case Budgeted(node=child, minimum=minimum, preferred=preferred, stretch=stretch):
+            if isinstance(child, Paged):
+                return _paged_region(
+                    child,
+                    path,
+                    context,
+                    minimum=minimum,
+                    preferred=preferred,
+                    stretch=stretch,
+                )
             return [
                 Budget(
                     tuple(_node(child, path, context)),
@@ -282,6 +293,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                     best_effort=isinstance(child, BestEffort),
                 )
             ]
+        case Paged():
+            return _paged_region(node, path, context, minimum=0, preferred=node.chars, stretch=0)
         case Unbreakable(node=child):
             return [Break(tuple(_node(child, path, context)), unbreakable=True)]
         case KeepWithNext(node=child):
@@ -526,6 +539,182 @@ def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> l
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))
     return lowered
+
+
+@dataclass(frozen=True, slots=True)
+class _RegionItem:
+    nodes: tuple[Node, ...]
+    keep_with_next: bool = False
+    unbreakable: bool = False
+
+
+def _region_items(nodes: Sequence[Node], *, keep_heading: bool) -> list[_RegionItem]:
+    items: list[_RegionItem] = []
+    for node in nodes:
+        if isinstance(node, Break):
+            items.append(_RegionItem(node.children, node.keep_with_next, node.unbreakable))
+        else:
+            items.append(_RegionItem((node,)))
+    if keep_heading and len(items) > 1 and isinstance(items[0].nodes[0], PrimitiveHeading):
+        items[0] = replace(items[0], keep_with_next=True)
+    return items
+
+
+def _split_oversized_region_items(
+    items: Sequence[_RegionItem],
+    *,
+    chars: int,
+    min_fill: int,
+    widows: int,
+    limits: V2Limits,
+    path: str,
+) -> list[_RegionItem]:
+    result: list[_RegionItem] = []
+    for item in items:
+        cost = measure_nodes(item.nodes, limits=limits)
+        if cost.chars <= chars and cost.components <= limits.total_components:
+            result.append(item)
+            continue
+        fragments = (
+            None
+            if item.unbreakable or len(item.nodes) != 1
+            else split_text_node(item.nodes[0], chars, min_fill=min_fill, widows=widows)
+        )
+        if fragments is None or len(fragments) <= 1:
+            message = (
+                f"{path}: unbreakable region child {type(item.nodes[0]).__name__} needs "
+                f"{cost.chars} characters and {cost.components} components; page limit is {chars} characters"
+            )
+            raise UnsolvableLayoutError(message)
+        result.extend(
+            _RegionItem((fragment,), keep_with_next=item.keep_with_next and index == len(fragments) - 1)
+            for index, fragment in enumerate(fragments)
+        )
+    return result
+
+
+def _break_region(
+    items: Sequence[_RegionItem],
+    *,
+    chars: int,
+    min_fill: int,
+    widows: int,
+    limits: V2Limits,
+    path: str,
+) -> list[tuple[_RegionItem, ...]]:
+    if not items:
+        return [()]
+    costs = [measure_nodes(item.nodes, limits=limits) for item in items]
+    total = sum(cost.chars for cost in costs)
+    count = len(items)
+    winner: tuple[int, int, float, tuple[int, ...], tuple[int, ...]] | None = None
+    for page_count in range(1, count + 1):
+        ideal = total / page_count
+        type State = tuple[int, float, tuple[int, ...], tuple[int, ...]]
+        states: dict[tuple[int, int], State] = {(0, 0): (0, 0.0, (), ())}
+        for used in range(1, page_count + 1):
+            for end in range(1, count + 1):
+                best: State | None = None
+                for start in range(end):
+                    previous = states.get((used - 1, start))
+                    if previous is None:
+                        continue
+                    if end < count and items[end - 1].keep_with_next:
+                        continue
+                    page_chars = sum(cost.chars for cost in costs[start:end])
+                    page_components = sum(cost.components for cost in costs[start:end])
+                    if page_chars > chars or page_components > limits.total_components:
+                        continue
+                    violation = int(used < page_count and page_chars < min_fill)
+                    violation += int(used == page_count and end - start < widows)
+                    candidate = (
+                        previous[0] + violation,
+                        previous[1] + (page_chars - ideal) ** 2,
+                        (*previous[2], -end),
+                        (*previous[3], end),
+                    )
+                    if best is None or candidate < best:
+                        best = candidate
+                if best is not None:
+                    states[(used, end)] = best
+        state = states.get((page_count, count))
+        if state is None:
+            continue
+        candidate = (state[0], page_count, state[1], state[2], state[3])
+        if winner is None or candidate < winner:
+            winner = candidate
+    if winner is None:
+        message = f"{path}: region has no feasible break set within its {chars}-character page budget"
+        raise UnsolvableLayoutError(message)
+    pages: list[tuple[_RegionItem, ...]] = []
+    start = 0
+    for end in winner[4]:
+        pages.append(tuple(items[start:end]))
+        start = end
+    return pages
+
+
+def _paged_region(
+    node: Paged,
+    path: str,
+    context: _Context,
+    *,
+    minimum: int,
+    preferred: int,
+    stretch: int,
+) -> list[Node]:
+    lowered = _node(node.node, path, context)
+    shell: Panel | None = lowered[0] if len(lowered) == 1 and isinstance(lowered[0], Panel) else None
+    children = shell.children if shell is not None else tuple(lowered)
+    items = _region_items(children, keep_heading=shell is not None)
+    items = _split_oversized_region_items(
+        items,
+        chars=node.chars,
+        min_fill=node.min_fill,
+        widows=node.widows,
+        limits=context.limits,
+        path=path,
+    )
+    pages = _break_region(
+        items,
+        chars=node.chars,
+        min_fill=node.min_fill,
+        widows=node.widows,
+        limits=context.limits,
+        path=path,
+    )
+    request = PageRequest(
+        key=node.key,
+        pages=len(pages),
+        fingerprint=stable_fingerprint(children),
+        initial=node.initial,
+    )
+    grant = context.pages.grant(request)
+    context.pages.record(request, grant.index)
+    selected = [primitive for item in pages[grant.index] for primitive in item.nodes]
+    budgeted = Budget(
+        tuple(selected),
+        minimum,
+        preferred,
+        stretch,
+        best_effort=isinstance(node.node, BestEffort),
+    )
+    controls = context.pages.controls(node.key, grant.index, grant.pages)
+    if controls and node.footer is not None:
+        controls[0] = Footer(_resolve(node.footer(grant.index + 1, grant.pages), context), overflow=Never())
+    if grant.pages > 1:
+        context.events.append(
+            PlanEvent(
+                code="pagination.region",
+                path=path,
+                message=f"Region {node.key!r} uses {grant.pages} balanced pages",
+                severity=PlanSeverity.ADAPTATION,
+                after={"pages": grant.pages},
+            )
+        )
+    if shell is not None:
+        return [replace(shell, children=(budgeted, *controls))]
+    return [budgeted, *controls]
 
 
 def _form(node: FormTrigger, context: _Context) -> list[Node]:

@@ -1,10 +1,7 @@
 """Plan logical documents into immutable target-resolved scenes."""
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, fields, is_dataclass, replace
-from enum import Enum
+from dataclasses import dataclass, field, replace
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
@@ -13,6 +10,7 @@ from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, Unso
 from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
+from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAssignment, iter_assignments
 from squid_layouts.planning.solve import (
@@ -612,7 +610,7 @@ def plan(
             )
             for note in solved.notes
         ),
-        logical_fingerprint=_logical_fingerprint((document,)),
+        logical_fingerprint=stable_fingerprint((document,)),
         scene_fingerprint=fingerprint,
     )
     resources = dict(converter.resources)
@@ -716,37 +714,10 @@ def _root_paginate(
     if current:
         pages.append(current)
 
-    request = PageRequest(key=key, pages=len(pages), fingerprint=_logical_fingerprint(nodes))
+    request = PageRequest(key=key, pages=len(pages), fingerprint=stable_fingerprint(nodes))
     grant = broker.grant(request)
     broker.record(request, grant.index)
     return solve_page(pages[grant.index], grant.index, grant.pages), grant.pages
-
-
-def _logical_fingerprint(nodes: Sequence[object]) -> str:
-    """Hash semantic structure without callback identity or process addresses."""
-    payload = json.dumps(_stable_value(nodes), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.blake2s(payload.encode(), digest_size=16).hexdigest()
-
-
-def _stable_value(value: object) -> object:
-    if callable(value):
-        return "<callback>"
-    if isinstance(value, Enum):
-        return value.value
-    if is_dataclass(value) and not isinstance(value, type):
-        return {
-            "type": type(value).__qualname__,
-            "fields": {item.name: _stable_value(getattr(value, item.name)) for item in fields(value)},
-        }
-    if isinstance(value, Mapping):
-        return {str(key): _stable_value(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        return [_stable_value(item) for item in value]
-    if isinstance(value, bytes):
-        return hashlib.blake2s(value, digest_size=16).hexdigest()
-    if isinstance(value, str | int | float | bool) or value is None:
-        return value
-    return type(value).__qualname__
 
 
 def _plan_cache_key(
@@ -764,10 +735,10 @@ def _plan_cache_key(
     search_budget: int,
 ) -> str:
     relevant = {
-        "document": _stable_value(nodes),
+        "document": stable_value(nodes),
         "target": (target.id, target.version),
-        "limits": _stable_value(limits),
-        "presentation": _stable_value(presentation),
+        "limits": stable_value(limits),
+        "presentation": stable_value(presentation),
         "chrome": (
             chrome.previous,
             chrome.next,
@@ -778,9 +749,9 @@ def _plan_cache_key(
             chrome.and_n_more(2),
         ),
         "locale": localization.locale,
-        "reservation": _stable_value(reservation),
+        "reservation": stable_value(reservation),
         "strict": strict,
-        "page": _stable_value(page),
+        "page": stable_value(page),
         "search_budget": search_budget,
         "nav": (
             None
@@ -792,8 +763,7 @@ def _plan_cache_key(
             )
         ),
     }
-    payload = json.dumps(relevant, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.blake2s(payload.encode(), digest_size=16).hexdigest()
+    return stable_fingerprint((relevant,))
 
 
 def _cacheable(nodes: Sequence[Node]) -> bool:
