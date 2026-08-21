@@ -8,6 +8,8 @@ from squid_layouts import (
     Document,
     InlineAsset,
     LayoutInvariantError,
+    Localization,
+    Message,
     UnsolvableLayoutError,
     plan,
 )
@@ -57,6 +59,14 @@ def test_planner_extracts_callbacks_from_the_serializable_scene() -> None:
     encoded = SceneCodec.dumps(result.scene)
     assert "_click" not in encoded
     assert '"action":"act"' in encoded
+
+
+def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
+    localization = Localization("xx", gettext=lambda message: {"Hello": "Bonjour"}[message])
+
+    result = plan(Text(Message("Hello")), target=DEFAULT_TARGET, localization=localization)
+
+    assert result.scene.children == (SceneText("Bonjour"),)
 
 
 def test_duplicate_action_keys_fail_before_drawing() -> None:

@@ -9,7 +9,7 @@ import discord
 import squid_layouts as sl
 from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import t
-from squid.bot.ui import create_mount
+from squid.bot.ui import L, create_mount, localization_for
 from squid.bot.utils.components import CardField, no_mentions
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -108,6 +108,7 @@ class SettingsPanel(sl.Component):
         self._capabilities = capabilities
         self.locale = locale
         self._owner_guild_id = owner_guild_id
+        self._mount: sl.discord.Mount | None = None
 
     @property
     def shows_server(self) -> bool:
@@ -166,7 +167,7 @@ class SettingsPanel(sl.Component):
 
     def _server_nodes(self) -> Sequence[sl.LayoutNode]:
         description = (
-            t(self.locale, _("Change as many as you like; an emptied picker clears that setting."))
+            L(t"Change as many as you like; an emptied picker clears that setting.")
             if self._capabilities.edit_server
             else None
         )
@@ -174,7 +175,7 @@ class SettingsPanel(sl.Component):
             sl.section(
                 description and sl.truncate(sl.paragraph(description)),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._server_fields())),
-                heading=t(self.locale, _("Server settings")),
+                heading=L(t"Server settings"),
             )
         ]
         if self._capabilities.edit_server:
@@ -197,7 +198,7 @@ class SettingsPanel(sl.Component):
                     choices=tuple(
                         sl.Choice(
                             tag,
-                            t(self.locale, _("Follow Discord")) if tag == FOLLOW_DISCORD else tag,
+                            L(t"Follow Discord") if tag == FOLLOW_DISCORD else tag,
                         )
                         for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
                     ),
@@ -206,10 +207,10 @@ class SettingsPanel(sl.Component):
             )
         actions: list[sl.primitives.Button] = []
         if self.shows_voting:
-            actions.append(sl.primitives.Button(t(self.locale, _("Voting")), self._show_voting, "voting"))
+            actions.append(sl.primitives.Button(L(t"Voting"), self._show_voting, "voting"))
         actions.append(
             sl.primitives.Button(
-                t(self.locale, _("Close")),
+                L(t"Close"),
                 self._close,
                 "close",
                 style=sl.primitives.ActionStyle.SECONDARY,
@@ -224,13 +225,11 @@ class SettingsPanel(sl.Component):
             sl.section(
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
                 scope_note and sl.note(scope_note),
-                heading=t(self.locale, _("Voting — {kind}"), kind=t(self.locale, KIND_LABELS[self.kind])),
+                heading=L("Voting — {kind}", kind=L(KIND_LABELS[self.kind])),
             ),
             sl.Choices(
                 key="vote-kind",
-                choices=tuple(
-                    sl.Choice(kind.value, t(self.locale, label), available=True) for kind, label in KIND_LABELS.items()
-                ),
+                choices=tuple(sl.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()),
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]
@@ -249,13 +248,13 @@ class SettingsPanel(sl.Component):
             actions.extend(
                 (
                     sl.primitives.Button(
-                        t(self.locale, _("Edit emojis")),
+                        L(t"Edit emojis"),
                         self._edit_emojis,
                         "edit-emojis",
                         style=sl.primitives.ActionStyle.PRIMARY,
                     ),
                     sl.primitives.Button(
-                        t(self.locale, _("Confirm reset")) if self.confirming_reset else t(self.locale, _("Reset")),
+                        L(t"Confirm reset") if self.confirming_reset else L(t"Reset"),
                         self._reset,
                         "reset",
                         style=sl.primitives.ActionStyle.DANGER
@@ -265,10 +264,10 @@ class SettingsPanel(sl.Component):
                 )
             )
         if self.shows_server:
-            actions.append(sl.primitives.Button(t(self.locale, _("Back")), self._show_server, "server"))
+            actions.append(sl.primitives.Button(L(t"Back"), self._show_server, "server"))
         actions.append(
             sl.primitives.Button(
-                t(self.locale, _("Close")),
+                L(t"Close"),
                 self._close,
                 "close",
                 style=sl.primitives.ActionStyle.SECONDARY,
@@ -279,7 +278,7 @@ class SettingsPanel(sl.Component):
 
     def _channel_choices(self, setting: ScalarChannelSetting) -> tuple[sl.Choice, ...]:
         current = self.channel_id(setting)
-        choices = [sl.Choice("clear", t(self.locale, _("Clear")), _("Remove this channel."), available=True)]
+        choices = [sl.Choice("clear", L(t"Clear"), L(t"Remove this channel."), available=True)]
         channels = getattr(self._guild, "channels", ())
         for channel in channels:
             if getattr(channel, "type", None) not in CHANNEL_TYPES:
@@ -290,11 +289,11 @@ class SettingsPanel(sl.Component):
         return tuple(choices)
 
     def _role_choices(self) -> tuple[sl.Choice, ...]:
-        choices = [sl.Choice("none", t(self.locale, _("Choose a role")))]
+        choices = [sl.Choice("none", L(t"Choose a role"))]
         roles = {role.id: role for role in getattr(self._guild, "roles", ())}
         roles.update({weight.role_id: self._guild.get_role(weight.role_id) for weight in self._weights})
         for role_id, role in sorted(roles.items()):
-            label = role.name if role is not None else t(self.locale, _("Deleted role {id}"), id=role_id)
+            label = role.name if role is not None else L("Deleted role {id}", id=role_id)
             choices.append(sl.Choice(str(role_id), label))
         return tuple(choices)
 
@@ -318,7 +317,7 @@ class SettingsPanel(sl.Component):
         role_id = int(event.selected[0])
         role = self._guild.get_role(role_id)
         if role is None:
-            await event.notice(t(self.locale, _("That role has been deleted.")))
+            await event.notice(L(t"That role has been deleted."))
             return
         responder = sl.discord.responder(event)
         await responder.send_modal(RoleWeightModal(self, role, mount=responder.mount))
@@ -348,7 +347,7 @@ class SettingsPanel(sl.Component):
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await allows(sl.discord.native(event), node):
             return True
-        await event.notice(t(self.locale, _("You are no longer allowed to change this.")))
+        await event.notice(L(t"You are no longer allowed to change this."))
         return False
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
@@ -362,6 +361,8 @@ class SettingsPanel(sl.Component):
         await self._settings.set_locale(self._guild.id, locale)
         self._locale_override = locale
         self.locale = locale or self.locale
+        if self._mount is not None:
+            self._mount.localize(localization_for(self.locale))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
         if multiplier is None:
@@ -383,37 +384,37 @@ class SettingsPanel(sl.Component):
 
     def _server_fields(self) -> list[CardField]:
         fields = [
-            CardField(t(self.locale, SETTING_LABELS[setting]), self._channel_display(self._channels[setting]))
+            CardField(L(SETTING_LABELS[setting]), self._channel_display(self._channels[setting]))
             for setting in CHANNEL_SETTINGS
         ]
         language = (
             self._locale_override
             if self._locale_override is not None
-            else t(self.locale, _("Following this server's Discord language"))
+            else L(t"Following this server's Discord language")
         )
-        fields.append(CardField(t(self.locale, _("Bot language")), language))
+        fields.append(CardField(L(t"Bot language"), language))
         return fields
 
-    def _channel_display(self, channel_id: int | None) -> str:
+    def _channel_display(self, channel_id: int | None) -> sl.TextLike:
         if channel_id is None:
-            return t(self.locale, _("_Not set_"))
+            return L(t"_Not set_")
         if self._guild.get_channel_or_thread(channel_id) is None:
-            return t(self.locale, _("_Not found_ ({id})"), id=channel_id)
-        return f"<#{channel_id}>"
+            return L("_Not found_ ({id})", id=channel_id)
+        return sl.md("{mention}", mention=sl.raw_md(f"<#{channel_id}>"))
 
     def _voting_fields(self) -> list[CardField]:
         preset = self._preset
         emojis = (
             "\n".join(f"{option.emoji} — {option.choice.value}" for option in preset.options)
             if preset is not None and preset.options
-            else t(self.locale, _("_None_"))
+            else L(t"_None_")
         )
         weights = "\n".join(
             f"{self._role_display(weight.role_id)} — {weight.multiplier:g}x" for weight in self._weights
-        ) or t(self.locale, _("_None_"))
+        ) or L(t"_None_")
         return [
-            CardField(t(self.locale, _("Emojis")), emojis),
-            CardField(t(self.locale, _("Role multipliers")), weights),
+            CardField(L(t"Emojis"), emojis),
+            CardField(L(t"Role multipliers"), weights),
         ]
 
     def _role_display(self, role_id: int) -> str:
@@ -422,17 +423,15 @@ class SettingsPanel(sl.Component):
             return t(self.locale, _("_Deleted role_ ({id})"), id=role_id)
         return role.name
 
-    def _scope_note(self) -> str | None:
+    def _scope_note(self) -> sl.TextLike | None:
         if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
             return None
-        return t(
-            self.locale,
-            _("Build reviews are weighted by the network's own server, so these multipliers do not apply here."),
-        )
+        return L(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
 
     def mount(self) -> sl.discord.Mount:
         """Create the production mount with author lock and shared error handling."""
-        return create_mount(self, locale=self.locale, timeout=SESSION_SECONDS, lock_to=self._author_id)
+        self._mount = create_mount(self, locale=self.locale, timeout=SESSION_SECONDS, lock_to=self._author_id)
+        return self._mount
 
 
 class RoleWeightModal(ErrorHandledModal):
