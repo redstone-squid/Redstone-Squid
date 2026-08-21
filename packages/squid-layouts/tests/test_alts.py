@@ -14,8 +14,10 @@ from squid_layouts.planning import solve
 from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
 from squid_layouts.primitives import (
     Alt,
+    Condense,
     FieldGroup,
     Lines,
+    Never,
     Text,
     alts,
     card,
@@ -86,6 +88,50 @@ class TestLinesLadders:
         texts = _solved_texts(solved)
         assert any("more" in text for text in texts)
         assert sum(map(len, texts)) <= 4000
+
+
+class TestCondensePolicy:
+    def test_entries_step_down_their_ladders_and_none_is_dropped(self):
+        # A condensing block is a fixed cost, so its ladders engage only when the block
+        # itself overdraws the message rather than merely because a neighbour wants room.
+        entries = (
+            "short entry",
+            Alt("L" * 5000, ("long entry condensed",)),
+            "another short entry",
+        )
+        solved = solve([Lines(entries, overflow=Condense())])
+        text = "\n".join(_solved_texts(solved))
+        assert "long entry condensed" in text
+        assert "short entry" in text and "another short entry" in text
+        assert "more" not in text  # Condense never spills a whole entry
+
+    def test_exhausted_ladders_trim_the_joined_block(self):
+        entries = tuple(Alt("entry " + "x" * 500, ("entry " + "y" * 400,)) for _ in range(20))
+        solved = solve([Lines(entries, overflow=Condense())])
+        assert any("exhausted its ladders" in note for note in solved.notes)
+        assert sum(map(len, _solved_texts(solved))) <= 4000
+
+    def test_plain_entries_behave_like_never(self):
+        # Nothing to step, so the block trims as a whole rather than losing an entry.
+        solved = solve([Lines(tuple("line " + "x" * 500 for _ in range(20)), overflow=Condense())])
+        assert not any("more" in text for text in _solved_texts(solved))
+        assert sum(map(len, _solved_texts(solved))) <= 4000
+
+    def test_a_condensing_block_is_charged_before_flexible_neighbours(self):
+        # The card's shock absorber is the prose, not the field list: the body trims first.
+        body = Text("b" * 3000, priority=-5)
+        block = Lines(tuple(f"**F{index}:** value" for index in range(10)), overflow=Condense())
+        solved = solve([body, block, Text("f" * 2000, priority=-5)])
+        texts = _solved_texts(solved)
+        assert all(f"**F{index}:** value" in texts[1] for index in range(10))
+
+    def test_never_still_outranks_a_condensing_block(self):
+        # A heading may not shrink at all, so it is charged ahead of a block that can.
+        heading = Text("H" * 200, overflow=Never())
+        block = Lines(tuple(Alt("e" * 900, ("e" * 100,)) for _ in range(6)), overflow=Condense())
+        solved = solve([heading, block])
+        assert "H" * 200 in _solved_texts(solved)
+        assert sum(map(len, _solved_texts(solved))) <= 4000
 
 
 class TestConstrainedShapes:

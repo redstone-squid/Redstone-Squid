@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
-from squid_layouts.primitives.constraints import Alts, Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     Button,
     Code,
@@ -380,6 +380,8 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
             return False
         case Spill() if unit.ladders is not None:
             return _apply_spill(unit, usable, chrome, notes)
+        case Condense() if usable >= 1:
+            return _apply_condense(unit, usable, notes)
         case Alts(ladder=ladder) if usable >= 1:
             for alternate in ladder:
                 if alternate and len(alternate) <= usable:
@@ -424,24 +426,52 @@ def _apply_count_pages(unit: _Unit) -> bool:
     return True
 
 
+def _step_ladders(ladders: tuple[tuple[str, ...], ...], join: str, usable: int) -> list[int]:
+    """Pick each entry's ladder rung, stepping the largest entry down until the block fits.
+
+    Shared by `Spill` and `Condense`: both shrink entries the same way and differ only in
+    what they do once every ladder is exhausted. Returns one rung index per entry, which is
+    0 for an entry that never had to move.
+    """
+    levels = [0] * len(ladders)
+
+    def entry(index: int) -> str:
+        return ladders[index][levels[index]]
+
+    while sum(len(entry(i)) for i in range(len(ladders))) + (len(ladders) - 1) * len(join) > usable:
+        candidates = [i for i in range(len(ladders)) if levels[i] + 1 < len(ladders[i])]
+        if not candidates:
+            break
+        largest = max(candidates, key=lambda i: len(entry(i)))
+        levels[largest] += 1
+    return levels
+
+
+def _apply_condense(unit: _Unit, usable: int, notes: list[str]) -> bool:
+    """Shorten entries as far as their ladders go, then trim; never lose a whole entry."""
+    ladders = unit.ladders or ((unit.content,),)
+    levels = _step_ladders(ladders, unit.join, usable)
+    body = unit.join.join(ladder[level] for ladder, level in zip(ladders, levels, strict=True))
+    stepped = sum(1 for level in levels if level)
+    if stepped:
+        notes.append(f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders")
+    if len(body) > usable:
+        notes.append(f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}")
+        body = _trim_keep(body, usable, "head")
+    unit.slot.content = unit.prefix + body + unit.suffix
+    return True
+
+
 def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> bool:
     ladders = unit.ladders or ()
     total = len(ladders)
     # First degrade the largest entries down their ladders; spill whole entries only after
     # every ladder is exhausted.
-    levels = [0] * total
-    degraded = False
+    levels = _step_ladders(ladders, unit.join, usable)
+    degraded = any(levels)
 
     def entry(index: int) -> str:
         return ladders[index][levels[index]]
-
-    while sum(len(entry(i)) for i in range(total)) + (total - 1) * len(unit.join) > usable:
-        candidates = [i for i in range(total) if levels[i] + 1 < len(ladders[i])]
-        if not candidates:
-            break
-        largest = max(candidates, key=lambda i: len(entry(i)))
-        levels[largest] += 1
-        degraded = True
 
     # Stepping is about fitting, so it takes the largest entries first; dropping is about
     # what the reader can afford to lose, so it takes the lowest priority first (ties from
@@ -468,7 +498,10 @@ def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome)
     active = list(units)
     for _ in range(len(units) + 1):
         remaining = budget
-        # Never nodes are fixed costs: charge them before any flexible node sees the budget.
+        # Never and Condense nodes are fixed costs: both promise to keep every entry, so
+        # they are charged before any flexible node sees the budget. Never goes first —
+        # a heading or a paragraph outranks a field block that can still condense — and
+        # only Never's shortfall is reported, because only Never's shortfall is a defeat.
         overdraw = 0
         for unit in active:
             if isinstance(unit.overflow, Never):
@@ -477,7 +510,11 @@ def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome)
                 remaining -= unit.grant
         if overdraw:
             notes.append(f"Never nodes need {budget + overdraw} of {budget} available characters")
-        flexible = [unit for unit in active if not isinstance(unit.overflow, Never)]
+        for unit in active:
+            if isinstance(unit.overflow, Condense):
+                unit.grant = min(unit.need, max(0, remaining))
+                remaining -= unit.grant
+        flexible = [unit for unit in active if not isinstance(unit.overflow, Never | Condense)]
         for priority in sorted({unit.priority for unit in flexible}, reverse=True):
             group = [unit for unit in flexible if unit.priority == priority]
             total_need = sum(unit.need for unit in group)

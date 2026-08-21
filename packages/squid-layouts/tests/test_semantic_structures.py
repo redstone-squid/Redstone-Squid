@@ -8,19 +8,32 @@ from squid_layouts import (
 )
 from squid_layouts.discord import DEFAULT_TARGET
 from squid_layouts.runtime import PresentationSession
-from squid_layouts.scene.model import SceneGallery, SceneRow, SceneSelect, SceneText
+from squid_layouts.scene.model import (
+    SceneGallery,
+    SceneGalleryItem,
+    ScenePanel,
+    SceneRow,
+    SceneSection,
+    SceneSelect,
+    SceneText,
+    SceneThumbnail,
+)
 from squid_layouts.semantic import (
     Choice,
     Choices,
     Column,
     Destination,
     Details,
+    Field,
+    Fields,
     Item,
     Items,
     Media,
     MediaItem,
     Navigation,
+    Note,
     Paragraph,
+    Section,
     Table,
     TableRow,
 )
@@ -149,3 +162,45 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     assert table_scene.children[0].content.startswith("```")
     galleries = [node for node in media_scene.children if isinstance(node, SceneGallery)]
     assert [len(gallery.items) for gallery in galleries] == [10, 2]
+
+
+def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
+    document = Section(
+        (Paragraph("body"), Note("Submission ID: 5")),
+        heading="Title",
+        accent=0x43B581,
+        thumbnail="https://example.invalid/lead.png",
+    )
+
+    scene = plan(document, target=DEFAULT_TARGET).scene
+    panel = scene.children[0]
+
+    assert isinstance(panel, ScenePanel)
+    assert panel.accent == 0x43B581
+    lead = panel.children[0]
+    assert isinstance(lead, SceneSection)
+    assert lead.texts[0].content == "## Title"
+    assert lead.accessory == SceneThumbnail("https://example.invalid/lead.png")
+    assert panel.children[-1] == SceneText("-# Submission ID: 5")
+
+
+def test_a_lead_image_with_no_heading_has_nothing_to_sit_beside() -> None:
+    document = Section((Paragraph("body"),), thumbnail="https://example.invalid/lead.png")
+
+    panel = plan(document, target=DEFAULT_TARGET).scene.children[0]
+
+    assert isinstance(panel, ScenePanel)
+    assert panel.children[0] == SceneGallery((SceneGalleryItem("https://example.invalid/lead.png"),))
+
+
+def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
+    document = Section(
+        (Fields(tuple(Field(str(index), f"Field {index}", "v" * 400, fallbacks=("short",)) for index in range(20))),),
+    )
+
+    panel = plan(document, target=DEFAULT_TARGET).scene.children[0]
+
+    assert isinstance(panel, ScenePanel)
+    body = "\n".join(child.content for child in panel.children if isinstance(child, SceneText))
+    assert all(f"**Field {index}:**" in body for index in range(20))
+    assert "short" in body

@@ -6,6 +6,7 @@ from enum import IntEnum, StrEnum
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
+from squid_layouts.primitives.styles import Color
 from squid_layouts.text import TextLike
 
 
@@ -88,14 +89,32 @@ class Cluster:
 
 @dataclass(frozen=True, slots=True)
 class Section:
+    """A titled block of related content.
+
+    ``accent`` is an explicit house-colour override, not a semantic fact: it says "paint
+    this the brand's green", which is chrome the framework has no opinion about. Colour
+    that *means* something — advisory, warning, failed — belongs on `Aside` or `Status`
+    via `Tone`, which every target maps for itself. Reach for ``accent`` when the exact
+    value is data (a guild's configured colour) or house style, and for `Aside` otherwise.
+
+    ``thumbnail`` is a lead image shown beside the heading. With no heading there is
+    nothing to sit beside, so it lowers to a leading single-image gallery instead.
+    """
+
     children: tuple[LayoutNode, ...]
     heading: TextLike | None = None
+    accent: Color | None = None
+    thumbnail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Article:
+    """A self-contained block that stands on its own; see `Section` for the extras."""
+
     children: tuple[LayoutNode, ...]
     heading: TextLike | None = None
+    accent: Color | None = None
+    thumbnail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,10 +153,18 @@ class List:
 
 @dataclass(frozen=True, slots=True)
 class Field:
+    """One labelled value.
+
+    ``fallbacks`` are shorter forms of ``value``, tried in order when the block is under
+    budget pressure — a count where the full form is a hundred links. A field steps down
+    its own ladder independently of its neighbours and is never dropped whole.
+    """
+
     key: str
     label: TextLike
     value: TextLike
     importance: Importance = Importance.NORMAL
+    fallbacks: tuple[TextLike, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +192,14 @@ class Table:
     key: str
     display: TableDisplay = TableDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Note:
+    """Small print: an id, a timestamp, a caveat the reader may skip."""
+
+    content: TextLike
+    importance: Importance = Importance.LOW
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,6 +401,7 @@ type SemanticNode = (
     | Aside
     | Heading
     | Paragraph
+    | Note
     | List
     | Fields
     | Table
