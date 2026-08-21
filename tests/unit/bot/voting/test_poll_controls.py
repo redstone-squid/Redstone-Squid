@@ -19,11 +19,10 @@ def _custom_ids(layout: discord.ui.LayoutView) -> list[str]:
 def test_an_open_poll_card_carries_its_own_close_and_refresh_controls() -> None:
     """`/poll close` and `/poll refresh` made you paste a link to the card in front of you.
 
-    The custom ids are pinned rather than merely counted: a card published by an earlier
-    release is routed by its id alone, so renaming one silently breaks every poll that is
-    already open (audit C4).
+    Canonical ids are pinned rather than merely counted. Legacy ids are pinned separately
+    against the route aliases, so new cards can migrate without orphaning old ones.
     """
-    assert _custom_ids(render_generic_poll(poll_snapshot())) == ["poll:close", "poll:refresh"]
+    assert _custom_ids(render_generic_poll(poll_snapshot())) == ["r:polls:close", "r:polls:refresh"]
 
 
 def test_a_closed_poll_card_has_nothing_left_to_click() -> None:
