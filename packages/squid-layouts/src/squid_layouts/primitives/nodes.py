@@ -92,7 +92,7 @@ class Button:
 
 @dataclass(frozen=True, slots=True)
 class RoutedButton:
-    """A button whose custom id *is* its state, dispatched by a router rather than a mount.
+    """A button whose route id *is* its state, dispatched by a router rather than a mount.
 
     Carries no handler, so it needs no binding and survives the process that drew it: a
     sessionless document may hold one, and a mount's policies (author lock, generation
@@ -101,7 +101,7 @@ class RoutedButton:
     """
 
     label: TextLike
-    custom_id: str
+    route_id: str
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: str | None = None
     disabled: bool = False

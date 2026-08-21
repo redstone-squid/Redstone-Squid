@@ -105,11 +105,11 @@ class _Converter:
                 return SceneThumbnail(url, description)
             case LinkButton(label=label, url=url):
                 return SceneLink(label, url)
-            case RoutedButton(label=label, custom_id=custom_id):
+            case RoutedButton(label=label, route_id=route_id):
                 # No binding: the router owns dispatch, so the scene is complete without one.
                 return SceneRoutedButton(
                     label=label,
-                    custom_id=custom_id,
+                    route_id=route_id,
                     style=node.style,
                     emoji=node.emoji,
                     disabled=node.disabled,

@@ -125,14 +125,14 @@ class Renderer:
                     return discord.ui.Thumbnail(url, description=description)
                 case SceneLink(label=label, url=url):
                     return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
-                case SceneRoutedButton(label=label, custom_id=custom_id):
+                case SceneRoutedButton(label=label, route_id=route_id):
                     # No binding to wire, so this draws in a sessionless document too. Not a
                     # DynamicItem: discord.py's dynamic dispatch finds the base item by custom
                     # id, so nothing outgoing has to be one.
                     return RoutedItem(
                         style=getattr(discord.ButtonStyle, node.style.value),
                         label=label,
-                        custom_id=custom_id,
+                        custom_id=route_id,
                         emoji=node.emoji,
                         disabled=node.disabled,
                     )

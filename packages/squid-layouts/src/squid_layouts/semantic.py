@@ -331,7 +331,7 @@ class RoutedAction:
     """A control whose custom id is its state, dispatched by a router rather than a mount.
 
     For the buttons on mass-posted cards that must still work after a restart: no
-    in-process handler, so a sessionless document may carry one. Build ``custom_id`` with
+    in-process handler, so a sessionless document may carry one. Build ``route_id`` with
     a `squid_layouts.routing.Route`, which validates it against Discord's budget at
     authoring time rather than at send time.
 
@@ -341,7 +341,7 @@ class RoutedAction:
 
     key: str
     label: TextLike
-    custom_id: str
+    route_id: str
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
