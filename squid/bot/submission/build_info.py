@@ -51,7 +51,7 @@ class BuildInfoComponent(sl.Component):
             self.build,
             interaction.client.services.builds,
             locale=self.locale,
-        ).send(interaction, ephemeral=self._ephemeral)
+        ).send(interaction, ephemeral=self._ephemeral, parent=sl.discord.responder(event).mount)
 
     def mount(self) -> sl.discord.Mount:
         return create_mount(
