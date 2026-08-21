@@ -368,9 +368,8 @@ class AccountPanel(sl.Component):
         extra_media = media[1:]
         nodes: list[sl.LayoutNode] = [
             sl.section(
-                # The bio is the card's shock absorber: sl.truncate lets it give up characters
-                # under pressure before the fields or footer lose any, mirroring
-                # presets.card's fixed field/footer priority over the description.
+                # The bio is the card's shock absorber: truncate lets it give up characters
+                # under pressure before the fields or footer lose any.
                 self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
                 sl.fields(*fields),
                 bool(extra_media) and sl.media(*extra_media, key="media"),
