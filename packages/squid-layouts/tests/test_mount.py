@@ -275,6 +275,159 @@ class TestAuthorLock:
 
         assert component.count == 1
 
+    async def test_a_set_admits_every_member(self):
+        component = Counter()
+        mount = Mount(component, timeout=None, lock_to={42, 43})
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction(user_id=42))
+        await mount.dispatch("inc", fake_interaction(user_id=43))
+
+        assert component.count == 2
+
+    async def test_a_set_still_rejects_a_stranger(self):
+        component = Counter()
+        mount = Mount(component, timeout=None, lock_to={42, 43})
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction(user_id=99))
+
+        assert component.count == 0
+
+    async def test_a_bare_id_normalizes_to_a_set(self):
+        assert Mount(Counter(), timeout=None, lock_to=42).lock_to == frozenset({42})
+        assert Mount(Counter(), timeout=None).lock_to is None
+
+
+class TestFinishHooks:
+    async def test_a_hook_fires_on_finish(self):
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+        mount.on_finish(lambda finished: _record(seen, finished))
+
+        await mount.finish(disable=False)
+
+        assert seen == [mount]
+
+    async def test_a_hook_fires_on_finish_via(self):
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+        mount.on_finish(lambda finished: _record(seen, finished))
+        commit_render(mount)
+
+        await mount.finish_via(fake_interaction())
+
+        assert seen == [mount]
+
+    async def test_a_hook_fires_on_timeout(self):
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+        mount.on_finish(lambda finished: _record(seen, finished))
+
+        await mount.handle_timeout()
+
+        assert seen == [mount]
+
+    async def test_a_hook_fires_once_across_repeated_finishes(self):
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+        mount.on_finish(lambda finished: _record(seen, finished))
+
+        await mount.finish(disable=False)
+        await mount.finish(disable=False)
+        await mount.handle_timeout()
+
+        assert seen == [mount]
+
+    async def test_hooks_run_in_registration_order(self):
+        mount = Mount(Counter(), timeout=None)
+        order: list[str] = []
+        mount.on_finish(lambda _: _note(order, "first"))
+        mount.on_finish(lambda _: _note(order, "second"))
+
+        await mount.finish(disable=False)
+
+        assert order == ["first", "second"]
+
+    async def test_a_raising_hook_does_not_stop_the_others_or_teardown(self):
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+
+        async def explode(_: Mount) -> None:
+            raise RuntimeError("observer is broken")
+
+        mount.on_finish(explode)
+        mount.on_finish(lambda finished: _record(seen, finished))
+        commit_render(mount)
+
+        await mount.finish(disable=False)
+
+        assert seen == [mount]
+        assert mount.finished
+        assert mount._view is None
+
+    async def test_a_hook_fires_even_when_the_disable_edit_raises(self):
+        """The mount is finished and torn down either way, so an observer must hear about it.
+
+        `finish_via` re-raises past its own `finally`, which is where the hooks have to run.
+        """
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+        mount.on_finish(lambda finished: _record(seen, finished))
+        commit_render(mount)
+        interaction = fake_interaction()
+        interaction.response.edit_message = AsyncMock(side_effect=RuntimeError("gateway is down"))
+
+        with pytest.raises(RuntimeError):
+            await mount.finish_via(interaction)
+
+        assert seen == [mount]
+        assert mount.finished
+
+    async def test_finishing_from_inside_a_hook_does_not_recurse(self):
+        mount = Mount(Counter(), timeout=None)
+        calls: list[int] = []
+
+        async def finish_again(finished: Mount) -> None:
+            calls.append(1)
+            await finished.finish(disable=False)
+
+        mount.on_finish(finish_again)
+
+        await mount.finish(disable=False)
+
+        assert calls == [1]
+
+    async def test_finished_flips_only_once_the_mount_is_done(self):
+        mount = Mount(Counter(), timeout=None)
+
+        assert not mount.finished
+
+        await mount.finish(disable=False)
+
+        assert mount.finished
+
+    async def test_a_late_click_never_reaches_the_handler(self):
+        """`view.stop()` hides this in production; a superseded-but-visible message does not."""
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        commit_render(mount)
+        await mount.finish(disable=False)
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction)
+
+        assert component.count == 0
+        assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
+
+
+async def _record(seen: list[Mount], mount: Mount) -> None:
+    seen.append(mount)
+
+
+async def _note(order: list[str], label: str) -> None:
+    order.append(label)
+
 
 class TestActionPolicy:
     async def test_exclusive_action_from_a_stale_view_is_acknowledged_without_running(self):
