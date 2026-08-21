@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock
 
 import discord
 
+from squid_layouts.discord.delivery import Destination
 from squid_layouts.discord.mount import Mount, MountedView
 from squid_layouts.planning.limits import LIMITS, V2Limits
 
@@ -147,14 +148,33 @@ def fake_message(*, message_id: int = 99, ephemeral: bool = False) -> Any:
     return message
 
 
-def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
-    """Stage a render and commit it with no Discord delivery — the test-side `bind`.
+def delivered_to(message: Any) -> Destination:
+    """A destination that hands `message` straight back — a send with no Discord in it.
 
-    `Mount.build_view` only stages; handlers and the live generation move when the host
-    reports a successful delivery. Tests that never touch Discord say so with this.
+    The mount ends up holding exactly the handle a real send would have given it, so tests
+    about editing, refreshing and finishing can start from a delivered mount.
+    """
+
+    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> Any:
+        return message
+
+    return send
+
+
+def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
+    """Stage a render and commit it with no Discord delivery — `Mount.send` to nowhere.
+
+    `Mount.build_view` only stages; handlers and the live generation move when a delivery
+    lands. Tests that never touch Discord say where that point is with this, rather than
+    driving a destination that would only ever hand back `None`.
+
+    Reaches past `send` on purpose: the alternative is making every one of these call sites
+    await, for no coverage of anything the real send path does.
     """
     view = mount.build_view(disabled=disabled)
-    mount.bind(None, view)
+    candidate = mount._pending
+    assert candidate is not None and candidate.view is view
+    mount._commit(candidate)
     return view
 
 
