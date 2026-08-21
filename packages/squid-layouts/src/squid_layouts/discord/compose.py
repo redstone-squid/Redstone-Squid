@@ -36,11 +36,6 @@ class Composition:
     def pages(self) -> int:
         return self.plan.scene.pagers[0].pages if self.plan.scene.pagers else 1
 
-    @property
-    def interventions(self) -> list[str]:
-        """Drawing no longer clamps; retained as an empty audit result."""
-        return []
-
 
 def compose(
     rendered: DocumentLike,
