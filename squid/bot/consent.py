@@ -65,9 +65,16 @@ class ConsentPrompt(sl.Component):
         return CURRENT_CONSENT_VERSION
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
-        card_fields = tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._fields)
+        card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
-            sl.primitives.card(self._title, self._summary, fields=card_fields),
+            sl.section(
+                # The summary is the card's shock absorber: sl.truncate lets it give up
+                # characters under pressure before a field loses any, mirroring presets.card's
+                # fixed field priority over the description.
+                sl.truncate(sl.paragraph(self._summary)),
+                bool(card_fields) and sl.fields(*card_fields),
+                heading=self._title,
+            ),
             sl.primitives.Row(
                 (
                     sl.primitives.Button(
