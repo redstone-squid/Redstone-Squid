@@ -3,6 +3,7 @@
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.runtime.component import Component, ComponentTree, render_component_tree
 from squid_layouts.runtime.context import ContextKey
@@ -34,12 +35,21 @@ class ComponentRuntime:
         if self.on_invalidate is not None:
             self.on_invalidate()
 
-    def render(self) -> ComponentTree:
-        """Render a candidate tree; call :meth:`commit` after planning and drawing succeed."""
-        return render_component_tree(self.root, runtime=self, context=self.context)
+    def render(self, *, defer: Callable[[Component], bool] | None = None) -> ComponentTree:
+        """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
+
+        ``defer`` renders for discovery only -- see :func:`render_component_tree`. Such a tree
+        is missing subtrees and must never be passed to :meth:`commit`.
+        """
+        return render_component_tree(self.root, runtime=self, context=self.context, defer=defer)
 
     def commit(self, tree: ComponentTree) -> None:
         """Publish one successfully planned tree and reconcile keyed lifecycle hooks."""
+        if tree.deferred:
+            # A discovery tree is missing subtrees; committing one would unmount live
+            # components that are only absent because expansion stopped early.
+            message = "a discovery render cannot be committed"
+            raise LayoutInvariantError(message)
 
         def depth(path: str) -> int:
             return 0 if path == "$" else path.count(".") + 1
