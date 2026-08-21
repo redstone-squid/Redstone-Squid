@@ -270,18 +270,18 @@ class Route:
         rendered = {
             name: converter.build(params[name]) for name, converter in zip(self.params, self.converters, strict=True)
         }
-        custom_id = self.template.format(**rendered)
-        if not self.pattern.fullmatch(custom_id):
-            message = f"route {self.format!r} cannot match the id it built from {params!r}: {custom_id!r}"
+        route_id = self.template.format(**rendered)
+        if not self.pattern.fullmatch(route_id):
+            message = f"route {self.format!r} cannot match the id it built from {params!r}: {route_id!r}"
             raise ValueError(message)
-        if len(custom_id) > LIMITS.custom_id:
-            message = f"route {self.format!r} built a {len(custom_id)}-character id, over the {LIMITS.custom_id} budget"
+        if len(route_id) > LIMITS.custom_id:
+            message = f"route {self.format!r} built a {len(route_id)}-character id, over the {LIMITS.custom_id} budget"
             raise LayoutInvariantError(message)
-        return custom_id
+        return route_id
 
-    def match(self, custom_id: str) -> dict[str, Any] | None:
-        """The parameters ``custom_id`` carries, or None when it belongs to another route."""
-        found = self.pattern.fullmatch(custom_id)
+    def match(self, route_id: str) -> dict[str, Any] | None:
+        """The parameters ``route_id`` carries, or None when it belongs to another route."""
+        found = self.pattern.fullmatch(route_id)
         if found is not None:
             raw = found.groupdict()
             try:
@@ -293,7 +293,7 @@ class Route:
                 # A converter's pattern admitted something its parse rejects: not our id.
                 return None
         for alias in self._alias_routes:
-            if (params := alias.match(custom_id)) is not None:
+            if (params := alias.match(route_id)) is not None:
                 return params
         return None
 

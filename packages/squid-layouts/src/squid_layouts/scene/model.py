@@ -40,7 +40,7 @@ class SceneButton:
 
 @dataclass(frozen=True, slots=True)
 class SceneRoutedButton:
-    """A button carrying its own custom id, with no binding for a frontend to wire.
+    """A button carrying its own route id, with no binding for a frontend to wire.
 
     That absence is the point: a renderer can draw one without a live session, which is
     what lets a sessionless document hold a control, and a codec can round-trip one,
@@ -48,7 +48,7 @@ class SceneRoutedButton:
     """
 
     label: str
-    custom_id: str
+    route_id: str
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: str | None = None
     disabled: bool = False
