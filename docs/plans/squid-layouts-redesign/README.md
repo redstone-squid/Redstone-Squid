@@ -34,7 +34,7 @@ is not re-derived later.
 | 11 | [Small warts sweep](11-small-warts.md) | Vestigial `Composition.interventions`, `Choices(minimum=1)` audit, custom-id collision test, post-01 `build_view` naming. |
 | 12 | [Session policy wrapper](12-session-policy.md) | Host-side `MountRegistry` with Replace/Reject/Coexist instance policies; `allowed_users` on Mount. |
 | 13 | [Runtime devtools](13-devtools.md) | Owner-only `/dev ui` cog over a weak mount registry: list, inspect, scene dump. |
-| 14 | [Routed actions](14-routed-actions.md) | First-class stateless controls (`RoutedAction` + `Router`): replaces the five hand-rolled `DynamicItem` classes and the `RawItem`/cast splices, makes routed scenes serializable, and unblocks semantic authoring of vote/starboard/consent cards. Best before 04's phase B touches those files; explicitly *not* a durability feature. |
+| 14 | [Routed actions](14-routed-actions.md) | First-class stateless controls (`Route` + `RoutedAction` + `Router`): replaces the five hand-rolled `DynamicItem` classes and the `RawItem`/cast splices, makes routed scenes serializable, and unblocks semantic authoring of vote/starboard/consent cards. Routes keep their existing custom ids, so posted messages survive. Lands between 04's phase A and phase B; explicitly *not* a durability feature. |
 
 ## Relation to existing plans
 
