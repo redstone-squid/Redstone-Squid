@@ -24,6 +24,7 @@ from squid.bot.profile_render import (
     public_profile_fields,
 )
 from squid.bot.submission.ui.views import ConfirmationView
+from squid.bot.ui import destination
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import DISCORD_BLUE, card_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
@@ -76,14 +77,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         )
         await component.load()
         mount = component.mount()
-        rendered = mount.build_view()
-        message = await ctx.send(
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=personal(ctx),
-            allowed_mentions=no_mentions(),
-        )
-        mount.bind(message, rendered)
+        await mount.send(destination(ctx, visibility="personal", locale=locale))
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
@@ -377,14 +371,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_reject=reject.allowed,
         )
         mount = component.mount()
-        rendered = mount.build_view()
-        message = await ctx.send(
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=personal(ctx),
-            allowed_mentions=no_mentions(),
-        )
-        mount.bind(message, rendered)
+        await mount.send(destination(ctx, visibility="personal", locale=locale))
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

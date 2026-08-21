@@ -206,15 +206,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             on_submit=persist_draft,
         )
         mount = component.mount()
-        rendered = mount.build_view()
-        workspace_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=True,
-            wait=True,
-            allowed_mentions=no_mentions(),
-        )
-        mount.bind(workspace_message, rendered)
+        workspace_message = await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
+        # `wait=True` fetches the message back, and a delivery that produced none would have
+        # raised. The form edits this message three times below, so it needs the handle.
+        assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()
         if component.value is None:
             await edit_layout(

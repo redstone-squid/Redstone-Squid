@@ -202,14 +202,7 @@ class PollModal(ErrorHandledModal):
             allow_network=self.allow_network,
         )
         mount = component.mount()
-        rendered = mount.build_view()
-        await interaction.response.send_message(
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
-        )
-        mount.bind(await interaction.original_response(), rendered)
+        await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
 
 
 class CustomDurationModal(ErrorHandledModal):

@@ -80,15 +80,7 @@ async def open_consent_prompt(interaction: Interaction[Any], _params: Mapping[st
         timeout=120,
     )
     mount = component.mount()
-    rendered = mount.build_view()
-    msg = await interaction.followup.send(
-        view=rendered,
-        files=mount.attachment_files(),
-        ephemeral=True,
-        wait=True,
-        allowed_mentions=no_mentions(),
-    )
-    mount.bind(msg, rendered)
+    await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
     await component.wait()
 
     if component.consent is not None:
