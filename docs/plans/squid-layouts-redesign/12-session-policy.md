@@ -31,12 +31,17 @@ runtime — session policy is operational, not presentational.
    - `Coexist()`: no constraint (default, current behavior).
 2. The registry tracks live mounts by key, hooks `Mount.finish` for cleanup (needs a
    small `on_finish` callback on `Mount` — the only framework change), and offers
-   `finish_children_of(key)` for parent/child teardown.
+   `finish_children_of(key)` for parent/child teardown. `open()` takes `parent=key` so
+   a mount spawned mid-interaction (a *branch*, per `90-deferred.md`'s multi-message
+   entry) registers under its parent — without it no child ever enters the registry and
+   `finish_children_of` has nothing to find.
 3. Participants/shared sessions: not in v1. `lock_to` covers single-owner; a
    `allowed_users: set[int]` generalization on `Mount` is a two-line change worth doing
    while touching dispatch, but participant *tracking* waits for a real consumer.
 4. First consumers: settings panel (`Replace`), poll wizard (`Reject` — two concurrent
-   wizards for one poll is a real footgun today).
+   wizards for one poll is a real footgun today), consent prompts (`parent=` — the
+   existing branch pattern, `account_view.py`/`consent.py`; today a panel that finishes
+   leaves an open consent branch to its own 120s timeout).
 
 ## Verification
 
