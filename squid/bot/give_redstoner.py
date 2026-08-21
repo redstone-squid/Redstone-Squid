@@ -12,7 +12,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import REMOVE_REDSTONER_ROLE, ROUTER
+from squid.bot.routes import remove_redstoner_role, router
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-@ROUTER.route(REMOVE_REDSTONER_ROLE)
+@router.route(remove_redstoner_role)
 async def remove_own_redstoner_role(interaction: Interaction[Any], _params: Mapping[str, str]) -> None:
     """Let a member drop the redstoner role the bot gave them."""
     await interaction.response.defer(ephemeral=True)
@@ -101,7 +101,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     (
                         sl.primitives.RoutedButton(
                             "I'm not a redstoner",
-                            REMOVE_REDSTONER_ROLE.id(),
+                            remove_redstoner_role.id(),
                             style=sl.primitives.ActionStyle.DANGER,
                         ),
                     )
