@@ -16,6 +16,7 @@ from squid_layouts.scene.model import (
     SceneNode,
     ScenePanel,
     SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -152,6 +153,31 @@ class Renderer:
                 return (
                     f'<select class="squid-select" data-squid-action="{_attribute(action)}" '
                     f'data-squid-policy="{policy.value}" data-squid-min="{minimum}" data-squid-max="{maximum}"'
+                    f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
+                )
+            case SceneRoutedSelect(
+                options=options,
+                route_id=route_id,
+                placeholder=placeholder,
+                min_values=minimum,
+                max_values=maximum,
+                disabled=disabled,
+            ):
+                disabled_attribute = " disabled" if disabled else ""
+                multiple = " multiple" if maximum > 1 else ""
+                prompt = (
+                    f'<option value="" disabled selected>{escape(placeholder)}</option>'
+                    if placeholder is not None
+                    else ""
+                )
+                rendered = "".join(
+                    f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
+                    f"{escape(option.label)}</option>"
+                    for option in options
+                )
+                return (
+                    f'<select class="squid-select" data-route-id="{_attribute(route_id)}" '
+                    f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
             case SceneThumbnail(url=url, description=description):

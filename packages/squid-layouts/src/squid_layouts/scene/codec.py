@@ -21,6 +21,7 @@ from squid_layouts.scene.model import (
     ScenePager,
     ScenePanel,
     SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -185,6 +186,31 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton)
                 "disabled": disabled,
                 "policy": policy.value,
             }
+        case SceneRoutedSelect(
+            options=options,
+            route_id=route_id,
+            placeholder=placeholder,
+            min_values=min_values,
+            max_values=max_values,
+            disabled=disabled,
+        ):
+            return {
+                "kind": "routed_select",
+                "options": [
+                    {
+                        "label": option.label,
+                        "value": option.value,
+                        "description": option.description,
+                        "default": option.default,
+                    }
+                    for option in options
+                ],
+                "route_id": route_id,
+                "placeholder": placeholder,
+                "min_values": min_values,
+                "max_values": max_values,
+                "disabled": disabled,
+            }
         case SceneRow(items=items):
             return {"kind": "row", "items": [_node_to_dict(item) for item in items]}
         case SceneThumbnail(url=url, description=description):
@@ -259,6 +285,27 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
+            )
+        case "routed_select":
+            options = raw.get("options")
+            if not isinstance(options, list):
+                msg = "routed select options must be an array"
+                raise SceneCodecError(msg)
+            return SceneRoutedSelect(
+                options=tuple(
+                    SceneOption(
+                        label=_string(_object(option), "label"),
+                        value=_string(_object(option), "value"),
+                        description=_optional_string(_object(option), "description"),
+                        default=_boolean(_object(option), "default"),
+                    )
+                    for option in options
+                ),
+                route_id=_string(raw, "route_id"),
+                placeholder=_optional_string(raw, "placeholder"),
+                min_values=_integer(raw, "min_values"),
+                max_values=_integer(raw, "max_values"),
+                disabled=_boolean(raw, "disabled"),
             )
         case "row":
             items = raw.get("items")
