@@ -1,6 +1,6 @@
 """Lower semantic author intent into finite target-shaped strategy candidates."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
@@ -8,7 +8,7 @@ from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
 from squid_layouts.planning.limits import V2Limits
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup as PrimitiveActionGroup,
@@ -67,6 +67,7 @@ from squid_layouts.semantic import (
     Field,
     Fields,
     Figure,
+    Flexibility,
     FormTrigger,
     Group,
     Heading,
@@ -103,6 +104,15 @@ from squid_layouts.text import Localization, TextLike, resolve_text
 ACTIONS_ADAPTER_ID = "discord.actions"
 ACTIONS_ADAPTER_VERSION = 1
 
+ITEMS_ADAPTER_ID = "discord.items"
+ITEMS_ADAPTER_VERSION = 1
+MEDIA_ADAPTER_ID = "discord.media"
+MEDIA_ADAPTER_VERSION = 1
+NAVIGATION_ADAPTER_ID = "discord.navigation"
+NAVIGATION_ADAPTER_VERSION = 1
+TABLE_ADAPTER_ID = "discord.table"
+TABLE_ADAPTER_VERSION = 1
+
 
 @dataclass(frozen=True, slots=True)
 class SemanticLowering:
@@ -124,9 +134,77 @@ class _Context:
     capabilities: frozenset[str]
     events: list[PlanEvent]
     updates: list[SessionUpdate]
+    strategies: Mapping[str, str]
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
+
+
+def nominate_strategies(
+    nodes: Sequence[LayoutNode],
+    *,
+    limits: V2Limits,
+    session: PresentationSession,
+) -> tuple[StrategyAxis, ...]:
+    """Collect every strategy axis reachable under any current representation."""
+    axes: list[StrategyAxis] = []
+
+    def walk_children(children: Sequence[LayoutNode], path: str) -> None:
+        for index, child in enumerate(children):
+            walk(child, f"{path}.{index}")
+
+    def walk(node: LayoutNode, path: str) -> None:
+        match node:
+            case Truncated(node=child) | Spilled(node=child) | OptionalContent(node=child) | BestEffort(node=child):
+                walk(child, path)
+            case FallbackContent(primary=primary, alternates=alternates):
+                walk(primary, f"{path}.primary")
+                for index, alternate in enumerate(alternates):
+                    walk(alternate, f"{path}.alternate.{index}")
+            case Actions():
+                axes.append(_action_axis(node, path, limits, session))
+            case Table():
+                axes.append(_table_axis(node, path, session))
+            case Media():
+                axes.append(_media_axis(node, path, session))
+            case Navigation():
+                axes.append(_navigation_axis(node, path, limits, session))
+            case Items(items=items):
+                axes.append(_items_axis(node, path, limits, session))
+                opened, fixed = _item_state(node, session)
+                if opened is None and not fixed and items:
+                    opened = items[0].key
+                if opened is not None:
+                    item = next((item for item in items if item.key == opened), None)
+                    if item is not None:
+                        walk_children(item.children, f"{path}.{item.key}")
+            case Group(children=children) | Stack(children=children) | Cluster(children=children):
+                walk_children(children, path)
+            case (
+                Section(children=children)
+                | Article(children=children)
+                | Aside(children=children)
+                | Panel(children=children)
+            ):
+                walk_children(children, path)
+            case Details(children=children, open=ownership):
+                match ownership:
+                    case Controlled(value=open_):
+                        pass
+                    case Managed(initial=initial):
+                        open_ = session.disclosure(node.key, initial=initial).open
+                if open_:
+                    walk_children(children, path)
+            case _:
+                return
+
+    for index, node in enumerate(nodes):
+        walk(node, f"$.{index}")
+    paths = tuple(axis.path for axis in axes)
+    if len(set(paths)) != len(paths):
+        message = "semantic strategy paths must be unique"
+        raise LayoutInvariantError(message)
+    return tuple(axes)
 
 
 def lower_semantics(
@@ -139,10 +217,22 @@ def lower_semantics(
     pages: PageBroker | None = None,
     capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
+    strategies: Mapping[str, str] | None = None,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
     broker = pages if pages is not None else PageBroker(session, chrome)
-    context = _Context(limits, chrome, localization, session, broker, capabilities, [], [], search_budget)
+    context = _Context(
+        limits,
+        chrome,
+        localization,
+        session,
+        broker,
+        capabilities,
+        [],
+        [],
+        {} if strategies is None else strategies,
+        search_budget,
+    )
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
@@ -221,7 +311,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 children.append(Footer(_resolve(caption, context)))
             return children
         case Media():
-            return _media(node, context)
+            return _media(node, path, context)
         case Details():
             return _details(node, path, context)
         case Status(content=content, tone=tone):
@@ -249,9 +339,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Items():
             return _items(node, path, context)
         case Navigation():
-            return _navigation(node, context)
+            return _navigation(node, path, context)
         case Table():
-            return _table(node, context)
+            return _table(node, path, context)
         case Panel(children=children, accent=accent):
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
@@ -261,6 +351,69 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
 def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _Context) -> None:
     """Stage an adapter's sticky choice. Lowering reads the session and writes nothing."""
     context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
+
+
+def _select_strategy(axis: StrategyAxis, context: _Context) -> str:
+    selected = context.strategies.get(axis.path)
+    if selected is None:
+        choice = choose_strategy(
+            axis.candidates,
+            path=axis.path,
+            flexibility=axis.flexibility,
+            preferred=axis.preferred,
+            baseline=axis.baseline,
+        )
+        context.states_explored += choice.states_explored
+        selected = choice.candidate.strategy_id
+    elif selected not in {candidate.strategy_id for candidate in axis.candidates}:
+        message = f"{axis.path}: assignment selected unavailable strategy {selected!r}"
+        raise ValueError(message)
+    _remember(
+        axis.key,
+        axis.adapter_id,
+        axis.adapter_version,
+        selected,
+        context,
+    )
+    return selected
+
+
+def _strategy_axis(
+    *,
+    path: str,
+    key: str,
+    adapter_id: str,
+    adapter_version: int,
+    flexibility: Flexibility,
+    preferred: str,
+    available: tuple[str, ...],
+    order: tuple[str, ...],
+    session: PresentationSession,
+    active_pagers: frozenset[str] = frozenset(),
+) -> StrategyAxis:
+    baseline = session.strategy(key, adapter_id, adapter_version)
+    if baseline not in available:
+        baseline = None
+    reference = baseline or preferred
+    positions = {strategy: index for index, strategy in enumerate(order)}
+    candidates = tuple(
+        StrategyCandidate(
+            strategy,
+            active_pagers=int(strategy in active_pagers),
+            transition_distance=abs(positions[strategy] - positions.get(reference, positions[strategy])),
+        )
+        for strategy in available
+    )
+    return StrategyAxis(
+        path,
+        key,
+        adapter_id,
+        adapter_version,
+        flexibility,
+        preferred,
+        candidates,
+        baseline,
+    )
 
 
 def _resolve(value: TextLike, context: _Context) -> str:
@@ -477,17 +630,58 @@ def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[N
     ]
 
 
-def _items(node: Items, path: str, context: _Context) -> list[Node]:
+def _item_state(node: Items, session: PresentationSession) -> tuple[str | None, bool]:
     # An entry the author named but no longer supplies means the list, not a crash.
     keys = {item.key for item in node.items}
     match node.opened:
         case Controlled(value=value):
-            opened = value if value in keys else None
+            return (value if value in keys else None), True
         case Managed(initial=initial):
             seed = () if initial is None else (initial,)
-            remembered = context.session.selection(node.key, initial=seed).selected
+            remembered = session.selection(node.key, initial=seed).selected
             opened = remembered[0] if remembered and remembered[0] in keys else None
-    if node.display is ItemDisplay.OPENED and opened is None and node.items:
+            return opened, node.key in session.selections or initial is not None
+
+
+def _items_axis(
+    node: Items,
+    path: str,
+    limits: V2Limits,
+    session: PresentationSession,
+) -> StrategyAxis:
+    opened, fixed = _item_state(node, session)
+    if fixed:
+        available = ("opened",) if opened is not None else ("overview",)
+    elif node.items:
+        available = ("overview", "opened")
+    else:
+        available = ("overview",)
+    preferred = (
+        "opened"
+        if opened is not None or (not fixed and node.display is ItemDisplay.OPENED and node.items)
+        else "overview"
+    )
+    axis = _strategy_axis(
+        path=path,
+        key=node.key,
+        adapter_id=ITEMS_ADAPTER_ID,
+        adapter_version=ITEMS_ADAPTER_VERSION,
+        flexibility=node.flexibility,
+        preferred=preferred,
+        available=available,
+        order=("overview", "opened"),
+        session=session,
+        active_pagers=frozenset({"overview"}) if len(node.items) > limits.select_options else frozenset(),
+    )
+    if opened is None and node.display is not ItemDisplay.OPENED:
+        axis = replace(axis, baseline=None)
+    return axis
+
+
+def _items(node: Items, path: str, context: _Context) -> list[Node]:
+    opened, _fixed = _item_state(node, context.session)
+    strategy = _select_strategy(_items_axis(node, path, context.limits, context.session), context)
+    if strategy == "opened" and opened is None and node.items:
         opened = node.items[0].key
 
     async def open_(event: ActionEvent, entry: str | None) -> None:
@@ -534,11 +728,44 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _navigation(node: Navigation, context: _Context) -> list[Node]:
+def _navigation_axis(
+    node: Navigation,
+    path: str,
+    limits: V2Limits,
+    session: PresentationSession,
+) -> StrategyAxis:
     available = tuple(destination for destination in node.destinations if destination.available)
-    grouped = node.display is NavigationDisplay.GROUPED or (
-        node.display is NavigationDisplay.AUTO and len(available) > 5
+    strategies = ["individual"]
+    individual_components = len(available) + (len(available) + limits.row_buttons - 1) // limits.row_buttons
+    if individual_components > limits.total_components:
+        strategies.remove("individual")
+    if available:
+        strategies.append("grouped")
+    preferred = {
+        NavigationDisplay.INDIVIDUAL: "individual",
+        NavigationDisplay.GROUPED: "grouped",
+        NavigationDisplay.AUTO: "individual" if len(available) <= 5 else "grouped",
+    }[node.display]
+    if preferred not in strategies:
+        preferred = strategies[-1]
+    return _strategy_axis(
+        path=path,
+        key=node.key,
+        adapter_id=NAVIGATION_ADAPTER_ID,
+        adapter_version=NAVIGATION_ADAPTER_VERSION,
+        flexibility=node.flexibility,
+        preferred=preferred,
+        available=tuple(strategies),
+        order=("individual", "grouped"),
+        session=session,
+        active_pagers=frozenset({"grouped"}) if len(available) > limits.select_options else frozenset(),
     )
+
+
+def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
+    available = tuple(destination for destination in node.destinations if destination.available)
+    strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
+    grouped = strategy == "grouped"
 
     match node.current:
         case Controlled(value=value):
@@ -625,11 +852,23 @@ def _details(node: Details, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _table(node: Table, context: _Context) -> list[Node]:
-    strategy = context.session.strategy(node.key, "discord.table", 1)
-    if strategy is None:
-        strategy = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
-        _remember(node.key, "discord.table", 1, strategy, context)
+def _table_axis(node: Table, path: str, session: PresentationSession) -> StrategyAxis:
+    preferred = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
+    return _strategy_axis(
+        path=path,
+        key=node.key,
+        adapter_id=TABLE_ADAPTER_ID,
+        adapter_version=TABLE_ADAPTER_VERSION,
+        flexibility=node.flexibility,
+        preferred=preferred,
+        available=("tabular", "records"),
+        order=("tabular", "records"),
+        session=session,
+    )
+
+
+def _table(node: Table, path: str, context: _Context) -> list[Node]:
+    strategy = _select_strategy(_table_axis(node, path, context.session), context)
     if strategy == "tabular":
         headings = [_resolve(column.heading, context) for column in node.columns]
         widths = [
@@ -653,13 +892,25 @@ def _table(node: Table, context: _Context) -> list[Node]:
     return [Lines(records, join="\n\n", overflow=Paginate(key=node.key))]
 
 
-def _media(node: Media, context: _Context) -> list[Node]:
+def _media_axis(node: Media, path: str, session: PresentationSession) -> StrategyAxis:
+    preferred = "featured" if node.display.value == "featured" else "collection"
+    return _strategy_axis(
+        path=path,
+        key=node.key,
+        adapter_id=MEDIA_ADAPTER_ID,
+        adapter_version=MEDIA_ADAPTER_VERSION,
+        flexibility=node.flexibility,
+        preferred=preferred,
+        available=("collection", "featured") if node.items else ("collection",),
+        order=("collection", "featured"),
+        session=session,
+    )
+
+
+def _media(node: Media, path: str, context: _Context) -> list[Node]:
+    strategy = _select_strategy(_media_axis(node, path, context.session), context)
     if not node.items:
         return []
-    strategy = context.session.strategy(node.key, "discord.media", 1)
-    if strategy is None:
-        strategy = "featured" if node.display.value == "featured" else "collection"
-        _remember(node.key, "discord.media", 1, strategy, context)
     if strategy == "featured":
         first = node.items[0]
         result: list[Node] = [Gallery((first.url,))]
@@ -673,8 +924,7 @@ def _media(node: Media, context: _Context) -> list[Node]:
 
 
 def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
-    strategy = _action_strategy(node, context)
-    _remember(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION, strategy, context)
+    strategy = _select_strategy(_action_axis(node, path, context.limits, context.session), context)
     groups: list[tuple[str, tuple[Action, ...], str | None]] = []
     # Links and routed controls carry no binding, so they can never be folded into a select
     # menu the way a group of session actions can: they stay individual buttons.
@@ -725,7 +975,12 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _action_strategy(node: Actions, context: _Context) -> str:
+def _action_axis(
+    node: Actions,
+    path: str,
+    limits: V2Limits,
+    session: PresentationSession,
+) -> StrategyAxis:
     actions = [action for item in node.items for action in _contained_actions(item)]
     forced_pager = any(
         len(tuple(_contained_actions(item))) > 75 for item in node.items if isinstance(item, ActionGroup)
@@ -733,8 +988,8 @@ def _action_strategy(node: Actions, context: _Context) -> str:
     if not any(isinstance(item, ActionGroup) for item in node.items):
         forced_pager = len(actions) > 75
     available = ["grouped", "paged"] if forced_pager else ["individual", "grouped"]
-    individual_components = len(actions) + (len(actions) + context.limits.row_buttons - 1) // context.limits.row_buttons
-    if individual_components > context.limits.total_components and "individual" in available:
+    individual_components = len(actions) + (len(actions) + limits.row_buttons - 1) // limits.row_buttons
+    if individual_components > limits.total_components and "individual" in available:
         available.remove("individual")
     preferred = {
         ActionDisplay.INDIVIDUAL: "individual",
@@ -743,41 +998,18 @@ def _action_strategy(node: Actions, context: _Context) -> str:
     }[node.display]
     if forced_pager:
         preferred = "paged"
-    baseline = context.session.strategy(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION)
-    order = {"individual": 0, "grouped": 1, "paged": 2}
-    candidates = tuple(
-        StrategyCandidate(
-            strategy,
-            active_pagers=int(strategy == "paged"),
-            transition_distance=abs(order[strategy] - order.get(baseline or preferred, order[strategy])),
-        )
-        for strategy in available
-    )
-    if context.states_explored + len(candidates) > context.search_budget:
-        selected = baseline if baseline in available else preferred if preferred in available else available[-1]
-        context.states_explored += 1
-        context.search_fallback = True
-        context.events.append(
-            PlanEvent(
-                code="planner.search_fallback",
-                path=f"actions:{node.key}",
-                message=(
-                    f"Strategy search reached its {context.search_budget}-state budget; "
-                    f"selected lossless {selected!r} fallback"
-                ),
-                severity=PlanSeverity.WARNING,
-            )
-        )
-        return selected
-    choice = choose_strategy(
-        candidates,
-        path=f"actions:{node.key}",
+    return _strategy_axis(
+        path=path,
+        key=node.key,
+        adapter_id=ACTIONS_ADAPTER_ID,
+        adapter_version=ACTIONS_ADAPTER_VERSION,
         flexibility=node.flexibility,
         preferred=preferred,
-        baseline=baseline if baseline in available else None,
+        available=tuple(available),
+        order=("individual", "grouped", "paged"),
+        session=session,
+        active_pagers=frozenset(available) if forced_pager else frozenset(),
     )
-    context.states_explored += choice.states_explored
-    return choice.candidate.strategy_id
 
 
 def _contained_actions(item: Action | object) -> Sequence[Action]:
