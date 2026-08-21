@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 
-from squid_layouts import TextLike, plan
+from squid_layouts import ActionPolicy, FormLike, SubmitHandler, TextLike, plan
 from squid_layouts.actions import Actor, SelectionEvent, Visibility
 from squid_layouts.discord import DEFAULT_TARGET
 from squid_layouts.runtime import PresentationSession
@@ -33,7 +33,14 @@ class _Responder:
 
     async def finish(self) -> None: ...
 
-    async def present_form(self, form, *, key, on_submit=None, policy=None) -> None: ...
+    async def present_form(
+        self,
+        form: FormLike,
+        *,
+        key: str = "form",
+        on_submit: SubmitHandler | None = None,
+        policy: ActionPolicy | None = None,
+    ) -> None: ...
 
     def invalidate(self) -> None: ...
 
