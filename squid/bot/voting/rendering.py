@@ -12,7 +12,7 @@ from textwrap import dedent
 import discord
 
 import squid_layouts as sl
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_static
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -69,7 +69,7 @@ def render_build_review(
         # Not currently reachable — render_node() always returns a Section — kept as a safe
         # fallback for any future card producer that returns something else entirely.
         post = sl.group(card, *state)
-    return sl.discord.render_static([post])
+    return render_static([post])
 
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> discord.ui.LayoutView:
@@ -128,7 +128,7 @@ def render_generic_poll(
     nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
     if snapshot.status is not VoteStatus.CLOSED:
         nodes.append(poll_controls())
-    return sl.discord.render_static(nodes)
+    return render_static(nodes)
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:

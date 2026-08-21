@@ -20,6 +20,7 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import SubmissionFormComponent
+from squid.bot.ui import render_static
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import (
     edit_layout,
@@ -234,7 +235,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = sl.discord.render_static(
+        preview = render_static(
             [
                 sl.primitives.Text(heading),
                 await self.bot.for_build(build).render_node(),
@@ -247,7 +248,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                         ),
                     )
                 ),
-            ]
+            ],
+            locale=locale,
         )
         await asyncio.gather(
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),

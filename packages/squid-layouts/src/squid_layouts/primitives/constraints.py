@@ -8,6 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+from squid_layouts.text import TextLike
+
 
 @dataclass(frozen=True, slots=True)
 class Truncate:
@@ -41,7 +43,7 @@ class Paginate:
     boundary: str = "\n"
     initial: Literal["start", "end"] = "start"
     per: int | None = None
-    footer: Callable[[int, int], str] | None = None
+    footer: Callable[[int, int], TextLike] | None = None
 
     def __post_init__(self) -> None:
         if self.per is not None and self.per < 1:

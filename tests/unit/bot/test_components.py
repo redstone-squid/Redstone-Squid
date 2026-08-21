@@ -5,7 +5,7 @@ from typing import cast
 import discord
 import pytest
 
-from squid.bot.ui import truncate_display_text
+from squid.bot.ui import L, truncate_display_text
 from squid.bot.utils.components import (
     CardField,
     card_layout,
@@ -42,6 +42,23 @@ def test_link_layout_uses_a_link_button() -> None:
 
     assert "https://example.com" in str(payload)
     assert "'style': 5" in str(payload)
+
+
+def test_deferred_template_marker_preserves_msgid_and_values() -> None:
+    page = 3
+    pages = 7
+
+    message = L(t"Page {page} of {pages}")
+
+    assert message.template == "Page {page} of {pages}"
+    assert message.params == {"page": 3, "pages": 7}
+
+
+def test_deferred_template_marker_rejects_expression_placeholders() -> None:
+    page = 3
+
+    with pytest.raises(ValueError, match="placeholder name"):
+        L(t"Page {page + 1}")
 
 
 def test_text_layout_truncates_to_the_v2_display_limit() -> None:

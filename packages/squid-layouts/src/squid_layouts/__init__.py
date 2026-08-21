@@ -14,7 +14,7 @@ from squid_layouts.actions import (
     Visibility,
 )
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset, as_document
+from squid_layouts.document import Asset, Document, DocumentLike, InlineAsset, StoredAsset, as_document
 from squid_layouts.errors import (
     DrawInvariantError,
     LayoutDegradedError,
@@ -212,6 +212,7 @@ __all__ = [
     "Details",
     "DisclosureOwnership",
     "Document",
+    "DocumentLike",
     "DrawInvariantError",
     "Emphasis",
     "FallbackContent",
