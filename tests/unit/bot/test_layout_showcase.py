@@ -49,9 +49,11 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
     ("section", "source_marker"),
     [
         ("tour", "class Counter(sl.Component)"),
-        ("pagination", "return sl.List("),
-        ("adaptation", 'return sl.Actions(actions, key="showcase-actions")'),
+        ("pagination", "sl.primitives.Paginate("),
+        ("adaptation", 'return sl.actions(*actions, key="showcase-actions")'),
+        ("degradation", "overflow=sl.primitives.Spill()"),
         ("composition", 'self.embed(self.left, key="left")'),
+        ("localization", 'mount.localize(localization_for("zh-CN"))'),
     ],
 )
 def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_marker: str) -> None:
@@ -61,6 +63,35 @@ def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_m
     assert "Declaration source" in content
     assert source_marker in content
     assert_within_limits(view)
+
+
+def test_degradation_exhibit_makes_each_compromise_visible() -> None:
+    mount = Mount(LayoutShowcase(section="degradation", entries=20, locale="en"), timeout=None)
+    view = commit_render(mount)
+
+    assert "…and 14 more" in _texts(view)
+    assert "The report records every compromise" in _texts(view)
+    assert mount.plan is not None
+    assert len(mount.plan.report.events) >= 2
+    assert_within_limits(view)
+
+
+async def test_localization_exhibit_escapes_values_and_relocalizes_the_same_mount() -> None:
+    component = LayoutShowcase(section="localization", entries=20, locale="en")
+    mount = Mount(component, timeout=None)
+    first = commit_render(mount)
+
+    assert "\\*operator input\\*" in _texts(first)
+    assert "@\u200beveryone" in _texts(first)
+
+    interaction = fake_interaction()
+    await mount.dispatch("switch-language", interaction)
+
+    assert component.display_locale == "zh-CN"
+    assert mount.localization.locale == "zh-CN"
+    assert interaction.response.edit_message.await_count == 1
+    edited_view = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "延迟本地化与安全 Markdown" in _texts(edited_view)
 
 
 async def test_composed_children_keep_independent_state_and_keys() -> None:
