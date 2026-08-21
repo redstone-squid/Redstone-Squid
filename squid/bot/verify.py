@@ -75,7 +75,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        await component.load()
         mount = component.mount()
         await mount.send(destination(ctx, visibility="personal", locale=locale))
 
