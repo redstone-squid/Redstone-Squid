@@ -103,6 +103,11 @@ from squid_layouts.patterns import (
     Tab,
     Tabs,
     TabsState,
+    Wizard,
+    WizardAnswer,
+    WizardAnswers,
+    WizardState,
+    WizardStep,
 )
 from squid_layouts.planning.planner import plan
 from squid_layouts.routing import Route
@@ -359,6 +364,11 @@ __all__ = [
     "UndeclaredStateError",
     "UnsolvableLayoutError",
     "Visibility",
+    "Wizard",
+    "WizardAnswer",
+    "WizardAnswers",
+    "WizardState",
+    "WizardStep",
     "action",
     "action_group",
     "actions",
