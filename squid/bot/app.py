@@ -89,6 +89,13 @@ between two cogs is only raised when they are registered onto the same bot, whic
 does -- it used to surface as the process failing to start.
 """
 
+DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools")
+"""Loaded on top of `EXTENSIONS`, in development mode only.
+
+Owner-gated either way. Keeping them off a production process is the second lock: a mount id
+in a log line is then not one command away from a dump of that session's state.
+"""
+
 
 class RedstoneSquid(Bot):
     def __init__(
@@ -195,7 +202,7 @@ class RedstoneSquid(Bot):
 
         extensions = [*EXTENSIONS]
         if self.development_mode:
-            extensions.append("jishaku")
+            extensions.extend(DEVELOPMENT_EXTENSIONS)
 
         loaded: list[str] = []
         try:
