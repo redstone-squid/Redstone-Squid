@@ -15,7 +15,6 @@ the guild's locale would still be the wrong language for most of them; what a cl
 *replies* is translated, because that reply has exactly one reader.
 """
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import discord
@@ -42,13 +41,13 @@ def poll_controls() -> sl.Actions:
 
 
 @router.route(poll_close)
-async def close_poll(interaction: discord.Interaction[Any], _params: Mapping[str, Any]) -> None:
+async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """End a poll early, tallying it where it stands."""
     authorized = await _authorize(interaction)
     if authorized is None:
         return
     locale, _snapshot, actor = authorized
-    bot: squid.bot.app.RedstoneSquid = interaction.client
+    bot = interaction.client
     assert interaction.message is not None
     result = await bot.services.votes.close(interaction.message.id, actor)
     if result.rejection is not None or result.session is None:
@@ -59,13 +58,13 @@ async def close_poll(interaction: discord.Interaction[Any], _params: Mapping[str
 
 
 @router.route(poll_refresh)
-async def refresh_poll(interaction: discord.Interaction[Any], _params: Mapping[str, Any]) -> None:
+async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
     authorized = await _authorize(interaction)
     if authorized is None:
         return
     locale, _snapshot, _actor = authorized
-    bot: squid.bot.app.RedstoneSquid = interaction.client
+    bot = interaction.client
     assert interaction.message is not None
     result = await bot.services.votes.refresh(interaction.message.id)
     if result.session is not None:

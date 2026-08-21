@@ -2,8 +2,7 @@
 """Magical stuff, don't worry about it."""
 
 import asyncio
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import discord
 from discord import Interaction
@@ -24,7 +23,7 @@ if TYPE_CHECKING:
 
 
 @router.route(remove_redstoner_role)
-async def remove_own_redstoner_role(interaction: Interaction[Any], _params: Mapping[str, Any]) -> None:
+async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Let a member drop the redstoner role the bot gave them."""
     await interaction.response.defer(ephemeral=True)
 
