@@ -74,6 +74,11 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
     client lookups. The client parameter is `Any` because the framework cannot know the
     host's client subclass; hosts that care can annotate the binding themselves.
 
+    Do not drive `.response` yourself: the mount owns this interaction's response
+    lifecycle. Use `event.acknowledge()`, `event.notice()`, `event.finish()`, or
+    `responder(event).send_modal()`. A hand-rolled `defer()` survives only because
+    `Mount.flush` falls back to editing through the followup.
+
     Raises:
         LookupError: The event came from a frontend other than Discord.
     """
