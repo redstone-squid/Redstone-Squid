@@ -54,11 +54,13 @@ it too early. Restructure `Mount` around an explicit candidate:
 6. The initial send path (`build_view()` used by hosts before `bind()`) keeps working:
    expose `build_view()` as stage-without-commit plus an explicit `bind(message, view)`
    that performs the commit, since the host owns that delivery. Document that `bind` is
-   the commit point. **Amended by [plan 15](15-send-ownership.md):** the host no longer
-   owns the initial delivery — `Mount.send(target)` runs this same stage→deliver→commit
-   sequence framework-side, and `bind` remains only as the manual commit point for
-   deliveries the mount cannot perform (edit-in-place, the `to_components()` compat
-   shim).
+   the commit point. **Superseded by [plan 15](15-send-ownership.md):** the host no
+   longer owns the initial delivery. `Mount.send(destination)` runs this same
+   stage→deliver→commit sequence framework-side, and `bind` is deleted — every remaining
+   caller turned out to be a hand-rolled `flush`. The commit point is now `send` for an
+   initial delivery and `flush` for an interaction-driven one; `build_view()` survives
+   only as the stage-only escape hatch for hosts that want the components and nothing
+   else.
 
 Keep the double-draw fingerprint dance inside `_stage()` unchanged; it is
 presentation-only and covered by the cursor snapshot. (Also superseded by plan 06:
