@@ -48,7 +48,13 @@ class ActionResponder(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ActionEvent:
-    """Base event passed to portable component handlers."""
+    """Base event passed to portable component handlers.
+
+    `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
+    the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
+    frontend facts — a Discord-only handler should reach for `sl.discord.native(event)`
+    instead, which hands back the real `discord.Interaction`.
+    """
 
     actor: Actor
     responder: ActionResponder
