@@ -318,10 +318,3 @@ Stages 0-4, 6-7 and C1-C4 have automated coverage in the package and bot unit su
 remaining operational check is to click a vote-card button and a build-card Edit button
 posted before the namespace migration, confirming legacy aliases on real Discord messages
 in addition to the pinned synthetic identities.
-
-## Sequencing
-
-0-3 landed together, then C1-C3. Remaining order: **5, then 4 (with C4), then 7, then 6** —
-5 before 4 because the middleware seam makes the namespace's gone-handler a one-liner; C4
-rides along with 4's format churn since both change the codec; and 6 stays last because its
-demand is the least established.
