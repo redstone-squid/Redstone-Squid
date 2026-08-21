@@ -57,7 +57,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No unresolved active record categories.")),
             locale=locale,
         )
-        await paginator.send(ctx, ephemeral=personal(ctx))
+        await paginator.send(ctx, visibility="personal")
 
     @records_group.command(name="title-issues")
     @requires(RECORD_ENTRY_INSPECT)
@@ -77,7 +77,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No active record titles require taxonomy review.")),
             locale=locale,
         )
-        await paginator.send(ctx, ephemeral=personal(ctx))
+        await paginator.send(ctx, visibility="personal")
 
     @autocompletes(current_version_id="version_ids")
     @records_group.command(name="rebuild")
