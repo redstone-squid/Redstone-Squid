@@ -62,8 +62,9 @@ reconciliation moved into `plan()`, so the mount draws once.)
 
 ## Verification
 
-- `packages/squid-layouts/tests/test_mount.py`: monkeypatch `deliver.apply_interaction`
-  to raise `discord.HTTPException`; assert generation unchanged, old handlers still
+- `packages/squid-layouts/tests/test_mount.py`: monkeypatch `deliver.handle_from` to return
+  a handle whose `write` raises `discord.HTTPException` (this was `deliver.apply_interaction`
+  until plan 07 replaced it); assert generation unchanged, old handlers still
   dispatch, `_dirty` still True, `on_mount` not fired for the candidate tree, cursors
   restored; then let a second flush succeed and assert full recovery.
 - Existing mount/navigation/durability suites unchanged:
