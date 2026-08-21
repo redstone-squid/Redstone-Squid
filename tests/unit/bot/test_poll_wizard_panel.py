@@ -3,8 +3,10 @@
 from types import SimpleNamespace
 from typing import Any, cast
 
+import discord
+
 from squid.bot.voting.poll_wizard import PollConfirmationComponent, PollDraft
-from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.voting import GENERIC_OPTIONS
 
 OWNER_ID = 11
@@ -34,3 +36,24 @@ async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> N
     message.edit.assert_awaited_once()
     disabled = message.edit.await_args.kwargs["view"]
     assert all(getattr(item, "disabled", True) for item in disabled.walk_children())
+
+
+async def test_custom_duration_submission_returns_through_the_mount_funnel() -> None:
+    wizard = make_wizard()
+    mount = wizard.mount()
+    commit_render(mount)
+    opening = fake_interaction(user_id=OWNER_ID)
+
+    await mount.dispatch("duration", opening, ["custom"])
+
+    modal = opening.response.send_modal.await_args.args[0]
+    label = modal.children[0]
+    assert isinstance(label, discord.ui.Label)
+    duration = label.component
+    assert isinstance(duration, discord.ui.TextInput)
+    duration._value = "12h"  # pyrefly: ignore[missing-attribute]
+
+    await modal.on_submit(fake_interaction(user_id=OWNER_ID))
+
+    assert wizard.draft.duration_seconds == 12 * 3600
+    assert mount.generation == 2
