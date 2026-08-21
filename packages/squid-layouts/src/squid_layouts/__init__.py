@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-from squid_layouts import html, planning, primitives, runtime, scene, semantic
+from squid_layouts import html, patterns, planning, primitives, runtime, scene, semantic
 from squid_layouts.actions import (
     ActionEvent,
     ActionPolicy,
@@ -66,6 +66,7 @@ from squid_layouts.factories import (
     table,
     table_row,
 )
+from squid_layouts.patterns import Menu, MenuEntry, RankedEntry, RankedList, Tab, Tabs
 from squid_layouts.planning.planner import plan
 from squid_layouts.routing import Route
 from squid_layouts.runtime.component import Component
@@ -243,6 +244,8 @@ __all__ = [
     "Media",
     "MediaDisplay",
     "MediaItem",
+    "Menu",
+    "MenuEntry",
     "Message",
     "NavOwnership",
     "NavigateEvent",
@@ -260,6 +263,8 @@ __all__ = [
     "PressEvent",
     "Progress",
     "Quote",
+    "RankedEntry",
+    "RankedList",
     "RawMarkdown",
     "ReactiveWriteError",
     "ResolvedText",
@@ -275,9 +280,11 @@ __all__ = [
     "Status",
     "StoredAsset",
     "SubmitEvent",
+    "Tab",
     "Table",
     "TableDisplay",
     "TableRow",
+    "Tabs",
     "TextDialect",
     "TextLike",
     "TextValue",
@@ -324,6 +331,7 @@ __all__ = [
     "note",
     "optional",
     "paragraph",
+    "patterns",
     "plain",
     "plan",
     "planning",
