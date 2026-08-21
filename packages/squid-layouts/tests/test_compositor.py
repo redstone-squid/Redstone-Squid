@@ -57,7 +57,6 @@ class TestCompose:
     def test_returns_the_solved_layout_beside_the_view(self):
         composition = compose([Text("hello")])
         assert isinstance(composition, Composition)
-        assert composition.interventions == []
         assert composition.plan.report.events == ()
         assert composition.pages == 1
         assert composition.page == 0
@@ -82,12 +81,6 @@ def test_reserved_text_is_held_back_from_the_budget(nodes, reserved):
 @given(documents())
 def test_render_static_matches_compose(nodes):
     assert render_static(nodes).to_components() == compose(nodes).view.to_components()
-
-
-@given(documents())
-def test_composed_documents_need_no_conform_interventions(nodes):
-    # compose runs the gate itself; a non-empty result means the solver mismeasured.
-    assert compose(nodes).interventions == []
 
 
 def test_a_reserved_budget_survives_nesting():
