@@ -295,6 +295,27 @@ into separate routes; the planner never invents state or silently changes transp
 canonical format, parameter converters, aliases, and handler provenance. Owner-only
 `!dev routes` renders the live table privately alongside `!dev ui`.
 
+## Remaining: registration hardening (2026-08-21 external audit)
+
+Two dispatch-boundary gaps, both verified in-repo:
+
+- **`Router.register` is not idempotent per client.** Every call builds a fresh
+  `RoutedDispatch` class over the same template (`discord/routing.py:287`); the same
+  client registered twice holds two dynamic items with identical regexes, and
+  discord.py's `ViewStore` schedules one call per matching class — the double-fire the
+  one-class design exists to prevent. Multi-client use stays supported (test suites
+  build a bot per case). Fix: a weak client registry — the same (client, router) pair is
+  a no-op, and a second router whose accepted language overlaps one already registered
+  on that client is rejected with the same exact-intersection check `add()` uses.
+- **`_accepted` checks names but not kinds** (`discord/routing.py:87`). It never
+  verifies that the first `required` parameters are positionally bindable — a
+  keyword-only `interaction` registers and dies at dispatch — and the `named`
+  comprehension silently drops `POSITIONAL_ONLY` parameters, so
+  `def h(interaction, build_id, /)` registers with `accepts = ∅` and fails on the first
+  click. Both violate this plan's fail-at-registration rule. Fix: require the leading
+  parameters to be positionally bindable, and reject `POSITIONAL_ONLY` parameters
+  beyond them rather than ignoring them.
+
 ## Deferred
 
 ### Stage 5 — Middleware, declarative defer, and the response guarantee
