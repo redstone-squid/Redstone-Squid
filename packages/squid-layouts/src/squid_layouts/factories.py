@@ -63,6 +63,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Progress,
     Quote,
+    RoutedAction,
     Section,
     Stack,
     Status,
@@ -394,19 +395,40 @@ def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.
     return Link(key, _text(label), url, emphasis)
 
 
-def action_group(*entries: Conditional[Action | Link], key: str, label: TextValue | None = None) -> ActionGroup:
+def routed_action(
+    label: TextValue,
+    custom_id: str,
+    *,
+    key: str,
+    tone: Tone = Tone.NEUTRAL,
+    emphasis: Emphasis = Emphasis.NORMAL,
+    available: bool = True,
+) -> RoutedAction:
+    """A control the router dispatches, surviving the process that drew it.
+
+    Build ``custom_id`` with a `squid_layouts.routing.Route` rather than by hand, so an id
+    over Discord's budget fails here and not at send time.
+    """
+    return RoutedAction(key, _text(label), custom_id, tone, emphasis, available)
+
+
+def action_group(
+    *entries: Conditional[Action | Link | RoutedAction], key: str, label: TextValue | None = None
+) -> ActionGroup:
     """Controls that belong together and degrade together."""
-    return ActionGroup(key, _collect(entries, (Action, Link), "sl.action_group()"), _opt_text(label))
+    return ActionGroup(key, _collect(entries, (Action, Link, RoutedAction), "sl.action_group()"), _opt_text(label))
 
 
 def actions(
-    *entries: Conditional[Action | Link | ActionGroup],
+    *entries: Conditional[Action | Link | RoutedAction | ActionGroup],
     key: str,
     display: ActionDisplay = ActionDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Actions:
     """The controls offered by a view; ``key`` carries the chosen presentation."""
-    return Actions(_collect(entries, (Action, Link, ActionGroup), "sl.actions()"), key, display, flexibility)
+    return Actions(
+        _collect(entries, (Action, Link, RoutedAction, ActionGroup), "sl.actions()"), key, display, flexibility
+    )
 
 
 def choice(label: TextValue, *, key: str, description: TextValue | None = None, available: bool = True) -> Choice:

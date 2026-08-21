@@ -285,15 +285,36 @@ class Link:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutedAction:
+    """A control whose custom id is its state, dispatched by a router rather than a mount.
+
+    For the buttons on mass-posted cards that must still work after a restart: no
+    in-process handler, so a sessionless document may carry one. Build ``custom_id`` with
+    a `squid_layouts.routing.Route`, which validates it against Discord's budget at
+    authoring time rather than at send time.
+
+    `Action` remains the right node whenever a session is already in play; this one buys
+    survival at the price of every guarantee the mount's funnel provides.
+    """
+
+    key: str
+    label: TextLike
+    custom_id: str
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
 class ActionGroup:
     key: str
-    actions: tuple[Action | Link, ...]
+    actions: tuple[Action | Link | RoutedAction, ...]
     label: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Actions:
-    items: tuple[Action | Link | ActionGroup, ...]
+    items: tuple[Action | Link | RoutedAction | ActionGroup, ...]
     key: str
     display: ActionDisplay = ActionDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL

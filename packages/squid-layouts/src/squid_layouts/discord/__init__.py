@@ -9,6 +9,7 @@ from squid_layouts.discord.mount import ErrorHook, Mount, MountedView
 from squid_layouts.discord.navigation import Navigator
 from squid_layouts.discord.reactor import Reactor
 from squid_layouts.discord.renderer import Renderer, StaticView, Wire
+from squid_layouts.discord.routing import RouteHandler, Router
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
 from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
 from squid_layouts.planning.limits import V2Limits as Limits
@@ -33,6 +34,8 @@ __all__ = [
     "PageContext",
     "Reactor",
     "Renderer",
+    "RouteHandler",
+    "Router",
     "StaticView",
     "Target",
     "TextInputSpec",
