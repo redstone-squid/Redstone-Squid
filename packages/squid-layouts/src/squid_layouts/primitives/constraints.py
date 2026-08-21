@@ -113,6 +113,21 @@ class Alt:
 
 
 @dataclass(frozen=True, slots=True)
+class Condense:
+    """Step every `Lines` entry down its own `Alt` ladder, never dropping one.
+
+    The policy for a block that may get shorter but may not get *smaller*: a labelled
+    field list keeps every field, at whatever rung of its ladder still fits. Entries with
+    no ladder cannot shrink, so a `Lines` of plain strings degrades to `Never`'s
+    behaviour — the joined result is ellipsis-trimmed once every ladder is exhausted.
+
+    Like `Never`, a condensing node is charged as a fixed cost before flexible nodes see
+    the budget, so a long neighbouring paragraph cannot starve it. The corollary is that
+    the ladders only engage when the fixed share itself overdraws the message.
+    """
+
+
+@dataclass(frozen=True, slots=True)
 class Drop:
     """Omit the node entirely rather than show it shortened."""
 
@@ -122,4 +137,4 @@ class Never:
     """Shrinking this node is a bug: overflow raises in strict mode."""
 
 
-type Overflow = Truncate | Spill | Paginate | Alts | Drop | Never
+type Overflow = Truncate | Spill | Paginate | Alts | Condense | Drop | Never
