@@ -35,7 +35,7 @@ is not re-derived later.
 | 12 | [Session policy wrapper](12-session-policy.md) | Host-side `MountRegistry` with Replace/Reject/Coexist instance policies; `allowed_users` on Mount. |
 | 13 | [Runtime devtools](13-devtools.md) | Owner-only `/dev ui` cog over a weak mount registry: list, inspect, scene dump. |
 | 14 | [Routed actions](14-routed-actions.md) | First-class stateless controls (`Route` + `RoutedAction` + `Router`): replaces the five hand-rolled `DynamicItem` classes and the `RawItem`/cast splices, makes routed scenes serializable, and unblocks semantic authoring of vote/starboard/consent cards. Routes keep their existing custom ids, so posted messages survive. Lands between 04's phase A and phase B; explicitly *not* a durability feature. |
-| 15 | [Send ownership](15-send-ownership.md) | `Mount.send(SendTarget)` runs stage→deliver→commit framework-side; `reply_to`/`respond_to` adapters own the discord.py kwargs, hosts keep destination policy. Amends 01 §6 ("bind is the commit point"); before 09. |
+| 15 | [Send ownership](15-send-ownership.md) | `Mount.send(Destination)` runs stage→deliver→commit framework-side; `reply_to`/`respond_to` adapters own the discord.py kwargs, `ui.destination` keeps audience policy host-side in the existing `Visibility` vocabulary. `bind` is deleted — its four remaining callers were hand-rolled flushes. Amends 01 §6 ("bind is the commit point"); before 09. Shipped. |
 
 ## Relation to existing plans
 

@@ -15,7 +15,8 @@ framework already exposes plus one small hook:
 
 1. **Framework hook**: a process-wide weak registry of live mounts
    (`sl.discord.mounts()` — weakrefs, no lifecycle ownership, no tasks). Mounts
-   register on `bind`, vanish on GC/finish. This is the only package change.
+   register on their first commit (`send` or `flush`, post-[15](15-send-ownership.md)),
+   vanish on GC/finish. This is the only package change.
 2. **`/dev ui list`**: live mounts — id, component class, message link, generation,
    dirty flag, age, timeout remaining, ephemeral flag.
 3. **`/dev ui inspect <id>`**: one mount — `export_state()` of the component tree

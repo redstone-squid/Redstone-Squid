@@ -22,7 +22,8 @@ flush, `Reactor.run` → `refresh_now`).
    component. At-most-once per instance on success; a raise leaves it eligible to retry
    on the next stage. A discarded candidate does *not* reset a completed load — its
    side effects happened.
-2. **Where the awaiting happens.** `Mount.send(target)`: stage discovers components new
+2. **Where the awaiting happens.** `Mount.send(destination)` — the seam plan 15 landed,
+   which already runs supersede → stage → deliver → commit: stage discovers components new
    to the tree; their `on_load`s run concurrently under one `anyio.create_task_group()`;
    state written by loads invalidates normally, so the mount stages again and the
    delivered view is the *loaded* render — loads coalesce into the first paint, no
