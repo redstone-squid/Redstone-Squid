@@ -16,6 +16,7 @@ from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 from squid_layouts.planning.pagination import NavNode, PageNav
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
+    ActionGroup,
     Break,
     Budget,
     Button,
@@ -26,6 +27,7 @@ from squid_layouts.primitives.nodes import (
     Heading,
     Lines,
     LinkButton,
+    MediaCollection,
     Node,
     Option,
     Panel,
@@ -393,6 +395,68 @@ def _trim_keep(text: str, limit: int, keep: str) -> str:
     if keep == "tail":
         return ELLIPSIS + text[-(limit - 1) :].lstrip()
     return text[: limit - 1].rstrip() + ELLIPSIS
+
+
+@dataclass(frozen=True, slots=True)
+class NodeMeasure:
+    """Exact preferred resource cost for a resolved primitive sequence."""
+
+    chars: int
+    components: int
+
+
+def measure_nodes(nodes: Sequence[Node], *, limits: V2Limits = LIMITS) -> NodeMeasure:
+    """Measure preferred text and component cost without applying pressure."""
+
+    def lower_shape(node: Node) -> list[Node]:
+        match node:
+            case ActionGroup(items=items):
+                return [
+                    Row(tuple(items[start : start + limits.row_buttons]))
+                    for start in range(0, len(items), limits.row_buttons)
+                ]
+            case MediaCollection(urls=urls):
+                return [
+                    Gallery(tuple(urls[start : start + limits.gallery_items]))
+                    for start in range(0, len(urls), limits.gallery_items)
+                ]
+            case Panel(children=children):
+                return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
+            case Budget(children=children) | Break(children=children):
+                return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
+            case _:
+                return [node]
+
+    lowered = [child for node in nodes for child in lower_shape(node)]
+    builder = _Builder(limits=limits)
+    children = builder.realize_children(_resolve_variants(lowered, {}))
+    return NodeMeasure(builder.raw_text_cost + sum(unit.need for unit in builder.units), _component_count(children))
+
+
+def split_text_node(
+    node: Node,
+    limit: int,
+    *,
+    min_fill: int = 0,
+    widows: int = 1,
+) -> tuple[Node, ...] | None:
+    """Losslessly split one text primitive into independently renderable fragments."""
+    if not isinstance(node, Text | Heading | Footer | Code | Lines):
+        return None
+    slot = RText()
+    unit = _make_unit(node, slot, 0)
+    if unit is None:
+        return (node,)
+    usable = limit - unit.chrome_len
+    if usable < 1:
+        return None
+    boundary = node.join if isinstance(node, Lines) else "\n"
+    fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
+    if len(fragments) <= 1:
+        return (node,)
+    if isinstance(node, Lines):
+        return tuple(Text(fragment, overflow=Never(), priority=node.priority) for fragment in fragments)
+    return tuple(replace(node, content=fragment, overflow=Never()) for fragment in fragments)
 
 
 # --- Solve ----------------------------------------------------------------------------------
