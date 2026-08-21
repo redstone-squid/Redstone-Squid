@@ -466,7 +466,7 @@ class PollConfirmationComponent(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.published:
-            return (sl.primitives.banner("Poll published."),)
+            return (sl.status("Poll published."),)
         preview = "\n".join(
             [
                 f"## {self.draft.question}",
@@ -474,13 +474,15 @@ class PollConfirmationComponent(sl.Component):
             ]
         )
         fields = [
-            sl.primitives.presets.Field("Visibility", self._visibility_label()),
-            sl.primitives.presets.Field("Closes after", format_duration(self.draft.duration_seconds)),
+            sl.field("Visibility", self._visibility_label()),
+            sl.field("Closes after", format_duration(self.draft.duration_seconds)),
         ]
         if self.allow_network:
-            fields.append(sl.primitives.presets.Field("Reaches", self._scope_label()))
+            fields.append(sl.field("Reaches", self._scope_label()))
         nodes: list[sl.LayoutNode] = [
-            sl.primitives.card(preview, fields=tuple(fields)),
+            # `preview` already opens with its own "## question" line; passing it as `heading`
+            # reproduces presets.card's (pre-existing) double "##" rather than fixing it here.
+            sl.section(sl.fields(*fields), heading=preview),
             sl.Choices(
                 key="visibility",
                 choices=tuple(
