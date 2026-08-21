@@ -279,8 +279,9 @@ class ClaimReviewComponent(sl.Component):
                         )
                         for claim in self._claims
                     ),
-                    selected=(str(self.selected_id),) if self.selected_id is not None else (),
-                    on_change=self._select_claim,
+                    selection=sl.controlled(
+                        (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
+                    ),
                     minimum=1,
                     maximum=1,
                 ),
