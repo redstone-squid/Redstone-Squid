@@ -50,11 +50,16 @@ Inverted: make the boundary loud, and remove the reasons to sit outside it.
    calls `report_undeclared_write`. Read-only actions raise `ReactiveWriteError`; mutating
    ones log a warning naming `Type.attr`; `sl.strict_state()` promotes that warning to
    `UndeclaredStateError`. Both test suites run strict.
-2. **Exempt components that are not in the tree.** `Component._state_tracked()` is false
-   until `_runtime` or `_parent` is set, and `_Transaction.mark_changed` consults it before
-   rejecting. Without this, a read-only handler could not construct a component at all —
-   every `self._x = ...` in `__init__` reached `mark_changed` and raised. `_runtime` and
-   `_parent` themselves are exempt by name, since the tree walker writes them.
+2. **Exempt components born during the action.** `Component.__new__` registers the instance
+   with the active transaction, and `_Transaction.protects()` answers "did this exist when the
+   action began". Without an exemption a read-only handler could not construct a component at
+   all — every `self._x = ...` in `__init__` reached `mark_changed` and raised.
+
+   The first attempt used "is it attached to the tree" as the test, which is a proxy, and a
+   leaky one in both directions: it let a component that existed before the action but was not
+   currently mounted be mutated by a read-only handler with no complaint. Birth is the property
+   the rule actually cares about, because a transaction restores the view the action started
+   from. `_runtime` and `_parent` stay exempt by name, since the tree walker writes them.
 3. **Make declaring a field the easy answer.** `sl.state()` now accepts neither a default nor
    a factory, for fields `__init__` assigns; `sl.state(copy="ref")` snapshots the reference
    instead of a deep copy, so services, guilds and sessions can be declared (never persisted,
@@ -70,17 +75,35 @@ Inverted: make the boundary loud, and remove the reasons to sit outside it.
 ## Known limits, deliberately
 
 - Attribute mutation on a nested domain object (`self.build.door_orientation = ...`) is not
-  tracked: `_observe` wraps containers, not arbitrary objects. `__setattr__` never fires for
-  it either, so it is not even reported. `_door_changed` and `_location_changed` in
-  `submission/ui/views.py` keep their manual `invalidate()` for exactly this reason.
+  tracked: `_observe` wraps containers, not arbitrary objects, and proxying arbitrary objects
+  would break identity and `isinstance`. `__setattr__` never fires for it either, so it cannot
+  even be reported.
+
+  `Component.mutated(name)` is the signal for it. It is `invalidate()` that names the field,
+  and it raises if that field is not declared state — so the manual call cannot drift away
+  from the declaration it depends on. It caught exactly that drift while landing this work:
+  `SubmissionFormComponent.build` had been left plain while `BuildEditComponent.build` was
+  declared, which `mutated("build")` turned into an immediate error.
+
+  Dropping the identity check in `_State.__set__` would have made a redundant assignment
+  invalidate instead, which is a second way to signal the same thing. It was rejected:
+  `Mount.flush` gates on `_dirty` alone and does not compare rendered output, so every no-op
+  assignment would become a real Discord edit.
 - `copy="ref"` rolls back the reference, not the object. `_apply` mutates the `Build` in
   place before saving it; a failure there leaves those mutations applied.
+- The submission workspace renders straight off a mutable `Build`, which is why it needs
+  `mutated()` at all. Holding the edits as declared state and building the `Build` at save
+  time would remove the limit rather than document it, but that is a refactor of the modals
+  and the submit flow, not of this framework.
 
 ## Verification
 
-- `packages/squid-layouts/tests/test_transactions.py` covers the reporting rules, the
-  construction exemption, and `copy="ref"` (asserted with a class whose `__deepcopy__`
-  raises).
+- `packages/squid-layouts/tests/test_transactions.py` covers the reporting rules, the birth
+  exemption in both directions, `mutated()`, and `copy="ref"` (asserted with a class whose
+  `__deepcopy__` raises).
+- `tests/unit/bot/submission/test_submission_form.py` pins the in-place case: changing the
+  door type must still redraw. It fails without `mutated("build")`, which nothing covered
+  before.
 - `tests/unit/bot/test_settings_panel.py` covers the guarantee on the panel that motivated
   the plan: a channel written before a later failure, a half-loaded voting page, and a
   read-only action. Each fails without its declaration.

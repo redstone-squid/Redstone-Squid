@@ -129,6 +129,23 @@ so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a wa
 the attribute. `sl.strict_state()` turns that warning into `UndeclaredStateError`; the test
 suite runs with it on. Declare the field to make it stop.
 
+A component *created* during an action is exempt, because a transaction restores the view the
+action started from and such a component had no state then. Handlers are free to build one.
+The rule is birth, not mounting: a component built earlier and not currently in the tree is
+still covered, since it may be about to go back in.
+
+Neither rollback nor invalidation reaches a change made *through* a field — setting an
+attribute on the object a `copy="ref"` field holds, for instance. Nothing can observe that, so
+say it explicitly:
+
+    async def _door_changed(self, event: sl.ChoiceEvent) -> None:
+        self.build.door_orientation = event.selected[0]
+        self.mutated("build")
+
+`mutated` only schedules the draw; the change is still outside the transaction. Naming the
+field is the point — the call fails if that field stops being declared state, so the manual
+signal cannot drift away from the declaration it depends on.
+
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
 must be JSON-safe. `sl.state(copy="ref")` covers the opposite case, a collaborator that is
 real state but must never be copied — a service, a guild, a session. It is never persisted,
