@@ -542,9 +542,8 @@ class SubmissionFormComponent(sl.Component):
         )
         return (
             sl.section(
-                # The guidance text is the card's shock absorber: sl.truncate lets it give up
-                # characters under pressure before a field or the footer loses any, mirroring
-                # presets.card's fixed field/footer priority over the description.
+                # The guidance text is the card's shock absorber: truncate lets it give up
+                # characters under pressure before a field or the footer loses any.
                 sl.truncate(sl.paragraph(guidance)),
                 sl.fields(*fields),
                 sl.note(t(self.locale, _("Only the door type and opening size are required."))),
@@ -1100,9 +1099,8 @@ class BuildEditComponent(sl.Component):
         controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
         nodes: list[sl.LayoutNode] = [
             sl.section(
-                # The description is the card's shock absorber: sl.truncate lets it give up
-                # characters under pressure before the summary field loses any, mirroring
-                # presets.card's fixed field priority over the description.
+                # The description is the card's shock absorber: truncate lets it give up
+                # characters under pressure before the summary field loses any.
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(sl.field(t(self.locale, _("Fields in this section")), summary)),
                 heading=t(self.locale, _("Edit build")),

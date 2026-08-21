@@ -156,9 +156,8 @@ class LayoutShowcase(sl.Component):
     def _tour(self) -> Sequence[sl.LayoutNode]:
         return (
             sl.section(
-                # The body is the card's shock absorber: sl.truncate lets it give up
-                # characters under pressure before a field or the footer loses any, mirroring
-                # presets.card's fixed field/footer priority over the description.
+                # The body is the card's shock absorber: truncate lets it give up characters
+                # under pressure before a field or the footer loses any.
                 sl.truncate(
                     sl.paragraph(
                         t(

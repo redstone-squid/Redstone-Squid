@@ -1,4 +1,4 @@
-"""squid-layouts glue: localized chrome, house colours, and the semantic layout presets.
+"""squid-layouts glue: localized chrome, house colours, and the semantic layout vocabulary.
 
 This module is the bot's front door to the `squid_layouts` package. The package itself is
 i18n-free by architecture rule, so every framework string is built here (where Babel extracts
@@ -261,8 +261,8 @@ def _fields(fields: Sequence[CardField]) -> tuple[ui.Field, ...]:
 
 
 def _groups(sections: Sequence[CardSection]) -> tuple[ui.Section, ...]:
-    # Nested sections step each field's Condense ladder independently, rather than in the
-    # lockstep the old FieldGroup ladder gave groups — finer-grained, not a regression.
+    # A nested section per group: each field steps its own Condense ladder independently
+    # rather than a whole group stepping in lockstep — finer-grained, not a regression.
     return tuple(ui.section(ui.fields(*_fields(s.fields)), heading=s.title) for s in sections if s.fields)
 
 
@@ -279,9 +279,8 @@ def card_layout(
     """Create a standalone V2 card."""
     extra_media = media[1:]
     node = ui.section(
-        # The body is the card's shock absorber: wrapping it in truncate lets it give up
-        # characters under pressure before a field or the footer loses any, mirroring
-        # presets.card's fixed field/footer priority over the description.
+        # The body is the card's shock absorber: truncate lets it give up characters under
+        # pressure before a field or the footer loses any.
         description and ui.truncate(ui.paragraph(description)),
         # `fields`/`extra_media` are tuples: an empty one is falsy but not `False`, and
         # `_children` only skips `None`/`False`, so the truthiness check must be explicit.
@@ -299,8 +298,7 @@ def card_layout(
 def text_layout(content: str, *, accent_colour: int | None = None) -> discord.ui.LayoutView:
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
-    # on an overlong message where presets.banner clipped it. This is the bot's most-used
-    # reply path, so it clips.
+    # on an overlong message. This is the bot's most-used reply path, so it clips.
     node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.section(node, accent=accent_colour)

@@ -480,8 +480,8 @@ class PollConfirmationComponent(sl.Component):
         if self.allow_network:
             fields.append(sl.field("Reaches", self._scope_label()))
         nodes: list[sl.LayoutNode] = [
-            # `preview` already opens with its own "## question" line; passing it as `heading`
-            # reproduces presets.card's (pre-existing) double "##" rather than fixing it here.
+            # `preview` already opens with its own "## question" line, so this renders a
+            # double "##". Pre-existing, and fixing rendering is out of scope here.
             sl.section(sl.fields(*fields), heading=preview),
             sl.Choices(
                 key="visibility",
