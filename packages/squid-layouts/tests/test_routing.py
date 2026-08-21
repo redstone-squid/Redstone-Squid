@@ -6,7 +6,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Router, render_static
 from squid_layouts.discord.routing import _dispatch_item
-from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Panel, RoutedButton, Row
 from squid_layouts.scene.model import SceneRoutedButton, SceneRow
 
@@ -61,6 +61,9 @@ class TestRouteFormats:
             ("a:{x}:{x}", "more than once"),
             ("a:{1x}", "not a usable parameter name"),
             ("a:{x:>4}", "unknown converter"),
+            ("a:build-{id}", "must be a literal or one"),
+            ("a:{x}{y}", "must be a literal or one"),
+            ("a::b", "is empty"),
             ("a:{x:float}", "unknown converter"),
             ("a:{x!r}", "may not carry a conversion"),
         ],
@@ -162,6 +165,39 @@ class TestRouter:
     def test_an_empty_router_matches_nothing(self) -> None:
         assert not Router().template().fullmatch("anything")
 
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            # The case a sampled check misses: neither route's own sample id exposes it, but
+            # both match "foo:bar:baz".
+            ("foo:{x}:baz", "foo:bar:{y}"),
+            ("poll:close", "poll:{action}"),
+            ("edit:{kind}:{id}", "edit:build:{build_id}"),
+        ],
+    )
+    def test_routes_that_share_any_id_are_rejected(self, first: str, second: str) -> None:
+        router = Router()
+        router.add(sl.Route(first), _noop)
+
+        with pytest.raises(ValueError, match="overlaps"):
+            router.add(sl.Route(second), _noop)
+
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
+            ("edit:build:{id}", "edit:vote:{id}"),
+            # A literal only shadows a parameter whose converter would accept it.
+            ("remove:role:redstoner", "remove:role:{id:int}"),
+            ("a:{x}", "a:{x}:{y}"),
+        ],
+    )
+    def test_disjoint_routes_coexist(self, first: str, second: str) -> None:
+        router = Router()
+        router.add(sl.Route(first), _noop)
+        router.add(sl.Route(second), _noop)
+
+        assert len(router._routes) == 2
+
     def test_shadowing_routes_are_rejected(self) -> None:
         router = Router()
         router.add(POLL_CLOSE, _noop)
@@ -222,6 +258,24 @@ class TestDrawing:
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [button.custom_id for button in buttons] == ["edit:build:3"]
+
+    def test_a_routed_button_keeps_out_of_discord_pys_dispatch_table(self) -> None:
+        # Its only dispatch path must be the router's. A stored button would take a second,
+        # no-op dispatch that resets the surrounding view's timeout expiry.
+        document = Panel((Row((RoutedButton("Close", "poll:close"),)),))
+        view = render_static(document)
+
+        button = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+        assert button.custom_id == "poll:close"
+        assert not button.is_dispatchable()
+
+    def test_an_over_budget_custom_id_is_refused_however_it_was_built(self) -> None:
+        # `Route.id` refuses this earlier, but a hand-built or decoded node never passes
+        # through it, so the drawing gate has to be the backstop.
+        document = Panel((Row((RoutedButton("Edit", "x" * 500),)),))
+
+        with pytest.raises(DrawInvariantError, match="custom id 500 > 100"):
+            render_static(document)
 
     def test_a_bound_control_still_needs_a_session(self) -> None:
         document = sl.actions(sl.action("Press", _press, key="press"), key="c")
