@@ -31,6 +31,7 @@ from squid_layouts.runtime.presentation import (
     SessionUpdate,
 )
 from squid_layouts.scene.model import ScenePager
+from squid_layouts.sources import DEFAULT_POSITION_POLICY, Position, PositionPolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +67,7 @@ class PageBroker:
     nav: PageNav | None = None
     overrides: Mapping[str, int] | None = None
     """Explicit `page=` from the caller: "show page N", outranking the stored position."""
+    policy: PositionPolicy = DEFAULT_POSITION_POLICY
     _pagers: list[ScenePager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
@@ -81,17 +83,15 @@ class PageBroker:
         cursor = self.session.cursor(request.key)
         override = None if self.overrides is None else self.overrides.get(request.key)
         anchored = None if request.anchors is None or cursor.anchor is None else request.anchors.get(cursor.anchor)
-        if override is not None:
-            index = override
-        elif anchored is not None:
-            index = anchored
-        elif cursor.content_fingerprint and cursor.content_fingerprint != request.fingerprint:
-            index = 0
-        elif request.key in self.session.cursors:
-            index = cursor.index
-        else:
-            index = pages - 1 if request.initial == "end" else 0
-        return PageGrant(max(0, min(index, pages - 1)), pages)
+        position = self.policy.resolve(
+            override=Position(offset=override) if override is not None else None,
+            anchored=Position(cursor.anchor, anchored) if anchored is not None else None,
+            stale=bool(cursor.content_fingerprint and cursor.content_fingerprint != request.fingerprint),
+            stored=Position(cursor.anchor, cursor.index) if request.key in self.session.cursors else None,
+            initial=Position(offset=pages - 1 if request.initial == "end" else 0),
+            upper_bound=pages - 1,
+        )
+        return PageGrant(position.offset, pages)
 
     def record(self, request: PageRequest, index: int, *, anchor: str | None = None) -> None:
         """Publish the slice a grant led to: the scene's pager record and the cursor write."""
