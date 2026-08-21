@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol
 
+from squid_layouts.text import TextLike
+
 
 class ActionPolicy(StrEnum):
     """Concurrency and stale-generation policy for an interactive action."""
@@ -38,7 +40,7 @@ class ActionResponder(Protocol):
 
     async def acknowledge(self) -> None: ...
 
-    async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
 
     async def redirect(self, url: str) -> None: ...
 
@@ -65,7 +67,7 @@ class ActionEvent:
     async def acknowledge(self) -> None:
         await self.responder.acknowledge()
 
-    async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None:
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
         await self.responder.notice(text, visibility=visibility)
 
     async def redirect(self, url: str) -> None:

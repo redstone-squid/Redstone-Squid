@@ -7,6 +7,7 @@ import discord
 from squid_layouts.actions import ActionEvent, Visibility
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord.modal import ModalSpec, build_modal
+from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
@@ -23,8 +24,9 @@ class ActionResponder:
         if not self.interaction.response.is_done():
             await self.interaction.response.defer()
 
-    async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None:
-        await deliver.respond_text(self.interaction, text, ephemeral=visibility is Visibility.PRIVATE)
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
+        resolved = resolve_text(text, self.mount.localization).content
+        await deliver.respond_text(self.interaction, resolved, ephemeral=visibility is Visibility.PRIVATE)
 
     async def send_modal(self, form: ModalSpec | discord.ui.Modal) -> None:
         """Present a form, stated in Discord's own types.
