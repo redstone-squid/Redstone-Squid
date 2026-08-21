@@ -113,11 +113,36 @@ and set mutation. `state(factory=...)` avoids shared mutable defaults:
             return f"{len(self.results)} results for {self.query}"
 
 computed caches until the component tree invalidates. batch coalesces related writes.
-transaction also restores every touched field if an exception escapes. `sl.discord.Mount` dispatch wraps
-mutating actions in a transaction, so a failed callback cannot leave state half-applied.
+transaction restores every touched field if an exception escapes, and `sl.discord.Mount`
+dispatch wraps mutating actions in one.
+
+That guarantee reaches declared state, and only declared state:
+
+| Attribute | Re-renders on write | Rolled back on failure |
+|---|---|---|
+| `sl.state(...)` | yes, including nested list, dict, and set mutation | yes |
+| `sl.state(copy="ref")` | on assignment | to the previous reference |
+| a plain attribute | no | no |
+
+A plain attribute assigned during a transaction is therefore uncovered, so the framework says
+so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
+the attribute. `sl.strict_state()` turns that warning into `UndeclaredStateError`; the test
+suite runs with it on. Declare the field to make it stop.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
-must be JSON-safe.
+must be JSON-safe. `sl.state(copy="ref")` covers the opposite case, a collaborator that is
+real state but must never be copied — a service, a guild, a session. It is never persisted,
+and it snapshots the reference rather than a deep copy:
+
+    class Panel(sl.Component):
+        page: str = sl.state("server")
+        guild: discord.Guild = sl.state(copy="ref")
+
+        def __init__(self, guild: discord.Guild) -> None:
+            self.guild = guild
+
+`sl.state()` with neither a default nor a factory declares a field that `__init__` assigns;
+reading it before then raises AttributeError.
 
 Children appear through explicit keyed boundaries:
 

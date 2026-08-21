@@ -67,7 +67,15 @@ from squid_layouts.planning.planner import plan
 from squid_layouts.routing import Route
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import ReactiveWriteError, batch, computed, state, transaction
+from squid_layouts.runtime.reactivity import (
+    ReactiveWriteError,
+    UndeclaredStateError,
+    batch,
+    computed,
+    state,
+    strict_state,
+    transaction,
+)
 from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, SceneDocument
 from squid_layouts.semantic import (
     Action,
@@ -230,6 +238,7 @@ __all__ = [
     "TextValue",
     "Tone",
     "Truncated",
+    "UndeclaredStateError",
     "UnsolvableLayoutError",
     "Visibility",
     "action",
@@ -284,6 +293,7 @@ __all__ = [
     "stack",
     "state",
     "status",
+    "strict_state",
     "table",
     "table_row",
     "transaction",
