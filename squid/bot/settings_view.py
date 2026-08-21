@@ -584,11 +584,11 @@ class SettingsPanel(sl.Component):
         if role is None:
             await event.notice(t(self.locale, _("That role has been deleted.")))
             return
-        await event.present_form(RoleWeightModal(cast(Any, self), role))
+        await sl.discord.responder(event).send_modal(RoleWeightModal(cast(Any, self), role))
 
     async def _edit_emojis(self, event: sl.PressEvent) -> None:
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
-            await event.present_form(VoteEmojiModal(cast(Any, self)))
+            await sl.discord.responder(event).send_modal(VoteEmojiModal(cast(Any, self)))
 
     async def _reset(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
