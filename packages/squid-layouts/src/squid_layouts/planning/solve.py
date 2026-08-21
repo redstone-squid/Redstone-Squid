@@ -11,7 +11,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
+from squid_layouts.planning.pagination import NavNode, PageNav
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     Button,
@@ -89,6 +91,10 @@ class Pager:
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""
     page: int = 0
+    nav_host: list[Realized] | None = None
+    """The realized list holding this pager's nav, so `repage` can replace it in place."""
+    nav_at: int = 0
+    nav_count: int = 0
 
     @property
     def pages(self) -> int:
@@ -110,6 +116,38 @@ class SolvedLayout:
     pagers: tuple[Pager, ...] = ()
     components: int = 0
     """Components the built view will hold, including every pager's controls."""
+    nav: PageNav | None = None
+    limits: V2Limits = LIMITS
+
+    def repage(self, indices: Mapping[str, int]) -> None:
+        """Show a different page of each named pager without re-fitting the document.
+
+        Which page is showing is a display decision, not a layout one: every fragment
+        already fits the grant its pager was allocated, the footer reservation was
+        measured at its widest, and a nav factory may not vary its shape by page. So a
+        caller that only learns where the reader belongs *after* fitting — which is
+        anyone reconciling against a stored cursor, since the page count is an output —
+        can move the page here instead of solving again.
+        """
+        for pager in self.pagers:
+            index = indices.get(pager.key)
+            if index is None:
+                continue
+            shown = pager.select(index)
+            if self.nav is None or pager.nav_host is None:
+                continue
+            window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
+            previous = pager.nav_host[window]
+            realized = _Builder(limits=self.limits).realize_children(
+                _validated_nav(self.nav(pager.key, shown, pager.pages))
+            )
+            if len(realized) != pager.nav_count or _component_count(realized) != _component_count(previous):
+                message = (
+                    f"nav factory changed shape between pages of {pager.key!r}; "
+                    "disable controls at the ends instead of hiding them"
+                )
+                raise LayoutInvariantError(message)
+            pager.nav_host[window] = realized
 
     @property
     def pager(self) -> Pager | None:
@@ -577,11 +615,12 @@ def _footer_cost(footer: Callable[[int, int], str], content_len: int) -> int:
     return len(PAGE_FOOTER_PREFIX) + len(footer(widest, widest))
 
 
-def _validated_nav(nodes: Sequence[Node]) -> list[Node]:
-    """Check a nav factory's output against the contract that makes late realization exact.
+def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
+    """Check the one part of the nav contract a type cannot state.
 
-    Nav lands after the display budget is allocated, so it may only carry nodes that cost no
-    display text: rows, selects, separators, media, and zero-cost raw items.
+    `NavNode` already excludes text-bearing nodes, which is what lets nav land after the
+    display budget is allocated. A raw item smuggles its own text cost past that, so it is
+    still worth a look at runtime.
     """
     for node in nodes:
         match node:
@@ -693,7 +732,6 @@ def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node
 
 
 type PageState = Mapping[str, int] | int | None
-type PageNav = Callable[[str, int, int], Sequence[Node]]
 
 
 def solve(
@@ -782,14 +820,17 @@ def _configure_paginators(
     return units, keys, footers
 
 
-def _insert_after(children: list[Realized], target: RText, additions: list[Realized]) -> bool:
+def _insert_after(
+    children: list[Realized], target: RText, additions: list[Realized]
+) -> tuple[list[Realized], int] | None:
+    """Splice `additions` in after `target`, reporting the list and offset they landed at."""
     for index, child in enumerate(children):
         if child is target:
             children[index + 1 : index + 1] = additions
-            return True
-        if isinstance(child, RPanel) and _insert_after(child.children, target, additions):
-            return True
-    return False
+            return children, index + 1
+        if isinstance(child, RPanel) and (found := _insert_after(child.children, target, additions)) is not None:
+            return found
+    return None
 
 
 def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
@@ -871,11 +912,22 @@ def _solve_once(
         additions: list[Realized] = [footer_slot]
         if nav is not None:
             additions.extend(builder.realize_children(_validated_nav(nav(key, shown, pager.pages))))
-        if not _insert_after(children, unit.slot, additions):
+        placement = _insert_after(children, unit.slot, additions)
+        if placement is None:
+            placement = (children, len(children))
             children.extend(additions)
+        # The nav follows the footer slot, and `repage` replaces exactly that span.
+        pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 
     count = _component_count(children)
     if count > limits.total_components:
         builder.notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
-    return SolvedLayout(children=children, notes=builder.notes, pagers=tuple(pagers), components=count)
+    return SolvedLayout(
+        children=children,
+        notes=builder.notes,
+        pagers=tuple(pagers),
+        components=count,
+        nav=nav,
+        limits=limits,
+    )
