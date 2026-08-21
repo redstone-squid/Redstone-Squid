@@ -18,7 +18,7 @@ from squid.accounts.domain import (
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.bot.account_view import AccountPanel
 from squid.bot.claims_view import ClaimReviewComponent
-from squid.bot.consent import ensure_consented_account, prompt_for_consent
+from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
@@ -120,6 +120,10 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
                 )
 
             consent = await prompt_for_consent(ctx, user_id=ctx.author.id, locale=locale, preview=reservation.preview)
+            if consent is NOT_ASKED:
+                # The user was never asked and already knows why; a cancellation notice here
+                # would be reporting something that did not happen.
+                return
             if consent is None:
                 await ctx.send(
                     view=text_layout(

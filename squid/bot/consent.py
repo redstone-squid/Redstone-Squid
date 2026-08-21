@@ -1,5 +1,6 @@
 """Asking one Discord user for informed consent, and continuing what they asked for."""
 
+from enum import Enum
 from typing import Any, cast, override
 
 import anyio
@@ -19,7 +20,22 @@ from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.ui import create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
+from squid.bot.utils.mount_registry import MountRegistry, SessionKey, WhenOpen
+from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
+
+
+class NotAskedType(Enum):
+    NOT_ASKED = Sentinel("NOT_ASKED")
+
+
+NOT_ASKED = NotAskedType.NOT_ASKED
+"""The question was never put to the user, and they have already been told why.
+
+Distinct from `None`, which means they were asked and did not agree. A caller that reports
+`None` as "cancelled, nothing was stored" would be misreporting this: nothing was cancelled,
+because nothing was asked. Both mean "stop", but only one of them is news.
+"""
 
 type ConsentTarget = commands.Context[Any] | discord.Interaction[Any]
 """Anywhere the bot can both identify a user and answer them.
@@ -110,6 +126,19 @@ class ConsentPrompt(sl.Component):
         self.closed = True
         self._done.set()
         await event.finish()
+
+    async def abandon(self, mount: sl.discord.Mount) -> None:
+        """Stop waiting: the prompt is gone and no answer is ever coming.
+
+        The prompt is awaited, so ending its mount without ending its wait strands the caller
+        -- and the handler blocked on that caller -- for the rest of the timeout. Every way a
+        mount dies that is not the user answering comes through here: a cascade from a closing
+        parent, shutdown, an error.
+        """
+        # Deliberately not touching `closed`: that is reactive state, and a finish hook runs
+        # outside the transaction a handler gets. The write would raise, be swallowed by the
+        # hook runner, and leave the waiter stranded for the whole timeout.
+        self._done.set()
 
     async def wait(self) -> AccountConsent | None:
         with anyio.move_on_after(self._timeout) as scope:
@@ -359,6 +388,13 @@ def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
     return cast(discord.Interaction[Any], target).user
 
 
+def _registry_of(target: ConsentTarget) -> MountRegistry:
+    """The bot's session registry, through whichever surface the caller arrived on."""
+    if _is_context(target):
+        return cast(Any, cast(commands.Context[Any], target).bot).mounts
+    return cast(Any, cast(discord.Interaction[Any], target).client).mounts
+
+
 def _link_credit_value(preview: LinkPreview, locale: str | None) -> str:
     credit = preview.credit
     if credit is None:
@@ -399,11 +435,22 @@ async def prompt_for_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-) -> AccountConsent | None:
+    parent: sl.discord.Mount | None = None,
+) -> AccountConsent | NotAskedType | None:
     """Show the notice and wait, returning the receipt the user granted.
 
     `None` covers both cancelling and letting the prompt expire; neither stores anything, so the
-    caller treats them the same and only the wording differs.
+    caller treats them the same and only the wording differs. `NOT_ASKED` is the third outcome:
+    the user was never asked, has already been told why, and the caller should stay silent
+    rather than report a cancellation that did not happen.
+
+    One prompt per user at a time. A second is refused rather than replacing the first, because
+    the first is being awaited somewhere and the two are rarely about the same thing -- replacing
+    a `/verify` prompt with an `/account` one would abandon the verification the user started.
+
+    `parent` is the mount this prompt was opened from, when it was opened from one. The prompt
+    lives on its own message, so without it a closed parent leaves the prompt clickable until its
+    own timer runs out.
     """
     if preview is None:
         component = ConsentPrompt(
@@ -474,7 +521,21 @@ async def prompt_for_consent(
             timeout=timeout,
         )
     mount = component.mount()
-    await mount.send(_destination(target))
+    # Registered before the send: everything that ends this mount short of an answer has to
+    # end the wait too, or the caller blocks for the rest of the timeout on a dead prompt.
+    mount.on_finish(component.abandon)
+    registry = _registry_of(target)
+    key = SessionKey("consent", user_id)
+    opened = await registry.open(mount, _destination(target), key=key, policy=WhenOpen.REJECT, parent=parent)
+    if opened is None:
+        if registry.get(key) is not None:
+            await _send(
+                target,
+                text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
+            )
+        # The other way `open` declines is a destination that delivered nothing, which by
+        # contract has already told the user why. Either way there is nothing to wait on.
+        return NOT_ASKED
     return await component.wait()
 
 
@@ -484,6 +545,7 @@ async def ensure_consented_account(
     *,
     locale: str | None = None,
     timeout: float = 120.0,
+    parent: sl.discord.Mount | None = None,
 ) -> int | None:
     """The account id behind this Discord user, once it has accepted the current notice.
 
@@ -500,7 +562,9 @@ async def ensure_consented_account(
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         return account.id
 
-    consent = await prompt_for_consent(target, user_id=user.id, locale=locale, timeout=timeout)
+    consent = await prompt_for_consent(target, user_id=user.id, locale=locale, timeout=timeout, parent=parent)
+    if consent is NOT_ASKED:
+        return None
     if consent is None:
         await _send(target, text_layout(t(locale, _("Cancelled. No account information was stored."))))
         return None
