@@ -49,7 +49,7 @@ dual priorities and priority *levels* — the last converging independently on
 
 6. **Region pagination**: page boundaries fall between the children of a keyed
    container; children are atomic (a `Field` never splits) except text children, which
-   nest their own splitting; the fingerprint hashes child identity. `PageBroker` is
+   nest their own splitting; the fingerprint hashes child identity. `CursorCoordinator` is
    unchanged — plan 06's single cursor lifecycle was built for exactly this; the
    region slicer asks `grant`, cuts, `record`s. Interactive children may differ per
    page (precedent: `Items` and `Details` already change component counts on toggle).
@@ -86,7 +86,7 @@ dual priorities and priority *levels* — the last converging independently on
 The first implementation deliberately keeps glue allocation in the exact solver
 and region breaking in semantic adaptation. A small transparent primitive carries a
 budget through lowering; the region slicer lowers all candidate children, chooses a
-break set, asks `PageBroker` for the cursor, and only then exposes the selected
+break set, asks `CursorCoordinator` for the cursor, and only then exposes the selected
 children to the exact solver. This is the expedient boundary allowed by policy 8:
 the declarations, page keys, fingerprints, and observed pages do not depend on it,
 so plan 22's later candidate-ladder redesign can replace it without an author-facing
