@@ -1,52 +1,86 @@
-# 05 — Variant ladders: merge Fold into Choice
+# 05 — Variant ladders: one structural-fallback node
+
+**Landed.** Kept for the reasoning, not as a task list.
 
 ## Problem
 
-Two structural-fallback mechanisms each carry half the semantics:
+Two node types encoded the same idea — "here are alternate structures for this region; give
+one up when components run short":
 
-- `primitives.Fold(primary, fallback, priority)` (`primitives/nodes.py:224-238`) is the
-  only node the solver's component-pressure loop can step (`planning/solve.py:664-680`,
-  `_folds`/`_resolve_folds` at solve.py:592-633) — but it is binary.
-- `primitives.Choice(variants, priority)` with `Variant.requires` is an ordered N-way
-  ladder — but the planner resolves it by **target capability only**
-  (`planning/planner.py:216`) before the solver runs; budget pressure never steps it.
+- `Fold(primary, fallback, priority)` — binary.
+- `Choice(variants, priority)` with `Variant.requires` — N-way, capability-tagged.
 
-A 3-step budget ladder today requires nesting `Fold(a, Fold(b, c))`, and because the
-collapse loop compares `priority` globally across nesting levels with `min()`, the
-collapse order of nested folds is genuinely hard to reason about.
+The first draft of this plan proposed unifying onto `Choice`. Auditing the code against it,
+three of its claims did not hold and two real defects were missing.
 
-## Design
+**Corrections to the first draft.**
 
-Unify on `Choice`; `Fold` becomes sugar.
+1. *"budget pressure never steps a `Choice`"* — it did. The planner lowered
+   `Choice((a, b, c))` into `Fold(a, Fold(b, c))`, right-nested through the fallback, and
+   `_folds` only walked the *selected* branch, so the solver already stepped one rung per
+   iteration. N-way budget ladders worked, via a rewrite whose correctness rested on an
+   unstated coincidence between the walk order and the nesting direction.
+2. *"keep `Fold`; most call sites read better with it"* — no author constructed `Fold`, and
+   after plan 14 no author constructed `Choice` either. Both were internal shapes.
+3. *"coordinate with plan 04's `Ladder` helper"* — plan 04 rejected that name and shipped
+   `Condense`. The item was stale.
 
-1. **Semantics**: a `Choice`'s variants are first filtered by capability
-   (`Variant.requires`, unchanged, still resolved at adaptation/planning). The surviving
-   ordered variants form a budget ladder: the solver starts every Choice at variant 0 and,
-   under component pressure, steps the lowest-priority Choice to its next variant, one
-   rung per iteration, re-solving each time — the exact shape of today's fold loop.
-2. **Solver**: generalize `collapsed: set[_FoldPath]` to
-   `positions: dict[_ChoicePath, int]` (path → selected variant index). `_folds` becomes
-   `_choices` (walk selected branches, report choices not yet at their last variant);
-   `_resolve_folds` becomes `_resolve_choices` (substitute the selected variant).
-   `Fold(primary, fallback, priority)` is normalized to
-   `Choice((Variant(primary), Variant(fallback)), priority)` before solving — either in
-   `__post_init__`-adjacent normalization or at the top of `solve()`.
-3. **API**: keep the `Fold` dataclass as a thin constructor for the two-variant case
-   (most call sites read better with it); document that it is sugar. No deprecation
-   churn.
-4. **Priority across nesting**: document the rule that priorities compare globally and
-   a nested Choice only becomes steppable once its ancestor's selected variant exposes
-   it — this is today's behavior, now stated instead of discovered.
-5. **No scene/codec impact**: choices resolve before scene construction, as today.
-6. Coordinate with plan 04's shared text-stepping helper: `Ladder` (text axis) and
-   Choice stepping (component axis) are different loops; they must not be merged, only
-   named consistently.
+**What was actually wrong.**
 
-## Verification
+- **Two IR shapes, six duplicated traversals** across `solve.py`, `planner.py` and
+  `runtime/component.py`, plus the `Choice`→`Fold` lowering rewrite.
+- **`solve()` silently corrupted a `Choice`.** `realize` had no arm for it, so it fell through
+  `case _` into the realized tree, counted as one component and unrenderable.
+- **A variant that lowered to more than one node raised.** `_lower_single` demanded exactly
+  one, so `Fold`'s own docstring example — a button panel folding to a select — exploded as
+  soon as the panel needed two rows.
+- **`Choice` collided with the dominant meaning of "choice"**: `sl.Choice` is a select-menu
+  option, with `Choices`, `ChoiceEvent`, `sl.choice()` and `sl.choices()` behind it.
+- **Diagnostics were unattributable**: every rung emitted
+  `"folded a priority N alternate under component pressure"` with `path='$'`.
 
-- `test_solve.py`: 3+-variant ladders step one rung at a time; capability filtering
-  composes with budget stepping; nested-choice ordering matches the documented rule;
-  existing Fold tests pass unchanged through the sugar path.
-- `test_compositor.py` / `test_structure.py` regression pass:
-  `cd packages/squid-layouts && uv run pytest tests/test_solve.py tests/test_compositor.py tests/test_structure.py --no-cov`.
-- `just typecheck`.
+## Design decisions
+
+- **The node is `Variants`, holding `Variant` rungs.** Plural-of-element mirrors `Alt`/`Alts`
+  on the text axis, `Variant` already existed with the right docstring, and it frees `choice`
+  for the select-option meaning. `Ladder` was rejected for the reason plan 04 rejected it:
+  "ladder" already names the *text* axis (`Alts.ladder`, `Alt.fallbacks`, `_step_ladders`),
+  and reusing it on the component axis would make the word ambiguous across both.
+- **`Fold` was deleted, not kept as sugar.** `Variants.of(a, b)` covers the readable binary
+  form without a second shape in the `Node` union.
+- **`Variant.nodes` is a tuple.** A rung may lower to several nodes (an `ActionGroup` becomes
+  one `Row` per five buttons). Splicing is exact; wrapping in a `Panel` to satisfy
+  `_lower_single` would invent the very container component the ladder exists to save.
+- **`requires` is resolved once, by the planner**, which clears it on the lowered result.
+  `solve()` documents that it ignores `requires` and sees a pure budget ladder. Giving
+  `solve()` a `capabilities` parameter was rejected: it would duplicate `TargetProfile`'s job
+  into a layer with no concept of a target.
+- **Stepping is breadth-first within a priority.** Only expressible once rung positions are
+  explicit, and invisible to every pre-existing test because every ladder in the tree then had
+  two rungs.
+
+## What changed
+
+- `primitives/nodes.py`: `Variant.nodes: tuple[Node, ...]`; new `Variants` with
+  `Variants.of(*rungs, priority=...)`; `Fold` and `Choice` gone from the `Node` union.
+- `planning/solve.py`: `collapsed: set[_FoldPath]` → `positions: dict[_VariantPath, int]`.
+  Paths embed the selected rung index, so stepping a ladder abandons its descendants'
+  positions rather than reinterpreting them against a different subtree. `_folds`/
+  `_resolve_folds` → `_steppable`/`_resolve_variants` over a shared `_walk_ladders`;
+  resolution returns a list per node so a multi-node rung splices. Selection keys on
+  `(priority, current rung)`; `min` is stable, so full ties still fall to document order.
+  `realize` now raises on an unresolved `Variants` instead of falling through.
+- `planning/planner.py`: one lowering arm replaces two; `_lower_single` deleted; `_validate`
+  walks every rung (so two rungs still cannot share a `Paginate` key, as under `Fold`).
+- `runtime/component.py`: two pairs of traversal arms collapse to one each.
+- `semantic.py` / `adaptation.py`: `FallbackContent.alternates` is a tuple and
+  `sl.fallback(primary, *alternates)` is variadic, so ladders are expressible above the
+  primitives layer. `adaptation._single`'s Panel-wrapping hack is gone with it.
+- Notes now read
+  `$.0 stepped to variant 2 of 3 (priority 0) under component pressure`.
+
+## Out of scope
+
+- `PlanEvent.path` stays `'$'`; structured event paths are a separate change at the
+  note→event mapping.
+- `solve()` still re-solves the whole document once per rung, bounded by the total rung count.
