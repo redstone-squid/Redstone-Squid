@@ -36,8 +36,11 @@ are not re-derived or accidentally adopted later.
   more than 15 minutes with nobody touching it — the render simply waits in `Mount.pending`
   until someone does. Only worth building for a view that must update itself unattended,
   which none does.
-- **Participant tracking / shared sessions** — plan 12 v1 ships instance policies and
-  `allowed_users`; participant lifecycle waits for a feature that needs it.
+- **Participant tracking / shared sessions** — plan 12 shipped instance policies and
+  widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
+  state) waits for a feature that needs it. No consumer needs even the set form today: the
+  one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
+  its own wording, which a static set cannot express.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
@@ -55,8 +58,10 @@ are not re-derived or accidentally adopted later.
   hiding in one thought, with opposite verdicts. *Branching* — a click spawns an
   additional message — is not deferred: it ships today as the consent pattern
   (`account_view.py` mounts `prompt_for_consent` as its own ephemeral message), and its
-  missing piece is lifecycle, which is plan 12's registry (`finish_children_of`) plus at
-  most a spawn-child-from-`ActionEvent` helper. *Spanning* — one root component rendered
+  missing piece was lifecycle, which plan 12's registry shipped as `open(..., parent=)`. The
+  spawn-child-from-`ActionEvent` helper it also proposed resolves to none needed:
+  `sl.discord.responder(event).mount` already hands a handler its own mount, which is all
+  `parent=` takes. *Spanning* — one root component rendered
   across N messages — is deferred until a consumer exists (the audit found none; search
   and leaderboards fit one message with plan 06). When it comes, the shape is decided:
   Discord's message sequence is append-only, so content cannot reflow between slots —
