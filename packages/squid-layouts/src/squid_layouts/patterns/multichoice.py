@@ -134,7 +134,7 @@ class MultiChoicePanel:
     def _ordered(self, selected: Iterable[str]) -> tuple[str, ...]:
         values = set(selected)
         return tuple(key for key in self._choice_order if key in values) + tuple(
-            key for key in values if key not in self._choices
+            sorted(key for key in values if key not in self._choices)
         )
 
     @staticmethod
@@ -218,7 +218,10 @@ class MultiChoicePanel:
         labels = [display_text(self._choices[key].label) for key in state.staged if key in self._choices]
         return f"{len(state.staged)} selected" + (f": {', '.join(labels)}" if labels else "")
 
-    def _modal(self, state: MultiChoiceState) -> FormSpec:
+    def form_for(self, state: MultiChoiceState, action: str) -> FormSpec | None:
+        """Resolve the routed modal action to its small-panel form schema."""
+        if action != "modal" or len(self._choice_order) > 5:
+            return None
         return FormSpec(
             "Select options",
             tuple(BoolField(key=key, label=self._choices[key].label) for key in self._choice_order),
@@ -240,7 +243,7 @@ class MultiChoicePanel:
                     key=f"{self.key}.{group.key}.select",
                     selected=tuple(key for key in state.staged if key in visible_keys),
                     minimum=0,
-                    maximum=max(1, allowance),
+                    maximum=max(1, allowance, len(staged & visible_keys)),
                     placeholder=group.label,
                 )
                 if allowance > 0 or bool(staged & visible_keys)
@@ -276,10 +279,12 @@ class MultiChoicePanel:
 
         direct = stack(*group_nodes)
         if len(self._choice_order) <= 5:
+            modal = self.form_for(state, "modal")
+            assert modal is not None
             selection = fallback(
                 direct,
                 controls.form(
-                    self._modal(state),
+                    modal,
                     "modal",
                     key=f"{self.key}.modal",
                     label="Select options",

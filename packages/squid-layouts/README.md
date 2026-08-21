@@ -64,6 +64,38 @@ path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
 other processes; `sl.discord.durability.MountManager` provides opt-in versioned state checkpoints.
 
+## Interaction patterns and two shells
+
+`Tabs`, `Menu`, `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines. They do not
+choose between in-memory callbacks and restart-surviving routes. Instead, a shell injects that
+control construction:
+
+```python
+tabs = sl.Tabs(
+    (sl.Tab("summary", "Summary", summary), sl.Tab("history", "History", history)),
+    key="build-tabs",
+)
+
+# A mounted message: state lives in sl.state and controls use sl.action closures.
+mount = sl.discord.Mount(tabs.component())
+
+# A restart-surviving message: state is decoded from and encoded into route parameters.
+shell = sl.RouterShell(
+    lambda request: BUILD_TAB.id(build_id=build.id, tab=request.state.selected),
+)
+document = shell.render(tabs, sl.TabsState(selected=tab))
+```
+
+`PatternRoute.phase` is `next` for deterministic buttons: its state is already the state the next
+document should render. Selects and forms use `input`, because their values arrive in the
+interaction; a route handler calls `RouterShell.transition(...)` with those values and rebuilds the
+whole document. `Wizard.form_for(...)` and `MultiChoicePanel.form_for(...)` return the form a routed
+input action should present. The route builder owns compact state encoding and receives the normal
+100-character custom-id budget check from `sl.routed_action`/`sl.routed_choices`.
+
+Routed patterns accept frontend-neutral content only. A mounted shell may embed child `Component`
+instances, but a process-independent route cannot carry an in-memory component identity.
+
 ## Host integration rules
 
 - The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The adapter never spawns tasks — start

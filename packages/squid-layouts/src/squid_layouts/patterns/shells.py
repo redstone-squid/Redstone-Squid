@@ -121,7 +121,9 @@ class PatternControls[StateT](Protocol):
 class ComponentShell[StateT](Component):
     """Store pattern state in ``sl.state`` and inject closure-backed controls."""
 
-    pattern_state: Any = state()
+    # RouterShell is the restart boundary; a generic state dataclass has no honest JSON
+    # decoder for durable component restoration.
+    pattern_state: Any = state(persist=False)
 
     def __init__(
         self,
