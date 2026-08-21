@@ -22,7 +22,7 @@ from squid_layouts.discord import (
     Mount,
     MountedView,
 )
-from squid_layouts.discord.testing import assert_within_limits, fake_interaction
+from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 
 
 def make_report(
@@ -77,7 +77,7 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
 
 def mount_browser(browser: ErrorReportBrowser) -> tuple[Mount, discord.ui.LayoutView]:
     mount = create_mount(browser, chrome=browser.chrome(), lock_to=1)
-    return mount, mount.build_view()
+    return mount, commit_render(mount)
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
@@ -88,7 +88,7 @@ def _code_pages(mount: Mount) -> list[str]:
     """Every page of the fenced body, walked via the mount's own nav handlers."""
     pages = []
     while True:
-        view = mount.build_view()
+        view = commit_render(mount)
         pages.append(next(text for text in _texts(view) if text.startswith("```")))
         next_button = next(
             item
@@ -139,7 +139,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
     assert "page 1 of" not in footers[0]
 
     mount.presentation.move_cursor("traceback", 0)
-    earliest = mount.build_view()
+    earliest = commit_render(mount)
     assert "frame0" in "\n".join(_texts(earliest))
 
 
@@ -184,7 +184,7 @@ async def test_every_page_fits_the_real_display_budget() -> None:
     assert len(pages) > 1
     for page_index in range(len(pages)):
         mount.presentation.move_cursor("traceback", page_index)
-        view = mount.build_view()
+        view = commit_render(mount)
         assert_within_limits(view)
         assert sum(len(text) for text in _texts(view)) <= LIMITS.total_text
     assert "ValueError: boom" in pages[-1]

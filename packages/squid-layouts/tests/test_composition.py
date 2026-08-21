@@ -13,7 +13,7 @@ from squid_layouts import (
     state,
 )
 from squid_layouts.discord import Mount
-from squid_layouts.discord.testing import fake_interaction
+from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import (
     Button,
     Embed,
@@ -74,7 +74,7 @@ class TestEmbedding:
     async def test_each_instance_answers_only_its_own_control(self):
         pair = Pair()
         mount = Mount(pair, timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("left.inc", fake_interaction())
 
@@ -86,28 +86,28 @@ class TestEmbedding:
 
     def test_controls_are_namespaced_including_every_explicit_key(self):
         mount = Mount(Pair(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
         assert set(mount._handlers) == {"left.inc", "left.help", "right.inc", "right.help"}
 
     def test_a_childs_state_change_re_renders_the_root_message(self):
         pair = Pair()
         mount = Mount(pair, timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         pair.right.count = 3
 
         assert mount._dirty
-        assert "right: 3" in _texts(mount.build_view())
+        assert "right: 3" in _texts(commit_render(mount))
 
     def test_components_do_not_expose_the_frontend_mount(self):
         pair = Pair()
-        Mount(pair, timeout=None).build_view()
+        commit_render(Mount(pair, timeout=None))
         assert not hasattr(pair.left, "mount")
 
     def test_embedding_does_not_mutate_the_childs_own_keys(self):
         # render() stays pure: namespacing rewrites the returned tree, not the component.
         pair = Pair()
-        Mount(pair, timeout=None).build_view()
+        commit_render(Mount(pair, timeout=None))
         row = pair.left.render()[1]
         assert isinstance(row, Row)
         button = row.items[0]
@@ -134,7 +134,7 @@ class Nest(Component):
 @given(st.integers(min_value=0, max_value=8))
 def test_nested_embeds_stay_addressable(depth):
     mount = Mount(Nest(depth), timeout=None)
-    view = mount.build_view()
+    view = commit_render(mount)
     ids = _custom_ids(view)
 
     assert len(ids) == depth + 1
@@ -159,7 +159,7 @@ class PagedPair(Component):
 
 def test_embed_namespaces_pager_state_and_controls() -> None:
     mount = Mount(PagedPair(), timeout=None)
-    mount.build_view()
+    commit_render(mount)
 
     assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {
         "left.items": 0,
@@ -175,7 +175,7 @@ def test_duplicate_sibling_embed_keys_are_rejected() -> None:
             return [self.embed(Counter("one"), key="same"), self.embed(Counter("two"), key="same")]
 
     with pytest.raises(LayoutInvariantError, match="duplicate Embed key"):
-        Mount(Duplicate(), timeout=None).build_view()
+        commit_render(Mount(Duplicate(), timeout=None))
 
 
 def test_one_component_instance_cannot_occupy_two_paths() -> None:
@@ -186,7 +186,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
             return [self.embed(child, key="one"), self.embed(child, key="two")]
 
     with pytest.raises(LayoutInvariantError, match="already embedded"):
-        Mount(Duplicate(), timeout=None).build_view()
+        commit_render(Mount(Duplicate(), timeout=None))
 
 
 def test_component_embedding_cycles_are_rejected() -> None:
@@ -195,7 +195,7 @@ def test_component_embedding_cycles_are_rejected() -> None:
             return self.embed(self, key="self")
 
     with pytest.raises(LayoutInvariantError, match="embedding cycle"):
-        Mount(Cycle(), timeout=None).build_view()
+        commit_render(Mount(Cycle(), timeout=None))
 
 
 class Tracked(Component):
@@ -226,12 +226,12 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
 
     parent = Parent()
     mount = Mount(parent, timeout=None)
-    mount.build_view()
+    commit_render(mount)
     assert events == ["mount:parent", "mount:first"]
 
     parent.child = Tracked("second", events)
     mount.invalidate()
-    mount.build_view()
+    commit_render(mount)
     assert events[-2:] == ["unmount:first", "mount:second"]
 
     await mount.finish(disable=False)
@@ -253,7 +253,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
             self.provide(greeting, "hello from context")
             return self.embed(self.child, key="child")
 
-    view = Mount(Parent(), timeout=None).build_view()
+    view = commit_render(Mount(Parent(), timeout=None))
 
     assert "hello from context" in _texts(view)
 
@@ -274,7 +274,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
             return (self.embed(self.left, key="left"), self.embed(self.right, key="right"))
 
     mount = Mount(Parent(), timeout=None)
-    mount.build_view()
+    commit_render(mount)
 
     assert {"left.run", "right.run"} <= mount._handlers.keys()
 
@@ -309,7 +309,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
             return (self.embed(self.left, key="left"), self.embed(self.right, key="right"))
 
     mount = Mount(Parent(), timeout=None)
-    mount.build_view()
+    commit_render(mount)
 
     assert {"left.entries", "right.entries"} <= mount.presentation.cursors.keys()
     assert {"left.choice", "right.choice"} <= mount._handlers.keys()

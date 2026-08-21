@@ -1,7 +1,7 @@
 """Reactive core tests: state, dispatch funnel, flush, lifecycle."""
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import anyio
@@ -12,6 +12,7 @@ from squid_layouts import (
     ActionPolicy,
     Component,
     Document,
+    LayoutNode,
     PressEvent,
     ReactiveWriteError,
     SelectionEvent,
@@ -23,13 +24,16 @@ from squid_layouts import (
 from squid_layouts.discord import (
     Mount,
     Reactor,
+    delivery,
 )
-from squid_layouts.discord.testing import assert_within_limits, fake_interaction
+from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
     Heading,
+    Lines,
     Option,
+    Paginate,
     Row,
     SelectMenu,
     Text,
@@ -60,6 +64,49 @@ class RootToolbar(Component):
     async def click(self, event: PressEvent) -> None: ...
 
 
+class Child(Component):
+    def __init__(self, mounted: list[str]) -> None:
+        self.mounted = mounted
+
+    def render(self):
+        return Text("child")
+
+    def on_mount(self) -> None:
+        self.mounted.append("child")
+
+
+class Panel(Component):
+    """A pager, a button and an optional child — one of each thing a commit publishes."""
+
+    entries: list[str] = state(factory=lambda: [f"entry {index}" for index in range(6)])
+    show_child: bool = state(default=False)
+
+    def __init__(self, mounted: list[str]) -> None:
+        self.child = Child(mounted)
+
+    def render(self):
+        nodes: list[LayoutNode] = [
+            Lines(tuple(self.entries), overflow=Paginate(key="entries", per=2)),
+            Row((Button("add", self.add, "add"),)),
+        ]
+        if self.show_child:
+            nodes.append(self.embed(self.child, key="child"))
+        return nodes
+
+    async def add(self, event: PressEvent) -> None:
+        self.entries.append("added")
+        self.show_child = True
+
+
+def _http_error() -> discord.HTTPException:
+    response = cast(Any, SimpleNamespace(status=500, reason="Internal Server Error"))
+    return discord.HTTPException(response, "edit refused")
+
+
+async def _refuse_edit(*args: Any, **kwargs: Any) -> None:
+    raise _http_error()
+
+
 def _button(view: discord.ui.LayoutView) -> discord.ui.Button:
     return next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
 
@@ -67,7 +114,7 @@ def _button(view: discord.ui.LayoutView) -> discord.ui.Button:
 class TestRenderAndWire:
     def test_build_view_wires_handlers(self):
         mount = Mount(Counter(), timeout=None)
-        view = mount.build_view()
+        view = commit_render(mount)
         button = _button(view)
         assert button.custom_id is not None and button.custom_id.startswith(f"ctl:{mount.id}:1:inc")
         assert "inc" in mount._handlers
@@ -76,14 +123,14 @@ class TestRenderAndWire:
     def test_render_generations_have_distinct_control_ids(self):
         mount = Mount(Counter(), timeout=None)
 
-        first = _button(mount.build_view())
-        second = _button(mount.build_view())
+        first = _button(commit_render(mount))
+        second = _button(commit_render(mount))
 
         assert first.custom_id != second.custom_id
 
     async def test_keyed_document_root_pages_are_live_mount_navigation(self):
         mount = Mount(RootToolbar(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         assert mount.presentation.cursor("toolbar").extent > 1
         await mount.dispatch("__page_next.toolbar", fake_interaction())
@@ -92,7 +139,7 @@ class TestRenderAndWire:
     async def test_click_mutates_state_and_edits(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         await mount.dispatch("inc", interaction)
@@ -113,7 +160,7 @@ class TestRenderAndWire:
                 seen.append(event)
 
         mount = Mount(Inspect(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("inspect", fake_interaction(user_id=42))
 
@@ -126,7 +173,7 @@ class TestRenderAndWire:
                 pass  # no state change
 
         mount = Mount(Static(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         await mount.dispatch("inc", interaction)
@@ -136,7 +183,7 @@ class TestRenderAndWire:
 
     async def test_stale_key_is_acknowledged_not_crashed(self):
         mount = Mount(Counter(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         await mount.dispatch("gone", interaction)
@@ -156,7 +203,7 @@ class TestRenderAndWire:
                 await release.wait()
 
         mount = Mount(Slow(), timeout=None, acknowledgement_timeout=0.01)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         async def dispatch() -> None:
@@ -175,7 +222,7 @@ class TestAuthorLock:
     async def test_wrong_user_is_rejected_ephemerally(self):
         component = Counter()
         mount = Mount(component, timeout=None, lock_to=42)
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction(user_id=99)
 
         await mount.dispatch("inc", interaction)
@@ -187,7 +234,7 @@ class TestAuthorLock:
     async def test_owner_passes(self):
         component = Counter()
         mount = Mount(component, timeout=None, lock_to=42)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("inc", fake_interaction(user_id=42))
 
@@ -198,9 +245,9 @@ class TestActionPolicy:
     async def test_exclusive_action_from_a_stale_view_is_acknowledged_without_running(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        mount.build_view()
+        commit_render(mount)
         stale_generation = mount._generation
-        mount.build_view()
+        commit_render(mount)
         interaction = fake_interaction()
 
         await mount.dispatch("inc", interaction, generation=stale_generation)
@@ -226,10 +273,10 @@ class TestActionPolicy:
 
         component = Rebased()
         mount = Mount(component, timeout=None)
-        mount.build_view()
+        commit_render(mount)
         stale_generation = mount._generation
         component.current = True
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("run", fake_interaction(), generation=stale_generation)
 
@@ -251,7 +298,7 @@ class TestActionPolicy:
                 active -= 1
 
         mount = Mount(Serialized(), timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         async def dispatch(interaction) -> None:
             await mount.dispatch("run", interaction)
@@ -275,7 +322,7 @@ class TestActionPolicy:
         component = Reader()
         hook = AsyncMock()
         mount = Mount(component, timeout=None, on_error=hook)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("read", fake_interaction())
 
@@ -296,7 +343,7 @@ class TestErrors:
 
         hook = AsyncMock()
         mount = Mount(Boom(), timeout=None, on_error=hook)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("x", fake_interaction())
 
@@ -322,7 +369,7 @@ class TestErrors:
         component = Boom()
         hook = AsyncMock()
         mount = Mount(component, timeout=None, on_error=hook)
-        mount.build_view()
+        commit_render(mount)
 
         await mount.dispatch("x", fake_interaction())
 
@@ -349,7 +396,7 @@ class TestSelect:
                 picked.extend(event.values)
 
         mount = Mount(Picker(), timeout=None)
-        view = mount.build_view()
+        view = commit_render(mount)
         assert any(isinstance(item, discord.ui.Select) for item in view.walk_children())
 
         await mount.dispatch("pick", fake_interaction(), ["b"])
@@ -360,7 +407,7 @@ class TestSelect:
 class TestLifecycle:
     async def test_finish_disables_controls(self):
         mount = Mount(Counter(), timeout=None)
-        view = mount.build_view()
+        view = commit_render(mount)
         message: Any = SimpleNamespace(
             flags=SimpleNamespace(components_v2=True),
             edit=AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True))),
@@ -378,7 +425,7 @@ class TestLifecycle:
     async def test_refresh_now_edits_bound_message(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        view = mount.build_view()
+        view = commit_render(mount)
         message: Any = SimpleNamespace(
             flags=SimpleNamespace(components_v2=True),
             edit=AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True))),
@@ -400,6 +447,95 @@ class TestLifecycle:
         assert reactor._queue.qsize() == 1
 
 
+class TestDeliveryAtomicity:
+    """A render becomes the mount's state only once Discord has accepted it."""
+
+    def test_build_view_stages_and_bind_commits(self):
+        mount = Mount(Counter(), timeout=None)
+
+        view = mount.build_view()
+
+        assert mount._handlers == {}
+        assert mount._generation == 0
+        assert mount._assets == ()
+
+        mount.bind(None, view)
+
+        assert "inc" in mount._handlers
+        assert mount._generation == 1
+
+    async def test_failed_edit_keeps_the_visible_generation_live(self, monkeypatch):
+        mounted: list[str] = []
+        panel = Panel(mounted)
+        mount = Mount(panel, timeout=None)
+        commit_render(mount)
+        await mount.dispatch("__page_next.entries", fake_interaction())
+        assert mount.presentation.cursor("entries").index == 1
+
+        live_generation = mount._generation
+        live_handlers = mount._handlers
+        panel.entries.append("entry 6")  # a new fingerprint: the staged render resets the cursor
+        panel.show_child = True  # a component the failed generation must not mount
+
+        monkeypatch.setattr(delivery, "apply_interaction", _refuse_edit)
+        with pytest.raises(discord.HTTPException):
+            await mount.flush(fake_interaction())
+
+        assert mount._generation == live_generation
+        assert mount._handlers is live_handlers
+        assert mount._dirty
+        assert mounted == []
+        assert mount.presentation.cursor("entries").index == 1
+
+    async def test_a_click_after_a_failed_edit_still_runs_and_repairs_the_message(self, monkeypatch):
+        mounted: list[str] = []
+        panel = Panel(mounted)
+        mount = Mount(panel, timeout=None)
+        commit_render(mount)
+        live_generation = mount._generation
+        panel.show_child = True
+
+        monkeypatch.setattr(delivery, "apply_interaction", _refuse_edit)
+        with pytest.raises(discord.HTTPException):
+            await mount.flush(fake_interaction())
+        monkeypatch.undo()
+
+        # The stale-generation guard would silently defer this click if the mount had
+        # advanced past the generation the message is still showing.
+        interaction = fake_interaction()
+        await mount.dispatch("add", interaction, generation=live_generation)
+
+        assert panel.entries[-1] == "added"
+        assert mount._generation > live_generation
+        assert not mount._dirty
+        assert mounted == ["child"]
+        interaction.response.edit_message.assert_awaited_once()
+
+    async def test_failed_refresh_leaves_the_mount_repairable(self, monkeypatch):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        view = commit_render(mount)
+        message: Any = SimpleNamespace(
+            flags=SimpleNamespace(components_v2=True),
+            edit=AsyncMock(side_effect=_http_error()),
+        )
+        mount.bind(message, view)
+        component.count = 7
+        live_generation = mount._generation
+
+        with pytest.raises(discord.HTTPException):
+            await mount.refresh_now()
+
+        assert mount._generation == live_generation
+        assert mount._dirty
+
+        message.edit = AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True)))
+        await mount.refresh_now()
+
+        assert mount._generation > live_generation
+        assert not mount._dirty
+
+
 class TestStateDescriptor:
     def test_default_is_per_instance(self):
         first, second = Counter(), Counter()
@@ -409,7 +545,7 @@ class TestStateDescriptor:
     def test_assignment_marks_mount_dirty(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        mount.build_view()
+        commit_render(mount)
         assert not mount._dirty
         component.count = 3
         assert mount._dirty
@@ -423,14 +559,14 @@ class TestStateDescriptor:
 
         first, second = Collection(), Collection()
         mount = Mount(first, timeout=None)
-        mount.build_view()
+        commit_render(mount)
 
         first.entries.append({"count": 1})
 
         assert mount._dirty
         assert second.entries == []
 
-        mount.build_view()
+        commit_render(mount)
         first.entries[0]["count"] = 2
         assert mount._dirty
 
