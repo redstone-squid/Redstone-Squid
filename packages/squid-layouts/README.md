@@ -15,11 +15,9 @@ class Counter(sl.Component):
     count: int = sl.state(0)
 
     def render(self):
-        return sl.Section(
-            (
-                sl.Paragraph(sl.md(t"Count: {self.count}")),
-                sl.Actions((sl.Action("increment", "+1", self.increment),), key="counter-actions"),
-            ),
+        return sl.section(
+            t"Count: {self.count}",
+            sl.actions(sl.action("+1", self.increment, key="increment"), key="counter-actions"),
             heading="Counter",
         )
 
@@ -35,6 +33,8 @@ for component composition, planning, renderers, action policies, and durable mou
 1. **Semantic documents** describe author intent with `Section`, `Paragraph`, `List`,
    `Fields`, `Table`, `Media`, `Details`, `Actions`, `Choices`, `Items`, and `Navigation`.
    Authors may express a display preference and flexibility, but never an exact Discord shape.
+   The lowercase factories (`sl.section`, `sl.actions`, `sl.field`, …) are the recommended
+   authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
 2. **Target adapters** select lossless representations. For example, 36 semantic actions become
    two pickers containing 25 and 11 options; explicit action groups never merge. Strategy state
    supplies hysteresis, so small data changes do not reshuffle a familiar UI.
@@ -68,6 +68,10 @@ other processes; `sl.discord.durability.MountManager` provides opt-in versioned 
 
 - The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The adapter never spawns tasks — start
   `sl.discord.Reactor.run()` under your own supervisor.
+- Factories take content positionally and everything else by keyword. `None` and `False`
+  children are skipped, so `cond and node` is the way to include something conditionally;
+  `True` is rejected because `and` can never produce it. Collections are unpacked by the
+  caller: `sl.fields(*(sl.field(name, value) for name, value in rows))`.
 - Bare strings are trusted Discord Markdown. Use `md(t"Build {title}")` for escaped Python
   3.14 template-string interpolation, `plain()` for literal text, and `raw_md()` only for a
   deliberately trusted interpolation.
