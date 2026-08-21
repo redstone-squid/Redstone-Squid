@@ -13,7 +13,7 @@ import discord
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.ui import chrome_for
+from squid.bot.ui import CHROME
 from squid.core.i18n import _
 from squid.diagnostics.domain import ErrorReport
 
@@ -52,7 +52,7 @@ class ErrorReportBrowser(sl.Component):
     def chrome(self) -> sl.Chrome:
         """This browser's chrome: temporal paging labels and a footer that names the attachment."""
         return dataclasses.replace(
-            chrome_for(self.locale),
+            CHROME,
             not_yours=t(self.locale, _("These error controls belong to someone else.")),
             previous=t(self.locale, _("Earlier")),
             next=t(self.locale, _("Later")),

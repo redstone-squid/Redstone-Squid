@@ -1,7 +1,10 @@
 import ast
 from pathlib import Path
 
+from babel.messages.pofile import read_po
 from pytest_archon import archrule
+
+from squid.core.extract import deferred_msgid
 
 # Roots for the AST scans that state repo-wide invariants. The squid-layouts workspace member
 # is held to the same rules as squid itself.
@@ -45,6 +48,51 @@ def test_layouts_package_carries_no_translation_markers() -> None:
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
     ]
+
+    assert violations == []
+
+
+def test_deferred_messages_are_present_in_the_catalog_template() -> None:
+    with Path("locales/squid.pot").open(encoding="utf-8") as fileobj:
+        catalog = read_po(fileobj)
+    msgids = {message.id for message in catalog if isinstance(message.id, str)}
+    deferred = {
+        msgid
+        for path in Path("squid").rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call) and (msgid := deferred_msgid(node)) is not None
+    }
+
+    assert deferred - msgids == set()
+
+
+def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
+    violations: list[str] = []
+    for path in Path("squid").rglob("*.py"):
+        if path == Path("squid/bot/ui.py"):
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        aliases: dict[str, str] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    aliases[alias.asname or alias.name] = alias.name
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                for alias in node.names:
+                    aliases[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            parts: list[str] = []
+            target = node.func
+            while isinstance(target, ast.Attribute):
+                parts.append(target.attr)
+                target = target.value
+            if not isinstance(target, ast.Name):
+                continue
+            resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
+            if resolved in {"squid_layouts.discord.compose", "squid_layouts.discord.render_static"}:
+                violations.append(f"{path}:{node.lineno}")
 
     assert violations == []
 
