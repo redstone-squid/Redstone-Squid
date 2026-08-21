@@ -26,13 +26,13 @@ does not so the rejected half is not re-derived.
 | Route declared inline as a string (`@app.route("/x/<int:y>")`) | **Taken** — stage 2 |
 | Lowercase `router` / `app` module singletons | **Taken** — stage 0 |
 | Typed request/app context | **Taken** — stage 3 |
-| Redirects / aliases (301) | Stage 4 |
-| 404 handler | Stage 4, scoped — see below |
-| Middleware / `before_request` | Stage 5 |
-| "A view must return a response" | Stage 5 |
-| Method verbs (GET/POST) | Stage 6 — the analogue is *component type* |
-| Form body vs path params | Stage 6 — the analogue is `interaction.data["values"]` |
-| `flask routes` / `show_urls` | Stage 7 |
+| Redirects / aliases (301) | **Taken** — stage 4 |
+| 404 handler | **Taken** — stage 4, scoped; see below |
+| Middleware / `before_request` | **Deferred** — stage 5 did not survive Discord semantics |
+| "A view must return a response" | **Deferred** — the raw interaction exposes no reliable completion signal |
+| Method verbs (GET/POST) | **Taken** — stage 6; the analogue is *component type* |
+| Form body vs path params | **Taken** — stage 6; selected values are a second parameter source |
+| `flask routes` / `show_urls` | **Taken** — stage 7 |
 | Blueprints / `include_router(prefix=)` | **Deferred.** Real at 30 routes; at 5 it adds indirection over one module-level `router` |
 | `Depends` dependency injection | **Rejected.** The duplication (`resolve_locale`, `_authorize`) is bot-domain, not framework. Stage 5's middleware is the seam to build it host-side |
 | `url_for("endpoint")` string keys | **Rejected.** A `Route` object is the typed, refactor-safe version of the same thing |
@@ -134,7 +134,7 @@ Two findings worth keeping:
 
 An outside review of plan 14 raised seven points. Each was checked against the shipped
 code rather than reasoned about; two were already handled, one is moot, and four were real.
-C1-C3 have since shipped; C4 remains.
+C1-C4 have since shipped.
 
 ### Already handled
 
@@ -238,19 +238,21 @@ invariant regardless of how the node was constructed, covering `Button` and sele
 ids alike. Reported, never clamped — every other string there degrades acceptably when
 trimmed, but a shortened custom id routes to a different handler or to none.
 
-### C4 — `custom_id` is Discord vocabulary in a portable protocol
+### C4 — `custom_id` is Discord vocabulary in a portable protocol (`52e983a7`)
 
 `SceneRoutedButton.custom_id` and the codec's `"custom_id"` key put a frontend's word in
 the scene protocol. `route_id` is the honest name: Discord maps it to `custom_id`, HTML can
 emit `data-route-id`, and the semantic layer keeps saying "opaque stable routed-interaction
 identity".
 
-Cosmetic, and it is a codec-format change, so it belongs with stage 4's format churn rather
-than on its own.
+Shipped as `route_id` throughout the portable and semantic layers. Discord maps it to
+`custom_id`; HTML emits `data-route-id`. The experimental scene protocol remains version
+1 and was rewritten in place, with no legacy decoder for a protocol that had no supported
+stored population.
 
-## Not shipped
+## Shipped since the original plan
 
-### Stage 4 — Aliases and a reserved namespace
+### Stage 4 — Aliases and a reserved namespace (`602fa32e`, `c5404634`, `4d4af451`)
 
 **Aliases (301).** `Route(format, aliases=(...))`. Alias patterns join `anonymous` for the
 template and are tried in `match`, but `id()` always builds the *canonical* format, so a
@@ -259,65 +261,63 @@ renamed route keeps answering already-posted buttons while new cards get the new
 **Namespace (`r:`) + gone-handler (410).** New routes authored under a reserved prefix;
 `register` appends one fallback branch scoped to it, and `dispatch` answers an unmatched id
 inside the namespace with a friendly reply instead of Discord's "This interaction failed".
-`add()` rejects a route that shadows `ctl:` — probe a synthetic mount id against the new
-route's pattern — so a route can never eat a mount's buttons.
+`add()` rejects every route whose accepted language enters `ctl:`, using exact segment
+intersection rather than a synthetic probe, so canonical formats and aliases are covered
+by the same generalized C1 fix. Alias-to-alias and alias-to-canonical overlap are likewise
+checked exactly. Button and select registrations form separate identity spaces, matching
+their role as method verbs.
 
 Agreed 2026-08-21: migrate all five routes into the namespace, with legacy aliases, so the
 posted population drains into it on its own. The instruction was "don't worry about
 backcompat"; the aliases deliver it cheaply enough to keep anyway, and the alias mechanism
 stays regardless as the general answer to a future rename.
 
-Needs an **alias identity guard**: a test asserting each production route's alias still
-builds the exact pre-migration id (`poll:close`, `edit:build:5`, …), so the rename is
-provably non-orphaning and a later edit cannot silently undo it.
+All five production identities now live under `r:` and retain their old ids as aliases.
+The production identity tests pin both spellings, including `edit:build:5`, so a later edit
+cannot silently orphan posted controls. Unknown `r:` controls receive a localized gone
+response; `ctl:` remains wholly reserved for mounts.
+
+### Stage 6 — Explicit stateless selects (`0fe0cca9`)
+
+`RoutedChoices` lowers to one `RoutedSelect`, never through the session-bound choice
+collapse or pagination ladder. Its route id remains stable and its selected string values
+arrive before typed path parameters at an explicit `@router.select` handler. Buttons and
+selects may intentionally share a route id because component type is part of registration
+and resolution identity.
+
+The portable node, scene codec/schema, Discord renderer, HTML renderer and planner all
+carry the distinction. More than 25 routed options fails with a remedy to split the picker
+into separate routes; the planner never invents state or silently changes transport.
+
+### Stage 7 — Introspection (`4a705e11`)
+
+`Router.describe()` returns immutable public descriptions containing component type,
+canonical format, parameter converters, aliases, and handler provenance. Owner-only
+`!dev routes` renders the live table privately alongside `!dev ui`.
+
+## Deferred
 
 ### Stage 5 — Middleware, declarative defer, and the response guarantee
 
-- `@router.route(x, defer="ephemeral")`, covering the hand-rolled
-  `await interaction.response.defer(ephemeral=True)` at the top of `consent_banner` and
-  `give_redstoner`.
-- A Starlette-shaped chain, `Callable[[Interaction, Next], Awaitable[None]]`. The framework
-  ships the seam only; the bot builds `@owner_guild_only` (open-coded in `give_redstoner`)
-  and its locale/authorize decorators on top. An interaction has one initial response and a
-  ~3s ack deadline, so middleware here is *not* transparent the way HTTP middleware is.
-- **The response guarantee.** Flask errors when a view returns `None`. `give_redstoner`
-  defers and then bare-`return`s on two guard paths, leaving an ephemeral "thinking" state
-  with nothing behind it. After the handler, if the router deferred and nothing was sent,
-  log it and send a generic followup. Confirm the exact Discord behaviour when
-  implementing rather than trusting this description.
+The proposed `defer="ephemeral"` abstraction is not an honest button default. For a
+component interaction, `defer(ephemeral=True)` defaults to a deferred message update;
+`ephemeral` only affects a new deferred response when `thinking=True`. A generic router
+policy would therefore need to choose between editing the clicked message and showing a
+private loading state without knowing the handler's intent.
 
-### Stage 6 — `RoutedSelect`: the missing verb
-
-Only buttons are routable, which is why `planning/adaptation.py` carves routed controls out
-of the collapse ladder:
-
-> Links and routed controls carry no binding, so they can never be folded into a select
-> menu the way a group of session actions can: they stay individual buttons.
-
-A `RoutedSelect` closes it: a stateless select whose custom id is a route and whose chosen
-values arrive as a second parameter source — path params from the id, "form body" from
-`interaction.data["values"]`, exactly the web split. Touches `primitives/nodes.py`,
-`semantic.py`, the three `scene/` modules, both renderers, and lifts the carve-out.
-
-Largest stage, and the only one whose demand is inferred rather than observed. Confirm a
-real card wants a stateless select before starting it.
-
-### Stage 7 — Introspection
-
-`Router.describe()` → the route table (canonical format, params and converters, aliases,
-handler qualname, defining module), rendered by a `routes` subcommand alongside plan 13's
-`!dev ui`. Five lines of framework, and the thing that makes stage 4's namespace migration
-auditable.
+The proposed response guarantee is also not observable from a raw interaction. The router
+can see whether the initial response was acknowledged, but followups and edits are not a
+single completion bit it can reliably inspect. Middleware would either misdiagnose valid
+handlers or require wrapping every response path, turning a small dispatch layer into a
+second interaction API. Keep defer, authorization, and response ownership explicit in the
+handler until a concrete repeated policy justifies a narrower abstraction.
 
 ## Verification
 
-Stages 0-3 and C1-C3 verified: `packages/squid-layouts/tests` (408), `tests/unit/bot`
-(647), `pyrefly --config pyproject.toml` at 0 errors. `tests/unit` as a whole is CI's job.
-
-Remaining stages want, on top of their own unit tests: the alias identity guard above, and
-a manual pass via the `run` skill after stage 4 — click a vote card button and a build
-card's Edit button that were posted *before* the rename, to confirm the alias path works on
-a real message rather than a synthetic id.
+Stages 0-4, 6-7 and C1-C4 have automated coverage in the package and bot unit suites. The
+remaining operational check is to click a vote-card button and a build-card Edit button
+posted before the namespace migration, confirming legacy aliases on real Discord messages
+in addition to the pinned synthetic identities.
 
 ## Sequencing
 
