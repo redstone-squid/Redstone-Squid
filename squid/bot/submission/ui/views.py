@@ -41,6 +41,7 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
+from squid.bot.utils.mount_registry import SessionKey
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -1208,7 +1209,19 @@ class BuildEditComponent(sl.Component):
             return
         await self._mount.flush(interaction)
 
-    async def send(self, interaction: discord.Interaction[Any], ephemeral: bool = True) -> None:
+    async def send(
+        self,
+        interaction: discord.Interaction[Any],
+        ephemeral: bool = True,
+        *,
+        parent: sl.discord.Mount | None = None,
+    ) -> None:
+        """Open an editor for this build, replacing this user's previous one.
+
+        `parent` is the mount this editor was opened from, when it was opened from one: the
+        editor lives on its own message, so without it a closed parent leaves a clickable
+        orphan behind until the editor's own 300 s timer runs out.
+        """
         self.locale = await resolve_locale(interaction, interaction.client.services.settings)
         if not await self.can_edit(interaction):
             message = t(
@@ -1236,8 +1249,14 @@ class BuildEditComponent(sl.Component):
                 if render_node is not None
                 else sl.status(t(self.locale, _("Build preview unavailable.")))
             )
-        mount = self.mount()
-        await mount.send(sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True))
+        # Keyed per user per build: a second editor for the same build replaces the first
+        # rather than leaving two of them staging edits to one row.
+        await interaction.client.mounts.open(
+            self.mount(),
+            sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True),
+            key=SessionKey("build-edit", interaction.user.id, self.build.id),
+            parent=parent,
+        )
 
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)
