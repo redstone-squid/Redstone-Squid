@@ -244,12 +244,14 @@ class ClaimReviewComponent(sl.Component):
     def selected(self) -> AliasClaim | None:
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
-    def render(self) -> tuple[sl.primitives.Node, ...]:
+    def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
+            # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
+            # rather than sl.status's fixed tone palette.
             return (
-                sl.primitives.card(
-                    t(self.locale, _("Claims closed")),
-                    t(self.locale, _("This review queue is closed.")),
+                sl.section(
+                    sl.paragraph(t(self.locale, _("This review queue is closed."))),
+                    heading=t(self.locale, _("Claims closed")),
                     accent=DISCORD_BLUE,
                 ),
             )
