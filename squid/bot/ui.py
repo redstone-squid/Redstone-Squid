@@ -75,7 +75,6 @@ def chrome_for(locale: str | None) -> ui.Chrome:
     """Build the framework's chrome strings for `locale`."""
     return ui.Chrome(
         and_n_more=lambda count: t(locale, _("…and {count} more."), count=count),
-        see_attachment=t(locale, _("See attachment")),
         not_yours=t(locale, _("These list controls belong to someone else.")),
         session_ended=t(locale, _("This session has ended.")),
         previous=t(locale, _("Previous")),

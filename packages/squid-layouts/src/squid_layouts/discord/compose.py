@@ -17,6 +17,7 @@ from squid_layouts.planning.solve import PageNav, PageState
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanResult
+from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ def compose(
     renderer: Renderer | None = None,
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
     page: PageState = None,
@@ -57,6 +59,7 @@ def compose(
         rendered,
         target=Target(limits),
         chrome=chrome,
+        localization=localization,
         strict=strict,
         reservation=ResourceCost({"display_text": reserved_text}),
         page=page,
@@ -77,8 +80,16 @@ def render_static(
     *,
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
 ) -> discord.ui.LayoutView:
     """Plan and draw a sessionless Discord document."""
-    return compose(nodes, limits=limits, chrome=chrome, strict=strict, reserved_text=reserved_text).view
+    return compose(
+        nodes,
+        limits=limits,
+        chrome=chrome,
+        localization=localization,
+        strict=strict,
+        reserved_text=reserved_text,
+    ).view

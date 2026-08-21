@@ -7,7 +7,7 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
 
 from squid_layouts.actions import ActionBinding
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.adaptation import lower_semantics
@@ -74,6 +74,7 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
 )
+from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
 
@@ -313,6 +314,7 @@ def plan(
     *,
     target: TargetProfile,
     chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
     page: PageState = None,
@@ -332,12 +334,14 @@ def plan(
     document = as_document(rendered)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
+    chrome = localize_chrome(chrome, localization)
     # One broker owns every page position in this plan, whichever layer does the slicing.
     broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
     semantic = lower_semantics(
         document.children,
         limits=limits,
         chrome=chrome,
+        localization=localization,
         session=presentation,
         pages=broker,
         search_budget=search_budget,
@@ -349,6 +353,7 @@ def plan(
         target=target,
         limits=limits,
         chrome=chrome,
+        localization=localization,
         presentation=presentation,
         reservation=reservation,
         strict=strict,
@@ -578,6 +583,7 @@ def _plan_cache_key(
     target: TargetProfile,
     limits: V2Limits,
     chrome: Chrome,
+    localization: Localization,
     presentation: PresentationSession,
     reservation: ResourceCost,
     strict: bool,
@@ -599,6 +605,7 @@ def _plan_cache_key(
             chrome.page_footer(1, 2),
             chrome.and_n_more(2),
         ),
+        "locale": localization.locale,
         "reservation": _stable_value(reservation),
         "strict": strict,
         "page": _stable_value(page),

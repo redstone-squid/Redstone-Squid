@@ -95,7 +95,7 @@ from squid_layouts.semantic import (
     Tone,
     Truncated,
 )
-from squid_layouts.text import resolve_text
+from squid_layouts.text import Localization, TextLike, resolve_text
 
 ACTIONS_ADAPTER_ID = "discord.actions"
 ACTIONS_ADAPTER_VERSION = 1
@@ -115,6 +115,7 @@ class SemanticLowering:
 class _Context:
     limits: V2Limits
     chrome: Chrome
+    localization: Localization
     session: PresentationSession
     pages: PageBroker
     events: list[PlanEvent]
@@ -129,13 +130,14 @@ def lower_semantics(
     *,
     limits: V2Limits,
     chrome: Chrome,
+    localization: Localization,
     session: PresentationSession,
     pages: PageBroker | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
     broker = pages if pages is not None else PageBroker(session, chrome)
-    context = _Context(limits, chrome, session, broker, [], [], search_budget)
+    context = _Context(limits, chrome, localization, session, broker, [], [], search_budget)
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
@@ -177,7 +179,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         ):
             contents: list[Node] = []
             if heading is not None:
-                title = PrimitiveHeading(resolve_text(heading).content, overflow=Never())
+                title = PrimitiveHeading(_resolve(heading, context), overflow=Never())
                 # The lead image sits beside the title and nothing else: picking "the body"
                 # out of an arbitrary children tuple would be a guess.
                 contents.append(
@@ -190,28 +192,28 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Aside(children=children, tone=tone):
             return [Panel(tuple(_children(children, path, context)), accent=_tone_color(tone))]
         case Heading(content=content, level=level):
-            return [PrimitiveHeading(resolve_text(content).content, level=level, overflow=Never())]
+            return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never())]
         case Paragraph(content=content):
-            return [Text(resolve_text(content).content, overflow=Never())]
+            return [Text(_resolve(content, context), overflow=Never())]
         case Note(content=content):
-            return [Footer(resolve_text(content).content, overflow=Never())]
+            return [Footer(_resolve(content, context), overflow=Never())]
         case List(items=items, key=key, ordered=ordered, page_size=page_size):
             marker = (lambda index: f"{index + 1}.") if ordered else (lambda _index: "•")
-            lines = tuple(f"{marker(index)} {resolve_text(item.content).content}" for index, item in enumerate(items))
+            lines = tuple(f"{marker(index)} {_resolve(item.content, context)}" for index, item in enumerate(items))
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
-            return [Lines(tuple(_field_entry(field) for field in fields), overflow=Condense())]
+            return [Lines(tuple(_field_entry(field, context) for field in fields), overflow=Condense())]
         case Quote(content=content, attribution=attribution):
-            value = "> " + resolve_text(content).content.replace("\n", "\n> ")
+            value = "> " + _resolve(content, context).replace("\n", "\n> ")
             if attribution is not None:
-                value += f"\n— {resolve_text(attribution).content}"
+                value += f"\n— {_resolve(attribution, context)}"
             return [Text(value, overflow=Never())]
         case Code(content=content, language=language):
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
             children: list[Node] = [Gallery((media.url,))]
             if caption is not None:
-                children.append(Footer(resolve_text(caption).content))
+                children.append(Footer(_resolve(caption, context)))
             return children
         case Media():
             return _media(node, context)
@@ -224,15 +226,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 Tone.WARNING: "⚠️ ",
                 Tone.DANGER: "❌ ",
             }.get(tone, "")
-            return [Text(prefix + resolve_text(content).content, overflow=Never())]
+            return [Text(prefix + _resolve(content, context), overflow=Never())]
         case Progress(value=value, maximum=maximum, label=label):
             ratio = 0.0 if maximum <= 0 else max(0.0, min(1.0, value / maximum))
             filled = round(ratio * 10)
-            prefix = f"{resolve_text(label).content}: " if label is not None else ""
+            prefix = f"{_resolve(label, context)}: " if label is not None else ""
             return [Text(f"{prefix}{'█' * filled}{'░' * (10 - filled)} {ratio:.0%}", overflow=Never())]
         case Measure(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
-            return [Text(f"**{resolve_text(label).content}:** {value}{suffix}", overflow=Never())]
+            return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
         case Choices():
             return _choices(node, path, context)
         case Items():
@@ -252,19 +254,23 @@ def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _
     context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
 
 
-def _field_entry(field: Field) -> str | Alt:
+def _resolve(value: TextLike, context: _Context) -> str:
+    return resolve_text(value, context.localization).content
+
+
+def _field_entry(field: Field, context: _Context) -> str | Alt:
     """One `Fields` line, carrying the field's own degradation ladder when it has one.
 
     Rungs come from caller data assembled by formatting and escaping, so one that came out
     empty or longer than what precedes it is skipped rather than rejected — direct `Alt`
     construction stays strict.
     """
-    label = resolve_text(field.label).content
-    primary = f"**{label}:** {resolve_text(field.value).content}"
+    label = _resolve(field.label, context)
+    primary = f"**{label}:** {_resolve(field.value, context)}"
     kept: list[str] = []
     ceiling = len(primary)
     for fallback in field.fallbacks:
-        rung = f"**{label}:** {resolve_text(fallback).content}"
+        rung = f"**{label}:** {_resolve(fallback, context)}"
         if len(rung) <= ceiling:
             kept.append(rung)
             ceiling = len(rung)
@@ -322,7 +328,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
 
             buttons.append(
                 Button(
-                    resolve_text(choice.label).content,
+                    _resolve(choice.label, context),
                     choose,
                     f"{node.key}.{choice.key}",
                     style=ActionStyle.PRIMARY if choice.key in previous else ActionStyle.SECONDARY,
@@ -343,9 +349,9 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
 
     options = tuple(
         Option(
-            resolve_text(choice.label).content,
+            _resolve(choice.label, context),
             choice.key,
-            resolve_text(choice.description).content if choice.description is not None else None,
+            _resolve(choice.description, context) if choice.description is not None else None,
             choice.key in previous,
         )
         for choice in visible
@@ -392,7 +398,7 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
             await open_(event, None)
 
         return [
-            PrimitiveHeading(resolve_text(item.label).content, level=3, overflow=Never()),
+            PrimitiveHeading(_resolve(item.label, context), level=3, overflow=Never()),
             *_children(item.children, f"{path}.{item.key}", context),
             Row((Button(context.chrome.back, back, f"{node.key}.back"),)),
         ]
@@ -403,14 +409,14 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
     page_key = f"{node.key}.items"
     visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
     summaries = tuple(
-        f"**{resolve_text(item.label).content}**"
-        + (f" — {resolve_text(item.summary).content}" if item.summary is not None else "")
+        f"**{_resolve(item.label, context)}**"
+        + (f" — {_resolve(item.summary, context)}" if item.summary is not None else "")
         for item in visible
     )
     result: list[Node] = [
         Lines(summaries, overflow=Never()),
         SelectMenu(
-            tuple(Option(resolve_text(item.label).content, item.key) for item in visible),
+            tuple(Option(_resolve(item.label, context), item.key) for item in visible),
             focus,
             f"{node.key}.focus",
             placeholder="Choose an item",
@@ -460,7 +466,7 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
             SelectMenu(
                 tuple(
                     Option(
-                        resolve_text(destination.label).content,
+                        _resolve(destination.label, context),
                         destination.key,
                         default=destination.key == current,
                     )
@@ -480,7 +486,7 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
 
         buttons.append(
             Button(
-                resolve_text(destination.label).content,
+                _resolve(destination.label, context),
                 go,
                 f"{node.key}.{destination.key}",
                 style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
@@ -505,7 +511,7 @@ def _details(node: Details, path: str, context: _Context) -> list[Node]:
                 context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
                 event.invalidate()
 
-    result: list[Node] = [Row((Button(resolve_text(node.summary).content, toggle, f"{node.key}.toggle"),))]
+    result: list[Node] = [Row((Button(_resolve(node.summary, context), toggle, f"{node.key}.toggle"),))]
     if open_:
         result.extend(_children(node.children, path, context))
     return result
@@ -517,21 +523,21 @@ def _table(node: Table, context: _Context) -> list[Node]:
         strategy = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
         _remember(node.key, "discord.table", 1, strategy, context)
     if strategy == "tabular":
-        headings = [resolve_text(column.heading).content for column in node.columns]
+        headings = [_resolve(column.heading, context) for column in node.columns]
         widths = [
-            max([len(heading), *(len(resolve_text(row.cells[index]).content) for row in node.rows)])
+            max([len(heading), *(len(_resolve(row.cells[index], context)) for row in node.rows)])
             for index, heading in enumerate(headings)
         ]
         lines = [" | ".join(heading.ljust(widths[index]) for index, heading in enumerate(headings))]
         lines.append("-+-".join("-" * width for width in widths))
         lines.extend(
-            " | ".join(resolve_text(cell).content.ljust(widths[index]) for index, cell in enumerate(row.cells))
+            " | ".join(_resolve(cell, context).ljust(widths[index]) for index, cell in enumerate(row.cells))
             for row in node.rows
         )
         return [PrimitiveCode("\n".join(lines), overflow=Never())]
     records = tuple(
         "\n".join(
-            f"**{resolve_text(column.heading).content}:** {resolve_text(cell).content}"
+            f"**{_resolve(column.heading, context)}:** {_resolve(cell, context)}"
             for column, cell in zip(node.columns, row.cells, strict=True)
         )
         for row in node.rows
@@ -550,7 +556,7 @@ def _media(node: Media, context: _Context) -> list[Node]:
         first = node.items[0]
         result: list[Node] = [Gallery((first.url,))]
         if first.description is not None:
-            result.append(Footer(resolve_text(first.description).content, overflow=Never()))
+            result.append(Footer(_resolve(first.description, context), overflow=Never()))
         return result
     return [
         Gallery(tuple(item.url for item in node.items[start : start + context.limits.gallery_items]))
@@ -580,13 +586,13 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
                 if isinstance(action, Action):
                     group_actions.append(action)
                 else:
-                    direct.append(_unbound_button(action))
-            groups.append((item.key, tuple(group_actions), resolve_text(item.label).content if item.label else None))
+                    direct.append(_unbound_button(action, context))
+            groups.append((item.key, tuple(group_actions), _resolve(item.label, context) if item.label else None))
         elif isinstance(item, Action):
             implicit.append(item)
         else:
             flush_implicit()
-            direct.append(_unbound_button(item))
+            direct.append(_unbound_button(item, context))
     flush_implicit()
 
     result: list[Node] = []
@@ -597,7 +603,7 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
         for group_key, actions, label in groups:
             result.extend(_grouped(actions, f"{node.key}.{group_key}", label, path, context))
     if direct:
-        controls = tuple(_button(action) if isinstance(action, Action) else action for action in direct)
+        controls = tuple(_button(action, context) if isinstance(action, Action) else action for action in direct)
         result.append(PrimitiveActionGroup(controls))
     context.events.append(
         PlanEvent(
@@ -675,7 +681,7 @@ def _contained_actions(item: Action | object) -> Sequence[Action]:
 
 
 def _individual(actions: Sequence[Action], key: str, context: _Context) -> list[Node]:
-    controls = tuple(_button(action) for action in actions)
+    controls = tuple(_button(action, context) for action in actions)
     return [PrimitiveActionGroup(controls)] if controls else []
 
 
@@ -694,7 +700,12 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
         result.extend(_paged_picker(eligible, key, label, context))
     else:
         result.extend(
-            _picker(tuple(eligible[start : start + context.limits.select_options]), f"{key}.{start // 25}", label)
+            _picker(
+                tuple(eligible[start : start + context.limits.select_options]),
+                f"{key}.{start // 25}",
+                label,
+                context,
+            )
             for start in range(0, len(eligible), context.limits.select_options)
         )
     if direct:
@@ -704,7 +715,7 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
 
 def _paged_picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> list[Node]:
     chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
-    return [_picker(chunk, f"{key}.page", label), *context.pages.controls(key, index, pages)]
+    return [_picker(chunk, f"{key}.page", label, context), *context.pages.controls(key, index, pages)]
 
 
 def _page_items[T](
@@ -732,7 +743,7 @@ def _page_items[T](
     return visible, grant.index, grant.pages
 
 
-def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMenu:
+def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
     routes = {action.key: ActionBinding(action.key, action.on_trigger, action.policy) for action in actions}
 
     async def route(event: SelectionEvent) -> None:
@@ -741,7 +752,7 @@ def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMen
             await binding.handler(event)
 
     return SelectMenu(
-        tuple(Option(resolve_text(action.label).content, action.key) for action in actions),
+        tuple(Option(_resolve(action.label, context), action.key) for action in actions),
         route,
         key,
         placeholder=label or "Choose an action",
@@ -749,9 +760,9 @@ def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMen
     )
 
 
-def _unbound_button(item: Link | RoutedAction) -> LinkButton | RoutedButton:
+def _unbound_button(item: Link | RoutedAction, context: _Context) -> LinkButton | RoutedButton:
     """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
-    label = resolve_text(item.label).content
+    label = _resolve(item.label, context)
     if isinstance(item, Link):
         return LinkButton(label, item.url)
     return RoutedButton(
@@ -767,9 +778,9 @@ def _button_style(tone: Tone, emphasis: Emphasis) -> ActionStyle:
     }.get(tone, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)
 
 
-def _button(action: Action) -> Button:
+def _button(action: Action, context: _Context) -> Button:
     return Button(
-        resolve_text(action.label).content,
+        _resolve(action.label, context),
         action.on_trigger,
         action.key,
         style=_button_style(action.tone, action.emphasis),

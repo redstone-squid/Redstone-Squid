@@ -1,7 +1,7 @@
 """Resolved text values and safe Discord Markdown interpolation."""
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 from string.templatelib import Interpolation, Template
 from typing import Any
@@ -29,7 +29,33 @@ class RawMarkdown:
     content: str
 
 
-type TextLike = str | ResolvedText
+def _identity(message: str) -> str:
+    return message
+
+
+@dataclass(frozen=True, slots=True)
+class Localization:
+    """One negotiated locale and the catalogue used to resolve its messages."""
+
+    locale: str | None = None
+    gettext: Callable[[str], str] = _identity
+    ngettext: Callable[[str, str, int], str] | None = None
+
+
+NEUTRAL = Localization()
+
+
+@dataclass(frozen=True, slots=True)
+class Message:
+    """Translatable text deferred until a render has a localization."""
+
+    template: str
+    params: Mapping[str, object] = field(default_factory=dict)
+    dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
+    plural: str | None = None
+
+
+type TextLike = str | ResolvedText | Message
 
 
 def raw_md(value: object) -> RawMarkdown:
@@ -58,9 +84,24 @@ def md(value: str | Template, /, **values: object) -> ResolvedText:
     return ResolvedText(_resolve_named(value, values))
 
 
-def resolve_text(value: TextLike) -> ResolvedText:
-    """Normalize author text; bare strings are trusted Discord Markdown."""
-    return value if isinstance(value, ResolvedText) else ResolvedText(value)
+def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
+    """Resolve author text against a required render-time localization."""
+    if isinstance(value, ResolvedText):
+        return value
+    if isinstance(value, str):
+        return ResolvedText(value)
+    template = localization.gettext(value.template)
+    if value.plural is not None:
+        count = value.params.get("count")
+        if not isinstance(count, int):
+            message = "plural messages require an integer 'count' parameter"
+            raise ValueError(message)
+        if localization.ngettext is not None:
+            template = localization.ngettext(value.template, value.plural, count)
+        else:
+            template = value.template if count == 1 else value.plural
+    content = _resolve_named(template, value.params) if value.params else template
+    return ResolvedText(content, value.dialect)
 
 
 def discord_text(value: ResolvedText) -> str:

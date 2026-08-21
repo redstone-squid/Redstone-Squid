@@ -154,7 +154,18 @@ from squid_layouts.semantic import (
     spill,
     truncate,
 )
-from squid_layouts.text import RawMarkdown, ResolvedText, TextDialect, md, plain, raw_md
+from squid_layouts.text import (
+    NEUTRAL,
+    Localization,
+    Message,
+    RawMarkdown,
+    ResolvedText,
+    TextDialect,
+    TextLike,
+    md,
+    plain,
+    raw_md,
+)
 
 
 def __getattr__(name: str) -> object:
@@ -167,6 +178,7 @@ __all__ = [
     "CLOSED",
     "DEFAULT_CHROME",
     "FIRST_DESTINATION",
+    "NEUTRAL",
     "UNOPENED",
     "UNSELECTED",
     "Action",
@@ -222,11 +234,13 @@ __all__ = [
     "Link",
     "List",
     "ListItem",
+    "Localization",
     "Managed",
     "Measure",
     "Media",
     "MediaDisplay",
     "MediaItem",
+    "Message",
     "NavOwnership",
     "NavigateEvent",
     "Navigation",
@@ -261,6 +275,7 @@ __all__ = [
     "TableDisplay",
     "TableRow",
     "TextDialect",
+    "TextLike",
     "TextValue",
     "Tone",
     "Truncated",

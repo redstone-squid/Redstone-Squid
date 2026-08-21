@@ -48,6 +48,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.semantic import Item, Items, Paragraph
+from squid_layouts.text import NEUTRAL
 
 
 class TestSplitPages:
@@ -429,7 +430,13 @@ class TestBuildModal:
 @given(st.text(min_size=4500, max_size=9000, alphabet=st.characters(blacklist_categories=("Cs",))))
 def test_paginated_documents_fit_on_every_page(body):
     card_node = section(truncate(paragraph("intro")), fields(field("k", "v")), heading="Title")
-    lowered = lower_semantics([card_node], limits=LIMITS, chrome=DEFAULT_CHROME, session=PresentationSession()).nodes
+    lowered = lower_semantics(
+        [card_node],
+        limits=LIMITS,
+        chrome=DEFAULT_CHROME,
+        localization=NEUTRAL,
+        session=PresentationSession(),
+    ).nodes
     solved = solve([*lowered, Code(body, overflow=Paginate())])
     if solved.pager is None:
         return

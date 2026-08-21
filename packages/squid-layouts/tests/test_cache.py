@@ -7,6 +7,9 @@ from squid_layouts import (
     Actions,
     List,
     ListItem,
+    Localization,
+    Message,
+    Paragraph,
     plan,
 )
 from squid_layouts.discord import DEFAULT_TARGET, compose
@@ -92,6 +95,19 @@ def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
     assert hit.metrics.cache_hit
     assert hit.session_updates == miss.session_updates
     assert hit.session_updates
+
+
+def test_plan_cache_separates_locales() -> None:
+    cache = PlanCache()
+    document = Paragraph(Message("Hello"))
+    english = Localization("en", gettext=lambda message: message)
+    translated = Localization("xx", gettext=lambda _message: "Bonjour")
+
+    first = plan(document, target=DEFAULT_TARGET, localization=english, cache=cache)
+    second = plan(document, target=DEFAULT_TARGET, localization=translated, cache=cache)
+
+    assert not second.metrics.cache_hit
+    assert first.scene != second.scene
 
 
 def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:
