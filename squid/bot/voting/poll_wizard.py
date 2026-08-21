@@ -3,7 +3,7 @@
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 
@@ -12,6 +12,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.ui import create_mount
 from squid.bot.utils.components import edit_interaction_layout, no_mentions, text_layout
+from squid.bot.utils.mount_registry import SessionKey
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -178,7 +179,7 @@ class PollModal(ErrorHandledModal):
         self.add_item(discord.ui.Label(text="Options (one per line)", component=self.options))
 
     @override
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction[Any]) -> None:
         if interaction.guild is None:
             await interaction.response.send_message("Polls can only be created in a server.", ephemeral=True)
             return
@@ -201,8 +202,14 @@ class PollModal(ErrorHandledModal):
             options,
             allow_network=self.allow_network,
         )
-        mount = component.mount()
-        await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
+        # REPLACE rather than REJECT: the wizard's own Edit button re-opens this modal, so
+        # turning a second wizard away would turn away the edit. One live wizard per user per
+        # guild, and it is always the one they last submitted.
+        await interaction.client.mounts.open(
+            component.mount(),
+            sl.discord.respond_to(interaction, ephemeral=True, wait=True),
+            key=SessionKey("poll-wizard", interaction.user.id, interaction.guild.id),
+        )
 
 
 class CustomDurationModal(ErrorHandledModal):
