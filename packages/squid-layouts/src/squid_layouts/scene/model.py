@@ -38,6 +38,22 @@ class SceneButton:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneRoutedButton:
+    """A button carrying its own custom id, with no binding for a frontend to wire.
+
+    That absence is the point: a renderer can draw one without a live session, which is
+    what lets a sessionless document hold a control, and a codec can round-trip one,
+    which a process-local handler could never be.
+    """
+
+    label: str
+    custom_id: str
+    style: ActionStyle = ActionStyle.SECONDARY
+    emoji: str | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class SceneOption:
     label: str
     value: str
@@ -58,7 +74,7 @@ class SceneSelect:
 
 @dataclass(frozen=True, slots=True)
 class SceneRow:
-    items: tuple[SceneLink | SceneButton | SceneExtension, ...]
+    items: tuple[SceneLink | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +97,7 @@ class SceneGallery:
 @dataclass(frozen=True, slots=True)
 class SceneSection:
     texts: tuple[SceneText, ...]
-    accessory: SceneThumbnail | SceneLink | SceneButton | SceneExtension
+    accessory: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +120,7 @@ type SceneNode = (
     | SceneSeparator
     | SceneRow
     | SceneSelect
+    | SceneRoutedButton
     | SceneThumbnail
     | SceneGallery
     | SceneSection

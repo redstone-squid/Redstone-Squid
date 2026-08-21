@@ -90,6 +90,23 @@ class Button:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutedButton:
+    """A button whose custom id *is* its state, dispatched by a router rather than a mount.
+
+    Carries no handler, so it needs no binding and survives the process that drew it: a
+    sessionless document may hold one, and a mount's policies (author lock, generation
+    checks) do not reach it even when it sits inside a mounted message. Build the id with
+    a `squid_layouts.routing.Route` rather than by hand.
+    """
+
+    label: str
+    custom_id: str
+    style: ActionStyle = ActionStyle.SECONDARY
+    emoji: str | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Option:
     label: str
     value: str
@@ -154,14 +171,14 @@ class Extension:
 class Row:
     """An exact target row; invalid local structure is a planning error."""
 
-    items: tuple[LinkButton | Button | RawItem, ...]
+    items: tuple[LinkButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ActionGroup:
     """Buttons automatically arranged into as many valid target rows as needed."""
 
-    items: tuple[LinkButton | Button | RawItem, ...]
+    items: tuple[LinkButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,7 +206,7 @@ class Section:
     """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
 
     texts: tuple[Text | Heading | Footer, ...]
-    accessory: Thumbnail | LinkButton | RawItem
+    accessory: Thumbnail | LinkButton | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,6 +264,7 @@ type Node = (
     | Row
     | ActionGroup
     | SelectMenu
+    | RoutedButton
     | Thumbnail
     | Gallery
     | MediaCollection

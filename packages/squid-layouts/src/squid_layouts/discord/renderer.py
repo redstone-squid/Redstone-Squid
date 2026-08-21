@@ -19,6 +19,7 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneNode,
     ScenePanel,
+    SceneRoutedButton,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -94,12 +95,25 @@ class Renderer:
                 raise DrawInvariantError(message)
             return item
 
-        def accessory(node: SceneThumbnail | SceneLink | SceneButton | SceneExtension) -> discord.ui.Item[Any]:
+        def accessory(
+            node: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension,
+        ) -> discord.ui.Item[Any]:
             match node:
                 case SceneThumbnail(url=url, description=description):
                     return discord.ui.Thumbnail(url, description=description)
                 case SceneLink(label=label, url=url):
                     return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
+                case SceneRoutedButton(label=label, custom_id=custom_id):
+                    # No binding to wire, so this draws in a sessionless document too. A plain
+                    # button is deliberate: discord.py's dynamic dispatch finds the base item by
+                    # custom id, so nothing here has to be a DynamicItem.
+                    return discord.ui.Button(
+                        style=getattr(discord.ButtonStyle, node.style.value),
+                        label=label,
+                        custom_id=custom_id,
+                        emoji=node.emoji,
+                        disabled=node.disabled,
+                    )
                 case SceneButton():
                     return control(node)
                 case SceneExtension():
@@ -127,7 +141,7 @@ class Renderer:
                     return discord.ui.MediaGallery(
                         *(discord.MediaGalleryItem(entry.url, description=entry.description) for entry in items)
                     )
-                case SceneThumbnail() | SceneLink() | SceneButton():
+                case SceneThumbnail() | SceneLink() | SceneButton() | SceneRoutedButton():
                     return accessory(node)
                 case SceneExtension():
                     return extension(node)
