@@ -352,13 +352,15 @@ class SettingsPanel(sl.Component):
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
     confirming_reset: bool = sl.state(default=False)
-    locale: str | None = sl.state(persist=False)
+    locale: str | None = sl.state(None, persist=False)
     # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
     # them stale.
-    _channels: dict[ScalarChannelSetting, int | None] = sl.state(persist=False)
-    _locale_override: str | None = sl.state(persist=False)
-    _preset: EmojiPreset | None = sl.state(persist=False)
-    _weights: tuple[RoleWeight, ...] = sl.state(persist=False)
+    _channels: dict[ScalarChannelSetting, int | None] = sl.state(
+        factory=lambda: dict.fromkeys(CHANNEL_SETTINGS), persist=False
+    )
+    _locale_override: str | None = sl.state(None, persist=False)
+    _preset: EmojiPreset | None = sl.state(None, persist=False)
+    _weights: tuple[RoleWeight, ...] = sl.state((), persist=False)
 
     def __init__(
         self,
@@ -378,10 +380,6 @@ class SettingsPanel(sl.Component):
         self._capabilities = capabilities
         self.locale = locale
         self._owner_guild_id = owner_guild_id
-        self._channels = dict.fromkeys(CHANNEL_SETTINGS)
-        self._locale_override = None
-        self._preset = None
-        self._weights = ()
         self._compat_mount: sl.discord.Mount | None = None
         self._compat_disabled = False
         self._bound_message: discord.Message | None = None

@@ -315,9 +315,10 @@ class AccountPanel(sl.Component):
     unlink_armed: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
     # Refreshed from the service by load(), so a snapshot would only restore them stale.
-    _identities: tuple[AccountIdentity, ...] = sl.state(persist=False)
+    _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
+    _needs_consent: bool = sl.state(default=False, persist=False)
+    # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _needs_consent: bool = sl.state(persist=False)
 
     def __init__(
         self,
@@ -333,9 +334,7 @@ class AccountPanel(sl.Component):
         self._author_id = author_id
         self.locale = locale
         self._timeout = timeout
-        self._identities = ()
         self._profile = AccountProfile.empty(account_id)
-        self._needs_consent = False
         self._mount: sl.discord.Mount | None = None
 
     async def load(self) -> None:
