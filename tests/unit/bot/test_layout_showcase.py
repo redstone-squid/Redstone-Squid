@@ -10,7 +10,7 @@ from discord.ext import commands
 
 from squid.bot.layout_showcase import LayoutShowcase, LayoutShowcaseCog
 from squid_layouts.discord import Mount
-from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction, fake_message
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
@@ -89,7 +89,7 @@ async def test_demo_command_and_controls_are_public() -> None:
                 interaction=None,
                 guild=None,
                 author=SimpleNamespace(id=7),
-                send=AsyncMock(return_value=SimpleNamespace(id=1, flags=SimpleNamespace(components_v2=True))),
+                send=AsyncMock(return_value=fake_message(message_id=1)),
             ),
         ),
     )

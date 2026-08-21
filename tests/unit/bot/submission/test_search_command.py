@@ -10,6 +10,7 @@ from discord.ext import commands
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
+from squid_layouts.discord.testing import fake_message
 
 
 class RecordingSearch:
@@ -37,7 +38,7 @@ def _context() -> commands.Context[Any]:
             Any,
             SimpleNamespace(
                 defer=AsyncMock(),
-                send=AsyncMock(return_value=SimpleNamespace(id=1)),
+                send=AsyncMock(return_value=fake_message(message_id=1)),
                 guild=None,
                 interaction=None,
                 author=SimpleNamespace(id=7),
