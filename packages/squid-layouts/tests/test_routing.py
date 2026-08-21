@@ -71,16 +71,63 @@ class TestRouteFormats:
 
 
 class TestRouter:
-    async def test_dispatch_hands_the_handler_its_parsed_parameters(self) -> None:
-        seen: list[dict[str, str]] = []
+    async def test_a_handler_takes_its_route_parameters_by_name(self) -> None:
+        seen: list[int] = []
         router = Router()
 
         @router.route(EDIT_BUILD)
-        async def edit(_interaction, params) -> None:
-            seen.append(dict(params))
+        async def edit(_interaction, build_id: int) -> None:
+            seen.append(build_id)
+
+        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        assert seen == [42]
+
+    async def test_a_handler_may_ignore_parameters_it_does_not_need(self) -> None:
+        seen: list[str] = []
+        router = Router()
+
+        @router.route(EDIT_BUILD)
+        async def edit(_interaction) -> None:
+            seen.append("called")
+
+        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        assert seen == ["called"]
+
+    async def test_a_handler_taking_kwargs_receives_every_parameter(self) -> None:
+        seen: list[dict[str, object]] = []
+        router = Router()
+
+        @router.route(EDIT_BUILD)
+        async def edit(_interaction, **params) -> None:
+            seen.append(params)
 
         await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
         assert seen == [{"build_id": 42}]
+
+    def test_a_handler_asking_for_a_parameter_the_route_lacks_fails_at_import(self) -> None:
+        # The typo that would otherwise surface as a failed click in production.
+        router = Router()
+
+        with pytest.raises(ValueError, match=r"asks for \['biuld_id'\]"):
+
+            @router.route(EDIT_BUILD)
+            async def edit(_interaction, biuld_id: int) -> None: ...
+
+    async def test_a_route_may_be_spelled_inline_as_its_format_string(self) -> None:
+        # Naming a `Route` only pays when something outside this module builds ids from it.
+        seen: list[int] = []
+        router = Router()
+
+        @router.route("edit:build:{build_id:int}")
+        async def edit(_interaction, build_id: int) -> None:
+            seen.append(build_id)
+
+        await router.dispatch(None, "edit:build:7")  # type: ignore[arg-type]
+        assert seen == [7]
+
+    def test_a_handler_taking_no_arguments_at_all_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="must take the interaction"):
+            Router().add(POLL_CLOSE, lambda: None)  # type: ignore[arg-type]
 
     async def test_a_retired_route_is_logged_rather_than_raised(self) -> None:
         # Buttons outlive the code that answered them; an unknown id must not crash dispatch.
@@ -95,7 +142,7 @@ class TestRouter:
         router = Router(on_error=hook)
 
         @router.route(POLL_CLOSE)
-        async def close(_interaction, _params) -> None:
+        async def close(_interaction) -> None:
             raise RuntimeError("boom")
 
         await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
@@ -128,7 +175,7 @@ class TestRouter:
         router = Router()
         router.add(POLL_CLOSE, _noop)
 
-        async def replacement(_interaction, _params) -> None:
+        async def replacement(_interaction) -> None:
             seen.append("replacement")
 
         router.add(sl.Route("poll:close"), replacement)
@@ -202,7 +249,7 @@ class TestDrawing:
         assert 'data-squid-route="poll:close"' in html
 
 
-async def _noop(_interaction, _params) -> None: ...
+async def _noop(_interaction) -> None: ...
 
 
 async def _press(_event) -> None: ...
