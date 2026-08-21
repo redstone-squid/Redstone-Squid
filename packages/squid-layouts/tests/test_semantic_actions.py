@@ -6,6 +6,7 @@ import pytest
 
 from squid_layouts import (
     ActionDisplay,
+    Paragraph,
     plan,
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
@@ -81,6 +82,24 @@ def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     assert routed.key == "read"
     assert routed.handler is _act
     assert routed.policy is ActionPolicy.PARALLEL_READ
+
+
+def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
+    dense_document = (
+        *(Paragraph(f"component {index}") for index in range(35)),
+        Actions(_actions(5), key="demo"),
+    )
+
+    dense = plan(dense_document, target=DEFAULT_TARGET)
+    roomy = plan(Actions(_actions(5), key="demo"), target=DEFAULT_TARGET)
+
+    assert dense.report.events[0].code == "actions.grouped"
+    assert dense.metrics.states_explored == 2
+    assert not dense.scene.pagers
+    assert sum(isinstance(node, SceneSelect) for node in dense.scene.children) == 1
+    assert roomy.report.events[0].code == "actions.individual"
+    assert roomy.metrics.states_explored == 1
+    assert sum(len(node.items) for node in roomy.scene.children if isinstance(node, SceneRow)) == 5
 
 
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:

@@ -3,18 +3,18 @@
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from enum import Enum
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning.adaptation import lower_semantics
+from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
 from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAssignment, iter_assignments
 from squid_layouts.planning.solve import (
     PageNav,
     PageState,
@@ -332,6 +332,129 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
         walk(node, f"$.{index}")
 
 
+@dataclass(frozen=True, slots=True)
+class _StrategyAttempt:
+    assignment: StrategyAssignment
+    semantic: SemanticLowering
+    lowered: tuple[Node, ...]
+    solved: SolvedLayout
+    broker: PageBroker
+
+
+def _attempt_strategy(
+    assignment: StrategyAssignment,
+    *,
+    document,
+    target: TargetProfile,
+    limits: V2Limits,
+    chrome: Chrome,
+    localization: Localization,
+    presentation: PresentationSession,
+    reservation: ResourceCost,
+    page: PageState,
+    nav: PageNav | None,
+) -> _StrategyAttempt:
+    broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
+    semantic = lower_semantics(
+        document.children,
+        limits=limits,
+        chrome=chrome,
+        localization=localization,
+        session=presentation,
+        pages=broker,
+        capabilities=target.capabilities,
+        strategies=dict(assignment.strategies),
+    )
+    lowered = _lower_children(semantic.nodes, target, limits)
+    _validate(lowered, limits)
+    solved = solve(
+        lowered,
+        limits=limits,
+        chrome=chrome,
+        strict=False,
+        reserved_text=reservation.get("display_text"),
+        nav=nav,
+    )
+    return _StrategyAttempt(assignment, semantic, lowered, solved, broker)
+
+
+def _search_strategies(
+    *,
+    document,
+    target: TargetProfile,
+    limits: V2Limits,
+    chrome: Chrome,
+    localization: Localization,
+    presentation: PresentationSession,
+    reservation: ResourceCost,
+    page: PageState,
+    nav: PageNav | None,
+    search_budget: int,
+) -> _StrategyAttempt:
+    axes = nominate_strategies(document.children, limits=limits, session=presentation)
+    assignments = iter(iter_assignments(axes))
+    current = next(assignments)
+    first: _StrategyAttempt | None = None
+    degraded: _StrategyAttempt | None = None
+    selected: _StrategyAttempt | None = None
+    fallback = False
+    states_explored = 0
+
+    while True:
+        attempted = _attempt_strategy(
+            current,
+            document=document,
+            target=target,
+            limits=limits,
+            chrome=chrome,
+            localization=localization,
+            presentation=presentation,
+            reservation=reservation,
+            page=page,
+            nav=nav,
+        )
+        states_explored += 1
+        if first is None:
+            first = attempted
+        fits = attempted.solved.components <= limits.total_components
+        if fits and attempted.solved.overflowed and degraded is None:
+            degraded = attempted
+
+        following = next(assignments, None)
+        if following is not None and states_explored >= search_budget:
+            selected = first
+            fallback = True
+            break
+        if fits and not attempted.solved.overflowed:
+            selected = attempted
+            break
+        if following is None:
+            selected = degraded or first
+            break
+        current = following
+
+    assert selected is not None
+    fallback_events: tuple[PlanEvent, ...] = ()
+    if fallback:
+        fallback_events = (
+            PlanEvent(
+                code="planner.search_fallback",
+                path="$",
+                message=(
+                    f"Strategy search reached its {search_budget}-attempt budget; selected the local-minimum fallback"
+                ),
+                severity=PlanSeverity.WARNING,
+            ),
+        )
+    semantic = replace(
+        selected.semantic,
+        events=fallback_events + selected.semantic.events,
+        states_explored=states_explored,
+        search_fallback=fallback,
+    )
+    return replace(selected, semantic=semantic)
+
+
 def plan(
     rendered: DocumentLike,
     *,
@@ -358,20 +481,22 @@ def plan(
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
-    # One broker owns every page position in this plan, whichever layer does the slicing.
-    broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
-    semantic = lower_semantics(
-        document.children,
+    attempt = _search_strategies(
+        document=document,
+        target=target,
         limits=limits,
         chrome=chrome,
         localization=localization,
-        session=presentation,
-        pages=broker,
-        capabilities=target.capabilities,
+        presentation=presentation,
+        reservation=reservation,
+        page=page,
+        nav=nav,
         search_budget=search_budget,
     )
-    lowered = _lower_children(semantic.nodes, target, limits)
-    _validate(lowered, limits)
+    broker = attempt.broker
+    semantic = attempt.semantic
+    lowered = attempt.lowered
+    solved = attempt.solved
     cache_key = _plan_cache_key(
         (document,),
         target=target,
@@ -400,15 +525,6 @@ def plan(
             ),
             session_updates=cached.session_updates,
         )
-    # No `page=`: which page shows is settled below, once the page count exists.
-    solved = solve(
-        lowered,
-        limits=limits,
-        chrome=chrome,
-        strict=False,
-        reserved_text=reservation.get("display_text"),
-        nav=nav,
-    )
     root_events: tuple[PlanEvent, ...] = ()
     if solved.components > limits.total_components:
         local_pagers = [*broker.pagers, *solved.pagers]
