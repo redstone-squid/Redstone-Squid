@@ -72,6 +72,7 @@ from squid_layouts.semantic import (
     Progress,
     Quote,
     RoutedAction,
+    RoutedChoices,
     Section,
     Stack,
     Status,
@@ -478,6 +479,27 @@ def choices(
         minimum,
         maximum,
         flexibility,
+    )
+
+
+def routed_choices(
+    *entries: Conditional[Choice],
+    route_id: str,
+    key: str,
+    placeholder: TextValue | None = None,
+    minimum: int = 1,
+    maximum: int = 1,
+    available: bool = True,
+) -> RoutedChoices:
+    """A stateless string picker dispatched by ``route_id`` with selected choice keys."""
+    return RoutedChoices(
+        key,
+        _collect(entries, (Choice,), "sl.routed_choices()"),
+        route_id,
+        _opt_text(placeholder),
+        minimum,
+        maximum,
+        available,
     )
 
 

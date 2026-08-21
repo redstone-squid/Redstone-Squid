@@ -131,6 +131,18 @@ class SelectMenu:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutedSelect:
+    """A string select dispatched by its stable route id rather than a mount binding."""
+
+    options: tuple[Option, ...]
+    route_id: str
+    placeholder: TextLike | None = None
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class RawItem:
     """Internal prepared target item retained until scene drawing."""
 
@@ -281,6 +293,7 @@ type Node = (
     | Row
     | ActionGroup
     | SelectMenu
+    | RoutedSelect
     | RoutedButton
     | Thumbnail
     | Gallery

@@ -23,6 +23,7 @@ from squid_layouts.primitives.nodes import (
     Option,
     Panel,
     RoutedButton,
+    RoutedSelect,
     Row,
     SelectMenu,
     Text,
@@ -86,6 +87,7 @@ from squid_layouts.semantic import (
     Progress,
     Quote,
     RoutedAction,
+    RoutedChoices,
     Section,
     Spilled,
     Stack,
@@ -237,6 +239,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
         case Choices():
             return _choices(node, path, context)
+        case RoutedChoices():
+            return _routed_choices(node, path, context)
         case Items():
             return _items(node, path, context)
         case Navigation():
@@ -279,7 +283,10 @@ def _primitive(node: Node, context: _Context) -> Node:
             return replace(node, label=_resolve(label, context))
         case Row(items=items) | PrimitiveActionGroup(items=items):
             return replace(node, items=tuple(_primitive(item, context) for item in items))
-        case SelectMenu(options=options, placeholder=placeholder):
+        case (
+            SelectMenu(options=options, placeholder=placeholder)
+            | RoutedSelect(options=options, placeholder=placeholder)
+        ):
             return replace(
                 node,
                 options=tuple(
@@ -413,6 +420,31 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     ]
     result.extend(context.pages.controls(page_key, page, pages))
     return result
+
+
+def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
+    """Lower an explicitly stateless picker without inventing mount-owned pagination."""
+    available = tuple(choice for choice in node.choices if choice.available)
+    if not available:
+        message = f"{path}: RoutedChoices needs at least one available choice"
+        raise LayoutInvariantError(message)
+    return [
+        RoutedSelect(
+            options=tuple(
+                Option(
+                    _resolve(choice.label, context),
+                    choice.key,
+                    _resolve(choice.description, context) if choice.description is not None else None,
+                )
+                for choice in available
+            ),
+            route_id=node.route_id,
+            placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
+            min_values=node.minimum,
+            max_values=min(node.maximum, len(available)),
+            disabled=not node.available,
+        )
+    ]
 
 
 def _items(node: Items, path: str, context: _Context) -> list[Node]:

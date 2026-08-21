@@ -145,6 +145,9 @@ class TestParity:
         assert sl.choices(sl.choice("Yes", key="y"), key="c", selection=sl.controlled(("y",), _noop)) == sl.Choices(
             "c", (sl.Choice("y", "Yes"),), sl.Controlled(("y",), _noop)
         )
+        assert sl.routed_choices(sl.choice("Yes", key="y"), key="c", route_id="r:choices") == sl.RoutedChoices(
+            "c", (sl.Choice("y", "Yes"),), "r:choices"
+        )
         assert sl.destination("Home", key="home") == sl.Destination("home", "Home")
         assert sl.navigation(
             sl.destination("Home", key="home"), key="n", current=sl.controlled("home", _noop)
@@ -152,7 +155,7 @@ class TestParity:
 
 
 class TestDrift:
-    _ALIASES = {"List": "bullets"}
+    _ALIASES = {"List": "bullets", "RoutedChoices": "routed_choices"}
 
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:

@@ -15,7 +15,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from squid_layouts.chrome import Chrome
-from squid_layouts.primitives.nodes import Button, Gallery, RawItem, Row, SelectMenu, Sep, Thumbnail
+from squid_layouts.primitives.nodes import Button, Gallery, RawItem, RoutedSelect, Row, SelectMenu, Sep, Thumbnail
 
 PREV_KEY = "__page_prev"
 NEXT_KEY = "__page_next"
@@ -41,7 +41,7 @@ class PageContext:
         return self.page >= self.pages - 1
 
 
-type NavNode = Row | SelectMenu | Sep | Thumbnail | Gallery | RawItem
+type NavNode = Row | SelectMenu | RoutedSelect | Sep | Thumbnail | Gallery | RawItem
 """What a nav factory may return: components, never display text."""
 
 type NavFactory = Callable[[PageContext], Sequence[NavNode]]
