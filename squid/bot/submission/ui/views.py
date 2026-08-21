@@ -556,8 +556,10 @@ class SubmissionFormComponent(sl.Component):
             sl.Choices(
                 key="door_type",
                 choices=tuple(sl.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
-                selected=(self.build.door_orientation,) if self.build.door_orientation is not None else (),
-                on_change=self._door_changed,
+                selection=sl.controlled(
+                    (self.build.door_orientation,) if self.build.door_orientation is not None else (),
+                    self._door_changed,
+                ),
             ),
             sl.Choices(
                 key="location",
@@ -573,10 +575,14 @@ class SubmissionFormComponent(sl.Component):
                         t(self.locale, _("May depend on its position in the world")),
                     ),
                 ),
-                selected=tuple(
-                    value for value in ("Directional", "Locational") if value in self.build.miscellaneous_restrictions
+                selection=sl.controlled(
+                    tuple(
+                        value
+                        for value in ("Directional", "Locational")
+                        if value in self.build.miscellaneous_restrictions
+                    ),
+                    self._location_changed,
                 ),
-                on_change=self._location_changed,
                 minimum=0,
                 maximum=2,
             ),

@@ -490,8 +490,7 @@ class PollConfirmationComponent(sl.Component):
                 choices=tuple(
                     sl.Choice(value.value, label, description) for value, label, description in VISIBILITY_CHOICES
                 ),
-                selected=(self.draft.visibility.value,),
-                on_change=self._visibility_changed,
+                selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
             ),
             sl.Choices(
                 key="duration",
@@ -499,8 +498,7 @@ class PollConfirmationComponent(sl.Component):
                     sl.Choice(str(seconds), label)
                     for label, seconds in (*DURATION_PRESETS, ("Custom…", CUSTOM_DURATION))
                 ),
-                selected=(str(self.draft.duration_seconds),),
-                on_change=self._duration_changed,
+                selection=sl.controlled((str(self.draft.duration_seconds),), self._duration_changed),
             ),
         ]
         if self.allow_network:
@@ -510,8 +508,7 @@ class PollConfirmationComponent(sl.Component):
                     choices=tuple(
                         sl.Choice(value.value, label, description) for value, label, description in SCOPE_CHOICES
                     ),
-                    selected=(self.draft.scope.value,),
-                    on_change=self._scope_changed,
+                    selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
                 )
             )
         nodes.append(
