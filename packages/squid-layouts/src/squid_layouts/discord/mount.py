@@ -502,7 +502,12 @@ class Mount:
             self._teardown()
 
     async def refresh(self) -> None:
-        """Out-of-band re-render (background state change, not an interaction)."""
+        """Out-of-band re-render (background state change, not an interaction).
+
+        Shows the newest state at the next opportunity rather than this instant: a scheduler
+        coalesces requests, and a mount with no live `handle` — an ephemeral message nobody
+        has clicked lately — keeps the render in `pending` until someone clicks it again.
+        """
         if self.scheduler is not None:
             self.scheduler.schedule(self)
             return
