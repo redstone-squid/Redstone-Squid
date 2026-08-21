@@ -52,10 +52,10 @@ upstream could reconcile a cursor until the solve was done.
 One cursor lifecycle, three slicers left alone, and the page index demoted to a
 projection.
 
-**06a — one cursor ladder.** `planning/cursors.py` holds a `PageBroker`: a slicer asks
-`grant(PageRequest)` where to cut, cuts, then `record`s what it did. The broker owns the
+**06a — one cursor ladder.** `planning/cursors.py` holds a `CursorCoordinator`: a slicer asks
+`grant(MaterializedCursorRequest)` where to cut, cuts, then `record`s what it did. The coordinator owns the
 whole precedence ladder — explicit override, anchor recovery, stale-content reset, stored
-index, `initial`, clamp — plus `controls()` (the `Never` footer and the nav) and the
+position, `initial`, clamp — plus `controls()` (the `Never` footer and the nav) and the
 `ScenePager` records with cross-engine duplicate-key detection. Anchor recovery outranks
 the stale reset deliberately: if the item the reader was on still exists, following it
 beats sending them back to page 1.
@@ -64,10 +64,10 @@ beats sending them back to page 1.
 solver, inside the tail that attaches pagers. Realization, allocation, pruning, the footer
 fixed point and the ladder loop never look at it; every fragment fits the grant its unit
 was allocated, the footer reservation is measured at its widest digit count, and
-`page_controls` disables rather than hides. So `SolvedLayout.repage()` turns a page by
+`navigation_controls` disables rather than hides. So `SolvedLayout.reposition()` moves a cursor by
 rewriting two slots and replacing the span its nav occupies. Two contracts hold it up:
 `NavNode` narrows what a factory may return (text in nav is now a type error), and shape
-invariance across pages is checked in `repage`.
+invariance across pages is checked in `reposition`.
 
 **06c — planning reads, and returns its writes.** `PlanResult.session_updates` carries
 cursor and strategy writes plus the set of keys still backed by a pager; the mount applies
@@ -88,9 +88,9 @@ drop, trim or ladder step). The packer cuts on the latter.
   asymmetry — an `Items` window is a text-budget input because of its summaries — is
   deferred; the lever if it ever matters is the existing count-page mechanism, where
   `_Unit.need` already budgets by the *widest* page.
-- **Merging `NavFactory` and `PageNav`.** They are an adapter pair, not a duplicate:
-  `NavFactory` is closed over the handlers that move the page, `PageNav` is what planning
-  can offer, having none. Both now live in `pagination.py` and say so.
+- **Async source fetching in planning.** Fetching remains component-owned; planning stays
+  synchronous. Plan 21 later unified source and materialized controls under one
+  `NavigationContext` / `NavFactory` boundary without moving I/O into planning.
 - **Memoizing the root packer's probes.** Every probe measures a different prefix and each
   is visited once, so there is nothing to memoize.
 - **Plan-cache key refinement.** Dropping `page` and splitting `presentation` into
@@ -100,12 +100,9 @@ drop, trim or ladder step). The packer cuts on the latter.
 
 ## Constraints this had to respect
 
-- `CursorState`'s four fields are frozen: `durability/__init__.py` requires all four
-  positionally at snapshot protocol 1.
-- Nav action-key strings (`__page_prev.{key}` / `__page_next.{key}`) are what posted
-  messages dispatch against. Unchanged.
-- Solver pager fingerprints now hash on a NUL like every other pager rather than a literal
-  backslash-zero, so a mount restored from an older snapshot resets those cursors once.
+- `CursorState` stores a `Position`, extent, and fingerprint; snapshot protocol 1 serializes
+  that shape directly.
+- Materialized nav action keys use `__cursor_previous.{key}` and `__cursor_next.{key}`.
 
 ## Verification
 
