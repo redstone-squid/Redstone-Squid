@@ -14,6 +14,8 @@ from squid_layouts.primitives.nodes import (
     ActionGroup as PrimitiveActionGroup,
 )
 from squid_layouts.primitives.nodes import (
+    Break,
+    Budget,
     Button,
     Footer,
     Gallery,
@@ -56,6 +58,7 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     BestEffort,
+    Budgeted,
     ChoiceEvent,
     Choices,
     Cluster,
@@ -73,6 +76,7 @@ from squid_layouts.semantic import (
     Heading,
     ItemDisplay,
     Items,
+    KeepWithNext,
     LayoutNode,
     Link,
     List,
@@ -85,6 +89,7 @@ from squid_layouts.semantic import (
     Note,
     OpenEvent,
     OptionalContent,
+    Paged,
     Paragraph,
     Progress,
     Quote,
@@ -98,6 +103,7 @@ from squid_layouts.semantic import (
     TableDisplay,
     Tone,
     Truncated,
+    Unbreakable,
 )
 from squid_layouts.text import Localization, TextLike, resolve_text
 
@@ -155,7 +161,16 @@ def nominate_strategies(
 
     def walk(node: LayoutNode, path: str) -> None:
         match node:
-            case Truncated(node=child) | Spilled(node=child) | OptionalContent(node=child) | BestEffort(node=child):
+            case (
+                Truncated(node=child)
+                | Spilled(node=child)
+                | OptionalContent(node=child)
+                | BestEffort(node=child)
+                | Budgeted(node=child)
+                | Unbreakable(node=child)
+                | KeepWithNext(node=child)
+                | Paged(node=child)
+            ):
                 walk(child, path)
             case FallbackContent(primary=primary, alternates=alternates):
                 walk(primary, f"{path}.primary")
@@ -256,7 +271,21 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [_with_overflow(item, Drop()) for item in _node(child, path, context)]
         case BestEffort(node=child):
             policy: Overflow = Spill() if isinstance(child, List | Fields) else Truncate()
-            return [_with_overflow(item, policy) for item in _node(child, path, context)]
+            return [_with_best_effort(_with_overflow(item, policy)) for item in _node(child, path, context)]
+        case Budgeted(node=child, minimum=minimum, preferred=preferred, stretch=stretch):
+            return [
+                Budget(
+                    tuple(_node(child, path, context)),
+                    minimum,
+                    preferred,
+                    stretch,
+                    best_effort=isinstance(child, BestEffort),
+                )
+            ]
+        case Unbreakable(node=child):
+            return [Break(tuple(_node(child, path, context)), unbreakable=True)]
+        case KeepWithNext(node=child):
+            return [Break(tuple(_node(child, path, context)), keep_with_next=True)]
         case FallbackContent(primary=primary, alternates=alternates):
             rungs = [Variant(tuple(_node(primary, f"{path}.primary", context)))]
             rungs.extend(
@@ -465,6 +494,10 @@ def _primitive(node: Node, context: _Context) -> Node:
                 texts=tuple(_primitive(text, context) for text in texts),
                 accessory=_primitive(accessory, context),
             )
+        case Budget(children=children):
+            return replace(node, children=tuple(_primitive(child, context) for child in children))
+        case Break(children=children):
+            return replace(node, children=tuple(_primitive(child, context) for child in children))
         case _:
             return node
 
@@ -525,6 +558,20 @@ def _with_overflow(node: Node, overflow: Overflow) -> Node:
         return replace(node, overflow=overflow)
     if isinstance(node, Panel):
         return replace(node, children=tuple(_with_overflow(child, overflow) for child in node.children))
+    if isinstance(node, Budget | Break):
+        return replace(node, children=tuple(_with_overflow(child, overflow) for child in node.children))
+    return node
+
+
+def _with_best_effort(node: Node) -> Node:
+    if isinstance(node, Budget):
+        return replace(
+            node,
+            children=tuple(_with_best_effort(child) for child in node.children),
+            best_effort=True,
+        )
+    if isinstance(node, Panel | Break):
+        return replace(node, children=tuple(_with_best_effort(child) for child in node.children))
     return node
 
 
