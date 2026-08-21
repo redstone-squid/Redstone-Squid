@@ -18,11 +18,20 @@ import squid_layouts as sl
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
-poll_close = sl.Route("poll:close")
-poll_refresh = sl.Route("poll:refresh")
-build_edit = sl.Route("edit:build:{build_id:int}")
-build_log_consent = sl.Route("build_log:consent")
-remove_redstoner_role = sl.Route("remove:role:redstoner")
+poll_close = sl.Route("r:polls:close", aliases=("poll:close",))
+poll_refresh = sl.Route("r:polls:refresh", aliases=("poll:refresh",))
+build_edit = sl.Route("r:builds:{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+build_log_consent = sl.Route("r:build-log-consents:new", aliases=("build_log:consent",))
+remove_redstoner_role = sl.Route("r:redstoner-roles:self:remove", aliases=("remove:role:redstoner",))
+
+
+async def _route_gone_hook(interaction: discord.Interaction) -> None:
+    from squid.bot.i18n import resolve_locale, t
+    from squid.bot.utils.components import reply_layout, text_layout
+    from squid.core.i18n import _
+
+    locale = await resolve_locale(interaction, interaction.client.services.settings)
+    await reply_layout(interaction, text_layout(t(locale, _("This control is no longer available."))))
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
@@ -34,4 +43,8 @@ async def _route_error_hook(interaction: discord.Interaction, error: Exception, 
 
 # Annotated rather than subscripted at runtime, because `app` imports this module: PEP 649
 # defers the annotation, so the client type is checked without the import cycle.
-router: sl.discord.Router[RedstoneSquid] = sl.discord.Router(on_error=_route_error_hook)
+router: sl.discord.Router[RedstoneSquid] = sl.discord.Router(
+    namespace="r",
+    on_gone=_route_gone_hook,
+    on_error=_route_error_hook,
+)
