@@ -55,6 +55,23 @@ class TestBudgetContract:
         assert solved.pager is not None
         assert [len(fragment) for fragment in solved.pager.fragments] == [519, 520]
 
+    def test_over_band_pagination_can_snap_into_the_stretch_band(self) -> None:
+        body = "a" * 1040 + "\n" + "b" * 160
+
+        solved = solve(
+            [
+                sl.primitives.Budget(
+                    (Text(body, overflow=Paginate(key="body")),),
+                    minimum=500,
+                    preferred=1000,
+                    stretch=100,
+                )
+            ]
+        )
+
+        assert solved.pager is not None
+        assert [len(fragment) for fragment in solved.pager.fragments] == [1040, 160]
+
     def test_collectively_unsatisfied_floors_raise(self) -> None:
         document = (
             sl.budget(sl.paragraph("a" * 100), min=80, prefer=100),
@@ -91,6 +108,25 @@ class TestRegionPagination:
         panel = result.scene.children[0]
         assert isinstance(panel, ScenePanel)
         return [child.content for child in panel.children if isinstance(child, SceneText)]
+
+    def test_sugar_validates_its_region_contract(self) -> None:
+        with pytest.raises(ValueError, match="key must not be empty"):
+            sl.paged(sl.paragraph("body"), key="", chars=100)
+        with pytest.raises(ValueError, match="chars must be positive"):
+            sl.paged(sl.paragraph("body"), key="body", chars=0)
+        with pytest.raises(ValueError, match="widows"):
+            sl.paged(sl.paragraph("body"), key="body", chars=100, widows=0)
+
+    def test_break_annotations_are_transparent_without_a_paged_region(self) -> None:
+        result = sl.plan(
+            sl.group(sl.unbreakable(sl.paragraph("first")), sl.keep_with_next(sl.paragraph("second"))),
+            target=DEFAULT_TARGET,
+        )
+
+        assert [child.content for child in result.scene.children if isinstance(child, SceneText)] == [
+            "first",
+            "second",
+        ]
 
     def test_a_section_pages_heterogeneous_children(self) -> None:
         document = sl.paged(
