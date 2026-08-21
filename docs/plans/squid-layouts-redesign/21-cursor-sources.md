@@ -18,13 +18,12 @@
 > chrome says no more than that.
 
 1. **Extract `PositionPolicy`**: the precedence ladder as a pure function over an
-   abstract position `{anchor key, offset, direction}`. The broker becomes its first
-   caller — existing slicers derive index/pages from positions, behavior unchanged;
-   this is the refactor plan 06 arguably owed. Patterns are its second caller, so
-   there is one pagination brain even while there are two fetch paths.
+   abstract position `{anchor key, offset, direction}`. `CursorCoordinator` becomes its
+   materialized caller; patterns are its second caller, so there is one pagination brain
+   even while there are two fetch paths.
 
-2. **`WindowSource` protocol**: capability flags `countable`, `bidirectional`,
-   `jumpable`; `async fetch(position, extent) -> Window(items, has_prev, has_next,
+2. **`WindowSource` protocol**: one `SourceCapabilities` value and
+   `async fetch(position, extent) -> Window(position, items, has_previous, has_next,
    total | None)`.
 
 3. **Chrome degrades by capability**, through the existing nav-factory
@@ -44,7 +43,7 @@
    dependency model whose absence cut `sl.resource` from plan 09. The two are the
    same missing design and must be designed together or not at all.
 
-6. **Overrides generalize.** The explicit `page=N` map becomes position tokens — also
+6. **Overrides generalize.** Explicit page maps become position tokens — also
    the two-shell rule's stateless entry (plan 19): a routed panel carries its position
    in the custom id and passes it as an override, having no session to consult.
 
@@ -95,9 +94,8 @@ rather than deprecated or aliased; every in-repository caller moves in the same 
 
 Implemented 2026-08-21.
 
-`test_pagination.py` keeps the materialized broker behavior under the extracted policy
-and covers position-token overrides. `test_sources.py` covers window-scoped refresh,
+`test_pagination.py` keeps materialized cursor behavior under the extracted policy and
+covers position-token overrides. `test_sources.py` covers window-scoped refresh,
 source-selected anchor fallback, directional boundaries, and out-of-order completion.
-`test_patterns.py` exercises source loading and navigation through a real mount and all
-four countable/jumpable chrome combinations, including an uncountable source returning
-a bogus total that never reaches the reader.
+`test_patterns.py` exercises source loading and the shared navigation factory through a
+real mount, including all five supported numeric-chrome shapes.
