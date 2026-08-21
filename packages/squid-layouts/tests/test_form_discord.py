@@ -47,6 +47,48 @@ def test_portable_and_discord_fields_build_native_modal_components(field, compon
     assert isinstance(_component(modal), component_type)
 
 
+@pytest.mark.parametrize(
+    ("component", "wire_type"),
+    [
+        (discord.ui.Select(options=[discord.SelectOption(label="One", value="one")]), 3),
+        (discord.ui.UserSelect(), 5),
+        (discord.ui.RoleSelect(), 6),
+        (discord.ui.MentionableSelect(), 7),
+        (discord.ui.ChannelSelect(), 8),
+        (discord.ui.FileUpload(), 19),
+        (
+            discord.ui.RadioGroup(
+                options=[
+                    discord.RadioGroupOption(label="One", value="one"),
+                    discord.RadioGroupOption(label="Two", value="two"),
+                ]
+            ),
+            21,
+        ),
+        (
+            discord.ui.CheckboxGroup(
+                options=[
+                    discord.CheckboxGroupOption(label="One", value="one"),
+                    discord.CheckboxGroupOption(label="Two", value="two"),
+                ]
+            ),
+            22,
+        ),
+    ],
+)
+def test_discordpy_modal_component_inventory_serializes_through_labels(
+    component: discord.ui.Item,
+    wire_type: int,
+) -> None:
+    modal = discord.ui.Modal(title="Inventory")
+    modal.add_item(discord.ui.Label(text="Field", component=component))
+
+    label = modal.to_dict()["components"][0]
+
+    assert label["type"] == 18
+    assert label["component"]["type"] == wire_type
+
+
 def test_modal_budget_rejects_implicit_chunking() -> None:
     spec = sl.FormSpec(
         "Too large",
