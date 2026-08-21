@@ -25,7 +25,7 @@ from squid_layouts.discord.mount import (
 from squid_layouts.discord.navigation import Navigator
 from squid_layouts.discord.reactor import Reactor
 from squid_layouts.discord.renderer import Renderer, RoutedItem, StaticView, Wire
-from squid_layouts.discord.routing import RouteComponent, RouteHandler, RouteLike, Router
+from squid_layouts.discord.routing import RouteComponent, RouteDescription, RouteHandler, RouteLike, Router
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
 from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
 from squid_layouts.planning.limits import V2Limits as Limits
@@ -57,6 +57,7 @@ __all__ = [
     "Reactor",
     "Renderer",
     "RouteComponent",
+    "RouteDescription",
     "RouteHandler",
     "RouteLike",
     "RoutedItem",

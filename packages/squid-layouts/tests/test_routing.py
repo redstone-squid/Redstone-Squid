@@ -172,6 +172,23 @@ class TestRouter:
 
         assert seen == ["button", "select"]
 
+    def test_describe_returns_stable_public_route_metadata(self) -> None:
+        router = Router()
+
+        @router.select(EDIT_BUILD)
+        async def edit(_interaction, _values: tuple[str, ...], build_id: int) -> None: ...
+
+        assert router.describe() == (
+            sl.discord.RouteDescription(
+                component=sl.discord.RouteComponent.SELECT,
+                format=EDIT_BUILD.format,
+                params=(("build_id", "int"),),
+                aliases=EDIT_BUILD.aliases,
+                handler_module=edit.__module__,
+                handler_qualname=edit.__qualname__,
+            ),
+        )
+
     def test_a_handler_asking_for_a_parameter_the_route_lacks_fails_at_import(self) -> None:
         # The typo that would otherwise surface as a failed click in production.
         router = Router()
