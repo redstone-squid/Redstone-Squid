@@ -10,6 +10,7 @@ from squid_layouts import (
     LayoutInvariantError,
     Localization,
     Message,
+    Position,
     UnsolvableLayoutError,
     plan,
 )
@@ -38,12 +39,12 @@ from squid_layouts.scene.model import SceneRow, SceneText
 async def _click(event) -> None: ...
 
 
-def _nav(key: str, page: int, pages: int):
+def _nav(state):
     return (
         Row(
             (
-                Button("Previous", _click, f"prev.{key}", disabled=page == 0),
-                Button("Next", _click, f"next.{key}", disabled=page == pages - 1),
+                Button("Previous", _click, f"prev.{state.key}", disabled=not state.has_previous),
+                Button("Next", _click, f"next.{state.key}", disabled=not state.has_next),
             )
         ),
     )
@@ -119,7 +120,12 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
 
     visible: set[str] = set()
     for page_index in range(first.scene.pagers[0].pages):
-        page_result = plan(document, target=DEFAULT_TARGET, nav=_nav, page={"toolbar": page_index})
+        page_result = plan(
+            document,
+            target=DEFAULT_TARGET,
+            nav=_nav,
+            positions={"toolbar": Position(offset=page_index)},
+        )
         visible.update(key for key in page_result.bindings if key.startswith("b"))
     assert visible == {f"b{index}" for index in range(41)}
 
@@ -195,7 +201,7 @@ def test_scene_reports_every_independent_pager() -> None:
             Lines(tuple(f"right {index}" for index in range(6)), overflow=Paginate(key="right", per=2)),
         ),
         target=DEFAULT_TARGET,
-        page={"left": 1, "right": 2},
+        positions={"left": Position(offset=1), "right": Position(offset=2)},
     )
 
     assert [(pager.key, pager.page, pager.pages) for pager in result.scene.pagers] == [

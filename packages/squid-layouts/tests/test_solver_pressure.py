@@ -136,7 +136,7 @@ class TestRegionPagination:
         )
 
         first = sl.plan(document, target=DEFAULT_TARGET)
-        second = sl.plan(document, target=DEFAULT_TARGET, page={"report": 1})
+        second = sl.plan(document, target=DEFAULT_TARGET, positions={"report": sl.Position(offset=1)})
 
         assert first.scene.pagers[0].pages == 3
         assert self._texts(first)[:3] == ["## Report", "0: " + "x" * 30, "1: " + "x" * 30]
@@ -155,7 +155,7 @@ class TestRegionPagination:
         )
 
         first = sl.plan(document, target=DEFAULT_TARGET)
-        second = sl.plan(document, target=DEFAULT_TARGET, page={"chapters": 1})
+        second = sl.plan(document, target=DEFAULT_TARGET, positions={"chapters": sl.Position(offset=1)})
 
         assert "## Next" not in self._texts(first)
         assert self._texts(second)[:2] == ["## Next", "b" * 35]
@@ -173,7 +173,10 @@ class TestRegionPagination:
     def test_an_oversized_text_child_splits_losslessly(self) -> None:
         document = sl.paged(sl.section(sl.paragraph("x" * 120)), key="prose", chars=50)
 
-        pages = [sl.plan(document, target=DEFAULT_TARGET, page={"prose": index}) for index in range(3)]
+        pages = [
+            sl.plan(document, target=DEFAULT_TARGET, positions={"prose": sl.Position(offset=index)})
+            for index in range(3)
+        ]
 
         assert pages[0].scene.pagers[0].pages == 3
         content = "".join(self._texts(result)[0] for result in pages)
@@ -187,6 +190,6 @@ class TestRegionPagination:
             widows=3,
         )
 
-        last = sl.plan(document, target=DEFAULT_TARGET, page={"widows": 1})
+        last = sl.plan(document, target=DEFAULT_TARGET, positions={"widows": sl.Position(offset=1)})
 
         assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]

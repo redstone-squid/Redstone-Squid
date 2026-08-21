@@ -10,6 +10,7 @@ from squid_layouts.patterns._paging import window
 from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import ActionDisplay, Choice, Tone, fallback
+from squid_layouts.sources import Position
 from squid_layouts.text import TextLike
 
 
@@ -144,14 +145,15 @@ class MultiChoicePanel:
     def _window(
         self, group: MultiChoiceGroup, state: MultiChoiceState, controls: PatternControls[MultiChoiceState]
     ) -> tuple[tuple[Choice, ...], int, int]:
-        return window(
+        visible, position, extent = window(
             group.choices,
             key=f"{self.key}.{group.key}",
-            page=self._pages(state).get(group.key, 0),
+            position=Position(offset=self._pages(state).get(group.key, 0)),
             per_page=self.window_size,
             chrome=controls.chrome,
             identity=lambda entry: entry.key,
         )
+        return visible, position.offset, extent
 
     def _rivals(self, group_key: str) -> frozenset[str]:
         direct = next(group.exclusive_with for group in self.groups if group.key == group_key)

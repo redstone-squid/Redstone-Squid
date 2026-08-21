@@ -4,13 +4,13 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import DEFAULT_CHROME, plan
+from squid_layouts import plan
 from squid_layouts.discord import (
     DEFAULT_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
     DEFAULT_TARGET,
-    PageContext,
+    NavigationContext,
     default_nav,
     render_static,
 )
@@ -164,9 +164,8 @@ class TestVariants:
     def test_pagination_controls_participate_in_the_ladder_budget(self):
         async def move(interaction) -> None: ...
 
-        def nav(key: str, page: int, pages: int):
-            context = PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move)
-            return default_nav(DEFAULT_CHROME)(context)
+        def nav(state):
+            return default_nav(NavigationContext(state, move, move))
 
         entries = tuple(f"entry {index}" for index in range(20))
         solved = solve([*_ladder_document(9), Lines(entries, overflow=Paginate(per=10))], nav=nav)

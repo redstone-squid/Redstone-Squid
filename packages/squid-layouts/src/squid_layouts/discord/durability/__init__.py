@@ -17,6 +17,7 @@ from squid_layouts.runtime.presentation import (
     StrategyState,
 )
 from squid_layouts.runtime.reactivity import export_state, restore_state
+from squid_layouts.sources import Direction, Position
 
 
 class SnapshotError(ValueError):
@@ -190,10 +191,13 @@ def _presentation_to_dict(snapshot: PresentationSnapshot) -> dict[str, object]:
     return {
         "cursors": {
             key: {
-                "index": cursor.index,
-                "anchor": cursor.anchor,
+                "position": {
+                    "anchor": cursor.position.anchor,
+                    "offset": cursor.position.offset,
+                    "direction": cursor.position.direction.value,
+                },
                 "extent": cursor.extent,
-                "content_fingerprint": cursor.content_fingerprint,
+                "fingerprint": cursor.fingerprint,
             }
             for key, cursor in snapshot.cursors.items()
         },
@@ -219,10 +223,13 @@ def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
     return PresentationSnapshot(
         cursors={
             key: CursorState(
-                _integer(item := _object(value), "index"),
-                _optional_string(item, "anchor"),
+                Position(
+                    _optional_string(position := _object((item := _object(value)).get("position")), "anchor"),
+                    _integer(position, "offset"),
+                    Direction(_string(position, "direction")),
+                ),
                 _integer(item, "extent"),
-                _string(item, "content_fingerprint"),
+                _string(item, "fingerprint"),
             )
             for key, value in cursors.items()
         },

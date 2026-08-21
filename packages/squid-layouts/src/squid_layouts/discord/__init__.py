@@ -38,7 +38,13 @@ from squid_layouts.discord.routing import RouteComponent, RouteDescription, Rout
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
 from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
 from squid_layouts.planning.limits import V2Limits as Limits
-from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav, page_controls
+from squid_layouts.planning.navigation import (
+    NavFactory,
+    NavigationContext,
+    NavigationState,
+    default_nav,
+    navigation_controls,
+)
 
 __all__ = [
     "DEFAULT_LIMITS",
@@ -64,8 +70,9 @@ __all__ = [
     "MountedView",
     "NativeItem",
     "NavFactory",
+    "NavigationContext",
+    "NavigationState",
     "Navigator",
-    "PageContext",
     "Reactor",
     "Renderer",
     "RouteComponent",
@@ -90,7 +97,7 @@ __all__ = [
     "live",
     "mounts",
     "native",
-    "page_controls",
+    "navigation_controls",
     "render_static",
     "reply_to",
     "respond_to",

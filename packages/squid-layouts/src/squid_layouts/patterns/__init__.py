@@ -18,6 +18,7 @@ from squid_layouts.patterns.shells import (
     RouteBuilder,
     RouterShell,
 )
+from squid_layouts.patterns.source_ranked import SourceRankedList
 from squid_layouts.patterns.tabs import Tab, Tabs, TabsState
 from squid_layouts.patterns.wizard import (
     Wizard,
@@ -47,6 +48,7 @@ __all__ = [
     "RankedListState",
     "RouteBuilder",
     "RouterShell",
+    "SourceRankedList",
     "Tab",
     "Tabs",
     "TabsState",

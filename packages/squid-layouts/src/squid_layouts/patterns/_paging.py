@@ -1,25 +1,27 @@
-"""Explicit pattern windows resolved through the shared page broker."""
+"""Explicit pattern windows resolved through the shared cursor coordinator."""
 
 from collections.abc import Callable, Sequence
 
 from squid_layouts.chrome import Chrome
-from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
+from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.sources import Position
 
 
 def window[T](
     values: Sequence[T],
     *,
     key: str,
-    page: int,
+    position: Position,
     per_page: int,
     chrome: Chrome,
     identity: Callable[[T], str],
-) -> tuple[tuple[T, ...], int, int]:
-    """Slice an explicit page using the same clamping policy as planner pagination."""
+) -> tuple[tuple[T, ...], Position, int]:
+    """Slice at an explicit position using the materialized cursor policy."""
     pages = max(1, (len(values) + per_page - 1) // per_page)
-    request = PageRequest(key, pages, content_fingerprint([identity(value) for value in values]))
-    broker = PageBroker(PresentationSession(), chrome, overrides={key: page})
-    grant = broker.grant(request)
-    visible = tuple(values[grant.index * per_page : (grant.index + 1) * per_page])
-    return visible, grant.index, grant.pages
+    request = MaterializedCursorRequest(key, pages, content_fingerprint([identity(value) for value in values]))
+    coordinator = CursorCoordinator(PresentationSession(), chrome, overrides={key: position})
+    grant = coordinator.grant(request)
+    index = grant.position.offset
+    visible = tuple(values[index * per_page : (index + 1) * per_page])
+    return visible, grant.position, grant.extent
