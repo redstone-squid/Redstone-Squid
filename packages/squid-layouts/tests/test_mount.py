@@ -26,7 +26,7 @@ from squid_layouts.discord import (
     Reactor,
     delivery,
 )
-from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction, fake_message
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
@@ -105,6 +105,23 @@ def _http_error() -> discord.HTTPException:
 
 async def _refuse_edit(*args: Any, **kwargs: Any) -> None:
     raise _http_error()
+
+
+class _RefusingHandle:
+    """An edit handle Discord rejects for a reason that is not staleness."""
+
+    permanent = False
+    expires_at = None
+
+    def expired(self) -> bool:
+        return False
+
+    async def write(self, *args: Any, **kwargs: Any) -> None:
+        raise _http_error()
+
+
+def _refuse_handle(*args: Any, **kwargs: Any) -> _RefusingHandle:
+    return _RefusingHandle()
 
 
 def _button(view: discord.ui.LayoutView) -> discord.ui.Button:
@@ -478,7 +495,7 @@ class TestDeliveryAtomicity:
         panel.entries.append("entry 6")  # a new fingerprint: the staged render resets the cursor
         panel.show_child = True  # a component the failed generation must not mount
 
-        monkeypatch.setattr(delivery, "apply_interaction", _refuse_edit)
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
             await mount.flush(fake_interaction())
 
@@ -499,7 +516,7 @@ class TestDeliveryAtomicity:
         live_generation = mount._generation
         panel.show_child = True
 
-        monkeypatch.setattr(delivery, "apply_interaction", _refuse_edit)
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
         with pytest.raises(discord.HTTPException):
             await mount.flush(fake_interaction())
         monkeypatch.undo()
@@ -636,3 +653,133 @@ class TestStateDescriptor:
 
         assert component.name == "before"
         assert component.values == []
+
+
+class Notifier(Component):
+    """Writes state and then answers with a notice — the shape that broke the panel."""
+
+    count: int = state(0)
+
+    def render(self):
+        return [Text(f"count: {self.count}"), Row((Button(label="go", on_click=self.go, key="go"),))]
+
+    async def go(self, event: PressEvent) -> None:
+        self.count += 1
+        await event.notice("heads up")
+
+
+class TestEditHandles:
+    def test_handle_from_refuses_an_interaction_spent_on_another_message(self):
+        spent = fake_interaction()
+        spent.response.type = discord.InteractionResponseType.channel_message
+        assert delivery.handle_from(spent) is None
+
+        modal = fake_interaction()
+        modal.response.type = discord.InteractionResponseType.modal
+        assert delivery.handle_from(modal) is None
+
+    def test_handle_from_accepts_an_unspent_or_update_shaped_interaction(self):
+        assert delivery.handle_from(fake_interaction()) is not None
+
+        deferred = fake_interaction()
+        deferred.response.type = discord.InteractionResponseType.deferred_message_update
+        handle = delivery.handle_from(deferred)
+        assert handle is not None
+        assert not handle.permanent
+        assert handle.expires_at == deferred.expires_at
+
+    def test_message_handle_is_permanent_only_off_the_channel(self):
+        assert delivery.handle_for(fake_message()).permanent
+        assert not delivery.handle_for(fake_message(ephemeral=True)).permanent
+
+    async def test_a_notice_does_not_swallow_the_render_it_came_with(self):
+        # `notice` answers with a new message, which moves the interaction's original
+        # response off the panel. Editing through it would overwrite the notice and leave
+        # the panel stale, so the mount falls back to the message it holds.
+        message = fake_message()
+        mount = Mount(Notifier(), timeout=None)
+        mount.bind(message, mount.build_view())
+
+        interaction = fake_interaction()
+        await mount.dispatch("go", interaction)
+
+        interaction.response.send_message.assert_awaited_once()
+        interaction.edit_original_response.assert_not_awaited()
+        interaction.followup.edit_message.assert_not_awaited()
+        message.edit.assert_awaited_once()
+        assert not mount.pending
+
+    async def test_a_click_renews_an_ephemeral_mount_for_background_refreshes(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        mount.bind(fake_message(ephemeral=True), mount.build_view())
+        assert mount.handle is not None and not mount.handle.permanent
+
+        interaction = fake_interaction()
+        await mount.dispatch("inc", interaction)
+        assert mount.handle is not None
+        assert mount.handle.expires_at == interaction.expires_at
+
+        component.count += 1
+        await mount.refresh_now()
+
+        interaction.followup.edit_message.assert_awaited_once()
+        assert interaction.followup.edit_message.await_args.args[0] == interaction.message.id
+        assert not mount.pending
+
+    async def test_a_click_does_not_trade_away_the_bots_own_credentials(self):
+        message = fake_message()
+        mount = Mount(Counter(), timeout=None)
+        mount.bind(message, mount.build_view())
+        permanent = mount.handle
+
+        await mount.dispatch("inc", fake_interaction())
+
+        assert mount.handle is permanent
+
+    async def test_an_unreachable_mount_holds_its_render_for_the_next_click(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        mount.bind(fake_message(ephemeral=True), mount.build_view())
+        mount._handle = delivery.handle_from(fake_interaction(expired=True))
+        component.count += 1
+
+        await mount.refresh_now()
+
+        # Not an error and not the end of the mount: the message is simply out of reach
+        # until someone clicks it again.
+        assert mount.pending
+        assert not mount._finished
+
+        interaction = fake_interaction()
+        await mount.dispatch("inc", interaction)
+
+        interaction.response.edit_message.assert_awaited_once()
+        assert not mount.pending
+        assert component.count == 2
+
+    async def test_a_stale_handle_is_dropped_rather_than_reused(self):
+        class _Stale:
+            permanent = False
+            expires_at = None
+            writes = 0
+
+            def expired(self) -> bool:
+                return False
+
+            async def write(self, *args: Any, **kwargs: Any) -> None:
+                type(self).writes += 1
+                raise delivery.StaleHandleError("gone")
+
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        mount.bind(fake_message(ephemeral=True), mount.build_view())
+        mount._handle = _Stale()
+        component.count += 1
+
+        await mount.refresh_now()
+        await mount.refresh_now()
+
+        assert _Stale.writes == 1
+        assert mount.handle is None
+        assert mount.pending
