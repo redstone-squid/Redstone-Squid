@@ -186,7 +186,11 @@ class NotificationPanel(sl.Component):
         self._author_id = author_id
         self.locale = locale
 
-    async def load(self) -> None:
+    async def on_load(self) -> None:
+        await self._refresh()
+
+    async def _refresh(self) -> None:
+        """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
         self._preferences = await self._notifications.preferences(self._account_id)
         self._subscriptions = tuple(await self._notifications.subscriptions(self._account_id))
         self.selected_ids = tuple(
@@ -302,7 +306,7 @@ class NotificationPanel(sl.Component):
         await event.acknowledge()
         for subscription_id in self.selected_ids:
             await self._notifications.unsubscribe(self._account_id, int(subscription_id))
-        await self.load()
+        await self._refresh()
         self.invalidate()
 
     async def _close(self, event: sl.PressEvent) -> None:
