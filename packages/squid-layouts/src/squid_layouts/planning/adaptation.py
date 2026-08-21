@@ -9,7 +9,7 @@ from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
-from squid_layouts.primitives.constraints import Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup as PrimitiveActionGroup,
 )
@@ -26,12 +26,16 @@ from squid_layouts.primitives.nodes import (
     Row,
     SelectMenu,
     Text,
+    Thumbnail,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
 )
 from squid_layouts.primitives.nodes import (
     Heading as PrimitiveHeading,
+)
+from squid_layouts.primitives.nodes import (
+    Section as PrimitiveSection,
 )
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime.presentation import PresentationSession
@@ -50,6 +54,7 @@ from squid_layouts.semantic import (
     Code,
     Details,
     FallbackContent,
+    Field,
     Fields,
     Figure,
     Group,
@@ -63,6 +68,7 @@ from squid_layouts.semantic import (
     NavigateEvent,
     Navigation,
     NavigationDisplay,
+    Note,
     OptionalContent,
     Paragraph,
     Progress,
@@ -154,32 +160,36 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _actions(node, path, context)
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
             return _children(children, path, context)
-        case Section(children=children, heading=heading) | Article(children=children, heading=heading):
+        case (
+            Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
+            | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
+        ):
             contents: list[Node] = []
             if heading is not None:
-                contents.append(PrimitiveHeading(resolve_text(heading).content, overflow=Never()))
+                title = PrimitiveHeading(resolve_text(heading).content, overflow=Never())
+                # The lead image sits beside the title and nothing else: picking "the body"
+                # out of an arbitrary children tuple would be a guess.
+                contents.append(
+                    PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title
+                )
+            elif thumbnail:
+                contents.append(Gallery((thumbnail,)))
             contents.extend(_children(children, path, context))
-            return [Panel(tuple(contents))]
+            return [Panel(tuple(contents), accent=accent)]
         case Aside(children=children, tone=tone):
             return [Panel(tuple(_children(children, path, context)), accent=_tone_color(tone))]
         case Heading(content=content, level=level):
             return [PrimitiveHeading(resolve_text(content).content, level=level, overflow=Never())]
         case Paragraph(content=content):
             return [Text(resolve_text(content).content, overflow=Never())]
+        case Note(content=content):
+            return [Footer(resolve_text(content).content, overflow=Never())]
         case List(items=items, key=key, ordered=ordered, page_size=page_size):
             marker = (lambda index: f"{index + 1}.") if ordered else (lambda _index: "•")
             lines = tuple(f"{marker(index)} {resolve_text(item.content).content}" for index, item in enumerate(items))
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
-            return [
-                Lines(
-                    tuple(
-                        f"**{resolve_text(field.label).content}:** {resolve_text(field.value).content}"
-                        for field in fields
-                    ),
-                    overflow=Never(),
-                )
-            ]
+            return [Lines(tuple(_field_entry(field) for field in fields), overflow=Condense())]
         case Quote(content=content, attribution=attribution):
             value = "> " + resolve_text(content).content.replace("\n", "\n> ")
             if attribution is not None:
@@ -224,6 +234,25 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
             return [node]
+
+
+def _field_entry(field: Field) -> str | Alt:
+    """One `Fields` line, carrying the field's own degradation ladder when it has one.
+
+    Rungs come from caller data assembled by formatting and escaping, so one that came out
+    empty or longer than what precedes it is skipped rather than rejected — direct `Alt`
+    construction stays strict.
+    """
+    label = resolve_text(field.label).content
+    primary = f"**{label}:** {resolve_text(field.value).content}"
+    kept: list[str] = []
+    ceiling = len(primary)
+    for fallback in field.fallbacks:
+        rung = f"**{label}:** {resolve_text(fallback).content}"
+        if len(rung) <= ceiling:
+            kept.append(rung)
+            ceiling = len(rung)
+    return Alt(primary, tuple(kept)) if kept else primary
 
 
 def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:

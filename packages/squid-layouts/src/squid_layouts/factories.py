@@ -21,6 +21,7 @@ from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
     Action,
     ActionDisplay,
@@ -58,6 +59,7 @@ from squid_layouts.semantic import (
     NavigateEvent,
     Navigation,
     NavigationDisplay,
+    Note,
     Paragraph,
     Progress,
     Quote,
@@ -185,14 +187,24 @@ def cluster(*children: ChildLike) -> Cluster:
     return Cluster(_children(children, "sl.cluster()"))
 
 
-def section(*children: ChildLike, heading: TextValue | None = None) -> Section:
-    """A titled block of related content."""
-    return Section(_children(children, "sl.section()"), _opt_text(heading))
+def section(
+    *children: ChildLike,
+    heading: TextValue | None = None,
+    accent: Color | None = None,
+    thumbnail: str | None = None,
+) -> Section:
+    """A titled block of related content; ``accent`` is a house-colour override."""
+    return Section(_children(children, "sl.section()"), _opt_text(heading), accent, thumbnail)
 
 
-def article(*children: ChildLike, heading: TextValue | None = None) -> Article:
+def article(
+    *children: ChildLike,
+    heading: TextValue | None = None,
+    accent: Color | None = None,
+    thumbnail: str | None = None,
+) -> Article:
     """A self-contained block that stands on its own."""
-    return Article(_children(children, "sl.article()"), _opt_text(heading))
+    return Article(_children(children, "sl.article()"), _opt_text(heading), accent, thumbnail)
 
 
 def aside(*children: ChildLike, tone: Tone = Tone.NEUTRAL) -> Aside:
@@ -239,6 +251,11 @@ def status(content: TextValue, *, tone: Tone = Tone.NEUTRAL, emphasis: Emphasis 
     return Status(_text(content), tone, emphasis)
 
 
+def note(content: TextValue, *, importance: Importance = Importance.LOW) -> Note:
+    """Small print: an id, a timestamp, a caveat the reader may skip."""
+    return Note(_text(content), importance)
+
+
 def code(content: str, *, language: str = "") -> Code:
     """Preformatted code or output."""
     return Code(content, language)
@@ -268,9 +285,16 @@ def figure(media: MediaItem | str, *, caption: TextValue | None = None) -> Figur
 # --- records and their collections ---------------------------------------------------------
 
 
-def field(label: TextValue, value: TextValue, *, key: str = "", importance: Importance = Importance.NORMAL) -> Field:
-    """One labelled value."""
-    return Field(key, _text(label), _text(value), importance)
+def field(
+    label: TextValue,
+    value: TextValue,
+    *,
+    key: str = "",
+    importance: Importance = Importance.NORMAL,
+    fallbacks: Iterable[TextValue] = (),
+) -> Field:
+    """One labelled value; ``fallbacks`` are shorter forms tried under budget pressure."""
+    return Field(key, _text(label), _text(value), importance, tuple(_text(item) for item in fallbacks))
 
 
 def fields(*entries: Conditional[Field]) -> Fields:
