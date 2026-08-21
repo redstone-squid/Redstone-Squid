@@ -71,7 +71,7 @@
   must fetch before rendering a materialized ranking.
 - Countable+jumpable sources use the existing page footer. Countable sequential
   sources show a range plus approximate total, jumpable uncountable sources show only
-  a range, and sources with neither capability show no numeric footer. Previous is
+  a range, and sources with neither capability show no numeric footer. Older is
   omitted for forward-only sources and every control follows the returned `has_*`
   flags.
 
@@ -85,4 +85,11 @@
 
 ## Status
 
-Agreed 2026-08-21 (extract now); not started.
+Implemented 2026-08-21.
+
+`test_pagination.py` keeps the materialized broker behavior under the extracted policy
+and covers position-token overrides. `test_sources.py` covers window-scoped refresh,
+source-selected anchor fallback, directional boundaries, and out-of-order completion.
+`test_patterns.py` exercises source loading and navigation through a real mount and all
+four countable/jumpable chrome combinations, including an uncountable source returning
+a bogus total that never reaches the reader.
