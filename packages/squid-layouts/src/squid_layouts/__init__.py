@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-from squid_layouts import forms, html, patterns, planning, primitives, runtime, scene, semantic
+from squid_layouts import forms, html, patterns, planning, primitives, runtime, scene, semantic, sources
 from squid_layouts.actions import (
     ActionEvent,
     ActionPolicy,
@@ -217,6 +217,15 @@ from squid_layouts.semantic import (
     truncate,
     unbreakable,
 )
+from squid_layouts.sources import (
+    DEFAULT_POSITION_POLICY,
+    Position,
+    PositionDirection,
+    PositionPolicy,
+    Window,
+    WindowCursor,
+    WindowSource,
+)
 from squid_layouts.text import (
     NEUTRAL,
     Localization,
@@ -240,6 +249,7 @@ def __getattr__(name: str) -> object:
 __all__ = [
     "CLOSED",
     "DEFAULT_CHROME",
+    "DEFAULT_POSITION_POLICY",
     "FIRST_DESTINATION",
     "NEUTRAL",
     "UNOPENED",
@@ -352,6 +362,9 @@ __all__ = [
     "PlanMetrics",
     "PlanReport",
     "PlanResult",
+    "Position",
+    "PositionDirection",
+    "PositionPolicy",
     "PressEvent",
     "Progress",
     "Quote",
@@ -393,6 +406,9 @@ __all__ = [
     "UndeclaredStateError",
     "UnsolvableLayoutError",
     "Visibility",
+    "Window",
+    "WindowCursor",
+    "WindowSource",
     "Wizard",
     "WizardAnswer",
     "WizardAnswers",
@@ -456,6 +472,7 @@ __all__ = [
     "scene",
     "section",
     "semantic",
+    "sources",
     "spill",
     "stack",
     "state",
