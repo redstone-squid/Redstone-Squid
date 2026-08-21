@@ -33,6 +33,7 @@ from squid_layouts.discord import (
     default_nav,
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import solve
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.solve import RText, _component_count, split_pages
@@ -285,8 +286,65 @@ class TestSolverNav:
         assert solve(self._paginated(), page=-5).page == 0
 
     def test_a_text_bearing_nav_factory_is_rejected(self):
+        # `NavNode` rejects this statically; the runtime guard is for callers without a
+        # type checker, so the suppression here is the test doing its job.
         with pytest.raises(ValueError, match="component-bearing"):
-            solve(self._paginated(), nav=lambda key, page, pages: [Text("page {page}")])
+            solve(self._paginated(), nav=lambda key, page, pages: [Text("page {page}")])  # type: ignore
+
+
+class TestRepage:
+    """Turning a page is a projection: the fit that produced it does not change."""
+
+    def _paginated(self) -> list:
+        return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate(key="lines"))]
+
+    def _nav(self, key: str, page: int, pages: int):
+        async def move(interaction) -> None: ...
+
+        return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
+
+    def test_repage_moves_the_page_without_moving_the_fit(self):
+        solved = solve(self._paginated(), nav=self._nav)
+        before = solved.components
+        pager = solved.pager
+        assert pager is not None and solved.pages > 2
+        solved.repage({"lines": 2})
+        direct = solve(self._paginated(), nav=self._nav, page=2).pager
+        assert direct is not None
+        assert pager.page == 2
+        assert pager.slot.content == direct.slot.content
+        assert _component_count(solved.children) == before
+
+    def test_repage_redraws_the_nav_it_replaced(self):
+        solved = solve(self._paginated(), nav=self._nav)
+        previous = self._previous_button(solved)
+        assert previous.disabled  # on page 0
+        solved.repage({"lines": 1})
+        assert not self._previous_button(solved).disabled
+
+    @staticmethod
+    def _previous_button(solved) -> Button:
+        row = solved.children[-1]
+        assert isinstance(row, Row)
+        button = row.items[0]
+        assert isinstance(button, Button)
+        return button
+
+    def test_repage_clamps_like_the_solver_does(self):
+        solved = solve(self._paginated(), nav=self._nav)
+        solved.repage({"lines": 999})
+        assert solved.page == solved.pages - 1
+        solved.repage({"lines": -5})
+        assert solved.page == 0
+
+    def test_a_nav_factory_that_hides_controls_between_pages_is_rejected(self):
+        def hiding(key: str, page: int, pages: int):
+            controls = self._nav(key, page, pages)
+            return controls if page else []
+
+        solved = solve(self._paginated(), nav=hiding)
+        with pytest.raises(LayoutInvariantError, match="changed shape between pages"):
+            solved.repage({"lines": 1})
 
 
 class TestBuildModal:
