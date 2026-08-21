@@ -10,7 +10,7 @@ dropped footnote genuinely returns its characters to the body.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 from squid_layouts.planning.pagination import NavNode, PageNav
@@ -38,6 +38,7 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.primitives.styles import Color
+from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
 
@@ -747,6 +748,7 @@ def solve(
     *,
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
     page: PageState = None,
@@ -758,6 +760,7 @@ def solve(
     which is the only layer that knows the target. A ladder reaching the solver is a pure
     budget ladder whose rungs are all available.
     """
+    chrome = localize_chrome(chrome, localization)
     tree = list(nodes)
     positions: dict[_VariantPath, int] = {}
     step_notes: list[str] = []
