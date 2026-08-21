@@ -21,7 +21,7 @@ runtime — session policy is operational, not presentational.
        await registry.open(
            key=("settings", ctx.guild.id, ctx.author.id),
            policy=Replace(),          # or Reject(notice=...), or Coexist()
-           open=lambda: send_component(ctx, SettingsPanel(...)),
+           open=lambda: SettingsPanel(...).mount().send(reply_to(ctx)),  # plan 15's seam
        )
 
    - `Replace()`: finish the existing mount (disable controls) before opening the new
