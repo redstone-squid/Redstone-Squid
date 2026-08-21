@@ -206,19 +206,23 @@ class NotificationPanel(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            return (sl.primitives.banner(t(self.locale, _("Notifications closed")), accent=DISCORD_BLUE),)
+            # DISCORD_BLUE is house chrome, not a Tone, so the exact colour needs sl.section's
+            # accent rather than sl.status's fixed tone palette.
+            return (sl.section(sl.paragraph(t(self.locale, _("Notifications closed"))), accent=DISCORD_BLUE),)
         on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
         fields = (
-            sl.primitives.presets.Field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),
-            sl.primitives.presets.Field(t(self.locale, _("Discord DMs")), on if self.dm_enabled else off),
-            sl.primitives.presets.Field(t(self.locale, _("Following")), self._subscription_list()),
+            sl.field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),
+            sl.field(t(self.locale, _("Discord DMs")), on if self.dm_enabled else off),
+            sl.field(t(self.locale, _("Following")), self._subscription_list()),
         )
+        description = t(self.locale, _("Toggle where notifications arrive, and unfollow what you no longer want."))
+        suspension_note = self._suspension_note()
         nodes: list[sl.LayoutNode] = [
-            sl.primitives.card(
-                t(self.locale, _("Notifications")),
-                t(self.locale, _("Toggle where notifications arrive, and unfollow what you no longer want.")),
-                fields=fields,
-                footer=self._suspension_note(),
+            sl.section(
+                sl.truncate(sl.paragraph(description)),
+                sl.fields(*fields),
+                suspension_note and sl.note(suspension_note),
+                heading=t(self.locale, _("Notifications")),
             )
         ]
         if self.subscriptions:
