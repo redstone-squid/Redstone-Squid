@@ -516,12 +516,15 @@ def _root_paginate(
             nav=nav,
         )
 
+    # Greedy: grow a page until it stops fitting, then cut. Every probe measures a
+    # different prefix, so there is nothing to memoize — the cost is one solve per node,
+    # paid only by a document that already blew the component budget.
     pages: list[tuple[Node, ...]] = []
     current: tuple[Node, ...] = ()
     for node in nodes:
         candidate = (*current, node)
         probe = solve_page(candidate, 0, maximum_pages)
-        if current and (probe.components > target_limits.total_components or probe.notes):
+        if current and (probe.components > target_limits.total_components or probe.overflowed):
             pages.append(current)
             current = (node,)
             probe = solve_page(current, 0, maximum_pages)

@@ -116,6 +116,14 @@ class SolvedLayout:
     pagers: tuple[Pager, ...] = ()
     components: int = 0
     """Components the built view will hold, including every pager's controls."""
+    overflowed: bool = False
+    """Whether anything had to give to fit, as opposed to being clamped on the way in.
+
+    Not every note is a defeat. Trimming a select's options to 25 or a section's texts to
+    3 is Discord's shape being enforced and happens whatever the budget; degrading,
+    spilling, dropping or stepping a ladder means the content did not fit. A caller
+    deciding whether more will fit — the root packer — needs to tell those apart.
+    """
     nav: PageNav | None = None
     limits: V2Limits = LIMITS
 
@@ -862,6 +870,7 @@ def _solve_once(
             list[_Unit],
             dict[int, str],
             dict[int, Callable[[int, int], str]],
+            int,
         ]
         | None
     ) = None
@@ -873,6 +882,8 @@ def _solve_once(
         builder = _Builder(limits=limits, notes=pass_notes)
         children = builder.realize_children(resolved)
         paginate_units, keys, footers = _configure_paginators(builder, chrome)
+        # Everything noted so far is a clamp to Discord's own shape; fitting starts here.
+        clamps = len(pass_notes)
         footer_reservation = sum(
             _footer_cost(footers[unit.index], len(unit.content)) for unit in paginate_units if unit.index in active
         )
@@ -880,14 +891,14 @@ def _solve_once(
         _allocate(builder.units, budget, pass_notes, chrome)
         children = _prune(children)
         detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
-        final = (builder, children, paginate_units, keys, footers)
+        final = (builder, children, paginate_units, keys, footers, clamps)
         expanded = active | detected
         if expanded == active:
             break
         active = expanded
 
     assert final is not None
-    builder, children, paginate_units, keys, footers = final
+    builder, children, paginate_units, keys, footers, clamps = final
     pagers: list[Pager] = []
     for unit in paginate_units:
         if unit.fragments is None or len(unit.fragments) <= 1:
@@ -928,6 +939,9 @@ def _solve_once(
         notes=builder.notes,
         pagers=tuple(pagers),
         components=count,
+        # Incoming notes are the ladder steps this pass was asked to measure, which are
+        # themselves a response to overflow.
+        overflowed=bool(notes) or len(builder.notes) > clamps,
         nav=nav,
         limits=limits,
     )

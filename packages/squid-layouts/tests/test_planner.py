@@ -19,6 +19,7 @@ from squid_layouts.primitives import (
     Button,
     Code,
     Lines,
+    Never,
     Paginate,
     Panel,
     Row,
@@ -111,6 +112,22 @@ def test_explicit_document_key_allows_lossless_root_component_paging() -> None:
         page_result = plan(document, target=DEFAULT_TARGET, nav=_nav, page={"toolbar": page_index})
         visible.update(key for key in page_result.bindings if key.startswith("b"))
     assert visible == {f"b{index}" for index in range(41)}
+
+
+def test_a_cosmetic_note_does_not_fragment_root_pages() -> None:
+    """Cutting on any note put every later node on a page of its own.
+
+    `Paginate(per=...)` on a node that is not `Lines` is noted and ignored — the content
+    is unchanged and nothing had to give — but the note was sticky across every probe
+    that included the node, so each following node looked like it no longer fitted.
+    """
+    buttons = tuple(Button(str(index), _click, f"b{index}") for index in range(41))
+
+    def pages_for(overflow) -> int:
+        document = Document((Text("hi", overflow=overflow), ActionGroup(buttons)), key="toolbar")
+        return plan(document, target=DEFAULT_TARGET, nav=_nav).scene.pagers[0].pages
+
+    assert pages_for(Paginate(key="noted", per=5)) == pages_for(Never())
 
 
 def test_root_paging_requires_an_explicit_document_key() -> None:
