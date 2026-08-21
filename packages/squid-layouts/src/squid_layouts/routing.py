@@ -10,6 +10,10 @@ A route is one format string, read as colon-separated segments:
     EDIT_BUILD.id(build_id=5)            # "edit:build:5"
     EDIT_BUILD.match("edit:build:5")     # {"build_id": 5}
 
+Aliases keep already-posted controls alive when the canonical format changes. `id()` always
+builds the canonical format; `match()` and overlap detection cover the canonical format and
+every alias.
+
 Each segment is *exactly* a literal or one parameter — never a mix, so `build-{id}` is not
 a route. That restriction is what makes overlap between two routes decidable exactly
 (`Route.overlaps`) instead of by sampling, which is worth far more than the generality it
@@ -155,6 +159,7 @@ class Route:
     """A named family of custom ids, and the parameters one carries."""
 
     format: str
+    aliases: tuple[str, ...] = ()
     segments: tuple[_Segment, ...] = field(init=False, repr=False)
     params: tuple[str, ...] = field(init=False)
     converters: tuple[Converter, ...] = field(init=False, repr=False)
@@ -168,6 +173,7 @@ class Route:
     """
     template: str = field(init=False, repr=False)
     """`format` with the converter specs stripped, because `"{x:int}".format(x=5)` raises."""
+    _alias_routes: tuple[Route, ...] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if not self.format:
@@ -209,6 +215,36 @@ class Route:
                 for s in segments
             ),
         )
+        alias_routes = tuple(Route(alias) for alias in self.aliases)
+        canonical_signature = {
+            name: converter.name for name, converter in zip(self.params, self.converters, strict=True)
+        }
+        variants = (self, *alias_routes)
+        for alias in alias_routes:
+            alias_signature = {
+                name: converter.name for name, converter in zip(alias.params, alias.converters, strict=True)
+            }
+            if alias_signature != canonical_signature:
+                message = (
+                    f"route {self.format!r}: alias {alias.format!r} must carry the same parameters and converters; "
+                    f"expected {canonical_signature}, got {alias_signature}"
+                )
+                raise ValueError(message)
+        for index, left in enumerate(variants):
+            for right in variants[index + 1 :]:
+                if left._overlaps_format(right):
+                    message = (
+                        f"route {self.format!r}: formats {left.format!r} and {right.format!r} overlap; "
+                        "one id could decode through both"
+                    )
+                    raise ValueError(message)
+        object.__setattr__(self, "_alias_routes", alias_routes)
+        if alias_routes:
+            object.__setattr__(
+                self,
+                "anonymous",
+                "|".join(f"(?:{route.anonymous})" for route in variants),
+            )
 
     def id(self, **params: object) -> str:
         """Build one custom id, refusing anything this route could not match back.
@@ -246,16 +282,26 @@ class Route:
     def match(self, custom_id: str) -> dict[str, Any] | None:
         """The parameters ``custom_id`` carries, or None when it belongs to another route."""
         found = self.pattern.fullmatch(custom_id)
-        if found is None:
-            return None
-        raw = found.groupdict()
-        try:
-            return {
-                name: converter.parse(raw[name]) for name, converter in zip(self.params, self.converters, strict=True)
-            }
-        except ValueError:
-            # A converter's pattern admitted something its parse rejects: not our id.
-            return None
+        if found is not None:
+            raw = found.groupdict()
+            try:
+                return {
+                    name: converter.parse(raw[name])
+                    for name, converter in zip(self.params, self.converters, strict=True)
+                }
+            except ValueError:
+                # A converter's pattern admitted something its parse rejects: not our id.
+                return None
+        for alias in self._alias_routes:
+            if (params := alias.match(custom_id)) is not None:
+                return params
+        return None
+
+    def _overlaps_format(self, other: Route) -> bool:
+        """Whether the canonical formats of two routes admit a common id."""
+        if len(self.segments) != len(other.segments):
+            return False
+        return all(_intersect(left, right) for left, right in zip(self.segments, other.segments, strict=True))
 
     def overlaps(self, other: Route) -> bool:
         """Whether any one custom id could belong to both routes.
@@ -265,6 +311,8 @@ class Route:
         Sampling one id per route misses `foo:{x}:baz` against `foo:bar:{y}`, which collide
         at `foo:bar:baz`.
         """
-        if len(self.segments) != len(other.segments):
-            return False
-        return all(_intersect(left, right) for left, right in zip(self.segments, other.segments, strict=True))
+        return any(
+            left._overlaps_format(right)
+            for left in (self, *self._alias_routes)
+            for right in (other, *other._alias_routes)
+        )
