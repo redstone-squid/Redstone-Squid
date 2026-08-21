@@ -443,6 +443,8 @@ class PollConfirmationComponent(sl.Component):
     """A semantic poll preview and publication workspace."""
 
     published: bool = sl.state(default=False)
+    # Supplied by the caller on every open, so a snapshot would only restore it stale.
+    draft: PollDraft = sl.state(persist=False)
 
     def __init__(
         self,
