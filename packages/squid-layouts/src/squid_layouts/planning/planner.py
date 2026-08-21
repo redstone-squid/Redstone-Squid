@@ -12,6 +12,7 @@ from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.cache import CachedPlan, PlanCache
+from squid_layouts.planning.cursors import PageBroker
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.solve import (
@@ -332,13 +333,14 @@ def plan(
     document = as_document(rendered)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
+    # One broker owns every page position in this plan, whichever layer does the slicing.
+    broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
     semantic = lower_semantics(
         document.children,
         limits=limits,
         chrome=chrome,
         session=presentation,
-        page=page,
-        nav=nav,
+        pages=broker,
         search_budget=search_budget,
     )
     lowered = _lower_children(semantic.nodes, target, limits)
