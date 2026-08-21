@@ -8,6 +8,7 @@ import discord
 
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
+from squid.bot.utils.mount_registry import MountRegistry
 from squid.builds.domain import DoorBuild, OtherBuild, Status
 
 
@@ -86,6 +87,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
             for_build=lambda _build: SimpleNamespace(
                 render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card")))
             ),
+            mounts=MountRegistry(),
         ),
     )
     return cog

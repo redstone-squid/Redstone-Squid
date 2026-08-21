@@ -6,6 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, Self, override
 
+import anyio
 import discord
 from discord import Webhook
 from discord.abc import Messageable
@@ -24,6 +25,7 @@ from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import ROUTER
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.mount_registry import MountRegistry
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -143,6 +145,9 @@ class RedstoneSquid(Bot):
         # Permission checks resolve a Discord id to an account on every command,
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
+        # How many of each panel a user may have open, and which mounts die with their
+        # parent. Reached from a handler as `interaction.client.mounts`.
+        self.mounts = MountRegistry()
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -164,6 +169,11 @@ class RedstoneSquid(Bot):
     async def close(self) -> None:
         """Stop gateway-triggered and background work before application resources close."""
         await self.reactions.close()
+        # Panels are left showing disabled controls rather than silently going dead. Bounded
+        # because each one is a gateway round trip: a slow Discord must not stall shutdown,
+        # and an undisabled panel times out on its own anyway.
+        with anyio.move_on_after(3.0):
+            await self.mounts.close_all()
         await self.background_tasks.close()
         await self.catbox.aclose()
         await self.media_previews.aclose()

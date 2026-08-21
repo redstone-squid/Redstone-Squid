@@ -11,6 +11,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import destination
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
+from squid.bot.utils.mount_registry import SessionKey
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -50,8 +51,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             owner_guild_id=self.bot.owner_server_id,
         )
         await view.load()
-        mount = view.mount()
-        await mount.send(destination(ctx, visibility="personal", locale=locale))
+        # One panel per admin per guild: a second `/settings` replaces the first rather than
+        # leaving two live panels writing the same settings service.
+        await self.bot.mounts.open(
+            view.mount(),
+            destination(ctx, visibility="personal", locale=locale),
+            key=SessionKey("settings", ctx.author.id, ctx.guild.id),
+        )
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:
         """What this caller may do, asked once so the panel can render only that.
