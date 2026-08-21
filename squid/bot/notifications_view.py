@@ -169,6 +169,9 @@ class NotificationPanel(sl.Component):
 
     selected_ids: tuple[str, ...] = sl.state(())
     closed: bool = sl.state(default=False)
+    # Refreshed from the service by load(), so a snapshot would only restore them stale.
+    _preferences: NotificationPreferences | None = sl.state(persist=False)
+    _subscriptions: tuple[NotificationSubscription, ...] = sl.state(persist=False)
 
     def __init__(
         self,
@@ -182,8 +185,8 @@ class NotificationPanel(sl.Component):
         self._account_id = account_id
         self._author_id = author_id
         self.locale = locale
-        self._preferences: NotificationPreferences | None = None
-        self._subscriptions: tuple[NotificationSubscription, ...] = ()
+        self._preferences = None
+        self._subscriptions = ()
 
     async def load(self) -> None:
         self._preferences = await self._notifications.preferences(self._account_id)
@@ -289,7 +292,6 @@ class NotificationPanel(sl.Component):
             web_enabled=not self.web_enabled,
             dm_enabled=self.dm_enabled,
         )
-        self.invalidate()
 
     async def _toggle_dm(self, event: sl.PressEvent) -> None:
         await event.acknowledge()
@@ -298,7 +300,6 @@ class NotificationPanel(sl.Component):
             web_enabled=self.web_enabled,
             dm_enabled=not self.dm_enabled,
         )
-        self.invalidate()
 
     async def _unfollow(self, event: sl.PressEvent) -> None:
         await event.acknowledge()

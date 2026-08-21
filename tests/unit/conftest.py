@@ -4,6 +4,14 @@ import pytest
 
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.models import TagDefinition
+from squid_layouts import strict_state
+
+
+@pytest.fixture(autouse=True)
+def _strict_state():
+    """A component write outside declared state is a test failure, not a log line."""
+    with strict_state():
+        yield
 
 
 @pytest.fixture
