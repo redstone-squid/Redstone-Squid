@@ -348,10 +348,10 @@ class ClaimReviewComponent(sl.Component):
         await self._decide(event, approve=False)
 
     async def _decide(self, event: sl.PressEvent, *, approve: bool) -> None:
-        interaction = self._interaction(event)
         claim = self.selected
-        if interaction is None or claim is None:
+        if claim is None:
             return
+        interaction = sl.discord.native(event)
         await enforce(interaction, ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT)
         await interaction.response.defer()
         staff_account_id = await ensure_consented_account(interaction, self._accounts, locale=self.locale)
@@ -396,11 +396,6 @@ class ClaimReviewComponent(sl.Component):
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
         await event.finish()
-
-    @staticmethod
-    def _interaction(event: sl.ActionEvent) -> discord.Interaction[Any] | None:
-        interaction = getattr(event.responder, "interaction", None)
-        return cast(discord.Interaction[Any], interaction) if interaction is not None else None
 
     def mount(self) -> sl.discord.Mount:
         return create_mount(
