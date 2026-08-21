@@ -576,6 +576,9 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
     """Render the unit into its slot within its grant. Returns False when the node drops."""
     if unit.count_pages is not None:
         return _apply_count_pages(unit)
+    if unit.fragments is not None and unit.grant >= unit.chrome_len + max(map(len, unit.fragments)):
+        unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
+        return True
     if unit.grant >= unit.need:
         unit.slot.content = unit.prefix + unit.content + unit.suffix
         return True
@@ -779,7 +782,21 @@ def _allocate_budgeted(builder: _Builder, budget: int, notes: list[str], chrome:
             continue
         claimed.update(unit.index for unit in units)
         need = sum(unit.need for unit in units)
-        demand = need if need <= region.preferred + region.stretch else min(need, region.preferred)
+        ceiling = region.preferred + region.stretch
+        demand = need if need <= ceiling else min(need, region.preferred)
+        if len(units) == 1 and need > ceiling and isinstance(units[0].overflow, Paginate):
+            unit = units[0]
+            usable = ceiling - unit.chrome_len
+            if usable >= 1:
+                policy = unit.overflow
+                unit.fragments = split_pages(
+                    unit.content,
+                    usable,
+                    policy.boundary,
+                    min_fill=policy.min_fill,
+                    widows=policy.widows,
+                )
+                demand = unit.chrome_len + max(map(len, unit.fragments))
         groups.append(
             _GrantGroup(
                 units,
