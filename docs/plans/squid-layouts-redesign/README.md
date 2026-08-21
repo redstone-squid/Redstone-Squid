@@ -8,7 +8,7 @@ the reasons for it.
 The audit behind these plans covered the whole package (~8k lines), the nine production
 consumers, and a comparison against CascadeUI
 (https://github.com/HollowTheSilver/CascadeUI). Everything found is captured: plans
-01–07 are the dependency-ordered core, 08–15 are agreed improvements whose order is
+01–07 are the dependency-ordered core, 08–17 are agreed improvements whose order is
 flexible, and `90-deferred.md` records what was consciously rejected or postponed so it
 is not re-derived later.
 
@@ -37,6 +37,7 @@ is not re-derived later.
 | 14 | [Routed actions](14-routed-actions.md) | First-class stateless controls (`Route` + `RoutedAction` + `Router`): replaces the five hand-rolled `DynamicItem` classes and the `RawItem`/cast splices, makes routed scenes serializable, and unblocks semantic authoring of vote/starboard/consent cards. Routes keep their existing custom ids, so posted messages survive. Explicitly *not* a durability feature. Shipped; extended by 16. |
 | 15 | [Send ownership](15-send-ownership.md) | `Mount.send(Destination)` runs stage→deliver→commit framework-side; `reply_to`/`respond_to` adapters own the discord.py kwargs, `ui.destination` keeps audience policy host-side in the existing `Visibility` vocabulary. `bind` is deleted — its four remaining callers were hand-rolled flushes. Amends 01 §6 ("bind is the commit point"); before 09. Shipped. |
 | 16 | [Routed actions, part two](16-routed-actions-part-two.md) | What 14 left on the table, taken from URL routers: `{build_id:int}` converters (closing a real regression — the route pattern was *looser* than the `(\d+)` it replaced), Flask-style parameters-as-arguments checked at import, and a `Router[BotT]` whose `Concatenate` pins `interaction.client`. Stages 0-3 shipped; aliases + a reserved namespace, middleware, `RoutedSelect` and route introspection remain. Records what does *not* transfer, and why a 404 needs a namespace here. |
+| 17 | [Deferred text](17-deferred-text-i18n.md) | The framework translates: a `Message` carries its own msgid through the tree and is resolved at plan time by the mount's `Localization`. Retires `t(self.locale, _("…"))` (712 sites) in favour of `L(t"…")`, makes `Chrome` a locale-free constant so the twelve chrome-less `render_static` calls stop rendering English, routes interpolation through `md()`'s escaping, and lets `Mount.localize` retranslate a live panel. Needs a custom Babel extractor — the stock one drops `L(t"…")` silently. Capability plus a three-module pilot; the rest migrates opportunistically. |
 
 ## Relation to existing plans
 
