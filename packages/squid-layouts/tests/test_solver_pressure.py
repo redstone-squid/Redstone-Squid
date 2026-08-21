@@ -7,6 +7,7 @@ from squid_layouts.discord import DEFAULT_TARGET
 from squid_layouts.planning import solve
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.primitives import Paginate, Text
+from squid_layouts.scene.model import ScenePanel, SceneText
 
 
 class TestBudgetContract:
@@ -82,3 +83,74 @@ class TestPaginateBreakPreferences:
             Paginate(min_fill=-1)
         with pytest.raises(ValueError, match="widows"):
             Paginate(widows=0)
+
+
+class TestRegionPagination:
+    @staticmethod
+    def _texts(result: sl.PlanResult) -> list[str]:
+        panel = result.scene.children[0]
+        assert isinstance(panel, ScenePanel)
+        return [child.content for child in panel.children if isinstance(child, SceneText)]
+
+    def test_a_section_pages_heterogeneous_children(self) -> None:
+        document = sl.paged(
+            sl.section(*(sl.paragraph(f"{index}: " + "x" * 30) for index in range(6)), heading="Report"),
+            key="report",
+            chars=80,
+        )
+
+        first = sl.plan(document, target=DEFAULT_TARGET)
+        second = sl.plan(document, target=DEFAULT_TARGET, page={"report": 1})
+
+        assert first.scene.pagers[0].pages == 3
+        assert self._texts(first)[:3] == ["## Report", "0: " + "x" * 30, "1: " + "x" * 30]
+        assert self._texts(second)[:2] == ["2: " + "x" * 30, "3: " + "x" * 30]
+        assert first.scene.pagers[0].content_fingerprint == second.scene.pagers[0].content_fingerprint
+
+    def test_keep_with_next_moves_a_heading_to_its_content(self) -> None:
+        document = sl.paged(
+            sl.section(
+                sl.paragraph("a" * 45),
+                sl.keep_with_next(sl.heading("Next")),
+                sl.paragraph("b" * 35),
+            ),
+            key="chapters",
+            chars=50,
+        )
+
+        first = sl.plan(document, target=DEFAULT_TARGET)
+        second = sl.plan(document, target=DEFAULT_TARGET, page={"chapters": 1})
+
+        assert "## Next" not in self._texts(first)
+        assert self._texts(second)[:2] == ["## Next", "b" * 35]
+
+    def test_unbreakable_rejects_an_oversized_group(self) -> None:
+        document = sl.paged(
+            sl.section(sl.unbreakable(sl.group(sl.paragraph("a" * 30), sl.paragraph("b" * 30)))),
+            key="atomic",
+            chars=50,
+        )
+
+        with pytest.raises(sl.UnsolvableLayoutError, match="unbreakable region child"):
+            sl.plan(document, target=DEFAULT_TARGET)
+
+    def test_an_oversized_text_child_splits_losslessly(self) -> None:
+        document = sl.paged(sl.section(sl.paragraph("x" * 120)), key="prose", chars=50)
+
+        pages = [sl.plan(document, target=DEFAULT_TARGET, page={"prose": index}) for index in range(3)]
+
+        assert pages[0].scene.pagers[0].pages == 3
+        content = "".join(self._texts(result)[0] for result in pages)
+        assert content == "x" * 120
+
+    def test_widows_keep_three_children_on_the_last_page(self) -> None:
+        document = sl.paged(
+            sl.section(*(sl.paragraph(str(index) * 20) for index in range(5))),
+            key="widows",
+            chars=65,
+            widows=3,
+        )
+
+        last = sl.plan(document, target=DEFAULT_TARGET, page={"widows": 1})
+
+        assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]
