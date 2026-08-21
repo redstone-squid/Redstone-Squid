@@ -386,6 +386,13 @@ class OpenEvent[ValueT](ActionEvent):
 
 @dataclass(frozen=True, slots=True)
 class Choices:
+    """A picker over `choices`, backed by buttons or a select depending on shape.
+
+    `minimum` defaults to 1, so the picker cannot be cleared to nothing without setting
+    it to 0 explicitly; a small (2-5 choice) single-select (`maximum=1`) renders as
+    buttons instead, which always select exactly one and ignore `minimum` entirely.
+    """
+
     key: str
     choices: tuple[Choice, ...]
     selection: ChoiceOwnership = UNSELECTED

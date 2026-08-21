@@ -134,6 +134,15 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     assert "25" in values
 
 
+def test_choices_minimum_zero_allows_deselecting_all() -> None:
+    document = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)), minimum=0)
+
+    select = next(
+        node for node in plan(document, target=DEFAULT_TARGET).scene.children if isinstance(node, SceneSelect)
+    )
+    assert select.min_values == 0
+
+
 def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
     document = Choices("many", tuple(Choice(str(index), str(index)) for index in range(36)), maximum=2)
 
