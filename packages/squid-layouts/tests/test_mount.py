@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import anyio
 import discord
 import pytest
+from discord.webhook.async_ import async_context
 
 from squid_layouts import (
     ActionPolicy,
@@ -1138,6 +1139,31 @@ class TestEditHandles:
             thread=discord.utils.MISSING,
         )
 
+    async def test_application_webhook_followups_force_wait_and_return_the_message(self):
+        expected = object()
+        adapter = SimpleNamespace(execute_webhook=AsyncMock(return_value={}))
+        subject = cast(
+            discord.Webhook,
+            SimpleNamespace(
+                type=discord.WebhookType.application,
+                token="interaction-token",
+                id=42,
+                _state=SimpleNamespace(allowed_mentions=None),
+                session=object(),
+                proxy=None,
+                proxy_auth=None,
+                _create_message=lambda data, *, thread: expected,
+            ),
+        )
+        token = async_context.set(adapter)
+        try:
+            sent = await discord.Webhook.send(subject, wait=False)
+        finally:
+            async_context.reset(token)
+
+        assert sent is expected
+        assert adapter.execute_webhook.await_args.kwargs["wait"] is True
+
     async def test_a_notice_does_not_swallow_the_render_it_came_with(self):
         # `notice` answers with a new message, which moves the interaction's original
         # response off the panel. Editing through it would overwrite the notice and leave
@@ -1306,15 +1332,18 @@ class TestDestinations:
         assert interaction.followup.edit_message.await_args.args[0] == 42
         message.edit.assert_not_awaited()
 
-    async def test_unwaited_followup_honestly_exposes_no_message_or_handle(self):
+    async def test_followup_exposes_the_message_and_handle_even_when_wait_was_not_requested(self):
         interaction = fake_interaction()
         interaction.response._done = True
+        message = fake_message(message_id=42)
+        interaction.followup.send.return_value = message
         mount = Mount(Counter(), timeout=None)
 
         sent = await mount.send(delivery.respond_to(interaction, wait=False))
 
-        assert sent is None
-        assert mount.handle is None
+        assert sent is message
+        assert mount.handle is not None
+        assert not mount.handle.permanent
 
     async def test_plain_command_reply_keeps_permanent_channel_authority(self):
         message = fake_message()
