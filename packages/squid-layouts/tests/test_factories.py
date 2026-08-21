@@ -155,7 +155,7 @@ class TestParity:
 
 
 class TestDrift:
-    _ALIASES = {"List": "bullets", "RoutedChoices": "routed_choices"}
+    _ALIASES = {"FormTrigger": "form", "List": "bullets", "RoutedChoices": "routed_choices"}
 
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:
