@@ -161,8 +161,12 @@ and it snapshots the reference rather than a deep copy:
         def __init__(self, guild: discord.Guild) -> None:
             self.guild = guild
 
-`sl.state()` with neither a default nor a factory declares a field that `__init__` assigns;
-reading it before then raises AttributeError.
+`sl.state()` with neither a default nor a factory declares a field that `__init__` must
+assign, the way a dataclass field with no default is required. Leaving one unassigned raises
+TypeError at construction, not later at first read. Only the outermost `__init__` is checked,
+so a subclass may assign after calling `super().__init__()`, and a class that has not
+implemented `render` yet is exempt — it is a base to build on, and its subclasses do the
+assigning.
 
 Children appear through explicit keyed boundaries:
 
