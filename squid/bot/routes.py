@@ -15,7 +15,7 @@ import squid_layouts as sl
 
 poll_close = sl.Route("poll:close")
 poll_refresh = sl.Route("poll:refresh")
-build_edit = sl.Route("edit:build:{build_id}")
+build_edit = sl.Route("edit:build:{build_id:int}")
 build_log_consent = sl.Route("build_log:consent")
 remove_redstoner_role = sl.Route("remove:role:redstoner")
 

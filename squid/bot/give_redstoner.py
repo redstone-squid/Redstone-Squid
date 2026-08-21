@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 @router.route(remove_redstoner_role)
-async def remove_own_redstoner_role(interaction: Interaction[Any], _params: Mapping[str, str]) -> None:
+async def remove_own_redstoner_role(interaction: Interaction[Any], _params: Mapping[str, Any]) -> None:
     """Let a member drop the redstoner role the bot gave them."""
     await interaction.response.defer(ephemeral=True)
 

@@ -10,34 +10,49 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives import Panel, RoutedButton, Row
 from squid_layouts.scene.model import SceneRoutedButton, SceneRow
 
-EDIT_BUILD = sl.Route("edit:build:{build_id}")
+EDIT_BUILD = sl.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.Route("poll:close")
+NAME_BUILD = sl.Route("name:build:{slug}")
 
 
 class TestRouteFormats:
     def test_ids_and_matches_are_derived_from_one_format(self) -> None:
         assert EDIT_BUILD.params == ("build_id",)
         assert EDIT_BUILD.id(build_id=5) == "edit:build:5"
-        assert EDIT_BUILD.match("edit:build:5") == {"build_id": "5"}
+        assert EDIT_BUILD.match("edit:build:5") == {"build_id": 5}
         assert EDIT_BUILD.match("poll:close") is None
 
     def test_a_route_with_no_parameters_is_its_own_id(self) -> None:
         assert POLL_CLOSE.id() == "poll:close"
         assert POLL_CLOSE.match("poll:close") == {}
 
+    def test_a_converter_narrows_the_pattern_and_types_the_value(self) -> None:
+        # The regression this closes: `edit:build:(\d+)` became `[^:]+` when the hand-rolled
+        # DynamicItem moved onto a route, so a non-numeric id reached the handler and blew up
+        # in `int()` instead of simply not matching.
+        assert EDIT_BUILD.match("edit:build:abc") is None
+        assert NAME_BUILD.match("name:build:abc") == {"slug": "abc"}
+        assert isinstance(EDIT_BUILD.match("edit:build:5")["build_id"], int)  # type: ignore[index]
+
     @pytest.mark.parametrize(
         ("params", "match"),
         [
             ({}, "missing"),
             ({"build_id": 5, "extra": 1}, "unknown"),
-            ({"build_id": ""}, "may not be empty"),
-            ({"build_id": "a:b"}, "may not contain"),
-            ({"build_id": "x" * 200}, "over the 100"),
+            ({"build_id": ""}, "cannot match the id it built"),
+            ({"build_id": "a:b"}, "cannot match the id it built"),
+            ({"build_id": "abc"}, "cannot match the id it built"),
         ],
     )
-    def test_bad_ids_fail_at_authoring_time_not_at_send_time(self, params: dict, match: str) -> None:
-        with pytest.raises(LayoutInvariantError, match=match):
+    def test_an_id_this_route_could_not_match_back_is_refused(self, params: dict, match: str) -> None:
+        with pytest.raises(ValueError, match=match):
             EDIT_BUILD.id(**params)
+
+    def test_an_over_budget_id_is_a_layout_invariant_not_a_bad_argument(self) -> None:
+        # Distinct from the cases above: the value is a fine `int`, Discord's limit is what
+        # rejects it, so it fails as a layout invariant and not as a call error.
+        with pytest.raises(LayoutInvariantError, match="over the 100"):
+            EDIT_BUILD.id(build_id=10**200)
 
     @pytest.mark.parametrize(
         ("fmt", "match"),
@@ -45,7 +60,9 @@ class TestRouteFormats:
             ("", "non-empty"),
             ("a:{x}:{x}", "more than once"),
             ("a:{1x}", "not a usable parameter name"),
-            ("a:{x:>4}", "format spec"),
+            ("a:{x:>4}", "unknown converter"),
+            ("a:{x:float}", "unknown converter"),
+            ("a:{x!r}", "may not carry a conversion"),
         ],
     )
     def test_unusable_formats_are_rejected(self, fmt: str, match: str) -> None:
@@ -63,7 +80,7 @@ class TestRouter:
             seen.append(dict(params))
 
         await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
-        assert seen == [{"build_id": "42"}]
+        assert seen == [{"build_id": 42}]
 
     async def test_a_retired_route_is_logged_rather_than_raised(self) -> None:
         # Buttons outlive the code that answered them; an unknown id must not crash dispatch.
