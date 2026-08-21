@@ -178,3 +178,11 @@ async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_th
     await _fire(plan(document, target=DEFAULT_TARGET, session=session), "tabs", _select(("4",)))
 
     assert _chosen(plan(document, target=DEFAULT_TARGET, session=session)) == ("4",)
+
+
+async def test_a_managed_navigation_forgets_a_destination_that_went_away() -> None:
+    session = PresentationSession()
+    session.select("tabs", ("4",))
+    document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6, 12)))
+
+    assert _chosen(plan(document, target=DEFAULT_TARGET, session=session)) == ("6",)
