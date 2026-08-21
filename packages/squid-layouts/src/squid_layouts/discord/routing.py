@@ -133,14 +133,26 @@ class Router[BotT: discord.Client]:
         """
         route = Route(route) if isinstance(route, str) else route
         registration = _Registration(route, handler, _accepted(route, handler))
+        replaced: int | None = None
         for index, existing in enumerate(self._routes):
             if existing.route.format == route.format:
-                self._routes[index] = registration
-                return
-        for existing in self._routes:
+                replaced = index
+                break
+        for index, existing in enumerate(self._routes):
+            if index == replaced:
+                continue
             if route.overlaps(existing.route):
                 message = f"route {route.format!r} overlaps the already-registered {existing.route.format!r}"
                 raise ValueError(message)
+        if replaced is not None:
+            existing = self._routes[replaced]
+            if self._registered and existing.route.aliases != route.aliases:
+                message = (
+                    f"route {route.format!r} cannot change aliases after Router.register(client) builds the template"
+                )
+                raise RuntimeError(message)
+            self._routes[replaced] = registration
+            return
         if self._registered:
             message = f"new route {route.format!r} must be added before Router.register(client) builds the template"
             raise RuntimeError(message)

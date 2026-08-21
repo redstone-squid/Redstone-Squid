@@ -26,6 +26,25 @@ class TestRouteFormats:
         assert POLL_CLOSE.id() == "poll:close"
         assert POLL_CLOSE.match("poll:close") == {}
 
+    def test_aliases_match_but_ids_remain_canonical(self) -> None:
+        route = sl.Route("r:builds:{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+
+        assert route.id(build_id=5) == "r:builds:5:edit"
+        assert route.match("r:builds:5:edit") == {"build_id": 5}
+        assert route.match("edit:build:5") == {"build_id": 5}
+
+    @pytest.mark.parametrize(
+        "alias",
+        ["edit:build:{id:int}", "edit:build:{build_id}", "edit:build:{build_id}:{extra}"],
+    )
+    def test_aliases_keep_the_canonical_parameter_contract(self, alias: str) -> None:
+        with pytest.raises(ValueError, match="same parameters and converters"):
+            sl.Route("r:builds:{build_id:int}:edit", aliases=(alias,))
+
+    def test_aliases_with_an_internal_overlap_are_rejected(self) -> None:
+        with pytest.raises(ValueError, match="could decode through both"):
+            sl.Route("r:{value}:fixed", aliases=("r:fixed:{value}",))
+
     def test_a_converter_narrows_the_pattern_and_types_the_value(self) -> None:
         # The regression this closes: `edit:build:(\d+)` became `[^:]+` when the hand-rolled
         # DynamicItem moved onto a route, so a non-numeric id reached the handler and blew up
@@ -185,6 +204,23 @@ class TestRouter:
     @pytest.mark.parametrize(
         ("first", "second"),
         [
+            (
+                sl.Route("new:one:{value}", aliases=("legacy:{value}:one",)),
+                sl.Route("new:two:{other}", aliases=("legacy:fixed:{other}",)),
+            ),
+            (sl.Route("new:one:{value}", aliases=("old:{value}:one",)), sl.Route("old:fixed:{other}")),
+        ],
+    )
+    def test_aliases_participate_in_exact_overlap_detection(self, first: sl.Route, second: sl.Route) -> None:
+        router = Router()
+        router.add(first, _noop)
+
+        with pytest.raises(ValueError, match="overlaps"):
+            router.add(second, _noop)
+
+    @pytest.mark.parametrize(
+        ("first", "second"),
+        [
             ("edit:build:{id}", "edit:vote:{id}"),
             # A literal only shadows a parameter whose converter would accept it.
             ("remove:role:redstoner", "remove:role:{id:int}"),
@@ -226,8 +262,18 @@ class TestRouter:
         router._registered = True
 
         router.add(sl.Route("poll:close"), _noop)  # a reload leaves the template unchanged
+        with pytest.raises(RuntimeError, match="cannot change aliases"):
+            router.add(sl.Route("poll:close", aliases=("poll:end",)), _noop)
         with pytest.raises(RuntimeError, match=r"before Router\.register"):
             router.add(EDIT_BUILD, _noop)
+
+    def test_a_replacement_with_new_aliases_is_checked_against_other_routes(self) -> None:
+        router = Router()
+        router.add(sl.Route("new:one:{value}"), _noop)
+        router.add(sl.Route("legacy:fixed:{other}"), _noop)
+
+        with pytest.raises(ValueError, match="overlaps"):
+            router.add(sl.Route("new:one:{value}", aliases=("legacy:{value}:one",)), _noop)
 
     def test_the_generated_dispatch_item_accepts_its_own_ids(self) -> None:
         router = Router()
