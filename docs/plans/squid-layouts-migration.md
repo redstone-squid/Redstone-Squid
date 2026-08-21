@@ -37,17 +37,13 @@ by their own tests. In rough order of value:
   time (deliver.py already carries the framework-side carve-out).
 - **`squid/bot/utils/pagination.py`** — delete once `ClaimReviewView` above is gone;
   `ListPaginator` has no other consumers.
-- **`squid_layouts.primitives.presets`** (`card`, `banner`, `listing`, `report`) — the
-  pre-semantic-layer card builders the package root note below calls "legacy card fields."
-  Still has 9 real production consumers (`squid/bot/settings_view.py`, `account_view.py`,
-  `consent.py`, `notifications_view.py`, `poll_wizard.py`, `submission/build_handler.py`,
-  `submission/ui/views.py`, `ui.py`, `layout_showcase.py`). Migrating them to semantic
-  `Section`/`Fields`/`Media`/`Status` and deleting `presets.py` is in progress.
 
 Core design debts closed before further migration:
 
-- The package root is semantic-first; exact Discord-shaped nodes live under `primitives`
-  and legacy card fields under `presets`.
+- The package root is semantic-first; exact Discord-shaped nodes live under `primitives`.
+  `squid_layouts.primitives.presets` (`card`, `banner`, `listing`, `report`) — the
+  pre-semantic-layer card builders — is deleted; all consumers migrated to semantic
+  `Section`/`Fields`/`Media`/`Status`.
 - Planning and drawing are separate; scenes are serializable and Discord plus HTML are
   independent renderers.
 - compose is the only Discord plan/draw path. render_item now uses render_static and threads
