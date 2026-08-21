@@ -48,6 +48,33 @@
    the two-shell rule's stateless entry (plan 19): a routed panel carries its position
    in the custom id and passes it as an override, having no session to consult.
 
+## Resolved API
+
+- `Position(anchor, offset, direction)` is the portable token. `direction` is
+  `"around"`, `"forward"`, or `"backward"`: refresh around an inclusive anchor, fetch
+  after the trailing anchor, or fetch before the leading anchor. `offset` is a
+  zero-based hint and becomes authoritative only for a jumpable source.
+- `PositionPolicy.resolve(...)` accepts an override, a resolved anchor position, the
+  stale bit, stored and initial positions, a reset position, and an optional upper
+  bound. It has no session or source dependency. `PageBroker` projects its integer
+  cursors into these inputs and projects the result back to a page index.
+- `Window(items, has_prev, has_next, total, position)` may return a corrected position
+  after an anchor-gone fallback. `WindowSource` declares `countable`,
+  `bidirectional`, and `jumpable` and implements `fetch(position, extent)`.
+- `WindowCursor` owns source reconciliation outside planning. It fingerprints only the
+  returned item identities, refreshes around the visible anchor, and uses a monotonic
+  request token so only the newest fetch may publish. Sources therefore own the choice
+  of nearest key, newest item, or start when an anchor disappears.
+- `RankedList(..., source=...)` is the first async consumer. Its component shell loads
+  the first window in `on_load`; navigation handlers fetch and invalidate. Async
+  sources are intentionally unavailable through `RouterShell`, whose route handler
+  must fetch before rendering a materialized ranking.
+- Countable+jumpable sources use the existing page footer. Countable sequential
+  sources show a range plus approximate total, jumpable uncountable sources show only
+  a range, and sources with neither capability show no numeric footer. Previous is
+  omitted for forward-only sources and every control follows the returned `has_*`
+  flags.
+
 ## Verification
 
 - The `PositionPolicy` extraction is behavior-preserving over the existing pagination
