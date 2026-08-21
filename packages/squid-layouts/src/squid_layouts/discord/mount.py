@@ -15,7 +15,7 @@ import time
 from collections.abc import Awaitable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, override
 
 import anyio
 import discord
@@ -78,6 +78,13 @@ class MountedView(discord.ui.LayoutView):
 
     async def on_timeout(self) -> None:
         await self._mount.handle_timeout()
+
+    @override
+    def is_dispatchable(self) -> bool:
+        # A mount wants storing even when it draws nothing dispatchable, because
+        # `store_view` is gated on this and `add_view` is what starts the timeout task.
+        # A document of nothing but routed controls would otherwise never time out.
+        return True
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any]) -> None:
         await self._mount.handle_error(interaction, error, f"item:{type(item).__name__}")
