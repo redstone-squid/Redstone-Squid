@@ -119,7 +119,7 @@ def render_generic_poll(
     """
     nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
     if snapshot.status is not VoteStatus.CLOSED:
-        nodes.append(sl.primitives.RawItem(poll_controls, kind="discord.item", version=1))
+        nodes.append(poll_controls())
     return sl.discord.render_static(nodes)
 
 
