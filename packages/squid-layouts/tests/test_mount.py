@@ -16,6 +16,9 @@ from squid_layouts import (
     InlineAsset,
     LayoutInvariantError,
     LayoutNode,
+    Localization,
+    Message,
+    Paragraph,
     PressEvent,
     ReactiveWriteError,
     SelectionEvent,
@@ -24,6 +27,7 @@ from squid_layouts import (
     state,
     transaction,
 )
+from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_layouts.discord import (
     Mount,
     Reactor,
@@ -204,6 +208,65 @@ class TestRenderAndWire:
 
         assert seen[0].actor.id == "42"
         assert seen[0].context == {"frontend": "discord"}
+
+    async def test_press_event_carries_the_mounts_negotiated_locale(self):
+        seen: list[PressEvent] = []
+
+        class Inspect(Component):
+            def render(self):
+                return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
+
+            async def inspect(self, event: PressEvent) -> None:
+                seen.append(event)
+
+        mount = Mount(Inspect(), localization=Localization("zh-CN"), timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch("inspect", fake_interaction())
+
+        assert seen[0].locale == "zh-CN"
+
+    def test_localize_retranslates_content_chrome_and_runtime_context(self):
+        class Localized(Component):
+            def render(self):
+                return [
+                    Paragraph(Message("Hello")),
+                    Lines(("a", "b"), overflow=Paginate(key="lines", per=1)),
+                ]
+
+        translated = {"Hello": "Bonjour", "Previous": "Précédent", "Next": "Suivant"}
+        chrome = Chrome(previous=Message("Previous"), next=Message("Next"))
+        mount = Mount(Localized(), chrome=chrome, localization=Localization("en"), timeout=None)
+        commit_render(mount)
+
+        localization = Localization("fr", gettext=lambda message: translated.get(message, message))
+        mount.localize(localization)
+        view = commit_render(mount)
+
+        texts = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+        labels = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+        assert "Bonjour" in texts
+        assert labels == ["Précédent", "Suivant"]
+        assert mount.runtime.context[LOCALIZATION_CONTEXT] is localization
+
+    async def test_notice_resolves_deferred_text_with_mount_localization(self):
+        class Notify(Component):
+            def render(self):
+                return Row((Button(label="notify", on_click=self.notify, key="notify"),))
+
+            async def notify(self, event: PressEvent) -> None:
+                await event.notice(Message("Notice"))
+
+        localization = Localization("fr", gettext=lambda message: "Avis" if message == "Notice" else message)
+        mount = Mount(Notify(), localization=localization, timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("notify", interaction)
+
+        interaction.response.send_message.assert_awaited_once()
+        notice = interaction.response.send_message.await_args.kwargs["view"]
+        assert [item.content for item in notice.walk_children() if isinstance(item, discord.ui.TextDisplay)] == ["Avis"]
 
     async def test_clean_dispatch_defers_instead_of_editing(self):
         class Static(Counter):

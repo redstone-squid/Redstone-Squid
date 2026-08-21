@@ -22,7 +22,7 @@ import anyio
 import discord
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
-from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
+from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
 from squid_layouts.discord.actions import ActionResponder
@@ -47,6 +47,7 @@ from squid_layouts.scene.model import (
     SceneDocument,
     SceneSelect,
 )
+from squid_layouts.text import NEUTRAL, Localization, resolve_text
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +270,7 @@ class Mount:
         component: Component,
         *,
         chrome: Chrome = DEFAULT_CHROME,
+        localization: Localization = NEUTRAL,
         limits: V2Limits = LIMITS,
         strict: bool = False,
         timeout: float | None = 900,
@@ -285,9 +287,16 @@ class Mount:
         self._born = self._active = time.monotonic()
         self.address: MountAddress | None = None
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
-        self.chrome = chrome
-        self.runtime = ComponentRuntime(component, on_invalidate=self.invalidate, context={CHROME_CONTEXT: chrome})
-        self.nav = nav if nav is not None else default_nav(chrome)
+        self._chrome = chrome
+        self.localization = localization
+        self.chrome = localize_chrome(chrome, localization)
+        self.runtime = ComponentRuntime(
+            component,
+            on_invalidate=self.invalidate,
+            context={CHROME_CONTEXT: self.chrome, LOCALIZATION_CONTEXT: localization},
+        )
+        self._custom_nav = nav
+        self.nav = nav if nav is not None else default_nav(self.chrome)
         self.acknowledgement_timeout = acknowledgement_timeout
         self.limits = limits
         self.strict = strict
@@ -440,7 +449,8 @@ class Mount:
                     view_factory=lambda: MountedView(self, self.timeout),
                 ),
                 limits=self.limits,
-                chrome=self.chrome,
+                chrome=self._chrome,
+                localization=self.localization,
                 strict=self.strict,
                 nav=nav,
                 session=self.presentation,
@@ -498,6 +508,16 @@ class Mount:
 
     def invalidate(self) -> None:
         self._dirty = True
+
+    def localize(self, localization: Localization) -> None:
+        """Change the locale used by the next render of this live mount."""
+        self.localization = localization
+        self.chrome = localize_chrome(self._chrome, localization)
+        self.runtime.set_context(CHROME_CONTEXT, self.chrome)
+        self.runtime.set_context(LOCALIZATION_CONTEXT, localization)
+        if self._custom_nav is None:
+            self.nav = default_nav(self.chrome)
+        self.invalidate()
 
     async def _move_page(self, key: str, delta: int) -> None:
         cursor = self.presentation.cursor(key)
@@ -662,10 +682,12 @@ class Mount:
             # may have failed, or a replacement may have taken over the session while this
             # message stayed visible. Say so rather than running a handler against state
             # nobody will see again.
-            await deliver.respond_text(interaction, self.chrome.session_ended, ephemeral=True)
+            text = resolve_text(self.chrome.session_ended, self.localization).content
+            await deliver.respond_text(interaction, text, ephemeral=True)
             return
         if self.lock_to is not None and interaction.user.id not in self.lock_to:
-            await deliver.respond_text(interaction, self.chrome.not_yours, ephemeral=True)
+            text = resolve_text(self.chrome.not_yours, self.localization).content
+            await deliver.respond_text(interaction, text, ephemeral=True)
             return
         binding = self._handlers.get(key)
         if binding is None:
@@ -719,8 +741,7 @@ class Mount:
     ) -> None:
         actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
         responder = ActionResponder(interaction, self)
-        native_locale = getattr(interaction, "locale", None)
-        locale = str(native_locale) if native_locale is not None else None
+        locale = self.localization.locale
         event = (
             PressEvent(actor, responder, locale, {"frontend": "discord"})
             if values is None

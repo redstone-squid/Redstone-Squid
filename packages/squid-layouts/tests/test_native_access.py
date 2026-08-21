@@ -2,7 +2,7 @@
 
 import pytest
 
-from squid_layouts import Component, PressEvent
+from squid_layouts import Component, PressEvent, TextLike
 from squid_layouts.actions import ActionResponder as ActionResponderProtocol
 from squid_layouts.actions import Actor, Visibility
 from squid_layouts.discord import Mount, native, responder
@@ -16,7 +16,7 @@ class Portable:
 
     async def acknowledge(self) -> None: ...
 
-    async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
 
     async def redirect(self, url: str) -> None: ...
 
