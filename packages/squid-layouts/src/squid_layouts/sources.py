@@ -5,6 +5,9 @@ from dataclasses import dataclass, replace
 from hashlib import blake2s
 from typing import Literal, Protocol
 
+from squid_layouts.chrome import Chrome
+from squid_layouts.text import TextLike
+
 type PositionDirection = Literal["around", "forward", "backward"]
 
 
@@ -98,6 +101,28 @@ def window_fingerprint[ItemT](items: tuple[ItemT, ...], identity: Callable[[Item
         digest.update(len(encoded).to_bytes(8, "big"))
         digest.update(encoded)
     return digest.hexdigest()
+
+
+def window_footer[ItemT](
+    chrome: Chrome,
+    source: WindowSource[ItemT],
+    position: Position,
+    window: Window[ItemT],
+    extent: int,
+) -> TextLike | None:
+    """Describe only the numeric position the source's capabilities can support."""
+    if not window.items:
+        return None
+    first = position.offset + 1
+    last = position.offset + len(window.items)
+    if source.countable and source.jumpable and window.total is not None:
+        pages = max(1, (window.total + extent - 1) // extent)
+        return chrome.page_footer(position.offset // extent + 1, pages)
+    if source.countable and window.total is not None:
+        return chrome.approximate_total_footer(first, last, window.total)
+    if source.jumpable:
+        return chrome.range_footer(first, last)
+    return None
 
 
 class WindowCursor[ItemT]:
@@ -205,4 +230,5 @@ __all__ = [
     "WindowCursor",
     "WindowSource",
     "window_fingerprint",
+    "window_footer",
 ]
