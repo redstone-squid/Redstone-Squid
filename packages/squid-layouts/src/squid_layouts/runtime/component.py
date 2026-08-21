@@ -69,6 +69,9 @@ from squid_layouts.semantic import (
     FallbackContent as SemanticFallbackContent,
 )
 from squid_layouts.semantic import (
+    FormTrigger as SemanticFormTrigger,
+)
+from squid_layouts.semantic import (
     Group as SemanticGroup,
 )
 from squid_layouts.semantic import (
@@ -518,6 +521,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticNavigation(key=key)
                 | SemanticTable(key=key)
                 | SemanticMedia(key=key)
+                | SemanticFormTrigger(key=key)
             ):
                 return replace(node, key=f"{prefix}.{key}")
             case (

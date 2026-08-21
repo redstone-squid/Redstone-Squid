@@ -21,6 +21,7 @@ from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
     CLOSED,
@@ -48,6 +49,7 @@ from squid_layouts.semantic import (
     Fields,
     Figure,
     Flexibility,
+    FormTrigger,
     Group,
     Heading,
     Importance,
@@ -243,6 +245,21 @@ def details(
 ) -> Details:
     """Content the reader expands; ``key`` carries its disclosure state."""
     return Details(key, _text(summary), _children(children, "sl.details()"), open)
+
+
+def form(
+    spec: FormLike,
+    *,
+    key: str,
+    label: TextValue = "Open form",
+    on_submit: SubmitHandler | None = None,
+    policy: ActionPolicy | None = None,
+    tone: Tone = Tone.NEUTRAL,
+    emphasis: Emphasis = Emphasis.NORMAL,
+) -> FormTrigger:
+    """A content control that presents a portable form."""
+    resolved, handler, default_policy = bind_form(spec, on_submit)
+    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis)
 
 
 def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | None = None) -> Item:
