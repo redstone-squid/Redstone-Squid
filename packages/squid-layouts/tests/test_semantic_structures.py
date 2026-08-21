@@ -7,7 +7,7 @@ from squid_layouts import (
     plan,
 )
 from squid_layouts.discord import DEFAULT_TARGET
-from squid_layouts.runtime import PresentationSession
+from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.scene.model import (
     SceneGallery,
     SceneGalleryItem,
@@ -121,9 +121,11 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
     session = PresentationSession()
     original = tuple(Item(str(index), f"Item {index}", (Paragraph("detail"),)) for index in range(36))
-    plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
+    first = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
+    apply_updates(session, first.session_updates)
     session.move_cursor("catalog.items", 1)
     second_page = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
+    apply_updates(session, second_page.session_updates)
     assert "25" in next(node for node in second_page.scene.children if isinstance(node, SceneSelect)).options[0].value
 
     inserted = (Item("new", "New", (Paragraph("detail"),)), *original)

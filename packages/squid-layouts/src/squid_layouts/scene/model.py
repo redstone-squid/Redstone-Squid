@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
 
 
@@ -195,3 +196,9 @@ class PlanResult:
     report: PlanReport
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
+    session_updates: tuple[SessionUpdate, ...] = ()
+    """Presentation writes this plan earned but did not make.
+
+    Planning only reads the session. A frontend applies these once the render has
+    actually reached the reader, so a failed delivery leaves them where the message
+    still shows them."""

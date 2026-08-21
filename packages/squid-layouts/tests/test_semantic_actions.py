@@ -10,7 +10,7 @@ from squid_layouts import (
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DEFAULT_TARGET
-from squid_layouts.runtime import PresentationSession
+from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
 from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
 from squid_layouts.semantic import Action, ActionGroup, Actions, Emphasis, Link
@@ -86,6 +86,7 @@ def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
     session = PresentationSession()
     first = plan(Actions(_actions(36), key="demo"), target=DEFAULT_TARGET, session=session)
+    apply_updates(session, first.session_updates)
     second = plan(Actions(_actions(5), key="demo"), target=DEFAULT_TARGET, session=session)
 
     assert first.report.events[0].code == "actions.grouped"
@@ -114,7 +115,8 @@ def test_fresh_action_strategy_matrix(count: int, expected: str) -> None:
 )
 def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: int, expected: str) -> None:
     session = PresentationSession()
-    plan(Actions(_actions(initial), key="demo"), target=DEFAULT_TARGET, session=session)
+    first = plan(Actions(_actions(initial), key="demo"), target=DEFAULT_TARGET, session=session)
+    apply_updates(session, first.session_updates)
 
     result = plan(Actions(_actions(changed), key="demo"), target=DEFAULT_TARGET, session=session)
 
@@ -124,7 +126,8 @@ def test_sticky_action_strategy_grow_and_shrink_matrix(initial: int, changed: in
 def test_reordering_actions_does_not_change_a_sticky_strategy() -> None:
     session = PresentationSession()
     actions = _actions(36)
-    plan(Actions(actions, key="demo"), target=DEFAULT_TARGET, session=session)
+    first = plan(Actions(actions, key="demo"), target=DEFAULT_TARGET, session=session)
+    apply_updates(session, first.session_updates)
 
     result = plan(Actions(tuple(reversed(actions)), key="demo"), target=DEFAULT_TARGET, session=session)
 
@@ -135,6 +138,7 @@ def test_adapter_version_change_resets_only_that_strategy() -> None:
     session = PresentationSession(strategies={"demo": StrategyState("demo", "discord.actions", 0, "individual")})
 
     result = plan(Actions(_actions(36), key="demo"), target=DEFAULT_TARGET, session=session)
+    apply_updates(session, result.session_updates)
 
     assert result.report.events[0].code == "actions.grouped"
     assert session.strategies["demo"].adapter_version == 1
@@ -144,6 +148,7 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     session = PresentationSession()
     document = Actions(_actions(76), key="demo")
     first = plan(document, target=DEFAULT_TARGET, session=session)
+    apply_updates(session, first.session_updates)
     session.move_cursor("demo.default", 1)
     second = plan(document, target=DEFAULT_TARGET, session=session)
 

@@ -40,7 +40,12 @@ from squid_layouts.primitives.nodes import (
     Section as PrimitiveSection,
 )
 from squid_layouts.primitives.styles import ActionStyle
-from squid_layouts.runtime.presentation import PresentationSession
+from squid_layouts.runtime.presentation import (
+    PresentationSession,
+    SessionUpdate,
+    StrategyState,
+    StrategyUpdate,
+)
 from squid_layouts.scene.model import PlanEvent, PlanSeverity, ScenePager
 from squid_layouts.semantic import (
     Action,
@@ -98,6 +103,7 @@ class SemanticLowering:
     nodes: tuple[Node, ...]
     events: tuple[PlanEvent, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
+    updates: tuple[SessionUpdate, ...] = ()
     states_explored: int = 0
     search_fallback: bool = False
 
@@ -109,6 +115,7 @@ class _Context:
     session: PresentationSession
     pages: PageBroker
     events: list[PlanEvent]
+    updates: list[SessionUpdate]
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
@@ -125,7 +132,7 @@ def lower_semantics(
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
     broker = pages if pages is not None else PageBroker(session, chrome)
-    context = _Context(limits, chrome, session, broker, [], search_budget)
+    context = _Context(limits, chrome, session, broker, [], [], search_budget)
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
@@ -133,6 +140,7 @@ def lower_semantics(
         tuple(lowered),
         tuple(context.events),
         context.pages.pagers,
+        tuple(context.updates),
         context.states_explored,
         context.search_fallback,
     )
@@ -234,6 +242,11 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
             return [node]
+
+
+def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _Context) -> None:
+    """Stage an adapter's sticky choice. Lowering reads the session and writes nothing."""
+    context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
 
 
 def _field_entry(field: Field) -> str | Alt:
@@ -460,7 +473,7 @@ def _table(node: Table, context: _Context) -> list[Node]:
     strategy = context.session.strategy(node.key, "discord.table", 1)
     if strategy is None:
         strategy = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
-        context.session.remember_strategy(node.key, "discord.table", 1, strategy)
+        _remember(node.key, "discord.table", 1, strategy, context)
     if strategy == "tabular":
         headings = [resolve_text(column.heading).content for column in node.columns]
         widths = [
@@ -490,7 +503,7 @@ def _media(node: Media, context: _Context) -> list[Node]:
     strategy = context.session.strategy(node.key, "discord.media", 1)
     if strategy is None:
         strategy = "featured" if node.display.value == "featured" else "collection"
-        context.session.remember_strategy(node.key, "discord.media", 1, strategy)
+        _remember(node.key, "discord.media", 1, strategy, context)
     if strategy == "featured":
         first = node.items[0]
         result: list[Node] = [Gallery((first.url,))]
@@ -505,7 +518,7 @@ def _media(node: Media, context: _Context) -> list[Node]:
 
 def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
     strategy = _action_strategy(node, context)
-    context.session.remember_strategy(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION, strategy)
+    _remember(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION, strategy, context)
     groups: list[tuple[str, tuple[Action, ...], str | None]] = []
     # Links and routed controls carry no binding, so they can never be folded into a select
     # menu the way a group of session actions can: they stay individual buttons.
