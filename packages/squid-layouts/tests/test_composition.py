@@ -25,7 +25,7 @@ from squid_layouts.primitives import (
     Row,
     Text,
 )
-from squid_layouts.semantic import Action, Actions, Choice, Choices, Group, List, ListItem
+from squid_layouts.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
 
 class Counter(Component):
@@ -294,8 +294,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
                     Choices(
                         "choice",
                         tuple(Choice(str(index), f"Choice {index}") for index in range(6)),
-                        (),
-                        change,
+                        Controlled((), change),
                     ),
                 )
             )

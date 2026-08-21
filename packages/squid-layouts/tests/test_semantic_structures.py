@@ -43,8 +43,8 @@ async def _change(_event) -> None: ...
 
 
 def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None:
-    small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)), (), _change)
-    large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)), (), _change)
+    small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
+    large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))
 
     assert isinstance(plan(small, target=DEFAULT_TARGET).scene.children[0], SceneRow)
     assert isinstance(plan(large, target=DEFAULT_TARGET).scene.children[0], SceneSelect)
@@ -88,28 +88,18 @@ def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
 
 
 def test_navigation_groups_six_destinations() -> None:
-    document = Navigation(
-        "tabs",
-        tuple(Destination(str(index), f"Tab {index}") for index in range(6)),
-        "0",
-        _change,
-    )
+    document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6)))
 
     assert isinstance(plan(document, target=DEFAULT_TARGET).scene.children[0], SceneSelect)
 
 
 def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
-    choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)), (), _change)
+    choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)))
     items = Items(
         "catalog",
         tuple(Item(str(index), f"Item {index}", (Paragraph(f"Detail {index}"),)) for index in range(36)),
     )
-    navigation = Navigation(
-        "tabs",
-        tuple(Destination(str(index), f"Tab {index}") for index in range(36)),
-        "0",
-        _change,
-    )
+    navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
 
     choice_plan = plan(choices, target=DEFAULT_TARGET, page={"size.choices": 1})
     item_plan = plan(items, target=DEFAULT_TARGET, page={"catalog.items": 1})
@@ -145,13 +135,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
 
 
 def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
-    document = Choices(
-        "many",
-        tuple(Choice(str(index), str(index)) for index in range(36)),
-        (),
-        _change,
-        maximum=2,
-    )
+    document = Choices("many", tuple(Choice(str(index), str(index)) for index in range(36)), maximum=2)
 
     with pytest.raises(LayoutInvariantError, match="cross-page multi-selection is ambiguous"):
         plan(document, target=DEFAULT_TARGET)
