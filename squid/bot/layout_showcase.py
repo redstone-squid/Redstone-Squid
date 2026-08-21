@@ -153,31 +153,37 @@ class LayoutShowcase(sl.Component):
                 exhibit = self._tour()
         return (*exhibit, self._source_example())
 
-    def _tour(self) -> Sequence[sl.primitives.Node]:
+    def _tour(self) -> Sequence[sl.LayoutNode]:
         return (
-            sl.primitives.card(
-                t(self.locale, _("What this message is doing")),
-                t(
-                    self.locale,
-                    _(
-                        "The component renders semantic intent. The planner fits it to Discord's real limits, "
-                        "the renderer draws Components V2, and the mount turns state changes into safe edits."
-                    ),
+            sl.section(
+                # The body is the card's shock absorber: sl.truncate lets it give up
+                # characters under pressure before a field or the footer loses any, mirroring
+                # presets.card's fixed field/footer priority over the description.
+                sl.truncate(
+                    sl.paragraph(
+                        t(
+                            self.locale,
+                            _(
+                                "The component renders semantic intent. The planner fits it to Discord's real "
+                                "limits, the renderer draws Components V2, and the mount turns state changes into "
+                                "safe edits."
+                            ),
+                        )
+                    )
                 ),
-                fields=(
-                    sl.primitives.presets.Field(
-                        t(self.locale, _("Reactivity")), t(self.locale, _("Change state; the view rebuilds."))
-                    ),
-                    sl.primitives.presets.Field(
+                sl.fields(
+                    sl.field(t(self.locale, _("Reactivity")), t(self.locale, _("Change state; the view rebuilds."))),
+                    sl.field(
                         t(self.locale, _("Pagination")),
                         t(self.locale, _("Pages are measured from content, footer, and controls together.")),
                     ),
-                    sl.primitives.presets.Field(
+                    sl.field(
                         t(self.locale, _("Composition")),
                         t(self.locale, _("Keyed child components keep state and handlers independent.")),
                     ),
                 ),
-                footer=t(self.locale, _("Use the selector above to switch exhibits in place.")),
+                sl.note(t(self.locale, _("Use the selector above to switch exhibits in place."))),
+                heading=t(self.locale, _("What this message is doing")),
             ),
         )
 
@@ -211,31 +217,40 @@ class LayoutShowcase(sl.Component):
             for index in range(1, 37)
         )
         return (
-            sl.primitives.card(
-                t(self.locale, _("Structural adaptation")),
-                t(
-                    self.locale,
-                    _(
-                        "This declares 36 actions, not buttons or menus. The planner preserves all 36 as two "
-                        "pickers of 25 and 11 options because that is the best legal Discord representation."
-                    ),
+            sl.section(
+                sl.truncate(
+                    sl.paragraph(
+                        t(
+                            self.locale,
+                            _(
+                                "This declares 36 actions, not buttons or menus. The planner preserves all 36 as "
+                                "two pickers of 25 and 11 options because that is the best legal Discord "
+                                "representation."
+                            ),
+                        )
+                    )
                 ),
+                heading=t(self.locale, _("Structural adaptation")),
                 accent=DISCORD_YELLOW,
             ),
             sl.Actions(actions, key="showcase-actions"),
         )
 
-    def _composition(self) -> Sequence[sl.primitives.Node]:
+    def _composition(self) -> Sequence[sl.LayoutNode]:
         return (
-            sl.primitives.card(
-                t(self.locale, _("Keyed component composition")),
-                t(
-                    self.locale,
-                    _(
-                        "These are two instances of the same child class. Embed namespaces their state, actions, "
-                        "and lifecycle paths, so clicking one cannot cross-wire the other."
-                    ),
+            sl.section(
+                sl.truncate(
+                    sl.paragraph(
+                        t(
+                            self.locale,
+                            _(
+                                "These are two instances of the same child class. Embed namespaces their state, "
+                                "actions, and lifecycle paths, so clicking one cannot cross-wire the other."
+                            ),
+                        )
+                    )
                 ),
+                heading=t(self.locale, _("Keyed component composition")),
             ),
             self.embed(self.left, key="left"),
             self.embed(self.right, key="right"),
