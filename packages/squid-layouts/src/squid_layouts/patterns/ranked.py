@@ -3,9 +3,10 @@
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_layouts.factories import bullet, bullets, heading, stack
 from squid_layouts.patterns._content import ContentLike, display_text, normalize_content, render_content, require_key
 from squid_layouts.runtime.component import Component
-from squid_layouts.semantic import Heading, LayoutNode, List, ListItem
+from squid_layouts.semantic import LayoutNode, ListItem
 from squid_layouts.text import TextLike
 
 
@@ -102,27 +103,30 @@ class RankedList[EntryT](Component):
             raise TypeError(message)
         return self._project(entry, self.label), self._project(entry, self.value), ""
 
-    def _hook(self, hook: ContentHook, total: int, *, name: str) -> list[LayoutNode]:
+    def _hook(self, hook: ContentHook, total: int, *, name: str) -> tuple[LayoutNode, ...]:
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
-    def render(self) -> list[LayoutNode]:
+    def render(self) -> LayoutNode:
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
-        nodes: list[LayoutNode] = []
-        if self.heading is not None:
-            nodes.append(Heading(self.heading))
         total = len(displayed)
-        if self.header is not None:
-            nodes.extend(self._hook(self.header, total, name="header"))
+        header = self._hook(self.header, total, name="header") if self.header is not None else ()
         if displayed:
-            rows: list[ListItem] = []
-            for rank, entry in enumerate(displayed, 1):
-                label, value, entry_key = self._row_values(entry)
-                row_key = entry_key or f"rank-{rank}"
-                rows.append(ListItem(row_key, f"**{display_text(label)}** — {display_text(value)}"))
-            nodes.append(List(tuple(rows), self.key, ordered=True, page_size=self.page_size))
+            rows: tuple[ListItem, ...] = tuple(
+                bullet(
+                    f"**{display_text(label)}** — {display_text(value)}",
+                    key=entry_key or f"rank-{rank}",
+                )
+                for rank, entry in enumerate(displayed, 1)
+                for label, value, entry_key in (self._row_values(entry),)
+            )
+            body = (bullets(*rows, key=self.key, ordered=True, page_size=self.page_size),)
         else:
-            nodes.extend(render_content(self, self.empty, prefix="empty"))
-        if self.footer is not None:
-            nodes.extend(self._hook(self.footer, total, name="footer"))
-        return nodes
+            body = render_content(self, self.empty, prefix="empty")
+        footer = self._hook(self.footer, total, name="footer") if self.footer is not None else ()
+        return stack(
+            heading(self.heading) if self.heading is not None else None,
+            *header,
+            *body,
+            *footer,
+        )
