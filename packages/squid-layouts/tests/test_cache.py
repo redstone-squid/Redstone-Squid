@@ -1,5 +1,6 @@
 """Resolved-plan caching is bounded, fast, and rebinds current callbacks."""
 
+from dataclasses import replace
 from time import perf_counter
 
 from squid_layouts import (
@@ -52,6 +53,35 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     assert second.metrics.cache_hit
     assert second.scene is first.scene
     assert second.bindings["run"].handler is _second
+
+
+def test_cache_hit_reuses_the_global_assignment_without_solving(monkeypatch) -> None:
+    import squid_layouts.planning.planner as planner_module
+
+    attempts = 0
+    original = planner_module.solve
+
+    def counted(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(planner_module, "solve", counted)
+    cache = PlanCache()
+    document = (
+        *(Paragraph(f"component {index}") for index in range(35)),
+        Actions(
+            tuple(Action(f"run.{index}", f"Run {index}", _first) for index in range(5)),
+            key="tools",
+        ),
+    )
+
+    miss = plan(document, target=DEFAULT_TARGET, cache=cache)
+    hit = plan(document, target=DEFAULT_TARGET, cache=cache)
+
+    assert attempts == miss.metrics.states_explored == 2
+    assert hit.metrics == replace(miss.metrics, cache_hit=True)
+    assert hit.scene is miss.scene
 
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
