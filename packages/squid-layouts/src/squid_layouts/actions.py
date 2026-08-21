@@ -53,7 +53,7 @@ class ActionResponder(Protocol):
         self,
         form: FormLike,
         *,
-        key: str,
+        key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
     ) -> None: ...
@@ -92,7 +92,7 @@ class ActionEvent:
         self,
         form: FormLike,
         *,
-        key: str,
+        key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
     ) -> None:
