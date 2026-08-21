@@ -608,8 +608,7 @@ class SettingsPanel(sl.Component):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
-        interaction = getattr(event.responder, "interaction", None)
-        if interaction is None or await allows(cast(Any, interaction), node):
+        if await allows(sl.discord.native(event), node):
             return True
         await event.notice(t(self.locale, _("You are no longer allowed to change this.")))
         return False
