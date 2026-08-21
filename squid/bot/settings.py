@@ -50,7 +50,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             locale=locale,
             owner_guild_id=self.bot.owner_server_id,
         )
-        await view.load()
         # One panel per admin per guild: a second `/settings` replaces the first rather than
         # leaving two live panels writing the same settings service.
         await self.bot.mounts.open(

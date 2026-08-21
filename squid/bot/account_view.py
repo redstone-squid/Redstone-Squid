@@ -341,7 +341,11 @@ class AccountPanel(sl.Component):
         self._profile = AccountProfile.empty(account_id)
         self._mount: sl.discord.Mount | None = None
 
-    async def load(self) -> None:
+    async def on_load(self) -> None:
+        await self._refresh()
+
+    async def _refresh(self) -> None:
+        """Re-read the account this panel is about. Also what a write calls to show its result."""
         account = await self._accounts.get_account_by_id(self._account_id)
         if account is None:
             raise AccountNotFoundError(self._account_id)
@@ -503,7 +507,7 @@ class AccountPanel(sl.Component):
 
     async def save_profile(self, interaction: discord.Interaction[Any], update: ProfileUpdate) -> None:
         await self._accounts.update_profile(self._account_id, update)
-        await self.load()
+        await self._refresh()
         self.invalidate()
         if self._mount is None:
             return
@@ -529,7 +533,7 @@ class AccountPanel(sl.Component):
         return True
 
     async def _reload(self) -> None:
-        await self.load()
+        await self._refresh()
         self.invalidate()
 
     async def _close(self, event: sl.PressEvent) -> None:
