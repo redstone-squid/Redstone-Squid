@@ -13,7 +13,11 @@ from dataclasses import dataclass, field, replace
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
-from squid_layouts.planning.pagination import NavNode, PageNav
+from squid_layouts.planning.navigation import (
+    NavNode,
+    PlannedNav,
+    materialized_navigation_state,
+)
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
@@ -140,11 +144,12 @@ class SolvedLayout:
     spilling, dropping or stepping a ladder means the content did not fit. A caller
     deciding whether more will fit — the root packer — needs to tell those apart.
     """
-    nav: PageNav | None = None
+    nav: PlannedNav | None = None
+    chrome: Chrome = DEFAULT_CHROME
     limits: V2Limits = LIMITS
 
-    def repage(self, indices: Mapping[str, int]) -> None:
-        """Show a different page of each named pager without re-fitting the document.
+    def reposition(self, positions: Mapping[str, Position]) -> None:
+        """Show a different position in each named pager without re-fitting.
 
         Which page is showing is a display decision, not a layout one: every fragment
         already fits the grant its pager was allocated, the footer reservation was
@@ -154,16 +159,18 @@ class SolvedLayout:
         can move the page here instead of solving again.
         """
         for pager in self.pagers:
-            index = indices.get(pager.key)
-            if index is None:
+            position = positions.get(pager.key)
+            if position is None:
                 continue
-            shown = pager.select(index)
+            shown = pager.select(position.offset)
             if self.nav is None or pager.nav_host is None:
                 continue
             window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
             previous = pager.nav_host[window]
             realized = _Builder(limits=self.limits).realize_children(
-                _validated_nav(self.nav(pager.key, shown, pager.pages))
+                _validated_nav(
+                    self.nav(materialized_navigation_state(pager.key, Position(offset=shown), pager.pages, self.chrome))
+                )
             )
             if len(realized) != pager.nav_count or _component_count(realized) != _component_count(previous):
                 message = (
@@ -1026,7 +1033,7 @@ def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node
     return resolved
 
 
-type PageState = Mapping[str, int | Position] | int | None
+type PositionState = Mapping[str, Position] | Position | None
 
 
 def solve(
@@ -1037,8 +1044,8 @@ def solve(
     localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    position: PositionState = None,
+    nav: PlannedNav | None = None,
 ) -> SolvedLayout:
     """Fit nodes into target budgets with independently keyed pagination.
 
@@ -1056,7 +1063,7 @@ def solve(
         limits=limits,
         chrome=chrome,
         reserved_text=reserved_text,
-        page=page,
+        position=position,
         nav=nav,
         notes=[],
     )
@@ -1080,7 +1087,7 @@ def solve(
             limits=limits,
             chrome=chrome,
             reserved_text=reserved_text,
-            page=page,
+            position=position,
             nav=nav,
             notes=list(step_notes),
         )
@@ -1133,11 +1140,10 @@ def _insert_after(
     return None
 
 
-def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
+def _requested_position(state: PositionState, key: str, *, first: bool) -> Position | None:
     if isinstance(state, Mapping):
-        requested = state.get(key)
-        return requested.offset if isinstance(requested, Position) else requested
-    if isinstance(state, int) and first:
+        return state.get(key)
+    if isinstance(state, Position) and first:
         return state
     return None
 
@@ -1149,8 +1155,8 @@ def _solve_once(
     limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    page: PageState,
-    nav: PageNav | None,
+    position: PositionState,
+    nav: PlannedNav | None,
     notes: list[str],
 ) -> SolvedLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
@@ -1214,11 +1220,15 @@ def _solve_once(
             footer=footers[unit.index],
             initial=initial,
         )
-        requested = _requested_page(page, key, first=not pagers)
-        shown = pager.select(initial if requested is None else requested)
+        requested = _requested_position(position, key, first=not pagers)
+        shown = pager.select(initial if requested is None else requested.offset)
         additions: list[Realized] = [footer_slot]
         if nav is not None:
-            additions.extend(builder.realize_children(_validated_nav(nav(key, shown, pager.pages))))
+            additions.extend(
+                builder.realize_children(
+                    _validated_nav(nav(materialized_navigation_state(key, Position(offset=shown), pager.pages, chrome)))
+                )
+            )
         placement = _insert_after(children, unit.slot, additions)
         if placement is None:
             placement = (children, len(children))
@@ -1239,5 +1249,6 @@ def _solve_once(
         # themselves a response to overflow.
         overflowed=bool(notes) or len(builder.notes) > clamps,
         nav=nav,
+        chrome=chrome,
         limits=limits,
     )

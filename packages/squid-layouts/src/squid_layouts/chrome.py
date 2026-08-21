@@ -27,6 +27,10 @@ def _default_approximate_total_footer(first: int, last: int, total: int) -> Text
     return f"{first}\N{EN DASH}{last} of ~{total}"
 
 
+def _default_total_range_footer(first: int, last: int, total: int) -> TextLike:
+    return f"{first}\N{EN DASH}{last} of {total}"
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
@@ -45,9 +49,11 @@ class Chrome:
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
     range_footer: Callable[[int, int], TextLike] = _default_range_footer
-    """Visible 1-based item range for an uncountable jumpable source."""
+    """Visible 1-based item range for a source with known offsets."""
     approximate_total_footer: Callable[[int, int, int], TextLike] = _default_approximate_total_footer
-    """Visible range and approximate total for a countable sequential source."""
+    """Visible range and approximate source total."""
+    total_range_footer: Callable[[int, int, int], TextLike] = _default_total_range_footer
+    """Visible range and exact source total."""
 
 
 DEFAULT_CHROME = Chrome()
@@ -72,5 +78,8 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,
         approximate_total_footer=lambda first, last, total: (
             resolve_text(chrome.approximate_total_footer(first, last, total), localization).content
+        ),
+        total_range_footer=lambda first, last, total: (
+            resolve_text(chrome.total_range_footer(first, last, total), localization).content
         ),
     )

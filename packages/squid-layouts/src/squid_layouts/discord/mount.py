@@ -32,7 +32,13 @@ from squid_layouts.document import Asset, Document, InlineAsset
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav
+from squid_layouts.planning.navigation import (
+    NAV_FACTORY_CONTEXT,
+    NavFactory,
+    NavigationContext,
+    NavigationState,
+    default_nav,
+)
 from squid_layouts.primitives.nodes import Node
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
@@ -48,6 +54,7 @@ from squid_layouts.scene.model import (
     SceneDocument,
     SceneSelect,
 )
+from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization, resolve_text
 
 logger = logging.getLogger(__name__)
@@ -291,13 +298,16 @@ class Mount:
         self._chrome = chrome
         self.localization = localization
         self.chrome = localize_chrome(chrome, localization)
+        self.nav = nav if nav is not None else default_nav
         self.runtime = ComponentRuntime(
             component,
             on_invalidate=self.invalidate,
-            context={CHROME_CONTEXT: self.chrome, LOCALIZATION_CONTEXT: localization},
+            context={
+                CHROME_CONTEXT: self.chrome,
+                LOCALIZATION_CONTEXT: localization,
+                NAV_FACTORY_CONTEXT: self.nav,
+            },
         )
-        self._custom_nav = nav
-        self.nav = nav if nav is not None else default_nav(self.chrome)
         self.acknowledgement_timeout = acknowledgement_timeout
         self.limits = limits
         self.strict = strict
@@ -438,14 +448,14 @@ class Mount:
                     item.disabled = True  # pyrefly: ignore  # both wired types have the attribute
                 return item
 
-            def nav(key: str, page: int, pages: int) -> Sequence[Node]:
+            def nav(state: NavigationState) -> Sequence[Node]:
                 async def previous(event: PressEvent) -> None:
-                    await self._move_page(key, -1)
+                    await self._move_cursor(state.key, -1)
 
                 async def next_(event: PressEvent) -> None:
-                    await self._move_page(key, 1)
+                    await self._move_cursor(state.key, 1)
 
-                return self.nav(PageContext(key=key, page=page, pages=pages, on_prev=previous, on_next=next_))
+                return self.nav(NavigationContext(state, previous, next_))
 
             composition = compose(
                 rendered,
@@ -521,18 +531,16 @@ class Mount:
         self.chrome = localize_chrome(self._chrome, localization)
         self.runtime.set_context(CHROME_CONTEXT, self.chrome)
         self.runtime.set_context(LOCALIZATION_CONTEXT, localization)
-        if self._custom_nav is None:
-            self.nav = default_nav(self.chrome)
         self.invalidate()
 
-    async def _move_page(self, key: str, delta: int) -> None:
+    async def _move_cursor(self, key: str, delta: int) -> None:
         cursor = self.presentation.cursor(key)
-        if 0 <= cursor.index + delta < cursor.extent:
-            self.presentation.move_cursor(key, cursor.index + delta)
+        if 0 <= cursor.position.offset + delta < cursor.extent:
+            self.presentation.move_cursor(key, Position(offset=cursor.position.offset + delta))
             self.invalidate()
 
-    def reset_page(self, key: str | None = None) -> None:
-        """Forget one page position, or every position when key is omitted."""
+    def reset_cursor(self, key: str | None = None) -> None:
+        """Forget one cursor position, or every position when key is omitted."""
         if key is None:
             self.presentation.reset_cursor()
         else:

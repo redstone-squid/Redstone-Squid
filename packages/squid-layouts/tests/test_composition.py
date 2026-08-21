@@ -161,12 +161,12 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
     mount = Mount(PagedPair(), timeout=None)
     commit_render(mount)
 
-    assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {
+    assert {key: cursor.position.offset for key, cursor in mount.presentation.cursors.items()} == {
         "left.items": 0,
         "right.items": 0,
     }
-    assert "__page_next.left.items" in mount._handlers
-    assert "__page_next.right.items" in mount._handlers
+    assert "__cursor_next.left.items" in mount._handlers
+    assert "__cursor_next.right.items" in mount._handlers
 
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
@@ -312,5 +312,5 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
 
     assert {"left.entries", "right.entries"} <= mount.presentation.cursors.keys()
     assert {"left.choice", "right.choice"} <= mount._handlers.keys()
-    assert "__page_next.left.entries" in mount._handlers
-    assert "__page_next.right.entries" in mount._handlers
+    assert "__cursor_next.left.entries" in mount._handlers
+    assert "__cursor_next.right.entries" in mount._handlers
