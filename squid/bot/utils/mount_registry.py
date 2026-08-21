@@ -119,9 +119,17 @@ class MountRegistry:
             await entry.mount.finish(disable=disable)
 
     async def close_all(self, *, disable: bool = True) -> None:
-        """Finish every session this registry knows about."""
+        """Finish every session this registry knows about.
+
+        One unreachable message must not leave the rest of them live: this runs at shutdown,
+        where the alternative to a disabled panel is one that stays clickable and answers
+        nothing.
+        """
         for _, mount in list(self.active()):
-            await mount.finish(disable=disable)
+            try:
+                await mount.finish(disable=disable)
+            except Exception:
+                logger.exception("could not close mount %s", mount.id)
 
     def active(self) -> Iterator[tuple[SessionKey | None, sl.discord.Mount]]:
         """Every live session, keyed ones first. A mount appears once even if it is both."""

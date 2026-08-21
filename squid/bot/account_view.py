@@ -25,7 +25,7 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountNotFoundError
-from squid.bot.consent import prompt_for_consent
+from squid.bot.consent import NOT_ASKED, prompt_for_consent
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
@@ -206,6 +206,8 @@ class AccountPanelView(ExpiringLayoutView):
         """
         if self._needs_consent:
             consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+            if consent is NOT_ASKED:
+                return
             if consent is None:
                 await reply_layout(interaction, text_layout(t(self.locale, _("Cancelled. Nothing was changed."))))
                 return
@@ -241,6 +243,8 @@ class AccountPanelView(ExpiringLayoutView):
         if not self._needs_consent:
             return True
         consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+        if consent is NOT_ASKED:
+            return False
         if consent is None:
             await reply_layout(interaction, text_layout(t(self.locale, _("Cancelled. Nothing was changed."))))
             return False
@@ -480,7 +484,14 @@ class AccountPanel(sl.Component):
     async def _edit_page(self, event: sl.PressEvent) -> None:
         interaction = sl.discord.native(event)
         if self._needs_consent:
-            consent = await prompt_for_consent(interaction, user_id=self._author_id, locale=self.locale)
+            consent = await prompt_for_consent(
+                interaction,
+                user_id=self._author_id,
+                locale=self.locale,
+                parent=sl.discord.responder(event).mount,
+            )
+            if consent is NOT_ASKED:
+                return
             if consent is None:
                 await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
                 return
@@ -502,7 +513,14 @@ class AccountPanel(sl.Component):
         await event.acknowledge()
         if not self._needs_consent:
             return True
-        consent = await prompt_for_consent(sl.discord.native(event), user_id=self._author_id, locale=self.locale)
+        consent = await prompt_for_consent(
+            sl.discord.native(event),
+            user_id=self._author_id,
+            locale=self.locale,
+            parent=sl.discord.responder(event).mount,
+        )
+        if consent is NOT_ASKED:
+            return False
         if consent is None:
             await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
             return False
