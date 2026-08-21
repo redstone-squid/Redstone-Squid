@@ -6,6 +6,10 @@ credentials, which never expire, and an interaction's, which do. Everything that
 webhook tokens, `@original` semantics and HTTP error codes lives here, so callers only ever
 ask whether a handle is expired and catch :class:`StaleHandleError` when it turns out to be.
 
+The initial send is the mirror image: a mount holds no message yet, so it asks for one
+through a :class:`Destination` — `async (view, files) -> Message | None`. The destination
+owns every discord.py kwarg; the mount owns the stage/deliver/commit sequence around it.
+
 Absorbs the three helpers that previously lived in the host bot (`edit_layout`,
 `edit_interaction_layout`, `reply_layout`): every path defaults to `AllowedMentions.none()`
 and clears legacy content/embed fields when converting a pre-Components-V2 message. Delivery
@@ -36,6 +40,16 @@ class StaleHandleError(Exception):
     Discord expires the credentials behind an interaction, and a response spent on a new
     message stops addressing the old one. Raised in place of the underlying HTTP failure so
     callers never read status codes.
+    """
+
+
+class DeliveryAbandoned(Exception):
+    """A destination chose not to deliver, and has already told the user why.
+
+    Distinct from a failure: nothing reached Discord, but nothing went wrong either. The
+    closed-DM path is the case — a payload too private for a channel, and no private channel
+    to put it in. `Mount.send` discards the staged render rather than committing one nobody
+    will ever see.
     """
 
 
@@ -215,3 +229,68 @@ async def respond_text(interaction: discord.Interaction[Any], content: str, *, e
     await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
         view=view, ephemeral=ephemeral, allowed_mentions=no_mentions()
     )
+
+
+class Replyable(Protocol):
+    """Whatever a command arrived on — `discord.ext.commands.Context`, structurally.
+
+    Typed by shape so this package keeps out of the commands extension, and so a test double
+    does not have to subclass one.
+    """
+
+    async def send(
+        self,
+        *,
+        view: discord.ui.LayoutView,
+        files: Sequence[discord.File],
+        ephemeral: bool,
+        allowed_mentions: discord.AllowedMentions,
+    ) -> discord.Message: ...
+
+
+class Destination(Protocol):
+    """A way to create the message a mount will live on.
+
+    The return value says what the mount gets to keep, not whether it worked:
+
+    - a `Message` — delivered, and here are the credentials to edit it later;
+    - `None` — delivered, but no handle came back (an unwaited interaction response). The
+      mount commits and mints its handle from the first click instead;
+    - raise :class:`DeliveryAbandoned` — nothing was delivered, deliberately, and the user
+      already knows;
+    - raise anything else — the delivery failed. The mount stays on its previous generation
+      and the exception reaches the caller.
+    """
+
+    async def __call__(self, view: discord.ui.LayoutView, files: list[discord.File]) -> discord.Message | None: ...
+
+
+def reply_to(ctx: Replyable, *, ephemeral: bool = False) -> Destination:
+    """Answer the command that asked, in whatever channel it asked from."""
+
+    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> discord.Message | None:
+        return await ctx.send(view=view, files=files, ephemeral=ephemeral, allowed_mentions=no_mentions())
+
+    return send
+
+
+def respond_to(interaction: discord.Interaction[Any], *, ephemeral: bool = True, wait: bool = False) -> Destination:
+    """Answer an interaction, whether or not it was already responded to.
+
+    `wait` costs a round trip to fetch the message back, so it is opt-in: pass it when the
+    caller needs the message itself, or when the mount must still be writable with nobody
+    having clicked it. Otherwise the mount runs handle-less until the first click renews it.
+    """
+
+    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> discord.Message | None:
+        if interaction.response.is_done():
+            message = await interaction.followup.send(
+                view=view, files=files, ephemeral=ephemeral, wait=wait, allowed_mentions=no_mentions()
+            )
+            return message if wait else None
+        await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
+            view=view, files=files, ephemeral=ephemeral, allowed_mentions=no_mentions()
+        )
+        return await interaction.original_response() if wait else None
+
+    return send
