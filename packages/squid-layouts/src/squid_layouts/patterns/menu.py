@@ -159,9 +159,7 @@ class Menu(Component):
             chrome = self.inject(CHROME_CONTEXT)
         except LookupError:
             chrome = DEFAULT_CHROME
-        actions: list[Action] = []
-        if self.path:
-            actions.append(Action(f"{self.key}.back", chrome.back, self._back))
+        actions: list[Action] = [Action(f"{self.key}.back", chrome.back, self._back, available=bool(self.path))]
         if len(self.path) > 1:
             actions.append(Action(f"{self.key}.home", chrome.home, self._home))
         actions.append(Action(f"{self.key}.close", chrome.close, self._close))
