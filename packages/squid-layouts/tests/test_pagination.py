@@ -47,6 +47,7 @@ from squid_layouts.primitives import (
     Text,
 )
 from squid_layouts.runtime import PresentationSession
+from squid_layouts.semantic import Item, Items, Paragraph
 
 
 class TestSplitPages:
@@ -136,6 +137,17 @@ class TwoBrowsers(Component):
         ]
 
 
+class Catalog(Component):
+    """A semantic picker whose list can shift under the reader."""
+
+    def __init__(self) -> None:
+        self.lead: tuple[str, ...] = ()
+
+    def render(self):
+        keys = (*self.lead, *(str(index) for index in range(36)))
+        return [Items("catalog", tuple(Item(key, f"Item {key}", (Paragraph("detail"),)) for key in keys))]
+
+
 class TestMountPagination:
     def _nav_buttons(self, view) -> list[discord.ui.Button]:
         return [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
@@ -161,6 +173,43 @@ class TestMountPagination:
         assert not prev_button.disabled
         footers = [c.content for c in edited.walk_children() if isinstance(c, discord.ui.TextDisplay)]
         assert any("Page 2 of" in text for text in footers)
+
+    def test_the_mount_draws_once_per_render(self, monkeypatch):
+        """The fingerprint dance used to make every flush plan twice."""
+        from squid_layouts.discord import mount as mount_module
+
+        calls = 0
+        original = mount_module.compose
+
+        def counted(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(mount_module, "compose", counted)
+        mount = Mount(TwoBrowsers(), timeout=None)
+        commit_render(mount)
+        assert calls == 1
+
+    async def test_a_paged_picker_follows_its_anchor_through_the_mount(self):
+        """The production path, which used to launder every cursor through `page=`."""
+        catalog = Catalog()
+        mount = Mount(catalog, timeout=None)
+        commit_render(mount)
+        await mount.dispatch("__page_next.catalog.items", fake_interaction())
+        assert mount.presentation.cursor("catalog.items").index == 1
+
+        catalog.lead = ("new",)
+        view = commit_render(mount)
+
+        # One item joined the head, so the reader's page slid by one to keep them on it.
+        values = [
+            option.value
+            for item in view.walk_children()
+            if isinstance(item, discord.ui.Select)
+            for option in item.options
+        ]
+        assert "24" in values
 
     def test_stopping_replaced_view_keeps_new_paginator_registered(self):
         """discord.py must retain the new generation after Mount stops the old one."""

@@ -80,6 +80,20 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
     assert cached.bindings["next.traceback"].handler is _next
 
 
+def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
+    """The session is part of the key, so a hit must not silently skip its writes."""
+    document = Code("x" * 9000, overflow=Paginate(key="traceback"))
+    miss = plan(document, target=DEFAULT_TARGET, session=PresentationSession())
+
+    cache = PlanCache()
+    plan(document, target=DEFAULT_TARGET, session=PresentationSession(), cache=cache)
+    hit = plan(document, target=DEFAULT_TARGET, session=PresentationSession(), cache=cache)
+
+    assert hit.metrics.cache_hit
+    assert hit.session_updates == miss.session_updates
+    assert hit.session_updates
+
+
 def test_realistic_queue_plan_and_draw_meets_latency_budget() -> None:
     document = List(
         tuple(ListItem(str(index), f"Build {index}: compact queue status and author") for index in range(36)),
