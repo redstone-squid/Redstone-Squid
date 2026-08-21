@@ -4,13 +4,17 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
+import discord
 import pytest
 from discord.ext import commands
 
+import squid.bot.submission.search as search_module
+import squid_layouts as sl
 from squid.bot.submission.search import SearchCog, SearchTarget
+from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
-from squid_layouts.discord.testing import fake_message
+from squid_layouts.discord.testing import fake_interaction, fake_message
 
 
 class RecordingSearch:
@@ -127,3 +131,56 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
 
     assert search.requests[0].scope is SearchScope.ALL
     assert search.requests[0].query == "a OR b"
+
+
+async def test_public_build_panel_recovers_background_refresh_after_its_followup_token_stales(monkeypatch) -> None:
+    interaction = fake_interaction()
+    public_message = fake_message(message_id=42, ephemeral=False)
+    interaction.followup.send.return_value = public_message
+    build = OtherBuild(id=42)
+    renderer = SimpleNamespace(render_node=AsyncMock(return_value=sl.paragraph("Build 42")))
+    bot = SimpleNamespace(
+        services=SimpleNamespace(settings=SimpleNamespace()),
+        for_build=lambda current: renderer,
+    )
+    cog = SearchCog.__new__(SearchCog)
+    cog.bot = cast(Any, bot)
+    cog.queries = cast(Any, SimpleNamespace(get=AsyncMock(return_value=build)))
+    mounts: list[sl.discord.Mount] = []
+
+    def capture_mount(component: sl.Component, **kwargs: Any) -> sl.discord.Mount:
+        mount = sl.discord.Mount(component, timeout=None)
+        mounts.append(mount)
+        return mount
+
+    monkeypatch.setattr(search_module, "create_mount", capture_mount)
+    monkeypatch.setattr(search_module, "resolve_locale", AsyncMock(return_value=None))
+    ctx = cast(
+        commands.Context[Any],
+        cast(Any, SimpleNamespace(interaction=interaction, author=SimpleNamespace(id=7))),
+    )
+
+    await SearchCog.view_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
+
+    mount = mounts[0]
+    assert mount.handle is not None
+    assert not mount.handle.permanent
+    interaction.followup.edit_message.side_effect = _unknown_webhook()
+    mount.invalidate()
+
+    await mount.refresh_now()
+
+    assert mount.handle is None
+    assert mount.pending
+
+    click = fake_interaction(message_id=42)
+    await mount.dispatch("__nav_back", click)
+
+    assert mount.handle is not None
+    assert not mount.pending
+    click.response.edit_message.assert_awaited_once()
+
+
+def _unknown_webhook() -> discord.HTTPException:
+    response = cast(Any, SimpleNamespace(status=404, reason="Not Found"))
+    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})
