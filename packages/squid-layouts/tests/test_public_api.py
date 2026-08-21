@@ -14,6 +14,7 @@ def test_root_is_semantic_first() -> None:
     assert {"Section", "Paragraph", "Note", "Actions", "Component", "plan", "PlanReport"} <= set(sl.__all__)
     assert {"section", "paragraph", "note", "actions", "action", "ChildLike"} <= set(sl.__all__)
     assert {"budget", "paged", "unbreakable", "keep_with_next"} <= set(sl.__all__)
+    assert {"Position", "PositionPolicy", "Window", "WindowCursor", "WindowSource"} <= set(sl.__all__)
     for removed in (
         "Button",
         "Mount",
