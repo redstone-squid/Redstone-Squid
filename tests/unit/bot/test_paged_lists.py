@@ -9,6 +9,7 @@ from discord.ext import commands
 
 from squid.bot.submission.records import RecordCog
 from squid.bot.version_tracking import VersionTracker
+from squid_layouts.discord.testing import fake_message
 
 
 def _context() -> commands.Context[Any]:
@@ -17,7 +18,7 @@ def _context() -> commands.Context[Any]:
         cast(
             Any,
             SimpleNamespace(
-                send=AsyncMock(return_value=SimpleNamespace(id=1, flags=SimpleNamespace(components_v2=True))),
+                send=AsyncMock(return_value=fake_message(message_id=1)),
                 guild=None,
                 interaction=None,
                 author=SimpleNamespace(id=7),
