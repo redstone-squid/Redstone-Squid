@@ -1,8 +1,7 @@
 """squid-layouts glue: localized chrome, house colours, and the semantic layout vocabulary.
 
-This module is the bot's front door to the `squid_layouts` package. The package itself is
-i18n-free by architecture rule, so every framework string is built here (where Babel extracts
-`_()` markers) and passed in pre-translated through `Chrome`.
+This module is the bot's front door to the `squid_layouts` package. The package resolves text,
+while this host supplies the gettext catalogue and translatable chrome messages.
 
 The layout helpers keep the exact signatures of their `squid.bot.utils.components`
 predecessors, so call sites migrate by changing an import line.
@@ -11,14 +10,14 @@ predecessors, so call sites migrate by changing an import line.
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
+from string.templatelib import Template
 from typing import Any, Literal
 
 import discord
 from discord.ext.commands import Context
 
 import squid_layouts as ui
-from squid.bot.i18n import t
-from squid.core.i18n import _
+from squid.core.i18n import catalog_for, negotiate_locale
 
 DISCORD_RED = 0xF04747
 DISCORD_YELLOW = 0xFAA61A
@@ -27,6 +26,7 @@ DISCORD_BLUE = 0x5865F2
 DISCORD_GREY = 0x4F545C
 
 __all__ = [
+    "CHROME",
     "DISCORD_BLUE",
     "DISCORD_GREEN",
     "DISCORD_GREY",
@@ -34,11 +34,11 @@ __all__ = [
     "DISCORD_YELLOW",
     "CardField",
     "CardSection",
+    "L",
     "PagedList",
     "Private",
     "Visibility",
     "card_layout",
-    "chrome_for",
     "create_mount",
     "destination",
     "display_text_length",
@@ -46,7 +46,9 @@ __all__ = [
     "help_layout",
     "info_layout",
     "link_layout",
+    "localization_for",
     "render_item",
+    "render_static",
     "reply",
     "send_component",
     "text_layout",
@@ -59,31 +61,58 @@ __all__ = [
 class CardField:
     """A labelled value rendered inside a card."""
 
-    name: str
-    value: str
+    name: ui.TextLike
+    value: ui.TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class CardSection:
     """A titled group of related values rendered inside a card."""
 
-    title: str
+    title: ui.TextLike
     fields: Sequence[CardField]
 
 
-def chrome_for(locale: str | None) -> ui.Chrome:
-    """Build the framework's chrome strings for `locale`."""
-    return ui.Chrome(
-        and_n_more=lambda count: t(locale, _("…and {count} more."), count=count),
-        not_yours=t(locale, _("These list controls belong to someone else.")),
-        session_ended=t(locale, _("This session has ended.")),
-        previous=t(locale, _("Previous")),
-        next=t(locale, _("Next")),
-        back=t(locale, _("Back")),
-        home=t(locale, _("Home")),
-        close=t(locale, _("Close")),
-        page_footer=lambda page, pages: t(locale, _("Page {page} of {pages}"), page=page, pages=pages),
-    )
+def L(message: str | Template, /, **params: object) -> ui.Message:
+    """Mark and defer a translatable string: ``L(t"Page {page} of {pages}")``."""
+    if isinstance(message, str):
+        return ui.Message(message, params)
+    if params:
+        detail = "template strings already contain their interpolation values"
+        raise TypeError(detail)
+    values: dict[str, object] = {}
+    parts: list[str] = []
+    for string, interpolation in zip(message.strings, message.interpolations, strict=False):
+        parts.append(string)
+        name = interpolation.expression
+        if not name.isidentifier():
+            detail = f"template string interpolation {name!r} is not a placeholder name"
+            raise ValueError(detail)
+        parts.append("{" + name + "}")
+        values[name] = interpolation.value
+    parts.append(message.strings[-1])
+    return ui.Message("".join(parts), values)
+
+
+def localization_for(locale: str | None) -> ui.Localization:
+    """Build the framework localization backed by the bot's negotiated catalogue."""
+    resolved = negotiate_locale(locale)
+    catalog = catalog_for(resolved)
+    return ui.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
+
+
+CHROME = ui.Chrome(
+    and_n_more=lambda count: L(t"…and {count} more."),
+    not_yours=L(t"These list controls belong to someone else."),
+    session_ended=L(t"This session has ended."),
+    previous=L(t"Previous"),
+    next=L(t"Next"),
+    back=L(t"Back"),
+    home=L(t"Home"),
+    close=L(t"Close"),
+    page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
+)
+_OPEN_LINK = L(t"Open link")
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,10 +201,27 @@ def render_item(node: ui.LayoutNode, *, locale: str | None = None, reserved_text
     the message, so callers pass ``reserved_text`` for whatever else the message will carry;
     composing the whole document with `ui.discord.render_static` is better still where possible.
     """
-    view = ui.discord.render_static([node], chrome=chrome_for(locale), reserved_text=reserved_text)
+    view = render_static([node], locale=locale, reserved_text=reserved_text)
     item = view.children[0]
     view.remove_item(item)
     return item
+
+
+def render_static(
+    nodes: ui.DocumentLike,
+    *,
+    locale: str | None = None,
+    strict: bool = False,
+    reserved_text: int = 0,
+) -> discord.ui.LayoutView:
+    """Render a sessionless document through the bot's chrome and catalogue."""
+    return ui.discord.render_static(
+        nodes,
+        chrome=CHROME,
+        localization=localization_for(locale),
+        strict=strict,
+        reserved_text=reserved_text,
+    )
 
 
 def display_text_length(view: discord.ui.LayoutView) -> int:
@@ -214,7 +260,8 @@ def create_mount(
     """A mount wired to the bot's chrome and shared interaction error handler."""
     return ui.discord.Mount(
         component,
-        chrome=chrome if chrome is not None else chrome_for(locale),
+        chrome=chrome if chrome is not None else CHROME,
+        localization=localization_for(locale),
         timeout=timeout,
         lock_to=lock_to,
         on_error=_component_error_hook,
@@ -279,14 +326,9 @@ class PagedList(ui.Component):
         )
         return [ui.primitives.Panel(children=(ui.primitives.Heading(self.title), body), accent=self.accent_colour)]
 
-    def _page_footer(self, page: int, pages: int) -> str:
-        return t(
-            self.locale,
-            _("Page {page} of {pages} · {total} in total"),
-            page=page,
-            pages=pages,
-            total=len(self.entries),
-        )
+    def _page_footer(self, page: int, pages: int) -> ui.Message:
+        total = len(self.entries)
+        return L(t"Page {page} of {pages} · {total} in total")
 
     async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> ui.discord.Mount:
         """Send the first page bound to a mount that owns paging, locking, and expiry."""
@@ -306,14 +348,15 @@ def _groups(sections: Sequence[CardSection]) -> tuple[ui.Section, ...]:
 
 
 def card_layout(
-    title: str,
-    description: str | None = None,
+    title: ui.TextLike,
+    description: ui.TextLike | None = None,
     *,
     accent_colour: int = DISCORD_GREEN,
     fields: Sequence[CardField] = (),
     sections: Sequence[CardSection] = (),
-    footer: str | None = None,
+    footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
+    locale: str | None = None,
 ) -> discord.ui.LayoutView:
     """Create a standalone V2 card."""
     extra_media = media[1:]
@@ -331,49 +374,89 @@ def card_layout(
         accent=accent_colour,
         thumbnail=media[0] if media else None,
     )
-    return ui.discord.render_static([node])
+    return render_static([node], locale=locale)
 
 
-def text_layout(content: str, *, accent_colour: int | None = None) -> discord.ui.LayoutView:
+def text_layout(
+    content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
+) -> discord.ui.LayoutView:
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
     node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.section(node, accent=accent_colour)
-    return ui.discord.render_static([node])
+    return render_static([node], locale=locale)
 
 
-def error_layout(title: str, description: str | None) -> discord.ui.LayoutView:
-    return card_layout(title, f":x: {description or ''}", accent_colour=DISCORD_RED)
+def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
+    if isinstance(value, ui.Message):
+        plural = None if value.plural is None else prefix + value.plural
+        return ui.Message(prefix + value.template, value.params, value.dialect, plural)
+    if isinstance(value, ui.ResolvedText):
+        return ui.ResolvedText(prefix + value.content, value.dialect)
+    return prefix + value
 
 
-def warning_layout(title: str, description: str | None) -> discord.ui.LayoutView:
-    return card_layout(f":warning: {title}", description, accent_colour=DISCORD_YELLOW)
+def error_layout(
+    title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
+) -> discord.ui.LayoutView:
+    return card_layout(
+        title,
+        _prefixed(":x: ", description or ""),
+        accent_colour=DISCORD_RED,
+        locale=locale,
+    )
 
 
-def info_layout(title: str, description: str | None) -> discord.ui.LayoutView:
-    return card_layout(title, description, accent_colour=DISCORD_GREEN)
+def warning_layout(
+    title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
+) -> discord.ui.LayoutView:
+    return card_layout(
+        _prefixed(":warning: ", title),
+        description,
+        accent_colour=DISCORD_YELLOW,
+        locale=locale,
+    )
+
+
+def info_layout(
+    title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
+) -> discord.ui.LayoutView:
+    return card_layout(title, description, accent_colour=DISCORD_GREEN, locale=locale)
 
 
 def help_layout(
-    title: str,
-    description: str | None,
+    title: ui.TextLike,
+    description: ui.TextLike | None,
     *,
     sections: Sequence[CardSection] = (),
-    footer: str | None = None,
+    footer: ui.TextLike | None = None,
+    locale: str | None = None,
 ) -> discord.ui.LayoutView:
-    return card_layout(title, description, accent_colour=DISCORD_BLUE, sections=sections, footer=footer)
+    return card_layout(
+        title,
+        description,
+        accent_colour=DISCORD_BLUE,
+        sections=sections,
+        footer=footer,
+        locale=locale,
+    )
 
 
 def link_layout(
-    title: str, url: str, *, description: str | None = None, label: str = "Open link"
+    title: ui.TextLike,
+    url: str,
+    *,
+    description: ui.TextLike | None = None,
+    label: ui.TextLike = _OPEN_LINK,
+    locale: str | None = None,
 ) -> discord.ui.LayoutView:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
         description and ui.truncate(ui.paragraph(description)),
-        ui.primitives.Row((ui.primitives.LinkButton(label, url),)),
+        ui.actions(ui.link(label, url, key="open-link"), key="link"),
         heading=title,
         accent=DISCORD_GREEN,
     )
-    return ui.discord.render_static([node])
+    return render_static([node], locale=locale)

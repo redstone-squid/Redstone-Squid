@@ -29,7 +29,7 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     get_text_input,
 )
-from squid.bot.ui import create_mount, display_text_length
+from squid.bot.ui import create_mount, display_text_length, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
@@ -977,7 +977,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         else:
             build_container = await handler.render_container(reserved_text=len(heading))
             build_node = sl.primitives.RawItem(lambda: build_container, kind="discord.item", version=1)
-        success = sl.discord.render_static([sl.primitives.Text(heading), build_node])
+        success = render_static([sl.primitives.Text(heading), build_node], locale=self.locale)
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
         # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
         await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
