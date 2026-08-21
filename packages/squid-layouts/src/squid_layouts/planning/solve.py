@@ -43,6 +43,7 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.primitives.styles import Color
+from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
@@ -1025,7 +1026,7 @@ def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node
     return resolved
 
 
-type PageState = Mapping[str, int] | int | None
+type PageState = Mapping[str, int | Position] | int | None
 
 
 def solve(
@@ -1134,7 +1135,8 @@ def _insert_after(
 
 def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
     if isinstance(state, Mapping):
-        return state.get(key)
+        requested = state.get(key)
+        return requested.offset if isinstance(requested, Position) else requested
     if isinstance(state, int) and first:
         return state
     return None

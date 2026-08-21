@@ -146,6 +146,12 @@ class TestSolvePagination:
         )
         assert [(pager.key, pager.page) for pager in solved.pagers] == [("alpha", 0), ("beta", 1)]
 
+    def test_a_position_token_is_an_explicit_page_override(self):
+        body = "\n".join(f"line {index:04d}" for index in range(1000))
+        solved = solve([Code(body, overflow=Paginate(key="entries"))], page={"entries": Position(offset=2)})
+
+        assert solved.pager is not None and solved.pager.page == 2
+
 
 def _total_text(solved) -> int:
     def walk(children) -> int:

@@ -65,8 +65,8 @@ class PageBroker:
     session: PresentationSession
     chrome: Chrome
     nav: PageNav | None = None
-    overrides: Mapping[str, int] | None = None
-    """Explicit `page=` from the caller: "show page N", outranking the stored position."""
+    overrides: Mapping[str, int | Position] | None = None
+    """Explicit position from the caller, outranking the stored position."""
     policy: PositionPolicy = DEFAULT_POSITION_POLICY
     _pagers: list[ScenePager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
@@ -84,7 +84,7 @@ class PageBroker:
         override = None if self.overrides is None else self.overrides.get(request.key)
         anchored = None if request.anchors is None or cursor.anchor is None else request.anchors.get(cursor.anchor)
         position = self.policy.resolve(
-            override=Position(offset=override) if override is not None else None,
+            override=Position(offset=override) if isinstance(override, int) else override,
             anchored=Position(cursor.anchor, anchored) if anchored is not None else None,
             stale=bool(cursor.content_fingerprint and cursor.content_fingerprint != request.fingerprint),
             stored=Position(cursor.anchor, cursor.index) if request.key in self.session.cursors else None,
