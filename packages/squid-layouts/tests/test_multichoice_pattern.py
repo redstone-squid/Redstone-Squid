@@ -2,6 +2,8 @@
 
 from collections.abc import Iterable
 
+import discord
+
 import squid_layouts as sl
 from squid_layouts.discord import Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
@@ -102,6 +104,7 @@ async def test_apply_commits_and_dispatches_exactly_once() -> None:
     assert commits == [("role-1",)]
     view = commit_render(mount)
     apply = next(item for item in view.walk_children() if getattr(item, "label", None) == "Apply")
+    assert isinstance(apply, discord.ui.Button)
     assert apply.disabled
 
 

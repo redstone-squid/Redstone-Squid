@@ -174,6 +174,14 @@ class Wizard:
         attempted = self._answer_map(state.answers).get(step.key)
         return step.form if attempted is None else step.form.with_prefill(attempted)
 
+    def form_for(self, state: WizardState, action: str) -> FormSpec | None:
+        """Resolve a routed form action to the schema its handler should present."""
+        if not action.startswith("submit:"):
+            return None
+        key = action.removeprefix("submit:")
+        step = next((candidate for candidate in self.live_steps(state) if candidate.key == key), None)
+        return None if step is None or step.form is None else self._prefilled(step, state)
+
     def render(self, state: WizardState, controls: PatternControls[WizardState]) -> RenderResult:
         live = self.live_steps(state)
         index = self._index(live, state.current)

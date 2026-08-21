@@ -65,4 +65,23 @@ pattern implemented in the meantime.
 
 ## Status
 
-Agreed 2026-08-21 (design session); not started.
+Implemented 2026-08-21.
+
+## Implemented API
+
+All five patterns implement one pure `initial_state` / `transition` / `render(state, controls)`
+contract. `ComponentShell` owns `pattern_state` in `sl.state` and injects callback controls;
+`RouterShell` accepts explicit state and a `PatternRoute -> route_id` builder and injects routed
+controls. `PatternRoute.phase` distinguishes deterministic button state (`next`) from state awaiting
+select or form input (`input`). There is no parallel `PersistentFoo` class hierarchy.
+
+- `Tabs.component()`, `Menu.component()`, `RankedList.component()`, `Wizard.component()`, and
+  `MultiChoicePanel.component()` are convenience constructors for the same generic component shell.
+- `WizardStep` accepts a `FormSpec`/`Form` or plain content. `WizardState.answers` retains hidden
+  branch values, `Wizard.live_answers()` filters them at Finish, and `Wizard.form_for()` supports
+  routed modal presentation with restored prefill.
+- `MultiChoiceGroup` declares explicit group exclusions. `MultiChoiceState` carries staged,
+  committed, and per-group page state; `MultiChoicePanel.form_for()` supplies the small-cardinality
+  modal alternate.
+- Explicit RankedList and MultiChoicePanel windows resolve their route/component page through
+  `PageBroker.overrides`, rather than growing a second clamping policy.
