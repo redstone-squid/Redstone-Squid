@@ -29,6 +29,8 @@ from squid_layouts.planning.target import ResourceCost, TargetProfile
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Break,
+    Budget,
     Button,
     Embed,
     Extension,
@@ -211,6 +213,8 @@ def _lower_children(
                 )
             case Panel(children=children, accent=accent):
                 lowered.append(Panel(_lower_children(children, target, limits), accent))
+            case Budget(children=children) | Break(children=children):
+                lowered.append(replace(node, children=_lower_children(children, target, limits)))
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                 adapter = target.extensions.get(kind)
                 if adapter is None:
@@ -314,7 +318,7 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
                             "Paginate cannot be nested in a Section; place it beside the Section",
                         )
                     walk(text, f"{path}.text.{index}")
-            case Panel(children=children):
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
             case Variants(variants=variants):
@@ -580,8 +584,11 @@ def plan(
     _reconcile_pagers(solved, broker)
     if strict and solved.notes:
         raise LayoutDegradedError("; ".join(solved.notes))
-    if any(note.startswith("Never nodes need") for note in solved.notes):
-        message = "; ".join(note for note in solved.notes if note.startswith("Never nodes need"))
+    hard_failures = tuple(
+        note for note in solved.notes if note.startswith("Never nodes need") or note.startswith("Budget floors need")
+    )
+    if hard_failures:
+        message = "; ".join(hard_failures)
         raise UnsolvableLayoutError(message)
     converter = _Converter()
     scene = SceneDocument(
@@ -793,7 +800,7 @@ def _cacheable(nodes: Sequence[Node]) -> bool:
     def check(node: Node) -> bool:
         if isinstance(node, Extension | RawItem | Variants):
             return False
-        if isinstance(node, Panel):
+        if isinstance(node, Panel | Budget | Break):
             return all(check(child) for child in node.children)
         return True
 
@@ -814,7 +821,7 @@ def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
             case Section(accessory=accessory):
                 if isinstance(accessory, Button):
                     converter.action(accessory)
-            case Panel(children=children):
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for child in children:
                     collect(child)
             case _:
