@@ -56,6 +56,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     BestEffort as SemanticBestEffort,
 )
+from squid_layouts.semantic import Budgeted as SemanticBudgeted
 from squid_layouts.semantic import (
     Choices as SemanticChoices,
 )
@@ -77,6 +78,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Items as SemanticItems,
 )
+from squid_layouts.semantic import KeepWithNext as SemanticKeepWithNext
 from squid_layouts.semantic import (
     LayoutNode,
 )
@@ -95,6 +97,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     OptionalContent as SemanticOptionalContent,
 )
+from squid_layouts.semantic import Paged as SemanticPaged
 from squid_layouts.semantic import (
     Section as SemanticSection,
 )
@@ -110,6 +113,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
+from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
 
 type RenderNode = LayoutNode
 type RenderResult = Document | LayoutNode | Sequence[LayoutNode]
@@ -397,6 +401,10 @@ def render_component_tree(
                     | SemanticSpilled(node=child)
                     | SemanticOptionalContent(node=child)
                     | SemanticBestEffort(node=child)
+                    | SemanticBudgeted(node=child)
+                    | SemanticUnbreakable(node=child)
+                    | SemanticKeepWithNext(node=child)
+                    | SemanticPaged(node=child)
                 ):
                     node_path = f"{item_path}.node"
                     return [replace(item, node=one(expand_item(child, node_path), node_path))]
@@ -529,6 +537,10 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticSpilled(node=child)
                 | SemanticOptionalContent(node=child)
                 | SemanticBestEffort(node=child)
+                | SemanticBudgeted(node=child)
+                | SemanticUnbreakable(node=child)
+                | SemanticKeepWithNext(node=child)
+                | SemanticPaged(node=child)
             ):
                 return replace(node, node=rewrite(child))
             case SemanticFallbackContent(primary=primary, alternates=alternates):

@@ -16,6 +16,8 @@ from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 from squid_layouts.planning.pagination import NavNode, PageNav
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
+    Break,
+    Budget,
     Button,
     Code,
     Embed,
@@ -73,7 +75,16 @@ class RPanel:
     accent: Color | None
 
 
-type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
+@dataclass(frozen=True, slots=True)
+class RGroup:
+    """A transparent realized group removed before scene conversion."""
+
+    children: list[Realized]
+
+
+type Realized = (
+    RText | RSection | RPanel | RGroup | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
+)
 
 
 PAGE_FOOTER_PREFIX = "-# "
@@ -209,6 +220,15 @@ class _Unit:
         return self.chrome_len + len(self.content)
 
 
+@dataclass(frozen=True, slots=True)
+class _BudgetRegion:
+    units: tuple[_Unit, ...]
+    minimum: int
+    preferred: int
+    stretch: int
+    best_effort: bool
+
+
 def _escape_fences(content: str) -> str:
     # A closing fence inside the content would end the block early; break it invisibly.
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
@@ -258,37 +278,111 @@ def _hard_split(segment: str, limit: int) -> list[str]:
     return [segment[start : start + limit] for start in range(0, len(segment), limit)]
 
 
-def split_pages(text: str, limit: int, boundary: str = "\n") -> list[str]:
-    """Split ``text`` into chunks of at most ``limit``, preferring ``boundary`` cuts.
+def split_pages(
+    text: str,
+    limit: int,
+    boundary: str = "\n",
+    *,
+    min_fill: int = 0,
+    widows: int = 1,
+) -> list[str]:
+    """Balance ``text`` across the fewest bounded pages, preferring semantic cuts."""
+    if limit < 1:
+        message = "page limit must be positive"
+        raise ValueError(message)
+    chunks: list[tuple[str, str]] = []
+    for segment_index, segment in enumerate(text.split(boundary)):
+        separator = boundary if segment_index else ""
+        pieces = _hard_split(segment, limit) if len(segment) > limit else [segment]
+        for piece_index, piece in enumerate(pieces):
+            chunks.append((separator if piece_index == 0 else "", piece))
+    if not chunks:
+        return [""]
 
-    Ported from the diagnostics view's `_paginate`/`_hard_split`: segments are kept whole
-    where they fit; a single segment longer than a page is hard-split without inserting
-    boundary characters that were never in the text.
-    """
-    pages: list[str] = []
-    current = ""
+    prefix_lengths = [0]
+    for separator, content in chunks:
+        prefix_lengths.append(prefix_lengths[-1] + len(separator) + len(content))
 
-    def flush() -> None:
-        nonlocal current
-        if current:
-            pages.append(current)
-            current = ""
+    def page_length(start: int, end: int) -> int:
+        return prefix_lengths[end] - prefix_lengths[start] - len(chunks[start][0])
 
-    for segment in text.split(boundary):
-        if len(segment) > limit:
-            flush()
-            chunks = _hard_split(segment, limit)
-            pages.extend(chunks[:-1])
-            current = chunks[-1]
-            continue
-        candidate = segment if not current else current + boundary + segment
-        if len(candidate) <= limit:
-            current = candidate
-        else:
-            flush()
-            current = segment
-    flush()
-    return pages or [""]
+    def page_text(start: int, end: int) -> str:
+        return chunks[start][1] + "".join(separator + content for separator, content in chunks[start + 1 : end])
+
+    count = len(chunks)
+    earliest = [0] * (count + 1)
+    window_start = 0
+    for end in range(1, count + 1):
+        while page_length(window_start, end) > limit:
+            window_start += 1
+        earliest[end] = window_start
+    pages = 0
+    start = 0
+    while start < count:
+        end = start + 1
+        while end < count and page_length(start, end + 1) <= limit:
+            end += 1
+        pages += 1
+        start = end
+
+    if count > 256:
+        cuts: list[int] = []
+        start = 0
+        for used in range(1, pages):
+            remaining_pages = pages - used
+            target = (prefix_lengths[count] - prefix_lengths[start]) / (remaining_pages + 1)
+            end = start + 1
+            maximum = count - remaining_pages
+            while end < maximum and page_length(start, end + 1) <= limit:
+                if page_length(start, end + 1) > target and page_length(start, end) >= min_fill:
+                    before = abs(page_length(start, end) - target)
+                    after = abs(page_length(start, end + 1) - target)
+                    if after <= before:
+                        end += 1
+                    break
+                end += 1
+            cuts.append(end)
+            start = end
+        cuts.append(count)
+        result: list[str] = []
+        start = 0
+        for end in cuts:
+            result.append(page_text(start, end))
+            start = end
+        return result
+
+    ideal = len(text) / pages
+    type BreakState = tuple[int, float, tuple[int, ...], tuple[int, ...]]
+    states: dict[tuple[int, int], BreakState] = {(0, 0): (0, 0.0, (), ())}
+    for used in range(1, pages + 1):
+        for end in range(1, count + 1):
+            best: BreakState | None = None
+            for start in range(earliest[end], end):
+                previous = states.get((used - 1, start))
+                if previous is None:
+                    continue
+                length = page_length(start, end)
+                if length > limit:
+                    continue
+                violation = int(used < pages and length < min_fill)
+                violation += int(used == pages and end - start < widows)
+                candidate = (
+                    previous[0] + violation,
+                    previous[1] + (length - ideal) ** 2,
+                    (*previous[2], -end),
+                    (*previous[3], end),
+                )
+                if best is None or candidate < best:
+                    best = candidate
+            if best is not None:
+                states[(used, end)] = best
+    cuts = states[(pages, count)][3]
+    result: list[str] = []
+    start = 0
+    for end in cuts:
+        result.append(page_text(start, end))
+        start = end
+    return result or [""]
 
 
 def _trim_keep(text: str, limit: int, keep: str) -> str:
@@ -310,6 +404,7 @@ class _Builder:
     notes: list[str] = field(default_factory=list)
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: int = 0
+    budgets: list[_BudgetRegion] = field(default_factory=list)
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
@@ -373,6 +468,19 @@ class _Builder:
                 return RSection(texts=slots, accessory=accessory)
             case Panel(children=children, accent=accent):
                 return RPanel(children=self.realize_children(children), accent=accent)
+            case Budget(
+                children=children,
+                minimum=minimum,
+                preferred=preferred,
+                stretch=stretch,
+                best_effort=best_effort,
+            ):
+                first = len(self.units)
+                realized = self.realize_children(children)
+                self.budgets.append(_BudgetRegion(tuple(self.units[first:]), minimum, preferred, stretch, best_effort))
+                return RGroup(realized)
+            case Break(children=children):
+                return RGroup(self.realize_children(children))
             case Gallery(urls=urls):
                 if len(urls) > 10:
                     self.notes.append(f"gallery holds {len(urls)} items; keeping 10")
@@ -427,9 +535,9 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
             notes.append(f"node {unit.index} exhausted its ladder; trimming the last alternate")
             unit.slot.content = unit.prefix + _trim_keep(fallback, usable, "head") + unit.suffix
             return True
-        case Paginate(boundary=boundary) if usable >= 1:
+        case Paginate(boundary=boundary, min_fill=min_fill, widows=widows) if usable >= 1:
             # Pagination is the policy working as intended, not a degradation: no note.
-            unit.fragments = split_pages(unit.content, usable, boundary)
+            unit.fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
             unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
             return True
         case Truncate(keep=keep) if usable >= 1:
@@ -455,7 +563,13 @@ def _apply_count_pages(unit: _Unit) -> bool:
     usable = max(1, unit.grant - unit.chrome_len)
     fragments: list[str] = []
     for page in pages:
-        fragments.extend([page] if len(page) <= usable else split_pages(page, usable, unit.join))
+        policy = unit.overflow
+        assert isinstance(policy, Paginate)
+        fragments.extend(
+            [page]
+            if len(page) <= usable
+            else split_pages(page, usable, unit.join, min_fill=policy.min_fill, widows=policy.widows)
+        )
     unit.fragments = fragments
     unit.slot.content = unit.prefix + fragments[0] + unit.suffix
     return True
@@ -579,6 +693,86 @@ def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome)
     # The loop always terminates by emptying `active`; each pass removes at least one unit.
 
 
+@dataclass(slots=True)
+class _GrantGroup:
+    units: tuple[_Unit, ...]
+    floor: int
+    demand: int
+    priority: int
+    best_effort: bool = False
+    grant: int = 0
+
+
+def _allocate_budgeted(builder: _Builder, budget: int, notes: list[str], chrome: Chrome) -> None:
+    """Allocate transparent budget regions as siblings, then solve inside each grant."""
+    claimed: set[int] = set()
+    groups: list[_GrantGroup] = []
+    # Outer regions are recorded after their descendants. Claiming them first gives a
+    # nested declaration one owner instead of charging the same unit twice.
+    for region in reversed(builder.budgets):
+        units = tuple(unit for unit in region.units if unit.index not in claimed)
+        if not units:
+            continue
+        claimed.update(unit.index for unit in units)
+        need = sum(unit.need for unit in units)
+        demand = need if need <= region.preferred + region.stretch else min(need, region.preferred)
+        groups.append(
+            _GrantGroup(
+                units,
+                min(region.minimum, demand),
+                demand,
+                max(unit.priority for unit in units),
+                region.best_effort,
+            )
+        )
+    for unit in builder.units:
+        if unit.index in claimed:
+            continue
+        fixed = isinstance(unit.overflow, Never | Condense)
+        groups.append(_GrantGroup((unit,), unit.need if fixed else 0, unit.need, unit.priority))
+    groups.sort(key=lambda group: min(unit.index for unit in group.units))
+
+    remaining = max(0, budget)
+    hard_floor = sum(group.floor for group in groups if not group.best_effort)
+    if hard_floor > remaining:
+        notes.append(f"Budget floors need {hard_floor} of {remaining} available characters")
+
+    for group in groups:
+        if group.best_effort:
+            continue
+        group.grant = min(group.floor, remaining)
+        remaining -= group.grant
+    for group in groups:
+        if not group.best_effort:
+            continue
+        group.grant = min(group.floor, remaining)
+        remaining -= group.grant
+        if group.grant < group.floor:
+            notes.append(f"breached best-effort budget floor {group.floor} with a {group.grant}-character grant")
+
+    for priority in sorted({group.priority for group in groups}, reverse=True):
+        peers = [group for group in groups if group.priority == priority and group.grant < group.demand]
+        wanted = sum(group.demand - group.grant for group in peers)
+        share = min(remaining, wanted)
+        if wanted:
+            distributed = 0
+            for group in peers:
+                extra = (group.demand - group.grant) * share // wanted
+                group.grant += extra
+                distributed += extra
+            leftover = share - distributed
+            for group in peers:
+                if leftover <= 0:
+                    break
+                top_up = min(leftover, group.demand - group.grant)
+                group.grant += top_up
+                leftover -= top_up
+            remaining = max(0, budget - sum(group.grant for group in groups))
+
+    for group in groups:
+        _allocate(list(group.units), group.grant, notes, chrome)
+
+
 def _prune(children: list[Realized]) -> list[Realized]:
     pruned: list[Realized] = []
     for child in children:
@@ -589,6 +783,8 @@ def _prune(children: list[Realized]) -> list[Realized]:
                 kept = _prune(inner)
                 if kept:
                     pruned.append(RPanel(children=kept, accent=accent))
+            case RGroup(children=inner):
+                pruned.extend(_prune(inner))
             case RSection(texts=texts, accessory=accessory):
                 kept_texts = [slot for slot in texts if not slot.dropped]
                 # A Section needs at least one text child, and its accessory cannot stand
@@ -649,6 +845,8 @@ def _component_count(children: list[Realized]) -> int:
         match child:
             case RPanel(children=inner):
                 count += 1 + _component_count(inner)
+            case RGroup(children=inner):
+                count += _component_count(inner)
             case RSection(texts=texts, accessory=accessory):
                 count += 1 + len(texts) + _item_component_cost(accessory)
             case Row(items=items):
@@ -689,7 +887,7 @@ def _walk_ladders(nodes: Sequence[Node], positions: _Positions, visit) -> None:
                 # their positions rather than reinterpreting them against a different subtree.
                 for index, child in enumerate(variants[rung].nodes):
                     walk(child, (*path, rung, index))
-            case Panel(children=children):
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for index, child in enumerate(children):
                     walk(child, (*path, "panel", index))
             case _:
@@ -727,6 +925,16 @@ def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node
                 for index, child in enumerate(children):
                     inner.extend(rewrite(child, (*path, "panel", index)))
                 return [Panel(children=tuple(inner), accent=accent)]
+            case Budget(children=children):
+                inner = []
+                for index, child in enumerate(children):
+                    inner.extend(rewrite(child, (*path, "budget", index)))
+                return [replace(node, children=tuple(inner))]
+            case Break(children=children):
+                inner = []
+                for index, child in enumerate(children):
+                    inner.extend(rewrite(child, (*path, "break", index)))
+                return [replace(node, children=tuple(inner))]
             case _:
                 return [node]
 
@@ -835,7 +1043,10 @@ def _insert_after(
         if child is target:
             children[index + 1 : index + 1] = additions
             return children, index + 1
-        if isinstance(child, RPanel) and (found := _insert_after(child.children, target, additions)) is not None:
+        if (
+            isinstance(child, RPanel | RGroup)
+            and (found := _insert_after(child.children, target, additions)) is not None
+        ):
             return found
     return None
 
@@ -887,7 +1098,10 @@ def _solve_once(
             _footer_cost(footers[unit.index], len(unit.content)) for unit in paginate_units if unit.index in active
         )
         budget = limits.total_text - builder.raw_text_cost - reserved_text - footer_reservation
-        _allocate(builder.units, budget, pass_notes, chrome)
+        if builder.budgets:
+            _allocate_budgeted(builder, budget, pass_notes, chrome)
+        else:
+            _allocate(builder.units, budget, pass_notes, chrome)
         children = _prune(children)
         detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
         final = (builder, children, paginate_units, keys, footers, clamps)

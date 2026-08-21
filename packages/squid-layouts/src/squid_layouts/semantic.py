@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
+from typing import Literal
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.forms import FormSpec, SubmitHandler
@@ -502,6 +503,65 @@ class BestEffort:
     node: LayoutNode
 
 
+@dataclass(frozen=True, slots=True)
+class Budgeted:
+    """Reserve and cap the character grant for one logical region."""
+
+    node: LayoutNode
+    minimum: int
+    preferred: int
+    stretch: int = 0
+
+    def __post_init__(self) -> None:
+        if self.minimum < 0 or self.preferred < 0 or self.stretch < 0:
+            message = "layout budgets must not be negative"
+            raise ValueError(message)
+        if self.minimum > self.preferred:
+            message = "layout budget min must not exceed prefer"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class Unbreakable:
+    """Keep every primitive produced by ``node`` together on a region page."""
+
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class KeepWithNext:
+    """Forbid a region page break immediately after ``node``."""
+
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class Paged:
+    """Paginate the direct children of a keyed heterogeneous region."""
+
+    node: LayoutNode
+    key: str
+    chars: int
+    min_fill: int = 0
+    widows: int = 1
+    initial: Literal["start", "end"] = "start"
+    footer: Callable[[int, int], TextLike] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "paged region key must not be empty"
+            raise ValueError(message)
+        if self.chars < 1:
+            message = "paged region chars must be positive"
+            raise ValueError(message)
+        if self.min_fill < 0:
+            message = "paged region min_fill must not be negative"
+            raise ValueError(message)
+        if self.widows < 1:
+            message = "paged region widows must be at least 1"
+            raise ValueError(message)
+
+
 type SemanticNode = (
     Group
     | Stack
@@ -531,7 +591,9 @@ type SemanticNode = (
     | Navigation
 )
 
-type Adaptation = Truncated | Spilled | OptionalContent | FallbackContent | BestEffort
+type Adaptation = (
+    Truncated | Spilled | OptionalContent | FallbackContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
+)
 type LayoutNode = SemanticNode | Adaptation | PrimitiveNode
 
 
@@ -565,3 +627,35 @@ def fallback(primary: LayoutNode, *alternates: LayoutNode) -> FallbackContent:
 def best_effort(node: LayoutNode) -> BestEffort:
     """Allow safe prose truncation and static collection spill, never consequential loss."""
     return BestEffort(node)
+
+
+def budget(node: LayoutNode, *, min: int, prefer: int, stretch: int = 0) -> Budgeted:
+    """Give ``node`` a hard floor, preferred size, and lossless stretch band."""
+    return Budgeted(node, min, prefer, stretch)
+
+
+def unbreakable(node: LayoutNode) -> Unbreakable:
+    """Keep ``node`` atomic when its containing region paginates."""
+    return Unbreakable(node)
+
+
+def keep_with_next(node: LayoutNode) -> KeepWithNext:
+    """Keep ``node`` off the bottom of a region page without its successor."""
+    return KeepWithNext(node)
+
+
+def paged(
+    node: LayoutNode,
+    *,
+    key: str,
+    chars: int,
+    min: int = 0,
+    stretch: int = 0,
+    min_fill: int = 0,
+    widows: int = 1,
+    initial: Literal["start", "end"] = "start",
+    footer: Callable[[int, int], TextLike] | None = None,
+) -> Budgeted:
+    """Apply a preferred character budget and heterogeneous paging to ``node``."""
+    region = Paged(node, key, chars, min_fill, widows, initial, footer)
+    return Budgeted(region, min, chars, stretch)
