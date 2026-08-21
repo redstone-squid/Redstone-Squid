@@ -1,7 +1,7 @@
 """Mechanical drawing of resolved Discord Components V2 scenes."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, override
 
 import discord
 
@@ -32,6 +32,28 @@ from squid_layouts.text import discord_text
 type Control = SceneButton | SceneSelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ViewFactory = Callable[[], discord.ui.LayoutView]
+
+
+class RoutedItem(discord.ui.Button[Any]):
+    """A button whose only dispatch path is a `Router`.
+
+    Discord's payload is an ordinary button; the override is purely about discord.py's
+    in-process bookkeeping. `ViewStore.add_view` files an item into the stored dispatch
+    table only when `is_dispatchable()` is true, and `dispatch_view` runs *both* the dynamic
+    lookup and that table. A stored routed button would therefore take a second dispatch
+    whose callback is `Item`'s no-op — harmless for responses, but `_scheduled_task` resets
+    the view's timeout expiry before awaiting it, so clicking a routed control inside a
+    mounted message silently extended that mount's life.
+
+    Staying out of the table gives the control exactly one dispatch path. Dynamic dispatch
+    is unaffected: `schedule_dynamic_item_call` rebuilds the view with
+    `LayoutView.from_message` and finds the base item by component type and custom id there,
+    on stock `Button` objects this class never touches.
+    """
+
+    @override
+    def is_dispatchable(self) -> bool:
+        return False
 
 
 class StaticView(discord.ui.LayoutView):
@@ -104,10 +126,10 @@ class Renderer:
                 case SceneLink(label=label, url=url):
                     return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
                 case SceneRoutedButton(label=label, custom_id=custom_id):
-                    # No binding to wire, so this draws in a sessionless document too. A plain
-                    # button is deliberate: discord.py's dynamic dispatch finds the base item by
-                    # custom id, so nothing here has to be a DynamicItem.
-                    return discord.ui.Button(
+                    # No binding to wire, so this draws in a sessionless document too. Not a
+                    # DynamicItem: discord.py's dynamic dispatch finds the base item by custom
+                    # id, so nothing outgoing has to be one.
+                    return RoutedItem(
                         style=getattr(discord.ButtonStyle, node.style.value),
                         label=label,
                         custom_id=custom_id,
