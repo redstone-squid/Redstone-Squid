@@ -100,7 +100,11 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
             template = localization.ngettext(value.template, value.plural, count)
         else:
             template = value.template if count == 1 else value.plural
-    content = _resolve_named(template, value.params) if value.params else template
+    params = {
+        key: raw_md(resolve_text(param, localization).content) if isinstance(param, Message | ResolvedText) else param
+        for key, param in value.params.items()
+    }
+    content = _resolve_named(template, params) if params else template
     return ResolvedText(content, value.dialect)
 
 
