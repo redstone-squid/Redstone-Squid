@@ -1,7 +1,22 @@
-"""Reusable, frontend-neutral UI composition patterns."""
+"""Reusable, frontend-neutral state-machine patterns."""
 
-from squid_layouts.patterns.menu import Menu, MenuEntry
-from squid_layouts.patterns.ranked import RankedEntry, RankedList
-from squid_layouts.patterns.tabs import Tab, Tabs
+from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
+from squid_layouts.patterns.ranked import RankedEntry, RankedList, RankedListState
+from squid_layouts.patterns.shells import ComponentShell, PatternEvent, PatternRoute, RouterShell
+from squid_layouts.patterns.tabs import Tab, Tabs, TabsState
 
-__all__ = ["Menu", "MenuEntry", "RankedEntry", "RankedList", "Tab", "Tabs"]
+__all__ = [
+    "ComponentShell",
+    "Menu",
+    "MenuEntry",
+    "MenuState",
+    "PatternEvent",
+    "PatternRoute",
+    "RankedEntry",
+    "RankedList",
+    "RankedListState",
+    "RouterShell",
+    "Tab",
+    "Tabs",
+    "TabsState",
+]

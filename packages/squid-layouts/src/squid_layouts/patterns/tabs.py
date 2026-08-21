@@ -1,13 +1,13 @@
-"""A keyed tab strip over alternate content regions."""
+"""A keyed tab pattern with component and routed shells."""
 
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_layouts.factories import controlled, destination, heading, navigation, stack
-from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, render_content, require_key
-from squid_layouts.runtime.component import Component
-from squid_layouts.runtime.reactivity import state
-from squid_layouts.semantic import LayoutNode, NavigateEvent, NavigationDisplay
+from squid_layouts.factories import actions, choice, heading, stack
+from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, require_key
+from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternHandler
+from squid_layouts.runtime.component import RenderResult
+from squid_layouts.semantic import ActionDisplay
 from squid_layouts.text import TextLike
 
 
@@ -26,15 +26,15 @@ class Tab:
         object.__setattr__(self, "content", normalize_content(content, name=f"Tab {key!r}.content"))
 
 
-class Tabs(Component):
-    """A component that selects one of several keyed content regions.
+@dataclass(frozen=True, slots=True)
+class TabsState:
+    """Serializable selection state for :class:`Tabs`."""
 
-    The tab strip is semantic ``Navigation``: small sets become buttons and larger sets use
-    the target's picker strategy. ``selected`` is component-owned presentation state, while
-    ``key`` keeps the navigation identity stable across renders and embedding boundaries.
-    """
+    selected: str
 
-    selected: str = state()
+
+class Tabs:
+    """A pure keyed tab pattern with generic component and router shells."""
 
     def __init__(
         self,
@@ -43,8 +43,6 @@ class Tabs(Component):
         key: str,
         initial: str | None = None,
         heading: TextLike | None = None,
-        display: NavigationDisplay = NavigationDisplay.AUTO,
-        on_change: Callable[[NavigateEvent], Awaitable[None]] | None = None,
     ) -> None:
         self.key = require_key(key, name="Tabs.key")
         self.tabs = tuple(tabs)
@@ -59,31 +57,65 @@ class Tabs(Component):
             message = f"Tabs.initial {initial!r} is not one of the tab keys"
             raise ValueError(message)
         self.heading = heading
-        self.display = display
-        self.on_change = on_change
-        self.selected = initial or self.tabs[0].key
+        self._initial_state = TabsState(initial or self.tabs[0].key)
 
     @property
-    def current(self) -> Tab:
-        """The tab whose content is currently rendered."""
-        return next(tab for tab in self.tabs if tab.key == self.selected)
+    def initial_state(self) -> TabsState:
+        return self._initial_state
 
-    async def _select(self, event: NavigateEvent) -> None:
-        if event.destination not in {tab.key for tab in self.tabs}:
-            return
-        self.selected = event.destination
-        if self.on_change is not None:
-            await self.on_change(event)
+    def component(
+        self,
+        *,
+        initial: TabsState | None = None,
+        on_change: PatternHandler[TabsState] | None = None,
+    ) -> ComponentShell[TabsState]:
+        """Build the in-memory shell for this tab set."""
+        return ComponentShell(self, initial=initial, on_change=on_change)
 
-    def render(self) -> LayoutNode:
-        current = self.current
+    def transition(
+        self,
+        state: TabsState,
+        action: str,
+        *,
+        values: tuple[str, ...] = (),
+        submitted: Mapping[str, object] | None = None,
+    ) -> TabsState:
+        del submitted
+        selected = values[0] if action == "select" and len(values) == 1 else action.removeprefix("select:")
+        if action != "select" and not action.startswith("select:"):
+            return state
+        if selected not in {tab.key for tab in self.tabs}:
+            return state
+        return TabsState(selected)
+
+    def render(self, state: TabsState, controls: PatternControls[TabsState]) -> RenderResult:
+        current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
+        if len(self.tabs) <= 5:
+            selector = actions(
+                *(
+                    controls.action(
+                        tab.label,
+                        f"select:{tab.key}",
+                        key=f"{self.key}.{tab.key}",
+                        available=tab.key != current.key,
+                    )
+                    for tab in self.tabs
+                ),
+                key=self.key,
+                display=ActionDisplay.INDIVIDUAL,
+            )
+        else:
+            selector = controls.choices(
+                tuple(choice(tab.label, key=tab.key) for tab in self.tabs),
+                "select",
+                key=self.key,
+                selected=(current.key,),
+                minimum=1,
+                maximum=1,
+                placeholder=current.label,
+            )
         return stack(
             heading(self.heading) if self.heading is not None else None,
-            navigation(
-                *(destination(tab.label, key=tab.key) for tab in self.tabs),
-                key=self.key,
-                current=controlled(self.selected, self._select),
-                display=self.display,
-            ),
-            *render_content(self, current.content, prefix=f"tab-{current.key}"),
+            selector,
+            *controls.content(current.content, prefix=f"tab-{current.key}"),
         )
