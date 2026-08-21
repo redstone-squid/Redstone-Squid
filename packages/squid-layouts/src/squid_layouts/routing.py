@@ -303,6 +303,16 @@ class Route:
             return False
         return all(_intersect(left, right) for left, right in zip(self.segments, other.segments, strict=True))
 
+    def canonical_starts_with(self, segment: str) -> bool:
+        """Whether the canonical format starts with exactly the literal ``segment``."""
+        first = self.segments[0]
+        return isinstance(first, _Literal) and first.text == segment
+
+    def accepts_first_segment(self, segment: str) -> bool:
+        """Whether the canonical format or an alias can start with ``segment``."""
+        literal = _Literal(segment)
+        return any(_intersect(route.segments[0], literal) for route in (self, *self._alias_routes))
+
     def overlaps(self, other: Route) -> bool:
         """Whether any one custom id could belong to both routes.
 

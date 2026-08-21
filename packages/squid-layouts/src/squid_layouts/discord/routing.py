@@ -51,6 +51,9 @@ type RouteLike = Route | str
 """A route, or the format string to build one from — `Route` is only worth naming when
 something outside the handler's module has to build ids from it."""
 
+type GoneHook = Callable[[discord.Interaction[Any]], Awaitable[None]]
+"""A friendly response for a control retired from a reserved router namespace."""
+
 
 @dataclass(frozen=True, slots=True)
 class _Registration:
@@ -90,9 +93,23 @@ def _accepted(route: Route, handler: RouteHandler) -> frozenset[str] | None:
 class Router[BotT: discord.Client]:
     """A table of routes and their handlers, registered once with the client."""
 
-    def __init__(self, *, on_error: ErrorHook | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        namespace: str | None = None,
+        on_gone: GoneHook | None = None,
+        on_error: ErrorHook | None = None,
+    ) -> None:
+        if namespace is not None and (not namespace or ":" in namespace):
+            message = "a router namespace must be one non-empty route segment"
+            raise ValueError(message)
+        if namespace is not None and on_gone is None:
+            message = "a namespaced router needs an on_gone hook for retired controls"
+            raise ValueError(message)
         self._routes: list[_Registration] = []
         self._registered = False
+        self.namespace = namespace
+        self.on_gone = on_gone
         self.on_error = on_error
 
     def route[**P](
@@ -132,6 +149,12 @@ class Router[BotT: discord.Client]:
         reaches, because an ambiguous table never registers in the first place.
         """
         route = Route(route) if isinstance(route, str) else route
+        if route.accepts_first_segment("ctl"):
+            message = f"route {route.format!r} enters the reserved mount namespace 'ctl:'"
+            raise ValueError(message)
+        if self.namespace is not None and (not route.canonical_starts_with(self.namespace) or len(route.segments) == 1):
+            message = f"route {route.format!r} must live under the reserved namespace {self.namespace!r}"
+            raise ValueError(message)
         registration = _Registration(route, handler, _accepted(route, handler))
         replaced: int | None = None
         for index, existing in enumerate(self._routes):
@@ -178,8 +201,12 @@ class Router[BotT: discord.Client]:
         """
         if not self._routes:
             # An alternation of nothing matches everything; match nothing instead.
-            return re.compile(r"(?!)")
-        return re.compile("|".join(f"(?:{registration.route.anonymous})" for registration in self._routes))
+            patterns: list[str] = []
+        else:
+            patterns = [f"(?:{registration.route.anonymous})" for registration in self._routes]
+        if self.namespace is not None:
+            patterns.append(rf"(?:{re.escape(self.namespace)}(?::[^:]+)+)")
+        return re.compile("|".join(patterns) if patterns else r"(?!)")
 
     def register(self, client: discord.Client) -> None:
         """Install this router's dispatch item on ``client``, freezing the route table.
@@ -194,6 +221,10 @@ class Router[BotT: discord.Client]:
         """Run the handler owning ``custom_id``; a retired route is logged, never raised."""
         found = self.resolve(custom_id)
         if found is None:
+            if self._in_namespace(custom_id):
+                assert self.on_gone is not None
+                await self.on_gone(interaction)
+                return
             # Reachable when a route is deregistered while its buttons are still posted.
             logger.warning("no route owns custom id %r", custom_id)
             return
@@ -207,6 +238,10 @@ class Router[BotT: discord.Client]:
                 logger.exception("routed handler for %r failed", custom_id)
             else:
                 await self.on_error(interaction, error, f"route:{custom_id}")
+
+    def _in_namespace(self, custom_id: str) -> bool:
+        """Whether ``custom_id`` belongs to this router's reserved namespace."""
+        return self.namespace is not None and custom_id.startswith(f"{self.namespace}:")
 
 
 def _dispatch_item(router: Router[Any]) -> type[discord.ui.DynamicItem[discord.ui.Button[Any]]]:
