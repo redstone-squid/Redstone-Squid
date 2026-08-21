@@ -95,13 +95,29 @@ def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Li
     return interventions
 
 
+def _report_custom_id(item: discord.ui.Button | BaseSelect, limits: V2Limits, interventions: list[str]) -> None:
+    """Report an over-budget custom id, never clamp it.
+
+    Every other string here degrades gracefully when trimmed. A custom id does not: a
+    shortened one routes to a different handler or to none, so the only safe outcome is to
+    say so. `Route.id` refuses the same thing earlier and with a better message, but a
+    `RoutedButton` built by hand or read back through the codec never passes through it, and
+    an invalid state that only Discord rejects is exactly what this gate exists to catch.
+    """
+    custom_id = getattr(item, "custom_id", None)
+    if isinstance(custom_id, str) and len(custom_id) > limits.custom_id:
+        interventions.append(f"custom id {len(custom_id)} > {limits.custom_id} (not clampable): {custom_id[:32]!r}...")
+
+
 def _conform_button(button: discord.ui.Button, limits: V2Limits, interventions: list[str]) -> None:
+    _report_custom_id(button, limits, interventions)
     if button.label is not None and len(button.label) > limits.button_label:
         interventions.append(f"button label {len(button.label)} > {limits.button_label}")
         button.label = trim(button.label, limits.button_label)
 
 
 def _conform_select(select: BaseSelect, limits: V2Limits, interventions: list[str]) -> None:
+    _report_custom_id(select, limits, interventions)
     if select.placeholder is not None and len(select.placeholder) > limits.select_placeholder:
         interventions.append(f"select placeholder {len(select.placeholder)} > {limits.select_placeholder}")
         select.placeholder = trim(select.placeholder, limits.select_placeholder)
