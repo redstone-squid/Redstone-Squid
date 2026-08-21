@@ -15,7 +15,7 @@ from whenever import Instant
 import squid_layouts as sl
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import BUILD_EDIT
+from squid.bot.routes import build_edit
 from squid.bot.submission.navigation_view import (
     BaseNavigableView,
     MaybeAwaitableBaseNavigableViewFunc,
@@ -1281,7 +1281,7 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
             else discord.ui.Button(
                 label="Edit",
                 style=discord.ButtonStyle.secondary,
-                custom_id=BUILD_EDIT.id(build_id=build.id),
+                custom_id=build_edit.id(build_id=build.id),
             )
         )
         self._edit_row = discord.ui.ActionRow(edit_button)
