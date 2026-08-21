@@ -119,6 +119,11 @@ def _http_error() -> discord.HTTPException:
     return discord.HTTPException(response, "edit refused")
 
 
+def _stale_http_error() -> discord.HTTPException:
+    response = cast(Any, SimpleNamespace(status=404, reason="Not Found"))
+    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})
+
+
 async def _refuse_edit(*args: Any, **kwargs: Any) -> None:
     raise _http_error()
 
@@ -803,10 +808,17 @@ class TestDeliveryAtomicity:
 
 
 class _Destination:
-    """A recording destination. `message` is whatever it hands back to the mount."""
+    """A recording destination. `message` is whatever its receipt exposes to the mount."""
 
-    def __init__(self, message: Any = None, *, raises: Exception | None = None) -> None:
+    def __init__(
+        self,
+        message: Any = None,
+        *,
+        handle: delivery.EditHandle | None = None,
+        raises: Exception | None = None,
+    ) -> None:
         self.message = message
+        self.handle = delivery.handle_for(message) if message is not None and handle is None else handle
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
@@ -814,7 +826,7 @@ class _Destination:
         self.calls.append((view, files))
         if self.raises is not None:
             raise self.raises
-        return self.message
+        return delivery.DeliveryReceipt(self.message, self.handle)
 
 
 class Report(Component):
@@ -843,6 +855,15 @@ class TestSend:
         assert not mount.pending
         assert mount.handle is not None
         assert mount.handle.permanent
+
+    async def test_a_successful_send_keeps_the_receipts_handle_without_reconstructing_it(self):
+        mount = Mount(Counter(), timeout=None)
+        message = fake_message()
+        authority = _RefusingHandle()
+
+        await mount.send(_Destination(message, handle=authority))
+
+        assert mount.handle is authority
 
     async def test_a_destination_with_no_message_commits_and_waits_for_the_first_click(self):
         component = Counter()
@@ -1067,9 +1088,55 @@ class TestEditHandles:
         assert not handle.permanent
         assert handle.expires_at == deferred.expires_at
 
-    def test_message_handle_is_permanent_only_off_the_channel(self):
+    def test_channel_message_handle_is_permanent_regardless_of_message_flags(self):
         assert delivery.handle_for(fake_message()).permanent
-        assert not delivery.handle_for(fake_message(ephemeral=True)).permanent
+        assert delivery.handle_for(fake_message(ephemeral=True)).permanent
+
+    async def test_interaction_message_edit_is_pinned_to_the_original_response_endpoint(self):
+        expected = object()
+        interaction = SimpleNamespace(edit_original_response=AsyncMock(return_value=expected))
+        subject = cast(
+            discord.InteractionMessage,
+            SimpleNamespace(_state=SimpleNamespace(_interaction=interaction), delete=AsyncMock()),
+        )
+
+        edited = await discord.InteractionMessage.edit(subject, content="updated")
+
+        assert edited is expected
+        interaction.edit_original_response.assert_awaited_once_with(
+            content="updated",
+            embeds=discord.utils.MISSING,
+            embed=discord.utils.MISSING,
+            attachments=discord.utils.MISSING,
+            view=discord.utils.MISSING,
+            allowed_mentions=None,
+            poll=discord.utils.MISSING,
+        )
+
+    async def test_webhook_message_edit_is_pinned_to_the_webhook_message_endpoint(self):
+        expected = object()
+        webhook = SimpleNamespace(edit_message=AsyncMock(return_value=expected))
+        subject = cast(
+            discord.WebhookMessage,
+            SimpleNamespace(
+                id=42,
+                _state=SimpleNamespace(_webhook=webhook, _thread=discord.utils.MISSING),
+            ),
+        )
+
+        edited = await discord.WebhookMessage.edit(subject, content="updated")
+
+        assert edited is expected
+        webhook.edit_message.assert_awaited_once_with(
+            42,
+            content="updated",
+            embeds=discord.utils.MISSING,
+            embed=discord.utils.MISSING,
+            attachments=discord.utils.MISSING,
+            view=discord.utils.MISSING,
+            allowed_mentions=None,
+            thread=discord.utils.MISSING,
+        )
 
     async def test_a_notice_does_not_swallow_the_render_it_came_with(self):
         # `notice` answers with a new message, which moves the interaction's original
@@ -1111,7 +1178,8 @@ class TestEditHandles:
     async def test_a_click_renews_an_ephemeral_mount_for_background_refreshes(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        await mount.send(delivered_to(fake_message(ephemeral=True)))
+        initial = fake_interaction()
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(initial)))
         assert mount.handle is not None and not mount.handle.permanent
 
         interaction = fake_interaction()
@@ -1139,7 +1207,7 @@ class TestEditHandles:
     async def test_an_unreachable_mount_holds_its_render_for_the_next_click(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        await mount.send(delivered_to(fake_message(ephemeral=True)))
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction())))
         mount._handle = delivery.handle_from(fake_interaction(expired=True))
         component.count += 1
 
@@ -1172,7 +1240,7 @@ class TestEditHandles:
 
         component = Counter()
         mount = Mount(component, timeout=None)
-        await mount.send(delivered_to(fake_message(ephemeral=True)))
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(fake_interaction())))
         mount._handle = _Stale()
         component.count += 1
 
@@ -1182,6 +1250,118 @@ class TestEditHandles:
         assert _Stale.writes == 1
         assert mount.handle is None
         assert mount.pending
+
+
+class TestDestinations:
+    async def test_fresh_unwaited_response_commits_an_original_response_handle_without_fetching(self):
+        interaction = fake_interaction()
+        component = Counter()
+        mount = Mount(component, timeout=None)
+
+        sent = await mount.send(delivery.respond_to(interaction, wait=False))
+
+        assert sent is None
+        assert mount.handle is not None and not mount.handle.permanent
+        assert mount.handle.expires_at == interaction.expires_at
+        interaction.original_response.assert_not_awaited()
+
+        component.count += 1
+        await mount.refresh_now()
+
+        interaction.edit_original_response.assert_awaited_once()
+        assert not mount.pending
+
+    async def test_fresh_waited_public_response_keeps_token_authority_not_message_authority(self):
+        interaction = fake_interaction()
+        message = fake_message(ephemeral=False)
+        interaction.original_response.return_value = message
+        component = Counter()
+        mount = Mount(component, timeout=None)
+
+        sent = await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
+
+        assert sent is message
+        assert mount.handle is not None and not mount.handle.permanent
+        assert mount.handle.expires_at == interaction.expires_at
+
+        component.count += 1
+        await mount.refresh_now()
+
+        interaction.edit_original_response.assert_awaited_once()
+        message.edit.assert_not_awaited()
+
+    async def test_waited_followup_keeps_webhook_message_authority(self):
+        interaction = fake_interaction()
+        interaction.response._done = True
+        message = fake_message(message_id=42)
+        interaction.followup.send.return_value = message
+        component = Counter()
+        mount = Mount(component, timeout=None)
+
+        await mount.send(delivery.respond_to(interaction, wait=True))
+        component.count += 1
+        await mount.refresh_now()
+
+        interaction.followup.edit_message.assert_awaited_once()
+        assert interaction.followup.edit_message.await_args.args[0] == 42
+        message.edit.assert_not_awaited()
+
+    async def test_unwaited_followup_honestly_exposes_no_message_or_handle(self):
+        interaction = fake_interaction()
+        interaction.response._done = True
+        mount = Mount(Counter(), timeout=None)
+
+        sent = await mount.send(delivery.respond_to(interaction, wait=False))
+
+        assert sent is None
+        assert mount.handle is None
+
+    async def test_plain_command_reply_keeps_permanent_channel_authority(self):
+        message = fake_message()
+        ctx = cast(delivery.Replyable, SimpleNamespace(send=AsyncMock(return_value=message)))
+        mount = Mount(Counter(), timeout=None)
+
+        await mount.send(delivery.reply_to(ctx))
+
+        assert mount.handle is not None and mount.handle.permanent
+
+    async def test_interaction_backed_context_reply_keeps_original_response_authority(self):
+        interaction = fake_interaction()
+        message = fake_message()
+        ctx = cast(
+            delivery.Replyable,
+            SimpleNamespace(interaction=interaction, send=AsyncMock(return_value=message)),
+        )
+        component = Counter()
+        mount = Mount(component, timeout=None)
+
+        await mount.send(delivery.reply_to(ctx))
+
+        assert mount.handle is not None and not mount.handle.permanent
+        component.count += 1
+        await mount.refresh_now()
+        interaction.edit_original_response.assert_awaited_once()
+
+    async def test_stale_public_response_drops_then_renews_for_the_pending_render(self):
+        interaction = fake_interaction()
+        interaction.original_response.return_value = fake_message(ephemeral=False)
+        interaction.edit_original_response.side_effect = _stale_http_error()
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
+        component.count += 1
+
+        await mount.refresh_now()
+
+        assert mount.handle is None
+        assert mount.pending
+
+        click = fake_interaction()
+        await mount.dispatch("inc", click)
+
+        assert mount.handle is not None
+        assert not mount.pending
+        click.response.edit_message.assert_awaited_once()
 
 
 class Leaf(Component):
