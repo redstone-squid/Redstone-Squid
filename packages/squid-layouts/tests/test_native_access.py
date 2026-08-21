@@ -1,10 +1,11 @@
-"""`sl.discord.native` — the sanctioned typed escape hatch to the real interaction."""
+"""`sl.discord.responder`/`native` — the sanctioned escape hatches to Discord's own surfaces."""
 
 import pytest
 
 from squid_layouts import Component, PressEvent
+from squid_layouts.actions import ActionResponder as ActionResponderProtocol
 from squid_layouts.actions import Actor, Visibility
-from squid_layouts.discord import Mount, native
+from squid_layouts.discord import Mount, native, responder
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Button, Row
@@ -16,10 +17,6 @@ class Portable:
     async def acknowledge(self) -> None: ...
 
     async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
-
-    async def present_form(self, form: object) -> None: ...
-
-    async def download(self, asset: object) -> None: ...
 
     async def redirect(self, url: str) -> None: ...
 
@@ -33,6 +30,31 @@ def test_native_returns_the_interaction_behind_a_discord_event() -> None:
     event = PressEvent(Actor("7"), ActionResponder(interaction, Mount(Component(), timeout=None)))
 
     assert native(event) is interaction
+
+
+def test_responder_returns_the_adapter_holding_the_native_surfaces() -> None:
+    adapter = ActionResponder(fake_interaction(), Mount(Component(), timeout=None))
+    event = PressEvent(Actor("7"), adapter)
+
+    assert responder(event) is adapter
+
+
+def test_responder_rejects_a_portable_responder() -> None:
+    event = PressEvent(Actor("7"), Portable(), None, {"frontend": "html"})
+
+    with pytest.raises(LookupError, match="html"):
+        responder(event)
+
+
+def test_a_portable_responder_satisfies_the_protocol_it_claims() -> None:
+    """The stub is the point: the protocol must be implementable with no Discord in reach.
+
+    The real check is static — `Portable` is accepted where `ActionResponder` is required,
+    which is what stopped holding once `present_form` took a frontend object.
+    """
+    accepted: ActionResponderProtocol = Portable()
+
+    assert PressEvent(Actor("7"), accepted).responder is accepted
 
 
 def test_native_rejects_a_portable_responder_by_name() -> None:
