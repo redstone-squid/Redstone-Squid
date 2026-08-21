@@ -476,7 +476,7 @@ class AccountPanel(sl.Component):
             self._needs_consent = False
             await event.notice(t(self.locale, _("Thanks. Press **Edit page** again to open the editor.")))
             return
-        await event.present_form(ProfileEditModal(self, self._profile, locale=self.locale))
+        await sl.discord.responder(event).send_modal(ProfileEditModal(self, self._profile, locale=self.locale))
 
     async def save_profile(self, interaction: discord.Interaction[Any], update: ProfileUpdate) -> None:
         await self._accounts.update_profile(self._account_id, update)

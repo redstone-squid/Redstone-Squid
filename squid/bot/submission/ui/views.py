@@ -608,10 +608,11 @@ class SubmissionFormComponent(sl.Component):
         self.invalidate()
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
-        await event.present_form(SubmissionModal(self.build, self.builds, self, locale=self.locale))
+        modal = SubmissionModal(self.build, self.builds, self, locale=self.locale)
+        await sl.discord.responder(event).send_modal(modal)
 
     async def _edit_details(self, event: sl.PressEvent) -> None:
-        await event.present_form(SubmissionDetailsModal(self))
+        await sl.discord.responder(event).send_modal(SubmissionDetailsModal(self))
 
     async def _submit(self, event: sl.PressEvent) -> None:
         if not self.is_ready:
@@ -1116,7 +1117,7 @@ class BuildEditComponent(sl.Component):
 
     async def _open(self, event: sl.PressEvent) -> None:
         if await self._may_event(event):
-            await event.present_form(self.get_modal())
+            await sl.discord.responder(event).send_modal(self.get_modal())
 
     async def _previous(self, event: sl.PressEvent) -> None:
         if self.page > 1:

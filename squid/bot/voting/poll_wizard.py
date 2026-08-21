@@ -538,7 +538,7 @@ class PollConfirmationComponent(sl.Component):
     async def _duration_changed(self, event: sl.ChoiceEvent) -> None:
         chosen = event.selected[0]
         if chosen == CUSTOM_DURATION:
-            await event.present_form(CustomDurationModal(self))
+            await sl.discord.responder(event).send_modal(CustomDurationModal(self))
             return
         self.draft = replace(self.draft, duration_seconds=int(chosen))
         self.invalidate()
@@ -587,7 +587,7 @@ class PollConfirmationComponent(sl.Component):
         await event.finish()
 
     async def _edit(self, event: sl.PressEvent) -> None:
-        await event.present_form(
+        await sl.discord.responder(event).send_modal(
             PollModal(
                 self.publisher,
                 self.author_account_id,
