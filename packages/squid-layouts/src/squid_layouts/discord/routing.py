@@ -52,7 +52,7 @@ type RouteLike = Route | str
 """A route, or the format string to build one from — `Route` is only worth naming when
 something outside the handler's module has to build ids from it."""
 
-type GoneHook = Callable[[discord.Interaction[Any]], Awaitable[None]]
+type GoneHook[BotT: discord.Client] = Callable[[discord.Interaction[BotT]], Awaitable[None]]
 """A friendly response for a control retired from a reserved router namespace."""
 
 
@@ -120,7 +120,7 @@ class Router[BotT: discord.Client]:
         self,
         *,
         namespace: str | None = None,
-        on_gone: GoneHook | None = None,
+        on_gone: GoneHook[BotT] | None = None,
         on_error: ErrorHook | None = None,
     ) -> None:
         if namespace is not None and (not namespace or ":" in namespace):

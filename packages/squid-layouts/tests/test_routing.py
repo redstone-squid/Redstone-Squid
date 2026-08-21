@@ -6,6 +6,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Router, render_static
 from squid_layouts.discord.routing import _dispatch_item
+from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
@@ -135,7 +136,7 @@ class TestRouter:
             seen.append((values, build_id))
 
         await router.dispatch(
-            None,
+            fake_interaction(),
             "edit:build:42",
             component=sl.discord.RouteComponent.SELECT,
             values=("one", "two"),
@@ -147,7 +148,7 @@ class TestRouter:
 
         with pytest.raises(ValueError, match="selected values"):
 
-            @router.select(POLL_CLOSE)
+            @router.select(POLL_CLOSE)  # type: ignore[arg-type]
             async def close(_interaction) -> None: ...
 
     async def test_button_and_select_registrations_may_share_one_route_id(self) -> None:
@@ -164,7 +165,7 @@ class TestRouter:
 
         await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
         await router.dispatch(
-            None,
+            fake_interaction(),
             "poll:close",
             component=sl.discord.RouteComponent.SELECT,
             values=("now",),

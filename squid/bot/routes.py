@@ -25,7 +25,7 @@ build_log_consent = sl.Route("r:build-log-consents:new", aliases=("build_log:con
 remove_redstoner_role = sl.Route("r:redstoner-roles:self:remove", aliases=("remove:role:redstoner",))
 
 
-async def _route_gone_hook(interaction: discord.Interaction) -> None:
+async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
     from squid.bot.i18n import resolve_locale, t
     from squid.bot.utils.components import reply_layout, text_layout
     from squid.core.i18n import _
