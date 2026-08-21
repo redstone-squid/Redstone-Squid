@@ -540,9 +540,10 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticBudgeted(node=child)
                 | SemanticUnbreakable(node=child)
                 | SemanticKeepWithNext(node=child)
-                | SemanticPaged(node=child)
             ):
                 return replace(node, node=rewrite(child))
+            case SemanticPaged(node=child, key=key):
+                return replace(node, node=rewrite(child), key=f"{prefix}.{key}")
             case SemanticFallbackContent(primary=primary, alternates=alternates):
                 return replace(
                     node,
