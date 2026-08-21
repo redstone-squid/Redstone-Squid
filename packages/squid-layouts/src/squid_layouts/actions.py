@@ -29,15 +29,16 @@ class Actor:
 
 
 class ActionResponder(Protocol):
-    """Small UI response surface implemented by each frontend adapter."""
+    """Small UI response surface implemented by each frontend adapter.
+
+    Every method here is one that any frontend can honestly implement. Presenting a form
+    and delivering a file are not — their payloads are frontend objects — so they live on
+    the concrete adapters, reached through `sl.discord.responder(event)`.
+    """
 
     async def acknowledge(self) -> None: ...
 
     async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
-
-    async def present_form(self, form: object) -> None: ...
-
-    async def download(self, asset: object) -> None: ...
 
     async def redirect(self, url: str) -> None: ...
 
@@ -53,7 +54,7 @@ class ActionEvent:
     `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
     the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
     frontend facts — a Discord-only handler should reach for `sl.discord.native(event)`
-    instead, which hands back the real `discord.Interaction`.
+    or `sl.discord.responder(event)` instead, which hand back the real Discord surfaces.
     """
 
     actor: Actor
@@ -66,12 +67,6 @@ class ActionEvent:
 
     async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None:
         await self.responder.notice(text, visibility=visibility)
-
-    async def present_form(self, form: object) -> None:
-        await self.responder.present_form(form)
-
-    async def download(self, asset: object) -> None:
-        await self.responder.download(asset)
 
     async def redirect(self, url: str) -> None:
         await self.responder.redirect(url)

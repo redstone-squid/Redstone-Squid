@@ -1,7 +1,7 @@
 """Discord Components V2 target, renderer, and runtime adapter."""
 
 from squid_layouts.discord import delivery, durability
-from squid_layouts.discord.actions import ActionResponder, native
+from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
 from squid_layouts.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
@@ -47,5 +47,6 @@ __all__ = [
     "native",
     "page_controls",
     "render_static",
+    "responder",
     "trim",
 ]
