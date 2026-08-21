@@ -16,7 +16,11 @@ Modal handling is the last UI surface the framework does not own:
   gone.
 - `modal.py` wraps text inputs only, while modals now accept string/user/role/channel
   selects, file uploads, radio and checkbox groups (docs.discord.com components
-  reference, checked 2026-08-21). The field vocabulary below maps nearly 1:1.
+  reference, checked 2026-08-21). discord.py 2.7.1 ships all of them (`Label`, modal
+  selects, `FileUpload`, `RadioGroup`, `CheckboxGroup`), so the ceiling
+  `min(protocol, library)` is currently the protocol — but the release trains are
+  independent; re-verify both at implementation. The field vocabulary below maps
+  nearly 1:1.
 
 ## Design
 
