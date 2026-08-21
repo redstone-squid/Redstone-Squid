@@ -135,9 +135,9 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         ladders = self._field_ladders()
 
-        # A nested section per group: each field steps its own Condense ladder independently,
-        # rather than in the lockstep the old FieldGroup ladder gave a whole group — finer
-        # granularity, not a regression. Groups with no matching fields render as nothing.
+        # A nested section per group: each field steps its own Condense ladder independently
+        # rather than a whole group stepping in lockstep — finer granularity, not a
+        # regression. Groups with no matching fields render as nothing.
         def group(title: str, names: set[str]) -> sl.LayoutNode | None:
             entries = tuple(
                 sl.field(
@@ -165,9 +165,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         media = await self._get_media_urls()
         extra_media = media[1:]
         return sl.section(
-            # The body is the card's shock absorber: sl.truncate lets it give up characters
-            # under pressure before a field group, media, or the footer loses any, mirroring
-            # presets.card's fixed field/footer priority over the description.
+            # The body is the card's shock absorber: truncate lets it give up characters
+            # under pressure before a field group, media, or the footer loses any.
             description and sl.truncate(sl.paragraph(description)),
             group("Review warnings", review_names),
             group("Size & performance", performance_names),
