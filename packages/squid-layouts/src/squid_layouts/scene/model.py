@@ -74,6 +74,16 @@ class SceneSelect:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneRoutedSelect:
+    options: tuple[SceneOption, ...]
+    route_id: str
+    placeholder: str | None = None
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class SceneRow:
     items: tuple[SceneLink | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
@@ -121,6 +131,7 @@ type SceneNode = (
     | SceneSeparator
     | SceneRow
     | SceneSelect
+    | SceneRoutedSelect
     | SceneRoutedButton
     | SceneThumbnail
     | SceneGallery
