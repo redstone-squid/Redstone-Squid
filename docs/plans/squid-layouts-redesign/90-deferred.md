@@ -42,6 +42,13 @@ are not re-derived or accidentally adopted later.
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands.
+- **`sl.resource` descriptor** (declared `pending | ready | failed` state with
+  `.reload()`), cut from plan 09. Under awaited `on_load` the pending state is never
+  observable at first paint, and without a dependency model it worsens its motivating
+  consumer: `SettingsPanel` fetches `_preset`/`_weights` as a function of `self._kind`,
+  which needs declared deps and an optimistic set before `.reload()` beats the explicit
+  `open_voting` method. Revisit only with a dependency design (declared deps or tracked
+  reads during the fetch), plus a staleness guard for out-of-order reloads.
 - **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
   in the architecture doc's gaps; unchanged priority.
 - **Cross-page multi-select** — still rejected pending an explicit grouping/commit
