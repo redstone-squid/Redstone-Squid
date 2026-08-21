@@ -79,6 +79,14 @@ def test_details_disclosure_is_presentation_state() -> None:
     assert any(isinstance(node, SceneText) and "hidden body" in node.content for node in opened.scene.children)
 
 
+def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
+    session = PresentationSession()
+
+    assert session.selection("catalog", initial=("two",)).selected == ("two",)
+    session.select("catalog", ())
+    assert session.selection("catalog", initial=("two",)).selected == ()
+
+
 def test_navigation_groups_six_destinations() -> None:
     document = Navigation(
         "tabs",
