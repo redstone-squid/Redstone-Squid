@@ -215,7 +215,7 @@ class PollModal(ErrorHandledModal):
 class CustomDurationModal(ErrorHandledModal):
     """Accept a duration outside the presets."""
 
-    def __init__(self, confirmation: PollConfirmation | PollConfirmationComponent):
+    def __init__(self, confirmation: PollConfirmation):
         super().__init__(title="Custom poll duration")
         self.confirmation = confirmation
         self.duration = discord.ui.TextInput(default="24h", max_length=8, placeholder="30m, 12h, 7d")
@@ -538,18 +538,32 @@ class PollConfirmationComponent(sl.Component):
     async def _duration_changed(self, event: sl.ChoiceEvent) -> None:
         chosen = event.selected[0]
         if chosen == CUSTOM_DURATION:
-            await sl.discord.responder(event).send_modal(CustomDurationModal(self))
+            await event.present_form(
+                sl.FormSpec(
+                    "Custom poll duration",
+                    (
+                        sl.DurationField(
+                            key="duration",
+                            label="Duration",
+                            placeholder="30m, 12h, 7d",
+                            maximum=MAX_POLL_DURATION_SECONDS,
+                            minimum=MIN_POLL_DURATION_SECONDS,
+                            parser=parse_poll_duration,
+                        ),
+                    ),
+                    prefill={"duration": self.draft.duration_seconds},
+                ),
+                key="custom-duration",
+                on_submit=self._custom_duration_submitted,
+            )
             return
         self.draft = replace(self.draft, duration_seconds=int(chosen))
 
+    async def _custom_duration_submitted(self, event: sl.SubmitEvent) -> None:
+        self.draft = replace(self.draft, duration_seconds=cast(int, event.values["duration"]))
+
     async def _scope_changed(self, event: sl.ChoiceEvent) -> None:
         self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
-
-    async def set_duration(self, interaction: discord.Interaction, seconds: int) -> None:
-        self.draft = replace(self.draft, duration_seconds=seconds)
-        if self._mount is None:
-            return
-        await self._mount.flush(interaction)
 
     async def _publish(self, event: sl.PressEvent) -> None:
         interaction = sl.discord.native(event)
