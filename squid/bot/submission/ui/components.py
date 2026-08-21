@@ -267,12 +267,12 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
 
 
 @router.route(build_edit)
-async def edit_build(interaction: Interaction[Any], params: Mapping[str, str]) -> None:
+async def edit_build(interaction: Interaction[Any], params: Mapping[str, Any]) -> None:
     """Open the build editor for the build a posted card points at."""
     # FIXME: circular import
     from squid.bot.submission.ui.views import BuildEditComponent
 
-    build = await interaction.client.services.builds.get(int(params["build_id"]))
+    build = await interaction.client.services.builds.get(params["build_id"])
     if build is None:
         # The card outlived its build; say so rather than failing the interaction silently.
         locale = await resolve_locale(interaction, interaction.client.services.settings)
