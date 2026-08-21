@@ -29,10 +29,8 @@ from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
-    Choice,
     Embed,
     Extension,
-    Fold,
     Footer,
     Gallery,
     LinkButton,
@@ -46,6 +44,8 @@ from squid_layouts.primitives.nodes import (
     SelectMenu,
     Sep,
     Thumbnail,
+    Variant,
+    Variants,
 )
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
@@ -196,14 +196,6 @@ def _lower_children(
                 )
             case Panel(children=children, accent=accent):
                 lowered.append(Panel(_lower_children(children, target, limits), accent))
-            case Fold(primary=primary, fallback=fallback, priority=priority):
-                lowered.append(
-                    Fold(
-                        _lower_single(primary, target, limits),
-                        _lower_single(fallback, target, limits),
-                        priority,
-                    )
-                )
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                 adapter = target.extensions.get(kind)
                 if adapter is None:
@@ -226,26 +218,22 @@ def _lower_children(
                         payload=prepared.scene_payload,
                     )
                 )
-            case Choice(variants=variants, priority=priority):
+            case Variants(variants=variants, priority=priority):
                 supported = [variant for variant in variants if variant.requires <= target.capabilities]
                 if not supported:
-                    message = "Choice has no variant supported by the selected target"
+                    message = "Variants has no variant supported by the selected target"
                     raise LayoutInvariantError(message)
-                branch = _lower_single(supported[-1].node, target, limits)
-                for variant in reversed(supported[:-1]):
-                    branch = Fold(_lower_single(variant.node, target, limits), branch, priority)
-                lowered.append(branch)
+                # `requires` is cleared rather than carried: capability selection happens here
+                # and exactly once, leaving the solver a pure budget ladder.
+                lowered.append(
+                    Variants(
+                        tuple(Variant(_lower_children(variant.nodes, target, limits)) for variant in supported),
+                        priority,
+                    )
+                )
             case _:
                 lowered.append(node)
     return tuple(lowered)
-
-
-def _lower_single(node: Node, target: TargetProfile, limits: V2Limits) -> Node:
-    lowered = _lower_children((node,), target, limits)
-    if len(lowered) != 1:
-        message = "a structural choice variant must lower to one node"
-        raise LayoutInvariantError(message)
-    return lowered[0]
 
 
 def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
@@ -305,9 +293,14 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
             case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
-            case Fold(primary=primary, fallback=fallback):
-                walk(primary, f"{path}.primary")
-                walk(fallback, f"{path}.fallback")
+            case Variants(variants=variants):
+                # Every rung is checked, not just the one the solver will open on, so a
+                # document is rejected for a bad rung it might never reach. That also means
+                # two rungs cannot share a Paginate key — as under the previous Fold, whose
+                # primary and fallback were both walked.
+                for index, variant in enumerate(variants):
+                    for child_index, child in enumerate(variant.nodes):
+                        walk(child, f"{path}.variant.{index}.{child_index}")
             case _:
                 return
 
@@ -624,7 +617,7 @@ def _plan_cache_key(
 
 def _cacheable(nodes: Sequence[Node]) -> bool:
     def check(node: Node) -> bool:
-        if isinstance(node, Extension | RawItem | Fold | Choice):
+        if isinstance(node, Extension | RawItem | Variants):
             return False
         if isinstance(node, Panel):
             return all(check(child) for child in node.children)

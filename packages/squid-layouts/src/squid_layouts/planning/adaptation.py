@@ -15,7 +15,6 @@ from squid_layouts.primitives.nodes import (
 )
 from squid_layouts.primitives.nodes import (
     Button,
-    Fold,
     Footer,
     Gallery,
     Lines,
@@ -28,6 +27,8 @@ from squid_layouts.primitives.nodes import (
     SelectMenu,
     Text,
     Thumbnail,
+    Variant,
+    Variants,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
@@ -153,13 +154,13 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case BestEffort(node=child):
             policy: Overflow = Spill() if isinstance(child, List | Fields) else Truncate()
             return [_with_overflow(item, policy) for item in _node(child, path, context)]
-        case FallbackContent(primary=primary, alternate=alternate):
-            return [
-                Fold(
-                    _single(_node(primary, f"{path}.primary", context)),
-                    _single(_node(alternate, f"{path}.alternate", context)),
-                )
-            ]
+        case FallbackContent(primary=primary, alternates=alternates):
+            rungs = [Variant(tuple(_node(primary, f"{path}.primary", context)))]
+            rungs.extend(
+                Variant(tuple(_node(alternate, f"{path}.alternate.{index}", context)))
+                for index, alternate in enumerate(alternates)
+            )
+            return [Variants(tuple(rungs))]
         case Actions():
             return _actions(node, path, context)
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
@@ -264,10 +265,6 @@ def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> l
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))
     return lowered
-
-
-def _single(nodes: Sequence[Node]) -> Node:
-    return nodes[0] if len(nodes) == 1 else Panel(tuple(nodes))
 
 
 def _with_overflow(node: Node, overflow: Overflow) -> Node:

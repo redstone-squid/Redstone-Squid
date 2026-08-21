@@ -404,8 +404,15 @@ class OptionalContent:
 
 @dataclass(frozen=True, slots=True)
 class FallbackContent:
+    """Complete author-supplied representations of one region, best first."""
+
     primary: LayoutNode
-    alternate: LayoutNode
+    alternates: tuple[LayoutNode, ...]
+
+    def __post_init__(self) -> None:
+        if not self.alternates:
+            message = "FallbackContent needs at least one alternate"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -459,9 +466,16 @@ def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> Op
     return OptionalContent(node, importance)
 
 
-def fallback(primary: LayoutNode, alternate: LayoutNode) -> FallbackContent:
-    """Declare a complete author-supplied alternate representation."""
-    return FallbackContent(primary, alternate)
+def fallback(primary: LayoutNode, *alternates: LayoutNode) -> FallbackContent:
+    """Declare complete author-supplied alternate representations, in descending preference.
+
+    Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
+    steps down the ladder one rung at a time under component pressure.
+    """
+    if not alternates:
+        message = "sl.fallback() needs at least one alternate"
+        raise ValueError(message)
+    return FallbackContent(primary, alternates)
 
 
 def best_effort(node: LayoutNode) -> BestEffort:

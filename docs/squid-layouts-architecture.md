@@ -81,7 +81,9 @@ Target-shaped nodes live under `squid_layouts.primitives`. Their policies are ex
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
 - `Alt`/`Alts` supply text ladders and per-entry drop priority.
 - `Paginate` has an explicit key and measured footer/navigation chrome.
-- `Fold` supplies a complete structural alternate for component pressure.
+- `Variants` supplies an ordered ladder of complete structural alternates for component
+  pressure; rungs may be capability-gated, and the planner filters them before the solver
+  steps the survivors.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
