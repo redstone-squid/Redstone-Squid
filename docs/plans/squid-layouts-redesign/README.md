@@ -28,7 +28,7 @@ is not re-derived later.
 
 | # | Plan | Summary |
 |---|------|---------|
-| 08 | [Transactional state coverage](08-transactional-state-coverage.md) | Plain attributes get assignment-level rollback; PARALLEL_READ rejects them; docs state the real guarantee; `state()` gets typed overloads. |
+| 08 | [Transactional state coverage](08-transactional-state-coverage.md) | Undeclared writes are reported rather than half-tracked: PARALLEL_READ rejects them, `sl.strict_state()` raises. `sl.state()` gains a no-initial form, `copy="ref"`, and typed overloads; the panels declare their view state. Shipped. |
 | 09 | [Async data loading](09-async-data-loading.md) | `on_load` hook replaces every hand-rolled `load()`-before-mount, awaited inside 15's send seam. After 15. The `sl.resource` descriptor moved to `90-deferred.md` pending a dependency model. |
 | 10 | [Selection ownership](10-selection-ownership.md) | One rule for selected/focused/open: controlled when the author passes a value, presentation-managed when `None`. Alongside/after 04. |
 | 11 | [Small warts sweep](11-small-warts.md) | Vestigial `Composition.interventions`, `Choices(minimum=1)` audit, custom-id collision test, post-01 `build_view` naming. |
