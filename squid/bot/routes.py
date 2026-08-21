@@ -9,9 +9,14 @@ Handlers register themselves with `router` from their own modules; `RedstoneSqui
 the router once every extension has loaded, which is what freezes the table.
 """
 
+from typing import TYPE_CHECKING
+
 import discord
 
 import squid_layouts as sl
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 poll_close = sl.Route("poll:close")
 poll_refresh = sl.Route("poll:refresh")
@@ -27,4 +32,6 @@ async def _route_error_hook(interaction: discord.Interaction, error: Exception, 
     await handle_interaction_error(interaction, error, surface=source)
 
 
-router = sl.discord.Router(on_error=_route_error_hook)
+# Annotated rather than subscripted at runtime, because `app` imports this module: PEP 649
+# defers the annotation, so the client type is checked without the import cycle.
+router: sl.discord.Router[RedstoneSquid] = sl.discord.Router(on_error=_route_error_hook)

@@ -1,8 +1,7 @@
 """Build log ingestion consent banner and ephemeral permission flow."""
 
 import logging
-from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord import Interaction, TextChannel
@@ -20,7 +19,7 @@ from squid.core.i18n import _
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
-    pass
+    from squid.bot.app import RedstoneSquid
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
 
 @router.route(build_log_consent)
-async def open_consent_prompt(interaction: Interaction[Any], _params: Mapping[str, Any]) -> None:
+async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
     await interaction.response.defer(ephemeral=True)
     locale = await resolve_locale(interaction, interaction.client.services.settings)
