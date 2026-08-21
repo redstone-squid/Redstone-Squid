@@ -10,8 +10,10 @@ import pytest
 
 from squid_layouts import (
     ActionPolicy,
+    Asset,
     Component,
     Document,
+    InlineAsset,
     LayoutNode,
     PressEvent,
     ReactiveWriteError,
@@ -565,6 +567,140 @@ class TestDeliveryAtomicity:
 
         assert mount._generation > live_generation
         assert not mount._dirty
+
+
+class _Destination:
+    """A recording destination. `message` is whatever it hands back to the mount."""
+
+    def __init__(self, message: Any = None, *, raises: Exception | None = None) -> None:
+        self.message = message
+        self.raises = raises
+        self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
+
+    async def __call__(self, view: discord.ui.LayoutView, files: list[discord.File]) -> Any:
+        self.calls.append((view, files))
+        if self.raises is not None:
+            raise self.raises
+        return self.message
+
+
+class Report(Component):
+    """A component carrying one inline asset, so a send has files to hand over."""
+
+    def render(self):
+        return Document(
+            (Text("summary"),),
+            (Asset("report", "report.txt", "text/plain", InlineAsset(b"full report")),),
+        )
+
+
+class TestSend:
+    """`Mount.send` runs stage -> deliver -> commit; the destination only says where."""
+
+    async def test_a_successful_send_commits_and_keeps_the_message_handle(self):
+        mount = Mount(Counter(), timeout=None)
+        message = fake_message()
+        destination = _Destination(message)
+
+        sent = await mount.send(destination)
+
+        assert sent is message
+        assert "inc" in mount._handlers
+        assert mount._generation == 1
+        assert not mount.pending
+        assert mount.handle is not None
+        assert mount.handle.permanent
+
+    async def test_a_destination_with_no_message_commits_and_waits_for_the_first_click(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+
+        sent = await mount.send(_Destination(None))
+
+        # Delivered, so the render is live -- but nothing came back to write through.
+        assert sent is None
+        assert mount._generation == 1
+        assert not mount.pending
+        assert mount.handle is None
+
+        # The first click renews the mount, exactly as an ephemeral send relies on.
+        await mount.dispatch("inc", fake_interaction())
+
+        assert component.count == 1
+        assert mount.handle is not None
+
+    async def test_an_abandoned_delivery_leaves_the_mount_resendable(self):
+        mount = Mount(Counter(), timeout=None)
+        abandoned = _Destination(raises=delivery.DeliveryAbandoned())
+
+        sent = await mount.send(abandoned)
+
+        # Nothing reached Discord, so nothing is live: no handlers, no handle, still dirty.
+        assert sent is None
+        assert mount._generation == 0
+        assert mount._handlers == {}
+        assert mount.handle is None
+        assert mount.pending
+
+        message = fake_message()
+        assert await mount.send(_Destination(message)) is message
+        # Generation 2, not 1: the abandoned candidate does not hand its control ids on.
+        assert mount._generation == 2
+        assert not mount.pending
+
+    async def test_a_failed_delivery_propagates_and_the_next_send_recovers(self):
+        mounted: list[str] = []
+        panel = Panel(mounted)
+        mount = Mount(panel, timeout=None)
+        panel.show_child = True
+
+        with pytest.raises(discord.HTTPException):
+            await mount.send(_Destination(raises=_http_error()))
+
+        assert mount._generation == 0
+        assert mount._handlers == {}
+        assert mount.pending
+        # A candidate that was never delivered must not fire its lifecycle hooks.
+        assert mounted == []
+
+        await mount.send(_Destination(fake_message()))
+
+        assert mount._generation > 0
+        assert not mount.pending
+        assert mounted == ["child"]
+
+    async def test_the_staged_assets_reach_the_destination(self):
+        mount = Mount(Report(), timeout=None)
+        destination = _Destination(fake_message())
+
+        await mount.send(destination)
+
+        _, files = destination.calls[0]
+        assert [file.filename for file in files] == ["report.txt"]
+
+    async def test_send_supersedes_a_render_that_was_only_staged(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        staged = mount.build_view()
+        component.count = 5
+
+        destination = _Destination(fake_message())
+        await mount.send(destination)
+
+        delivered, _ = destination.calls[0]
+        assert delivered is not staged
+        assert staged.is_finished()
+        assert mount._pending is None
+        # The delivered generation is the one the mount is now live on.
+        assert mount._view is delivered
+
+    async def test_a_finished_mount_does_not_send(self):
+        mount = Mount(Counter(), timeout=None)
+        await mount.finish(disable=False)
+        destination = _Destination(fake_message())
+
+        assert await mount.send(destination) is None
+        assert destination.calls == []
 
 
 class TestStateDescriptor:
