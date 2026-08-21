@@ -26,6 +26,7 @@ from squid_layouts.discord import (
     Reactor,
     delivery,
 )
+from squid_layouts.discord.mount import _custom_id
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction, fake_message
 from squid_layouts.primitives import (
     ActionGroup,
@@ -144,6 +145,15 @@ class TestRenderAndWire:
         second = _button(commit_render(mount))
 
         assert first.custom_id != second.custom_id
+
+    def test_custom_id_digests_do_not_collide_across_a_shared_prefix(self):
+        shared_prefix = "section." * 20
+        first = _custom_id("mount", 1, shared_prefix + "one")
+        second = _custom_id("mount", 1, shared_prefix + "two")
+
+        assert len(first) <= 100
+        assert len(second) <= 100
+        assert first != second
 
     async def test_keyed_document_root_pages_are_live_mount_navigation(self):
         mount = Mount(RootToolbar(), timeout=None)
