@@ -150,6 +150,14 @@ portable actor facts and response intents: notice, present_form, download, redir
 finish. Each frontend implements ActionResponder; Discord details live in
 sl.discord.ActionResponder.
 
+A mount writes back through an `EditHandle` rather than a stored message: a way to reach one
+already-sent message, and how long it is good for. The bot's own credentials never expire;
+an interaction's do, and every click carries a fresh one, so `Mount` keeps the longest-lived
+handle it has seen. A handle that no longer addresses its message raises `StaleHandleError`,
+which is the one place webhook tokens and response shapes are understood. When no handle is
+live the render waits in `Mount.pending` for the next interaction — `refresh()` has always
+promised the next opportunity rather than the current instant.
+
 | Policy | Concurrency | Stale control | State writes |
 |---|---|---|---|
 | EXCLUSIVE | serialized per mount | ignored and acknowledged | transactional |
@@ -221,6 +229,9 @@ two workers from dispatching the same visible controls after a restart.
 - Exact `primitives.SelectMenu` overflow is intentionally a planning error; semantic
   interactions own legal paging. Cross-page multi-select needs an explicit grouping or commit
   model and is rejected rather than approximated.
+- An ephemeral message that nobody has interacted with for over 15 minutes cannot be
+  edited out of band at all; Discord expires the only credentials that reach it. Interactive
+  use is unaffected, and `Mount.pending` reports a render held back for this reason.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
 - The base distribution is dependency-free; `squid-layouts[discord]` installs discord.py and anyio for the adapter.

@@ -30,9 +30,12 @@ are not re-derived or accidentally adopted later.
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
 - **Ephemeral session handoff** (Cascade-style: arm a refresh control before token
-  expiry, rebuild the session from the fresh interaction). Plan 07's cap + graceful
-  degradation covers today's views; the handoff is only worth it for an ephemeral view
-  needing >14 minutes of life.
+  expiry, rebuild the session from the fresh interaction). Mostly retired: plan 07's
+  `EditHandle` renews on every click, so an ephemeral panel in use stays writable
+  indefinitely. What remains is an ephemeral view that needs a *background* refresh after
+  more than 15 minutes with nobody touching it — the render simply waits in `Mount.pending`
+  until someone does. Only worth building for a view that must update itself unattended,
+  which none does.
 - **Participant tracking / shared sessions** — plan 12 v1 ships instance policies and
   `allowed_users`; participant lifecycle waits for a feature that needs it.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
