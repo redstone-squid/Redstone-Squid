@@ -102,11 +102,14 @@ renderer can choose an appropriate Markdown implementation.
 ## Components and Vue-inspired reactivity
 
 Components render synchronously from state. state observes assignment and nested list, dict,
-and set mutation. `state(factory=...)` avoids shared mutable defaults:
+and set mutation. A default is deep-copied per instance, so `sl.state([])` is safe; reach for
+`state(factory=...)` when the initial value must be *computed* per instance rather than copied
+from a template, since the declaration itself runs once, at class-body time:
 
     class Search(sl.Component):
         query: str = sl.state("")
-        results: list[str] = sl.state(factory=list)
+        results: list[str] = sl.state([])
+        opened_at: Instant = sl.state(factory=Instant.now)
 
         @sl.computed
         def title(self) -> str:
