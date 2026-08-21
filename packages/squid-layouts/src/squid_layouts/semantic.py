@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.primitives.styles import Color
 from squid_layouts.text import TextLike
@@ -307,6 +308,19 @@ class Measure:
 
 
 @dataclass(frozen=True, slots=True)
+class FormTrigger:
+    """A content entry point that presents a portable form."""
+
+    key: str
+    label: TextLike
+    spec: FormSpec
+    on_submit: SubmitHandler
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
 class Action:
     key: str
     label: TextLike
@@ -509,6 +523,7 @@ type SemanticNode = (
     | Status
     | Progress
     | Measure
+    | FormTrigger
     | Actions
     | Choices
     | RoutedChoices

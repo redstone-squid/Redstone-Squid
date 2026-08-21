@@ -3,9 +3,12 @@
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_layouts.text import TextLike
+
+if TYPE_CHECKING:
+    from squid_layouts.forms import FormIssue, FormLike, SubmitHandler
 
 
 class ActionPolicy(StrEnum):
@@ -33,9 +36,9 @@ class Actor:
 class ActionResponder(Protocol):
     """Small UI response surface implemented by each frontend adapter.
 
-    Every method here is one that any frontend can honestly implement. Presenting a form
-    and delivering a file are not — their payloads are frontend objects — so they live on
-    the concrete adapters, reached through `sl.discord.responder(event)`.
+    Every method here is one that any frontend can honestly implement. Forms joined this
+    surface once their schemas became portable; frontend-native payloads remain on concrete
+    adapters reached through helpers such as `sl.discord.responder(event)`.
     """
 
     async def acknowledge(self) -> None: ...
@@ -45,6 +48,15 @@ class ActionResponder(Protocol):
     async def redirect(self, url: str) -> None: ...
 
     async def finish(self) -> None: ...
+
+    async def present_form(
+        self,
+        form: FormLike,
+        *,
+        key: str,
+        on_submit: SubmitHandler | None = None,
+        policy: ActionPolicy | None = None,
+    ) -> None: ...
 
     def invalidate(self) -> None: ...
 
@@ -76,6 +88,17 @@ class ActionEvent:
     async def finish(self) -> None:
         await self.responder.finish()
 
+    async def present_form(
+        self,
+        form: FormLike,
+        *,
+        key: str,
+        on_submit: SubmitHandler | None = None,
+        policy: ActionPolicy | None = None,
+    ) -> None:
+        """Present a portable form through the dispatching frontend."""
+        await self.responder.present_form(form, key=key, on_submit=on_submit, policy=policy)
+
     def invalidate(self) -> None:
         """Request a redraw after presentation-only state changes."""
         self.responder.invalidate()
@@ -97,7 +120,9 @@ class SelectionEvent(ActionEvent):
 class SubmitEvent(ActionEvent):
     """A portable form was submitted."""
 
-    values: Mapping[str, str] = field(default_factory=dict)
+    values: Mapping[str, object] = field(default_factory=dict)
+    attempted: Mapping[str, object] = field(default_factory=dict)
+    errors: tuple[FormIssue, ...] = ()
 
 
 type ActionHandler = Callable[[ActionEvent], Awaitable[None]]

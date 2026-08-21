@@ -367,6 +367,7 @@ def plan(
         localization=localization,
         session=presentation,
         pages=broker,
+        capabilities=target.capabilities,
         search_budget=search_budget,
     )
     lowered = _lower_children(semantic.nodes, target, limits)

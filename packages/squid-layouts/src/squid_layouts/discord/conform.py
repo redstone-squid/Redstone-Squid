@@ -7,6 +7,8 @@ built view, clamps every length it can, and reports each intervention. Tests tre
 a failure; production degrades to an ugly-but-delivered message.
 """
 
+from typing import Any
+
 import discord
 from discord.ui.select import BaseSelect
 
@@ -76,6 +78,7 @@ def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Li
 
     for child in modal.children:
         text_input: discord.ui.TextInput | None = None
+        component: discord.ui.Item[Any] | None = None
         if isinstance(child, discord.ui.Label):
             if len(child.text) > limits.label_text:
                 interventions.append(f"label text {len(child.text)} > {limits.label_text}")
@@ -83,19 +86,24 @@ def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Li
             if child.description is not None and len(child.description) > limits.label_description:
                 interventions.append(f"label description {len(child.description)} > {limits.label_description}")
                 child.description = trim(child.description, limits.label_description)
-            if isinstance(child.component, discord.ui.TextInput):
-                text_input = child.component
+            component = child.component
+            if isinstance(component, discord.ui.TextInput):
+                text_input = component
         elif isinstance(child, discord.ui.TextInput):
             text_input = child
         if text_input is not None:
             _conform_text_input(text_input, limits, interventions)
+        elif isinstance(component, BaseSelect):
+            _conform_select(component, limits, interventions)
+        elif isinstance(component, discord.ui.RadioGroup | discord.ui.CheckboxGroup):
+            _conform_modal_options(component, limits, interventions)
 
     if strict and interventions:
         raise LimitViolationError(interventions)
     return interventions
 
 
-def _report_custom_id(item: discord.ui.Button | BaseSelect, limits: V2Limits, interventions: list[str]) -> None:
+def _report_custom_id(item: object, limits: V2Limits, interventions: list[str]) -> None:
     """Report an over-budget custom id, never clamp it.
 
     Every other string here degrades gracefully when trimmed. A custom id does not: a
@@ -139,6 +147,29 @@ def _conform_select(select: BaseSelect, limits: V2Limits, interventions: list[st
             interventions.append(f"option description {len(option.description)} > {limits.option_description}")
             option.description = trim(option.description, limits.option_description)
     select.options = options
+
+
+def _conform_modal_options(
+    component: discord.ui.RadioGroup | discord.ui.CheckboxGroup,
+    limits: V2Limits,
+    interventions: list[str],
+) -> None:
+    _report_custom_id(component, limits, interventions)
+    options = component.options
+    if len(options) > 10:
+        interventions.append(f"{len(options)} modal options exceed 10")
+        options = options[:10]
+    for option in options:
+        if len(option.label) > limits.option_label:
+            interventions.append(f"option label {len(option.label)} > {limits.option_label}")
+            option.label = trim(option.label, limits.option_label)
+        if len(option.value) > limits.option_value:
+            interventions.append(f"option value {len(option.value)} > {limits.option_value}")
+            option.value = option.value[: limits.option_value]
+        if option.description is not None and len(option.description) > limits.option_description:
+            interventions.append(f"option description {len(option.description)} > {limits.option_description}")
+            option.description = trim(option.description, limits.option_description)
+    component.options = options
 
 
 def _conform_gallery(gallery: discord.ui.MediaGallery, limits: V2Limits, interventions: list[str]) -> None:
