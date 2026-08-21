@@ -179,7 +179,9 @@ def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     driving a destination that would only ever hand back `None`.
 
     Reaches past `send` on purpose: the alternative is making every one of these call sites
-    await, for no coverage of anything the real send path does.
+    await, for no coverage of anything the real send path does. For the same reason it runs no
+    `on_load` -- a test that wants a loaded render wants the real seam,
+    `await mount.send(delivered_to(fake_message()))`.
     """
     view = mount.build_view(disabled=disabled)
     candidate = mount._pending

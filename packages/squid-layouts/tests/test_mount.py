@@ -49,6 +49,7 @@ from squid_layouts.primitives import (
     Text,
 )
 from squid_layouts.runtime import ComponentRuntime
+from squid_layouts.runtime.reactivity import _CURRENT
 
 
 class Counter(Component):
@@ -1211,3 +1212,275 @@ class TestDeferredExpansion:
 
         assert tree.deferred == ()
         assert "render:child" in log
+
+
+class Nested(Component):
+    """A loading parent that embeds a loading child, for the tiered-pass case."""
+
+    ready: bool = state(default=False)
+
+    def __init__(self, log: list[str]) -> None:
+        self.log = log
+        self.child = Leaf(log, "child")
+
+    async def on_load(self) -> None:
+        self.log.append("load:parent")
+        self.ready = True
+
+    def render(self):
+        self.log.append("render:parent")
+        nodes: list[LayoutNode] = [Text("parent")]
+        if self.ready:
+            nodes.append(self.embed(self.child, key="child"))
+        return nodes
+
+
+class Siblings(Component):
+    """Two children that enter the tree together, so their loads share one task group."""
+
+    def __init__(self, log: list[str], *, first: Component, second: Component) -> None:
+        self.log = log
+        self.first = first
+        self.second = second
+
+    def render(self):
+        return [self.embed(self.first, key="first"), self.embed(self.second, key="second")]
+
+
+class TestLoading:
+    """`on_load` runs before the first render that would show the component."""
+
+    async def test_the_delivered_render_is_the_loaded_one(self):
+        log: list[str] = []
+        mount = Mount(Leaf(log, "panel"), timeout=None)
+        destination = _Destination(fake_message())
+
+        await mount.send(destination)
+
+        assert log == ["load:panel", "render:panel"]
+        assert len(destination.calls) == 1
+        view, _files = destination.calls[0]
+        assert "panel loaded" in str(view.to_components())
+        assert not mount.pending
+
+    async def test_a_child_loads_before_its_own_first_render(self):
+        log: list[str] = []
+        mount = Mount(Nested(log), timeout=None)
+
+        await mount.send(delivered_to(fake_message()))
+
+        # The parent's loaded render is what reveals the child, so the tiers are serial —
+        # but no component renders before its own load.
+        assert log.index("load:child") < log.index("render:child")
+        assert log.index("load:parent") < log.index("render:parent")
+
+    async def test_siblings_load_together_and_coalesce_into_one_paint(self):
+        log: list[str] = []
+        started = anyio.Event()
+
+        class Slow(Leaf):
+            async def on_load(self) -> None:
+                started.set()
+                await super().on_load()
+
+        class Waits(Leaf):
+            async def on_load(self) -> None:
+                # Deadlocks unless the sibling is genuinely in flight at the same time.
+                await started.wait()
+                await super().on_load()
+
+        component = Siblings(log, first=Waits(log, "waits"), second=Slow(log, "slow"))
+        mount = Mount(component, timeout=None)
+        destination = _Destination(fake_message())
+
+        with anyio.fail_after(5):
+            await mount.send(destination)
+
+        assert len(destination.calls) == 1
+        rendered = str(destination.calls[0][0].to_components())
+        assert "waits loaded" in rendered
+        assert "slow loaded" in rendered
+
+    async def test_a_component_embedded_mid_session_loads_before_the_edit(self):
+        log: list[str] = []
+
+        class Opener(Component):
+            open: bool = state(default=False)
+
+            def __init__(self) -> None:
+                self.child = Leaf(log, "child")
+
+            def render(self):
+                nodes: list[LayoutNode] = [Row((Button("open", self.reveal, "open"),))]
+                if self.open:
+                    nodes.append(self.embed(self.child, key="child"))
+                return nodes
+
+            async def reveal(self, event: PressEvent) -> None:
+                self.open = True
+
+        mount = Mount(Opener(), timeout=None)
+        await mount.send(delivered_to(fake_message()))
+        assert log == []
+
+        interaction = fake_interaction()
+        await mount.dispatch("open", interaction)
+
+        assert log.index("load:child") < log.index("render:child")
+        assert "child loaded" in str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+
+    async def test_a_failed_load_delivers_nothing_and_stays_retryable(self):
+        attempts: list[int] = []
+
+        class Flaky(Component):
+            label: str = state("")
+
+            async def on_load(self) -> None:
+                attempts.append(1)
+                if len(attempts) == 1:
+                    message = "the database is down"
+                    raise RuntimeError(message)
+                self.label = "loaded"
+
+            def render(self):
+                return Text(self.label)
+
+        mount = Mount(Flaky(), timeout=None)
+        destination = _Destination(fake_message())
+
+        with pytest.raises(RuntimeError, match="the database is down"):
+            await mount.send(destination)
+
+        assert destination.calls == []
+        assert mount._generation == 0
+
+        await mount.send(destination)
+
+        assert len(attempts) == 2
+        assert "loaded" in str(destination.calls[0][0].to_components())
+
+    async def test_a_lone_failure_arrives_unwrapped(self):
+        """Error routing downstream of a mount is isinstance-based, not `except*`-based."""
+
+        class Boom(Leaf):
+            async def on_load(self) -> None:
+                message = "no such account"
+                raise LookupError(message)
+
+        log: list[str] = []
+        component = Siblings(log, first=Boom(log, "boom"), second=Leaf(log, "fine"))
+        mount = Mount(component, timeout=None)
+
+        with pytest.raises(LookupError, match="no such account"):
+            await mount.send(_Destination(fake_message()))
+
+    async def test_several_failures_at_once_stay_a_group(self):
+        class Boom(Leaf):
+            async def on_load(self) -> None:
+                await anyio.sleep(0)
+                message = f"{self.name} failed"
+                raise RuntimeError(message)
+
+        log: list[str] = []
+        component = Siblings(log, first=Boom(log, "first"), second=Boom(log, "second"))
+        mount = Mount(component, timeout=None)
+
+        with pytest.raises(BaseExceptionGroup) as caught:
+            await mount.send(_Destination(fake_message()))
+
+        assert len(caught.value.exceptions) == 2
+
+    async def test_a_completed_load_does_not_run_again(self):
+        log: list[str] = []
+        component = Leaf(log, "panel")
+        mount = Mount(component, timeout=None)
+        destination = _Destination(fake_message(), raises=_http_error())
+
+        with pytest.raises(discord.HTTPException):
+            await mount.send(destination)
+        destination.raises = None
+        await mount.send(destination)
+        component.label = "changed"
+        await mount.refresh_now()
+
+        assert log.count("load:panel") == 1
+
+    async def test_build_view_renders_without_loading(self):
+        """The stage-only escape hatch is sync, so it cannot load — and does not pretend to."""
+        log: list[str] = []
+        mount = Mount(Leaf(log, "panel"), timeout=None)
+
+        mount.build_view()
+        await mount.finish(disable=True)
+
+        assert log == ["render:panel"]
+
+    async def test_a_terminal_render_loads_nothing(self):
+        log: list[str] = []
+        component = Nested(log)
+        mount = Mount(component, timeout=None)
+        await mount.send(delivered_to(fake_message()))
+        component.child = Leaf(log, "late")
+        log.clear()
+
+        await mount.finish(disable=True)
+
+        assert not any(entry.startswith("load:") for entry in log)
+
+    async def test_a_tree_declaring_no_loads_takes_no_extra_render(self):
+        renders: list[int] = []
+
+        class Plain(Component):
+            count: int = state(0)
+
+            def render(self):
+                renders.append(self.count)
+                return Text(f"count: {self.count}")
+
+        mount = Mount(Plain(), timeout=None)
+
+        await mount.send(delivered_to(fake_message()))
+
+        assert len(renders) == 1
+
+    async def test_a_load_writes_plain_state_outside_any_transaction(self):
+        """Plan 08's tracking covers handlers; a load is ordinary pre-delivery state."""
+        seen: list[bool] = []
+
+        class Reader(Component):
+            label: str = state("")
+
+            async def on_load(self) -> None:
+                seen.append(_CURRENT.get() is not None)
+                self.untracked = "a plain attribute, written with nothing watching"
+                self.label = "loaded"
+
+            def render(self):
+                return Text(self.label)
+
+        mount = Mount(Reader(), timeout=None)
+        await mount.send(delivered_to(fake_message()))
+
+        assert seen == [False]
+
+    async def test_a_load_that_never_settles_is_reported(self):
+        class Endless(Component):
+            depth: int = state(0)
+
+            def __init__(self) -> None:
+                self.child: Endless | None = None
+
+            async def on_load(self) -> None:
+                self.child = Endless()
+                self.child.depth = self.depth + 1
+
+            def render(self):
+                nodes: list[LayoutNode] = [Text(f"depth {self.depth}")]
+                if self.child is not None:
+                    nodes.append(self.embed(self.child, key="child"))
+                return nodes
+
+        mount = Mount(Endless(), timeout=None)
+
+        with pytest.raises(LayoutInvariantError, match="did not settle"):
+            await mount.send(delivered_to(fake_message()))

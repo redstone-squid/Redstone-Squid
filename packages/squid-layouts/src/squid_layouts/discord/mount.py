@@ -12,8 +12,9 @@ import io
 import logging
 import secrets
 import time
-from collections.abc import Awaitable, Sequence
+from collections.abc import Awaitable, Iterator, Sequence
 from collections.abc import Set as AbstractSet
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol, override
 
@@ -28,6 +29,7 @@ from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
 from squid_layouts.document import Asset, Document, InlineAsset
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.pagination import NavFactory, PageContext, default_nav
 from squid_layouts.primitives.nodes import Node
@@ -47,6 +49,55 @@ from squid_layouts.scene.model import (
 )
 
 logger = logging.getLogger(__name__)
+
+_MAX_LOAD_PASSES = 16
+"""Embedding tiers one delivery loads through -- not retries.
+
+Each pass loads a tier and renders to reveal the next, so this bounds nesting depth. It only
+trips on an `on_load` that keeps embedding freshly unloaded components, which is a loop rather
+than a deep tree.
+"""
+
+
+def _needs_load(component: Component) -> bool:
+    """Whether this instance still owes an `on_load` before it may render.
+
+    A component that does not override the hook is never deferred, so a tree declaring no
+    loads costs no extra pass.
+    """
+    return not component._loaded and type(component).on_load is not Component.on_load
+
+
+def _sole_error(group: BaseExceptionGroup[Any]) -> Exception | None:
+    """The one ordinary exception `group` holds, or `None` if it holds anything else."""
+    leaves: list[BaseException] = []
+    stack: list[BaseException] = list(group.exceptions)
+    while stack:
+        error = stack.pop()
+        if isinstance(error, BaseExceptionGroup):
+            stack.extend(error.exceptions)
+        else:
+            leaves.append(error)
+    if len(leaves) == 1 and isinstance(leaves[0], Exception):
+        return leaves[0]
+    return None
+
+
+@contextmanager
+def _unwrapped() -> Iterator[None]:
+    """Let a task group's lone failure through as itself.
+
+    anyio wraps even a single exception, and error routing downstream of a mount is
+    `isinstance`-based: a host that answers `AccountNotFoundError` with its own wording would
+    show the generic crash card instead. Several failures at once stay a group, which a caller
+    branching on type should catch with `except*`.
+    """
+    try:
+        yield
+    except BaseExceptionGroup as group:
+        if (sole := _sole_error(group)) is not None:
+            raise sole from None
+        raise
 
 
 class ErrorHook(Protocol):
@@ -344,10 +395,17 @@ class Mount:
         return candidate.view
 
     def _stage(self, *, disabled: bool = False) -> _Candidate:
-        """Render and draw one candidate generation, publishing none of it."""
+        """Render and draw one candidate generation, publishing none of it.
+
+        Runs no `on_load`, because it cannot: the paths that can await one stage through
+        :meth:`_stage_loaded`, and the terminal and stage-only paths deliberately do not.
+        """
+        return self._draw(self.runtime.render(), disabled=disabled)
+
+    def _draw(self, tree: ComponentTree, *, disabled: bool = False) -> _Candidate:
+        """Plan and draw one rendered tree into a candidate generation."""
         self._issued += 1
         generation = self._issued
-        tree = self.runtime.render()
         rendered = Document(tree.nodes, tree.assets, tree.document_key)
         handlers: dict[str, ActionBinding] = {}
 
@@ -463,6 +521,46 @@ class Mount:
         """
         return _attachment_files(self._pending.assets if self._pending is not None else self._assets)
 
+    # --- Loading -----------------------------------------------------------------------
+
+    async def _stage_loaded(self, *, disabled: bool = False) -> _Candidate:
+        """Stage a candidate whose every component has completed its `on_load`.
+
+        One pass per embedding tier: the root is known without rendering anything, and each
+        tier's loaded render is what reveals the next. Siblings within a tier load together.
+        A tier that still owes loads is never drawn -- only rendered, and only to find out
+        who they are -- so an incomplete document is never planned. A tree that declares no
+        loads is rendered and drawn exactly once, as it was before this existed.
+
+        A raise leaves every completed load completed, every other one eligible to retry, and
+        nothing staged, so the mount is exactly as deliverable as it was.
+        """
+        for _ in range(_MAX_LOAD_PASSES):
+            if _needs_load(root := self.runtime.root):
+                await self._load_all((root,))
+                continue
+            tree = self.runtime.render(defer=_needs_load)
+            if not tree.deferred:
+                return self._draw(tree, disabled=disabled)
+            await self._load_all(tree.deferred)
+        message = f"mount {self.id}: on_load did not settle in {_MAX_LOAD_PASSES} passes"
+        raise LayoutInvariantError(message)
+
+    async def _load_all(self, components: Sequence[Component]) -> None:
+        """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
+        if len(components) == 1:
+            # The overwhelmingly common case, and no group to unwrap.
+            await self._load_one(components[0])
+            return
+        with _unwrapped():
+            async with anyio.create_task_group() as tasks:
+                for component in components:
+                    tasks.start_soon(self._load_one, component)
+
+    async def _load_one(self, component: Component) -> None:
+        await component.on_load()
+        component._loaded = True
+
     # --- Lifecycle ---------------------------------------------------------------------
 
     async def send(self, destination: deliver.Destination) -> discord.Message | None:
@@ -484,7 +582,9 @@ class Mount:
         if self._pending is not None:
             self._pending.view.stop()
             self._pending = None
-        candidate = self._stage()
+        # The loaded render is the first one the reader sees: one delivery, no loading
+        # paint. A raise here delivered nothing and staged nothing.
+        candidate = await self._stage_loaded()
         try:
             message = await destination(candidate.view, _attachment_files(candidate.assets))
         except deliver.DeliveryAbandoned:
@@ -604,10 +704,11 @@ class Mount:
             await anyio.sleep(self.acknowledgement_timeout)
             await self._acknowledge(interaction)
 
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(watchdog)
-            await self._invoke_and_flush(binding, key, interaction, values)
-            tasks.cancel_scope.cancel()
+        with _unwrapped():
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(watchdog)
+                await self._invoke_and_flush(binding, key, interaction, values)
+                tasks.cancel_scope.cancel()
 
     async def _invoke_and_flush(
         self,
@@ -647,7 +748,9 @@ class Mount:
             if not interaction.response.is_done():
                 await interaction.response.defer()
             return
-        candidate = self._stage()
+        # A component cannot enter the tree without a state write, so a click that changed
+        # nothing never reaches this at all.
+        candidate = await self._stage_loaded()
         source = deliver.handle_from(interaction)
         try:
             wrote = await self._deliver(candidate, through=source)
@@ -706,7 +809,7 @@ class Mount:
     async def refresh_now(self) -> None:
         if self._finished or self._handle is None:
             return
-        candidate = self._stage()
+        candidate = await self._stage_loaded()
         try:
             delivered = await self._deliver(candidate) is not None
         except Exception:
