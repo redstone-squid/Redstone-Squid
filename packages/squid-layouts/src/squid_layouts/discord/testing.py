@@ -103,6 +103,17 @@ def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> lis
     return problems
 
 
+def _fake_message_shape(message_id: int, *, ephemeral: bool, channel_id: int, guild_id: int | None) -> Any:
+    """The read-only half of a message: what it is and where it lives."""
+    return SimpleNamespace(
+        id=message_id,
+        flags=SimpleNamespace(components_v2=True, ephemeral=ephemeral),
+        channel=SimpleNamespace(id=channel_id),
+        guild=None if guild_id is None else SimpleNamespace(id=guild_id),
+        jump_url=f"https://discord.com/channels/{guild_id or '@me'}/{channel_id}/{message_id}",
+    )
+
+
 def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = False) -> Any:
     """A minimal interaction double for exercising mounts without Discord.
 
@@ -128,7 +139,7 @@ def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = 
     response.send_modal = _responds(discord.InteractionResponseType.modal)
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
-        message=SimpleNamespace(id=message_id, flags=SimpleNamespace(components_v2=True, ephemeral=False)),
+        message=_fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7),
         response=response,
         followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock()),
         edit_original_response=AsyncMock(),
@@ -137,13 +148,12 @@ def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = 
     )
 
 
-def fake_message(*, message_id: int = 99, ephemeral: bool = False) -> Any:
+def fake_message(
+    *, message_id: int = 99, ephemeral: bool = False, channel_id: int = 5, guild_id: int | None = 7
+) -> Any:
     """A minimal message double whose `edit` returns itself, as Discord's does."""
-    message = SimpleNamespace(
-        id=message_id,
-        flags=SimpleNamespace(components_v2=True, ephemeral=ephemeral),
-        edit=AsyncMock(),
-    )
+    message = _fake_message_shape(message_id, ephemeral=ephemeral, channel_id=channel_id, guild_id=guild_id)
+    message.edit = AsyncMock()
     message.edit.return_value = message
     return message
 

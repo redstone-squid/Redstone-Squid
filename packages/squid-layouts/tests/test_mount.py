@@ -393,10 +393,8 @@ class TestFinishHooks:
         mount = Mount(Counter(), timeout=None)
         seen: list[Mount] = []
         mount.on_finish(lambda finished: _record(seen, finished))
-        message: Any = SimpleNamespace(
-            flags=SimpleNamespace(components_v2=True),
-            edit=AsyncMock(side_effect=RuntimeError("message is gone")),
-        )
+        message: Any = fake_message()
+        message.edit = AsyncMock(side_effect=RuntimeError("message is gone"))
         await mount.send(delivered_to(message))
 
         with pytest.raises(RuntimeError):
@@ -617,10 +615,7 @@ class TestSelect:
 class TestLifecycle:
     async def test_finish_disables_controls(self):
         mount = Mount(Counter(), timeout=None)
-        message: Any = SimpleNamespace(
-            flags=SimpleNamespace(components_v2=True),
-            edit=AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True))),
-        )
+        message: Any = fake_message()
         await mount.send(delivered_to(message))
 
         await mount.finish()
@@ -634,10 +629,7 @@ class TestLifecycle:
     async def test_refresh_now_edits_bound_message(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        message: Any = SimpleNamespace(
-            flags=SimpleNamespace(components_v2=True),
-            edit=AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True))),
-        )
+        message: Any = fake_message()
         await mount.send(delivered_to(message))
         component.count = 7
 
@@ -725,10 +717,8 @@ class TestDeliveryAtomicity:
     async def test_failed_refresh_leaves_the_mount_repairable(self, monkeypatch):
         component = Counter()
         mount = Mount(component, timeout=None)
-        message: Any = SimpleNamespace(
-            flags=SimpleNamespace(components_v2=True),
-            edit=AsyncMock(side_effect=_http_error()),
-        )
+        message: Any = fake_message()
+        message.edit = AsyncMock(side_effect=_http_error())
         await mount.send(delivered_to(message))
         component.count = 7
         live_generation = mount._generation
@@ -739,7 +729,7 @@ class TestDeliveryAtomicity:
         assert mount._generation == live_generation
         assert mount._dirty
 
-        message.edit = AsyncMock(return_value=SimpleNamespace(flags=SimpleNamespace(components_v2=True)))
+        message.edit = AsyncMock(return_value=message)
         await mount.refresh_now()
 
         assert mount._generation > live_generation

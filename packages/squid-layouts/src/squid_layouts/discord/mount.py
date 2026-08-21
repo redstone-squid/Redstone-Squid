@@ -11,6 +11,7 @@ import hashlib
 import io
 import logging
 import secrets
+import time
 from collections.abc import Awaitable, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ import discord
 from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_layouts.discord import delivery as deliver
+from squid_layouts.discord import live
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
@@ -35,7 +37,14 @@ from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import readonly_transaction, transaction
-from squid_layouts.scene.model import SceneButton, SceneSelect
+from squid_layouts.scene.model import (
+    PlanMetrics,
+    PlanReport,
+    PlanResult,
+    SceneButton,
+    SceneDocument,
+    SceneSelect,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +155,54 @@ class _Candidate:
     session_updates: tuple[SessionUpdate, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class MountAddress:
+    """Where a mount's message is -- for links and diagnostics, never for writing to it.
+
+    Writing goes through an :class:`~squid_layouts.discord.delivery.EditHandle`, which is
+    about credentials and when they expire. These are only coordinates, so they stay true
+    after every handle to the message has gone stale.
+    """
+
+    message_id: int
+    channel_id: int
+    guild_id: int | None
+    jump_url: str
+    ephemeral: bool
+
+
+@dataclass(frozen=True, slots=True)
+class MountSnapshot:
+    """One read-only look at a live mount, for host diagnostics.
+
+    A single call rather than a dozen properties: it fixes what a mount is willing to say
+    about itself, and a caller cannot accidentally mutate what it reads. Everything here is
+    either a scalar or already immutable, so nothing is copied. The deeper payloads — the
+    components' declared state and the presentation session — stay behind `runtime` and
+    `presentation`, because building them costs more than a list of sessions should.
+    """
+
+    id: str
+    component: str
+    """Qualified class name of the root component."""
+    address: MountAddress | None
+    generation: int
+    pending: bool
+    finished: bool
+    age: float
+    """Seconds since the mount was constructed."""
+    idle: float
+    """Seconds since the last render or click — what the timeout actually counts."""
+    expires_in: float | None
+    """Seconds of idle timeout left, or `None` for a mount that never times out."""
+    lock_to: frozenset[int] | None
+    handler_keys: tuple[str, ...]
+    """Action keys the live generation answers to."""
+    scene: SceneDocument | None
+    report: PlanReport | None
+    metrics: PlanMetrics | None
+
+
 class Mount:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
@@ -165,6 +222,11 @@ class Mount:
     ) -> None:
         self.id = secrets.token_urlsafe(6)
         self.component = component
+        # Diagnostics only. `_active` is what the idle timeout counts from: discord.py restarts
+        # the view's timer on every click, and every commit hands it a brand new view.
+        self._born = self._active = time.monotonic()
+        self.address: MountAddress | None = None
+        """Where this mount's message is, once it has one. Read `handle` to write to it."""
         self.chrome = chrome
         self.runtime = ComponentRuntime(component, on_invalidate=self.invalidate, context={CHROME_CONTEXT: chrome})
         self.nav = nav if nav is not None else default_nav(chrome)
@@ -193,6 +255,7 @@ class Mount:
         self._finish_hooks: list[FinishHook] = []
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
+        self._plan: PlanResult | None = None
 
     @property
     def handle(self) -> deliver.EditHandle | None:
@@ -208,6 +271,53 @@ class Mount:
     def finished(self) -> bool:
         """Whether this mount has stopped dispatching, by close, timeout or error."""
         return self._finished
+
+    @property
+    def plan(self) -> PlanResult | None:
+        """The plan behind the generation currently on screen, if one has been committed.
+
+        The resolved scene, the adaptation report and the planner metrics for what the reader
+        is actually looking at — as opposed to what a fresh render would produce now.
+        """
+        return self._plan
+
+    def snapshot(self) -> MountSnapshot:
+        """Describe this mount for a diagnostics surface. See :class:`MountSnapshot`."""
+        idle = time.monotonic() - self._active
+        component = type(self.component)
+        return MountSnapshot(
+            id=self.id,
+            component=f"{component.__module__}.{component.__qualname__}",
+            address=self.address,
+            generation=self._generation,
+            pending=self._dirty,
+            finished=self._finished,
+            age=time.monotonic() - self._born,
+            idle=idle,
+            expires_in=None if self.timeout is None else max(0.0, self.timeout - idle),
+            lock_to=self.lock_to,
+            handler_keys=tuple(sorted(self._handlers)),
+            scene=None if self._plan is None else self._plan.scene,
+            report=None if self._plan is None else self._plan.report,
+            metrics=None if self._plan is None else self._plan.metrics,
+        )
+
+    def _note_address(self, message: discord.Message | None) -> None:
+        """Remember where this mount's message is, the first time Discord says.
+
+        Coordinates never change for a given mount, so this is set once and kept. It reads
+        only what a `Message` already carries, and a `None` from an interaction that has no
+        message simply leaves the mount unlocated.
+        """
+        if message is None or self.address is not None:
+            return
+        self.address = MountAddress(
+            message_id=message.id,
+            channel_id=message.channel.id,
+            guild_id=None if message.guild is None else message.guild.id,
+            jump_url=message.jump_url,
+            ephemeral=bool(message.flags.ephemeral),
+        )
 
     # --- Rendering ---------------------------------------------------------------------
 
@@ -293,9 +403,14 @@ class Mount:
         self._generation = candidate.generation
         self.runtime.commit(candidate.tree)
         self._assets = candidate.assets
+        self._plan = candidate.composition.plan
+        self._active = time.monotonic()
         self._dirty = False
         self._pending = None
         self._swap_view(candidate.view)
+        # The commit point is where a mount becomes something a reader can see and click, and
+        # so the first moment it is worth listing as live. Idempotent after the first.
+        live.track(self)
 
     def _rollback(self, candidate: _Candidate) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
@@ -374,6 +489,7 @@ class Mount:
             raise
         if message is not None:
             self._handle = deliver.handle_for(message)
+            self._note_address(message)
         self._commit(candidate)
         return message
 
@@ -430,6 +546,10 @@ class Mount:
         generation: int | None = None,
     ) -> None:
         """The funnel: finished check -> author lock -> handler -> flush."""
+        self._active = time.monotonic()
+        # A mount sent through an unwaited interaction response never saw its own message; the
+        # click is where it finally learns where it lives.
+        self._note_address(interaction.message)
         if self._finished:
             # A finished mount can still be on screen with live controls: its disable-edit
             # may have failed, or a replacement may have taken over the session while this
