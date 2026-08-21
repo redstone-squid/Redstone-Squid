@@ -70,10 +70,12 @@ class ErrorReportBrowser(sl.Component):
         assets = (report_asset(self.detail),) if self.detail is not None else ()
         return sl.Document(tuple(nodes), assets)
 
-    def _render_list(self) -> Sequence[sl.primitives.Node]:
+    def _render_list(self) -> Sequence[sl.LayoutNode]:
         entries = tuple(_list_line(report) for report in self._reports)
         body = "\n".join(entries) or t(self.locale, _("Nothing has failed within the retention window."))
-        nodes: list[sl.primitives.Node] = [sl.primitives.card(t(self.locale, _("Recent errors")), body)]
+        nodes: list[sl.LayoutNode] = [
+            sl.section(sl.truncate(sl.paragraph(body)), heading=t(self.locale, _("Recent errors")))
+        ]
         if self._reports:
             nodes.append(
                 sl.primitives.SelectMenu(
