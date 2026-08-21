@@ -108,4 +108,8 @@ preference, as it was before this change, rather than a hard constraint.
 
 ## Status
 
-Agreed 2026-08-21 (external audit, verified in-repo); not started.
+Implemented 2026-08-21. The planner now enumerates path-keyed assignments in aggregate
+`CostVector` order, gives every attempt isolated lowering/pager state, prefers an
+undegraded whole-document fit, and caches the winning assignment. The audit construction
+and its stronger local-pager form both select grouped actions in two attempts; a roomy
+document still selects individual actions in one.

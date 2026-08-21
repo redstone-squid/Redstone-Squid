@@ -11,6 +11,7 @@ from squid_layouts import (
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.primitives import Lines, Paginate
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
 from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
@@ -100,6 +101,21 @@ def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
     assert roomy.report.events[0].code == "actions.individual"
     assert roomy.metrics.states_explored == 1
     assert sum(len(node.items) for node in roomy.scene.children if isinstance(node, SceneRow)) == 5
+
+
+def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
+    document = (
+        *(Paragraph(f"component {index}") for index in range(33)),
+        Lines(("first", "second"), overflow=Paginate(key="local", per=1)),
+        Actions(_actions(5), key="demo"),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET)
+
+    assert result.report.events[0].code == "actions.grouped"
+    assert result.metrics.states_explored == 2
+    assert [(pager.key, pager.pages) for pager in result.scene.pagers] == [("local", 2)]
+    assert not result.metrics.search_fallback
 
 
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
