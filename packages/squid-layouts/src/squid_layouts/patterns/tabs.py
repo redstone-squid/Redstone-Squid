@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 
-from squid_layouts.patterns._content import ContentItem, normalize_content, render_content, require_key
+from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, render_content, require_key
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.reactivity import state
 from squid_layouts.semantic import (
@@ -18,7 +18,7 @@ from squid_layouts.semantic import (
 from squid_layouts.text import TextLike
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class Tab:
     """One tab and the content shown while it is selected."""
 
@@ -26,9 +26,11 @@ class Tab:
     label: TextLike
     content: tuple[ContentItem, ...]
 
-    def __post_init__(self) -> None:
-        require_key(self.key, name="Tab.key")
-        object.__setattr__(self, "content", normalize_content(self.content, name=f"Tab {self.key!r}.content"))
+    def __init__(self, key: str, label: TextLike, content: ContentLike) -> None:
+        require_key(key, name="Tab.key")
+        object.__setattr__(self, "key", key)
+        object.__setattr__(self, "label", label)
+        object.__setattr__(self, "content", normalize_content(content, name=f"Tab {key!r}.content"))
 
 
 class Tabs(Component):

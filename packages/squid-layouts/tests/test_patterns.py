@@ -157,6 +157,16 @@ def test_ranked_list_preserves_global_numbering_and_projects_entries() -> None:
     assert "Showing 3 entries" in _texts(view)
 
 
+async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
+    ranked = sl.RankedList([("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2)
+    mount = Mount(ranked, timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("__page_next.leaderboard", fake_interaction())
+    view = commit_render(mount)
+    assert "3. **Edsger** — 10" in _texts(view)
+
+
 def test_ranked_list_top_n_and_explicit_entries() -> None:
     ranked = sl.RankedList(
         [
