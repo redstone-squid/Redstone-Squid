@@ -46,7 +46,7 @@ are not re-derived or accidentally adopted later.
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
   plans [18](18-forms.md)/[19](19-patterns.md) now cover Form, Wizard and
-  MultiChoicePanel; Tabs/Menu/RankedList proceed separately under 19's two-shell rule.
+  MultiChoicePanel; Tabs/Menu/RankedList were also migrated under 19's two-shell rule.
 - **Grid / matrix interaction** (added 2026-08-21) — content grids are a `Table`
   display strategy (`MATRIX`), not a new node; interactive grids start as an
   `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes

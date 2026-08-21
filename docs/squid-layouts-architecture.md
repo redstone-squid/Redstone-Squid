@@ -114,6 +114,43 @@ interpolations and neutralizes mentions; `plain()` requests literal text; `raw_m
 known-safe interpolation back into trusted markup. Scenes preserve the dialect so every
 renderer can choose an appropriate Markdown implementation.
 
+## Patterns: one state machine, two shells
+
+Reusable interaction patterns are authored as pure `state -> tree` state machines. Control and
+content construction enter through `PatternControls`; a pattern never hard-codes `sl.action`, a
+route id, or a frontend mount. The same specification therefore has two execution paths:
+
+| Shell | State location | Controls | Interaction result |
+|---|---|---|---|
+| `ComponentShell` | its declared `pattern_state = sl.state()` | closure-backed `Action`, `Choices`, and `FormTrigger` | mutate state and let the mount redraw |
+| `RouterShell` | caller-defined route parameters | `RoutedAction` and `RoutedChoices` | decode state and replace the complete document |
+
+`PatternRoute(action, state, phase)` is the route-builder boundary. A deterministic button has
+`phase="next"`; the pattern transition has already run and `state` is what the replacement document
+renders. A select or form has `phase="input"`; its route carries the state the submitted values apply
+to, and the handler passes those values to `RouterShell.transition`. Routed form handlers obtain the
+prefilled schema from the pattern's `form_for` method. This distinction prevents a routed shell from
+smuggling an in-process callback into a supposedly restart-surviving control.
+
+Explicit pattern windows use `PageBroker.overrides`, so a route-carried page outranks any cursor and
+is clamped by the same pagination policy as planner-owned lists. The current pattern catalogue is:
+
+- `TabsState.selected` and `MenuState.path` keep navigation stable by key.
+- `RankedListState.page` preserves global rank numbers across explicit windows.
+- `WizardState` retains answers by step key. Computed steps may hide answers without deleting them;
+  returning to the branch restores their prefill, while `live_answers` excludes those orphans from
+  Finish. A content-to-form Next can present the modal directly. Consecutive form steps necessarily
+  render the next step's Continue trigger after submission because Discord forbids opening a modal
+  from a modal-submit response.
+- `MultiChoiceState` separates staged and committed sets. A visible-window submit replaces only that
+  window's membership, group exclusions are applied during the merge, validation gates Apply, and an
+  Apply edge dispatches only when the committed set changes. Panels with at most five options expose
+  a form alternate to the planner.
+
+Route state still has to fit the target's custom-id budget. Large domain drafts should be represented
+by a compact stored identifier; the shell deliberately does not hide a database or persistence
+policy behind pattern state.
+
 ## Components and Vue-inspired reactivity
 
 Components render synchronously from state. state observes assignment and nested list, dict,
