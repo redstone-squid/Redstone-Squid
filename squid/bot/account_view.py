@@ -395,8 +395,9 @@ class AccountPanel(sl.Component):
                         for identity in self.identities
                         if identity.id is not None
                     ),
-                    selected=(str(self.selected_id),) if self.selected_id is not None else (),
-                    on_change=self._selection_changed,
+                    selection=sl.controlled(
+                        (str(self.selected_id),) if self.selected_id is not None else (), self._selection_changed
+                    ),
                 )
             )
         nodes.append(
