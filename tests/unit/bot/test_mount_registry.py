@@ -184,8 +184,9 @@ class TestRacingOpens:
                 tasks.start_soon(lambda m=mount: registry.open(m, slowly(), key=KEY))
 
         assert sum(not mount.finished for mount in mounts) == 1
-        assert registry.get(KEY) is not None
-        assert not registry.get(KEY).finished
+        survivor = registry.get(KEY)
+        assert survivor is not None
+        assert not survivor.finished
 
     async def test_the_lock_map_empties_once_the_key_goes_idle(self):
         registry = MountRegistry()
