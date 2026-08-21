@@ -5,6 +5,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+import squid_layouts as sl
 from squid_layouts.discord import (
     conform,
     render_static,
@@ -15,14 +16,11 @@ from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
 from squid_layouts.primitives import (
     Alt,
     Condense,
-    FieldGroup,
     Lines,
     Never,
     Text,
     alts,
-    card,
 )
-from squid_layouts.primitives.presets import Field
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
@@ -147,9 +145,9 @@ class TestConstrainedShapes:
         with pytest.raises(ValueError, match="no longer than the primary"):
             Alt("tiny", ("much longer fallback",))
 
-    def test_presets_normalize_instead_of_raising(self):
-        # A caller-supplied rung that came out longer than its primary is skipped, not fatal.
-        node = card("T", fields=(Field("Creators", "a, b", alts=("a and 3 others",)),))
+    def test_field_fallbacks_normalize_instead_of_raising(self):
+        # A caller-supplied fallback that came out longer than its primary is skipped, not fatal.
+        node = sl.section(sl.fields(sl.field("Creators", "a, b", fallbacks=("a and 3 others",))), heading="T")
         view = render_static([node])
         assert any("a, b" in text for text in _texts(view))
 
@@ -157,21 +155,19 @@ class TestConstrainedShapes:
 class TestCardFieldLadders:
     def test_url_field_degrades_meaningfully(self):
         urls = [f"https://example.invalid/video-{index}" for index in range(150)]
-        node = card(
-            "Build",
-            "d" * 3500,
-            groups=(
-                FieldGroup(
-                    "Resources",
-                    (
-                        Field(
-                            "Videos",
-                            ", ".join(urls),
-                            alts=(f"{len(urls)} links — first: {urls[0]}", f"{len(urls)} links"),
-                        ),
+        node = sl.section(
+            sl.truncate(sl.paragraph("d" * 3500)),
+            sl.section(
+                sl.fields(
+                    sl.field(
+                        "Videos",
+                        ", ".join(urls),
+                        fallbacks=(f"{len(urls)} links — first: {urls[0]}", f"{len(urls)} links"),
                     ),
                 ),
+                heading="Resources",
             ),
+            heading="Build",
         )
         view = render_static([node])
         text = "\n".join(_texts(view))
