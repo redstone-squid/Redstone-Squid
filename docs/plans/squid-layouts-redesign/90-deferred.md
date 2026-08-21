@@ -65,7 +65,7 @@ are not re-derived or accidentally adopted later.
   partitions*, each independently budgeted, as a coordinator over per-message mounts
   (sharing services/session, routing invalidation) — never a multi-handle `Mount`, which
   would smear message identity through planner, generations, dispatch, and durability.
-  `EditHandle`/`SendTarget` being per-message is what makes the coordinator cheap; keep
+  `EditHandle`/`Destination` being per-message is what makes the coordinator cheap; keep
   `on_load`, context, and session policy free of any root-component-equals-session
   assumption so it stays that way.
 - **Cross-page multi-select** — still rejected pending an explicit grouping/commit
