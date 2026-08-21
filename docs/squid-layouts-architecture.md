@@ -141,6 +141,7 @@ That guarantee reaches declared state, and only declared state:
 | `sl.state(...)` | yes, including nested list, dict, and set mutation | yes |
 | `sl.state(copy="ref")` | on assignment | to the previous reference |
 | a plain attribute | no | no |
+| anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
 
 A plain attribute assigned during a transaction is therefore uncovered, so the framework says
 so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
@@ -196,6 +197,16 @@ invalidation, injected context, presentation state, and the bounded plan cache. 
 scopes action keys and pager keys, detects cycles and duplicate instances, and gives the
 runtime deterministic `on_mount`/`on_unmount` ownership. Components have no mount reference;
 the Discord mount is one frontend consumer of the runtime.
+
+`async def on_load(self)` is where a component fetches what it cannot render without. The
+frontend awaits it before the first delivery that would show the component, once per instance,
+and **before `render()` is ever called on it**: expansion stops at an embedded component that
+still owes a load, so the tier is loaded and then re-rendered rather than rendered empty. The
+delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
+for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
+leaves the load eligible to retry. `Mount.send`, `flush` and `refresh_now` load; `finish`,
+`finish_via` and `build_view` deliberately do not. Data the component can degrade without
+belongs in declared state with a render branch, refreshed by a handler.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
 `DisclosureState`, and `StrategyState`. It is per mounted message/viewer session and separate
