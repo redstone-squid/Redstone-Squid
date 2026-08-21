@@ -12,6 +12,7 @@ import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes import remove_redstoner_role, router
+from squid.bot.ui import render_static
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
@@ -91,7 +92,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        view = sl.discord.render_static(
+        view = render_static(
             [
                 sl.primitives.Text(t(locale, _("Redstoner role controls"))),
                 # Not translated: one panel is read by everyone in the channel, so the
@@ -105,7 +106,8 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                         ),
                     )
                 ),
-            ]
+            ],
+            locale=locale,
         )
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
@@ -152,7 +154,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-        view = sl.discord.render_static(
+        view = render_static(
             [
                 sl.primitives.Text(
                     t(
@@ -163,7 +165,8 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                         url=decision.source_message_url,
                     )
                 )
-            ]
+            ],
+            locale=locale,
         )
         await self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id).send(
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),

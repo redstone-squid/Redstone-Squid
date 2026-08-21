@@ -245,6 +245,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _table(node, context)
         case Panel(children=children, accent=accent):
             return [Panel(tuple(_children(children, path, context)), accent)]
+        case Lines(overflow=Paginate(footer=footer)) if footer is not None:
+            localized = lambda page, pages: _resolve(footer(page, pages), context)
+            return [replace(node, overflow=replace(node.overflow, footer=localized))]
         case _:
             return [node]
 

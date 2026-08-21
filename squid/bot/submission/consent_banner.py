@@ -11,7 +11,7 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import ConsentPrompt, ConsentPromptView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes import build_log_consent, router
-from squid.bot.ui import CardField
+from squid.bot.ui import CardField, render_static
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.mount_registry import SessionKey, WhenOpen
 from squid.bot.utils.sticky_message import StickyMessage
@@ -154,7 +154,7 @@ class BuildLogConsentStickyMessage(StickyMessage):
 
     @override
     async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
-        return sl.discord.render_static(
+        return render_static(
             [
                 sl.primitives.Text(
                     "## \U0001f4cb Build Log Ingestion Consent\n"
