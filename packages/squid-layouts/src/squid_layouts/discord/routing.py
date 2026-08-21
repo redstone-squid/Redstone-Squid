@@ -60,11 +60,6 @@ class _Registration:
     """Parameter names to pass, or None for a handler taking `**kwargs`."""
 
 
-def _sample(route: Route) -> str:
-    """One id standing in for every id ``route`` can build, for the overlap check."""
-    return route.id(**{name: converter.sample for name, converter in zip(route.params, route.converters, strict=True)})
-
-
 def _accepted(route: Route, handler: RouteHandler) -> frozenset[str] | None:
     """Which of ``route``'s parameters ``handler`` asked for, rejecting names it invented."""
     # FORWARDREF, because evaluating a handler's annotations here would resurrect the
@@ -131,12 +126,10 @@ class Router[BotT: discord.Client]:
         classes keyed by template. It also leaves the template unchanged, which is why a
         reload is allowed after `register` while a genuinely new route is not.
 
-        A route that *shadows* another is still rejected. That check substitutes each
-        converter's probe value for every parameter and tries one route's sample id against
-        the other's pattern, which catches the shapes that occur in practice (a literal id
-        under a parameterized one, and the reverse) without claiming to decide regex
-        intersection in general. Resolution is first-match-wins in registration order, so an
-        overlap this misses shadows a later route rather than dispatching a click twice.
+        A route that *shadows* another is rejected outright, by `Route.overlaps`, which is
+        exact rather than sampled: the segment grammar makes "could one id belong to both"
+        a per-position decision. So resolution order cannot decide which handler a click
+        reaches, because an ambiguous table never registers in the first place.
         """
         route = Route(route) if isinstance(route, str) else route
         registration = _Registration(route, handler, _accepted(route, handler))
@@ -144,10 +137,8 @@ class Router[BotT: discord.Client]:
             if existing.route.format == route.format:
                 self._routes[index] = registration
                 return
-        sample = _sample(route)
         for existing in self._routes:
-            other = _sample(existing.route)
-            if existing.route.pattern.fullmatch(sample) or route.pattern.fullmatch(other):
+            if route.overlaps(existing.route):
                 message = f"route {route.format!r} overlaps the already-registered {existing.route.format!r}"
                 raise ValueError(message)
         if self._registered:
