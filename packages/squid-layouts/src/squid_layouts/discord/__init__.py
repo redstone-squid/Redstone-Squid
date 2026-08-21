@@ -4,7 +4,7 @@ from squid_layouts.discord import delivery, durability
 from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
-from squid_layouts.discord.delivery import EditHandle, StaleHandleError
+from squid_layouts.discord.delivery import DeliveryAbandoned, Destination, EditHandle, StaleHandleError
 from squid_layouts.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_layouts.discord.mount import ErrorHook, Mount, MountedView
 from squid_layouts.discord.navigation import Navigator
@@ -22,6 +22,8 @@ __all__ = [
     "ELLIPSIS",
     "ActionResponder",
     "Composition",
+    "DeliveryAbandoned",
+    "Destination",
     "EditHandle",
     "ErrorHook",
     "LabelSpec",
