@@ -407,8 +407,12 @@ class SettingsPanel(sl.Component):
     def weight_for(self, role_id: int) -> float | None:
         return next((weight.multiplier for weight in self._weights if weight.role_id == role_id), None)
 
-    async def load(self) -> None:
-        """Load the first page allowed by the caller."""
+    async def on_load(self) -> None:
+        """Open the first page allowed by the caller.
+
+        Both branches are the same methods the page buttons call, so nothing here is a
+        lifecycle hook masquerading as a re-fetch API.
+        """
         if self.shows_server:
             await self.open_server()
         else:
