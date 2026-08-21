@@ -45,10 +45,14 @@ edit `@original` without ever fetching the message.
    - followup, `wait=True` → message + a webhook-token handle. `wait=False` → neither:
      an unwaited followup has no id and is not `@original`; the receipt makes that
      honest instead of implicit.
-3. **The heuristic permanence read is deleted.** `handle_for(message)` survives only
+3. **Handles are named by the endpoint they perform** — bot-token channel edit,
+   webhook `@original`, webhook message edit — so the protocol operation is the
+   contract and discord.py stays transport (see the architecture doc's
+   library-binding section).
+4. **The heuristic permanence read is deleted.** `handle_for(message)` survives only
    where the message really was sent with bot credentials; `handle_from(interaction)`
    is unchanged.
-4. **Optional upgrade path, verify at implementation time**: whether a public original
+5. **Optional upgrade path, verify at implementation time**: whether a public original
    response can be re-fetched through the channel as a plain `Message` and edited with
    the bot token. If so, a mount holding an expiring handle on a public message may
    trade up in the background. Not load-bearing; the receipt is correct without it.
