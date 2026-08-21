@@ -3,9 +3,9 @@
 import re
 from collections.abc import Iterable, Mapping
 
-from squid_layouts.factories import _NODE_TYPES
+from squid_layouts.factories import _NODE_TYPES, paragraph
 from squid_layouts.runtime.component import Component
-from squid_layouts.semantic import LayoutNode, Paragraph
+from squid_layouts.semantic import LayoutNode
 from squid_layouts.text import Message, ResolvedText, TextLike
 
 type ContentItem = LayoutNode | Component
@@ -17,35 +17,36 @@ def normalize_content(value: object, *, name: str) -> tuple[ContentItem, ...]:
     if isinstance(value, Component):
         return (value,)
     if isinstance(value, str | ResolvedText | Message):
-        return (Paragraph(value),)
+        return (paragraph(value),)
     if isinstance(value, _NODE_TYPES):
         return (value,)
     if isinstance(value, Mapping):
         message = f"{name} cannot be a mapping; unpack the content you meant"
         raise TypeError(message)
     if isinstance(value, Iterable):
-        normalized: list[ContentItem] = []
-        for index, item in enumerate(value):
-            if isinstance(item, Component):
-                normalized.append(item)
-            elif isinstance(item, str | ResolvedText | Message):
-                normalized.append(Paragraph(item))
-            elif isinstance(item, _NODE_TYPES):
-                normalized.append(item)
-            else:
-                message = f"{name}[{index}] is not a layout node, text value, or Component"
-                raise TypeError(message)
-        return tuple(normalized)
+        return tuple(_normalize_item(item, name=f"{name}[{index}]") for index, item in enumerate(value))
     message = f"{name} must be a layout node, text value, Component, or iterable of those"
     raise TypeError(message)
 
 
-def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: str) -> list[LayoutNode]:
+def _normalize_item(value: object, *, name: str) -> ContentItem:
+    """Normalize one member of an iterable content slot."""
+    if isinstance(value, Component):
+        return value
+    if isinstance(value, str | ResolvedText | Message):
+        return paragraph(value)
+    if isinstance(value, _NODE_TYPES):
+        return value
+    message = f"{name} is not a layout node, text value, or Component"
+    raise TypeError(message)
+
+
+def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]:
     """Expand component children under stable embed keys while retaining semantic nodes."""
-    rendered: list[LayoutNode] = []
-    for index, item in enumerate(content):
-        rendered.append(owner.embed(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item)
-    return rendered
+    return tuple(
+        owner.embed(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
+        for index, item in enumerate(content)
+    )
 
 
 def require_key(value: str, *, name: str) -> str:

@@ -3,18 +3,11 @@
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 
+from squid_layouts.factories import controlled, destination, heading, navigation, stack
 from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, render_content, require_key
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.reactivity import state
-from squid_layouts.semantic import (
-    Controlled,
-    Destination,
-    Heading,
-    LayoutNode,
-    NavigateEvent,
-    Navigation,
-    NavigationDisplay,
-)
+from squid_layouts.semantic import LayoutNode, NavigateEvent, NavigationDisplay
 from squid_layouts.text import TextLike
 
 
@@ -82,17 +75,15 @@ class Tabs(Component):
         if self.on_change is not None:
             await self.on_change(event)
 
-    def render(self) -> list[LayoutNode]:
-        nodes: list[LayoutNode] = []
-        if self.heading is not None:
-            nodes.append(Heading(self.heading))
-        nodes.append(
-            Navigation(
-                self.key,
-                tuple(Destination(tab.key, tab.label) for tab in self.tabs),
-                Controlled(self.selected, self._select),
+    def render(self) -> LayoutNode:
+        current = self.current
+        return stack(
+            heading(self.heading) if self.heading is not None else None,
+            navigation(
+                *(destination(tab.label, key=tab.key) for tab in self.tabs),
+                key=self.key,
+                current=controlled(self.selected, self._select),
                 display=self.display,
-            )
+            ),
+            *render_content(self, current.content, prefix=f"tab-{current.key}"),
         )
-        nodes.extend(render_content(self, self.current.content, prefix=f"tab-{self.current.key}"))
-        return nodes
