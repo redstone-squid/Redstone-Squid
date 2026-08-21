@@ -57,6 +57,13 @@ The package root is semantic-first. Structural nodes are `Group`, `Stack`, `Clus
 `Choices`, `Items`, and `Navigation`. These say what the information means and preserve
 stable string keys, not which Discord widget must appear.
 
+Author them through the lowercase factories — `sl.section(*children, heading=...)`,
+`sl.actions(*entries, key=...)`, `sl.action(label, handler, key=...)`. Content is positional,
+identity and configuration are keyword-only, `None`/`False` children are skipped so
+`cond and node` composes, and bare strings or t-strings in a child position become a
+`Paragraph`. Collections are unpacked by the caller. The dataclasses remain the IR and remain
+public; the factories only normalize what authors write.
+
 Adapters choose among finite lossless strategies. Actions may be individual controls,
 grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 11 options;
 author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
@@ -93,7 +100,7 @@ renderer can choose an appropriate Markdown implementation.
 ## Components and Vue-inspired reactivity
 
 Components render synchronously from state. state observes assignment and nested list, dict,
-and set mutation. Factories avoid shared mutable defaults:
+and set mutation. `state(factory=...)` avoids shared mutable defaults:
 
     class Search(sl.Component):
         query: str = sl.state("")
@@ -113,10 +120,10 @@ must be JSON-safe.
 Children appear through explicit keyed boundaries:
 
     def render(self):
-        return sl.Group((
+        return sl.group(
             self.embed(self.filters, key="filters"),
             self.embed(self.results, key="results"),
-        ))
+        )
 
 `sl.runtime.ComponentRuntime`, not `sl.discord.Mount`, owns rendering, keyed component identity, lifecycle,
 invalidation, injected context, presentation state, and the bounded plan cache. Expansion
