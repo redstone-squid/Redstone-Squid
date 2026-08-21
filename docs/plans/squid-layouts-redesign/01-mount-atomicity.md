@@ -38,17 +38,15 @@ it too early. Restructure `Mount` around an explicit candidate:
    and the assets tuple. The `wire` callback collects bindings into the candidate's dict,
    never into `self._handlers`.
 2. Presentation cursors: snapshot `dict(self.presentation.cursors)` before drawing and
-   restore it if delivery fails. (Plan 06 later moves cursor reconciliation into the
-   planner, which retires this snapshot/restore workaround — note the cross-reference in
-   both directions but do not block on it.) Known gap as landed: planning also writes
-   strategy hysteresis (`remember_strategy`), which the snapshot does not restore, so a
-   discarded candidate leaves its adapter choices behind. Benign — it is a per-node
-   stickiness cache the next render re-derives from — and 06a closes it by staging the
-   whole session, which that plan now states as a requirement.
+   restore it if delivery fails. **Superseded by [plan 06](06-pagination.md).** Planning
+   no longer writes to the session at all; it returns `PlanResult.session_updates` and
+   the mount applies them in `_commit`, so the snapshot is gone and the guarantee now
+   also covers the strategy hysteresis this workaround could never restore.
 3. `_commit(candidate)` runs only after `deliver.apply*` returns: swap handlers, advance
    `_generation`, `runtime.commit(tree)`, store assets, clear `_dirty`, `_swap_view`.
 4. On delivery failure: discard the candidate, `candidate.view.stop()`, restore the
    cursor snapshot, leave `_dirty` True, re-raise (the existing error funnel reports it).
+   Post-06 there is nothing to restore — dropping the candidate drops its writes.
 5. Apply the same stage→deliver→commit shape to `flush`, `refresh_now`, `finish_via`,
    and `finish(disable=True)`. `finish` may still mark `_finished` before delivery — a
    failed disable-edit should not resurrect the mount — but must not commit the disabled
@@ -58,8 +56,9 @@ it too early. Restructure `Mount` around an explicit candidate:
    that performs the commit, since the host owns that delivery. Document that `bind` is
    the commit point.
 
-Keep the double-draw fingerprint dance (mount.py:214-228) inside `_stage()` unchanged;
-it is presentation-only and covered by the cursor snapshot.
+Keep the double-draw fingerprint dance inside `_stage()` unchanged; it is
+presentation-only and covered by the cursor snapshot. (Also superseded by plan 06:
+reconciliation moved into `plan()`, so the mount draws once.)
 
 ## Verification
 
