@@ -5,20 +5,29 @@ layout (`error_layout`, `info_layout`, …) already renders through the engine v
 `squid/bot/ui.py`; the pilots are `PagedList` (version list, pending queue, record gaps),
 `ErrorReportBrowser`, and the build card (`build_handler.render_container`).
 
-Still on the old machinery, in rough order of value:
+As of 2026-08-21, every listed consumer has a production `sl.Component` wired up
+(`SearchResultsView`, `SettingsPanel`, `ClaimReviewComponent`), but several old classes
+were never deleted after their replacements landed — they're dead weight kept alive only
+by their own tests. In rough order of value:
 
-- **`SearchResultsView`** (`squid/bot/submission/search_view.py`) — the cursor-driven
-  paginator. As a component: callbacks fetch the next page, then assign state. Its select
-  and detail text still hand-slice.
-- **`SettingsPanelView`** (`squid/bot/settings_view.py`) — last big `card_container`
-  consumer besides ClaimReviewView.
-- **`ClaimReviewView`** (`squid/bot/claims_view.py`) — subclasses `ListPaginator`'s
-  render/go_to contract; rewriting it as a component retires
-  `squid/bot/utils/pagination.py` entirely.
-- **`BaseNavigableView` consumers** (`BuildInfoView`) — replace with `squid_layouts.Navigator`,
-  then delete `squid/bot/submission/navigation_view.py` and its `__init_subclass__` wrapping.
-- **`ExpiringLayoutView`/`ErrorHandledLayoutView` consumers** — each view that becomes a
-  component sheds them; when the last one goes, the view halves of `squid/bot/errors.py` go too.
+- **`SettingsPanelView`** (`squid/bot/settings_view.py`) — `SettingsPanel` is what
+  `squid/bot/settings.py` actually mounts; the old `ExpiringLayoutView` class and a
+  `card_container`-based `_compat_layout()` fallback are still in the file. Delete both,
+  and drop `tests/unit/bot/test_settings_panel.py`'s coverage of the old class.
+- **`ClaimReviewView`** (`squid/bot/claims_view.py`) — `ClaimReviewComponent` is what
+  `squid/bot/verify.py` mounts; the old `ListPaginator` subclass is dead, referenced only
+  by `tests/unit/bot/test_claim_review.py`. Deleting it is most of the way to retiring
+  `squid/bot/utils/pagination.py`.
+- **`BaseNavigableView` consumers** (`BuildInfoView`, `squid/bot/submission/ui/views.py`) —
+  never migrated; zero real callers today (only `tests/unit/.../test_build_info_view.py`
+  and a stale comment). Replace with `squid_layouts.Navigator`, then delete
+  `squid/bot/submission/navigation_view.py` and its `__init_subclass__` wrapping.
+- **`ExpiringLayoutView`/`ErrorHandledLayoutView` consumers** — `consent.py`,
+  `notifications_view.py`, `account_view.py`, and the submission form/edit views already
+  have superseded components as their real production path (`SubmissionFormComponent`,
+  `BuildEditComponent`, etc. via `submit.py`/`edit.py`); the old view classes just weren't
+  removed. `poll_wizard.py` and `errors.py` still need their component replacements. When
+  the last consumer goes, the view halves of `squid/bot/errors.py` go too.
 - **Delivery call sites** — `ui.reply(ctx, view, visibility=...)` exists; migrate
   `reply_layout`/`deliver_privately`/ad-hoc `ctx.send` sites organically.
 - **`squid/bot/utils/components.py`** — delete when `card_container`,
@@ -26,6 +35,14 @@ Still on the old machinery, in rough order of value:
   caps), `StaticLayout`, and the edit/reply mechanics reach zero consumers; update the
   V2-guard carve-out list in `tests/architecture/test_discord_components_v2.py` at the same
   time (deliver.py already carries the framework-side carve-out).
+- **`squid/bot/utils/pagination.py`** — delete once `ClaimReviewView` above is gone;
+  `ListPaginator` has no other consumers.
+- **`squid_layouts.primitives.presets`** (`card`, `banner`, `listing`, `report`) — the
+  pre-semantic-layer card builders the package root note below calls "legacy card fields."
+  Still has 9 real production consumers (`squid/bot/settings_view.py`, `account_view.py`,
+  `consent.py`, `notifications_view.py`, `poll_wizard.py`, `submission/build_handler.py`,
+  `submission/ui/views.py`, `ui.py`, `layout_showcase.py`). Migrating them to semantic
+  `Section`/`Fields`/`Media`/`Status` and deleting `presets.py` is in progress.
 
 Core design debts closed before further migration:
 
