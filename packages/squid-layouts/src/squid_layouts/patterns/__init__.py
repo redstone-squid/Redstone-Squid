@@ -4,6 +4,7 @@ from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
 from squid_layouts.patterns.ranked import RankedEntry, RankedList, RankedListState
 from squid_layouts.patterns.shells import ComponentShell, PatternEvent, PatternRoute, RouterShell
 from squid_layouts.patterns.tabs import Tab, Tabs, TabsState
+from squid_layouts.patterns.wizard import Wizard, WizardAnswer, WizardAnswers, WizardState, WizardStep
 
 __all__ = [
     "ComponentShell",
@@ -19,4 +20,9 @@ __all__ = [
     "Tab",
     "Tabs",
     "TabsState",
+    "Wizard",
+    "WizardAnswer",
+    "WizardAnswers",
+    "WizardState",
+    "WizardStep",
 ]
