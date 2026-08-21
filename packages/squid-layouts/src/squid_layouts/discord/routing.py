@@ -27,10 +27,12 @@ from squid_layouts.routing import Route
 
 logger = logging.getLogger(__name__)
 
-type RouteHandler = Callable[[discord.Interaction[Any], Mapping[str, str]], Awaitable[None]]
+type RouteHandler = Callable[[discord.Interaction[Any], Mapping[str, Any]], Awaitable[None]]
 
-_PROBE = "\x01"
-"""A value standing in for any parameter, for the registration-time overlap check."""
+
+def _sample(route: Route) -> str:
+    """One id standing in for every id ``route`` can build, for the overlap check."""
+    return route.id(**{name: converter.sample for name, converter in zip(route.params, route.converters, strict=True)})
 
 
 class Router:
@@ -59,20 +61,20 @@ class Router:
         classes keyed by template. It also leaves the template unchanged, which is why a
         reload is allowed after `register` while a genuinely new route is not.
 
-        A route that *shadows* another is still rejected. That check substitutes a probe
-        value for every parameter and tries each route's sample id against the other's
-        pattern, which catches the shapes that occur in practice (a literal id under a
-        parameterized one, and the reverse) without claiming to decide regex intersection in
-        general. Resolution is first-match-wins in registration order, so an overlap this
+        A route that *shadows* another is still rejected. That check substitutes each
+        converter's probe value for every parameter and tries one route's sample id against
+        the other's pattern, which catches the shapes that occur in practice (a literal id
+        under a parameterized one, and the reverse) without claiming to decide regex
+        intersection in general. Resolution is first-match-wins in registration order, so an overlap this
         misses shadows a later route rather than dispatching a click twice.
         """
         for index, (existing, _handler) in enumerate(self._routes):
             if existing.format == route.format:
                 self._routes[index] = (route, handler)
                 return
-        sample = route.id(**dict.fromkeys(route.params, _PROBE))
+        sample = _sample(route)
         for existing, _handler in self._routes:
-            other = existing.id(**dict.fromkeys(existing.params, _PROBE))
+            other = _sample(existing)
             if existing.pattern.fullmatch(sample) or route.pattern.fullmatch(other):
                 message = f"route {route.format!r} overlaps the already-registered {existing.format!r}"
                 raise ValueError(message)

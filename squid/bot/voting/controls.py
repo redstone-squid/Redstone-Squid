@@ -42,7 +42,7 @@ def poll_controls() -> sl.Actions:
 
 
 @router.route(poll_close)
-async def close_poll(interaction: discord.Interaction[Any], _params: Mapping[str, str]) -> None:
+async def close_poll(interaction: discord.Interaction[Any], _params: Mapping[str, Any]) -> None:
     """End a poll early, tallying it where it stands."""
     authorized = await _authorize(interaction)
     if authorized is None:
@@ -59,7 +59,7 @@ async def close_poll(interaction: discord.Interaction[Any], _params: Mapping[str
 
 
 @router.route(poll_refresh)
-async def refresh_poll(interaction: discord.Interaction[Any], _params: Mapping[str, str]) -> None:
+async def refresh_poll(interaction: discord.Interaction[Any], _params: Mapping[str, Any]) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
     authorized = await _authorize(interaction)
     if authorized is None:

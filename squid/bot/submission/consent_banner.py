@@ -28,7 +28,7 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
 
 @router.route(build_log_consent)
-async def open_consent_prompt(interaction: Interaction[Any], _params: Mapping[str, str]) -> None:
+async def open_consent_prompt(interaction: Interaction[Any], _params: Mapping[str, Any]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
     await interaction.response.defer(ephemeral=True)
     locale = await resolve_locale(interaction, interaction.client.services.settings)
