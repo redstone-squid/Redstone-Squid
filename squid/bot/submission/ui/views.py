@@ -480,6 +480,9 @@ class SubmissionFormComponent(sl.Component):
     validation_error: str | None = sl.state(None)
     submitting: bool = sl.state(default=False)
     closed: bool = sl.state(default=False)
+    # The draft this workspace edits. Held by reference: the modals mutate it through their
+    # own reference, so the handlers report that with mutated("build").
+    build: BuildDraft = sl.state(copy="ref")
 
     def __init__(
         self,
@@ -605,11 +608,11 @@ class SubmissionFormComponent(sl.Component):
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = cast(Literal["Door", "Skydoor", "Trapdoor"], event.selected[0])
         self.validation_error = None
-        self.invalidate()
+        self.mutated("build")
 
     async def _location_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.miscellaneous_restrictions = list(event.selected)
-        self.invalidate()
+        self.mutated("build")
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
         modal = SubmissionModal(self.build, self.builds, self, locale=self.locale)
@@ -655,8 +658,9 @@ class SubmissionFormComponent(sl.Component):
         await event.finish()
 
     async def refresh(self, interaction: discord.Interaction[Any]) -> None:
+        # The modal that calls this mutated the Build through its own reference.
         self.validation_error = None
-        self.invalidate()
+        self.mutated("build")
         if self._mount is None:
             return
         rendered = self._mount.build_view()

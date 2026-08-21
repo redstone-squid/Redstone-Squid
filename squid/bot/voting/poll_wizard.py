@@ -537,7 +537,6 @@ class PollConfirmationComponent(sl.Component):
 
     async def _visibility_changed(self, event: sl.ChoiceEvent) -> None:
         self.draft = replace(self.draft, visibility=VoteVisibility(event.selected[0]))
-        self.invalidate()
 
     async def _duration_changed(self, event: sl.ChoiceEvent) -> None:
         chosen = event.selected[0]
@@ -545,15 +544,12 @@ class PollConfirmationComponent(sl.Component):
             await sl.discord.responder(event).send_modal(CustomDurationModal(self))
             return
         self.draft = replace(self.draft, duration_seconds=int(chosen))
-        self.invalidate()
 
     async def _scope_changed(self, event: sl.ChoiceEvent) -> None:
         self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
-        self.invalidate()
 
     async def set_duration(self, interaction: discord.Interaction, seconds: int) -> None:
         self.draft = replace(self.draft, duration_seconds=seconds)
-        self.invalidate()
         if self._mount is None:
             return
         rendered = self._mount.build_view()
