@@ -78,11 +78,25 @@ class TestUndeclaredWrites:
             fresh = Panel(service)
         assert fresh.undeclared == "before"
 
-    def test_an_unattached_component_is_not_reported(self):
+    def test_a_component_born_earlier_is_covered_even_when_out_of_the_tree(self):
+        """Being unmounted is not being new: such a component may be about to go back in."""
         panel = Panel(Uncopyable())
-        with transaction():
+        with pytest.raises(UndeclaredStateError, match=r"Panel\.undeclared"), transaction():
             panel.undeclared = "after"
-        assert panel.undeclared == "after"
+
+    def test_a_component_born_earlier_cannot_be_mutated_by_a_read_only_action(self):
+        panel = Panel(Uncopyable())
+        with pytest.raises(ReactiveWriteError), readonly_transaction():
+            panel.declared = 1
+        assert panel.declared == 0
+
+    def test_a_component_born_mid_action_stays_exempt_after_construction(self):
+        with readonly_transaction():
+            fresh = Panel(Uncopyable())
+            fresh.declared = 5
+            fresh.undeclared = "after"
+        assert fresh.declared == 5
+        assert fresh.undeclared == "after"
 
     def test_the_tree_walker_may_write_its_own_bookkeeping(self):
         """Rendering assigns _runtime and _parent; that is not an author's undeclared write."""
@@ -158,3 +172,20 @@ class TestStateWithoutAnInitialValue:
             message = "abort"
             raise RuntimeError(message)
         assert component.value == 1
+
+
+class TestMutatedInPlace:
+    def test_it_schedules_a_draw_for_a_change_nothing_observed(self):
+        runtime = ComponentRuntime(Panel(Uncopyable()))
+        runtime.commit(runtime.render())
+        assert runtime.dirty is False
+
+        runtime.root.mutated("service")
+
+        assert runtime.dirty is True
+
+    def test_it_rejects_a_field_that_is_not_declared_state(self):
+        """The point of naming the field: the call breaks when the declaration goes away."""
+        panel = attached(Panel(Uncopyable()))
+        with pytest.raises(TypeError, match=r"Panel\.undeclared is not declared state"):
+            panel.mutated("undeclared")

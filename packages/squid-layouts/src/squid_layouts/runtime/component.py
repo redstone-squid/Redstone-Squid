@@ -12,7 +12,7 @@ root component is attached to a Mount; children reach it through their parent.
 from collections.abc import Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import Any, Protocol
+from typing import Any, Protocol, Self
 
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
@@ -140,12 +140,19 @@ class Component:
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
 
+    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+        # A handler may build components. Noting the ones born mid-action is what lets their
+        # __init__ write freely while a live component's writes stay covered.
+        instance = super().__new__(cls)
+        if current := _CURRENT.get():
+            current.note_born(instance)
+        return instance
+
     def __setattr__(self, name: str, value: Any) -> None:
         # Fast path: one contextvar read when no action is in flight, which is almost always.
         if (
             _CURRENT.get() is not None
             and name not in _FRAMEWORK_ATTRIBUTES
-            and self._state_tracked()
             and not isinstance(getattr(type(self), name, None), _State)
         ):
             report_undeclared_write(self, name)
@@ -156,10 +163,6 @@ class Component:
 
     def _state_rolled_back(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
-
-    def _state_tracked(self) -> bool:
-        """Whether this component is in the tree. One still under construction is not."""
-        return self._runtime is not None or self._parent is not None
 
     def render(self) -> RenderResult:
         """Describe the message for the current state. Pure and synchronous."""
@@ -174,6 +177,19 @@ class Component:
 
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
+
+    def mutated(self, name: str) -> None:
+        """Re-render because declared state changed in place where nothing observed it.
+
+        Assignment and list, dict, and set mutation are observed already. Reach for this only
+        when a field's *contents* changed some other way, such as setting an attribute on the
+        object a ``copy="ref"`` field holds. It schedules the draw; it cannot roll the change
+        back, and naming the field keeps the call tied to the declaration it depends on.
+        """
+        if not isinstance(getattr(type(self), name, None), _State):
+            message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
+            raise TypeError(message)
+        self.invalidate()
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""

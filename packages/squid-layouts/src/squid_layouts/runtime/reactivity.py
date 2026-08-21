@@ -20,8 +20,6 @@ class ReactiveOwner(Protocol):
 
     def _state_rolled_back(self) -> None: ...
 
-    def _state_tracked(self) -> bool: ...
-
 
 class ReactiveWriteError(RuntimeError):
     """A state mutation was attempted inside a read-only action."""
@@ -55,8 +53,24 @@ class _Transaction:
     readonly: bool = False
     snapshots: dict[tuple[int, str], _Snapshot] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
+    # Held by strong reference, so an id cannot be recycled while this transaction runs.
+    born: dict[int, object] = field(default_factory=dict)
+
+    def note_born(self, owner: object) -> None:
+        """Record an object created after this transaction began."""
+        self.born[id(owner)] = owner
+
+    def protects(self, owner: object) -> bool:
+        """Whether this transaction is responsible for the owner's state.
+
+        A transaction restores the view the action started from. An object created during the
+        action had no state then, so writing to it is construction, not mutation.
+        """
+        return id(owner) not in self.born
 
     def record(self, owner: ReactiveOwner, name: str, copy: CopyMode = "deep") -> None:
+        if not self.protects(owner):
+            return
         key = (id(owner), name)
         if key in self.snapshots:
             return
@@ -70,11 +84,9 @@ class _Transaction:
         self.snapshots[key] = _Snapshot(owner, name, existed, value, copy)
 
     def mark_changed(self, owner: ReactiveOwner) -> None:
+        if not self.protects(owner):
+            return
         if self.readonly:
-            # Building an object is not mutating the view, and a read-only handler is allowed
-            # to build one. Only owners already in the tree are what this rule protects.
-            if not owner._state_tracked():
-                return
             message = "parallel-read actions cannot mutate component state"
             raise ReactiveWriteError(message)
         self.changed[id(owner)] = owner
@@ -116,7 +128,7 @@ def report_undeclared_write(owner: object, name: str) -> None:
     rather than pretending a half-guarantee reaches it.
     """
     current = _CURRENT.get()
-    if current is None:
+    if current is None or not current.protects(owner):
         return
     label = f"{type(owner).__name__}.{name}"
     if current.readonly:
