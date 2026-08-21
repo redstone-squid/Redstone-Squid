@@ -39,6 +39,7 @@ __all__ = [
     "card_layout",
     "chrome_for",
     "create_mount",
+    "destination",
     "display_text_length",
     "error_layout",
     "help_layout",
@@ -100,7 +101,7 @@ async def reply(
     *,
     visibility: Visibility = "public",
     locale: str | None = None,
-    file: discord.File | None = None,
+    files: Sequence[discord.File] = (),
 ) -> discord.Message | None:
     """The one reply entry point: send `view` with an explicit audience.
 
@@ -112,10 +113,54 @@ async def reply(
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
-        return await deliver_privately(ctx, view, reason=visibility.reason, locale=locale, file=file)
-    extra: dict[str, Any] = {"file": file} if file is not None else {}
+        return await deliver_privately(ctx, view, reason=visibility.reason, locale=locale, files=files)
+    extra: dict[str, Any] = {"files": list(files)} if files else {}
     ephemeral = visibility == "personal" and personal(ctx)
     return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.discord.delivery.no_mentions(), **extra)
+
+
+def destination(
+    ctx: Context[Any],
+    *,
+    visibility: Visibility = "public",
+    locale: str | None = None,
+    files: Sequence[discord.File] = (),
+) -> ui.discord.Destination:
+    """Where a mount's first message goes, in the same vocabulary `reply` uses.
+
+    The audience rule stays host-side: "public" answers in the channel, "personal" is
+    ephemeral where the transport allows it, and `Private(reason)` must never reach a channel
+    at all. `files` are the host's own attachments; the mount adds its rendered assets.
+
+    A closed DM under `Private` delivers nothing, which is not the same as delivering without
+    a handle, so it is reported as `DeliveryAbandoned` rather than as a `None` message.
+    """
+    # Imported lazily: visibility -> utils.components -> this module would otherwise cycle.
+    from squid.bot.utils.visibility import deliver_privately, personal
+
+    if isinstance(visibility, Private):
+
+        async def privately(view: discord.ui.LayoutView, rendered: list[discord.File]) -> discord.Message | None:
+            message = await deliver_privately(
+                ctx, view, reason=visibility.reason, locale=locale, files=[*files, *rendered]
+            )
+            if message is None:
+                raise ui.discord.DeliveryAbandoned
+            return message
+
+        return privately
+
+    ephemeral = visibility == "personal" and personal(ctx)
+
+    async def openly(view: discord.ui.LayoutView, rendered: list[discord.File]) -> discord.Message | None:
+        return await ctx.send(
+            view=view,
+            files=[*files, *rendered],
+            ephemeral=ephemeral,
+            allowed_mentions=ui.discord.delivery.no_mentions(),
+        )
+
+    return openly
 
 
 def render_item(node: ui.LayoutNode, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:
@@ -182,18 +227,11 @@ async def send_component(
     locale: str | None = None,
     timeout: float = 180,
     lock_to: int | None = None,
-    ephemeral: bool = False,
+    visibility: Visibility = "public",
 ) -> ui.discord.Mount:
     """Mount a component and send it as the reply to a command."""
     mount = create_mount(component, locale=locale, timeout=timeout, lock_to=lock_to)
-    view = mount.build_view()
-    message = await ctx.send(
-        view=view,
-        files=mount.attachment_files(),
-        ephemeral=ephemeral,
-        allowed_mentions=ui.discord.delivery.no_mentions(),
-    )
-    mount.bind(message, view)
+    await mount.send(destination(ctx, visibility=visibility, locale=locale))
     return mount
 
 
@@ -249,10 +287,10 @@ class PagedList(ui.Component):
             total=len(self.entries),
         )
 
-    async def send(self, ctx: Context[Any], *, ephemeral: bool = False) -> ui.discord.Mount:
+    async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> ui.discord.Mount:
         """Send the first page bound to a mount that owns paging, locking, and expiry."""
         return await send_component(
-            ctx, self, locale=self.locale, lock_to=ctx.author.id if ctx.author else None, ephemeral=ephemeral
+            ctx, self, locale=self.locale, lock_to=ctx.author.id if ctx.author else None, visibility=visibility
         )
 
 

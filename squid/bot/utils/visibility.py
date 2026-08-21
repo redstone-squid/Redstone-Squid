@@ -23,6 +23,7 @@ difference between a reply that is merely nobody else's business and one that is
 or a traceback.
 """
 
+from collections.abc import Sequence
 from typing import Any
 
 import discord
@@ -49,7 +50,7 @@ async def deliver_privately(
     *,
     reason: str,
     locale: str | None = None,
-    file: discord.File | None = None,
+    files: Sequence[discord.File] = (),
 ) -> discord.Message | None:
     """Answer where only the caller can read it, whatever the transport invoked us.
 
@@ -62,8 +63,8 @@ async def deliver_privately(
     channel, because the channel is exactly what the payload must not reach.
     """
     payload: dict[str, Any] = {"view": layout, "allowed_mentions": no_mentions()}
-    if file is not None:
-        payload["file"] = file
+    if files:
+        payload["files"] = list(files)
 
     if ctx.interaction is not None or ctx.guild is None:
         return await ctx.send(ephemeral=True, **payload)
