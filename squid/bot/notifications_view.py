@@ -238,8 +238,7 @@ class NotificationPanel(sl.Component):
                         )
                         for subscription in self.subscriptions
                     ),
-                    selected=self.selected_ids,
-                    on_change=self._selection_changed,
+                    selection=sl.controlled(self.selected_ids, self._selection_changed),
                     minimum=0,
                     maximum=len(self.subscriptions),
                 )

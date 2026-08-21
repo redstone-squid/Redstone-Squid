@@ -451,9 +451,11 @@ class SettingsPanel(sl.Component):
                 sl.Choices(
                     key=f"channel-{setting}",
                     choices=self._channel_choices(setting),
-                    selected=(str(self.channel_id(setting)) if self.channel_id(setting) is not None else "clear",),
-                    on_change=lambda event, setting=setting: self._channel_changed(
-                        cast(ScalarChannelSetting, setting), event
+                    selection=sl.controlled(
+                        (str(self.channel_id(setting)) if self.channel_id(setting) is not None else "clear",),
+                        lambda event, setting=setting: self._channel_changed(
+                            cast(ScalarChannelSetting, setting), event
+                        ),
                     ),
                 )
                 for setting in CHANNEL_SETTINGS
@@ -468,8 +470,7 @@ class SettingsPanel(sl.Component):
                         )
                         for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
                     ),
-                    selected=(self._locale_override or FOLLOW_DISCORD,),
-                    on_change=self._locale_changed,
+                    selection=sl.controlled((self._locale_override or FOLLOW_DISCORD,), self._locale_changed),
                 )
             )
         actions: list[sl.primitives.Button] = []
@@ -499,8 +500,7 @@ class SettingsPanel(sl.Component):
                 choices=tuple(
                     sl.Choice(kind.value, t(self.locale, label), available=True) for kind, label in KIND_LABELS.items()
                 ),
-                selected=(self.kind.value,),
-                on_change=self._kind_changed,
+                selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]
         if self._capabilities.edit_voting:
@@ -508,10 +508,9 @@ class SettingsPanel(sl.Component):
                 sl.Choices(
                     key="role-weight",
                     choices=self._role_choices(),
-                    selected=("none",),
+                    selection=sl.controlled(("none",), self._role_changed),
                     minimum=1,
                     maximum=1,
-                    on_change=self._role_changed,
                 )
             )
         actions: list[sl.primitives.Button] = []
