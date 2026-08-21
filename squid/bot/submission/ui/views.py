@@ -669,10 +669,7 @@ class SubmissionFormComponent(sl.Component):
         self.mutated("build")
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point: it publishes the render the edit above delivered.
-        self._mount.bind(None, rendered)
+        await self._mount.flush(interaction)
 
     async def wait(self) -> bool | None:
         with anyio.move_on_after(self._timeout) as scope:
@@ -1209,10 +1206,7 @@ class BuildEditComponent(sl.Component):
         self.invalidate()
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point: it publishes the render the edit above delivered.
-        self._mount.bind(None, rendered)
+        await self._mount.flush(interaction)
 
     async def send(self, interaction: discord.Interaction[Any], ephemeral: bool = True) -> None:
         self.locale = await resolve_locale(interaction, interaction.client.services.settings)

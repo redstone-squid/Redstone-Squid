@@ -542,10 +542,7 @@ class PollConfirmationComponent(sl.Component):
         self.draft = replace(self.draft, duration_seconds=seconds)
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point: it publishes the render the edit above delivered.
-        self._mount.bind(None, rendered)
+        await self._mount.flush(interaction)
 
     async def _publish(self, event: sl.PressEvent) -> None:
         interaction = sl.discord.native(event)
