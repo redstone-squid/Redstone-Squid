@@ -155,6 +155,42 @@ class TestRouter:
         # Buttons outlive the code that answered them; an unknown id must not crash dispatch.
         await Router().dispatch(None, "gone:forever")  # type: ignore[arg-type]
 
+    async def test_a_retired_namespaced_route_gets_a_friendly_response(self) -> None:
+        seen: list[object] = []
+
+        async def gone(interaction) -> None:
+            seen.append(interaction)
+
+        router = Router(namespace="r", on_gone=gone)
+        await router.dispatch("interaction", "r:retired:control")  # type: ignore[arg-type]
+        await router.dispatch("interaction", "other:control")  # type: ignore[arg-type]
+
+        assert seen == ["interaction"]
+
+    def test_a_namespace_requires_a_gone_handler(self) -> None:
+        with pytest.raises(ValueError, match="on_gone"):
+            Router(namespace="r")
+
+    def test_canonical_routes_stay_inside_the_reserved_namespace(self) -> None:
+        async def gone(_interaction) -> None: ...
+
+        router = Router(namespace="r", on_gone=gone)
+        with pytest.raises(ValueError, match="must live under"):
+            router.add(POLL_CLOSE, _noop)
+        with pytest.raises(ValueError, match="must live under"):
+            router.add(sl.Route("{prefix:int}:poll:close"), _noop)
+
+        router.add(sl.Route("r:polls:close", aliases=("poll:close",)), _noop)
+
+    @pytest.mark.parametrize("route", ["ctl:fixed:route", "{prefix}:fixed:route"])
+    def test_routes_cannot_enter_the_mount_namespace(self, route: str) -> None:
+        with pytest.raises(ValueError, match="mount namespace"):
+            Router().add(sl.Route(route), _noop)
+
+    def test_aliases_cannot_enter_the_mount_namespace(self) -> None:
+        with pytest.raises(ValueError, match="mount namespace"):
+            Router().add(sl.Route("new:{value}", aliases=("ctl:{value}",)), _noop)
+
     async def test_a_failing_handler_reaches_the_error_hook(self) -> None:
         seen: list[str] = []
 
@@ -180,6 +216,19 @@ class TestRouter:
         assert template.fullmatch("edit:build:9")
         assert not template.fullmatch("something:else")
         assert "(?P<" not in template.pattern  # groups would collide across routes
+
+    def test_a_namespaced_template_catches_retired_controls_only_inside_its_namespace(self) -> None:
+        async def gone(_interaction) -> None: ...
+
+        router = Router(namespace="r", on_gone=gone)
+        router.add(sl.Route("r:polls:close", aliases=("poll:close",)), _noop)
+
+        template = router.template()
+        assert template.fullmatch("r:polls:close")
+        assert template.fullmatch("poll:close")
+        assert template.fullmatch("r:retired:control")
+        assert not template.fullmatch("ctl:mount:1:key")
+        assert not template.fullmatch("other:control")
 
     def test_an_empty_router_matches_nothing(self) -> None:
         assert not Router().template().fullmatch("anything")
