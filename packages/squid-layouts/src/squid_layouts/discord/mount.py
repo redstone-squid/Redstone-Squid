@@ -322,6 +322,40 @@ class Mount:
 
     # --- Lifecycle ---------------------------------------------------------------------
 
+    async def send(self, destination: deliver.Destination) -> discord.Message | None:
+        """Deliver this mount's first render through `destination`.
+
+        The commit point for an initial send, and the same stage -> deliver -> commit sequence
+        `flush` runs for an interaction edit: the host chooses where the message goes, the
+        mount owns everything around the call. A destination that raises leaves the mount on
+        its previous generation with the render still pending, so a second `send` is a clean
+        retry.
+
+        Returns the message when the destination produced one. `None` means the mount has no
+        standing handle -- either the destination could not hand one back, in which case the
+        first click mints one, or it abandoned the delivery and nothing was sent at all.
+        """
+        if self._finished:
+            return None
+        # A render staged by `build_view` and never delivered is superseded, not delivered.
+        if self._pending is not None:
+            self._pending.view.stop()
+            self._pending = None
+        candidate = self._stage()
+        try:
+            message = await destination(candidate.view, _attachment_files(candidate.assets))
+        except deliver.DeliveryAbandoned:
+            logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
+            self._rollback(candidate)
+            return None
+        except Exception:
+            self._rollback(candidate)
+            raise
+        if message is not None:
+            self._handle = deliver.handle_for(message)
+        self._commit(candidate)
+        return message
+
     def bind(self, message: discord.Message | None, view: MountedView) -> None:
         """Record the sent message and commit the render it carries.
 
