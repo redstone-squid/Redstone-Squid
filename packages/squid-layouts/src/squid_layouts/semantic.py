@@ -25,7 +25,7 @@ class NavigationDisplay(StrEnum):
 class ItemDisplay(StrEnum):
     AUTO = "auto"
     OVERVIEW = "overview"
-    FOCUSED = "focused"
+    OPENED = "opened"
 
 
 class TableDisplay(StrEnum):
@@ -70,6 +70,48 @@ class Tone(StrEnum):
     SUCCESS = "success"
     WARNING = "warning"
     DANGER = "danger"
+
+
+# --- Who owns a node's value -----------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Controlled[ValueT, EventT]:
+    """The author owns this value: authoritative on every render, never written by the engine."""
+
+    value: ValueT
+    on_change: Callable[[EventT], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class Managed[ValueT]:
+    """The engine owns this value, in the presentation session under the node's key.
+
+    ``initial`` is a seed, not a value: it applies on a session miss and is ignored from
+    then on. An author who needs their value to keep winning wants `Controlled`.
+    """
+
+    initial: ValueT
+
+
+type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Managed[ValueT]
+"""Every stateful semantic node takes one of these, and it is the whole ownership story.
+
+Ownership is a value rather than something inferred from whether a handler was passed,
+so a node cannot be half-controlled and the mode is readable at the call site.
+"""
+
+
+type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
+type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
+type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
+type NavOwnership = Ownership[str | None, NavigateEvent]
+
+# The engine-managed default of each stateful node, named for the state it seeds.
+UNSELECTED: ChoiceOwnership = Managed(())
+UNOPENED: ItemOwnership = Managed(None)
+CLOSED: DisclosureOwnership = Managed(initial=False)
+FIRST_DESTINATION: NavOwnership = Managed(None)
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,7 +282,7 @@ class Details:
     key: str
     summary: TextLike
     children: tuple[LayoutNode, ...]
-    open: bool = False
+    open: DisclosureOwnership = CLOSED
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,12 +377,18 @@ class ChoiceEvent(ActionEvent):
     removed: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OpenEvent[ValueT](ActionEvent):
+    """The reader asked to open something: one of N entries, or one disclosure."""
+
+    opened: ValueT
+
+
 @dataclass(frozen=True, slots=True)
 class Choices:
     key: str
     choices: tuple[Choice, ...]
-    selected: tuple[str, ...]
-    on_change: Callable[[ChoiceEvent], Awaitable[None]]
+    selection: ChoiceOwnership = UNSELECTED
     minimum: int = 1
     maximum: int = 1
     flexibility: Flexibility = Flexibility.NORMAL
@@ -358,7 +406,7 @@ class Item:
 class Items:
     key: str
     items: tuple[Item, ...]
-    focused: str | None = None
+    opened: ItemOwnership = UNOPENED
     display: ItemDisplay = ItemDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
 
@@ -379,8 +427,8 @@ class NavigateEvent(ActionEvent):
 class Navigation:
     key: str
     destinations: tuple[Destination, ...]
-    current: str
-    on_navigate: Callable[[NavigateEvent], Awaitable[None]]
+    current: NavOwnership = FIRST_DESTINATION
+    """`None` means the first available destination."""
     display: NavigationDisplay = NavigationDisplay.AUTO
     flexibility: Flexibility = Flexibility.STABLE
 
