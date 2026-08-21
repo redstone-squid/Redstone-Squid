@@ -298,14 +298,12 @@ def card_layout(
 
 def text_layout(content: str, *, accent_colour: int | None = None) -> discord.ui.LayoutView:
     """Create a simple V2 text response."""
-    node: ui.LayoutNode
-    if accent_colour is None:
-        # No accent, so drop to the bare primitive: it keeps presets.banner's Truncate
-        # overflow, which clips an overlong message instead of `sl.paragraph`'s fixed Never
-        # raising on overflow. No call site actually passes accent_colour today.
-        node = ui.primitives.Text(content)
-    else:
-        node = ui.section(ui.paragraph(content), accent=accent_colour)
+    # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
+    # on an overlong message where presets.banner clipped it. This is the bot's most-used
+    # reply path, so it clips.
+    node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
+    if accent_colour is not None:
+        node = ui.section(node, accent=accent_colour)
     return ui.discord.render_static([node])
 
 
