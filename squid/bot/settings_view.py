@@ -431,13 +431,16 @@ class SettingsPanel(sl.Component):
         return self._server_nodes()
 
     def _server_nodes(self) -> Sequence[sl.LayoutNode]:
+        description = (
+            t(self.locale, _("Change as many as you like; an emptied picker clears that setting."))
+            if self._capabilities.edit_server
+            else None
+        )
         children: list[sl.LayoutNode] = [
-            sl.primitives.card(
-                t(self.locale, _("Server settings")),
-                t(self.locale, _("Change as many as you like; an emptied picker clears that setting."))
-                if self._capabilities.edit_server
-                else None,
-                fields=tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._server_fields()),
+            sl.section(
+                description and sl.truncate(sl.paragraph(description)),
+                sl.fields(*(sl.field(field.name, field.value) for field in self._server_fields())),
+                heading=t(self.locale, _("Server settings")),
             )
         ]
         if self._capabilities.edit_server:
@@ -481,12 +484,12 @@ class SettingsPanel(sl.Component):
         return children
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode]:
+        scope_note = self._scope_note()
         children: list[sl.LayoutNode] = [
-            sl.primitives.card(
-                t(self.locale, _("Voting — {kind}"), kind=t(self.locale, KIND_LABELS[self.kind])),
-                None,
-                fields=tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._voting_fields()),
-                footer=self._scope_note(),
+            sl.section(
+                sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
+                scope_note and sl.note(scope_note),
+                heading=t(self.locale, _("Voting — {kind}"), kind=t(self.locale, KIND_LABELS[self.kind])),
             ),
             sl.Choices(
                 key="vote-kind",
