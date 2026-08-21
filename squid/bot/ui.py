@@ -256,12 +256,14 @@ class PagedList(ui.Component):
         )
 
 
-def _fields(fields: Sequence[CardField]) -> tuple[ui.primitives.presets.Field, ...]:
-    return tuple(ui.primitives.presets.Field(field.name, field.value) for field in fields)
+def _fields(fields: Sequence[CardField]) -> tuple[ui.Field, ...]:
+    return tuple(ui.field(field.name, field.value) for field in fields)
 
 
-def _groups(sections: Sequence[CardSection]) -> tuple[ui.primitives.FieldGroup, ...]:
-    return tuple(ui.primitives.FieldGroup(section.title, _fields(section.fields)) for section in sections)
+def _groups(sections: Sequence[CardSection]) -> tuple[ui.Section, ...]:
+    # Nested sections step each field's Condense ladder independently, rather than in the
+    # lockstep the old FieldGroup ladder gave groups — finer-grained, not a regression.
+    return tuple(ui.section(ui.fields(*_fields(s.fields)), heading=s.title) for s in sections if s.fields)
 
 
 def card_layout(
@@ -275,21 +277,36 @@ def card_layout(
     media: Sequence[str] = (),
 ) -> discord.ui.LayoutView:
     """Create a standalone V2 card."""
-    node = ui.primitives.card(
-        title,
-        description,
+    extra_media = media[1:]
+    node = ui.section(
+        # The body is the card's shock absorber: wrapping it in truncate lets it give up
+        # characters under pressure before a field or the footer loses any, mirroring
+        # presets.card's fixed field/footer priority over the description.
+        description and ui.truncate(ui.paragraph(description)),
+        # `fields`/`extra_media` are tuples: an empty one is falsy but not `False`, and
+        # `_children` only skips `None`/`False`, so the truthiness check must be explicit.
+        bool(fields) and ui.fields(*_fields(fields)),
+        *_groups(sections),
+        bool(extra_media) and ui.media(*extra_media, key="media"),
+        footer and ui.note(footer),
+        heading=title,
         accent=accent_colour,
-        fields=_fields(fields),
-        groups=_groups(sections),
-        footer=footer,
-        media=media,
+        thumbnail=media[0] if media else None,
     )
     return ui.discord.render_static([node])
 
 
 def text_layout(content: str, *, accent_colour: int | None = None) -> discord.ui.LayoutView:
     """Create a simple V2 text response."""
-    return ui.discord.render_static([ui.primitives.banner(content, accent=accent_colour)])
+    node: ui.LayoutNode
+    if accent_colour is None:
+        # No accent, so drop to the bare primitive: it keeps presets.banner's Truncate
+        # overflow, which clips an overlong message instead of `sl.paragraph`'s fixed Never
+        # raising on overflow. No call site actually passes accent_colour today.
+        node = ui.primitives.Text(content)
+    else:
+        node = ui.section(ui.paragraph(content), accent=accent_colour)
+    return ui.discord.render_static([node])
 
 
 def error_layout(title: str, description: str | None) -> discord.ui.LayoutView:
@@ -318,7 +335,10 @@ def link_layout(
     title: str, url: str, *, description: str | None = None, label: str = "Open link"
 ) -> discord.ui.LayoutView:
     """Create a card whose primary action opens a URL."""
-    node = ui.primitives.card(
-        title, description, accent=DISCORD_GREEN, rows=(ui.primitives.Row((ui.primitives.LinkButton(label, url),)),)
+    node = ui.section(
+        description and ui.truncate(ui.paragraph(description)),
+        ui.primitives.Row((ui.primitives.LinkButton(label, url),)),
+        heading=title,
+        accent=DISCORD_GREEN,
     )
     return ui.discord.render_static([node])
