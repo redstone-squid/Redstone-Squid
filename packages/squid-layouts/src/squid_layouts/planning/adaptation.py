@@ -1,12 +1,12 @@
 """Lower semantic author intent into finite target-shaped strategy candidates."""
 
-import hashlib
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
@@ -89,9 +89,6 @@ from squid_layouts.semantic import (
 )
 from squid_layouts.text import resolve_text
 
-type PageState = Mapping[str, int] | int | None
-type PageNav = Callable[[str, int, int], Sequence[Node]]
-
 ACTIONS_ADAPTER_ID = "discord.actions"
 ACTIONS_ADAPTER_VERSION = 1
 
@@ -110,10 +107,8 @@ class _Context:
     limits: V2Limits
     chrome: Chrome
     session: PresentationSession
-    page: PageState
-    nav: PageNav | None
+    pages: PageBroker
     events: list[PlanEvent]
-    pagers: list[ScenePager]
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
@@ -125,19 +120,19 @@ def lower_semantics(
     limits: V2Limits,
     chrome: Chrome,
     session: PresentationSession,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    pages: PageBroker | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SemanticLowering:
     """Lower semantic nodes before the existing exact solver measures the result."""
-    context = _Context(limits, chrome, session, page, nav, [], [], search_budget)
+    broker = pages if pages is not None else PageBroker(session, chrome)
+    context = _Context(limits, chrome, session, broker, [], search_budget)
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
     return SemanticLowering(
         tuple(lowered),
         tuple(context.events),
-        tuple(context.pagers),
+        context.pages.pagers,
         context.states_explored,
         context.search_fallback,
     )
@@ -345,7 +340,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
             max_values=min(node.maximum, len(options)),
         )
     ]
-    result.extend(_page_chrome(page_key, page, pages, context))
+    result.extend(context.pages.controls(page_key, page, pages))
     return result
 
 
@@ -392,7 +387,7 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
             placeholder="Choose an item",
         ),
     ]
-    result.extend(_page_chrome(page_key, page, pages, context))
+    result.extend(context.pages.controls(page_key, page, pages))
     return result
 
 
@@ -427,7 +422,7 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
                 node.key,
             )
         ]
-        result.extend(_page_chrome(page_key, page, pages, context))
+        result.extend(context.pages.controls(page_key, page, pages))
         return result
     buttons: list[Button] = []
     for destination in available:
@@ -653,26 +648,8 @@ def _grouped(actions: Sequence[Action], key: str, label: str | None, path: str, 
 
 
 def _paged_picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> list[Node]:
-    per = context.limits.select_options
-    pages = (len(actions) + per - 1) // per
-    cursor = context.session.cursor(key)
-    index = cursor.index
-    keys = [action.key for action in actions]
-    if cursor.anchor in keys:
-        index = keys.index(cursor.anchor) // per
-    if isinstance(context.page, Mapping):
-        index = context.page.get(key, index)
-    index = max(0, min(index, pages - 1))
-    chunk = tuple(actions[index * per : (index + 1) * per])
-    anchor = chunk[0].key if chunk else None
-    context.session.anchor_cursor(key, index, anchor, extent=pages)
-    fingerprint = hashlib.blake2s("\0".join(keys).encode(), digest_size=16).hexdigest()
-    context.pagers.append(ScenePager(key, index, pages, fingerprint))
-    result: list[Node] = [_picker(chunk, f"{key}.page", label)]
-    result.append(Footer(context.chrome.page_footer(index + 1, pages)))
-    if context.nav is not None:
-        result.extend(context.nav(key, index, pages))
-    return result
+    chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
+    return [_picker(chunk, f"{key}.page", label), *context.pages.controls(key, index, pages)]
 
 
 def _page_items[T](
@@ -682,37 +659,22 @@ def _page_items[T](
     *,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], int, int]:
+    """Window a list of options 25 at a time, following the item the reader was on."""
     per = context.limits.select_options
-    pages = max(1, (len(items) + per - 1) // per)
-    cursor = context.session.cursor(pager_key)
-    index = cursor.index
     keys = [identity(item) for item in items]
-    if cursor.anchor in keys:
-        index = keys.index(cursor.anchor) // per
-    if isinstance(context.page, Mapping):
-        index = context.page.get(pager_key, index)
-    index = max(0, min(index, pages - 1))
-    visible = tuple(items[index * per : (index + 1) * per])
-    fingerprint = hashlib.blake2s("\0".join(keys).encode(), digest_size=16).hexdigest()
-    context.session.anchor_cursor(
-        pager_key,
-        index,
-        identity(visible[0]) if visible else None,
-        extent=pages,
-        content_fingerprint=fingerprint,
+    anchors: dict[str, int] = {}
+    for position, key in enumerate(keys):
+        anchors.setdefault(key, position // per)
+    request = PageRequest(
+        key=pager_key,
+        pages=max(1, (len(items) + per - 1) // per),
+        fingerprint=content_fingerprint(keys),
+        anchors=anchors,
     )
-    if pages > 1:
-        context.pagers.append(ScenePager(pager_key, index, pages, fingerprint))
-    return visible, index, pages
-
-
-def _page_chrome(key: str, page: int, pages: int, context: _Context) -> list[Node]:
-    if pages <= 1:
-        return []
-    result: list[Node] = [Footer(context.chrome.page_footer(page + 1, pages))]
-    if context.nav is not None:
-        result.extend(context.nav(key, page, pages))
-    return result
+    grant = context.pages.grant(request)
+    visible = tuple(items[grant.index * per : (grant.index + 1) * per])
+    context.pages.record(request, grant.index, anchor=identity(visible[0]) if visible else None)
+    return visible, grant.index, grant.pages
 
 
 def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMenu:
