@@ -23,6 +23,10 @@ from typing import Literal, NoReturn, TypeAliasType, get_args
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
+    CLOSED,
+    FIRST_DESTINATION,
+    UNOPENED,
+    UNSELECTED,
     Action,
     ActionDisplay,
     ActionGroup,
@@ -30,13 +34,15 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     Choice,
-    ChoiceEvent,
+    ChoiceOwnership,
     Choices,
     Cluster,
     Code,
     Column,
+    Controlled,
     Destination,
     Details,
+    DisclosureOwnership,
     Emphasis,
     Field,
     Fields,
@@ -47,18 +53,20 @@ from squid_layouts.semantic import (
     Importance,
     Item,
     ItemDisplay,
+    ItemOwnership,
     Items,
     LayoutNode,
     Link,
     List,
     ListItem,
+    Managed,
     Measure,
     Media,
     MediaDisplay,
     MediaItem,
-    NavigateEvent,
     Navigation,
     NavigationDisplay,
+    NavOwnership,
     Note,
     Paragraph,
     Progress,
@@ -213,7 +221,25 @@ def aside(*children: ChildLike, tone: Tone = Tone.NEUTRAL) -> Aside:
     return Aside(_children(children, "sl.aside()"), tone)
 
 
-def details(*children: ChildLike, key: str, summary: TextValue, open: bool = False) -> Details:
+def controlled[ValueT, EventT](
+    value: ValueT,
+    on_change: Callable[[EventT], Awaitable[None]],
+) -> Controlled[ValueT, EventT]:
+    """Own this node's value yourself: it wins every render and ``on_change`` gets the writes."""
+    return Controlled(value, on_change)
+
+
+def managed[ValueT](initial: ValueT) -> Managed[ValueT]:
+    """Let the engine own this node's value, seeded once with ``initial``."""
+    return Managed(initial)
+
+
+def details(
+    *children: ChildLike,
+    key: str,
+    summary: TextValue,
+    open: DisclosureOwnership = CLOSED,
+) -> Details:
     """Content the reader expands; ``key`` carries its disclosure state."""
     return Details(key, _text(summary), _children(children, "sl.details()"), open)
 
@@ -226,12 +252,12 @@ def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | 
 def items(
     *entries: Conditional[Item],
     key: str,
-    focused: str | None = None,
+    opened: ItemOwnership = UNOPENED,
     display: ItemDisplay = ItemDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Items:
-    """A set of entries the reader browses; ``key`` carries the focused entry."""
-    return Items(key, _collect(entries, (Item,), "sl.items()"), focused, display, flexibility)
+    """A set of entries the reader browses; ``key`` carries the opened entry."""
+    return Items(key, _collect(entries, (Item,), "sl.items()"), opened, display, flexibility)
 
 
 # --- text and figures ---------------------------------------------------------------------
@@ -439,8 +465,7 @@ def choice(label: TextValue, *, key: str, description: TextValue | None = None, 
 def choices(
     *entries: Conditional[Choice],
     key: str,
-    selected: Iterable[str],
-    on_change: Callable[[ChoiceEvent], Awaitable[None]],
+    selection: ChoiceOwnership = UNSELECTED,
     minimum: int = 1,
     maximum: int = 1,
     flexibility: Flexibility = Flexibility.NORMAL,
@@ -449,8 +474,7 @@ def choices(
     return Choices(
         key,
         _collect(entries, (Choice,), "sl.choices()"),
-        tuple(selected),
-        on_change,
+        selection,
         minimum,
         maximum,
         flexibility,
@@ -465,8 +489,7 @@ def destination(label: TextValue, *, key: str, available: bool = True) -> Destin
 def navigation(
     *entries: Conditional[Destination],
     key: str,
-    current: str,
-    on_navigate: Callable[[NavigateEvent], Awaitable[None]],
+    current: NavOwnership = FIRST_DESTINATION,
     display: NavigationDisplay = NavigationDisplay.AUTO,
     flexibility: Flexibility = Flexibility.STABLE,
 ) -> Navigation:
@@ -475,7 +498,6 @@ def navigation(
         key,
         _collect(entries, (Destination,), "sl.navigation()"),
         current,
-        on_navigate,
         display,
         flexibility,
     )

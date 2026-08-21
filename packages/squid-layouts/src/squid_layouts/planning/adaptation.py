@@ -59,6 +59,7 @@ from squid_layouts.semantic import (
     Choices,
     Cluster,
     Code,
+    Controlled,
     Details,
     Emphasis,
     FallbackContent,
@@ -72,12 +73,14 @@ from squid_layouts.semantic import (
     LayoutNode,
     Link,
     List,
+    Managed,
     Measure,
     Media,
     NavigateEvent,
     Navigation,
     NavigationDisplay,
     Note,
+    OpenEvent,
     OptionalContent,
     Paragraph,
     Progress,
@@ -285,23 +288,37 @@ def _with_overflow(node: Node, overflow: Overflow) -> Node:
 
 def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     available = tuple(choice for choice in node.choices if choice.available)
-    previous = tuple(node.selected)
-    if node.maximum == 1 and 2 <= len(available) <= 5:
-        buttons: list[Button] = []
-        for choice in available:
+    match node.selection:
+        case Controlled(value=value):
+            previous = tuple(value)
+        case Managed(initial=initial):
+            previous = context.session.selection(node.key, initial=tuple(initial)).selected
 
-            async def choose(event: PressEvent, key: str = choice.key) -> None:
-                await node.on_change(
+    async def commit(event: ActionEvent, selected: tuple[str, ...]) -> None:
+        match node.selection:
+            case Controlled(on_change=on_change):
+                await on_change(
                     ChoiceEvent(
                         event.actor,
                         event.responder,
                         event.locale,
                         event.context,
-                        (key,),
-                        () if key in previous else (key,),
-                        tuple(value for value in previous if value != key),
+                        selected,
+                        tuple(key for key in selected if key not in previous),
+                        tuple(key for key in previous if key not in selected),
                     )
                 )
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, selected)
+                event.invalidate()
+
+    if node.maximum == 1 and 2 <= len(available) <= 5:
+        buttons: list[Button] = []
+        for choice in available:
+
+            async def choose(event: PressEvent, key: str = choice.key) -> None:
+                await commit(event, (key,))
 
             buttons.append(
                 Button(
@@ -322,18 +339,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     visible, page, pages = _page_items(available, page_key, context, identity=lambda choice: choice.key)
 
     async def choose_values(event: SelectionEvent) -> None:
-        selected = tuple(event.values)
-        await node.on_change(
-            ChoiceEvent(
-                event.actor,
-                event.responder,
-                event.locale,
-                event.context,
-                selected,
-                tuple(key for key in selected if key not in previous),
-                tuple(key for key in previous if key not in selected),
-            )
-        )
+        await commit(event, tuple(event.values))
 
     options = tuple(
         Option(
@@ -358,20 +364,32 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
 
 
 def _items(node: Items, path: str, context: _Context) -> list[Node]:
+    # An entry the author named but no longer supplies means the list, not a crash.
     keys = {item.key for item in node.items}
-    remembered = context.session.selection(node.key).selected
-    focused = (
-        node.focused if node.focused in keys else (remembered[0] if remembered and remembered[0] in keys else None)
-    )
-    if node.display is ItemDisplay.FOCUSED and focused is None and node.items:
-        focused = node.items[0].key
-    if focused is not None:
-        item = next(item for item in node.items if item.key == focused)
+    match node.opened:
+        case Controlled(value=value):
+            opened = value if value in keys else None
+        case Managed(initial=initial):
+            seed = () if initial is None else (initial,)
+            remembered = context.session.selection(node.key, initial=seed).selected
+            opened = remembered[0] if remembered and remembered[0] in keys else None
+    if node.display is ItemDisplay.OPENED and opened is None and node.items:
+        opened = node.items[0].key
+
+    async def open_(event: ActionEvent, entry: str | None) -> None:
+        match node.opened:
+            case Controlled(on_change=on_change):
+                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=entry))
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, () if entry is None else (entry,))
+                event.invalidate()
+
+    if opened is not None:
+        item = next(item for item in node.items if item.key == opened)
 
         async def back(event: PressEvent) -> None:
-            await event.acknowledge()
-            context.session.select(node.key, ())
-            event.invalidate()
+            await open_(event, None)
 
         return [
             PrimitiveHeading(resolve_text(item.label).content, level=3, overflow=Never()),
@@ -380,9 +398,7 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
         ]
 
     async def focus(event: SelectionEvent) -> None:
-        await event.acknowledge()
-        context.session.select(node.key, tuple(event.values[:1]))
-        event.invalidate()
+        await open_(event, event.values[0] if event.values else None)
 
     page_key = f"{node.key}.items"
     visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
@@ -410,8 +426,24 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
         node.display is NavigationDisplay.AUTO and len(available) > 5
     )
 
+    match node.current:
+        case Controlled(value=value):
+            current = value
+        case Managed(initial=initial):
+            seed = () if initial is None else (initial,)
+            remembered = context.session.selection(node.key, initial=seed).selected
+            current = remembered[0] if remembered else None
+    if current is None and available:
+        current = available[0].key
+
     async def navigate(event: ActionEvent, destination: str) -> None:
-        await node.on_navigate(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
+        match node.current:
+            case Controlled(on_change=on_change):
+                await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, (destination,))
+                event.invalidate()
 
     if grouped:
         page_key = f"{node.key}.destinations"
@@ -427,7 +459,7 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
                     Option(
                         resolve_text(destination.label).content,
                         destination.key,
-                        default=destination.key == node.current,
+                        default=destination.key == current,
                     )
                     for destination in visible
                 ),
@@ -448,20 +480,27 @@ def _navigation(node: Navigation, context: _Context) -> list[Node]:
                 resolve_text(destination.label).content,
                 go,
                 f"{node.key}.{destination.key}",
-                style=ActionStyle.PRIMARY if destination.key == node.current else ActionStyle.SECONDARY,
+                style=ActionStyle.PRIMARY if destination.key == current else ActionStyle.SECONDARY,
             )
         )
     return [PrimitiveActionGroup(tuple(buttons))]
 
 
 def _details(node: Details, path: str, context: _Context) -> list[Node]:
-    open_ = context.session.disclosure(node.key, initial=node.open).open
+    match node.open:
+        case Controlled(value=value):
+            open_ = value
+        case Managed(initial=initial):
+            open_ = context.session.disclosure(node.key, initial=initial).open
 
     async def toggle(event: PressEvent) -> None:
-        await event.acknowledge()
-        current = context.session.disclosure(node.key, initial=node.open).open
-        context.session.disclose(node.key, not current)
-        event.invalidate()
+        match node.open:
+            case Controlled(on_change=on_change):
+                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not open_))
+            case Managed(initial=seed):
+                await event.acknowledge()
+                context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
+                event.invalidate()
 
     result: list[Node] = [Row((Button(resolve_text(node.summary).content, toggle, f"{node.key}.toggle"),))]
     if open_:
