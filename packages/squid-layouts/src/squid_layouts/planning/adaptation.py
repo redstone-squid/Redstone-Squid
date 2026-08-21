@@ -23,6 +23,7 @@ from squid_layouts.primitives.nodes import (
     Node,
     Option,
     Panel,
+    RoutedButton,
     Row,
     SelectMenu,
     Text,
@@ -53,6 +54,7 @@ from squid_layouts.semantic import (
     Cluster,
     Code,
     Details,
+    Emphasis,
     FallbackContent,
     Field,
     Fields,
@@ -62,6 +64,7 @@ from squid_layouts.semantic import (
     ItemDisplay,
     Items,
     LayoutNode,
+    Link,
     List,
     Measure,
     Media,
@@ -73,6 +76,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Progress,
     Quote,
+    RoutedAction,
     Section,
     Spilled,
     Stack,
@@ -511,7 +515,9 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
     strategy = _action_strategy(node, context)
     context.session.remember_strategy(node.key, ACTIONS_ADAPTER_ID, ACTIONS_ADAPTER_VERSION, strategy)
     groups: list[tuple[str, tuple[Action, ...], str | None]] = []
-    direct: list[Action | LinkButton] = []
+    # Links and routed controls carry no binding, so they can never be folded into a select
+    # menu the way a group of session actions can: they stay individual buttons.
+    direct: list[Action | LinkButton | RoutedButton] = []
     implicit: list[Action] = []
 
     def flush_implicit() -> None:
@@ -527,13 +533,13 @@ def _actions(node: Actions, path: str, context: _Context) -> list[Node]:
                 if isinstance(action, Action):
                     group_actions.append(action)
                 else:
-                    direct.append(LinkButton(resolve_text(action.label).content, action.url))
+                    direct.append(_unbound_button(action))
             groups.append((item.key, tuple(group_actions), resolve_text(item.label).content if item.label else None))
         elif isinstance(item, Action):
             implicit.append(item)
         else:
             flush_implicit()
-            direct.append(LinkButton(resolve_text(item.label).content, item.url))
+            direct.append(_unbound_button(item))
     flush_implicit()
 
     result: list[Node] = []
@@ -729,17 +735,30 @@ def _picker(actions: Sequence[Action], key: str, label: str | None) -> SelectMen
     )
 
 
-def _button(action: Action) -> Button:
-    style = {
+def _unbound_button(item: Link | RoutedAction) -> LinkButton | RoutedButton:
+    """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
+    label = resolve_text(item.label).content
+    if isinstance(item, Link):
+        return LinkButton(label, item.url)
+    return RoutedButton(
+        label, item.custom_id, style=_button_style(item.tone, item.emphasis), disabled=not item.available
+    )
+
+
+def _button_style(tone: Tone, emphasis: Emphasis) -> ActionStyle:
+    return {
         Tone.SUCCESS: ActionStyle.SUCCESS,
         Tone.DANGER: ActionStyle.DANGER,
         Tone.INFO: ActionStyle.PRIMARY,
-    }.get(action.tone, ActionStyle.PRIMARY if action.emphasis.value == "strong" else ActionStyle.SECONDARY)
+    }.get(tone, ActionStyle.PRIMARY if emphasis is Emphasis.STRONG else ActionStyle.SECONDARY)
+
+
+def _button(action: Action) -> Button:
     return Button(
         resolve_text(action.label).content,
         action.on_trigger,
         action.key,
-        style=style,
+        style=_button_style(action.tone, action.emphasis),
         disabled=not action.available,
         policy=action.policy,
     )

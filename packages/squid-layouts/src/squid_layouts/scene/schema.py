@@ -61,6 +61,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "separator",
                     "link",
                     "button",
+                    "routed_button",
                     "select",
                     "row",
                     "thumbnail",
@@ -106,6 +107,21 @@ SCENE_SCHEMA: dict[str, Any] = {
             "disabled",
             "policy",
         ),
+        "routed_button": _node(
+            "routed_button",
+            {
+                "label": {"type": "string"},
+                "custom_id": {"type": "string", "maxLength": 100},
+                "style": {"enum": ["primary", "secondary", "success", "danger"]},
+                "emoji": {"type": ["string", "null"]},
+                "disabled": {"type": "boolean"},
+            },
+            "label",
+            "custom_id",
+            "style",
+            "emoji",
+            "disabled",
+        ),
         "select": _node(
             "select",
             {
@@ -145,6 +161,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                         "oneOf": [
                             {"$ref": "#/$defs/link"},
                             {"$ref": "#/$defs/button"},
+                            {"$ref": "#/$defs/routed_button"},
                             {"$ref": "#/$defs/extension"},
                         ]
                     },
@@ -181,6 +198,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                         {"$ref": "#/$defs/thumbnail"},
                         {"$ref": "#/$defs/link"},
                         {"$ref": "#/$defs/button"},
+                        {"$ref": "#/$defs/routed_button"},
                         {"$ref": "#/$defs/extension"},
                     ]
                 },
