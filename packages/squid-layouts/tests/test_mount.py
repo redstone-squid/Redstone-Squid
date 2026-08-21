@@ -384,6 +384,28 @@ class TestFinishHooks:
         assert seen == [mount]
         assert mount.finished
 
+    async def test_a_hook_fires_even_when_finish_hits_an_unanticipated_error(self):
+        """`finish` anticipates `HTTPException` from its disable-edit and nothing else.
+
+        Anything it did not anticipate used to propagate past the teardown as well as the
+        hooks, leaving the mount half-finished and every observer holding it.
+        """
+        mount = Mount(Counter(), timeout=None)
+        seen: list[Mount] = []
+        mount.on_finish(lambda finished: _record(seen, finished))
+        message: Any = SimpleNamespace(
+            flags=SimpleNamespace(components_v2=True),
+            edit=AsyncMock(side_effect=RuntimeError("message is gone")),
+        )
+        await mount.send(delivered_to(message))
+
+        with pytest.raises(RuntimeError):
+            await mount.finish()
+
+        assert seen == [mount]
+        assert mount.finished
+        assert mount._view is None
+
     async def test_finishing_from_inside_a_hook_does_not_recurse(self):
         mount = Mount(Counter(), timeout=None)
         calls: list[int] = []
