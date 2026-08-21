@@ -9,10 +9,11 @@ child class can appear in one message without their controls or pagers cross-wir
 root component is attached to a Mount; children reach it through their parent.
 """
 
-from collections.abc import Sequence
+import functools
+from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import Any, Protocol, Self
+from typing import Any, ClassVar, Protocol, Self
 
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
@@ -124,6 +125,39 @@ _MISSING = object()
 _FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent"})
 
 
+def _is_abstract(cls: type) -> bool:
+    """Whether this class is a base to build on rather than one to instantiate.
+
+    Such a class may declare state only its concrete subclasses can assign, so its constructor
+    is not the place to demand one. Not having implemented render is the test: `ABCMeta` needs
+    no special case, both because it populates `__abstractmethods__` only after
+    `__init_subclass__` has run, and because it already refuses to instantiate the class, so
+    that wrapper can never be the outermost one.
+    """
+    return cls.render is Component.render
+
+
+def _checked_init(
+    original: Callable[..., None],
+    required: tuple[tuple[str, str], ...],
+) -> Callable[..., None]:
+    """Wrap ``__init__`` so state declared without an initial value must be assigned."""
+
+    @functools.wraps(original)
+    def __init__(self: Component, *args: Any, **kwargs: Any) -> None:
+        original(self, *args, **kwargs)
+        # Only the outermost __init__ checks. A subclass calling super().__init__() would
+        # otherwise trip the base's wrapper before it had finished assigning.
+        if type(self).__init__ is not __init__:
+            return
+        missing = sorted(name for name, slot in required if slot not in self.__dict__)
+        if missing:
+            message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
+            raise TypeError(message)
+
+    return __init__
+
+
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
     """One expanded render and the component identities that produced it."""
@@ -139,6 +173,24 @@ class Component:
 
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
+    _state_names: ClassVar[frozenset[str]] = frozenset()
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        declared = {
+            name: descriptor
+            for klass in reversed(cls.__mro__)
+            for name, descriptor in vars(klass).items()
+            if isinstance(descriptor, _State)
+        }
+        cls._state_names = frozenset(declared)
+        required = tuple(
+            (name, descriptor._name) for name, descriptor in declared.items() if not descriptor.has_initial
+        )
+        if required and not _is_abstract(cls):
+            # Wrap even an inherited __init__, so adding a required field to a subclass that
+            # defines no constructor of its own is still checked.
+            cls.__init__ = _checked_init(cls.__init__, required)
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         # A handler may build components. Noting the ones born mid-action is what lets their
@@ -150,11 +202,7 @@ class Component:
 
     def __setattr__(self, name: str, value: Any) -> None:
         # Fast path: one contextvar read when no action is in flight, which is almost always.
-        if (
-            _CURRENT.get() is not None
-            and name not in _FRAMEWORK_ATTRIBUTES
-            and not isinstance(getattr(type(self), name, None), _State)
-        ):
+        if _CURRENT.get() is not None and name not in _FRAMEWORK_ATTRIBUTES and name not in type(self)._state_names:
             report_undeclared_write(self, name)
         object.__setattr__(self, name, value)
 
@@ -186,7 +234,7 @@ class Component:
         object a ``copy="ref"`` field holds. It schedules the draw; it cannot roll the change
         back, and naming the field keeps the call tied to the declaration it depends on.
         """
-        if not isinstance(getattr(type(self), name, None), _State):
+        if name not in type(self)._state_names:
             message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
             raise TypeError(message)
         self.invalidate()
