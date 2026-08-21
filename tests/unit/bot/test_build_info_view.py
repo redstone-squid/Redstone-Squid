@@ -18,8 +18,7 @@ async def test_build_info_view_expires_and_disables_every_control() -> None:
     await view.on_timeout()
 
     assert view.timeout == BUILD_INFO_TIMEOUT_SECONDS
-    components = [child.item if isinstance(child, discord.ui.DynamicItem) else child for child in view.walk_children()]
-    controls = [component for component in components if isinstance(component, discord.ui.Button | discord.ui.Select)]
+    controls = [child for child in view.walk_children() if isinstance(child, discord.ui.Button | discord.ui.Select)]
     assert controls
     assert all(control.disabled for control in controls)
     message.edit.assert_awaited_once()

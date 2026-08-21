@@ -21,6 +21,7 @@ from squid.bot.errors import SquidCommandTree, set_error_reporter
 from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
+from squid.bot.routes import ROUTER
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import AccountIdCache
@@ -196,6 +197,10 @@ class RedstoneSquid(Bot):
                 with contextlib.suppress(commands.ExtensionError):
                     await self.unload_extension(extension)
             raise
+
+        # After every extension, because loading is what imports the handler modules that
+        # register routes, and installing the router freezes the table.
+        ROUTER.register(self)
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
         """Resolve a messageable channel from cache or Discord, if it is accessible."""
