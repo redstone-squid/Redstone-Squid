@@ -48,6 +48,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.semantic import Item, Items, Paragraph
+from squid_layouts.sources import Position, PositionPolicy
 from squid_layouts.text import NEUTRAL
 
 
@@ -69,6 +70,48 @@ class TestSplitPages:
         pages = split_pages(text, 300)
         assert "\n".join(pages) == text
         assert all(len(page) <= 300 for page in pages)
+
+
+class TestPositionPolicy:
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            (
+                {
+                    "override": Position("override", 8, "forward"),
+                    "anchored": Position("anchor", 7),
+                    "stale": True,
+                    "stored": Position("stored", 6),
+                    "initial": Position(offset=5),
+                },
+                Position("override", 8, "forward"),
+            ),
+            (
+                {
+                    "anchored": Position("anchor", 7),
+                    "stale": True,
+                    "stored": Position("stored", 6),
+                    "initial": Position(offset=5),
+                },
+                Position("anchor", 7),
+            ),
+            (
+                {"stale": True, "stored": Position("stored", 6), "reset": Position("fallback", 4)},
+                Position("fallback", 4),
+            ),
+            ({"stored": Position("stored", 6), "initial": Position(offset=5)}, Position("stored", 6)),
+            ({"initial": Position("initial", 5)}, Position("initial", 5)),
+        ],
+    )
+    def test_precedence(self, kwargs, expected) -> None:
+        assert PositionPolicy().resolve(**kwargs) == expected
+
+    def test_clamps_only_the_offset(self) -> None:
+        policy = PositionPolicy()
+        assert policy.resolve(override=Position("item", -3, "backward"), upper_bound=8) == Position(
+            "item", 0, "backward"
+        )
+        assert policy.resolve(override=Position("item", 20, "forward"), upper_bound=8) == Position("item", 8, "forward")
 
 
 class TestSolvePagination:
