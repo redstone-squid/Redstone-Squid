@@ -11,18 +11,19 @@ from dataclasses import dataclass, field
 from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
 from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class Text:
-    content: str
+    content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class Heading:
-    content: str
+    content: TextLike
     level: int = 2
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 10
@@ -32,7 +33,7 @@ class Heading:
 class Footer:
     """Small (`-#`) text at the card's foot; first to shrink by default."""
 
-    content: str
+    content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = -10
 
@@ -41,7 +42,7 @@ class Footer:
 class Code:
     """Fenced code block; embedded fences are escaped so content cannot break out."""
 
-    content: str
+    content: TextLike
     lang: str = ""
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
@@ -58,7 +59,7 @@ class Lines:
     priorities disappear first, while surviving entries keep document order.
     """
 
-    lines: tuple[str | Alt, ...]
+    lines: tuple[TextLike | Alt, ...]
     join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0
@@ -72,7 +73,7 @@ class Sep:
 
 @dataclass(frozen=True, slots=True)
 class LinkButton:
-    label: str
+    label: TextLike
     url: str
 
 
@@ -80,7 +81,7 @@ class LinkButton:
 class Button:
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
-    label: str
+    label: TextLike
     on_click: PressHandler
     key: str
     style: ActionStyle = ActionStyle.SECONDARY
@@ -99,7 +100,7 @@ class RoutedButton:
     a `squid_layouts.routing.Route` rather than by hand.
     """
 
-    label: str
+    label: TextLike
     custom_id: str
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: str | None = None
@@ -108,9 +109,9 @@ class RoutedButton:
 
 @dataclass(frozen=True, slots=True)
 class Option:
-    label: str
+    label: TextLike
     value: str
-    description: str | None = None
+    description: TextLike | None = None
     default: bool = False
 
 
@@ -121,7 +122,7 @@ class SelectMenu:
     options: tuple[Option, ...]
     on_select: SelectionHandler
     key: str
-    placeholder: str | None = None
+    placeholder: TextLike | None = None
     min_values: int = 1
     max_values: int = 1
     disabled: bool = False
@@ -184,7 +185,7 @@ class ActionGroup:
 @dataclass(frozen=True, slots=True)
 class Thumbnail:
     url: str
-    description: str | None = None
+    description: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)

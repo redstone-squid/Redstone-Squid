@@ -245,11 +245,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _table(node, context)
         case Panel(children=children, accent=accent):
             return [Panel(tuple(_children(children, path, context)), accent)]
-        case Lines(overflow=Paginate(footer=footer)) if footer is not None:
-            localized = lambda page, pages: _resolve(footer(page, pages), context)
-            return [replace(node, overflow=replace(node.overflow, footer=localized))]
         case _:
-            return [node]
+            return [_primitive(node, context)]
 
 
 def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _Context) -> None:
@@ -259,6 +256,52 @@ def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _
 
 def _resolve(value: TextLike, context: _Context) -> str:
     return resolve_text(value, context.localization).content
+
+
+def _primitive(node: Node, context: _Context) -> Node:
+    """Resolve deferred author text on exact primitive nodes."""
+    match node:
+        case (
+            Text(content=content)
+            | PrimitiveHeading(content=content)
+            | Footer(content=content)
+            | PrimitiveCode(content=content)
+        ):
+            return replace(node, content=_resolve(content, context))
+        case Lines(lines=lines, overflow=overflow):
+            resolved_lines = tuple(line if isinstance(line, Alt) else _resolve(line, context) for line in lines)
+            if isinstance(overflow, Paginate) and overflow.footer is not None:
+                footer = overflow.footer
+                localized = lambda page, pages: _resolve(footer(page, pages), context)
+                overflow = replace(overflow, footer=localized)
+            return replace(node, lines=resolved_lines, overflow=overflow)
+        case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
+            return replace(node, label=_resolve(label, context))
+        case Row(items=items) | PrimitiveActionGroup(items=items):
+            return replace(node, items=tuple(_primitive(item, context) for item in items))
+        case SelectMenu(options=options, placeholder=placeholder):
+            return replace(
+                node,
+                options=tuple(
+                    replace(
+                        option,
+                        label=_resolve(option.label, context),
+                        description=_resolve(option.description, context) if option.description is not None else None,
+                    )
+                    for option in options
+                ),
+                placeholder=_resolve(placeholder, context) if placeholder is not None else None,
+            )
+        case Thumbnail(description=description):
+            return replace(node, description=_resolve(description, context) if description is not None else None)
+        case PrimitiveSection(texts=texts, accessory=accessory):
+            return replace(
+                node,
+                texts=tuple(_primitive(text, context) for text in texts),
+                accessory=_primitive(accessory, context),
+            )
+        case _:
+            return node
 
 
 def _field_entry(field: Field, context: _Context) -> str | Alt:
