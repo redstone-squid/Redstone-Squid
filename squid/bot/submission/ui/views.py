@@ -1142,9 +1142,7 @@ class BuildEditComponent(sl.Component):
     async def _apply(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event):
             return
-        interaction = self._interaction(event)
-        if interaction is None:
-            return
+        interaction = sl.discord.native(event)
         changed = [item for item in self.items if item.modified]
         await event.acknowledge()
         patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
@@ -1164,9 +1162,7 @@ class BuildEditComponent(sl.Component):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
-        interaction = self._interaction(event)
-        if interaction is None:
-            return False
+        interaction = sl.discord.native(event)
         if Instant.now() > self.expiry_time:
             await event.notice(t(self.locale, _("This edit session expired. Reopen the build to start again.")))
             return False
@@ -1241,11 +1237,6 @@ class BuildEditComponent(sl.Component):
             wait=True,
         )
         mount.bind(message, rendered)
-
-    @staticmethod
-    def _interaction(event: sl.ActionEvent) -> discord.Interaction[Any] | None:
-        interaction = getattr(event.responder, "interaction", None)
-        return cast(discord.Interaction[Any], interaction) if interaction is not None else None
 
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)
