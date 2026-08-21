@@ -192,11 +192,12 @@ class Mount:
     # --- Rendering ---------------------------------------------------------------------
 
     def build_view(self, *, disabled: bool = False) -> MountedView:
-        """Stage a render of the component's current state into a fresh view.
+        """Stage a render of the component's current state into a fresh view, committing none of it.
 
-        Staging is not committing: handlers, lifecycle hooks, page positions and the live
-        generation only move in :meth:`bind`, once the host's own delivery has landed.
-        Rendering the component tree is the one side effect staging cannot avoid.
+        The escape hatch for a host that only wants the rendered components — nothing here
+        moves handlers, lifecycle hooks, page positions or the live generation. Delivery goes
+        through :meth:`send` or :meth:`flush`, which stage their own render and commit it;
+        a view staged here and never delivered is superseded by the next one.
         """
         pending = self._pending
         candidate = self._stage(disabled=disabled)
@@ -315,8 +316,8 @@ class Mount:
     def attachment_files(self) -> list[discord.File]:
         """Materialize a fresh Discord file set from the current declarative assets.
 
-        A staged render's assets win, so a host can send `build_view()` and its files
-        together before the delivery that :meth:`bind` commits.
+        A staged render's assets win, so files fetched alongside a `build_view()` belong to
+        that render rather than to the generation it will replace.
         """
         return _attachment_files(self._pending.assets if self._pending is not None else self._assets)
 
@@ -356,24 +357,6 @@ class Mount:
         self._commit(candidate)
         return message
 
-    def bind(self, message: discord.Message | None, view: MountedView) -> None:
-        """Record the sent message and commit the render it carries.
-
-        This is the commit point for the host-owned initial send: `build_view` stages only,
-        so a delivery that never happened leaves the mount on its previous generation. Pass
-        `None` for a view that reached Discord without giving the host a message handle; the
-        mount keeps whatever edit handle it already had.
-        """
-        if message is not None:
-            self._handle = deliver.handle_for(message)
-        pending = self._pending
-        if pending is not None and pending.view is view:
-            self._commit(pending)
-            return
-        # A view this mount did not stage, or one a later stage superseded: it can be
-        # recorded as live, but there is no candidate state to publish with it.
-        self._swap_view(view)
-
     def _swap_view(self, view: MountedView) -> None:
         if self._view is not None and self._view is not view:
             self._view.stop()
@@ -381,8 +364,13 @@ class Mount:
 
     async def _deliver(
         self, candidate: _Candidate, *, through: deliver.EditHandle | None = None, files: bool = True
-    ) -> bool:
+    ) -> deliver.EditHandle | None:
         """Show a staged render, through `through` when it is usable and the standing handle otherwise.
+
+        Returns the handle that wrote, or `None` when none of them could. Which one it was
+        matters: only the interaction's own handle answers the click as a side effect of
+        editing, so a caller holding an interaction has to read this to know whether it still
+        owes an acknowledgement.
 
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
@@ -398,8 +386,8 @@ class Mount:
                 if handle is self._handle:
                     self._handle = None
                 continue
-            return True
-        return False
+            return handle
+        return None
 
     def _renew(self, interaction: discord.Interaction) -> None:
         """Trade up to the credentials this click carries.
@@ -506,16 +494,22 @@ class Mount:
                 await interaction.response.defer()
             return
         candidate = self._stage()
+        source = deliver.handle_from(interaction)
         try:
-            delivered = await self._deliver(candidate, through=deliver.handle_from(interaction))
+            wrote = await self._deliver(candidate, through=source)
         except Exception:
             self._rollback(candidate)
             raise
-        if not delivered:
+        if wrote is None:
             self._rollback(candidate)
             await self._acknowledge(interaction)
             return
         self._commit(candidate)
+        # Only the interaction's own handle answers the click by editing through it. Delivery
+        # through the standing handle leaves the click unanswered, and Discord shows the user
+        # "This interaction failed" three seconds later.
+        if wrote is not source:
+            await self._acknowledge(interaction)
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
         """Finish through an interaction edit — the shape a Close button wants."""
@@ -524,8 +518,12 @@ class Mount:
         # Marked before delivery: a failed disable-edit must not resurrect the mount.
         self._finished = True
         candidate = self._stage(disabled=True)
+        source = deliver.handle_from(interaction)
         try:
-            if not await self._deliver(candidate, through=deliver.handle_from(interaction), files=False):
+            wrote = await self._deliver(candidate, through=source, files=False)
+            # Editing through the interaction's own handle answers the click; nothing else
+            # does, whether it delivered through the standing handle or not at all.
+            if wrote is None or wrote is not source:
                 await self._acknowledge(interaction)
         except Exception:
             self._rollback(candidate)
@@ -552,7 +550,7 @@ class Mount:
             return
         candidate = self._stage()
         try:
-            delivered = await self._deliver(candidate)
+            delivered = await self._deliver(candidate) is not None
         except Exception:
             self._rollback(candidate)
             raise
@@ -572,7 +570,7 @@ class Mount:
         if disable and self._handle is not None:
             candidate = self._stage(disabled=True)
             try:
-                if not await self._deliver(candidate, files=False):
+                if await self._deliver(candidate, files=False) is None:
                     logger.debug("could not disable controls on finish: no live edit handle")
                     self._rollback(candidate)
             except discord.HTTPException:
