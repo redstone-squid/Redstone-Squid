@@ -167,8 +167,10 @@ class ScoreSource:
         self.countable = countable
         self.bidirectional = bidirectional
         self.jumpable = jumpable
+        self.requests: list[Position] = []
 
     async def fetch(self, position: Position, extent: int) -> Window[tuple[str, int]]:
+        self.requests.append(position)
         keys = tuple(label for label, _score in self.entries)
         if position.anchor in keys:
             anchor = keys.index(position.anchor)
@@ -231,7 +233,7 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
         bidirectional=True,
         jumpable=jumpable,
     )
-    ranked = sl.RankedList(source=source, key="leaderboard", page_size=2).component()
+    ranked = sl.RankedList(source=source, key="leaderboard", identity=lambda entry: entry[0], page_size=2).component()
     mount = Mount(ranked, timeout=None)
 
     await mount.send(delivered_to(fake_message()))
@@ -249,7 +251,7 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
         bidirectional=False,
         jumpable=True,
     )
-    ranked = sl.RankedList(source=source, key="stream", page_size=2).component()
+    ranked = sl.RankedList(source=source, key="stream", identity=lambda entry: entry[0], page_size=2).component()
     mount = Mount(ranked, timeout=None)
     await mount.send(delivered_to(fake_message()))
 
@@ -259,13 +261,14 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     await mount.dispatch("stream.next", interaction)
 
     edited = interaction.response.edit_message.await_args.kwargs["view"]
+    assert source.requests[-1] == Position("Grace", 2, "forward")
     assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(edited)
     assert "-# Page 2 of 3" in _texts(edited)
 
 
 def test_source_ranked_list_rejects_the_stateless_router_shell() -> None:
     source = ScoreSource((("Ada", 30),), countable=True, bidirectional=True, jumpable=True)
-    ranked = sl.RankedList(source=source, key="source", page_size=1)
+    ranked = sl.RankedList(source=source, key="source", identity=lambda entry: entry[0], page_size=1)
 
     with pytest.raises(TypeError, match="requires component"):
         sl.RouterShell(lambda _request: "route").render(ranked, ranked.initial_state)
