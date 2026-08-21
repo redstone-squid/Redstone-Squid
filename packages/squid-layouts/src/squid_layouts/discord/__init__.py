@@ -13,7 +13,7 @@ from squid_layouts.discord.delivery import (
     respond_to,
 )
 from squid_layouts.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_layouts.discord.mount import ErrorHook, Mount, MountedView
+from squid_layouts.discord.mount import ErrorHook, FinishHook, Mount, MountedView
 from squid_layouts.discord.navigation import Navigator
 from squid_layouts.discord.reactor import Reactor
 from squid_layouts.discord.renderer import Renderer, StaticView, Wire
@@ -33,6 +33,7 @@ __all__ = [
     "Destination",
     "EditHandle",
     "ErrorHook",
+    "FinishHook",
     "LabelSpec",
     "LimitViolationError",
     "Limits",
