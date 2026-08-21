@@ -95,14 +95,16 @@ Target-shaped nodes live under `squid_layouts.primitives`. Their policies are ex
 
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
 - `Alt`/`Alts` supply text ladders and per-entry drop priority.
-- `Paginate` has an explicit key and measured footer/navigation chrome.
+- `Paginate` has an explicit key, measured footer/navigation chrome, and optional `min_fill`
+  and `widows` break preferences.
 - `Variants` supplies an ordered ladder of complete structural alternates for component
   pressure; rungs may be capability-gated, and the planner filters them before the solver
   steps the survivors.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
-same losses at intent level. Consequential actions, status, and code are never silently lost.
+same losses at intent level. `budget` adds a hard minimum reservation, preferred size, and
+lossless stretch band. Consequential actions, status, and code are never silently lost.
 
 Target-native features use Extension(kind, version, payload, fallback). A target adapter
 prepares and measures the native resource once. Unsupported targets use the mandatory
@@ -292,6 +294,14 @@ A paginator scene record contains a content fingerprint. When content under one 
 reordering where possible. `per=N` is count-based pagination; the default fills by target text
 budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
 All use the same `NavFactory`.
+
+`sl.paged(container, key=..., chars=...)` applies an author-sized budget and pages between the
+container's heterogeneous children. Children are atomic unless a text child must split;
+`sl.unbreakable` groups several lowered primitives into one atomic item and
+`sl.keep_with_next` forbids the following break. Region breaks minimize preference violations,
+then page count and squared fill badness. A section heading is kept with its first body child
+automatically. Region fingerprints hash every child's stable logical identity, so callbacks do
+not make an otherwise unchanged page stale across processes.
 
 Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
 component. If top-level structure still exceeds the component limit after lossless adaptation,

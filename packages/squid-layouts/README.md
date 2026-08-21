@@ -59,6 +59,11 @@ Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Nex
 any component-bearing nodes built from the `sl.discord.PageContext`. Semantic pickers page through keyed
 25-option windows. A keyed root `Document` may promote structural overflow to whole-message
 pages; local pagination wins, and local plus root navigation are never shown simultaneously.
+Authors can size a region with `sl.budget(node, min=..., prefer=..., stretch=...)` or page a
+heterogeneous container with `sl.paged(section, key=..., chars=...)`. Use
+`sl.keep_with_next(heading)` to prevent a stranded heading and `sl.unbreakable(group)` when a
+region's children must stay together. These declarations use the same keyed cursor lifecycle as
+text and option pagination.
 `sl.discord.render_static` is the sessionless
 path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_modal` do the same for modals,
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to

@@ -118,4 +118,12 @@ needed). B: region breaking plus break annotations, together. C: the sugar.
 
 ## Status
 
-Agreed 2026-08-21 (design session); contract detailed and implementation in progress.
+Implemented 2026-08-21 in `467e083f`, `4f8754f1`, and `18641223`, plus a final
+contract/docs follow-up. Glue allocation remains the deliberately expedient special
+case described above; all author-facing declarations, page identity, and cursor behavior are
+covered for plan 22's later internal rewrite.
+
+Verification at completion: all 527 `packages/squid-layouts` tests pass; `just typecheck`
+reports zero errors. Dedicated coverage pins stretch-band hysteresis and snapping, hard and
+best-effort floors, balanced text and region breaks, heading keeps, unbreakable rejection,
+widows, lossless nested text splitting, and stable region fingerprints.
