@@ -13,6 +13,11 @@ from hypothesis import strategies as st
 from squid_layouts import (
     DEFAULT_CHROME,
     Component,
+    field,
+    fields,
+    paragraph,
+    section,
+    truncate,
 )
 from squid_layouts.discord import (
     DEFAULT_LIMITS as LIMITS,
@@ -29,6 +34,7 @@ from squid_layouts.discord import (
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.planning import solve
+from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.solve import RText, _component_count, split_pages
 from squid_layouts.primitives import (
     Button,
@@ -38,9 +44,8 @@ from squid_layouts.primitives import (
     Paginate,
     Row,
     Text,
-    card,
 )
-from squid_layouts.primitives.presets import Field
+from squid_layouts.runtime import PresentationSession
 
 
 class TestSplitPages:
@@ -316,7 +321,9 @@ class TestBuildModal:
 
 @given(st.text(min_size=4500, max_size=9000, alphabet=st.characters(blacklist_categories=("Cs",))))
 def test_paginated_documents_fit_on_every_page(body):
-    solved = solve([card("Title", "intro", fields=(Field("k", "v"),)), Code(body, overflow=Paginate())])
+    card_node = section(truncate(paragraph("intro")), fields(field("k", "v")), heading="Title")
+    lowered = lower_semantics([card_node], limits=LIMITS, chrome=DEFAULT_CHROME, session=PresentationSession()).nodes
+    solved = solve([*lowered, Code(body, overflow=Paginate())])
     if solved.pager is None:
         return
     for page in range(solved.pager.pages):
