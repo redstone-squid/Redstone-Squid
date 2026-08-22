@@ -947,14 +947,14 @@ class TestDrawing:
         assert '"route_id":"edit:build:3"' in payload
         assert '"custom_id"' not in payload
         assert sl.scene.Codec.loads(payload) == scene
-        row = scene.children[0].children[0]  # type: ignore[union-attr]
+        row = scene.components_v2.children[0].children[0]  # type: ignore[union-attr]
         assert isinstance(row, SceneRow)
         assert row.items == (SceneRoutedButton("Edit", "edit:build:3"),)
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
         payload = sl.scene.Codec.to_dict(sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene)
-        routed = payload["children"][0]["items"][0]
+        routed = payload["body"]["children"][0]["items"][0]
         routed["custom_id"] = routed.pop("route_id")
 
         with pytest.raises(ValueError, match="route_id"):
@@ -977,7 +977,7 @@ class TestDrawing:
         )
 
         scene = sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene
-        assert scene.children == (
+        assert scene.components_v2.children == (
             SceneRoutedSelect(
                 (sl.scene.SceneOption("One", "one", "First"), sl.scene.SceneOption("Two", "two")),
                 "pick:build:3",

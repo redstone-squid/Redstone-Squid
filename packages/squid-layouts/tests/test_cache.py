@@ -31,7 +31,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import PlanReport, SceneDocument, ScenePanel
+from squid_layouts.scene.model import PlanReport, SceneComponentsV2, SceneDocument, ScenePanel
 
 
 async def _first(_event) -> None: ...
@@ -54,9 +54,12 @@ def test_palette_is_part_of_plan_cache_identity() -> None:
     second = plan(document, target=DEFAULT_TARGET, palette=Palette(brand=0x222222), cache=cache)
 
     assert not second.metrics.cache_hit
-    assert isinstance(first.scene.children[0], ScenePanel)
-    assert isinstance(second.scene.children[0], ScenePanel)
-    assert (first.scene.children[0].accent, second.scene.children[0].accent) == (0x111111, 0x222222)
+    assert isinstance(first.scene.components_v2.children[0], ScenePanel)
+    assert isinstance(second.scene.components_v2.children[0], ScenePanel)
+    assert (first.scene.components_v2.children[0].accent, second.scene.components_v2.children[0].accent) == (
+        0x111111,
+        0x222222,
+    )
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
@@ -156,7 +159,7 @@ def _never_measured(*_args, **_kwargs):
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     cache = PlanCache(capacity=2)
-    scene = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, ())
+    scene = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, SceneComponentsV2(()))
     cached = CachedPlan(scene, PlanReport())
 
     cache.put("first", cached)

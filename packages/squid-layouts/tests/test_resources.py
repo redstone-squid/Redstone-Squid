@@ -139,7 +139,7 @@ class TestParetoSearch:
         filler = [Text(f"f{index}") for index in range(19)]
 
         result = plan([wide, long, *filler], target=TargetProfile("test", 1, limits=LIMITS))
-        rendered = repr(result.scene.children)
+        rendered = repr(result.scene.components_v2.children)
 
         assert "w0" not in rendered  # the component-heavy ladder gave way
         assert "x" * 3990 not in rendered  # and so did the text-heavy one

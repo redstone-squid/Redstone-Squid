@@ -71,7 +71,9 @@ ENTRIES = (
 
 
 def _opened(result) -> bool:
-    return any(isinstance(node, SceneText) and "second detail" in node.content for node in result.scene.children)
+    return any(
+        isinstance(node, SceneText) and "second detail" in node.content for node in result.scene.components_v2.children
+    )
 
 
 # --- Items -----------------------------------------------------------------------------
@@ -118,7 +120,9 @@ async def test_a_controlled_items_reports_both_opening_and_backing_out() -> None
 
 
 def _disclosed(result) -> bool:
-    return any(isinstance(node, SceneText) and "hidden body" in node.content for node in result.scene.children)
+    return any(
+        isinstance(node, SceneText) and "hidden body" in node.content for node in result.scene.components_v2.children
+    )
 
 
 async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it() -> None:
@@ -149,7 +153,7 @@ async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_
 
 
 def _chosen(result) -> tuple[str, ...]:
-    select = next(node for node in result.scene.children if isinstance(node, SceneSelect))
+    select = next(node for node in result.scene.components_v2.children if isinstance(node, SceneSelect))
     return tuple(option.value for option in select.options if option.default)
 
 

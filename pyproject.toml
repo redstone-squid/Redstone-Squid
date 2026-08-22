@@ -69,6 +69,10 @@ observability = [
 dev = [
     "docker>=7.2,<8",
     "hypothesis>=6.0.0",
+    # Validates the published scene schema against real payloads in
+    # squid-layouts' tests. Arrived transitively via schemathesis before; a
+    # cross-language contract should not depend on another tool's dependency tree.
+    "jsonschema>=4.23",
     "pip-tools>=7.4.1",
     "pytest-archon>=0.0.6",
     "ruff>=0.5.1",
