@@ -332,14 +332,17 @@ class TestRenderAndWire:
 
 class TestAuthorLock:
     async def test_wrong_user_is_rejected_ephemerally(self):
+        now = 0.0
         component = Counter()
-        mount = Mount(component, timeout=None, lock_to=42)
+        mount = Mount(component, timeout=30, lock_to=42, clock=lambda: now)
         commit_render(mount)
+        now = 10.0
         interaction = fake_interaction(user_id=99)
 
         await mount.dispatch("inc", interaction)
 
         assert component.count == 0
+        assert mount.snapshot().idle == 10
         send = interaction.response.send_message
         assert send.await_args.kwargs["ephemeral"] is True
 
