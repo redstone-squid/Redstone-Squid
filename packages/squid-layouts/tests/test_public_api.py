@@ -63,6 +63,8 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.primitives.Button
     assert sl.primitives.File
     assert sl.planning.measure
+    assert sl.profiling.MemoryProfiler
+    assert sl.profiling.snapshot_json
     assert sl.runtime.ComponentRuntime
     assert sl.scene.Codec
     assert sl.scene.SceneFile
@@ -98,6 +100,7 @@ sys.meta_path.insert(0, BlockAdapterDependencies())
 import squid_layouts
 import squid_layouts.html
 import squid_layouts.planning
+import squid_layouts.profiling
 import squid_layouts.runtime
 import squid_layouts.topics
 assert "discord" not in sys.modules

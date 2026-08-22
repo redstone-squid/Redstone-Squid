@@ -2,7 +2,7 @@
 
 from importlib import import_module
 
-from squid_layouts import forms, html, patterns, planning, primitives, runtime, scene, semantic, sources
+from squid_layouts import forms, html, patterns, planning, primitives, profiling, runtime, scene, semantic, sources
 from squid_layouts.actions import (
     ActionEvent,
     ActionKind,
@@ -597,6 +597,7 @@ __all__ = [
     "plan",
     "planning",
     "primitives",
+    "profiling",
     "progress",
     "quote",
     "raw_md",
