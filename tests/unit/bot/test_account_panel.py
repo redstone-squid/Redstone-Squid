@@ -141,6 +141,6 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     assert component.on_change is not None
     await component.on_change(sl.PatternEvent(cast(Any, source), "save", staged, committed))
 
-    panel._accounts.update_profile.assert_awaited_once()
+    cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
     assert panel._profile_editor is None
     source.notice.assert_awaited_once()

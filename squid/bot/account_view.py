@@ -369,7 +369,7 @@ class AccountPanel(sl.Component):
         fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft, self.locale))
         return sl.section(
             draft.bio and sl.truncate(sl.paragraph(draft.bio)),
-            fields and sl.fields(*fields),
+            sl.fields(*fields) if fields else None,
             heading=draft.display_name or t(self.locale, _("Your account")),
             accent=DISCORD_BLUE,
         )
