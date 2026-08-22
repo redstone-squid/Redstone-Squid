@@ -10,17 +10,19 @@ dropped footnote genuinely returns its characters to the body.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from heapq import heappop, heappush
+from itertools import count
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
-from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
+from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile, DegradationRecorder
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 from squid_layouts.planning.navigation import (
     NavNode,
     PlannedNav,
     materialized_navigation_state,
 )
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
@@ -151,6 +153,9 @@ class SolvedLayout:
     chrome: Chrome = DEFAULT_CHROME
     limits: V2Limits = LIMITS
     degradation: DegradationProfile = field(default_factory=DegradationProfile)
+    states_explored: int = 1
+    search_fallback: bool = False
+    variant_positions: tuple[tuple[_VariantPath, int], ...] = ()
 
     def reposition(self, positions: Mapping[str, Position]) -> None:
         """Show a different position in each named pager without re-fitting.
@@ -1012,6 +1017,54 @@ def _steppable(nodes: Sequence[Node], positions: _Positions) -> list[tuple[_Vari
     return found
 
 
+def _canonical_positions(nodes: Sequence[Node], positions: _Positions) -> dict[_VariantPath, int]:
+    """Discard zero and unreachable positions after a parent changes rungs."""
+    canonical: dict[_VariantPath, int] = {}
+
+    def visit(path: _VariantPath, _node: Variants, rung: int) -> None:
+        if rung:
+            canonical[path] = rung
+
+    _walk_ladders(nodes, positions, visit)
+    return canonical
+
+
+def _variant_profile(nodes: Sequence[Node], positions: _Positions) -> DegradationProfile:
+    profile = DegradationProfile()
+
+    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
+        nonlocal profile
+        if rung:
+            profile = profile.with_effect(
+                DegradationEffect(
+                    priority=node.priority,
+                    path=_format_path(path),
+                    semantic_steps=rung,
+                )
+            )
+
+    _walk_ladders(nodes, positions, visit)
+    return profile
+
+
+def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[str]:
+    notes: list[str] = []
+
+    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
+        notes.extend(
+            f"{_format_path(path)} stepped to variant {step + 2} of {len(node.variants)} "
+            f"(priority {node.priority}) under component pressure"
+            for step in range(rung)
+        )
+
+    _walk_ladders(nodes, positions, visit)
+    return notes
+
+
+def _hard_failure(solved: SolvedLayout) -> bool:
+    return any(note.startswith("Never nodes need") or note.startswith("Budget floors need") for note in solved.notes)
+
+
 def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node]:
     """Splice each ladder's selected rung into its parent for this measuring pass."""
 
@@ -1060,6 +1113,7 @@ def solve(
     reserved_text: int = 0,
     position: PositionState = None,
     nav: PlannedNav | None = None,
+    search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SolvedLayout:
     """Fit nodes into target budgets with independently keyed pagination.
 
@@ -1067,34 +1121,23 @@ def solve(
     which is the only layer that knows the target. A ladder reaching the solver is a pure
     budget ladder whose rungs are all available.
     """
+    if search_budget < 1:
+        message = "solver search budget must be positive"
+        raise ValueError(message)
     chrome = localize_chrome(chrome, localization)
     tree = list(nodes)
-    positions: dict[_VariantPath, int] = {}
-    step_notes: list[str] = []
-    solved = _solve_once(
-        tree,
-        positions=positions,
-        limits=limits,
-        chrome=chrome,
-        reserved_text=reserved_text,
-        position=position,
-        nav=nav,
-        notes=[],
-    )
-    while solved.components > limits.total_components:
-        remaining = _steppable(tree, positions)
-        if not remaining:
+    frontier: list[tuple[DegradationProfile, int, dict[_VariantPath, int]]] = []
+    serial = count()
+    heappush(frontier, (DegradationProfile(), next(serial), {}))
+    seen: set[frozenset[tuple[_VariantPath, int]]] = {frozenset()}
+    best: SolvedLayout | None = None
+    best_overflow: SolvedLayout | None = None
+    states_explored = 0
+
+    while frontier and states_explored < search_budget:
+        structural, _order, positions = heappop(frontier)
+        if best is not None and best.degradation < structural:
             break
-        # Priority decides which ladder gives way; the rung it already sits on decides which
-        # of several equals gives way next, so equal-priority ladders step breadth-first
-        # rather than one collapsing to nothing while its twin stays whole. `min` is stable,
-        # so a full tie still falls to document order.
-        path, ladder, rung = min(remaining, key=lambda candidate: (candidate[1].priority, candidate[2]))
-        step_notes.append(
-            f"{_format_path(path)} stepped to variant {rung + 2} of {len(ladder.variants)} "
-            f"(priority {ladder.priority}) under component pressure"
-        )
-        positions[path] = rung + 1
         solved = _solve_once(
             tree,
             positions=positions,
@@ -1103,12 +1146,46 @@ def solve(
             reserved_text=reserved_text,
             position=position,
             nav=nav,
-            notes=list(step_notes),
+            notes=_variant_notes(tree, positions),
         )
+        states_explored += 1
+        solved = replace(
+            solved,
+            degradation=solved.degradation.merged(structural),
+            states_explored=states_explored,
+            variant_positions=tuple(positions.items()),
+        )
+        valid = solved.components <= limits.total_components and not _hard_failure(solved)
+        if valid and (best is None or solved.degradation < best.degradation):
+            best = solved
+            if solved.degradation.lossless:
+                break
+        if best_overflow is None or (solved.components, solved.degradation) < (
+            best_overflow.components,
+            best_overflow.degradation,
+        ):
+            best_overflow = solved
 
-    if strict and solved.notes:
-        raise LayoutOverflowError(solved.notes)
-    return solved
+        for path, _ladder, rung in _steppable(tree, positions):
+            neighbor = dict(positions)
+            neighbor[path] = rung + 1
+            neighbor = _canonical_positions(tree, neighbor)
+            key = frozenset(neighbor.items())
+            if key in seen:
+                continue
+            seen.add(key)
+            lower_bound = _variant_profile(tree, neighbor)
+            if best is not None and best.degradation < lower_bound:
+                continue
+            heappush(frontier, (lower_bound, next(serial), neighbor))
+
+    selected = best or best_overflow
+    assert selected is not None
+    fallback = bool(frontier) and states_explored >= search_budget
+    selected = replace(selected, states_explored=states_explored, search_fallback=fallback)
+    if strict and selected.notes:
+        raise LayoutOverflowError(selected.notes)
+    return selected
 
 
 def _configure_paginators(
