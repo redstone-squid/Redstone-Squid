@@ -8,6 +8,7 @@ from squid_layouts import (
     ActionDisplay,
     Paragraph,
     Position,
+    fallback,
     plan,
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
@@ -16,7 +17,7 @@ from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variants
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
 from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
-from squid_layouts.semantic import Action, ActionGroup, Actions, Emphasis, Link
+from squid_layouts.semantic import Action, ActionGroup, Actions, Emphasis, Flexibility, Link, Stack
 
 
 async def _act(event: ActionEvent) -> None: ...
@@ -116,6 +117,39 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
     assert result.report.events[0].code == "actions.grouped"
     assert result.metrics.states_explored == 2
     assert [(pager.key, pager.pages) for pager in result.scene.pagers] == [("local", 2)]
+    assert not result.metrics.search_fallback
+
+
+def test_inactive_fallback_axes_do_not_spend_the_global_search_budget() -> None:
+    session = PresentationSession(strategies={"visible": StrategyState("visible", "discord.actions", 1, "individual")})
+    inactive = Stack(tuple(Actions(_actions(1), key=f"inactive-{index}") for index in range(9)))
+    document = (
+        *(Paragraph(f"component {index}") for index in range(35)),
+        fallback(Paragraph("primary"), inactive),
+        Actions(_actions(5), key="visible", flexibility=Flexibility.STABLE),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET, session=session)
+
+    assert any(event.code == "actions.grouped" and event.path == "$.36" for event in result.report.events)
+    assert result.metrics.states_explored == 2
+    assert not result.metrics.search_fallback
+
+
+def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> None:
+    document = (
+        *(Paragraph(f"component {index}") for index in range(35)),
+        fallback(
+            Stack(tuple(Paragraph(f"primary {index}") for index in range(10))),
+            Actions(_actions(5), key="fallback-actions"),
+        ),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET)
+
+    assert any(event.code == "actions.grouped" and event.path == "$.35.alternate.0" for event in result.report.events)
+    assert any(event.code == "layout.degradation.variant_step" for event in result.report.events)
+    assert sum(isinstance(node, SceneSelect) for node in result.scene.children) == 1
     assert not result.metrics.search_fallback
 
 
