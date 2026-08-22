@@ -60,6 +60,10 @@ are not re-derived or accidentally adopted later.
   this entry's condition is met — and the answer is the paused-chrome banner plus
   click-to-resume, not a handoff control: every control already renews on click, so
   arming a special one adds nothing. The handoff *mechanism* stays rejected.
+  **Reopened 2026-08-22**: [39](39-ephemeral-handoff.md) identifies the missing UX contract:
+  existing controls mutate application state, while a dedicated renewal action does not.
+  The accepted design keeps Cascade's protected pre-expiry screen but renews Squid's same
+  mount and message in place instead of reconstructing a view and spawning a successor.
 - **Participant tracking / shared sessions** — plan 12 shipped instance policies and
   widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
   state) waits for a feature that needs it. No consumer needs even the set form today: the
