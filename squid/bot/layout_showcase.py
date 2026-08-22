@@ -141,7 +141,7 @@ class LayoutShowcase(sl.Component):
         self.left = DemoCounter(L(t"Left child"))
         self.right = DemoCounter(L(t"Right child"))
 
-    @sl.computed
+    @sl.computed(depends=(section, clicks))
     def status(self) -> sl.Message:
         return L("Section: {section} · reactive clicks: {clicks}", section=self.section, clicks=self.clicks)
 

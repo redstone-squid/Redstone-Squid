@@ -1,6 +1,5 @@
-"""Versioned durable state for keyed component trees."""
+"""Versioned snapshots and fenced durable-session store contracts."""
 
-import time
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -8,30 +7,18 @@ from pathlib import Path
 import anyio
 import pytest
 
-from squid_layouts import (
-    Component,
-    Position,
-    state,
-)
+from squid_layouts import Component, Position, state
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,
-    DurableMountCodec,
-    LeaseSnapshotStore,
+    DurableSessionStore,
     MemorySnapshotStore,
-    MountLocator,
-    MountManager,
-    MountReachability,
     SnapshotCodec,
     SnapshotError,
     SQLiteSnapshotStore,
 )
 from squid_layouts.discord.testing import commit_render
-from squid_layouts.primitives import (
-    Lines,
-    Paginate,
-    Text,
-)
+from squid_layouts.primitives import Lines, Paginate, Text
 
 
 class DurableChild(Component):
@@ -52,70 +39,113 @@ class DurableRoot(Component):
         return [Text(f"count {self.count}"), self.embed(self.child, key="child")]
 
 
-class LocatorResolver:
-    def __init__(self, result: MountReachability | Exception) -> None:
-        self.result = result
-
-    async def resolve(self, locator: MountLocator) -> MountReachability:
-        if isinstance(self.result, Exception):
-            raise self.result
-        return self.result
-
-
-def _registry(*, version: int = 1) -> ComponentRegistry:
+def _registry(*, version: int = 1, migrations=None) -> ComponentRegistry:
     registry = ComponentRegistry()
-    registry.register("counter", version=version, factory=DurableRoot)
+    registry.register("counter", version=version, factory=DurableRoot, migrations=migrations)
     return registry
 
 
-def _snapshot_store(kind: str, path: Path, clock: Callable[[], float]) -> LeaseSnapshotStore:
+def _snapshot_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
     if kind == "memory":
         return MemorySnapshotStore(clock=clock)
     return SQLiteSnapshotStore(path, table_name="durable_sessions", clock=clock)
 
 
+async def _publish(
+    store: DurableSessionStore,
+    *,
+    key: str,
+    scope: str = "scope",
+    owner: str = "writer",
+    victims: tuple[str, ...] = (),
+):
+    reservation = await store.reserve(scope, owner, 10.0)
+    assert reservation is not None
+    token = await store.commit(
+        reservation,
+        key=key,
+        summary_payload=f"summary:{key}",
+        snapshot_payload=f"snapshot:{key}",
+        victims=victims,
+        lease_seconds=10.0,
+    )
+    assert token is not None
+    return token
+
+
 @pytest.mark.parametrize("kind", ["memory", "sqlite"])
-async def test_snapshot_store_contract(kind: str, tmp_path: Path) -> None:
+async def test_fenced_snapshot_store_contract(kind: str, tmp_path: Path) -> None:
     now = [100.0]
-    clock = lambda: now[0]
-    store = _snapshot_store(kind, tmp_path / "snapshots.sqlite3", clock)
+    store = _snapshot_store(kind, tmp_path / "snapshots.sqlite3", lambda: now[0])
 
     assert await store.load("missing") is None
-    await store.save("second", "payload 2")
-    await store.save("first", "payload 1")
-    assert await store.list_keys() == ("first", "second")
-    assert await store.load("first") == "payload 1"
+    first = await _publish(store, key="first", owner="alpha")
+    second = await _publish(store, key="second", owner="alpha")
+    assert tuple(record.key for record in await store.list_records()) == ("first", "second")
+    assert await store.release(first)
+    assert await store.release(second)
 
-    assert await store.claim("first", "alpha", 110.0)
-    assert not await store.claim("first", "beta", 120.0)
-    now[0] = 110.0
-    assert not await store.claim("first", "beta", 120.0)
+    alpha = await store.claim("first", "alpha", 10.0)
+    assert alpha is not None
+    assert await store.claim("first", "beta", 10.0) is None
     now[0] = 110.1
-    assert await store.claim("first", "beta", 120.0)
-    assert not await store.renew("first", "alpha", 130.0)
-    assert await store.renew("first", "beta", 130.0)
-
-    await store.save("first", "replacement")
-    assert not await store.claim("first", "alpha", 140.0)
-    await store.release("first", "alpha")
-    assert not await store.claim("first", "alpha", 140.0)
-    await store.release("first", "beta")
-    assert await store.claim("first", "alpha", 140.0)
-
-    await store.delete("first")
+    beta = await store.claim("first", "beta", 10.0)
+    assert beta is not None
+    assert not await store.renew(alpha, 10.0)
+    assert not await store.save(alpha, "stale", "stale")
+    assert not await store.delete(alpha)
+    assert await store.save(beta, "replacement summary", "replacement snapshot")
+    loaded = await store.load("first")
+    assert loaded is not None and loaded.snapshot_payload == "replacement snapshot"
+    assert await store.delete(beta)
     assert await store.load("first") is None
-    assert not await store.renew("first", "alpha", 150.0)
 
 
-async def test_sqlite_snapshot_store_serializes_lease_contention(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["memory", "sqlite"])
+async def test_admission_atomically_retires_victims_and_fences_their_writers(kind: str, tmp_path: Path) -> None:
+    store = _snapshot_store(kind, tmp_path / "snapshots.sqlite3", lambda: 100.0)
+    victim = await _publish(store, key="victim")
+    newcomer = await _publish(store, key="newcomer", victims=("victim",))
+
+    assert await store.load("victim") is None
+    assert not await store.save(victim, "stale", "stale")
+    assert await store.load("newcomer") is not None
+    assert await store.renew(newcomer, 10.0)
+
+
+async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
+    now = [100.0]
+    store = SQLiteSnapshotStore(tmp_path / "snapshots.sqlite3", clock=lambda: now[0])
+    stale = await store.reserve("scope", "first", 10.0)
+    assert stale is not None
+    now[0] = 110.1
+    current = await store.reserve("scope", "second", 10.0)
+    assert current is not None
+
+    assert (
+        await store.commit(
+            stale,
+            key="stale",
+            summary_payload="summary",
+            snapshot_payload="snapshot",
+            victims=(),
+            lease_seconds=10.0,
+        )
+        is None
+    )
+    assert await store.inspect(current) == ()
+
+
+async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
     path = tmp_path / "snapshots.sqlite3"
     writer = SQLiteSnapshotStore(path)
-    await writer.save("session", "payload")
+    token = await _publish(writer, key="session")
+    assert await writer.release(token)
     contenders = [SQLiteSnapshotStore(path), SQLiteSnapshotStore(path)]
     results: list[bool] = []
 
     async def claim(store: SQLiteSnapshotStore, owner: str) -> None:
-        results.append(await store.claim("session", owner, time.time() + 30))
+        results.append(await store.claim("session", owner, 30.0) is not None)
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(claim, contenders[0], "first")
@@ -168,142 +198,26 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
         registry.capture(mount, "invalid")
 
 
-def test_version_mismatch_requires_an_explicit_host_migration() -> None:
+def test_version_mismatch_requires_a_sequential_migration() -> None:
     mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(mount)
     snapshot = _registry().capture(mount, "counter")
 
-    with pytest.raises(SnapshotError, match="does not match"):
-        _registry(version=2).restore(replace(snapshot, component_version=1), access=Everyone())
+    with pytest.raises(SnapshotError, match="no migration"):
+        _registry(version=2).restore(snapshot, access=Everyone())
+
+    migrated = _registry(
+        version=2,
+        migrations={1: lambda current: replace(current, component_version=2)},
+    ).restore(snapshot, access=Everyone())
+    assert isinstance(migrated.component, DurableRoot)
 
 
-async def test_mount_manager_checkpoints_and_restores_through_a_host_store() -> None:
-    registry = _registry()
-    store = MemorySnapshotStore()
-    root = DurableRoot()
-    mount = Mount(root, access=Everyone(), timeout=None)
-    commit_render(mount)
-    root.count = 11
-
-    writer = MountManager(registry, store)
-    writer.attach("session", "counter", mount)
-    await writer.checkpoint("session")
-
-    reader = MountManager(registry, store)
-    restored = await reader.restore("session", access=Everyone(), timeout=None)
-
-    assert restored is not None
-    assert isinstance(restored.component, DurableRoot)
-    assert restored.component.count == 11
-    assert reader.get("session") is restored
-
-    await reader.finish("session")
-    assert await store.load("session") is None
-
-
-async def test_restoring_an_absent_session_is_a_clean_miss() -> None:
-    manager = MountManager(_registry(), MemorySnapshotStore())
-    assert await manager.restore("missing", access=Everyone()) is None
-
-
-async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locator() -> None:
-    now = [100.0]
-    clock = lambda: now[0]
-    store = MemorySnapshotStore(clock=clock)
-    root = DurableRoot()
-    mount = Mount(root, access=Everyone(), timeout=None)
-    commit_render(mount)
-    writer = MountManager(_registry(), store, owner="writer", clock=clock)
-    locator = MountLocator("discord", {"channel_id": 123, "message_id": 456})
-    writer.attach("session", "counter", mount, locator=locator, expires_at=200.0)
-    await writer.checkpoint("session")
-
-    payload = await store.load("session")
-    assert payload is not None
-    assert DurableMountCodec.loads(payload).locator == locator
-
-    resolver = LocatorResolver(MountReachability.REACHABLE)
-    first = MountManager(_registry(), store, owner="first", lease_seconds=10, clock=clock, locator_resolver=resolver)
-    second = MountManager(_registry(), store, owner="second", lease_seconds=10, clock=clock, locator_resolver=resolver)
-    recovered = await first.recover(access=Everyone(), timeout=None)
-
-    assert len(recovered) == 1
-    assert recovered[0].key == "session"
-    assert recovered[0].locator == locator
-    assert await second.recover(access=Everyone(), timeout=None) == ()
-    assert await first.renew_claims() == ()
-
-    now[0] = 111.0
-    assert len(await second.recover(access=Everyone(), timeout=None)) == 1
-    assert await first.renew_claims() == ("session",)
-    assert first.get("session") is None
-
-    await second.finish("session", delete=False)
-    third = MountManager(_registry(), store, owner="third", lease_seconds=10, clock=clock, locator_resolver=resolver)
-    assert len(await third.recover(access=Everyone(), timeout=None)) == 1
-
-
-async def test_startup_recovery_deletes_expired_records() -> None:
-    now = [100.0]
-    clock = lambda: now[0]
-    store = MemorySnapshotStore(clock=clock)
+def test_migration_must_advance_exactly_one_version() -> None:
     mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(mount)
-    writer = MountManager(_registry(), store, clock=clock)
-    writer.attach(
-        "expired",
-        "counter",
-        mount,
-        locator=MountLocator("discord", {"message_id": 456}),
-        expires_at=101.0,
-    )
-    await writer.checkpoint("expired")
-    now[0] = 102.0
+    snapshot = _registry().capture(mount, "counter")
+    registry = _registry(version=2, migrations={1: lambda current: replace(current, component_version=3)})
 
-    reader = MountManager(
-        _registry(), store, clock=clock, locator_resolver=LocatorResolver(MountReachability.REACHABLE)
-    )
-    assert await reader.recover(access=Everyone(), timeout=None) == ()
-    assert await store.load("expired") is None
-
-
-@pytest.mark.parametrize(
-    ("result", "is_deleted"),
-    [
-        (MountReachability.MISSING, True),
-        (MountReachability.UNREACHABLE, False),
-        (RuntimeError("frontend outage"), False),
-    ],
-)
-async def test_startup_recovery_sweeps_locator_reachability(
-    result: MountReachability | Exception, is_deleted: bool
-) -> None:
-    store = MemorySnapshotStore()
-    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
-    commit_render(mount)
-    writer = MountManager(_registry(), store)
-    writer.attach(
-        "session",
-        "counter",
-        mount,
-        locator=MountLocator("discord", {"channel_id": 123, "message_id": 456}),
-    )
-    await writer.checkpoint("session")
-
-    reader = MountManager(_registry(), store, locator_resolver=LocatorResolver(result))
-
-    assert await reader.recover(access=Everyone(), timeout=None) == ()
-    assert (await store.load("session") is None) is is_deleted
-    assert await store.claim("session", "next-owner", time.time() + 30) is not is_deleted
-
-
-async def test_startup_recovery_without_a_locator_resolver_keeps_the_snapshot() -> None:
-    store = MemorySnapshotStore()
-    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
-    commit_render(mount)
-    writer = MountManager(_registry(), store)
-    writer.attach("session", "counter", mount, locator=MountLocator("discord", {"message_id": 456}))
-    await writer.checkpoint("session")
-
-    assert await MountManager(_registry(), store).recover(access=Everyone(), timeout=None) == ()
-    assert await store.load("session") is not None
+    with pytest.raises(SnapshotError, match="must produce version 2"):
+        registry.restore(snapshot, access=Everyone())
