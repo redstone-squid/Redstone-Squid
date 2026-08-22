@@ -7,6 +7,7 @@ resulting scene — authors never do budget arithmetic.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
 from squid_layouts.forms import FormBinding
@@ -64,6 +65,15 @@ class Lines:
     join: str = "\n"
     overflow: Overflow = field(default_factory=Spill)
     priority: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class Time:
+    """A typed instant retained through scene conversion."""
+
+    instant: datetime
+    style: str
+    prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -320,6 +330,7 @@ type Node = (
     | Footer
     | Code
     | Lines
+    | Time
     | Sep
     | Row
     | ActionGroup

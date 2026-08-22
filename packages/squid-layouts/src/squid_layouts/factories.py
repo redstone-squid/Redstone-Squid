@@ -16,6 +16,7 @@ call site, and keeps a stray dict or generator from being silently absorbed.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
+from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
@@ -82,6 +83,8 @@ from squid_layouts.semantic import (
     Table,
     TableDisplay,
     TableRow,
+    Timestamp,
+    TimeStyle,
     Toggle,
     ToggleOwnership,
     Tone,
@@ -322,6 +325,19 @@ def progress(value: float, *, label: TextValue | None = None, maximum: float = 1
 def measure(value: int | float | str, label: TextValue, *, unit: str | None = None) -> Measure:
     """A single labelled quantity."""
     return Measure(value, _text(label), unit)
+
+
+def timestamp(
+    instant: datetime,
+    *,
+    style: TimeStyle = TimeStyle.SHORT_DATETIME,
+    label: TextValue | None = None,
+) -> Timestamp:
+    """A typed instant; naive datetimes are rejected before rendering."""
+    if instant.tzinfo is None or instant.utcoffset() is None:
+        message = "sl.timestamp() requires an aware datetime"
+        raise ValueError(message)
+    return Timestamp(instant, style, _opt_text(label))
 
 
 def figure(media: MediaItem | str, *, caption: TextValue | None = None) -> Figure:

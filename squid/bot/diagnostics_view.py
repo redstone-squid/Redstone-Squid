@@ -173,7 +173,7 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.Field]:
     entries = [
         sl.field(
             L(t"When"),
-            sl.md("{timestamp}", timestamp=sl.raw_md(f"<t:{report.occurred_at.timestamp()}:f>")),
+            sl.md(t"{report.occurred_at.to_stdlib()}"),
         ),
         sl.field(L(t"Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
         sl.field(L(t"Exception"), sl.md(t"{report.exception_type}")),

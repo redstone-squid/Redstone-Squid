@@ -19,6 +19,7 @@ from squid_layouts.forms import (
     BoolField,
     ChoiceField,
     DateField,
+    DateTimeField,
     DurationField,
     ExtensionField,
     FloatField,
@@ -29,6 +30,7 @@ from squid_layouts.forms import (
     MultiChoiceField,
     TextAreaField,
     TextField,
+    TimeField,
     UploadedFile,
 )
 from squid_layouts.planning.limits import LIMITS, V2Limits
@@ -175,7 +177,7 @@ def _resolve(value: TextLike, localization: Localization) -> str:
 
 
 def _text_input(
-    field: TextField | IntField | FloatField | DurationField | DateField,
+    field: TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField,
     prefill: object,
     localization: Localization,
 ) -> discord.ui.TextInput:
@@ -197,7 +199,7 @@ def _form_component(
     prefill: object,
     localization: Localization,
 ) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
-    if isinstance(field, TextField | IntField | FloatField | DurationField | DateField):
+    if isinstance(field, TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField):
         component = _text_input(field, prefill, localization)
         return component, lambda: component.value
     if isinstance(field, ChoiceField):

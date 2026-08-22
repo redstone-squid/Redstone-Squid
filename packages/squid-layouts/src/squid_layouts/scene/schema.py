@@ -58,6 +58,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                 {"$ref": f"#/$defs/{kind}"}
                 for kind in (
                     "text",
+                    "time",
                     "separator",
                     "link",
                     "button",
@@ -78,6 +79,17 @@ SCENE_SCHEMA: dict[str, Any] = {
             {"content": {"type": "string"}, "dialect": {"enum": ["plain", "discord-markdown"]}},
             "content",
             "dialect",
+        ),
+        "time": _node(
+            "time",
+            {
+                "instant": {"type": "string", "format": "date-time"},
+                "style": {"enum": ["t", "T", "d", "D", "f", "F", "R"]},
+                "prefix": {"type": ["string", "null"]},
+            },
+            "instant",
+            "style",
+            "prefix",
         ),
         "separator": _node(
             "separator",

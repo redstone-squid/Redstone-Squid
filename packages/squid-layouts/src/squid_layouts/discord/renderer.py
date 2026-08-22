@@ -1,6 +1,7 @@
 """Mechanical drawing of resolved Discord Components V2 scenes."""
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any, override
 
 import discord
@@ -27,6 +28,7 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
 from squid_layouts.text import discord_text
 
@@ -154,6 +156,9 @@ class Renderer:
             match node:
                 case SceneText() as text:
                     return discord.ui.TextDisplay(discord_text(text))
+                case SceneTime(instant=instant, style=style, prefix=prefix):
+                    unix = int(datetime.fromisoformat(instant).timestamp())
+                    return discord.ui.TextDisplay(f"{prefix or ''}<t:{unix}:{style}>")
                 case ScenePanel(children=children, accent=accent):
                     return discord.ui.Container(*(item(child) for child in children), accent_colour=accent)
                 case SceneSection(texts=texts, accessory=side):
