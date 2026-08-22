@@ -7,6 +7,7 @@ from enum import IntEnum, StrEnum
 from typing import Literal
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.assets import Asset
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.primitives.styles import Color
@@ -321,6 +322,17 @@ class Toggle:
 
 
 @dataclass(frozen=True, slots=True)
+class Download:
+    """A visible file control whose asset is declared at its point of use."""
+
+    key: str
+    label: TextLike | None
+    asset: Asset
+    description: TextLike | None = None
+    emphasis: Emphasis = Emphasis.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
 class Status:
     content: TextLike
     tone: Tone = Tone.NEUTRAL
@@ -623,6 +635,7 @@ type SemanticNode = (
     | Media
     | Details
     | Toggle
+    | Download
     | Status
     | Progress
     | Measure

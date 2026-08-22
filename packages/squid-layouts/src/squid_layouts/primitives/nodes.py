@@ -77,6 +77,15 @@ class Time:
 
 
 @dataclass(frozen=True, slots=True)
+class File:
+    """A visible file component backed by a separately carried asset resource."""
+
+    asset_key: str
+    name: str
+    media_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class Sep:
     large: bool = False
     visible: bool = True
@@ -331,6 +340,7 @@ type Node = (
     | Code
     | Lines
     | Time
+    | File
     | Sep
     | Row
     | ActionGroup
