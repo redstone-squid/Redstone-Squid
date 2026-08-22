@@ -40,7 +40,6 @@ def test_root_is_semantic_first() -> None:
         "HtmlRenderer",
         "PresentationSession",
         "SceneCodec",
-        "solve",
         "conform",
         "render_static",
     ):
@@ -51,7 +50,7 @@ def test_root_is_semantic_first() -> None:
 def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.primitives.Button
     assert sl.primitives.File
-    assert sl.planning.solve
+    assert sl.planning.measure
     assert sl.runtime.ComponentRuntime
     assert sl.scene.Codec
     assert sl.scene.SceneFile
