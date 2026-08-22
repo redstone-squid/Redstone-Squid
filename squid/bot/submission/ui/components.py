@@ -10,7 +10,7 @@ from beartype.door import is_bearable
 from discord import Interaction, TextStyle
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import build_edit, router
+from squid.bot.routes.builds import build_edit, builds
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
 from squid.bot.utils.components import reply_layout, text_layout
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildDraft, DoorBuild
@@ -267,7 +267,7 @@ def get_text_input[T](build: Build, attribute: str, attr_type: type[T] | None = 
     return BuildField(build, attribute, attr_type, formatter, parser, **kwargs)
 
 
-@router.route(build_edit)
+@builds.route(build_edit)
 async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> None:
     """Open the build editor for the build a posted card points at."""
     # FIXME: circular import

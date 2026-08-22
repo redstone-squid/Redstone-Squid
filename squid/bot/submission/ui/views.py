@@ -15,7 +15,7 @@ from whenever import Instant
 import squid_layouts as sl
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import build_edit
+from squid.bot.routes.builds import build_edit
 from squid.bot.submission.navigation_view import (
     BaseNavigableView,
     MaybeAwaitableBaseNavigableViewFunc,

@@ -10,9 +10,9 @@ import squid_layouts as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import ConsentPrompt, ConsentPromptView
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import build_log_consent, router
+from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
 from squid.bot.ui import CardField, render_static
-from squid.bot.utils.components import no_mentions, text_layout
+from squid.bot.utils.components import no_mentions, reply_layout, text_layout
 from squid.bot.utils.mount_registry import SessionKey, WhenOpen
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
@@ -26,17 +26,17 @@ logger = logging.getLogger(__name__)
 CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
 
-@router.route(build_log_consent)
+@build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
-    await interaction.response.defer(ephemeral=True)
     locale = await resolve_locale(interaction, interaction.client.services.settings)
     accounts = interaction.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await interaction.followup.send(
-            view=text_layout(
+        await reply_layout(
+            interaction,
+            text_layout(
                 t(
                     locale,
                     _(
@@ -49,7 +49,6 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                 )
             ),
             ephemeral=True,
-            allowed_mentions=no_mentions(),
         )
         return
 
