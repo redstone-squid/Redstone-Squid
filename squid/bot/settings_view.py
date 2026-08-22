@@ -79,6 +79,9 @@ class SettingsPanel(sl.Component):
     still use the Discord modal adapter, the one native form boundary in squid-layouts.
     """
 
+    history: sl.History = sl.history(limit=10)
+    """Undo for the server page's writes; see `docs/plans/squid-layouts-redesign/28-history.md`."""
+
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
     confirming_reset: bool = sl.state(default=False)
@@ -206,6 +209,12 @@ class SettingsPanel(sl.Component):
                 )
             )
         actions: list[sl.primitives.Button] = []
+        # Only once there is something to reverse: an always-present disabled pair would be
+        # two dead controls on a panel most readers never undo anything on.
+        if self._capabilities.edit_server and self.history.can_undo:
+            actions.append(sl.primitives.Button(L(t"Undo"), self._undo, "undo"))
+        if self._capabilities.edit_server and self.history.can_redo:
+            actions.append(sl.primitives.Button(L(t"Redo"), self._redo, "redo"))
         if self.shows_voting:
             actions.append(sl.primitives.Button(L(t"Voting"), self._show_voting, "voting"))
         actions.append(
@@ -335,6 +344,20 @@ class SettingsPanel(sl.Component):
         else:
             self.arm_reset()
 
+    async def _undo(self, event: sl.PressEvent) -> None:
+        # Undo is an ordinary write, so it repeats the check of the action it reverses:
+        # a moderator who lost the permission mid-session may not reverse their own change.
+        if not await self._may_event(event, SETTINGS_SERVER_EDIT):
+            return
+        if (entry := await self.history.undo()) is not None:
+            await event.notice(L("Undid: {change}", change=entry.label))
+
+    async def _redo(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event, SETTINGS_SERVER_EDIT):
+            return
+        if (entry := await self.history.redo()) is not None:
+            await event.notice(L("Redid: {change}", change=entry.label))
+
     async def _show_voting(self, event: sl.PressEvent) -> None:
         await self.open_voting()
 
@@ -351,18 +374,43 @@ class SettingsPanel(sl.Component):
         return False
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
+        previous = self._channels[setting]
+        await self._write_channel(setting, channel_id)
+        self._channels[setting] = channel_id
+        self.history.record(
+            L("Changed {setting}", setting=L(SETTING_LABELS[setting])),
+            undo=lambda: self._write_channel(setting, previous),
+            redo=lambda: self._write_channel(setting, channel_id),
+        )
+
+    async def _write_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
+        """The stored half of a channel change; `_channels` is the framework's to restore."""
         if channel_id is None:
             await self._settings.clear(self._guild.id, setting)
         else:
             await self._settings.set_channel(self._guild.id, setting, channel_id)
-        self._channels[setting] = channel_id
 
     async def set_locale(self, locale: str | None) -> None:
-        await self._settings.set_locale(self._guild.id, locale)
+        previous_override, previous_locale = self._locale_override, self.locale
+        await self._write_locale(locale, locale or previous_locale)
         self._locale_override = locale
         self.locale = locale or self.locale
+        self.history.record(
+            L(t"Changed the bot language"),
+            undo=lambda: self._write_locale(previous_override, previous_locale),
+            redo=lambda: self._write_locale(locale, locale or previous_locale),
+        )
+
+    async def _write_locale(self, override: str | None, effective: str | None) -> None:
+        """The stored locale and the mount's, neither of which is component state.
+
+        Both halves of the effective locale are captured at the call site rather than read
+        back here, because an inverse runs before the framework restores `locale` and
+        `_locale_override` -- so reading them here would see the values being reversed.
+        """
+        await self._settings.set_locale(self._guild.id, override)
         if self._mount is not None:
-            self._mount.localize(localization_for(self.locale))
+            self._mount.localize(localization_for(effective))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
         if multiplier is None:
