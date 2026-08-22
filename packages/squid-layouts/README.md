@@ -120,6 +120,35 @@ call `publish()`, then `await bus.drain()` and assert without starting backgroun
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
+### Runtime profiling
+
+Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the whole
+live-update chain: `Reactor` inherits its bus's profiler, and a `Mount` inherits its scheduler's
+profiler unless explicitly overridden. Routers are independent ownership roots and accept the
+same collector directly.
+
+```python
+profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
+bus = sl.TopicBus(profiler=profiler)
+reactor = sl.discord.Reactor(bus)
+
+mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
+router = sl.discord.Router(profiler=profiler)
+devtools = sl.discord.devtools.DevTools(reactor=reactor)
+```
+
+Completed operations contribute to lifetime and rolling histograms and event counters even when
+their detailed trace is sampled out. Slow, failed, cancelled, and acknowledgement-deadline traces
+have dedicated bounded retention. `profiler.snapshot()` returns frozen data, and
+`sl.profiling.snapshot_json(snapshot)` exports schema-versioned JSON without consulting live
+objects. The profiler starts no tasks and performs no I/O; keep exporters under the host's own
+supervisor.
+
+The owner-only devtools cog adds `dev profile actions`, `dev profile queues`,
+`dev ui profile <mount-id>`, and `dev profile export`. Trace attributes may retain a mount ID in
+these bounded buffers, but mount IDs, topics, users, message IDs, route values, and form payloads
+never become aggregate keys.
+
 ## Interaction patterns and two shells
 
 `Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines.

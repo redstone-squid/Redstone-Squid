@@ -2,8 +2,10 @@
 
 ## Status
 
-Planned. This is the implementation boundary and data contract; no collector or devtools
-surface has shipped yet.
+Implemented in August 2026. The bounded collector, mounted and routed instrumentation,
+TopicBus/Reactor causal delivery, immutable snapshots, JSON export, and owner-only devtools
+surface have shipped. The optional OpenTelemetry bridge remains deliberately deferred until a
+host needs live vendor export; it is not required for in-process profiling.
 
 ## Problem
 
@@ -111,7 +113,6 @@ class DispatchDisposition(StrEnum):
     MISSING = "missing"
     INVALID_SELECTION = "invalid_selection"
     STALE = "stale"
-    GUARD_DENIED = "guard_denied"
     VALIDATION_RETRY = "validation_retry"
     COMPLETED = "completed"
     ACTION_FAILED = "action_failed"
@@ -153,9 +154,8 @@ the contract has three levels:
 3. `RuntimeSpan`: name, monotonic offset and duration, outcome, and bounded scalar attributes.
 
 Snapshots never expose live tasks, locks, queues, middleware instances, interactions, mounts,
-messages, handlers, or exceptions. Exceptions become type/provenance strings and a bounded
-message suitable for owner-only diagnostics; the existing error hook remains responsible for
-presentation and error reporting.
+messages, handlers, or exceptions. Exceptions become bounded type/provenance strings; the
+existing error hook remains responsible for presentation and error reporting.
 
 Raw export serializes these public values rather than reaching back into the collector.
 
@@ -173,7 +173,8 @@ The supplied in-memory collector has:
 
 - separate fixed-size retention for ordinary samples, slow traces, failures, and acknowledgement
   deadline misses;
-- cumulative counters for dispositions, cache hits, coalescing, failures, and watchdog acks;
+- cumulative and rolling counters for rebases, planner calls/cache hits/fallbacks/search work,
+  coalesced triggers, and causal-link overflow; dispositions and failures remain aggregate keys;
 - bounded histograms for both lifetime and rolling-window latency aggregation and percentiles;
 - tail sampling after completion for successful high-volume operations, while failures, slow
   operations, and deadline misses are preferentially retained;
@@ -223,8 +224,9 @@ Add an immutable snapshot and traces/counters for queue depth, in-flight mounts,
 refresh duration/failure, coalesced schedules, and redelivery requested while in flight. The
 existing per-mount sets remain the scheduling authority; profiling only observes them.
 
-For each coalesced refresh record its first and latest trigger times, trigger count, time from
-both trigger edges to commit, retained causal links, and link-overflow count. This distinguishes
+For each coalesced refresh, trace time from the first trigger through settlement, record queue
+wait from the first trigger and a `freshness` span from the latest trigger through settlement,
+and retain trigger counts, bounded causal links, and link-overflow counters. This distinguishes
 healthy batching from a projection that is continuously behind.
 
 ### TopicBus
@@ -288,7 +290,9 @@ existing supervisor. The bridge is not part of the first implementation mileston
    measurements.
 5. Routed-action instrumentation.
 6. Devtools aggregation and inspection.
-7. Optional custom spans and OpenTelemetry bridge, justified by concrete host demand.
+7. Optional OpenTelemetry bridge, justified by concrete host demand. Framework owners already
+   use the public operation/span recorder protocol; a second ambient custom-span API was not
+   added without a concrete consumer.
 
 Each stage remains useful without the later presentation stages and adds focused tests before
 the next hot path is instrumented.
