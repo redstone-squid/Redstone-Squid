@@ -1,192 +1,230 @@
 # 36 — Classic Discord target
 
-## Problem
+## Why classic is not only a migration ramp
 
-Plan 35 lets an existing Components V2 `LayoutView` remain in charge while Squid contributes
-a measured sessionless fragment. It cannot help the most common legacy discord.py screen:
+A Components V2 message has **no `content` field**. Everything that reads `content` therefore
+sees nothing: reply previews, search results, push notifications, forwarded-message previews,
+and any automation keyed on message content. A bot whose message must ping someone *and* be
+readable in the notification cannot use V2 at all. Embeds also carry author, footer, timestamp,
+and field structure with no V2 equivalent, and they are the only Discord surface that renders a
+titled, coloured, field-structured card beside plain message text.
 
-```python
-await ctx.send(embed=embed, view=discord.ui.View(...))
-```
+So a classic target is a permanent capability, not a transitional one. The migration payoff is
+real but secondary:
 
-Components V2 is a different message mode. Editing such a message to a `LayoutView` requires
-explicitly clearing content, embeds, and attachments, and the message cannot then return to the
-classic representation. A V2 fragment therefore cannot migrate one region of a V1 screen.
-Transferring arbitrary items out of the existing `View` is not a substitute: view-level access,
-error handling, timeout state, decorator bindings, and callback-store registration belong to
-the original view and do not transfer with its child list.
-
-CascadeUI's support for both classic `View`/embed screens and V2 `LayoutView` screens is a real
-adoption advantage. Squid can match it without weakening planner guarantees, because its
-architecture already separates semantic authoring from target planning and rendering. The
-correct feature is a second exact Discord target, not `compose(..., into=old_view)`.
-
-> A classic target lets Squid produce and own a legal classic Discord message. It does not
-> adopt the lifecycle of an arbitrary existing view.
-
-The payoff is a staged migration:
-
-1. Replace hand-built embed content with a Squid semantic document while keeping the classic
-   message mode.
+1. Replace hand-built embed content with a Squid semantic document, keeping the classic message
+   mode.
 2. Move individual controls onto Squid actions while calling the same application functions.
 3. Let a classic `Mount` own the screen's reactive lifecycle.
-4. Select the V2 target for a new/replaced message without rewriting the semantic component.
+4. Select the V2 target for a new or replaced message without rewriting the semantic component.
+
+The correct feature is a second exact Discord target, not `compose(..., into=old_view)`. Editing
+a classic message into a `LayoutView` requires explicitly clearing content, embeds, and
+attachments, and the message can never return to the classic representation, so a V2 fragment
+cannot migrate one region of a V1 screen. Transferring items out of an existing `View` is not a
+substitute either: view-level access, error handling, timeout state, decorator bindings, and
+callback-store registration belong to the original view and do not travel with its child list.
+
+> A classic target lets Squid produce and own a legal classic Discord message. It does not adopt
+> the lifecycle of an arbitrary existing view.
+
+## The cost, stated honestly
+
+**There is no in-tree consumer.** `squid/` contains zero `discord.Embed` and zero
+`discord.ui.View`; the bot is entirely on V2. Nothing here can be dogfooded, no migration is
+performed by landing it, and its only end-to-end evidence is synthetic tests plus the live
+experiment in [Verification](#verification).
+
+That makes this a product bet on library users, in the sense
+[24](24-session-registry-move.md) opened. It is also the largest single plan in the series: a
+second target reaches adapters, limits, the solver, primitives, the scene, the codec, the
+renderer, mounts, and durability. §A and the rename in step 2 are worth landing on their own
+merits; **everything from §B onward should wait for someone to ask for it.**
 
 ## Boundaries and invariants
 
-- One message still has one lifecycle/edit owner. Plan 35's rule applies unchanged.
+- One message still has one lifecycle and edit owner. Plan 35's rule applies unchanged.
 - Both targets use the semantic tree, adapter registry, bounded search, exact resource
   accounting, action bindings, presentation state, and degradation report.
 - Classic layout decisions happen in planning. The renderer mechanically constructs content,
   embeds, and rows from an exact classic scene; it does not infer field grouping or overflow.
 - The classic target may choose lossy semantic strategies when the author permits them. It does
   not pretend every V2 exact primitive has a lossless classic representation.
-- Application/database state remains outside the UI package. This plan adds no shared store.
+- Application and database state remain outside the UI package. This plan adds no shared store.
 - Arbitrary callback-bearing `View` adoption remains rejected. Legacy application functions are
   reusable; legacy view ownership is not.
 
-## A. A complete Discord presentation value
+## Dependencies
 
-### 1. Delivery cannot remain view-only
+- [38](38-discord-presentation.md) for `DiscordPresentation` and the mode transition matrix. A
+  classic renderer produces content and embeds, so there is nothing for it to return until 38
+  exists.
+- [35](35-discord-v2-fragments.md) units 1 and 2 for `sl.discord.measure`/`audit` and for
+  `TargetProfile.resources` + `reserve()`, which §A generalizes rather than replaces.
 
-Today `Destination` receives `(LayoutView, files)` and `EditHandle.write` edits a view plus
-attachments. A classic renderer must also produce content and embeds, while V2 delivery must
-explicitly clear them when converting an older message.
+## A. Message-wide budgets become named axes
 
-Introduce one complete replacement payload:
+Plan 35 unit 2 introduced `TargetProfile.resources`, mapping a resource name to the message-wide
+limit attribute a reservation withholds from. Today it exists only for `reserve()`. Promote it
+into *the* message-wide budget vocabulary, so the planner reads caps through the same names it
+already reserves against.
 
-```python
-@dataclass(frozen=True, slots=True)
-class DiscordPresentation:
-    mode: DiscordMode
-    content: str | None
-    embeds: tuple[discord.Embed, ...]
-    view: discord.ui.View | discord.ui.LayoutView | None
-    assets: tuple[Asset, ...]
-```
+Four changes, all verifiable against the **V2** target before any classic code exists:
 
-`DiscordMode` is `CLASSIC` or `COMPONENTS_V2`. A presentation describes the whole outgoing
-message surface Squid owns; absent content and embeds are explicit clears, not omitted kwargs.
-It exposes `files()` to materialize fresh file wrappers and a package-private conversion to
-discord.py send/edit kwargs.
+- Measured usage becomes a `ResourceCost` per axis instead of the `measured.components` scalar.
+  `planner.py`'s `measured.components > limits.total_components` check becomes "any axis over its
+  cap", and the root-pagination remedy message names the offending axis.
+- `measure._measure_once`'s `range(limits.total_components + 1)` is a fixpoint-iteration guard,
+  not a semantic bound. Name it as one and give it its own constant.
+- **Multi-axis text is the one genuinely new solver capability.** Today `_allocate_budgeted`
+  distributes a single integer over every text unit. Tag each unit with the axis it draws from
+  and run the allocator once per axis over the units tagged to it. Classic puts one `Content`
+  node on `content_text` and everything else on `embed_text`, so this is a partition of
+  `builder.units`, not a new allocator.
+- **Per-value caps stay local shape, not budget.** `embed_title`, `embed_description`,
+  `field_name`, `field_value`, `embed_footer`, and `embed_author` are checked by `_validate` and
+  clamped by `measure._Clamper`, exactly as `button_label` and `option_label` are today. This is
+  the rule plan 35 §A.2 already states for `row_buttons` and `select_options`: local caps
+  describe the target's shape, not the remaining room.
 
-`Composition` carries `presentation` beside its `PlanResult`. V2 convenience APIs may retain a
-property exposing the `LayoutView`, but `Mount`, `Destination`, `DeliveryReceipt`, and
-`EditHandle` operate on `DiscordPresentation` so delivery atomicity covers every rendered field.
-Assets stop travelling as a parallel parameter whose ordering callers must remember.
+One imprecision to record rather than solve. The allocator can grant a description unit more than
+its 4096 cap, after which the clamp discards the excess and the budget is wasted. The classic
+adapter mitigates by wrapping a description region in `Budget(preferred=4096)`. It cannot do the
+same per field, because nested `Budget` regions currently flatten to the outermost owner —
+`_allocate_budgeted` claims `reversed(builder.budgets)` outer-first by design, so an inner region
+gets no units. v1 relies on clamping for fields and says so.
 
-Every destination continues to own transport policy—ephemerality, waiting, allowed mentions,
-DM fallback, and files supplied by the host. It merges host files with presentation files and
-rejects attachment overflow before calling Discord. `AllowedMentions.none()` remains the
-package default.
+## B. Classic target profile
 
-### 2. Message-mode transitions are explicit
+Add `sl.discord.CLASSIC_TARGET` beside an explicit `V2_TARGET` (today `DEFAULT_TARGET`). Every
+value below is a starting point to be re-verified against current Discord API documentation
+during implementation, and the documentation consulted is pinned in the test.
 
-The delivery adapter knows the previous message mode when a message object is available:
+| Message-wide axis | Value | Local cap | Value |
+|---|---|---|---|
+| `content_text` | 2000 | `embed_title` | 256 |
+| `embed_text` | 6000 | `embed_description` | 4096 |
+| `embeds` | 10 | `embed_fields` | 25 |
+| `rows` | 5 | `field_name` | 256 |
+| `controls` | 25 | `field_value` | 1024 |
+| `attachments` | 10 | `embed_footer` | 2048 |
+| | | `embed_author` | 256 |
 
-- classic → classic edits content, embeds, view, and attachments as one payload;
-- classic → V2 clears legacy content/embeds and installs the `LayoutView`;
-- V2 → V2 edits the layout normally;
-- V2 → classic raises `DiscordModeError` before HTTP because Discord's Components V2 flag is
-  not reversible.
+Row width, button label, select option caps, custom-ID length, and modal limits are Discord-wide
+and stay in one place. No classic strategy may borrow the V2 totals of 40 components or 4,000
+display characters.
 
-An interaction response with no readable source message still carries its intended mode in the
-standing handle after first delivery. Recovery stores the mode with its locator. A `Mount` has
-one target for its lifetime; changing targets means opening a replacement mount, not mutating a
-live mount's renderer under its action bindings.
+Say which side enforces what, because almost nothing here is caught locally:
 
-## B. Classic target profile and exact scene
+- discord.py enforces `len(embeds) > 10` in `http.handle_message_parameters` and a 25-child cap
+  on `discord.ui.View`. That is all.
+- The 6000-character aggregate and every per-value cap are server-only, so they need a strict
+  payload audit. It walks `Embed.to_dict()` output beside the component payload, mirroring the
+  existing wire-payload walk in `discord/testing.py`, and uses `Embed.__len__` for the aggregate.
+  `Embed.__len__` already computes exactly Discord's definition — title, description, field names
+  and values, footer text, author name — so the audit must not re-derive it.
 
-### 1. Target capabilities and limits
+Cross-check tests follow `tests/test_limits_crosscheck.py`.
 
-Add `sl.discord.CLASSIC_TARGET` beside a renamed/explicit `V2_TARGET`. Before implementation,
-verify every value against current Discord API documentation and discord.py behavior. The
-classic target accounts separately for at least:
+## C. Divergence happens at semantic lowering
 
-- message content characters;
-- embeds per message and aggregate embed characters;
-- embed title, description, field count/name/value, footer, and author limits;
-- action rows, row width, and total interactive controls;
-- button/select labels, placeholders, options, values, and custom IDs;
-- attachments and image/thumbnail references.
+This is the layer the design turns on. `Fields` and `Field` are destroyed during lowering —
+`adaptation._field_entry` returns `str | Alt` inside a `Lines` node — so by the time a renderer
+sees anything, field-ness is gone. A classic target that decides embed structure downstream of
+lowering has nothing left to decide with.
 
-The planning layer currently accepts a generic `ResourceCost` but several solver and renderer
-paths take `V2Limits` directly. Extract target-independent cap lookup and keep typed target
-limit tables at the adapters. Modal limits remain Discord-wide where V1 and V2 share them.
-No classic strategy may borrow the V2 totals of 40 components or 4,000 display characters.
+`lower_semantics` is already the right seam: it takes `capabilities` from the target and already
+drops `Variant` rungs whose `requires` the target lacks. The classic profile declares
+`{message.content, layout.embed, layout.embed_fields, actions.buttons, actions.select,
+forms.modal}` and **not** `{layout.container, layout.section, layout.gallery}`.
 
-Cross-check limits that discord.py enforces locally and retain strict payload audits for string
-or aggregate limits it leaves to the API, following the existing V2 limits test pattern.
+### 1. Classic primitives join the shared union
 
-### 2. Semantic adaptation
+Add classic-shaped nodes to `primitives.nodes.Node` rather than building a parallel IR, so one
+`Variants` ladder can offer a V2 rung and a classic rung for the same region, and
+`_lower_children`, `resolve_variants`, and `measure_nodes` stay single implementations:
 
-Classic adapters nominate exact candidate representations rather than letting the renderer
-guess:
+- `Content(text)` — message content.
+- `Card(title, children, fields, footer, author, accent, image, thumbnail, timestamp)` — one
+  embed.
+- `CardField(name, value, inline)`.
 
-- articles/panels become one or more embeds;
-- a primary heading may become an embed title, with paragraphs/lists in its description;
-- field-like semantic content becomes embed fields when it fits, then description text or
-  pagination under author-granted overflow policy;
-- accent becomes embed colour;
-- footer/attribution becomes embed footer text;
-- lead media becomes thumbnail or image where its meaning survives;
-- action groups become classic action rows under the five-row/width constraints;
-- choices use string selects and the existing option-pagination state;
-- document pagination owns both embed windows and control rows so one page is one exact payload.
+`_validate` gains one rule: a node whose required capability the target lacks is a planning
+error. That protects V2 from classic nodes as much as the reverse.
 
-Tables, galleries, sections with accessories, downloads, and other V2-rich structures need
-explicit ladders. A table may become aligned text or fields; a gallery may become one image plus
-links; a section accessory may become a thumbnail, link row, or ordinary text. `strict=True`
-rejects any adaptation whose cost tier represents author-visible loss.
+**Rename `primitives.Embed` to `Boundary`** in the same work. It means "keyed component
+boundary" and nothing else, and leaving a node called `Embed` in the same union as actual embed
+rendering is a trap for every future reader. It is 24 references and two construction sites
+(`measure.py`, `runtime/component.py`), and the series has already taken deliberate breaks
+(plan 34).
 
-Exact V2 primitives are not silently reinterpreted when their shape has no classic contract.
-They either have a documented classic adapter or require `Variants`/a semantic fallback.
-`NativeItem` remains gated to the V2 target and uses its required portable fallback under
-classic planning.
+### 2. Adapter ladders
 
-### 3. Classic scene protocol
+Each is an ordered `Variants`, so the existing global fit search picks the rung, not the adapter:
 
-Add exact scene values such as:
+- `Article`/`Section` → one `Card`, then several `Card`s, then paginated `Card`s.
+- `Fields` → `CardField`s while they fit, then description text, then pagination.
+- `Heading` → card title at the top level, bold description line otherwise.
+- `Media` → embed `image`, then `thumbnail`, then a link row.
+- `Table` → aligned code block, then `CardField`s, then pagination.
+- `Actions`/`Choices` → rows and string selects under the five-row and five-per-row constraints,
+  reusing the existing option-pagination state unchanged.
+- Accent → embed colour. `Footer` → embed footer text.
+- Document pagination owns both embed windows and control rows, so one page is one exact payload.
+
+`strict=True` rejects any rung whose cost tier represents author-visible loss. Sections with
+accessories, galleries, and downloads have no lossless classic form: they either take a
+documented ladder or require author-supplied `Variants`. `NativeItem` stays gated to the V2
+target and lowers to its required portable fallback under classic planning. Exact V2 primitives
+are never silently reinterpreted when their shape has no classic contract.
+
+## D. Classic scene and renderer
+
+Add exact scene values:
 
 ```python
 SceneClassicMessage(content, embeds, rows, assets)
-SceneEmbed(title, description, fields, footer, colour, image, thumbnail)
+SceneEmbed(title, description, fields, footer, author, colour, image, thumbnail, timestamp)
 SceneEmbedField(name, value, inline)
 SceneClassicRow(controls)
 ```
 
-Names are illustrative; the essential constraint is that embed grouping, field placement,
-row allocation, and pagination are already resolved before drawing. The scene carries action
-references and routed IDs but no callbacks or discord.py objects, and receives canonical codec
-coverage like the V2 scene.
+Target id `discord.components-v1`, version 1. Embed grouping, field placement, row allocation,
+and pagination are all resolved before drawing. The scene carries action references and routed
+IDs but no callbacks and no discord.py objects, and gets canonical codec and schema coverage like
+the V2 scene. V2 and classic scene nodes may share portable leaf types where that keeps the codec
+honest, but the renderer must never branch on semantic intent that planning failed to encode.
 
-The scene target remains `discord.components-v1` with its own version. V2 and classic scene
-nodes may share portable leaf types where that keeps the codec honest, but the renderer must
-never branch on semantic intent that planning failed to encode.
+Three renderer facts that are not obvious and must survive into the code comments:
 
-## C. Static and mounted rendering
+- The renderer builds a real `discord.ui.View`. It cannot reuse `LayoutView` with ActionRows:
+  `ActionRow._is_v2()` returns `True` by deliberate upstream design, so an ActionRow-only
+  `LayoutView` still sets the `components_v2` flag even though its payload is identical to
+  classic.
+- `discord.ui.View` rejects `ActionRow` items outright. Rows become explicit `row=` indices on
+  bare `Button` and `Select` items, and the planner has already satisfied `_ViewWeights`.
+- `View` caps at 25 children. Any `add_item` failure after planning is a `DrawInvariantError` in
+  tests; production may retain the existing ugly-but-delivered `conform` fallback only for
+  repairable upstream drift.
 
-### 1. Static classic composition
-
-The public entry point is target-explicit:
+The public entry point is target-explicit and returns a complete payload:
 
 ```python
 composition = sl.discord.classic.compose(document, localization=localization)
 await destination(composition.presentation)
 ```
 
-`sl.discord.classic.render_static` returns a `DiscordPresentation`, not only a `View`, because
-the embeds are inseparable from the rendered result. Sessionless documents may contain links
-and routed controls. Component-local actions remain an error without a mount.
+`sl.discord.classic.render_static` returns a `DiscordPresentation`, never a bare view, because
+the embeds are inseparable from the rendered result. Sessionless documents may contain links and
+routed controls; component-local actions remain an error without a mount.
 
-A classic renderer only constructs `discord.Embed`, `discord.ui.View`, buttons, and selects
-from the exact scene, then runs a strict non-mutating classic audit. Any intervention needed
-after planning is a `DrawInvariantError` in tests; production may retain the existing
-ugly-but-delivered conform fallback only for repairable upstream drift.
+## E. Classic mounts
 
-### 2. Classic mounts
-
-`Mount` accepts a Discord target/renderer pair, defaulting to V2 for new code:
+`MountedView` is about thirty lines — `on_timeout`, `is_dispatchable`, `on_error`, and a mount
+back-reference. Extract those into a mixin over discord.py's `BaseView`, which both `View` and
+`LayoutView` derive from, then declare `MountedView(mixin, LayoutView)` and
+`ClassicMountedView(mixin, View)`. `_WiredButton` and `_WiredSelect` generalize their view type
+parameter. Nothing else moves.
 
 ```python
 mount = sl.discord.Mount(
@@ -196,121 +234,135 @@ mount = sl.discord.Mount(
 )
 ```
 
-The classic renderer creates `ClassicMountedView(discord.ui.View)` with the same mount ID,
-generation-qualified custom IDs, access policy, stale-event handling, action serialization,
-transaction funnel, timeout, error hook, forms, navigation, and stage → deliver → commit
-semantics as `MountedView`. Buttons and selects are merely a different mechanical drawing of
-the same `ActionBinding`s.
+Mount ID, generation-qualified custom IDs, access policy, stale-event handling, action
+serialization, the transaction funnel, timeout, error hook, forms, navigation, and
+stage → deliver → commit are all unchanged. Buttons and selects are a different mechanical
+drawing of the same `ActionBinding`s.
 
-Do not fork the mount lifecycle into `ClassicMount`. The target-specific pieces are candidate
-planning, renderer/view factory, payload audit, and delivery serialization. If a lifecycle
-branch appears elsewhere, extract the shared operation before adding a mode conditional.
+Do not fork the mount lifecycle into a `ClassicMount`. The target-specific pieces are candidate
+planning, the renderer and view factory, the payload audit, and delivery serialization. If a
+lifecycle branch appears anywhere else, extract the shared operation before adding a mode
+conditional.
 
-History, resources, topic refresh, sessions, and the plan-34 durable runtime work unchanged.
-Durable snapshots record target ID/version and recovery refuses an unavailable or mismatched
-target. Discord reconnection redraws and edits the complete classic presentation before
-registering the recovered callback view.
+A mount has one target for its lifetime; changing target means opening a replacement mount, not
+mutating a live mount's renderer under its action bindings. History, resources, topic refresh,
+sessions, and the plan-34 durable runtime work unchanged. Durable snapshots record target id and
+version, and recovery refuses an unavailable or mismatched target. Discord reconnection redraws
+and edits the complete classic presentation before registering the recovered callback view.
 
-## D. Classic fragments for host-owned screens
+## F. Host-owned classic messages
 
-Once complete classic composition works, add the plan-35 equivalent:
+Squid does not need a fragment object here. A `DiscordPresentation` is already a complete
+payload value, so contributing to a host-owned classic message is a measured reservation plus
+value composition:
 
 ```python
-fragment = sl.discord.classic.fragment(
-    document,
-    alongside=sl.discord.classic.host(
-        content=content,
-        embeds=existing_embeds,
-        view=existing_view,
-        attachments=attachment_count,
-    ),
+reservation = sl.discord.classic.measure(
+    content=content, embeds=existing_embeds, view=existing_view, attachments=2
 )
-
-combined = fragment.attach_to(host)
-await ctx.send(**combined.to_kwargs())
+composition = sl.discord.classic.compose(document, reservation=reservation)
+await ctx.send(**host.merged_with(composition.presentation).to_kwargs())
 ```
 
-The host snapshot is immutable data measured from—but not an adoption of—the existing payload.
-Fragment planning reserves every classic resource axis. Attachment creates a new complete
-presentation or appends through public `Embed`/`View` APIs only after combined preflight. It
-does not mutate the host on a failed plan.
+`measure` returns a `ResourceCost` over the classic axes plus the host's custom IDs, computed
+with `Embed.__len__` and a `View` walk. It never mutates the host and raises on an already
+invalid one — the same contract as plan 35's `sl.discord.measure`, and ideally the same public
+function dispatching on view type.
 
-As in plan 35, fragment controls are limited to links and routed actions. The existing view's
-callbacks stay under its owner. Arbitrary native callback items cannot enter through a Squid
-fragment, and a fragment cannot become reactive independently of the host message.
+Merging is pure: embeds concatenate, rows append after host rows, content is used only when the
+host left that axis free, and a merge that would exceed any axis raises before send. Neither
+input is mutated.
 
-Content and embed placement need explicit operations rather than an ambiguous `append`:
+The boundary the fragment design discovered is kept: **never splice fields into a host-authored
+embed**, because Squid cannot own its internal layout or overflow policy. Squid replaces whole
+embeds and whole control regions, nothing finer. That is still enough to migrate one card or one
+control region at a time while the host keeps its lifecycle.
 
-- add embeds before or after the host embeds;
-- add action items into newly allocated rows after host rows;
-- use message content only when the host leaves that axis available;
-- never splice fields into a host-authored embed, because Squid cannot own its internal layout
-  or overflow policy.
+Contributed controls stay limited to links and routed actions. The host view's callbacks remain
+under its owner, arbitrary native callback items cannot enter, and a contributed region is never
+reactive independently of the host — all carried over from plan 35 §B.4 unchanged, including the
+warning that routed controls do not reset the host view's timeout.
 
-That narrower boundary still enables replacing one entire embed/card or control region at a
-time while preserving host lifecycle.
+## G. Migration guide and non-goals
 
-## E. Migration guide and non-goals
+Ship a worked classic-to-V2 example built on one semantic component:
 
-Ship a worked classic-to-V2 example using one semantic component:
-
-1. Hand-built embed + decorated `View`.
-2. Host-owned classic message with a static/routed Squid fragment.
+1. Hand-built embed plus decorated `View`.
+2. Host-owned classic message with a measured, statically composed Squid region.
 3. Classic Squid `Mount` whose action handlers call the unchanged service functions.
 4. A newly opened V2 mount selected by changing only the target and any target-specific
    `Variants`.
 
-The guide must distinguish reusable callback logic from callback ownership. A legacy function
-can be called from a portable action with `sl.discord.native(event)` when it needs the
-interaction; a decorated item or whole live view is not transferred.
+The guide must distinguish reusable callback logic from callback ownership. A legacy function can
+be called from a portable action with `sl.discord.native(event)` when it needs the interaction; a
+decorated item or a whole live view is not transferred.
 
 Explicit non-goals:
 
 - preserving arbitrary `View.interaction_check`, `on_error`, timeout, or navigation stacks;
 - editing a Components V2 message back into classic mode;
 - pixel-identical embed reproduction from semantic input;
-- making exact V2-native extensions work without a classic/portable fallback;
+- making exact V2-native extensions work without a classic or portable fallback;
 - two independently mounted regions in one classic message;
+- a fragment object for classic, with its own attachment state machine;
+- choosing a message mode automatically — the author picks a target;
 - treating embeds as an application state store.
 
 ## Implementation sequence
 
-1. `discord: deliver complete presentations` — presentation/mode value, destinations and edit
-   handles, V2 migration, assets, and transition tests.
-2. `planning: make Discord limits target-specific` — cap lookup, classic limit table, and
-   official/discord.py cross-checks.
-3. `scene: describe classic Discord messages` — exact scene values and canonical codec.
-4. `discord: render static classic messages` — adapters, bounded planning, renderer, audit, and
-   degradation tests.
-5. `discord: mount classic component views` — classic wired view through the unchanged mount
-   lifecycle and target-aware durability metadata.
-6. `discord: compose classic fragments` — immutable host measurement, preflight combination,
-   and the adoption cookbook.
+1. `planning: budget message-wide resources by name` — axis vocabulary, multi-axis text
+   allocation, axis-aware overflow diagnostics. Verifiable against V2 alone.
+2. `primitives: rename the component boundary node` — `Embed` → `Boundary`.
+3. `planning: add classic Discord limits` — limit table, capability set, official and discord.py
+   cross-checks.
+4. `primitives: describe classic message structure` — `Content`, `Card`, `CardField`, and
+   capability validation.
+5. `planning: lower semantics for the classic target` — adapter ladders and degradation tests.
+6. `scene: describe classic Discord messages` — exact scene values, canonical codec, schema.
+7. `discord: render static classic messages` — renderer, strict payload audit,
+   `classic.compose`.
+8. `discord: mount classic component views` — `BaseView` mixin, `ClassicMountedView`, and
+   target-aware durability metadata.
+9. `discord: measure host-owned classic messages` — `classic.measure`, presentation merging, and
+   the adoption cookbook.
+
+Steps 1 and 2 are worth landing whatever happens to the rest.
 
 ## Verification
 
 - Property tests generate semantic documents at every classic resource boundary and prove a
   successful plan satisfies per-value, aggregate embed, row, control, and attachment limits.
-- Limit cross-checks exercise discord.py construction/serialization and pin every server-only
-  constant to the current official documentation consulted during implementation.
+- Property tests prove *every* named axis is honoured, not a components scalar — including that
+  `content_text` and `embed_text` are separate pools, and that exhausting one does not degrade
+  content allocated from the other.
+- An ActionRow-only `LayoutView` still reports `has_components_v2()`. This pins the reason the
+  classic renderer builds a `View` and is the upstream assumption most likely to change.
+- The payload audit catches a 6000-character aggregate overrun that discord.py accepts locally,
+  and every per-value cap the API enforces alone.
+- Limit cross-checks exercise discord.py construction and serialization, and pin every
+  server-only constant to the official documentation consulted during implementation.
 - Scene round trips are canonical and contain no callbacks or discord.py objects.
-- The renderer is mechanical: malformed/over-budget classic scenes fail strict audit rather
+- The renderer is mechanical: a malformed or over-budget classic scene fails strict audit rather
   than invoking a hidden degradation path.
-- Delivery tests cover classic → classic, classic → V2 with explicit clears, V2 → V2, and
-  preflight rejection of V2 → classic across channel, original-response, and webhook handles.
-- Classic mount tests reuse the access, stale-generation, exclusive/rebase, transaction,
-  timeout, navigation, form, resource, history, and failed-delivery contracts currently run
-  against V2. Target-agnostic cases become parametrized rather than copied.
+- Classic mount tests reuse the access, stale-generation, exclusive/rebase, transaction, timeout,
+  navigation, form, resource, history, and failed-delivery contracts currently run against V2.
+  Target-agnostic cases become parametrized rather than copied.
 - Recovery preserves target identity and reinstalls classic callback registrations before a
   session becomes live.
-- Classic fragments reserve existing content/embeds/rows exactly, cannot introduce callback
-  ownership, and leave the host unchanged on every failure path.
-- Run focused planning/scene/Discord/delivery/durability suites with `--no-cov`,
-  `just typecheck`, changed-file formatting/linting, architecture tests, `git diff --check`,
-  and a live V1 → V1 edit plus V1 → V2 replacement experiment. The mount/delivery blast radius
-  warrants the full package suite locally; the full application suite remains CI-owned unless
-  failures show wider coupling.
+- `classic.measure` reserves host content, embeds, and rows exactly; merging is pure and leaves
+  both inputs unmutated; a merge exceeding any axis raises before send.
+- **Gate:** a live V1 → V1 edit and a live V1 → V2 replacement against a real message. With no
+  in-tree consumer, this is the only end-to-end evidence the target works, so it is required
+  rather than nice to have.
+- Run the focused planning, scene, Discord, delivery, and durability suites with `--no-cov`, then
+  `just typecheck`, changed-file formatting and linting, architecture tests, and
+  `git diff --check`. The mount and delivery blast radius warrants the full package suite
+  locally; the full application suite stays CI-owned unless failures show wider coupling.
 
 ## Status
 
-Proposed 2026-08-22.
+Proposed 2026-08-22. Redesigned 2026-08-22 after verifying every claim against the tree: there is
+no in-tree consumer, the limits work is a solver change rather than a plumbing extraction, embed
+fields cannot be chosen downstream of semantic lowering, `ActionRow` forces a real
+`discord.ui.View`, and the fragment API was cut in favour of a measured reservation over
+[38](38-discord-presentation.md)'s presentation value.
