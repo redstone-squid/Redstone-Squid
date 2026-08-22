@@ -26,6 +26,8 @@ from squid_layouts.profiling.model import (
     RuntimeSnapshot,
     RuntimeSpan,
     RuntimeTrace,
+    SpanAggregate,
+    SpanAggregateKey,
     SpanAttribute,
     SpanId,
     TraceId,
@@ -41,7 +43,7 @@ _MAX_DETAIL_LENGTH = 240
 _MAX_ATTRIBUTE_KEY_LENGTH = 64
 _MAX_ATTRIBUTE_STRING_LENGTH = 256
 _MAX_ATTRIBUTES = 16
-_OVERFLOW_LINK_KEY = "<overflow>"
+_OVERFLOW_AGGREGATE_NAME = "<overflow>"
 _SYSTEM_RANDOM = secrets.SystemRandom()
 
 type Clock = Callable[[], float]
@@ -114,6 +116,7 @@ class _MutableTrace:
     spans: dict[SpanId, _MutableSpan] = field(default_factory=dict)
     result: TraceResult | None = None
     deadline_missed: bool = False
+    closed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +178,7 @@ class _Histogram:
 class _WindowSlice:
     index: int
     histograms: dict[AggregateKey, _Histogram] = field(default_factory=dict)
+    span_histograms: dict[SpanAggregateKey, _Histogram] = field(default_factory=dict)
 
 
 class _NoOpSpan(AbstractContextManager[SpanRecorder]):
@@ -244,7 +248,8 @@ class NoOpProfiler:
             (),
             (),
             (),
-            ProfilerHealth(0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (),
+            ProfilerHealth(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         )
 
 
@@ -291,15 +296,22 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
     ) -> None:
         if self._fallback or self._span is None:
             return
-        if self._token is not None:
-            _current.reset(self._token)
-        outcome = self._span.outcome or _outcome_for_exception(exc)
+        self._reset_context()
+        outcome = _outcome_for_exception(exc) if exc is not None else self._span.outcome or TraceOutcome.COMPLETED
         self._profiler._finish_span(self._trace, self._span, outcome)
         return
 
     def set_outcome(self, outcome: TraceOutcome) -> None:
         if self._span is not None:
             self._span.outcome = outcome
+
+    def _reset_context(self) -> None:
+        if self._token is None:
+            return
+        try:
+            _current.reset(self._token)
+        except BaseException:
+            self._profiler._note_internal_failure()
 
 
 class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecorder):
@@ -343,8 +355,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         if self._fallback or self._trace is None:
             return
 
-        if self._token is not None:
-            _current.reset(self._token)
+        self._reset_context()
 
         if exc is not None:
             outcome = _outcome_for_exception(exc)
@@ -362,7 +373,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
     ) -> AbstractContextManager[SpanRecorder]:
-        if self._trace is None or self._fallback:
+        if self._trace is None or self._fallback or self._trace.closed:
             return _NOOP
         current = _current.get()
         parent = (
@@ -373,12 +384,20 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         return _SpanScope(self._profiler, self._trace, parent, name, attributes, links)
 
     def set_result(self, result: TraceResult) -> None:
-        if self._trace is not None:
+        if self._trace is not None and not self._trace.closed:
             self._trace.result = result
 
     def mark_deadline_missed(self) -> None:
-        if self._trace is not None:
+        if self._trace is not None and not self._trace.closed:
             self._trace.deadline_missed = True
+
+    def _reset_context(self) -> None:
+        if self._token is None:
+            return
+        try:
+            _current.reset(self._token)
+        except BaseException:
+            self._profiler._note_internal_failure()
 
 
 def _outcome_for_exception(error: BaseException | None) -> TraceOutcome:
@@ -410,6 +429,7 @@ class MemoryProfiler:
         window_seconds: Duration represented by rolling aggregate histograms.
         window_slices: Number of rotating histogram slices in the rolling window.
         max_aggregate_keys: Maximum lifetime aggregate keys before overflow grouping.
+        max_span_aggregate_keys: Maximum lifetime span aggregate keys before overflow grouping.
         max_links: Maximum causal links retained on one trace or span.
         clock: Monotonic clock used for durations and rolling windows.
         wall_clock: UTC wall clock used only for snapshot/export correlation.
@@ -429,6 +449,7 @@ class MemoryProfiler:
         window_seconds: float = 300.0,
         window_slices: int = 6,
         max_aggregate_keys: int = 256,
+        max_span_aggregate_keys: int = 512,
         max_links: int = 8,
         histogram_bounds: Sequence[float] = _DEFAULT_BOUNDS,
         clock: Clock = time.monotonic,
@@ -436,7 +457,7 @@ class MemoryProfiler:
         id_source: IdSource = secrets.token_bytes,
         sample_source: SampleSource = _SYSTEM_RANDOM.random,
     ) -> None:
-        sizes = (recent, slow, failed, deadline_misses, max_aggregate_keys, max_links)
+        sizes = (recent, slow, failed, deadline_misses, max_aggregate_keys, max_span_aggregate_keys, max_links)
         if any(size < 0 for size in sizes) or window_slices < 1:
             message = "profiler bounds cannot be negative and window_slices must be positive"
             raise ValueError(message)
@@ -464,6 +485,7 @@ class MemoryProfiler:
         self._window_slices = window_slices
         self._slice_seconds = window_seconds / window_slices
         self._max_aggregate_keys = max_aggregate_keys
+        self._max_span_aggregate_keys = max_span_aggregate_keys
         self._max_links = max_links
         self._bounds = bounds
         self._lock = threading.RLock()
@@ -473,12 +495,15 @@ class MemoryProfiler:
         self._failed: deque[RuntimeTrace] = deque(maxlen=failed)
         self._deadline_misses: deque[RuntimeTrace] = deque(maxlen=deadline_misses)
         self._lifetime: dict[AggregateKey, _Histogram] = {}
+        self._span_lifetime: dict[SpanAggregateKey, _Histogram] = {}
         self._window: deque[_WindowSlice] = deque()
         self._started = clock()
         self._started_at = wall_clock()
         self._process_id = secrets.token_hex(8)
         self._overflow_key: AggregateKey | None = None
+        self._span_overflow_key: SpanAggregateKey | None = None
         self._sampled_out = 0
+        self._dropped_traces = 0
         self._evicted = 0
         self._rejected_attributes = 0
         self._internal_failures = 0
@@ -495,7 +520,7 @@ class MemoryProfiler:
 
     def capture_link(self) -> TraceLink | None:
         current = _current.get()
-        if current is None or current.profiler is not self:
+        if current is None or current.profiler is not self or current.trace.closed:
             return None
         return TraceLink(current.trace.trace_id, current.span_id)
 
@@ -505,6 +530,7 @@ class MemoryProfiler:
         with self._lock:
             active = tuple(self._active_snapshot(trace, now) for trace in self._active.values())
             window = self._window_histograms(now)
+            span_window = self._span_window_histograms()
             aggregates = tuple(
                 OperationAggregate(
                     key,
@@ -513,6 +539,14 @@ class MemoryProfiler:
                 )
                 for key, histogram in self._lifetime.items()
             )
+            span_aggregates = tuple(
+                SpanAggregate(
+                    key,
+                    histogram.freeze(),
+                    span_window.get(key, _Histogram.empty(self._bounds)).freeze(),
+                )
+                for key, histogram in self._span_lifetime.items()
+            )
             health = ProfilerHealth(
                 len(active),
                 len(self._recent),
@@ -520,6 +554,7 @@ class MemoryProfiler:
                 len(self._failed),
                 len(self._deadline_misses),
                 self._sampled_out,
+                self._dropped_traces,
                 self._evicted,
                 self._rejected_attributes,
                 self._internal_failures,
@@ -537,15 +572,23 @@ class MemoryProfiler:
                 tuple(self._failed),
                 tuple(self._deadline_misses),
                 aggregates,
+                span_aggregates,
                 health,
             )
 
-    def _new_id(self, size: int, constructor: Callable[[bytes], TraceId | SpanId]) -> TraceId | SpanId:
+    def _new_id(
+        self,
+        size: int,
+        constructor: Callable[[bytes], TraceId | SpanId],
+        used: set[TraceId] | set[SpanId] | None = None,
+    ) -> TraceId | SpanId:
         for _ in range(3):
             value = self._id_source(size)
             if len(value) == size and any(value):
-                return constructor(value)
-        message = f"ID source did not produce {size} non-zero bytes"
+                identifier = constructor(value)
+                if used is None or identifier not in used:
+                    return identifier
+        message = f"ID source did not produce a unique, non-zero {size}-byte ID"
         raise ValueError(message)
 
     def _start_trace(
@@ -556,7 +599,9 @@ class MemoryProfiler:
         links: Sequence[TraceLink],
     ) -> _MutableTrace:
         started = self._clock()
-        trace_id = self._new_id(16, TraceId)
+        with self._lock:
+            active_ids = set(self._active)
+        trace_id = self._new_id(16, TraceId, active_ids)
         root_id = self._new_id(8, SpanId)
         stable_name = self._bounded_text(name or operation.value, _MAX_NAME_LENGTH)
         trace_links, trace_omitted_links = self._bounded_links(links)
@@ -591,7 +636,12 @@ class MemoryProfiler:
         attributes: Mapping[str, AttributeValue] | None,
         links: Sequence[TraceLink],
     ) -> _MutableSpan:
-        span_id = self._new_id(8, SpanId)
+        with self._lock:
+            if trace.closed:
+                message = "cannot add a span to a completed trace"
+                raise RuntimeError(message)
+            used_ids = set(trace.spans)
+        span_id = self._new_id(8, SpanId, used_ids)
         span_links, omitted = self._bounded_links(links)
         span = _MutableSpan(
             span_id,
@@ -619,7 +669,10 @@ class MemoryProfiler:
         try:
             ended = self._clock()
             with self._lock:
+                if trace.closed:
+                    return
                 root = trace.spans[trace.root_span_id]
+                trace.closed = True
                 trace.result = TraceResult(
                     result.outcome,
                     None if result.detail is None else self._bounded_text(result.detail, _MAX_DETAIL_LENGTH),
@@ -635,6 +688,7 @@ class MemoryProfiler:
                 self._record(frozen, ended)
         except BaseException:
             with self._lock:
+                trace.closed = True
                 self._active.pop(trace.trace_id, None)
             self._note_internal_failure()
 
@@ -658,7 +712,7 @@ class MemoryProfiler:
             trace.root_span_id,
             trace.operation,
             trace.name,
-            trace.started,
+            max(0.0, trace.started - self._started),
             max(0.0, ended - trace.started),
             trace.result or TraceResult(TraceOutcome.ABANDONED),
             spans,
@@ -675,14 +729,24 @@ class MemoryProfiler:
         if not self._window or self._window[-1].index != slice_index:
             self._window.append(_WindowSlice(slice_index))
         self._window[-1].histograms.setdefault(key, _Histogram.empty(self._bounds)).observe(trace.duration)
+        for span in trace.spans:
+            if span.span_id == trace.root_span_id:
+                continue
+            span_key = self._span_aggregate_key(trace, span)
+            self._span_lifetime.setdefault(span_key, _Histogram.empty(self._bounds)).observe(span.duration)
+            self._window[-1].span_histograms.setdefault(span_key, _Histogram.empty(self._bounds)).observe(span.duration)
         self._trim_window(slice_index)
 
         retained = False
-        if trace.result.outcome in {TraceOutcome.FAILED, TraceOutcome.CANCELLED}:
+        selected = False
+        if trace.result.outcome is not TraceOutcome.COMPLETED:
+            selected = True
             retained |= self._append(self._failed, trace)
         if trace.duration >= self._slow_threshold:
+            selected = True
             retained |= self._append(self._slow, trace)
         if trace.deadline_missed:
+            selected = True
             retained |= self._append(self._deadline_misses, trace)
 
         ordinary = (
@@ -690,11 +754,16 @@ class MemoryProfiler:
             and not trace.deadline_missed
             and trace.duration < self._slow_threshold
         )
-        if ordinary and self._sample_source() < self._sample_rate:
-            retained |= self._append(self._recent, trace)
+        if ordinary:
+            sampled = self._sample_rate >= 1 or (self._sample_rate > 0 and self._sample_source() < self._sample_rate)
+            if sampled:
+                selected = True
+                retained |= self._append(self._recent, trace)
+            else:
+                self._sampled_out += 1
 
-        if not retained:
-            self._sampled_out += 1
+        if selected and not retained:
+            self._dropped_traces += 1
 
     def _aggregate_key(self, trace: RuntimeTrace) -> AggregateKey:
         key = AggregateKey(trace.operation, trace.name, trace.result.outcome, trace.result.detail)
@@ -702,10 +771,10 @@ class MemoryProfiler:
             return key
         if self._overflow_key is None:
             self._overflow_key = AggregateKey(
-                trace.operation,
-                _OVERFLOW_LINK_KEY,
-                trace.result.outcome,
-                trace.result.detail,
+                None,
+                _OVERFLOW_AGGREGATE_NAME,
+                None,
+                None,
             )
         return self._overflow_key
 
@@ -716,6 +785,14 @@ class MemoryProfiler:
             self._evicted += 1
         target.append(trace)
         return True
+
+    def _span_aggregate_key(self, trace: RuntimeTrace, span: RuntimeSpan) -> SpanAggregateKey:
+        key = SpanAggregateKey(trace.operation, trace.name, span.name, span.outcome)
+        if key in self._span_lifetime or len(self._span_lifetime) < self._max_span_aggregate_keys:
+            return key
+        if self._span_overflow_key is None:
+            self._span_overflow_key = SpanAggregateKey(None, _OVERFLOW_AGGREGATE_NAME, _OVERFLOW_AGGREGATE_NAME, None)
+        return self._span_overflow_key
 
     def _trim_window(self, current_index: int) -> None:
         earliest = current_index - self._window_slices + 1
@@ -728,6 +805,13 @@ class MemoryProfiler:
         merged: dict[AggregateKey, _Histogram] = {}
         for window_slice in self._window:
             for key, histogram in window_slice.histograms.items():
+                merged.setdefault(key, _Histogram.empty(self._bounds)).merge(histogram)
+        return merged
+
+    def _span_window_histograms(self) -> dict[SpanAggregateKey, _Histogram]:
+        merged: dict[SpanAggregateKey, _Histogram] = {}
+        for window_slice in self._window:
+            for key, histogram in window_slice.span_histograms.items():
                 merged.setdefault(key, _Histogram.empty(self._bounds)).merge(histogram)
         return merged
 
@@ -747,7 +831,7 @@ class MemoryProfiler:
             trace.trace_id,
             trace.operation,
             trace.name,
-            trace.started,
+            max(0.0, trace.started - self._started),
             max(0.0, now - trace.started),
             current,
         )
