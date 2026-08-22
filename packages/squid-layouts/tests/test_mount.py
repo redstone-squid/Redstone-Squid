@@ -3095,15 +3095,31 @@ class TestGuards:
         assert dispatch.disposition is DispatchDisposition.GUARD_FAILED
 
     async def test_admission_runs_under_every_concurrency_policy(self):
+        # A list rather than component state: PARALLEL_READ handlers may not write, and the
+        # question here is whether the guard was consulted at all under each policy.
+        class Reader(Component):
+            def __init__(self, policy: ActionPolicy) -> None:
+                self.policy = policy
+                self.presses: list[str] = []
+
+            def render(self):
+                return sl.actions(
+                    sl.action("Go", self.go, key="go", guard=sl.guards.once(), policy=self.policy),
+                    key="panel",
+                )
+
+            async def go(self, event: ActionEvent) -> None:
+                self.presses.append(event.actor.id)
+
         for policy in ActionPolicy:
-            panel = _GuardedPanel(guard=sl.guards.once(), policy=policy)
+            panel = Reader(policy)
             mount = Mount(panel, access=Everyone(), timeout=None)
             commit_render(mount)
 
             await mount.dispatch("go", fake_interaction())
             await mount.dispatch("go", fake_interaction())
 
-            assert panel.count == 1, policy
+            assert panel.presses == ["1"], policy
 
     async def test_a_stale_press_is_rejected_before_its_guard_is_consulted(self):
         panel = _GuardedPanel(guard=sl.guards.once())
@@ -3272,16 +3288,15 @@ class TestBusyFeedback:
     async def test_an_action_that_changes_nothing_still_restores_the_panel(self):
         release = asyncio.Event()
 
-        class Idle(Component):
-            def __init__(self) -> None:
-                self.ran = False
+        ran: list[bool] = []
 
+        class Idle(Component):
             def render(self):
                 return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.Feedback()), key="panel")
 
             async def go(self, event: ActionEvent) -> None:
                 await release.wait()
-                self.ran = True
+                ran.append(True)
 
         panel = Idle()
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
@@ -3290,7 +3305,7 @@ class TestBusyFeedback:
 
         await self._press(mount, interaction, release)
 
-        assert panel.ran
+        assert ran == [True]
         assert not mount.pending
         restored = interaction.followup.edit_message.await_args.kwargs["view"]
         assert self._labels(restored) == [("Go", False)]
