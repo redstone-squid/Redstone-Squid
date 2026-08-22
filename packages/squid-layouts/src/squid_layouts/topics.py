@@ -277,6 +277,9 @@ class TopicBus:
                     max(0.0, delivery_started - trace_started),
                     attributes={"triggers": causes.triggers, "cause_links_omitted": causes.omitted_links},
                 )
+                operation.increment("topic.triggers", causes.triggers)
+                operation.increment("topic.coalesced", max(0, causes.triggers - 1))
+                operation.increment("topic.cause_links_omitted", causes.omitted_links)
                 token = _current_topic.set(topic)
                 delivery_failed = False
                 try:
@@ -296,6 +299,8 @@ class TopicBus:
                     _current_topic.reset(token)
                 if delivery_failed:
                     operation.set_result(TraceResult(TraceOutcome.FAILED, detail="subscriber_failed"))
+                if causes.last_triggered is not None:
+                    operation.record_span("freshness", max(0.0, self._clock() - causes.last_triggered))
         except asyncio.CancelledError:
             cancelled = True
             raise

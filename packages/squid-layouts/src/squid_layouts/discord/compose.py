@@ -102,6 +102,11 @@ def compose(
             planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
             planner_span.set_attribute("states_explored", result.metrics.states_explored)
             planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
+        if profile is not None:
+            profile.increment("planner.calls")
+            profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
+            profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
+            profile.increment("planner.states_explored", result.metrics.states_explored)
     drawer = renderer if renderer is not None else Renderer(limits=limits)
     with _span(profile, "renderer"):
         view = drawer.draw(result.scene, plan=result, wire=wire)

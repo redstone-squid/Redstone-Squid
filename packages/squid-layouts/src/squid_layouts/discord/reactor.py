@@ -246,8 +246,15 @@ class Reactor:
                         max(0.0, delivery_started - trace_started),
                         attributes={"triggers": causes.triggers, "cause_links_omitted": causes.omitted_links},
                     )
+                    operation.increment("reactor.triggers", causes.triggers)
+                    operation.increment("reactor.coalesced", max(0, causes.triggers - 1))
+                    operation.increment("reactor.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
-                    await mount.refresh_now(links=() if link is None else (link,))
+                    try:
+                        await mount.refresh_now(links=() if link is None else (link,))
+                    finally:
+                        if causes.last_triggered is not None:
+                            operation.record_span("freshness", max(0.0, self._monotonic() - causes.last_triggered))
                     self._delivered += 1
             except Exception:
                 self._failed += 1

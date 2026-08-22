@@ -203,8 +203,11 @@ async def test_coalesced_delivery_retains_producer_link_and_trigger_count() -> N
     producer = next(trace for trace in traces if trace.name == "save")
     delivery = next(trace for trace in traces if trace.operation is OperationKind.TOPIC_DELIVERY)
     queue_wait = next(span for span in delivery.spans if span.name == "queue_wait")
+    freshness = next(span for span in delivery.spans if span.name == "freshness")
     assert delivery.links[0].trace_id == producer.trace_id
     assert dict((attribute.key, attribute.value) for attribute in queue_wait.attributes)["triggers"] == 2
+    assert freshness.duration >= 0
+    assert {counter.name: counter.value for counter in delivery.counters}["topic.coalesced"] == 1
 
 
 async def test_caught_subscriber_failure_marks_delivery_trace_failed() -> None:
