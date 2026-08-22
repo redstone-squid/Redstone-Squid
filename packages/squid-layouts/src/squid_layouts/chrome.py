@@ -35,6 +35,10 @@ def _default_page_option(page: int) -> TextLike:
     return f"Page {page}"
 
 
+def _default_decided(label: TextLike) -> TextLike:
+    return f"You chose {label}."
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
@@ -56,6 +60,14 @@ class Chrome:
     redo: TextLike = "Redo"
     on: TextLike = "On"
     off: TextLike = "Off"
+    confirm: TextLike = "Confirm"
+    cancel: TextLike = "Cancel"
+    decided: Callable[[TextLike], TextLike] = _default_decided
+    add: TextLike = "Add"
+    edit: TextLike = "Edit"
+    remove: TextLike = "Remove"
+    move_up: TextLike = "Move up"
+    move_down: TextLike = "Move down"
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
     range_footer: Callable[[int, int], TextLike] = _default_range_footer
@@ -93,6 +105,14 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         redo=resolve_text(chrome.redo, localization).content,
         on=resolve_text(chrome.on, localization).content,
         off=resolve_text(chrome.off, localization).content,
+        confirm=resolve_text(chrome.confirm, localization).content,
+        cancel=resolve_text(chrome.cancel, localization).content,
+        decided=lambda label: resolve_text(chrome.decided(label), localization).content,
+        add=resolve_text(chrome.add, localization).content,
+        edit=resolve_text(chrome.edit, localization).content,
+        remove=resolve_text(chrome.remove, localization).content,
+        move_up=resolve_text(chrome.move_up, localization).content,
+        move_down=resolve_text(chrome.move_down, localization).content,
         page_footer=lambda page, pages: resolve_text(chrome.page_footer(page, pages), localization).content,
         range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,
         approximate_total_footer=lambda first, last, total: (

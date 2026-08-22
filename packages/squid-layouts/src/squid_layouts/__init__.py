@@ -97,7 +97,15 @@ from squid_layouts.forms import (
     UploadedFile,
 )
 from squid_layouts.patterns import (
+    CollectionChangeHandler,
+    CollectionEditor,
+    CollectionEntry,
+    CollectionState,
     ComponentShell,
+    Decision,
+    DecisionHandler,
+    DecisionOption,
+    DecisionState,
     Menu,
     MenuEntry,
     MenuState,
@@ -125,6 +133,7 @@ from squid_layouts.patterns import (
     WizardFinishHandler,
     WizardState,
     WizardStep,
+    confirm,
 )
 from squid_layouts.planning.planner import plan
 from squid_layouts.routing import Route
@@ -302,6 +311,10 @@ __all__ = [
     "Chrome",
     "Cluster",
     "Code",
+    "CollectionChangeHandler",
+    "CollectionEditor",
+    "CollectionEntry",
+    "CollectionState",
     "Column",
     "Component",
     "ComponentShell",
@@ -311,6 +324,10 @@ __all__ = [
     "CountPrecision",
     "DateField",
     "DateTimeField",
+    "Decision",
+    "DecisionHandler",
+    "DecisionOption",
+    "DecisionState",
     "Destination",
     "DetailLevel",
     "Details",
@@ -477,6 +494,7 @@ __all__ = [
     "code",
     "column",
     "computed",
+    "confirm",
     "controlled",
     "destination",
     "details",
