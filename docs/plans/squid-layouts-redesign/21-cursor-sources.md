@@ -36,12 +36,12 @@
    anchor-outranks-reset philosophy; reset-to-start remains the materialized-list
    policy, not the universal one.
 
-5. **Fetch stays out of planning.** Now: pattern-level — the prev/next handlers are
-   already async; they fetch, write `{window, position}` into component state, and
-   invalidate, with a per-key monotonic token dropping out-of-order results. Later: a
-   core load phase that re-runs when a declared input changes — which is the
-   dependency model whose absence cut `sl.resource` from plan 09. The two are the
-   same missing design and must be designed together or not at all.
+5. **Fetch stays out of planning.** At landing, prev/next handlers fetched and wrote
+   `{window, position}` into component state. [Plan 33](33-resources.md) now supplies the
+   missing core load phase: `SourceRankedList` declares a visible resource dependent on its
+   request state. The synchronous render sees pending, stale-ready, failed, or ready data;
+   the Discord mount owns settlement and delivery. Planning itself remains synchronous and
+   fetch-free.
 
 6. **Overrides generalize.** Explicit page maps become position tokens — also
    the two-shell rule's stateless entry (plan 19): a routed panel carries its position
@@ -68,8 +68,9 @@ rather than deprecated or aliased; every in-repository caller moves in the same 
 - `Window(position, items, has_previous, has_next, total)` always returns its resolved
   position. Anchor-gone fallback is therefore explicit rather than hidden behind an
   optional correction.
-- `WindowLoader` returns an immutable `LoadedWindow`. It owns only the monotonic request
-  token; the component owns the loaded value as declared state. A stale completion can
+- `WindowLoader` returns an immutable `LoadedWindow` and owns source-position ordering;
+  the component's resource owns the loaded value and its request generation. A stale
+  completion can
   never mutate the visible cursor behind the component's back.
 - `NavigationContext` and one `NavFactory` serve materialized and source windows. The
   mount injects its factory into components, so a custom navigation factory applies to
@@ -93,6 +94,8 @@ rather than deprecated or aliased; every in-repository caller moves in the same 
 ## Status
 
 Implemented 2026-08-21.
+
+Amended 2026-08-22 by plan 33: `SourceRankedList` now loads through a visible resource.
 
 `test_pagination.py` keeps materialized cursor behavior under the extracted policy and
 covers position-token overrides. `test_sources.py` covers window-scoped refresh,
