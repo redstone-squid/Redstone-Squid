@@ -896,10 +896,9 @@ class TestLifecycle:
         assert "Live updates paused" not in str(written.to_components())
         assert mount.status is None
 
-    async def test_background_refreshes_preserve_the_interaction_idle_budget(self, monkeypatch):
+    async def test_background_refreshes_preserve_the_interaction_idle_budget(self):
         now = 100.0
-        monkeypatch.setattr("squid_layouts.discord.mount.time.monotonic", lambda: now)
-        mount = Mount(Counter(), timeout=30)
+        mount = Mount(Counter(), timeout=30, clock=lambda: now)
         message: Any = fake_message()
         await mount.send(delivered_to(message))
 
