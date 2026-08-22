@@ -64,6 +64,7 @@ modules; the layout core stays presentational.
 | 32 | [Demand-driven patterns (Batch D)](32-demand-driven.md) | The controlled-ledger trio — `Roster` (slots/capacity/waitlist via a pure `place`), `sl.tally`, and a minimal mounted `Agreement` under 34's `Users` access — plus the Grid promotion from 90: `MATRIX` table strategy, `button_grid`, and the `Grid` ladder. |
 | 33 | [Reactive async resources](33-resources.md) | `sl.resource(depends=(state_field,))` exposes synchronous `Pending | Ready | Failed` state, render-observed lazy loading, stale-result rejection and optimistic replacement. Visible and atomic delivery are two policies over one state machine; `SourceRankedList` is the first migration. Shipped. |
 | 34 | [Safe session runtime](34-safe-session-runtime.md) | Required async mount access policies, typed session scopes and structured cardinality outcomes, then one durable runtime that owns fenced checkpoints, Discord reconnection, recovery reports, leases, expiry, and teardown. Intentionally breaking: `lock_to`, `MountRegistry`, and public `MountManager` are replaced rather than shimmed. |
+| 35 | [Discord V2 fragments](35-discord-v2-fragments.md) | Measured sessionless Squid islands inside an existing host-owned `LayoutView`: full resource reservations, detached multi-item fragments, atomic preflight/attachment, assets, custom-ID auditing, and routed controls. Arbitrary live-view adoption remains rejected. |
 
 ## Relation to existing plans
 
