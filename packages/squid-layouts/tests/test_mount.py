@@ -1031,6 +1031,139 @@ class TestDeliveryAtomicity:
         assert mount.pending
         assert mount.runtime.dirty
 
+    async def test_refresh_and_flush_deliver_in_generation_order(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+        second_started = asyncio.Event()
+        writes: list[discord.ui.LayoutView] = []
+
+        async def edit(view: discord.ui.LayoutView, **kwargs: Any) -> Any:
+            writes.append(view)
+            if len(writes) == 1:
+                started.set()
+                await release.wait()
+            else:
+                second_started.set()
+            return message
+
+        message.edit = AsyncMock(side_effect=edit)
+        component.count = 1
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.refresh_now)
+            await started.wait()
+            component.count = 2
+            interaction = fake_interaction()
+            interaction.response.edit_message = AsyncMock(side_effect=edit)
+            tasks.start_soon(mount.flush, interaction)
+            await anyio.sleep(0)
+            assert not second_started.is_set()
+            release.set()
+            await second_started.wait()
+
+        assert len(writes) == 2
+        assert "count: 1" in str(writes[0].to_components())
+        assert "count: 2" in str(writes[1].to_components())
+        assert mount.generation == 3
+        assert not mount.pending
+
+    async def test_concurrent_immediate_actions_serialize_delivery(self):
+        started = asyncio.Event()
+        release = asyncio.Event()
+        active = 0
+        maximum_active = 0
+        entered = 0
+
+        class ImmediatePanel(Component):
+            count: int = state(0)
+
+            def render(self):
+                return Row(
+                    (
+                        Button("a", self.click, "a", policy=ActionPolicy.IMMEDIATE),
+                        Button("b", self.click, "b", policy=ActionPolicy.IMMEDIATE),
+                    )
+                )
+
+            async def click(self, event: PressEvent) -> None:
+                nonlocal entered
+                entered += 1
+                if entered == 2:
+                    started.set()
+                await release.wait()
+                self.count += 1
+
+        component = ImmediatePanel()
+        mount = Mount(component, timeout=None)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+
+        async def edit(*args: Any, **kwargs: Any) -> Any:
+            nonlocal active, maximum_active
+            active += 1
+            maximum_active = max(maximum_active, active)
+            await anyio.sleep(0)
+            active -= 1
+            return message
+
+        first = fake_interaction()
+        second = fake_interaction()
+        first.response.edit_message = AsyncMock(side_effect=edit)
+        second.response.edit_message = AsyncMock(side_effect=edit)
+
+        async def dispatch_first() -> None:
+            await mount.dispatch("a", first)
+
+        async def dispatch_second() -> None:
+            await mount.dispatch("b", second)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(dispatch_first)
+            tasks.start_soon(dispatch_second)
+            await started.wait()
+            release.set()
+
+        assert component.count == 2
+        assert maximum_active == 1
+        assert not mount.pending
+
+    async def test_finish_waits_for_an_in_flight_refresh(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+        writes: list[discord.ui.LayoutView] = []
+
+        async def edit(view: discord.ui.LayoutView, **kwargs: Any) -> Any:
+            writes.append(view)
+            if len(writes) == 1:
+                started.set()
+                await release.wait()
+            return message
+
+        message.edit = AsyncMock(side_effect=edit)
+        component.count = 1
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.refresh_now)
+            await started.wait()
+            tasks.start_soon(mount.finish)
+            await anyio.sleep(0)
+            assert not mount.finished
+            release.set()
+
+        assert mount.finished
+        assert len(writes) == 2
+        assert all(item.disabled for item in writes[1].walk_children() if isinstance(item, discord.ui.Button))
+
 
 class _Destination:
     """A recording destination. `message` is whatever its receipt exposes to the mount."""
