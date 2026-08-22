@@ -54,11 +54,8 @@ class Target(TargetProfile):
             ),
             limits=limits,
             extensions={"discord.item": _DiscordItemExtension()},
-            resources={
-                "display_text": "total_text",
-                "components": "total_components",
-                "attachments": "attachments",
-            },
+            # `resources` is left empty on purpose: V2Limits.budgets already names every
+            # message-wide axis and its cap, and two declarations of the same thing drift.
         )
 
 
