@@ -162,6 +162,29 @@ def test_concurrent_sibling_spans_keep_operation_parent() -> None:
     assert two.parent_span_id == root.span_id
 
 
+def test_detached_span_measures_work_overlapping_lexical_spans() -> None:
+    clock = Clock()
+    subject = profiler(clock)
+
+    with subject.operation(OperationKind.DISPATCH, name="click") as operation:
+        acknowledgement = operation.start_span("acknowledgement")
+        clock.advance(0.1)
+        with operation.span("handler"):
+            clock.advance(0.2)
+            acknowledgement.set_attribute("source", "watchdog")
+            acknowledgement.finish()
+            clock.advance(0.3)
+        acknowledgement.finish(TraceOutcome.FAILED)
+
+    trace = trace_by_name(subject, "click")
+    root, acknowledgement_span, handler = trace.spans
+    assert acknowledgement_span.parent_span_id == root.span_id
+    assert handler.parent_span_id == root.span_id
+    assert acknowledgement_span.duration == pytest.approx(0.3)
+    assert acknowledgement_span.attributes[0].value == "watchdog"
+    assert acknowledgement_span.outcome is TraceOutcome.COMPLETED
+
+
 def test_task_local_parentage_carries_into_child_tasks() -> None:
     clock = Clock()
     subject = profiler(clock)
