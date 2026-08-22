@@ -547,6 +547,114 @@ class TestDrawing:
             sl.plan(document, target=sl.discord.DEFAULT_TARGET)
 
 
+class _FakeClient:
+    """Weak-referenceable stand-in recording what `register` installs."""
+
+    def __init__(self) -> None:
+        self.items: list[type] = []
+
+    def add_dynamic_items(self, *items: type) -> None:
+        self.items.extend(items)
+
+
+class TestHandlerKinds:
+    def test_a_keyword_only_interaction_fails_at_import(self) -> None:
+        async def broken(*, interaction) -> None: ...
+
+        with pytest.raises(ValueError, match="positionally"):
+            Router().add(POLL_CLOSE, broken)
+
+    def test_a_kwargs_only_handler_fails_at_import(self) -> None:
+        # `**kwargs` alone passes the arity check but cannot bind the interaction.
+        async def broken(**kwargs) -> None: ...
+
+        with pytest.raises(ValueError, match="positionally"):
+            Router().add(POLL_CLOSE, broken)
+
+    def test_a_positional_only_route_parameter_fails_at_import(self) -> None:
+        async def broken(_interaction, build_id, /) -> None: ...
+
+        with pytest.raises(ValueError, match="passed by name"):
+            Router().add(EDIT_BUILD, broken)
+
+    async def test_a_star_args_handler_still_binds_the_interaction(self) -> None:
+        seen: list[object] = []
+
+        async def catch_all(*args) -> None:
+            seen.append(args)
+
+        router = Router()
+        router.add(POLL_CLOSE, catch_all)
+        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        assert seen == [(None,)]
+
+
+class TestClientRegistration:
+    def test_registering_the_same_pair_again_is_a_no_op(self) -> None:
+        client = _FakeClient()
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+
+        router.register(client)  # type: ignore[arg-type]
+        router.register(client)  # type: ignore[arg-type]
+
+        assert len(client.items) == 1
+
+    def test_one_router_may_serve_two_clients(self) -> None:
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+        first, second = _FakeClient(), _FakeClient()
+
+        router.register(first)  # type: ignore[arg-type]
+        router.register(second)  # type: ignore[arg-type]
+
+        assert len(first.items) == len(second.items) == 1
+
+    def test_disjoint_routers_share_a_client(self) -> None:
+        client = _FakeClient()
+        polls, builds = Router(), Router()
+        polls.add(POLL_CLOSE, _noop)
+        builds.add(EDIT_BUILD, _noop)
+
+        polls.register(client)  # type: ignore[arg-type]
+        builds.register(client)  # type: ignore[arg-type]
+
+        assert len(client.items) == 2
+
+    def test_a_second_router_with_an_overlapping_route_is_rejected(self) -> None:
+        client = _FakeClient()
+        first, second = Router(), Router()
+        first.add(sl.Route("poll:{action}"), _noop)
+        second.add(POLL_CLOSE, _noop)
+        first.register(client)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="overlaps"):
+            second.register(client)  # type: ignore[arg-type]
+        assert len(client.items) == 1
+
+    def test_a_route_entering_another_routers_namespace_is_rejected(self) -> None:
+        # The namespaced router's template catches every id under its prefix, so the
+        # plain router's clicks would also wake the namespaced router's gone hook.
+        client = _FakeClient()
+        namespaced = Router(namespace="vote", on_gone=_noop)
+        namespaced.add(sl.Route("vote:close:{poll_id:int}"), _noop)
+        plain = Router()
+        plain.add(sl.Route("vote:up:{build_id:int}"), _noop)
+        namespaced.register(client)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="reserved namespace 'vote'"):
+            plain.register(client)  # type: ignore[arg-type]
+
+    def test_two_routers_reserving_one_namespace_are_rejected(self) -> None:
+        client = _FakeClient()
+        first = Router(namespace="v", on_gone=_noop)
+        second = Router(namespace="v", on_gone=_noop)
+        first.register(client)  # type: ignore[arg-type]
+
+        with pytest.raises(ValueError, match="both reserve"):
+            second.register(client)  # type: ignore[arg-type]
+
+
 async def _noop(_interaction) -> None: ...
 
 
