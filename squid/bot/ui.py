@@ -9,6 +9,7 @@ predecessors, so call sites migrate by changing an import line.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from math import ceil
 from string.templatelib import Template
 from typing import Any, Literal
 
@@ -100,10 +101,19 @@ def localization_for(locale: str | None) -> ui.Localization:
     return ui.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
 
 
+def _try_again_in(seconds: float) -> ui.Message:
+    """Round a guard's remaining cooldown up to whole seconds before wording it."""
+    whole = max(1, ceil(seconds))
+    return L(t"Try again in {whole} seconds.")
+
+
 CHROME = ui.Chrome(
     and_n_more=lambda count: L(t"…and {count} more."),
     not_yours=L(t"These list controls belong to someone else."),
     session_ended=L(t"This session has ended."),
+    not_now=L(t"You can't do that right now."),
+    try_again_in=_try_again_in,
+    working=L(t"Working…"),
     updates_paused=L(t"Live updates paused — press any control to resume."),
     previous=L(t"Previous"),
     next=L(t"Next"),
@@ -126,6 +136,9 @@ CHROME = ui.Chrome(
     remove=L(t"Remove"),
     move_up=L(t"Move up"),
     move_down=L(t"Move down"),
+    review=L(t"Review"),
+    finish=L(t"Finish"),
+    unanswered=L(t"Not answered yet"),
     page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
 )
 _OPEN_LINK = L(t"Open link")
