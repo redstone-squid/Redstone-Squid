@@ -139,17 +139,29 @@ class AccountPanel(sl.Component):
                     ),
                 )
             )
+        identity = self.selected
+        nodes.extend(
+            (
+                sl.toggle(
+                    t(self.locale, _("Selected identity")),
+                    key="identity_visibility",
+                    on=sl.controlled(identity is not None and identity.is_public, self._toggle_identity),
+                    on_label=t(self.locale, _("Shown on page")),
+                    off_label=t(self.locale, _("Hidden from page")),
+                    available=identity is not None,
+                ),
+                sl.toggle(
+                    t(self.locale, _("Creator page")),
+                    key="page_visibility",
+                    on=sl.controlled(not self.page_hidden, self._toggle_page),
+                    on_label=t(self.locale, _("Shown")),
+                    off_label=t(self.locale, _("Hidden")),
+                ),
+            )
+        )
         nodes.append(
             sl.primitives.Row(
                 (
-                    sl.primitives.Button(
-                        t(self.locale, _("Hide from page"))
-                        if self.selected is not None and self.selected.is_public
-                        else t(self.locale, _("Show on page")),
-                        self._toggle_identity,
-                        "identity_visibility",
-                        disabled=self.selected is None,
-                    ),
                     sl.primitives.Button(
                         t(self.locale, _("Unlink for good"))
                         if self.unlink_armed == self.selected_id
@@ -165,11 +177,6 @@ class AccountPanel(sl.Component):
                         "edit_page",
                         style=sl.primitives.ActionStyle.PRIMARY,
                     ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Show my page")) if self.page_hidden else t(self.locale, _("Hide my page")),
-                        self._toggle_page,
-                        "page_visibility",
-                    ),
                     sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),
                 )
             )
@@ -180,21 +187,21 @@ class AccountPanel(sl.Component):
         self.selected_id = int(event.selected[0])
         self.unlink_armed = None
 
-    async def _toggle_identity(self, event: sl.PressEvent) -> None:
+    async def _toggle_identity(self, event: sl.ToggleEvent) -> None:
         identity = self.selected
         if identity is None or identity.id is None or not await self._consented(event):
             return
         await self._accounts.set_identity_visibility(
             self._account_id,
             identity.id,
-            is_public=not identity.is_public,
+            is_public=event.value,
         )
         await self._reload()
 
-    async def _toggle_page(self, event: sl.PressEvent) -> None:
+    async def _toggle_page(self, event: sl.ToggleEvent) -> None:
         if not await self._consented(event):
             return
-        await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=not self.page_hidden))
+        await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=not event.value))
         await self._reload()
 
     async def _unlink(self, event: sl.PressEvent) -> None:

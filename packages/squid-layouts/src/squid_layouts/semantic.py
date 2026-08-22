@@ -107,12 +107,14 @@ so a node cannot be half-controlled and the mode is readable at the call site.
 type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
 type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
 type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
+type ToggleOwnership = Ownership[bool, ToggleEvent]
 type NavOwnership = Ownership[str | None, NavigateEvent]
 
 # The engine-managed default of each stateful node, named for the state it seeds.
 UNSELECTED: ChoiceOwnership = Managed(())
 UNOPENED: ItemOwnership = Managed(None)
 CLOSED: DisclosureOwnership = Managed(initial=False)
+OFF: ToggleOwnership = Managed(initial=False)
 FIRST_DESTINATION: NavOwnership = Managed(None)
 
 
@@ -285,6 +287,26 @@ class Details:
     summary: TextLike
     children: tuple[LayoutNode, ...]
     open: DisclosureOwnership = CLOSED
+
+
+@dataclass(frozen=True, slots=True)
+class ToggleEvent(ActionEvent):
+    """The reader requested a new boolean value."""
+
+    value: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Toggle:
+    """One keyed boolean control with explicit state ownership."""
+
+    key: str
+    label: TextLike
+    on: ToggleOwnership = OFF
+    on_label: TextLike | None = None
+    off_label: TextLike | None = None
+    tone: Tone = Tone.NEUTRAL
+    available: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,6 +602,7 @@ type SemanticNode = (
     | Figure
     | Media
     | Details
+    | Toggle
     | Status
     | Progress
     | Measure

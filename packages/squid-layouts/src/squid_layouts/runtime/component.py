@@ -110,6 +110,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Table as SemanticTable,
 )
+from squid_layouts.semantic import Toggle as SemanticToggle
 from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
@@ -530,6 +531,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticTable(key=key)
                 | SemanticMedia(key=key)
                 | SemanticFormTrigger(key=key)
+                | SemanticToggle(key=key)
             ):
                 return replace(node, key=f"{prefix}.{key}")
             case (
