@@ -29,6 +29,7 @@ def test_root_is_semantic_first() -> None:
         "EditorValues",
     } <= set(sl.__all__)
     assert {"Browser", "BrowserDetail", "BrowserOpenHandler", "BrowserOverview", "list_source"} <= set(sl.__all__)
+    assert {"Lookup", "LookupPickHandler", "LookupSearch"} <= set(sl.__all__)
     assert {"Download", "download"} <= set(sl.__all__)
     assert {"Resource", "ResourceDelivery", "ResourceState", "Pending", "Ready", "Failed", "resource"} <= set(
         sl.__all__
