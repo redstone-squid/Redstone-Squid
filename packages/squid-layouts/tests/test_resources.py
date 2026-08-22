@@ -12,6 +12,7 @@ from squid_layouts import (
     Ready,
     ResourceDelivery,
     ResourceNotReadyError,
+    computed,
     resource,
     state,
     transaction,
@@ -198,6 +199,30 @@ class TestResourceDependencies:
 
                 def render(self):
                     return Text("")
+
+    async def test_computed_dependency_invalidates_only_when_its_value_changes(self) -> None:
+        class ComputedPanel(Component):
+            kind: str = state("FIRST")
+
+            @computed(depends=(kind,))
+            def normalized_kind(self) -> str:
+                return self.kind.casefold()
+
+            @resource(depends=(normalized_kind,))
+            async def result(self) -> str:
+                return self.normalized_kind
+
+            def render(self):
+                return Text(type(self.result.state).__name__)
+
+        panel = ComputedPanel()
+        assert await panel.result.reload() == Ready("first")
+
+        panel.kind = "first"
+        assert panel.result.state == Ready("first")
+
+        panel.kind = "second"
+        assert panel.result.state == Pending(Ready("first"))
 
 
 class TestResourceObservation:

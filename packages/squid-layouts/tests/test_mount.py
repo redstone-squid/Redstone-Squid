@@ -1473,6 +1473,51 @@ class TestStateDescriptor:
                 def render(self):
                     return Text(str(self.doubled))
 
+    def test_computed_values_propagate_only_when_their_value_changes(self):
+        class Derived(Component):
+            query: str = state("FIRST")
+
+            def __init__(self) -> None:
+                self.calls = 0
+
+            @computed(depends=(query,))
+            def normalized(self) -> str:
+                return self.query.casefold()
+
+            @computed(depends=(normalized,))
+            def label(self) -> str:
+                self.calls += 1
+                return f"query:{self.normalized}"
+
+            def render(self):
+                return Text(self.label)
+
+        component = Derived()
+        assert component.label == "query:first"
+        assert component.calls == 1
+
+        component.query = "first"
+        assert component.label == "query:first"
+        assert component.calls == 1
+
+        component.query = "second"
+        assert component.label == "query:second"
+        assert component.calls == 2
+
+    def test_computed_dependency_cycles_are_rejected(self):
+        first_descriptor = computed(depends=())(lambda _self: 1)
+        second_descriptor = computed(depends=(first_descriptor,))(lambda _self: 2)
+        first_descriptor.depends = (second_descriptor,)
+
+        with pytest.raises(TypeError, match="Cyclic has a computed dependency cycle: first, second"):
+
+            class Cyclic(Component):
+                first = first_descriptor
+                second = second_descriptor
+
+                def render(self):
+                    return Text("")
+
     def test_batch_coalesces_invalidations(self):
         class Pair(Component):
             left: int = state(0)
