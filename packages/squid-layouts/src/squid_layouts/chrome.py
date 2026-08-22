@@ -63,6 +63,11 @@ class Chrome:
     download: TextLike = "Download"
     confirm: TextLike = "Confirm"
     cancel: TextLike = "Cancel"
+    apply: TextLike = "Apply"
+    save: TextLike = "Save"
+    unsaved: TextLike = "Unsaved changes"
+    search: TextLike = "Search"
+    no_results: TextLike = "No results"
     decided: Callable[[TextLike], TextLike] = _default_decided
     add: TextLike = "Add"
     edit: TextLike = "Edit"
@@ -109,6 +114,11 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         download=resolve_text(chrome.download, localization).content,
         confirm=resolve_text(chrome.confirm, localization).content,
         cancel=resolve_text(chrome.cancel, localization).content,
+        apply=resolve_text(chrome.apply, localization).content,
+        save=resolve_text(chrome.save, localization).content,
+        unsaved=resolve_text(chrome.unsaved, localization).content,
+        search=resolve_text(chrome.search, localization).content,
+        no_results=resolve_text(chrome.no_results, localization).content,
         decided=lambda label: resolve_text(chrome.decided(label), localization).content,
         add=resolve_text(chrome.add, localization).content,
         edit=resolve_text(chrome.edit, localization).content,
