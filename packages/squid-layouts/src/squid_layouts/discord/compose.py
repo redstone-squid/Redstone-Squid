@@ -14,6 +14,7 @@ from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.navigation import PlannedNav
+from squid_layouts.planning.planner import EMPTY_RESERVATION
 from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
@@ -51,7 +52,7 @@ def compose(
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
-    reserved_text: int = 0,
+    reservation: ResourceCost = EMPTY_RESERVATION,
     positions: Mapping[str, Position] | None = None,
     nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
@@ -66,7 +67,7 @@ def compose(
         localization=localization,
         palette=palette,
         strict=strict,
-        reservation=ResourceCost({"display_text": reserved_text}),
+        reservation=reservation,
         positions=positions,
         nav=nav,
         session=session,
@@ -88,7 +89,7 @@ def render_static(
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
-    reserved_text: int = 0,
+    reservation: ResourceCost = EMPTY_RESERVATION,
 ) -> discord.ui.LayoutView:
     """Plan and draw a sessionless Discord document."""
     return compose(
@@ -98,5 +99,5 @@ def render_static(
         localization=localization,
         palette=palette,
         strict=strict,
-        reserved_text=reserved_text,
+        reservation=reservation,
     ).view
