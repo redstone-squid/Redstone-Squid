@@ -79,9 +79,14 @@ class Resource[ValueT]:
         self._loader = loader
         self._name = name
         self.delivery = delivery
-        self.state: ResourceState[ValueT] = Pending()
-        self._request_token = 0
+        self._state: ResourceState[ValueT] = Pending()
         self._loading: tuple[int, asyncio.Event] | None = None
+        self._request_token = 0
+
+    @property
+    def state(self) -> ResourceState[ValueT]:
+        """Return the current synchronous state."""
+        return self._state
 
     @property
     def value(self) -> ValueT:
@@ -102,14 +107,14 @@ class Resource[ValueT]:
 
     def _invalidate(self, *, notify: bool) -> None:
         self._request_token += 1
-        self.state = Pending(_previous(self.state))
+        self._state = Pending(_previous(self.state))
         if notify:
             self._owner.invalidate()
 
     def replace(self, value: ValueT) -> None:
         """Install an authoritative value and supersede every in-flight request."""
         self._request_token += 1
-        self.state = Ready(value)
+        self._state = Ready(value)
         self._owner.invalidate()
 
     async def reload(self) -> ResourceState[ValueT]:
@@ -133,11 +138,11 @@ class Resource[ValueT]:
                 value = await self._loader()
             except Exception as error:
                 if token == self._request_token:
-                    self.state = Failed(error, _previous(self.state))
+                    self._state = Failed(error, _previous(self.state))
                     self._owner.invalidate()
             else:
                 if token == self._request_token:
-                    self.state = Ready(value)
+                    self._state = Ready(value)
                     self._owner.invalidate()
         finally:
             if self._loading is not None and self._loading[0] == token:
