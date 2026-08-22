@@ -6,7 +6,9 @@ from dataclasses import dataclass
 
 import discord
 
+from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.discord.attachments import attachment_assets, files_for
 from squid_layouts.discord.renderer import Renderer, Wire
 from squid_layouts.discord.target import Target
 from squid_layouts.document import DocumentLike
@@ -32,6 +34,15 @@ class Composition:
 
     view: discord.ui.LayoutView
     plan: PlanResult
+
+    @property
+    def assets(self) -> tuple[Asset, ...]:
+        """Declarative files this composition expects to be uploaded with it."""
+        return attachment_assets(self.plan)
+
+    def files(self) -> list[discord.File]:
+        """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
+        return files_for(self.assets)
 
     @property
     def page(self) -> int:
