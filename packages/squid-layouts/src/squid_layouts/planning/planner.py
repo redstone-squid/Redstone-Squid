@@ -7,6 +7,7 @@ from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.forms import FormBinding
 from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
@@ -34,6 +35,7 @@ from squid_layouts.primitives.nodes import (
     Embed,
     Extension,
     Footer,
+    FormButton,
     Gallery,
     LinkButton,
     MediaCollection,
@@ -86,10 +88,15 @@ EMPTY_RESERVATION = ResourceCost()
 @dataclass(slots=True)
 class _Converter:
     bindings: dict[str, ActionBinding] = field(default_factory=dict)
+    form_bindings: dict[str, FormBinding] = field(default_factory=dict)
     resources: dict[str, object] = field(default_factory=dict)
 
     def action(self, node: Button | SelectMenu) -> str:
         key = node.key
+        if isinstance(node, FormButton) and node.form is not None:
+            # Recorded beside the binding, not in place of it: the button presents the form
+            # and the binding submits it, and both answer to the same key.
+            self.form_bindings[key] = node.form
         if key in self.bindings:
             message = f"duplicate action key {key!r}"
             raise LayoutInvariantError(message)
@@ -563,6 +570,7 @@ def plan(
         return PlanResult(
             scene=cached.scene,
             bindings=converter.bindings,
+            form_bindings=converter.form_bindings,
             report=cached.report,
             resources=resources,
             metrics=PlanMetrics(
@@ -664,6 +672,7 @@ def plan(
     result = PlanResult(
         scene=scene,
         bindings=converter.bindings,
+        form_bindings=converter.form_bindings,
         report=report,
         resources=resources,
         metrics=PlanMetrics(

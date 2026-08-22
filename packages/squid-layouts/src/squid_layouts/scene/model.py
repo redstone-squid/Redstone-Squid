@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
@@ -206,6 +207,8 @@ class PlanResult:
     scene: SceneDocument
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
+    form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)
+    """What each declared form key presents right now, for resolving a late submission."""
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
     session_updates: tuple[SessionUpdate, ...] = ()

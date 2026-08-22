@@ -26,11 +26,13 @@ from squid_layouts import (
     PressEvent,
     ReactiveWriteError,
     SelectionEvent,
+    TextField,
     batch,
     computed,
     state,
     transaction,
 )
+from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_layouts.discord import (
     Mount,
@@ -564,6 +566,123 @@ class TestActionPolicy:
         await mount.dispatch("run", fake_interaction(), generation=stale_generation)
 
         assert calls == ["new"]
+
+    async def test_rebase_submit_uses_the_form_from_the_current_generation(self):
+        calls: list[str] = []
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+        class Rebased(Component):
+            current = False
+
+            def render(self):
+                handler = self.new if self.current else self.old
+                return sl_form(spec, key="rename", on_submit=handler, policy=ActionPolicy.REBASE)
+
+            async def old(self, event) -> None:
+                calls.append("old")
+
+            async def new(self, event) -> None:
+                calls.append("new")
+
+        component = Rebased()
+        mount = Mount(component, timeout=None)
+        commit_render(mount)
+        stale = mount.generation
+        component.current = True
+        commit_render(mount)
+
+        await mount.dispatch_submit(
+            "rename",
+            fake_interaction(),
+            spec,
+            {"name": "Ada"},
+            component.old,
+            policy=ActionPolicy.REBASE,
+            generation=stale,
+        )
+
+        assert calls == ["new"]
+
+    async def test_rebase_submit_never_resolves_the_button_that_opens_the_form(self):
+        """`_handlers` holds the presenting button under the very same key."""
+        submitted: list[str] = []
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+        class Trigger(Component):
+            def render(self):
+                return sl_form(spec, key="rename", on_submit=self.submit, policy=ActionPolicy.REBASE)
+
+            async def submit(self, event) -> None:
+                submitted.append("submit")
+
+        component = Trigger()
+        mount = Mount(component, timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch_submit(
+            "rename",
+            interaction,
+            spec,
+            {"name": "Ada"},
+            component.submit,
+            policy=ActionPolicy.REBASE,
+            generation=mount.generation,
+        )
+
+        # The presenting button would have reopened the modal instead of submitting it.
+        assert submitted == ["submit"]
+        interaction.response.send_modal.assert_not_awaited()
+
+    async def test_rebase_submit_keeps_the_filled_in_form_when_the_schema_changed_shape(self):
+        calls: list[str] = []
+        filled = FormSpec("Rename", (TextField(key="name", label="Name"),))
+        reshaped = FormSpec("Rename", (TextField(key="title", label="Title"),))
+
+        class Reshaped(Component):
+            def render(self):
+                return sl_form(reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
+
+            async def old(self, event) -> None:
+                calls.append(str(event.values))
+
+            async def new(self, event) -> None:
+                calls.append("new")
+
+        component = Reshaped()
+        mount = Mount(component, timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch_submit(
+            "rename",
+            fake_interaction(),
+            filled,
+            {"name": "Ada"},
+            component.old,
+            policy=ActionPolicy.REBASE,
+            generation=mount.generation,
+        )
+
+        # Parsed against the schema the reader actually saw, not the one that replaced it.
+        assert calls == ["{'name': 'Ada'}"]
+
+    async def test_exclusive_submit_still_rejects_a_stale_generation(self):
+        calls: list[str] = []
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+        async def submit(event) -> None:
+            calls.append("submit")
+
+        mount = Mount(Counter(), timeout=None)
+        commit_render(mount)
+        stale = mount.generation
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submit, generation=stale)
+
+        assert calls == []
+        interaction.response.defer.assert_awaited_once()
 
     async def test_exclusive_actions_do_not_overlap(self):
         active = 0

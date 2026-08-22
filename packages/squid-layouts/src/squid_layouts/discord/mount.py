@@ -30,7 +30,7 @@ from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
 from squid_layouts.document import Asset, Document, InlineAsset
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.forms import FormSpec, FormValidationPolicy, SubmitHandler
+from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
@@ -208,6 +208,13 @@ class _WiredSelect(discord.ui.Select[MountedView]):
         await self._mount.dispatch(self._key, interaction, self.values, generation=self._generation)
 
 
+@dataclass(frozen=True, slots=True)
+class _SubmitBinding(ActionBinding):
+    """A form submission's binding, carrying the schema its values must be parsed against."""
+
+    spec: FormSpec | None = None
+
+
 @dataclass(slots=True)
 class _Candidate:
     """One staged render generation, which becomes the mount's state only when committed."""
@@ -216,6 +223,7 @@ class _Candidate:
     composition: Composition
     tree: ComponentTree
     handlers: dict[str, ActionBinding]
+    form_bindings: Mapping[str, FormBinding]
     generation: int
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
@@ -322,6 +330,9 @@ class Mount:
         self._handle: deliver.EditHandle | None = None
         self._view: MountedView | None = None
         self._handlers: dict[str, ActionBinding] = {}
+        # What each render-declared form key presents right now. Separate from `_handlers`,
+        # which holds the button that *opens* the form under the very same key.
+        self._form_bindings: Mapping[str, FormBinding] = {}
         self._action_lock = asyncio.Lock()
         self._generation = 0
         # Generations handed to staged renders: a candidate whose delivery failed must not
@@ -490,12 +501,22 @@ class Mount:
         )
         if disabled:
             _disable_all(view)
-        return _Candidate(view, composition, tree, handlers, generation, assets, composition.plan.session_updates)
+        return _Candidate(
+            view,
+            composition,
+            tree,
+            handlers,
+            composition.plan.form_bindings,
+            generation,
+            assets,
+            composition.plan.session_updates,
+        )
 
     def _commit(self, candidate: _Candidate) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
         apply_updates(self.presentation, candidate.session_updates)
         self._handlers = candidate.handlers
+        self._form_bindings = candidate.form_bindings
         self._generation = candidate.generation
         self.runtime.commit(candidate.tree)
         self._assets = candidate.assets
@@ -717,7 +738,9 @@ class Mount:
         async def invoke(current: ActionBinding) -> None:
             await self._invoke(current, key, interaction, values)
 
-        await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=True)
+        await self._dispatch_binding(
+            binding, key, interaction, generation, invoke, rebase=lambda: self._handlers.get(key)
+        )
 
     async def dispatch_submit(
         self,
@@ -730,15 +753,30 @@ class Mount:
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         generation: int | None = None,
     ) -> None:
-        """Route a modal submission through the same stale, lock, policy, and flush funnel."""
+        """Route a modal submission through the same stale, lock, policy, and flush funnel.
+
+        Under `REBASE` this resolves the newest render-declared binding for `key`, the way a
+        stale click does -- but only when that binding parses the same field keys, since a
+        schema that has since changed shape cannot read what the reader actually typed. A form
+        presented ad hoc from a handler has no render-time binding, and a trigger the newest
+        render dropped has no newer one; both run what the reader submitted, because
+        discarding a filled-in form is the worse of the two surprises.
+        """
         if not await self._begin_dispatch(interaction):
             return
-        binding = ActionBinding(key, handler, policy)
+        binding = _SubmitBinding(key, handler, policy, spec=spec)
+
+        def rebase() -> ActionBinding | None:
+            newest = self._form_bindings.get(key)
+            if newest is None or newest.spec.field_keys != spec.field_keys:
+                return binding
+            return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
 
         async def invoke(current: ActionBinding) -> None:
-            await self._invoke_submit(current, key, interaction, spec, values, generation)
+            resolved = current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
+            await self._invoke_submit(current, key, interaction, resolved, values, generation)
 
-        await self._dispatch_binding(binding, key, interaction, generation, invoke)
+        await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=rebase)
 
     async def _begin_dispatch(self, interaction: discord.Interaction) -> bool:
         self._active = time.monotonic()
@@ -767,7 +805,7 @@ class Mount:
         generation: int | None,
         invoke: Callable[[ActionBinding], Awaitable[None]],
         *,
-        rebase: bool = False,
+        rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
             await invoke(binding)
@@ -777,8 +815,10 @@ class Mount:
             if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
                 await self._acknowledge(interaction)
                 return
-            if binding.policy is ActionPolicy.REBASE and rebase:
-                refreshed = self._handlers.get(key)
+            if binding.policy is ActionPolicy.REBASE and rebase is not None:
+                # Resolved inside the lock: outside it, "newest" is whatever happened to be
+                # committed before this action started waiting for its turn.
+                refreshed = rebase()
                 if refreshed is None:
                     await self._acknowledge(interaction)
                     return
