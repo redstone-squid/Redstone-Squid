@@ -25,6 +25,13 @@ are not re-derived or accidentally adopted later.
 - **`compose(into=view)` / adopting existing discord.py views** — re-confirmed: renderer
   ownership is what keeps budget measurement sound. Incremental interop is CascadeUI's
   advantage by design choice, not an oversight here.
+  **Revisited 2026-08-22**: this bundled two operations, and only one of them is unsafe.
+  *Adoption* — Squid and a live view both claiming lifecycle or edit ownership of one
+  message — stays rejected. *Fragment composition* — the host stays the sole owner while
+  Squid measures it and contributes a sessionless, fully planned region to what is left —
+  is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
+  `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
+  rejected because it names the wrong relationship.
 - **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).

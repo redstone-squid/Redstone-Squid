@@ -51,7 +51,20 @@ for component composition, planning, renderers, action policies, and durable mou
 `sl.discord.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
 message carries content the engine cannot see — `sl.discord.measure(view)` and `sl.discord.cost(item)`
 produce one without hand-counting. It always creates a renderer-owned view;
-adopting an arbitrary existing `discord.py` view is intentionally unsupported. Components nest through explicit
+adopting an arbitrary existing `discord.py` view is intentionally unsupported.
+
+There are three ways to adopt the package, and they can be mixed in one bot:
+
+1. **A new screen.** Use `sl.discord.Mount` for one command while everything else stays as it is.
+2. **A region of an existing V2 screen.** `sl.discord.contribute(document, to=view, followed_by=...)`
+   measures the host, plans into what is left, and places the result — the host keeps sending,
+   editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
+   routed controls only, since no mount exists to wire a component-local callback.
+3. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
+
+A fragment is not a miniature mount. If two independently stateful regions need to edit one
+message, give them a single parent component, or keep the legacy view as the sole owner and make
+the Squid region stateless. Components nest through explicit
 `self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sl.discord.Mount`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
