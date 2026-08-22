@@ -235,6 +235,8 @@ class SolvedLayout:
     states_explored: int = 1
     search_fallback: bool = False
     variant_positions: tuple[tuple[_VariantPath, int], ...] = ()
+    variant_topology: VariantTopology = ()
+    explored_variant_topologies: tuple[VariantTopology, ...] = ()
 
     @property
     def failures(self) -> tuple[SolveNote, ...]:
@@ -1155,6 +1157,7 @@ def _component_count(children: list[Realized]) -> int:
 
 type _VariantPath = tuple[int | str, ...]
 type _Positions = Mapping[_VariantPath, int]
+type VariantTopology = tuple[tuple[str, int], ...]
 """Which rung each ladder occurrence currently sits on; absent means rung 0."""
 
 
@@ -1190,12 +1193,17 @@ def _walk_ladders(nodes: Sequence[Node], positions: _Positions, visit) -> None:
         walk(node, (index,))
 
 
-def _steppable(nodes: Sequence[Node], positions: _Positions) -> list[tuple[_VariantPath, Variants, int]]:
+def _steppable(
+    nodes: Sequence[Node],
+    positions: _Positions,
+    *,
+    locked_semantics: frozenset[str] = frozenset(),
+) -> list[tuple[_VariantPath, Variants, int]]:
     """Every reachable ladder that still has a rung left, in document order."""
     found: list[tuple[_VariantPath, Variants, int]] = []
 
     def visit(path: _VariantPath, node: Variants, rung: int) -> None:
-        if rung + 1 < len(node.variants):
+        if node.semantic_path not in locked_semantics and rung + 1 < len(node.variants):
             found.append((path, node, rung))
 
     _walk_ladders(nodes, positions, visit)
@@ -1212,6 +1220,44 @@ def _canonical_positions(nodes: Sequence[Node], positions: _Positions) -> dict[_
 
     _walk_ladders(nodes, positions, visit)
     return canonical
+
+
+def _apply_semantic_topology(
+    nodes: Sequence[Node], positions: _Positions, topology: Mapping[str, int]
+) -> dict[_VariantPath, int]:
+    """Force every currently reachable semantic ladder to its requested rung."""
+    selected = dict(positions)
+
+    def visit(path: _VariantPath, node: Variants, _rung: int) -> None:
+        if node.semantic_path is None:
+            return
+        rung = topology.get(node.semantic_path, 0)
+        if not 0 <= rung < len(node.variants):
+            message = f"{node.semantic_path}: fallback topology selected unavailable rung {rung}"
+            raise ValueError(message)
+        if rung:
+            selected[path] = rung
+        else:
+            selected.pop(path, None)
+
+    # Selecting one semantic rung can reveal another semantic ladder.
+    while True:
+        before = dict(selected)
+        _walk_ladders(nodes, selected, visit)
+        selected = _canonical_positions(nodes, selected)
+        if selected == before:
+            return selected
+
+
+def _semantic_topology(nodes: Sequence[Node], positions: _Positions) -> VariantTopology:
+    topology: list[tuple[str, int]] = []
+
+    def visit(_path: _VariantPath, node: Variants, rung: int) -> None:
+        if node.semantic_path is not None:
+            topology.append((node.semantic_path, rung))
+
+    _walk_ladders(nodes, positions, visit)
+    return tuple(topology)
 
 
 def _variant_profile(nodes: Sequence[Node], positions: _Positions) -> DegradationProfile:
@@ -1249,7 +1295,7 @@ def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[SolveNo
     return notes
 
 
-def _variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
+def _variant_state_bound(nodes: Sequence[Node], cutoff: int, topology: Mapping[str, int]) -> int:
     """Count reachable rung assignments, stopping once the bounded search cannot exhaust them."""
 
     def multiply(values: Sequence[int]) -> int:
@@ -1263,6 +1309,12 @@ def _variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
     def count_node(node: Node) -> int:
         match node:
             case Variants(variants=variants):
+                if node.semantic_path in topology:
+                    rung = topology[node.semantic_path]
+                    if not 0 <= rung < len(variants):
+                        message = f"{node.semantic_path}: fallback topology selected unavailable rung {rung}"
+                        raise ValueError(message)
+                    return multiply([count_node(child) for child in variants[rung].nodes])
                 total = 0
                 for variant in variants:
                     total += multiply([count_node(child) for child in variant.nodes])
@@ -1291,9 +1343,12 @@ def _guided_variant_solve(
     position: PositionState,
     nav: PlannedNav | None,
     search_budget: int,
+    semantic_topology: Mapping[str, int] | None,
 ) -> SolvedLayout:
     """Preserve priority and breadth while guiding an intractable product by component savings."""
-    positions: dict[_VariantPath, int] = {}
+    positions = {} if semantic_topology is None else _apply_semantic_topology(tree, {}, semantic_topology)
+    locked_semantics = frozenset() if semantic_topology is None else frozenset(semantic_topology)
+    explored_topologies: list[VariantTopology] = []
     states_explored = 0
     solved: SolvedLayout | None = None
     while states_explored < search_budget:
@@ -1309,16 +1364,21 @@ def _guided_variant_solve(
             notes=_variant_notes(tree, positions),
         )
         states_explored += 1
+        topology = _semantic_topology(tree, positions)
+        if topology not in explored_topologies:
+            explored_topologies.append(topology)
         solved = replace(
             solved,
             degradation=solved.degradation.merged(structural),
             states_explored=states_explored,
             search_fallback=bool(positions) or solved.components > limits.total_components,
             variant_positions=tuple(positions.items()),
+            variant_topology=topology,
+            explored_variant_topologies=tuple(explored_topologies),
         )
         if solved.components <= limits.total_components and not solved.failures:
             break
-        remaining = _steppable(tree, positions)
+        remaining = _steppable(tree, positions, locked_semantics=locked_semantics)
         if not remaining:
             break
         priority, rung = min((ladder.priority, current) for _path, ladder, current in remaining)
@@ -1338,6 +1398,8 @@ def _guided_variant_solve(
             neighbor = dict(base_positions)
             neighbor[path] = current + 1
             neighbor = _canonical_positions(tree, neighbor)
+            if semantic_topology is not None:
+                neighbor = _apply_semantic_topology(tree, neighbor, semantic_topology)
             current_components = _static_components(ladder.variants[current].nodes, limits)
             next_components = _static_components(ladder.variants[current + 1].nodes, limits)
             return next_components - current_components, order, neighbor
@@ -1398,6 +1460,7 @@ def solve(
     position: PositionState = None,
     nav: PlannedNav | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
+    semantic_topology: Mapping[str, int] | None = None,
 ) -> SolvedLayout:
     """Fit nodes into target budgets with independently keyed pagination.
 
@@ -1410,7 +1473,8 @@ def solve(
         raise ValueError(message)
     chrome = localize_chrome(chrome, localization)
     tree = list(nodes)
-    if _variant_state_bound(tree, search_budget) > search_budget:
+    selected_topology = {} if semantic_topology is None else semantic_topology
+    if _variant_state_bound(tree, search_budget, selected_topology) > search_budget:
         selected = _guided_variant_solve(
             tree,
             limits=limits,
@@ -1419,14 +1483,18 @@ def solve(
             position=position,
             nav=nav,
             search_budget=search_budget,
+            semantic_topology=semantic_topology,
         )
         if strict and selected.notes:
             raise LayoutOverflowError(selected.notes)
         return selected
     frontier: list[tuple[DegradationProfile, int, dict[_VariantPath, int]]] = []
     serial = count()
-    heappush(frontier, (DegradationProfile(), next(serial), {}))
-    seen: set[frozenset[tuple[_VariantPath, int]]] = {frozenset()}
+    initial_positions = {} if semantic_topology is None else _apply_semantic_topology(tree, {}, semantic_topology)
+    heappush(frontier, (_variant_profile(tree, initial_positions), next(serial), initial_positions))
+    seen: set[frozenset[tuple[_VariantPath, int]]] = {frozenset(initial_positions.items())}
+    locked_semantics = frozenset() if semantic_topology is None else frozenset(selected_topology)
+    explored_topologies: list[VariantTopology] = []
     best: SolvedLayout | None = None
     best_overflow: SolvedLayout | None = None
     states_explored = 0
@@ -1446,11 +1514,15 @@ def solve(
             notes=_variant_notes(tree, positions),
         )
         states_explored += 1
+        topology = _semantic_topology(tree, positions)
+        if topology not in explored_topologies:
+            explored_topologies.append(topology)
         solved = replace(
             solved,
             degradation=solved.degradation.merged(structural),
             states_explored=states_explored,
             variant_positions=tuple(positions.items()),
+            variant_topology=topology,
         )
         valid = solved.components <= limits.total_components and not solved.failures
         if valid and (best is None or solved.degradation < best.degradation):
@@ -1466,10 +1538,12 @@ def solve(
         if solved.components <= limits.total_components and not solved.failures:
             continue
 
-        for path, _ladder, rung in _steppable(tree, positions):
+        for path, _ladder, rung in _steppable(tree, positions, locked_semantics=locked_semantics):
             neighbor = dict(positions)
             neighbor[path] = rung + 1
             neighbor = _canonical_positions(tree, neighbor)
+            if semantic_topology is not None:
+                neighbor = _apply_semantic_topology(tree, neighbor, selected_topology)
             key = frozenset(neighbor.items())
             if key in seen:
                 continue
@@ -1482,7 +1556,12 @@ def solve(
     selected = best or best_overflow
     assert selected is not None
     fallback = bool(frontier) and states_explored >= search_budget
-    selected = replace(selected, states_explored=states_explored, search_fallback=fallback)
+    selected = replace(
+        selected,
+        states_explored=states_explored,
+        search_fallback=fallback,
+        explored_variant_topologies=tuple(explored_topologies),
+    )
     if strict and selected.notes:
         raise LayoutOverflowError(selected.notes)
     return selected

@@ -168,9 +168,11 @@ def nominate_strategies(
     *,
     limits: V2Limits,
     session: PresentationSession,
+    topology: Mapping[str, int] | None = None,
 ) -> tuple[StrategyAxis, ...]:
-    """Collect every strategy axis reachable under any current representation."""
+    """Collect strategy axes reachable through one semantic fallback topology."""
     axes: list[StrategyAxis] = []
+    selected_rungs = {} if topology is None else topology
 
     def walk_children(children: Sequence[LayoutNode], path: str) -> None:
         for index, child in enumerate(children):
@@ -190,9 +192,13 @@ def nominate_strategies(
             ):
                 walk(child, path)
             case FallbackContent(primary=primary, alternates=alternates):
-                walk(primary, f"{path}.primary")
-                for index, alternate in enumerate(alternates):
-                    walk(alternate, f"{path}.alternate.{index}")
+                rung = selected_rungs.get(path, 0)
+                branches = (primary, *alternates)
+                if not 0 <= rung < len(branches):
+                    message = f"{path}: fallback topology selected unavailable rung {rung}"
+                    raise ValueError(message)
+                branch_path = f"{path}.primary" if rung == 0 else f"{path}.alternate.{rung - 1}"
+                walk(branches[rung], branch_path)
             case Actions():
                 axes.append(_action_axis(node, path, limits, session))
             case Table():
@@ -322,7 +328,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 Variant(tuple(_node(alternate, f"{path}.alternate.{index}", context)))
                 for index, alternate in enumerate(alternates)
             )
-            return [Variants(tuple(rungs))]
+            return [Variants(tuple(rungs), semantic_path=path)]
         case Actions():
             return _actions(node, path, context)
         case Group(children=children) | Stack(children=children) | Cluster(children=children):

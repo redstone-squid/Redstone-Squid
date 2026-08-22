@@ -25,6 +25,7 @@ from squid_layouts.planning.solve import (
     RText,
     RTime,
     SolvedLayout,
+    VariantTopology,
     _resolve_variants,
     solve,
 )
@@ -265,7 +266,7 @@ def _lower_children(
                         payload=prepared.scene_payload,
                     )
                 )
-            case Variants(variants=variants, priority=priority):
+            case Variants(variants=variants, priority=priority, semantic_path=semantic_path):
                 supported = [variant for variant in variants if variant.requires <= target.capabilities]
                 if not supported:
                     message = "Variants has no variant supported by the selected target"
@@ -276,6 +277,7 @@ def _lower_children(
                     Variants(
                         tuple(Variant(_lower_children(variant.nodes, target, limits)) for variant in supported),
                         priority,
+                        semantic_path,
                     )
                 )
             case _:
@@ -386,6 +388,7 @@ def _attempt_strategy(
     positions: Mapping[str, Position] | None,
     nav: PlannedNav | None,
     search_budget: int,
+    semantic_topology: Mapping[str, int] | None = None,
 ) -> _StrategyAttempt:
     broker = CursorCoordinator(presentation, chrome, nav, positions)
     semantic = lower_semantics(
@@ -408,6 +411,7 @@ def _attempt_strategy(
         reserved_text=reservation.get("display_text"),
         nav=nav,
         search_budget=search_budget,
+        semantic_topology=semantic_topology,
     )
     return _StrategyAttempt(assignment, semantic, lowered, solved, broker)
 
@@ -434,6 +438,12 @@ def _search_strategies(
     selected: _StrategyAttempt | None = None
     fallback = False
     states_explored = 0
+    conditional_topologies: list[VariantTopology] = []
+
+    def discover_topologies(attempt: _StrategyAttempt) -> None:
+        for topology in attempt.solved.explored_variant_topologies:
+            if any(rung for _path, rung in topology) and topology not in conditional_topologies:
+                conditional_topologies.append(topology)
 
     # Lossless semantic representations always outrank author-granted degradation. Give
     # every semantic assignment its preferred structural rungs before spending another
@@ -454,6 +464,7 @@ def _search_strategies(
         )
         states_explored += attempted.solved.states_explored
         phase_one.append(attempted)
+        discover_topologies(attempted)
         if first is None:
             first = attempted
         fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
@@ -496,11 +507,92 @@ def _search_strategies(
                 search_budget=remaining,
             )
             states_explored += attempted.solved.states_explored
+            discover_topologies(attempted)
             fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
             if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
                 degraded = attempted
             if attempted.solved.search_fallback:
                 fallback = True
+                break
+
+        # A semantic fallback's axes do not exist until structural search reaches that
+        # topology. Search each reached topology independently so choices hidden behind
+        # mutually exclusive rungs never multiply one another.
+        for topology in conditional_topologies:
+            topology_map = dict(topology)
+            topology_axes = nominate_strategies(
+                document.children,
+                limits=limits,
+                session=presentation,
+                topology=topology_map,
+            )
+            topology_phase_one: list[_StrategyAttempt] = []
+            topology_assignments = iter(iter_assignments(topology_axes))
+            assignment = next(topology_assignments)
+            while True:
+                remaining = search_budget - states_explored
+                if remaining < 1:
+                    fallback = True
+                    break
+                attempted = _attempt_strategy(
+                    assignment,
+                    document=document,
+                    target=target,
+                    limits=limits,
+                    chrome=chrome,
+                    localization=localization,
+                    presentation=presentation,
+                    reservation=reservation,
+                    positions=positions,
+                    nav=nav,
+                    search_budget=1,
+                    semantic_topology=topology_map,
+                )
+                states_explored += attempted.solved.states_explored
+                topology_phase_one.append(attempted)
+                discover_topologies(attempted)
+                fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
+                if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
+                    degraded = attempted
+                following = next(topology_assignments, None)
+                if states_explored >= search_budget and following is not None:
+                    fallback = True
+                    break
+                if following is None:
+                    break
+                assignment = following
+            if fallback:
+                break
+            for initial in topology_phase_one:
+                if not initial.solved.search_fallback:
+                    continue
+                remaining = search_budget - states_explored
+                if remaining < 1:
+                    fallback = True
+                    break
+                attempted = _attempt_strategy(
+                    initial.assignment,
+                    document=document,
+                    target=target,
+                    limits=limits,
+                    chrome=chrome,
+                    localization=localization,
+                    presentation=presentation,
+                    reservation=reservation,
+                    positions=positions,
+                    nav=nav,
+                    search_budget=remaining,
+                    semantic_topology=topology_map,
+                )
+                states_explored += attempted.solved.states_explored
+                discover_topologies(attempted)
+                fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
+                if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
+                    degraded = attempted
+                if attempted.solved.search_fallback:
+                    fallback = True
+                    break
+            if fallback:
                 break
         selected = degraded or first
 
