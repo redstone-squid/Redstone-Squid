@@ -35,6 +35,7 @@ __all__ = [
     "ComponentSnapshot",
     "DiscordFrontend",
     "DurabilityHealth",
+    "DurableBot",
     "DurableFrontend",
     "DurableMountCodec",
     "DurableMountRecord",
@@ -524,6 +525,7 @@ def _strings(raw: Mapping[str, object], key: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+from .bot import DurableBot
 from .frontend import (
     DiscordFrontend,
     DurableFrontend,
