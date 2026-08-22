@@ -41,13 +41,13 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
-from squid.bot.utils.mount_registry import SessionKey
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     import squid.bot.app
