@@ -63,6 +63,41 @@ Instrumentation records monotonic start and end values at the operation that own
 Middleware cannot reconstruct planner, renderer, resource, or Discord-write timing and is
 therefore not the profiling mechanism.
 
+## Trace model and causal context
+
+Squid owns a deliberately small in-process tracing core. OpenTelemetry is an optional live
+adapter, not the package's data model or a core dependency: its SDK does not provide Squid's
+bounded immutable snapshots, active-operation inspection, domain outcomes, or tail retention.
+The core does not implement OTLP, W3C transport propagation, batching, or vendor conventions.
+
+Public traces are frozen flat values. A trace has a 128-bit ID, an operation kind, timestamps,
+an operation result, a tuple of spans, and bounded causal links. A span has a 64-bit ID, an
+optional parent span ID, timestamps, outcome, typed bounded attributes, and bounded links. Flat
+spans preserve overlapping siblings and serialize more cleanly than a nested object graph.
+Identifiers use the standard trace/span widths so an optional exporter can correlate them
+without translating the public model.
+
+The profiler keeps private mutable active recorders and freezes them only when an operation
+finishes. A task-local `ContextVar` holds the current trace and span. Synchronous context
+managers surround async work—the recorder itself performs no I/O—and child AnyIO tasks inherit
+their structural parent while maintaining independent task-local span stacks. A shared mutable
+stack on the trace is forbidden because concurrent resource loads would corrupt it.
+
+Parentage and causality are distinct:
+
+- a parent span represents structurally nested work in the same operation;
+- a trace link represents work caused across a queue, coalescing boundary, process integration,
+  or otherwise independent operation.
+
+TopicBus and Reactor capture the current lightweight `TraceLink` when scheduling. Their pending
+state retains the first and latest trigger times, total trigger count, and only a bounded number
+of links. A coalesced refresh can therefore link to several dispatches without pretending they
+share one parent or retaining any live trace object.
+
+Framework instrumentation uses typed attribute values rather than arbitrary dictionaries.
+An optional public custom-span seam may accept bounded scalar attributes, with strict limits on
+count and string length and no aggregation by arbitrary values.
+
 ## Dispatch disposition
 
 Terminal disposition and generation handling are different dimensions. A rebased action can
@@ -70,7 +105,7 @@ complete, fail in its handler, or fail during delivery, so `REBASED` is not an o
 
 ```python
 class DispatchDisposition(StrEnum):
-    FINISHED = "finished"
+    MOUNT_FINISHED = "mount_finished"
     ACCESS_DENIED = "access_denied"
     ACCESS_FAILED = "access_failed"
     MISSING = "missing"
@@ -81,6 +116,7 @@ class DispatchDisposition(StrEnum):
     COMPLETED = "completed"
     ACTION_FAILED = "action_failed"
     DELIVERY_FAILED = "delivery_failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +131,13 @@ handler followed by a failed Discord edit is `DELIVERY_FAILED`, not `COMPLETED`.
 that only requires acknowledgement is complete once acknowledgement succeeds. Rebase remains
 metadata on all later dispositions.
 
+The terminal disposition is a convenient summary, not the only outcome. A dispatch result also
+records independent action and presentation dimensions. Action outcomes distinguish not-run,
+handled, middleware-short-circuited, failed, and cancelled. Presentation outcomes distinguish
+not-required, acknowledged, no-change, written, abandoned, failed, and superseded. This preserves
+cases such as a handler span failing, outer middleware recovering, and the overall dispatch
+completing with a successful write. Delivery traces use the same presentation vocabulary.
+
 The final implementation may use a boolean rather than the example `GenerationDecision`, but
 must not make rebase a mutually exclusive terminal state.
 
@@ -103,8 +146,8 @@ must not make rebase a mutually exclusive terminal state.
 The collector exposes frozen values only. Names are illustrative until implementation, but
 the contract has three levels:
 
-1. `RuntimeSnapshot`: cumulative counters, bounded aggregates, and snapshots of the recent
-   traces retained by the configured collector.
+1. `RuntimeSnapshot`: cumulative and rolling-window aggregates, bounded active-operation
+   snapshots, collector-health values, and recent traces retained by the configured collector.
 2. `DispatchTrace` / `DeliveryTrace`: one completed operation, its disposition, generation
    decision, stable action or component identity, and a tuple of immutable spans.
 3. `RuntimeSpan`: name, monotonic offset and duration, outcome, and bounded scalar attributes.
@@ -116,6 +159,11 @@ presentation and error reporting.
 
 Raw export serializes these public values rather than reaching back into the collector.
 
+Active-operation snapshots expose only operation kind, stable provenance, current phase,
+elapsed time, queue wait, and start time. They never expose the private mutable recorder. This
+is essential for diagnosing work that is currently hung rather than only work that eventually
+finished.
+
 ## Collection and retention
 
 Profiling is explicitly configured and cheap when absent. The first version uses one injected
@@ -123,12 +171,19 @@ collector protocol with a no-op default; call sites do not branch into a global 
 
 The supplied in-memory collector has:
 
-- a fixed-size ring of recent completed traces;
+- separate fixed-size retention for ordinary samples, slow traces, failures, and acknowledgement
+  deadline misses;
 - cumulative counters for dispositions, cache hits, coalescing, failures, and watchdog acks;
-- bounded histograms for latency aggregation and percentiles;
-- configurable sampling for successful high-volume operations, while failures and deadline
-  misses may always be retained;
+- bounded histograms for both lifetime and rolling-window latency aggregation and percentiles;
+- tail sampling after completion for successful high-volume operations, while failures, slow
+  operations, and deadline misses are preferentially retained;
 - an injected monotonic clock for deterministic tests.
+
+Every operation contributes to counters and histograms even when its detailed trace is not
+retained. Snapshot metadata includes observation counts, window boundaries, collector start/reset
+epoch, schema version, configured bounds, buffer utilization, rejected attributes, dropped traces,
+and collector failures. Monotonic values measure durations; an export also carries a wall-clock
+anchor and process/boot identifier so traces can be aligned with logs and external incidents.
 
 Aggregation keys are stable, low-cardinality identities such as action key, handler provenance,
 component class, route format, subscriber label, and operation kind. Mount IDs, actor IDs,
@@ -136,6 +191,12 @@ message IDs, route parameter values, selected values, and arbitrary topics may a
 bounded recent trace when explicitly enabled, but never become unbounded aggregate labels.
 
 Sensitive form values and interaction payloads are never recorded.
+
+Profiling is observational and must never change framework behavior. Span closure runs in
+`finally`; cancellation is recorded and re-raised; collector/exporter exceptions are contained;
+and snapshot/export work never performs I/O on an instrumented hot path. The no-op profiler does
+not generate IDs or read the clock. Benchmarks pin overhead for both disabled and enabled
+collection.
 
 ## Instrumentation boundaries
 
@@ -161,6 +222,10 @@ interaction handle, the final no-op acknowledgement, or the watchdog satisfied i
 Add an immutable snapshot and traces/counters for queue depth, in-flight mounts, queue wait,
 refresh duration/failure, coalesced schedules, and redelivery requested while in flight. The
 existing per-mount sets remain the scheduling authority; profiling only observes them.
+
+For each coalesced refresh record its first and latest trigger times, trigger count, time from
+both trigger edges to commit, retained causal links, and link-overflow count. This distinguishes
+healthy batching from a projection that is continuously behind.
 
 ### TopicBus
 
@@ -200,26 +265,45 @@ supervisor; neither a mount nor middleware starts a bare task.
 Cancellation is recorded as cancellation and re-raised. It is never converted into an ordinary
 failure disposition or sent to an error hook.
 
+## Optional OpenTelemetry bridge
+
+An integration may mirror spans into OpenTelemetry while they are live, allowing automatically
+instrumented database and HTTP work to become children of Squid handler spans. Exporting only a
+completed Squid trace is insufficient for that relationship. The bridge may adopt an existing
+OpenTelemetry context as an external parent and correlate IDs, but Squid's memory collector and
+devtools remain fully functional without it.
+
+OpenTelemetry exporters, propagation, batching, and SDK lifecycle belong to the host and its
+existing supervisor. The bridge is not part of the first implementation milestone.
+
 ## Landing order
 
-1. Frozen trace/disposition/span values, collector protocol, no-op and bounded-memory collectors.
-2. Mount dispatch and acknowledgement instrumentation, including the generation-decision model.
+1. Frozen trace/disposition/span values, task-local recorder, no-op and bounded-memory profilers,
+   active snapshots, tail retention, rolling histograms, and stable JSON export.
+2. Mount dispatch and acknowledgement instrumentation, including multidimensional outcomes and
+   the generation-decision model.
 3. Render/resource/planner/renderer/write spans shared by send, flush, refresh, and visible
    resource settlement.
-4. Reactor and TopicBus snapshots and queue/subscriber measurements.
+4. Reactor and TopicBus snapshots, causal links, coalescing freshness, and queue/subscriber
+   measurements.
 5. Routed-action instrumentation.
-6. Devtools aggregation, inspection, and JSON export.
+6. Devtools aggregation and inspection.
+7. Optional custom spans and OpenTelemetry bridge, justified by concrete host demand.
 
 Each stage remains useful without the later presentation stages and adds focused tests before
 the next hot path is instrumented.
 
 ## Verification
 
-- Injected-clock unit tests pin span nesting, durations, acknowledgement source, and total time.
+- Injected-clock and ID-source unit tests pin span parentage, causal links, overlapping durations,
+  acknowledgement source, cancellation, and total time.
 - Dispatch tests cover every disposition and prove a rebase may complete, fail in the action, or
   fail in delivery without becoming a terminal `REBASED` outcome.
-- Collector tests prove trace and histogram bounds, sampling, immutable snapshots, and that
-  sensitive values/high-cardinality IDs do not enter aggregate labels.
+- Profiler tests prove active snapshots, all retention and histogram bounds, tail sampling,
+  rolling windows, no-op behavior, immutable snapshots, and that sensitive values/high-cardinality
+  IDs do not enter aggregate labels.
+- Failure-injection tests prove profiler, collector, and export failures never alter the observed
+  operation; microbenchmarks bound disabled and enabled recording overhead.
 - Existing atomicity tests assert failed candidates are still rolled back and are reported as
   delivery failures without changing the live generation.
 - Reactor tests cover queued/in-flight depth, coalescing, redelivery, cancellation, and failure.
