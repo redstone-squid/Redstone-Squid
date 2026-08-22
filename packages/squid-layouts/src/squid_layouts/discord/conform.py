@@ -5,6 +5,11 @@ bug or a discord.py serialization change would otherwise surface as HTTP 50035 a
 discord.py validates child *counts* locally and no string lengths at all, so this gate walks a
 built view, clamps every length it can, and reports each intervention. Tests treat any clamp as
 a failure; production degrades to an ugly-but-delivered message.
+
+Detection for views lives in `inspection.audit`; this module is the repair half over the same
+measurements. A fragment's preflight uses `audit` alone, because trimming a host's own content
+would violate its ownership of the message. Modals keep detection here: they are not views, and
+`audit` deliberately walks view structure only.
 """
 
 from typing import Any
@@ -12,15 +17,19 @@ from typing import Any
 import discord
 from discord.ui.select import BaseSelect
 
+from squid_layouts.discord.inspection import Violation, ViolationCode, audit
+from squid_layouts.errors import LimitViolationError
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 
+__all__ = ["ELLIPSIS", "LimitViolationError", "conform", "conform_modal", "trim"]
 
-class LimitViolationError(Exception):
-    """A built view exceeds a Discord limit and the caller forbade clamping."""
+type Notes = list[str] | None
 
-    def __init__(self, interventions: list[str]) -> None:
-        super().__init__("; ".join(interventions))
-        self.interventions = interventions
+
+def _note(notes: Notes, message: str) -> None:
+    """Record an intervention, unless the caller already knows about it."""
+    if notes is not None:
+        notes.append(message)
 
 
 def trim(text: str, limit: int) -> str:
@@ -43,29 +52,45 @@ def conform(view: discord.ui.LayoutView, *, strict: bool = False, limits: V2Limi
     Returns:
         One human-readable description per intervention; empty when the view already fit.
     """
-    interventions: list[str] = []
-    text_displays: list[discord.ui.TextDisplay] = []  # pyrefly: ignore  # generic Item variance
+    report = audit(view, limits=limits)
+    for violation in report.violations:
+        _repair(violation, view, limits)
 
-    children = list(view.walk_children())
-    if len(children) > limits.total_components:
-        # Structural overflow cannot be clamped without redesigning the view; report only.
-        interventions.append(f"{len(children)} components exceed {limits.total_components} (not clampable)")
-
-    for item in children:
-        if isinstance(item, discord.ui.TextDisplay):
-            text_displays.append(item)
-        elif isinstance(item, discord.ui.Button):
-            _conform_button(item, limits, interventions)
-        elif isinstance(item, BaseSelect):
-            _conform_select(item, limits, interventions)
-        elif isinstance(item, discord.ui.MediaGallery):
-            _conform_gallery(item, limits, interventions)
-
-    _conform_text_budget(text_displays, limits, interventions)
-
+    interventions = list(report.messages)
     if strict and interventions:
         raise LimitViolationError(interventions)
     return interventions
+
+
+def _repair(violation: Violation, view: discord.ui.LayoutView, limits: V2Limits) -> None:
+    """Apply the clamp `violation` describes, where it has one.
+
+    Repairs are idempotent: `audit` reports one violation per broken value, so several may
+    name the same item, and each helper clamps the whole item.
+    """
+    if not violation.repairable:
+        return
+    item = violation.item
+    match violation.code:
+        case ViolationCode.BUTTON_LABEL if isinstance(item, discord.ui.Button):
+            _conform_button(item, limits)
+        case (
+            ViolationCode.SELECT_PLACEHOLDER
+            | ViolationCode.SELECT_OPTIONS
+            | ViolationCode.OPTION_LABEL
+            | ViolationCode.OPTION_VALUE
+            | ViolationCode.OPTION_DESCRIPTION
+        ) if isinstance(item, BaseSelect):
+            _conform_select(item, limits)
+        case ViolationCode.GALLERY_ITEMS | ViolationCode.GALLERY_ITEM_DESCRIPTION if isinstance(
+            item, discord.ui.MediaGallery
+        ):
+            _conform_gallery(item, limits)
+        case ViolationCode.TOTAL_TEXT:
+            displays = [child for child in view.walk_children() if isinstance(child, discord.ui.TextDisplay)]
+            _conform_text_budget(displays, limits)
+        case _:
+            pass
 
 
 def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Limits = LIMITS) -> list[str]:
@@ -103,7 +128,7 @@ def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Li
     return interventions
 
 
-def _report_custom_id(item: object, limits: V2Limits, interventions: list[str]) -> None:
+def _report_custom_id(item: object, limits: V2Limits, notes: Notes) -> None:
     """Report an over-budget custom id, never clamp it.
 
     Every other string here degrades gracefully when trimmed. A custom id does not: a
@@ -114,37 +139,37 @@ def _report_custom_id(item: object, limits: V2Limits, interventions: list[str]) 
     """
     custom_id = getattr(item, "custom_id", None)
     if isinstance(custom_id, str) and len(custom_id) > limits.custom_id:
-        interventions.append(f"custom id {len(custom_id)} > {limits.custom_id} (not clampable): {custom_id[:32]!r}...")
+        _note(notes, f"custom id {len(custom_id)} > {limits.custom_id} (not clampable): {custom_id[:32]!r}...")
 
 
-def _conform_button(button: discord.ui.Button, limits: V2Limits, interventions: list[str]) -> None:
-    _report_custom_id(button, limits, interventions)
+def _conform_button(button: discord.ui.Button, limits: V2Limits, notes: Notes = None) -> None:
+    _report_custom_id(button, limits, notes)
     if button.label is not None and len(button.label) > limits.button_label:
-        interventions.append(f"button label {len(button.label)} > {limits.button_label}")
+        _note(notes, f"button label {len(button.label)} > {limits.button_label}")
         button.label = trim(button.label, limits.button_label)
 
 
-def _conform_select(select: BaseSelect, limits: V2Limits, interventions: list[str]) -> None:
-    _report_custom_id(select, limits, interventions)
+def _conform_select(select: BaseSelect, limits: V2Limits, notes: Notes = None) -> None:
+    _report_custom_id(select, limits, notes)
     if select.placeholder is not None and len(select.placeholder) > limits.select_placeholder:
-        interventions.append(f"select placeholder {len(select.placeholder)} > {limits.select_placeholder}")
+        _note(notes, f"select placeholder {len(select.placeholder)} > {limits.select_placeholder}")
         select.placeholder = trim(select.placeholder, limits.select_placeholder)
     if not isinstance(select, discord.ui.Select):
         return
     options = select.options
     if len(options) > limits.select_options:
-        interventions.append(f"{len(options)} select options exceed {limits.select_options}")
+        _note(notes, f"{len(options)} select options exceed {limits.select_options}")
         options = options[: limits.select_options]
     for option in options:
         if len(option.label) > limits.option_label:
-            interventions.append(f"option label {len(option.label)} > {limits.option_label}")
+            _note(notes, f"option label {len(option.label)} > {limits.option_label}")
             option.label = trim(option.label, limits.option_label)
         if len(option.value) > limits.option_value:
             # Values are identifiers: a marker would corrupt them no less than the cut does.
-            interventions.append(f"option value {len(option.value)} > {limits.option_value}")
+            _note(notes, f"option value {len(option.value)} > {limits.option_value}")
             option.value = option.value[: limits.option_value]
         if option.description is not None and len(option.description) > limits.option_description:
-            interventions.append(f"option description {len(option.description)} > {limits.option_description}")
+            _note(notes, f"option description {len(option.description)} > {limits.option_description}")
             option.description = trim(option.description, limits.option_description)
     select.options = options
 
@@ -152,36 +177,37 @@ def _conform_select(select: BaseSelect, limits: V2Limits, interventions: list[st
 def _conform_modal_options(
     component: discord.ui.RadioGroup | discord.ui.CheckboxGroup,
     limits: V2Limits,
-    interventions: list[str],
+    notes: Notes = None,
 ) -> None:
-    _report_custom_id(component, limits, interventions)
+    _report_custom_id(component, limits, notes)
     options = component.options
     if len(options) > 10:
-        interventions.append(f"{len(options)} modal options exceed 10")
+        _note(notes, f"{len(options)} modal options exceed 10")
         options = options[:10]
     for option in options:
         if len(option.label) > limits.option_label:
-            interventions.append(f"option label {len(option.label)} > {limits.option_label}")
+            _note(notes, f"option label {len(option.label)} > {limits.option_label}")
             option.label = trim(option.label, limits.option_label)
         if len(option.value) > limits.option_value:
-            interventions.append(f"option value {len(option.value)} > {limits.option_value}")
+            _note(notes, f"option value {len(option.value)} > {limits.option_value}")
             option.value = option.value[: limits.option_value]
         if option.description is not None and len(option.description) > limits.option_description:
-            interventions.append(f"option description {len(option.description)} > {limits.option_description}")
+            _note(notes, f"option description {len(option.description)} > {limits.option_description}")
             option.description = trim(option.description, limits.option_description)
     component.options = options
 
 
-def _conform_gallery(gallery: discord.ui.MediaGallery, limits: V2Limits, interventions: list[str]) -> None:
+def _conform_gallery(gallery: discord.ui.MediaGallery, limits: V2Limits, notes: Notes = None) -> None:
     items = gallery.items
     if len(items) > limits.gallery_items:
-        interventions.append(f"{len(items)} gallery items exceed {limits.gallery_items}")
+        _note(notes, f"{len(items)} gallery items exceed {limits.gallery_items}")
         items = items[: limits.gallery_items]
     changed = False
     for media_item in items:
         if media_item.description is not None and len(media_item.description) > limits.gallery_item_description:
-            interventions.append(
-                f"gallery item description {len(media_item.description)} > {limits.gallery_item_description}"
+            _note(
+                notes,
+                f"gallery item description {len(media_item.description)} > {limits.gallery_item_description}",
             )
             media_item.description = trim(media_item.description, limits.gallery_item_description)
             changed = True
@@ -189,27 +215,25 @@ def _conform_gallery(gallery: discord.ui.MediaGallery, limits: V2Limits, interve
         gallery.items = items
 
 
-def _conform_text_input(text_input: discord.ui.TextInput, limits: V2Limits, interventions: list[str]) -> None:
+def _conform_text_input(text_input: discord.ui.TextInput, limits: V2Limits, notes: Notes = None) -> None:
     cap = limits.text_input_value
     if text_input.max_length is not None and text_input.max_length > cap:
-        interventions.append(f"text input max_length {text_input.max_length} > {cap}")
+        _note(notes, f"text input max_length {text_input.max_length} > {cap}")
         text_input.max_length = cap
     effective = text_input.max_length if text_input.max_length is not None else cap
     if text_input.default is not None and len(text_input.default) > effective:
-        interventions.append(f"text input default {len(text_input.default)} > {effective}")
+        _note(notes, f"text input default {len(text_input.default)} > {effective}")
         text_input.default = trim(text_input.default, effective)
     if text_input.placeholder is not None and len(text_input.placeholder) > limits.text_input_placeholder:
-        interventions.append(f"text input placeholder {len(text_input.placeholder)} > {limits.text_input_placeholder}")
+        _note(notes, f"text input placeholder {len(text_input.placeholder)} > {limits.text_input_placeholder}")
         text_input.placeholder = trim(text_input.placeholder, limits.text_input_placeholder)
 
 
-def _conform_text_budget(
-    text_displays: list[discord.ui.TextDisplay], limits: V2Limits, interventions: list[str]
-) -> None:
+def _conform_text_budget(text_displays: list[discord.ui.TextDisplay], limits: V2Limits, notes: Notes = None) -> None:
     total = sum(len(td.content) for td in text_displays)
     if total <= limits.total_text:
         return
-    interventions.append(f"total display text {total} > {limits.total_text}")
+    _note(notes, f"total display text {total} > {limits.total_text}")
     # Allocate front to back so earlier content survives; every later node is still reserved
     # one character so no TextDisplay is ever emptied (Discord rejects empty content).
     used = 0

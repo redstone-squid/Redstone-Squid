@@ -14,6 +14,15 @@ class ResourceCost:
     def get(self, name: str) -> int:
         return self.values.get(name, 0)
 
+    def __add__(self, other: ResourceCost) -> ResourceCost:
+        """Combine two reservations, summing every axis either one names."""
+        if not isinstance(other, ResourceCost):
+            return NotImplemented
+        merged = dict(self.values)
+        for name, value in other.values.items():
+            merged[name] = merged.get(name, 0) + value
+        return ResourceCost(merged)
+
 
 @dataclass(frozen=True, slots=True)
 class PreparedExtension:
