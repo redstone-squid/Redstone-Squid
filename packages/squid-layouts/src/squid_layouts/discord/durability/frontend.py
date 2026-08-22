@@ -122,8 +122,6 @@ class DiscordFrontend:
             try:
                 channel_id, message_id = self._coordinates(binding.locator)
                 message = await self._fetch_message(channel_id, message_id)
-            except (KeyError, TypeError, ValueError) as error:
-                missing.append((binding.record_mount_id, str(error)))
             except discord.NotFound:
                 missing.append((binding.record_mount_id, "Discord no longer has the channel or message"))
             except discord.Forbidden:
@@ -150,13 +148,13 @@ class DiscordFrontend:
                 authority: EditHandle = handle,
             ) -> DeliveryReceipt:
                 await authority.write(view, attachments=files)
-                return DeliveryReceipt(message, authority, message.id, False)
+                return DeliveryReceipt(message, authority, message_id=message.id, ephemeral=False)
 
             try:
                 result = await item.binding.mount.send(edit)
             except discord.NotFound:
                 return Missing((item.binding.record_mount_id,), ("Discord no longer has the message",))
-            except (discord.Forbidden, StaleHandleError):
+            except discord.Forbidden, StaleHandleError:
                 return Unreachable(
                     (item.binding.record_mount_id,),
                     ("Discord denied permanent edit access to the message",),
