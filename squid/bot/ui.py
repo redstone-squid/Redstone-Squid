@@ -113,6 +113,14 @@ CHROME = ui.Chrome(
     close=L(t"Close"),
     on=L(t"On"),
     off=L(t"Off"),
+    confirm=L(t"Confirm"),
+    cancel=L(t"Cancel"),
+    decided=lambda label: L(t"You chose {label}.", label=label),
+    add=L(t"Add"),
+    edit=L(t"Edit"),
+    remove=L(t"Remove"),
+    move_up=L(t"Move up"),
+    move_down=L(t"Move down"),
     page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
 )
 _OPEN_LINK = L(t"Open link")
