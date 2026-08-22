@@ -9,7 +9,8 @@ import discord
 
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.discord.attachments import attachment_assets, files_for
+from squid_layouts.discord.attachments import attachment_assets
+from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import Renderer, Wire
 from squid_layouts.discord.target import Target
 from squid_layouts.document import DocumentLike
@@ -41,19 +42,24 @@ def _span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder
 
 @dataclass(slots=True)
 class Composition:
-    """A resolved plan beside its mechanically drawn Discord view."""
+    """A resolved plan beside the complete Discord message it draws to."""
 
-    view: discord.ui.LayoutView
+    presentation: DiscordPresentation
     plan: PlanResult
+
+    @property
+    def view(self) -> discord.ui.LayoutView:
+        """The drawn view. Composition is Components V2, so there is always one."""
+        return self.presentation.layout
 
     @property
     def assets(self) -> tuple[Asset, ...]:
         """Declarative files this composition expects to be uploaded with it."""
-        return attachment_assets(self.plan)
+        return self.presentation.assets
 
     def files(self) -> list[discord.File]:
         """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
-        return files_for(self.assets)
+        return self.presentation.files()
 
     @property
     def page(self) -> int:
@@ -112,7 +118,7 @@ def compose(
         view = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
-    return Composition(view=view, plan=result)
+    return Composition(DiscordPresentation.components_v2(view, assets=attachment_assets(result)), result)
 
 
 def render_static(
