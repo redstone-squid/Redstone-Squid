@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from squid_layouts.discord.mount import Mount
+from squid_layouts.discord.sessions import SessionKey
 from squid_layouts.runtime.component import Component, render_component_tree
 from squid_layouts.runtime.presentation import (
     CursorState,
@@ -287,9 +288,27 @@ def _presentation_from_dict(raw: Mapping[str, object]) -> PresentationSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class RestoreContext:
+    """Stable operational facts available while a registered mount is reconstructed."""
+
+    record_id: str
+    session_key: SessionKey
+    actor_id: int | None
+    mount_actor_id: int | None
+    locator: MountLocator
+    expires_at: float | None
+    parent_id: str | None
+
+
+type SnapshotMigration = Callable[[MountSnapshot], MountSnapshot]
+
+
+@dataclass(frozen=True, slots=True)
 class _Registration:
     version: int
-    factory: Callable[[], Component]
+    factory: Callable[[], Component] | None
+    restore: Callable[[RestoreContext], Mount] | None
+    migrations: Mapping[int, SnapshotMigration]
 
 
 class ComponentRegistry:
@@ -298,14 +317,35 @@ class ComponentRegistry:
     def __init__(self) -> None:
         self._registrations: dict[str, _Registration] = {}
 
-    def register(self, key: str, *, version: int, factory: Callable[[], Component]) -> None:
+    def register(
+        self,
+        key: str,
+        *,
+        version: int,
+        restore: Callable[[RestoreContext], Mount] | None = None,
+        migrations: Mapping[int, SnapshotMigration] | None = None,
+        factory: Callable[[], Component] | None = None,
+    ) -> None:
+        """Register one known root and every sequential migration to its current version.
+
+        `restore` is the durable-session path: it reconstructs the complete mount, including
+        its explicit access policy and host dependencies. `factory` remains the low-level
+        component-only path for direct snapshot codec use.
+        """
         if not key or version < 1:
             message = "durable component keys must be non-empty and versions positive"
+            raise ValueError(message)
+        if (restore is None) == (factory is None):
+            message = "register exactly one of restore or factory"
             raise ValueError(message)
         if key in self._registrations:
             message = f"durable component {key!r} is already registered"
             raise ValueError(message)
-        self._registrations[key] = _Registration(version, factory)
+        migration_map = {} if migrations is None else dict(migrations)
+        if any(source < 1 or source >= version for source in migration_map):
+            message = "snapshot migration sources must be positive versions below the registered version"
+            raise ValueError(message)
+        self._registrations[key] = _Registration(version, factory, restore, migration_map)
 
     def capture(self, mount: Mount, component_key: str) -> MountSnapshot:
         registration = self._registrations.get(component_key)
@@ -334,25 +374,36 @@ class ComponentRegistry:
         SnapshotCodec.dumps(snapshot)
         return snapshot
 
-    def restore(self, snapshot: MountSnapshot, **mount_options: Any) -> Mount:
+    def restore(
+        self,
+        snapshot: MountSnapshot,
+        context: RestoreContext | None = None,
+        **mount_options: Any,
+    ) -> Mount:
         registration = self._registrations.get(snapshot.component_key)
         if registration is None:
             message = f"durable component {snapshot.component_key!r} is not registered"
             raise SnapshotError(message)
-        if registration.version != snapshot.component_version:
-            message = (
-                f"durable component {snapshot.component_key!r} snapshot version "
-                f"{snapshot.component_version} does not match {registration.version}"
-            )
-            raise SnapshotError(message)
+        snapshot = self._migrate(snapshot, registration)
         by_path = {component.path: component for component in snapshot.components}
-        root = registration.factory()
+        if registration.restore is not None:
+            if context is None:
+                message = f"durable component {snapshot.component_key!r} requires a restore context"
+                raise SnapshotError(message)
+            mount = registration.restore(context)
+            root = mount.component
+        else:
+            factory = registration.factory
+            if factory is None:
+                message = f"durable component {snapshot.component_key!r} has no restore recipe"
+                raise SnapshotError(message)
+            root = factory()
+            mount = Mount(root, **mount_options)
         root_snapshot = by_path.get("$")
         if root_snapshot is None:
             message = "mount snapshot has no root component"
             raise SnapshotError(message)
         _restore_component(root, root_snapshot)
-        mount = Mount(root, **mount_options)
         tree = render_component_tree(root)
         if set(by_path) != set(tree.components):
             message = "restored component tree does not match the snapshot paths"
@@ -367,6 +418,36 @@ class ComponentRegistry:
             strategies=dict(snapshot.presentation.strategies),
         )
         return mount
+
+    @staticmethod
+    def _migrate(snapshot: MountSnapshot, registration: _Registration) -> MountSnapshot:
+        current = snapshot
+        while current.component_version < registration.version:
+            migration = registration.migrations.get(current.component_version)
+            if migration is None:
+                message = (
+                    f"durable component {current.component_key!r} has no migration from "
+                    f"version {current.component_version}"
+                )
+                raise SnapshotError(message)
+            source_version = current.component_version
+            migrated = migration(current)
+            if (
+                migrated.protocol != SnapshotCodec.protocol
+                or migrated.component_key != current.component_key
+                or migrated.component_version != source_version + 1
+            ):
+                message = f"snapshot migration from version {source_version} must produce version {source_version + 1}"
+                raise SnapshotError(message)
+            SnapshotCodec.dumps(migrated)
+            current = SnapshotCodec.loads(SnapshotCodec.dumps(migrated))
+        if current.component_version != registration.version:
+            message = (
+                f"durable component {current.component_key!r} snapshot version "
+                f"{current.component_version} is newer than registered version {registration.version}"
+            )
+            raise SnapshotError(message)
+        return current
 
 
 class SnapshotStore(Protocol):
