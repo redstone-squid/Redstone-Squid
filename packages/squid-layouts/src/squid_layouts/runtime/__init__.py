@@ -2,6 +2,7 @@
 
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
+from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
 from squid_layouts.runtime.presentation import (
     ActivePagers,
     CursorState,
@@ -16,10 +17,14 @@ from squid_layouts.runtime.presentation import (
 )
 from squid_layouts.runtime.reactivity import (
     ReactiveWriteError,
+    StateChange,
+    StateDelta,
     UndeclaredStateError,
     batch,
+    block_writes,
     computed,
     export_state,
+    on_action_commit,
     restore_state,
     state,
     strict_state,
@@ -43,17 +48,26 @@ __all__ = [
     "CursorState",
     "CursorUpdate",
     "DisclosureState",
+    "History",
+    "HistoryEntry",
+    "HistoryError",
     "PresentationSession",
     "ReactiveWriteError",
     "SelectionState",
     "SessionUpdate",
+    "StateChange",
+    "StateDelta",
     "StrategyState",
     "StrategyUpdate",
     "UndeclaredStateError",
     "apply_updates",
     "batch",
+    "block_writes",
     "computed",
     "export_state",
+    "history",
+    "history_actions",
+    "on_action_commit",
     "restore_state",
     "state",
     "strict_state",
