@@ -224,6 +224,31 @@ class TestVariantLadders:
         assert steps[0] == "$.0 stepped to variant 2 of 3 (priority 0) under component pressure"
         assert [note.split()[0] for note in steps] == ["$.0", "$.1", "$.2"]
 
+    def test_global_search_skips_an_equal_priority_step_that_saves_nothing(self) -> None:
+        filler = [Text(f"filler {index}") for index in range(37)]
+        ineffective = Variants.of(Text("a preferred"), Text("a alternate"))
+        effective = Variants.of(Panel((Text("b preferred"), Text("b detail"))), Text("b alternate"))
+
+        solved = solve([*filler, ineffective, effective])
+        rendered = _rendered(solved)
+
+        assert solved.components <= LIMITS.total_components
+        assert "a preferred" in rendered
+        assert "a alternate" not in rendered
+        assert "b alternate" in rendered
+        assert solved.states_explored == 3
+
+    def test_variant_search_budget_returns_the_best_incumbent_and_reports_fallback(self) -> None:
+        filler = [Text(f"filler {index}") for index in range(37)]
+        ineffective = Variants.of(Text("a preferred"), Text("a alternate"))
+        effective = Variants.of(Panel((Text("b preferred"), Text("b detail"))), Text("b alternate"))
+
+        solved = solve([*filler, ineffective, effective], search_budget=2)
+
+        assert solved.components > LIMITS.total_components
+        assert solved.states_explored == 2
+        assert solved.search_fallback
+
 
 def test_a_bare_ladder_solves_to_its_first_rung() -> None:
     """`solve()` resolves ladders itself; it must never leak one into the realized tree."""

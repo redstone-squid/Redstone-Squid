@@ -107,6 +107,21 @@ class DegradationProfile:
         )
         return DegradationProfile(levels, tuple(sorted((*self.ties, tie))))
 
+    def merged(self, other: DegradationProfile) -> DegradationProfile:
+        totals: dict[int, list[int]] = {}
+        for level in (*self.levels, *other.levels):
+            aggregate = totals.setdefault(level.priority, [0, 0, 0, 0])
+            aggregate[0] += level.dropped_nodes
+            aggregate[1] += level.spilled_items
+            aggregate[2] += level.truncated_chars
+            aggregate[3] += level.semantic_steps
+        levels = tuple(
+            DegradationLevel(priority, *values)
+            for priority, values in sorted(totals.items(), reverse=True)
+            if any(values)
+        )
+        return DegradationProfile(levels, tuple(sorted((*self.ties, *other.ties))))
+
     def _rank(self, priorities: tuple[int, ...]) -> tuple[tuple[int, int, int, int], ...]:
         by_priority = {level.priority: level.rank for level in self.levels}
         return tuple(by_priority.get(priority, (0, 0, 0, 0)) for priority in priorities)
