@@ -346,3 +346,10 @@ the new chrome).
   delivery for controlled values.
 - `test_public_api.py`: every new export. Run focused tests with `--no-cov`, then
   `just typecheck` and `git diff --check`.
+
+## Status
+
+Shipped framework-side: `guards.py`, `sl.discord.guards`, the mount's admission stage and
+busy paint, `ScaleField`/`sl.rating`, and `Wizard(review=...)`. The bot consumers each
+section names are follow-up migrations, as they were for batches A and B — nothing in
+`squid/` has moved onto guards, `Feedback`, or wizard review yet.
