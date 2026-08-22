@@ -1,0 +1,69 @@
+"""The registry that lets a durable snapshot name its target and get that target back.
+
+A recovered mount must be rebuilt against the same budgets its stored render was fitted to.
+An id alone is not enough: two profiles can share `discord.components-v1` and differ in
+capabilities or limits, and rebuilding against the wrong one produces a message that is legal
+only by luck. So a snapshot records the id, the version, and a fingerprint of the profile, and
+recovery refuses anything it cannot resolve exactly.
+"""
+
+from squid_layouts.discord.target import CLASSIC_TARGET, V2_TARGET, Target
+from squid_layouts.errors import LayoutInvariantError
+
+
+class TargetRegistry:
+    """Targets a durable record may name, by id.
+
+    The built-in two are registered by default because every consumer has them. A custom
+    target — one with tightened limits, or an extra capability — has to be registered
+    explicitly: nothing else can reconstruct it from an id, and silently substituting the
+    built-in of the same id would rebuild the mount against budgets it was never planned for.
+    """
+
+    def __init__(self, *targets: Target, builtins: bool = True) -> None:
+        self._targets: dict[str, Target] = {}
+        for target in (V2_TARGET, CLASSIC_TARGET) if builtins else ():
+            self.register(target)
+        for target in targets:
+            self.register(target)
+
+    def register(self, target: Target) -> None:
+        """Make `target` resolvable. Re-registering the same profile is a no-op."""
+        existing = self._targets.get(target.id)
+        if existing is not None and existing.fingerprint != target.fingerprint:
+            message = (
+                f"target id {target.id!r} is already registered with a different profile; "
+                "give the custom target its own id rather than shadowing one"
+            )
+            raise LayoutInvariantError(message)
+        self._targets[target.id] = target
+
+    def resolve(self, target_id: str, version: int, fingerprint: str) -> Target:
+        """The exact target a snapshot recorded.
+
+        Raises:
+            LayoutInvariantError: The target is unregistered, or is registered with a
+                different version or profile than the snapshot was planned against.
+        """
+        target = self._targets.get(target_id)
+        if target is None:
+            known = ", ".join(sorted(self._targets)) or "none"
+            message = f"no target registered for {target_id!r} (registered: {known})"
+            raise LayoutInvariantError(message)
+        if target.version != version:
+            message = f"target {target_id!r} is version {target.version}; the snapshot was planned at {version}"
+            raise LayoutInvariantError(message)
+        if target.fingerprint != fingerprint:
+            message = (
+                f"target {target_id!r} no longer matches the profile this snapshot was planned against; "
+                "its capabilities or limits changed, so the stored render was fitted to different budgets"
+            )
+            raise LayoutInvariantError(message)
+        return target
+
+    def __contains__(self, target_id: object) -> bool:
+        return target_id in self._targets
+
+
+DEFAULT_TARGETS = TargetRegistry()
+"""The built-in targets, resolvable without any registration."""

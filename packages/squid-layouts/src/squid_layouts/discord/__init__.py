@@ -101,6 +101,7 @@ from squid_layouts.discord.sessions import (
     open_personal,
 )
 from squid_layouts.discord.target import CLASSIC_TARGET, V2_TARGET, NativeItem, Target
+from squid_layouts.discord.targets import DEFAULT_TARGETS, TargetRegistry
 from squid_layouts.errors import ExistingLayoutError, LimitViolationError
 from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.limits import LIMITS as V2_LIMITS
@@ -119,6 +120,7 @@ from squid_layouts.planning.target import ResourceCost
 __all__ = [
     "CLASSIC_LIMITS",
     "CLASSIC_TARGET",
+    "DEFAULT_TARGETS",
     "ELLIPSIS",
     "EMPTY_RESERVATION",
     "V2_LIMITS",
@@ -209,6 +211,7 @@ __all__ = [
     "StaticClassicView",
     "StaticView",
     "Target",
+    "TargetRegistry",
     "TextInputSpec",
     "Unprotected",
     "UserGuildScope",
