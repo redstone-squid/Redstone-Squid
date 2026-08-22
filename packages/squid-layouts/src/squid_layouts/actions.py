@@ -1,5 +1,6 @@
 """Frontend-neutral action events and dispatch metadata."""
 
+from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -18,6 +19,14 @@ class ActionPolicy(StrEnum):
     REBASE = "rebase"
     PARALLEL_READ = "parallel_read"
     IMMEDIATE = "immediate"
+
+
+class ActionKind(StrEnum):
+    """The portable interaction shape being dispatched."""
+
+    PRESS = "press"
+    SELECTION = "selection"
+    SUBMIT = "submit"
 
 
 class Visibility(StrEnum):
@@ -123,6 +132,35 @@ class SubmitEvent(ActionEvent):
     values: Mapping[str, object] = field(default_factory=dict)
     attempted: Mapping[str, object] = field(default_factory=dict)
     errors: tuple[FormIssue, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ActionRequest:
+    """One admitted mounted action supplied to application middleware.
+
+    Rebase is generation metadata, not an outcome: the rebased handler may still return,
+    fail, or later encounter a delivery failure. Framework admission has already resolved
+    the binding and generation before constructing this value.
+    """
+
+    event: ActionEvent
+    key: str
+    kind: ActionKind
+    policy: ActionPolicy
+    submitted_generation: int | None
+    active_generation: int
+    rebased: bool = False
+
+
+type ActionProceed = Callable[[], Awaitable[None]]
+
+
+class ActionMiddleware(ABC):
+    """Application-wide policy around an admitted mounted action."""
+
+    @abstractmethod
+    async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+        """Continue once through ``proceed``, or return to short-circuit."""
 
 
 type ActionHandler = Callable[[ActionEvent], Awaitable[None]]
