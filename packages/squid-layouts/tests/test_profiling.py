@@ -203,6 +203,23 @@ def test_operation_may_include_elapsed_queue_time_and_record_its_span() -> None:
     assert queue_wait.attributes[0].value == 3
 
 
+def test_operation_counters_survive_tail_sampling_and_roll_into_window() -> None:
+    clock = Clock()
+    subject = profiler(clock, recent=0)
+
+    with subject.operation(OperationKind.SEND, name="panel") as operation:
+        operation.increment("planner.calls")
+        operation.increment("planner.cache_hits")
+        operation.increment("planner.states_explored", 7)
+
+    snapshot = subject.snapshot()
+    counters = {aggregate.key.counter_name: aggregate for aggregate in snapshot.counter_aggregates}
+    assert snapshot.recent == ()
+    assert counters["planner.calls"].lifetime == 1
+    assert counters["planner.cache_hits"].window == 1
+    assert counters["planner.states_explored"].lifetime == 7
+
+
 def test_task_local_parentage_carries_into_child_tasks() -> None:
     clock = Clock()
     subject = profiler(clock)
@@ -570,6 +587,23 @@ def test_span_aggregate_overflow_is_bounded_and_honest() -> None:
     assert overflow.lifetime.observations == 2
 
 
+def test_counter_aggregate_overflow_is_bounded_and_honest() -> None:
+    clock = Clock()
+    subject = profiler(clock, max_counter_keys=1)
+
+    with subject.operation(OperationKind.SEND, name="panel") as operation:
+        operation.increment("one")
+        operation.increment("two", 2)
+        operation.increment("three", 3)
+
+    aggregates = subject.snapshot().counter_aggregates
+    assert len(aggregates) == 2
+    overflow = next(item for item in aggregates if item.key.counter_name == "<overflow>")
+    assert overflow.key.operation is None
+    assert overflow.lifetime == 5
+    assert overflow.window == 5
+
+
 def test_percentile_rank_uses_ceiling() -> None:
     clock = Clock()
     subject = profiler(clock, window_seconds=30, histogram_bounds=(0.1, 0.2, 0.3), max_aggregate_keys=1)
@@ -595,7 +629,7 @@ def test_snapshot_json_exports_frozen_snapshot() -> None:
 
     encoded = snapshot_json(subject.snapshot())
     decoded = json.loads(encoded)
-    assert decoded["schema_version"] == 1
+    assert decoded["schema_version"] == 2
     assert decoded["recent"][0]["trace_id"] == str(subject.snapshot().recent[0].trace_id)
     assert decoded["recent"][0]["operation"] == "send"
     assert decoded["active"] == []

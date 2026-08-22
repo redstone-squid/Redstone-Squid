@@ -158,6 +158,10 @@ class TestProfiles:
         profiler = MemoryProfiler()
         subject = Mount(Subject(), access=Everyone(), profiler=profiler)
         await subject.send(delivered_to(fake_message()))
+        assert {aggregate.key.counter_name for aggregate in profiler.snapshot().counter_aggregates} >= {
+            "planner.calls",
+            "planner.states_explored",
+        }
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 
@@ -200,5 +204,5 @@ class TestProfiles:
         file = ctx.send.await_args.kwargs["files"][0]
         payload = json.loads(file.fp.read().decode())
         assert file.filename.startswith("runtime-profile-")
-        assert payload["schema_version"] == 1
+        assert payload["schema_version"] == 2
         assert payload["aggregates"][0]["key"]["name"] == "panel"

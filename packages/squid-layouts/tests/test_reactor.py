@@ -124,10 +124,13 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
     producer = next(trace for trace in snapshot.recent if trace.name == "save")
     delivery = snapshot.slow[0]
     queue_wait = next(span for span in delivery.spans if span.name == "queue_wait")
+    freshness = next(span for span in delivery.spans if span.name == "freshness")
     assert delivery.operation is OperationKind.REACTOR_DELIVERY
     assert delivery.duration == pytest.approx(2.5)
     assert delivery.links[0].trace_id == producer.trace_id
     assert dict((attribute.key, attribute.value) for attribute in queue_wait.attributes)["triggers"] == 2
+    assert freshness.duration == pytest.approx(2.5)
+    assert {counter.name: counter.value for counter in delivery.counters}["reactor.coalesced"] == 1
     assert received_links[0].trace_id == delivery.trace_id
 
 
