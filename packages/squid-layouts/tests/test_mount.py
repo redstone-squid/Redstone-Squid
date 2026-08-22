@@ -1,6 +1,7 @@
 """Reactive core tests: state, dispatch funnel, flush, lifecycle."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
@@ -16,6 +17,7 @@ from squid_layouts import (
     Asset,
     Component,
     Document,
+    Failed,
     FormField,
     FormSpec,
     InlineAsset,
@@ -24,12 +26,16 @@ from squid_layouts import (
     Localization,
     Message,
     Paragraph,
+    Pending,
     PressEvent,
     ReactiveWriteError,
+    Ready,
+    ResourceDelivery,
     SelectionEvent,
     TextField,
     batch,
     computed,
+    resource,
     state,
     transaction,
 )
@@ -1748,6 +1754,204 @@ class TestDestinations:
         assert mount.handle is not None
         assert not mount.pending
         click.response.edit_message.assert_awaited_once()
+
+
+class VisibleResourcePanel(Component):
+    key: str = state("first")
+
+    def __init__(self, load: Callable[[str], Awaitable[str]]) -> None:
+        self._load = load
+
+    @resource(depends=(key,))
+    async def value(self) -> str:
+        return await self._load(self.key)
+
+    async def change(self, event: PressEvent) -> None:
+        self.key = "second"
+
+    def render(self):
+        match self.value.state:
+            case Pending(previous=previous):
+                label = "pending" if previous is None else f"pending:{previous.value}"
+            case Failed(error=error):
+                label = f"failed:{error}"
+            case Ready(value=value):
+                label = f"ready:{value}"
+        return [Text(label), Row((Button("change", self.change, "change"),))]
+
+
+class AtomicResourcePanel(Component):
+    def __init__(self, load: Callable[[], Awaitable[str]]) -> None:
+        self._load = load
+
+    @resource(delivery=ResourceDelivery.ATOMIC)
+    async def value(self) -> str:
+        return await self._load()
+
+    def render(self):
+        match self.value.state:
+            case Pending():
+                return Text("pending")
+            case Failed(error=error):
+                return Text(f"failed:{error}")
+            case Ready(value=value):
+                return Text(f"ready:{value}")
+
+
+class TestResourceLoading:
+    async def test_visible_resource_delivers_pending_then_ready(self) -> None:
+        async def load(_key: str) -> str:
+            return "loaded"
+
+        panel = VisibleResourcePanel(load)
+        message: Any = fake_message()
+        destination = _Destination(message)
+        mount = Mount(panel, timeout=None)
+
+        await mount.send(destination)
+
+        assert len(destination.calls) == 1
+        assert "pending" in str(destination.calls[0][0].to_components())
+        message.edit.assert_awaited_once()
+        assert "ready:loaded" in str(message.edit.await_args.kwargs["view"].to_components())
+        assert not mount.pending
+
+    async def test_atomic_resource_delivers_only_the_settled_render(self) -> None:
+        async def load() -> str:
+            return "loaded"
+
+        message: Any = fake_message()
+        destination = _Destination(message)
+        mount = Mount(AtomicResourcePanel(load), timeout=None)
+
+        await mount.send(destination)
+
+        assert len(destination.calls) == 1
+        assert "ready:loaded" in str(destination.calls[0][0].to_components())
+        message.edit.assert_not_awaited()
+
+    async def test_visible_failure_is_rendered_as_state(self) -> None:
+        async def load(_key: str) -> str:
+            message = "offline"
+            raise RuntimeError(message)
+
+        message: Any = fake_message()
+        mount = Mount(VisibleResourcePanel(load), timeout=None)
+
+        await mount.send(_Destination(message))
+
+        message.edit.assert_awaited_once()
+        assert "failed:offline" in str(message.edit.await_args.kwargs["view"].to_components())
+        assert not mount.pending
+
+    async def test_visible_siblings_load_concurrently(self) -> None:
+        started = anyio.Event()
+
+        class Pair(Component):
+            @resource
+            async def first(self) -> str:
+                started.set()
+                return "first"
+
+            @resource
+            async def second(self) -> str:
+                await started.wait()
+                return "second"
+
+            def render(self):
+                return Text(f"{type(self.first.state).__name__}:{type(self.second.state).__name__}")
+
+        message: Any = fake_message()
+        mount = Mount(Pair(), timeout=None)
+
+        with anyio.fail_after(5):
+            await mount.send(_Destination(message))
+
+        message.edit.assert_awaited_once()
+        assert "Ready:Ready" in str(message.edit.await_args.kwargs["view"].to_components())
+
+    async def test_hidden_resource_waits_until_its_branch_is_rendered(self) -> None:
+        loads: list[str] = []
+
+        class Conditional(Component):
+            shown: bool = state(default=False)
+
+            @resource
+            async def value(self) -> str:
+                loads.append("load")
+                return "loaded"
+
+            def render(self):
+                return Text(type(self.value.state).__name__) if self.shown else Text("hidden")
+
+        panel = Conditional()
+        message: Any = fake_message()
+        mount = Mount(panel, timeout=None)
+        await mount.send(_Destination(message))
+
+        assert loads == []
+        panel.shown = True
+        await mount.refresh_now()
+
+        assert loads == ["load"]
+        assert message.edit.await_count == 2
+        assert "Ready" in str(message.edit.await_args.kwargs["view"].to_components())
+
+    async def test_a_destination_without_an_edit_handle_leaves_loading_pending(self) -> None:
+        loads: list[str] = []
+
+        async def load(_key: str) -> str:
+            loads.append("load")
+            return "loaded"
+
+        panel = VisibleResourcePanel(load)
+        mount = Mount(panel, timeout=None)
+
+        await mount.send(_Destination(None))
+
+        assert loads == []
+        assert isinstance(panel.value.state, Pending)
+        assert mount.pending
+
+    async def test_dependency_reload_uses_the_interaction_for_both_paints(self) -> None:
+        async def load(key: str) -> str:
+            return key
+
+        panel = VisibleResourcePanel(load)
+        mount = Mount(panel, timeout=None)
+        await mount.send(_Destination(fake_message()))
+        interaction = fake_interaction()
+
+        await mount.dispatch("change", interaction)
+
+        interaction.response.edit_message.assert_awaited_once()
+        assert "pending:first" in str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        interaction.followup.edit_message.assert_awaited_once()
+        assert "ready:second" in str(interaction.followup.edit_message.await_args.kwargs["view"].to_components())
+
+    async def test_a_failed_settled_edit_keeps_the_pending_generation_repairable(self) -> None:
+        async def load(_key: str) -> str:
+            return "loaded"
+
+        panel = VisibleResourcePanel(load)
+        message: Any = fake_message()
+        message.edit.side_effect = _http_error()
+        mount = Mount(panel, timeout=None)
+
+        await mount.send(_Destination(message))
+
+        assert isinstance(panel.value.state, Ready)
+        assert mount.pending
+        assert mount._view is not None
+        assert "pending" in str(mount._view.to_components())
+
+        message.edit.side_effect = None
+        message.edit.return_value = message
+        await mount.refresh_now()
+
+        assert not mount.pending
+        assert mount._view is not None
+        assert "ready:loaded" in str(mount._view.to_components())
 
 
 class Leaf(Component):
