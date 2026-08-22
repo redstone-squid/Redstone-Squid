@@ -74,7 +74,10 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.SessionPolicy
     assert not hasattr(sl.discord, "MountRegistry")
     assert not hasattr(sl.discord, "WhenOpen")
-    assert sl.discord.durability.MountManager
+    assert sl.discord.durability.DurableSessionRuntime
+    assert sl.discord.durability.DurableBot
+    assert sl.discord.durability.DiscordFrontend
+    assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.TopicBus
     assert sl.discord.Reactor.follow
 
