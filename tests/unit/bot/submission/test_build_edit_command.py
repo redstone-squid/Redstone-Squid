@@ -10,8 +10,8 @@ import discord
 import squid_layouts as sl
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
-from squid.bot.utils.mount_registry import MountRegistry
 from squid.builds.domain import DoorBuild, OtherBuild, Status
+from squid_layouts.discord import SessionRegistry
 
 
 class _Response:
@@ -96,7 +96,7 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
                 render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card"))),
                 render_node=AsyncMock(return_value=sl.paragraph("card")),
             ),
-            mounts=MountRegistry(),
+            mounts=SessionRegistry(),
             topic_bus=topic_bus,
             layout_reactor=layout_reactor,
         ),

@@ -55,7 +55,8 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         await self.bot.mounts.open(
             view.mount(),
             destination(ctx, visibility="personal", locale=locale),
-            key=SessionKey("settings", ctx.author.id, ctx.guild.id),
+            key=SessionKey.user_guild("settings", ctx.author.id, ctx.guild.id),
+            actor_id=ctx.author.id,
         )
 
     async def _capabilities(self, ctx: Context[BotT]) -> SettingsCapabilities:

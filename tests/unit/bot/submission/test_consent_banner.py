@@ -16,7 +16,7 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid.bot.utils.mount_registry import MountRegistry
+from squid_layouts.discord import SessionRegistry
 from squid_layouts.discord.testing import fake_message
 
 BUILD_LOG_CHANNEL = 500
@@ -130,7 +130,7 @@ def _make_interaction(accounts: Any) -> Any:
                 settings=SimpleNamespace(),
                 accounts=accounts,
             ),
-            mounts=MountRegistry(),
+            mounts=SessionRegistry(),
         ),
         response=response,
         followup=SimpleNamespace(send=AsyncMock(return_value=message)),

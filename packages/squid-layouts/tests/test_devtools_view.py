@@ -141,7 +141,7 @@ class TestDetail:
         assert_within_limits(view)
 
     async def test_a_registry_key_labels_its_mount(self) -> None:
-        registry = sl.discord.MountRegistry()
+        registry = sl.discord.SessionRegistry()
         subject = Mount(Subject(), access=Everyone())
         await registry.open(subject, delivered_to(sl.discord.testing.fake_message()), key=("editor", 7))
 
