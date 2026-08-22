@@ -11,7 +11,6 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import destination
 from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
-from squid.bot.utils.mount_registry import SessionKey
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -23,6 +22,7 @@ from squid.permissions.domain.catalogue import (
 from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     import squid.bot.app
