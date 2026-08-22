@@ -31,6 +31,7 @@ from squid_layouts.discord import (
     build_modal,
     conform,
     default_nav,
+    page_select_nav,
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
@@ -301,6 +302,40 @@ class TestMountPagination:
         await mount.dispatch("jump", fake_interaction())
 
         assert mount.presentation.cursor("entries").position.offset == 1
+
+    async def test_a_materialized_cursor_seeks_to_a_page(self):
+        mount = Mount(Browser(), timeout=None, nav=page_select_nav)
+        view = commit_render(mount)
+        jump = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
+        assert jump.custom_id is not None and jump.custom_id.endswith("__cursor_seek.entries")
+
+        await mount.dispatch("__cursor_seek.entries", fake_interaction(), ["3"])
+
+        assert mount.presentation.cursor("entries").position.offset == 3
+
+    async def test_seeking_past_the_end_clamps_to_the_last_page(self):
+        mount = Mount(Browser(), timeout=None, nav=page_select_nav)
+        commit_render(mount)
+        extent = mount.presentation.cursor("entries").extent
+
+        await mount.dispatch("__cursor_seek.entries", fake_interaction(), ["9999"])
+
+        assert mount.presentation.cursor("entries").position.offset == extent - 1
+
+    async def test_seeking_to_the_visible_page_is_a_clean_noop(self):
+        mount = Mount(Browser(), timeout=None, nav=page_select_nav)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("__cursor_seek.entries", interaction, ["0"])
+
+        interaction.response.defer.assert_awaited_once()
+
+    def test_the_stock_factory_still_draws_no_jump_control(self):
+        """`page_select_nav` is opt-in: a select costs a whole component row."""
+        view = commit_render(Mount(Browser(), timeout=None))
+
+        assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
         mount = Mount(Browser(), timeout=None)
