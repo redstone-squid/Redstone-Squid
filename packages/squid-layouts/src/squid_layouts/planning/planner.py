@@ -610,7 +610,7 @@ def plan(
         protocol=SceneCodec.protocol,
         target=target.id,
         target_version=target.version,
-        children=dialect.body(measured.children, bindings),
+        body=dialect.body(measured.children, bindings),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )

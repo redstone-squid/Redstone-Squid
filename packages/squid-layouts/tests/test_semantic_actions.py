@@ -36,7 +36,7 @@ def _actions(count: int, *, handler: Callable[[ActionEvent], Awaitable[None]] = 
 def test_thirty_six_actions_fold_losslessly_into_twenty_five_and_eleven() -> None:
     result = plan(Actions(_actions(36), key="demo"), target=DEFAULT_TARGET)
 
-    selects = [node for node in result.scene.children if isinstance(node, SceneSelect)]
+    selects = [node for node in result.scene.components_v2.children if isinstance(node, SceneSelect)]
     assert [len(select.options) for select in selects] == [25, 11]
     assert {option.value for select in selects for option in select.options} == {
         f"action.{index}" for index in range(36)
@@ -57,7 +57,7 @@ def test_explicit_action_groups_never_merge() -> None:
     )
 
     result = plan(document, target=DEFAULT_TARGET)
-    selects = [node for node in result.scene.children if isinstance(node, SceneSelect)]
+    selects = [node for node in result.scene.components_v2.children if isinstance(node, SceneSelect)]
 
     assert [len(select.options) for select in selects] == [10, 10]
     assert [select.action for select in selects] == ["toolbar.files.0", "toolbar.admin.0"]
@@ -73,8 +73,8 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
         target=DEFAULT_TARGET,
     )
 
-    select = next(node for node in result.scene.children if isinstance(node, SceneSelect))
-    rows = [node for node in result.scene.children if isinstance(node, SceneRow)]
+    select = next(node for node in result.scene.components_v2.children if isinstance(node, SceneSelect))
+    rows = [node for node in result.scene.components_v2.children if isinstance(node, SceneRow)]
     assert [option.value for option in select.options] == ["archive"]
     assert any(isinstance(item, SceneButton) and item.action == "delete" for row in rows for item in row.items)
     assert sum(len(row.items) for row in rows) == 2
@@ -83,7 +83,7 @@ def test_strong_actions_and_links_remain_direct_unless_grouping_is_granted() -> 
 def test_grouped_route_keeps_the_selected_actions_policy_and_handler() -> None:
     action = Action("read", "Read", _act, policy=ActionPolicy.PARALLEL_READ)
     result = plan(Actions((action,), key="demo", display=ActionDisplay.GROUPED), target=DEFAULT_TARGET)
-    select = next(node for node in result.scene.children if isinstance(node, SceneSelect))
+    select = next(node for node in result.scene.components_v2.children if isinstance(node, SceneSelect))
 
     routed = result.bindings[select.action].routed(("read",))
 
@@ -105,10 +105,10 @@ def test_actions_choose_a_global_fit_instead_of_root_pagination() -> None:
     assert dense.report.events[0].code == "actions.grouped"
     assert dense.metrics.states_explored == 2
     assert not dense.scene.pagers
-    assert sum(isinstance(node, SceneSelect) for node in dense.scene.children) == 1
+    assert sum(isinstance(node, SceneSelect) for node in dense.scene.components_v2.children) == 1
     assert roomy.report.events[0].code == "actions.individual"
     assert roomy.metrics.states_explored == 1
-    assert sum(len(node.items) for node in roomy.scene.children if isinstance(node, SceneRow)) == 5
+    assert sum(len(node.items) for node in roomy.scene.components_v2.children if isinstance(node, SceneRow)) == 5
 
 
 def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
@@ -155,7 +155,7 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
 
     assert any(event.code == "actions.grouped" and event.path == "$.35.alternate.0" for event in result.report.events)
     assert any(event.code == "layout.degradation.semantic_fallback" for event in result.report.events)
-    assert sum(isinstance(node, SceneSelect) for node in result.scene.children) == 1
+    assert sum(isinstance(node, SceneSelect) for node in result.scene.components_v2.children) == 1
     assert not result.metrics.search_fallback
 
 
@@ -173,7 +173,9 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
     result = plan(document, target=DEFAULT_TARGET)
 
     assert result.report.events[0].code == "actions.grouped"
-    assert "compact details" not in {node.content for node in result.scene.children if hasattr(node, "content")}
+    assert "compact details" not in {
+        node.content for node in result.scene.components_v2.children if hasattr(node, "content")
+    }
     assert result.metrics.states_explored == 4
 
 
@@ -246,8 +248,8 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     session.move_cursor("demo.default", Position(offset=1))
     second = plan(document, target=DEFAULT_TARGET, session=session)
 
-    first_select = next(node for node in first.scene.children if isinstance(node, SceneSelect))
-    second_select = next(node for node in second.scene.children if isinstance(node, SceneSelect))
+    first_select = next(node for node in first.scene.components_v2.children if isinstance(node, SceneSelect))
+    second_select = next(node for node in second.scene.components_v2.children if isinstance(node, SceneSelect))
     assert len(first_select.options) == 25
     assert first.scene.pagers[0].pages == 4
     assert first.scene.pagers[0].page == 0
@@ -289,7 +291,7 @@ def _texts(result) -> set[str]:
             elif isinstance(child, ScenePanel):
                 walk(child.children)
 
-    walk(result.scene.children)
+    walk(result.scene.components_v2.children)
     return found
 
 
@@ -382,7 +384,7 @@ def test_capability_filtering_keeps_rung_selection_stable() -> None:
 
     result = plan(document, target=DEFAULT_TARGET)
     rendered = _texts(result)
-    panels = [node for node in result.scene.children if isinstance(node, ScenePanel)]
+    panels = [node for node in result.scene.components_v2.children if isinstance(node, ScenePanel)]
 
     assert {"rich", "detail"} <= rendered
     assert "compact" not in rendered

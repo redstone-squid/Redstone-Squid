@@ -22,7 +22,7 @@ SCENE_SCHEMA: dict[str, Any] = {
         "protocol": {"const": 1},
         "target": {"type": "string"},
         "target_version": {"type": "integer", "minimum": 0},
-        "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "body": {"$ref": "#/$defs/body"},
         "assets": {
             "type": "array",
             "items": {
@@ -51,8 +51,119 @@ SCENE_SCHEMA: dict[str, Any] = {
             },
         },
     },
-    "required": ["protocol", "target", "target_version", "children", "assets", "pagers"],
+    "required": ["protocol", "target", "target_version", "body", "assets", "pagers"],
     "$defs": {
+        "body": {"oneOf": [{"$ref": "#/$defs/components_v2"}, {"$ref": "#/$defs/classic_message"}]},
+        "components_v2": _node(
+            "components_v2",
+            {"children": {"type": "array", "items": {"$ref": "#/$defs/node"}}},
+            "children",
+        ),
+        "classic_message": _node(
+            "classic_message",
+            {
+                "content": {"type": ["string", "null"]},
+                "embeds": {"type": "array", "items": {"$ref": "#/$defs/embed"}},
+                "rows": {"type": "array", "items": {"$ref": "#/$defs/classic_row"}, "maxItems": 5},
+            },
+            "content",
+            "embeds",
+            "rows",
+        ),
+        "classic_row": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "controls": {
+                    "type": "array",
+                    "maxItems": 5,
+                    "items": {
+                        "oneOf": [
+                            {"$ref": "#/$defs/link"},
+                            {"$ref": "#/$defs/button"},
+                            {"$ref": "#/$defs/routed_button"},
+                            {"$ref": "#/$defs/select"},
+                            {"$ref": "#/$defs/routed_select"},
+                            {"$ref": "#/$defs/extension"},
+                        ]
+                    },
+                }
+            },
+            "required": ["controls"],
+        },
+        "embed": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "title": {"type": ["string", "null"]},
+                "url": {"type": ["string", "null"]},
+                "description": {"type": ["string", "null"]},
+                "fields": {"type": "array", "items": {"$ref": "#/$defs/embed_field"}, "maxItems": 25},
+                "footer": {
+                    "oneOf": [
+                        {"type": "null"},
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {"text": {"type": "string"}, "icon_url": {"type": ["string", "null"]}},
+                            "required": ["text", "icon_url"],
+                        },
+                    ]
+                },
+                "author": {
+                    "oneOf": [
+                        {"type": "null"},
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "properties": {
+                                "name": {"type": "string"},
+                                "url": {"type": ["string", "null"]},
+                                "icon_url": {"type": ["string", "null"]},
+                            },
+                            "required": ["name", "url", "icon_url"],
+                        },
+                    ]
+                },
+                "colour": {"type": ["integer", "null"], "minimum": 0, "maximum": 16777215},
+                "image": {"$ref": "#/$defs/embed_media"},
+                "thumbnail": {"$ref": "#/$defs/embed_media"},
+                "timestamp": {"type": ["string", "null"]},
+            },
+            "required": [
+                "title",
+                "url",
+                "description",
+                "fields",
+                "footer",
+                "author",
+                "colour",
+                "image",
+                "thumbnail",
+                "timestamp",
+            ],
+        },
+        "embed_field": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string"},
+                "value": {"type": "string"},
+                "inline": {"type": "boolean"},
+            },
+            "required": ["name", "value", "inline"],
+        },
+        "embed_media": {
+            "oneOf": [
+                {"type": "null"},
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {"url": {"type": "string"}, "description": {"type": ["string", "null"]}},
+                    "required": ["url", "description"],
+                },
+            ]
+        },
         "node": {
             "oneOf": [
                 {"$ref": f"#/$defs/{kind}"}

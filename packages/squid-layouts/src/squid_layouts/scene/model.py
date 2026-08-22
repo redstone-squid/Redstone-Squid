@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.runtime.presentation import SessionUpdate
@@ -166,6 +167,94 @@ type SceneNode = (
 )
 
 
+# --- Message bodies -------------------------------------------------------------------------
+#
+# A scene resolves to *one* Discord message, and Discord has two kinds. A Components V2
+# message is a component tree and has no content or embeds at all; a classic message is
+# content, embeds, and action rows and cannot hold a component tree. Modelling both as one
+# flat child list would force every consumer to rediscover which kind it was holding, so the
+# body says so once.
+
+
+@dataclass(frozen=True, slots=True)
+class SceneComponentsV2:
+    """A Components V2 message: the component tree is the whole message."""
+
+    children: tuple[SceneNode, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SceneEmbedField:
+    name: str
+    value: str
+    inline: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class SceneEmbedAuthor:
+    name: str
+    url: str | None = None
+    icon_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SceneEmbedFooter:
+    text: str
+    icon_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SceneEmbedMedia:
+    """One embed image or thumbnail. The description is kept even where Discord drops it."""
+
+    url: str
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SceneEmbed:
+    """One resolved embed. Every grouping and overflow decision is already made.
+
+    Server-generated properties — provider, video, and the fields Discord fills from a URL
+    it unfurls — are deliberately absent. A scene describes what Squid asked for, and
+    round-tripping something the API invents would make the fingerprint lie.
+    """
+
+    title: str | None = None
+    url: str | None = None
+    description: str | None = None
+    fields: tuple[SceneEmbedField, ...] = ()
+    footer: SceneEmbedFooter | None = None
+    author: SceneEmbedAuthor | None = None
+    colour: Color | None = None
+    image: SceneEmbedMedia | None = None
+    thumbnail: SceneEmbedMedia | None = None
+    timestamp: str | None = None
+    """An ISO-8601 instant, or None. Stored as text so the scene stays plain data."""
+
+
+type SceneControl = SceneLink | SceneButton | SceneRoutedButton | SceneSelect | SceneRoutedSelect | SceneExtension
+
+
+@dataclass(frozen=True, slots=True)
+class SceneClassicRow:
+    """One classic action row. Row assignment is a planning decision, not a drawing one."""
+
+    controls: tuple[SceneControl, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class SceneClassicMessage:
+    """A pre-Components-V2 message: content, embeds, and up to five action rows."""
+
+    content: str | None = None
+    embeds: tuple[SceneEmbed, ...] = ()
+    rows: tuple[SceneClassicRow, ...] = ()
+
+
+type SceneBody = SceneComponentsV2 | SceneClassicMessage
+
+
 @dataclass(frozen=True, slots=True)
 class SceneAsset:
     key: str
@@ -188,9 +277,21 @@ class SceneDocument:
     protocol: int
     target: str
     target_version: int
-    children: tuple[SceneNode, ...]
+    body: SceneBody
     assets: tuple[SceneAsset, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
+
+    @property
+    def components_v2(self) -> SceneComponentsV2:
+        """The Components V2 body, for a caller that only speaks V2.
+
+        Raises:
+            LayoutInvariantError: This scene resolved to some other kind of message.
+        """
+        if not isinstance(self.body, SceneComponentsV2):
+            message = f"scene for target {self.target!r} has a {type(self.body).__name__} body, not Components V2"
+            raise LayoutInvariantError(message)
+        return self.body
 
 
 class PlanSeverity(StrEnum):

@@ -44,7 +44,7 @@ def _event(responder: _Responder | None = None) -> PressEvent:
 
 
 def _button(result: sl.PlanResult) -> SceneButton:
-    row = next(node for node in result.scene.children if isinstance(node, SceneRow))
+    row = next(node for node in result.scene.components_v2.children if isinstance(node, SceneRow))
     button = row.items[0]
     assert isinstance(button, SceneButton)
     return button
