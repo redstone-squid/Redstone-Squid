@@ -353,6 +353,7 @@ class _DispatchProfile:
         if self.finished:
             return
         self.finished = True
+        self.operation.increment("dispatch.rebased", int(self.generation.rebased))
         self.acknowledge("action")
         outcome = (
             TraceOutcome.CANCELLED
