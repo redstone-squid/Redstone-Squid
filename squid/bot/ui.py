@@ -105,6 +105,7 @@ CHROME = ui.Chrome(
     and_n_more=lambda count: L(t"…and {count} more."),
     not_yours=L(t"These list controls belong to someone else."),
     session_ended=L(t"This session has ended."),
+    updates_paused=L(t"Live updates paused — press any control to resume."),
     previous=L(t"Previous"),
     next=L(t"Next"),
     back=L(t"Back"),
@@ -249,6 +250,7 @@ def create_mount(
     chrome: ui.Chrome | None = None,
     timeout: float = 180,
     lock_to: int | AbstractSet[int] | None = None,
+    reactor: ui.discord.Reactor | None = None,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
     return ui.discord.Mount(
@@ -258,6 +260,7 @@ def create_mount(
         timeout=timeout,
         lock_to=lock_to,
         on_error=_component_error_hook,
+        scheduler=reactor,
     )
 
 
