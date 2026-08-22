@@ -17,6 +17,7 @@ from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
 from squid_layouts.profiling import (
+    CounterAggregate,
     NoOpProfiler,
     OperationAggregate,
     OperationKind,
@@ -179,6 +180,13 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             if aggregate.key.operation in {OperationKind.DISPATCH, OperationKind.ROUTE_DISPATCH}
         )
         body = "No action profiles have been observed." if not actions else "\n".join(map(_aggregate_text, actions))
+        counters = tuple(
+            aggregate
+            for aggregate in snapshot.counter_aggregates
+            if aggregate.key.operation in {OperationKind.DISPATCH, OperationKind.ROUTE_DISPATCH}
+        )
+        if counters:
+            body += "\n" + "\n".join(map(_counter_text, counters))
         await self._send(ctx, [section(code(body), heading="Action profiles")])
 
     @profile_group.command(name="queues")
@@ -215,6 +223,11 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             for aggregate in snapshot.span_aggregates
             if aggregate.key.operation in queue_operations
             and (aggregate.key.span_name == "queue_wait" or aggregate.key.span_name.startswith("subscriber:"))
+        )
+        lines.extend(
+            _counter_text(aggregate)
+            for aggregate in snapshot.counter_aggregates
+            if aggregate.key.operation in queue_operations
         )
         body = "No queue diagnostics are configured or observed." if not lines else "\n".join(lines)
         await self._send(ctx, [section(code(body), heading="Queue profiles")])
@@ -280,6 +293,11 @@ def _aggregate_text(aggregate: OperationAggregate) -> str:
 
 def _milliseconds(seconds: float | None) -> str:
     return "—" if seconds is None else f"{seconds * 1000:.1f}ms"
+
+
+def _counter_text(aggregate: CounterAggregate) -> str:
+    key = aggregate.key
+    return f"counter  {key.operation}:{key.counter_name} window={aggregate.window} lifetime={aggregate.lifetime}"
 
 
 def _span_aggregate_text(aggregate: SpanAggregate) -> str:
