@@ -348,6 +348,8 @@ class Mount:
         # which holds the button that *opens* the form under the very same key.
         self._form_bindings: Mapping[str, FormBinding] = {}
         self._action_lock = asyncio.Lock()
+        # Every operation that can replace what Discord shows shares this lock. Handler
+        # execution stays outside it; only staged generations and terminal teardown serialize.
         self._render_lock = asyncio.Lock()
         self._generation = 0
         # Generations handed to staged renders: a candidate whose delivery failed must not
@@ -672,30 +674,31 @@ class Mount:
         object came back, or that the destination abandoned delivery; the receipt may still
         have committed a standing handle such as an interaction's `@original` authority.
         """
-        if self._finished:
-            return None
-        # A render staged by `_stage_view` and never delivered is superseded, not delivered.
-        if self._pending is not None:
-            self._pending.view.stop()
-            self._pending = None
-        # The loaded render is the first one the reader sees: one delivery, no loading
-        # paint. A raise here delivered nothing and staged nothing.
-        candidate = await self._stage_loaded()
-        try:
-            receipt = await destination(candidate.view, _attachment_files(candidate.assets))
-        except deliver.DeliveryAbandoned:
-            logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
-            self._rollback(candidate)
-            return None
-        except Exception:
-            self._rollback(candidate)
-            raise
-        self._handle = receipt.handle
-        if receipt.message is not None:
-            self._note_address(receipt.message)
-        self._active = self.clock()
-        self._commit(candidate)
-        return receipt.message
+        async with self._render_lock:
+            if self._finished:
+                return None
+            # A render staged by `_stage_view` and never delivered is superseded, not delivered.
+            if self._pending is not None:
+                self._pending.view.stop()
+                self._pending = None
+            # The loaded render is the first one the reader sees: one delivery, no loading
+            # paint. A raise here delivered nothing and staged nothing.
+            candidate = await self._stage_loaded()
+            try:
+                receipt = await destination(candidate.view, _attachment_files(candidate.assets))
+            except deliver.DeliveryAbandoned:
+                logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
+                self._rollback(candidate)
+                return None
+            except Exception:
+                self._rollback(candidate)
+                raise
+            self._handle = receipt.handle
+            if receipt.message is not None:
+                self._note_address(receipt.message)
+            self._active = self.clock()
+            self._commit(candidate)
+            return receipt.message
 
     def _swap_view(self, view: MountedView) -> None:
         if self._view is not None and self._view is not view:
@@ -966,56 +969,67 @@ class Mount:
 
     async def flush(self, interaction: discord.Interaction) -> None:
         """Apply pending state changes as an interaction edit, or just acknowledge."""
-        if self._finished:
-            return
-        if not self._dirty:
-            if not interaction.response.is_done():
-                await interaction.response.defer()
-            return
-        # A component cannot enter the tree without a state write, so a click that changed
-        # nothing never reaches this at all.
-        candidate = await self._stage_loaded()
-        source = deliver.handle_from(interaction)
-        try:
-            wrote = await self._deliver(candidate, through=source)
-        except Exception:
-            self._rollback(candidate)
-            raise
-        if wrote is None:
-            self._rollback(candidate)
-            await self._acknowledge(interaction)
-            return
-        self._commit(candidate)
-        # Only the interaction's own handle answers the click by editing through it. Delivery
-        # through the standing handle leaves the click unanswered, and Discord shows the user
-        # "This interaction failed" three seconds later.
-        if wrote is not source:
+        acknowledge = False
+        async with self._render_lock:
+            if self._finished:
+                return
+            if not self._dirty:
+                acknowledge = True
+            else:
+                # A component cannot enter the tree without a state write, so a click that
+                # changed nothing never reaches this at all.
+                candidate = await self._stage_loaded()
+                source = deliver.handle_from(interaction)
+                try:
+                    wrote = await self._deliver(candidate, through=source)
+                except Exception:
+                    self._rollback(candidate)
+                    raise
+                if wrote is None:
+                    self._rollback(candidate)
+                    acknowledge = True
+                else:
+                    self._commit(candidate)
+                    # Only the interaction's own handle answers the click by editing through
+                    # it. Delivery through the standing handle leaves the click unanswered,
+                    # and Discord shows the user "This interaction failed" three seconds later.
+                    acknowledge = wrote is not source
+        if acknowledge:
             await self._acknowledge(interaction)
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
         """Finish through an interaction edit — the shape a Close button wants."""
-        if self._finished:
-            return
-        # Marked before delivery: a failed disable-edit must not resurrect the mount.
-        self._finished = True
-        candidate = self._stage(disabled=True)
-        source = deliver.handle_from(interaction)
+        run_hooks = False
         try:
-            wrote = await self._deliver(candidate, through=source, files=False)
-            # Editing through the interaction's own handle answers the click; nothing else
-            # does, whether it delivered through the standing handle or not at all.
-            if wrote is None or wrote is not source:
-                await self._acknowledge(interaction)
-        except Exception:
-            self._rollback(candidate)
+            async with self._render_lock:
+                if self._finished:
+                    return
+                # Marked before delivery: a failed disable-edit must not resurrect the mount.
+                self._finished = True
+                candidate = self._stage(disabled=True)
+                source = deliver.handle_from(interaction)
+                try:
+                    wrote = await self._deliver(candidate, through=source, files=False)
+                    # Editing through the interaction's own handle answers the click; nothing else
+                    # does, whether it delivered through the standing handle or not at all.
+                    if wrote is None or wrote is not source:
+                        await self._acknowledge(interaction)
+                except Exception:
+                    self._rollback(candidate)
+                    raise
+                finally:
+                    # The terminal tree is never committed, so `finish` unmounts the live one once.
+                    candidate.view.stop()
+                    self._teardown()
+                    # In the `finally` rather than after it: a raising disable-edit propagates past
+                    # this block, and the mount is finished and torn down either way. An observer
+                    # that missed it would hold a dead mount forever.
+                    run_hooks = True
+        except BaseException:
+            if run_hooks:
+                await self._run_finish_hooks()
             raise
-        finally:
-            # The terminal tree is never committed, so `finish` unmounts the live one once.
-            candidate.view.stop()
-            self._teardown()
-            # In the `finally` rather than after it: a raising disable-edit propagates past
-            # this block, and the mount is finished and torn down either way. An observer
-            # that missed it would hold a dead mount forever.
+        if run_hooks:
             await self._run_finish_hooks()
 
     async def refresh(self) -> None:
@@ -1031,24 +1045,25 @@ class Mount:
         await self.refresh_now()
 
     async def refresh_now(self) -> None:
-        if self._finished:
-            return
-        if self._handle is None or self._handle.expired():
-            self._dirty = True
-            return
-        candidate = await self._stage_loaded()
-        try:
-            delivered = await self._deliver(candidate) is not None
-        except Exception:
-            self._rollback(candidate)
-            raise
-        if not delivered:
-            # `_rollback` leaves the mount dirty, so the next interaction shows this render.
-            # `refresh` has always promised the next opportunity rather than this instant.
-            self._rollback(candidate)
-            logger.debug("mount %s has no live edit handle; render deferred", self.id)
-            return
-        self._commit(candidate)
+        async with self._render_lock:
+            if self._finished:
+                return
+            if self._handle is None or self._handle.expired():
+                self._dirty = True
+                return
+            candidate = await self._stage_loaded()
+            try:
+                delivered = await self._deliver(candidate) is not None
+            except Exception:
+                self._rollback(candidate)
+                raise
+            if not delivered:
+                # `_rollback` leaves the mount dirty, so the next interaction shows this render.
+                # `refresh` has always promised the next opportunity rather than this instant.
+                self._rollback(candidate)
+                logger.debug("mount %s has no live edit handle; render deferred", self.id)
+                return
+            self._commit(candidate)
 
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
@@ -1077,26 +1092,36 @@ class Mount:
 
     async def finish(self, *, disable: bool = True) -> None:
         """Stop dispatching; optionally leave the message with its controls disabled."""
-        if self._finished:
-            return
-        self._finished = True
+        run_hooks = False
         try:
-            if disable and self._handle is not None:
-                candidate = self._stage(disabled=True)
+            async with self._render_lock:
+                if self._finished:
+                    return
+                self._finished = True
                 try:
-                    if await self._deliver(candidate, files=False) is None:
-                        logger.debug("could not disable controls on finish: no live edit handle")
-                        self._rollback(candidate)
-                except discord.HTTPException:
-                    logger.debug("could not disable controls on finish", exc_info=True)
-                    self._rollback(candidate)
+                    if disable and self._handle is not None:
+                        candidate = self._stage(disabled=True)
+                        try:
+                            if await self._deliver(candidate, files=False) is None:
+                                logger.debug("could not disable controls on finish: no live edit handle")
+                                self._rollback(candidate)
+                        except discord.HTTPException:
+                            logger.debug("could not disable controls on finish", exc_info=True)
+                            self._rollback(candidate)
+                        finally:
+                            candidate.view.stop()
                 finally:
-                    candidate.view.stop()
-        finally:
-            # Neither the teardown nor the hooks are conditional on the disable-edit working,
-            # or even on it failing in a way this anticipated. The mount is finished either
-            # way, and an observer that never heard so would hold a dead mount forever.
-            self._teardown()
+                    # Neither the teardown nor the hooks are conditional on the disable-edit
+                    # working, or even on it failing in a way this anticipated. The mount is
+                    # finished either way, and an observer that never heard so would hold a dead
+                    # mount forever.
+                    self._teardown()
+                    run_hooks = True
+        except BaseException:
+            if run_hooks:
+                await self._run_finish_hooks()
+            raise
+        if run_hooks:
             await self._run_finish_hooks()
 
     def _teardown(self) -> None:
