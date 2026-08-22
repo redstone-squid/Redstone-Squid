@@ -127,3 +127,7 @@ documents.
 Validation: focused breaking, pagination, solver-pressure, degradation, structure, search,
 semantic-action, and cache regressions pass; the complete package suite passes all 622 tests;
 and `just typecheck` reports zero errors.
+
+Diagnostics follow-up: measured-solver notes now carry a `SolveNoteCode` `StrEnum`, severity,
+and message. Feasibility consumes the failure severity directly, so changing user-facing wording
+cannot change the search result; plan events preserve the specific solver code.

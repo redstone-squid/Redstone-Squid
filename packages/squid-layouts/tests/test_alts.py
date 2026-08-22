@@ -11,7 +11,7 @@ from squid_layouts.discord import (
     render_static,
 )
 from squid_layouts.discord.testing import assert_within_limits
-from squid_layouts.planning import solve
+from squid_layouts.planning import SolveNoteCode, solve
 from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
 from squid_layouts.primitives import (
     Alt,
@@ -62,7 +62,7 @@ class TestAltsPolicy:
         node = Text("x" * 5000, overflow=alts("y" * 4500))
         filler = Text("f" * 3990, priority=10)
         solved = solve([filler, node])
-        assert any("exhausted" in note for note in solved.notes)
+        assert any(note.code is SolveNoteCode.ALTERNATE_EXHAUSTED for note in solved.notes)
         assert sum(map(len, _solved_texts(solved))) <= 4000
 
 
@@ -106,7 +106,7 @@ class TestCondensePolicy:
     def test_exhausted_ladders_trim_the_joined_block(self):
         entries = tuple(Alt("entry " + "x" * 500, ("entry " + "y" * 400,)) for _ in range(20))
         solved = solve([Lines(entries, overflow=Condense())])
-        assert any("exhausted its ladders" in note for note in solved.notes)
+        assert any(note.code is SolveNoteCode.CONDENSE_TRUNCATED for note in solved.notes)
         assert sum(map(len, _solved_texts(solved))) <= 4000
 
     def test_plain_entries_behave_like_never(self):

@@ -34,7 +34,7 @@ from squid_layouts.discord import (
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import solve
+from squid_layouts.planning import SolveNoteCode, solve
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.solve import RText, _component_count, split_pages
 from squid_layouts.primitives import (
@@ -373,7 +373,7 @@ class TestCountPages:
     def test_count_pages_on_a_non_lines_node_fall_back_to_budget_pages(self):
         solved = solve([Text("short", overflow=Paginate(per=10))])
         assert solved.pager is None
-        assert any("not a Lines node" in note for note in solved.notes)
+        assert any(note.code is SolveNoteCode.PAGINATE_PER_FALLBACK for note in solved.notes)
 
     def test_per_must_be_positive(self):
         with pytest.raises(ValueError, match="at least 1"):
