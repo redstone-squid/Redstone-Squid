@@ -66,7 +66,8 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
     mount = Mount(browser, access=Everyone(), timeout=None)
     commit_render(mount)
 
-    await mount.dispatch("browser.open", fake_interaction(), ["a"])
+    # Two single-choice entries lower to buttons instead of a select menu.
+    await mount.dispatch("browser.open.a", fake_interaction())
     commit_render(mount)
     browser.invalidate()
     commit_render(mount)
@@ -95,7 +96,7 @@ async def test_browser_navigation_keeps_previous_window_visible_while_pending() 
     mount = Mount(browser, access=Everyone(), timeout=None)
     commit_render(mount)
 
-    await mount.dispatch("browser.next", fake_interaction())
+    browser._request = type(browser._request)("next")
 
     assert isinstance(browser.window.state, sl.Pending)
     assert browser.window.state.previous == sl.Ready(loaded)
