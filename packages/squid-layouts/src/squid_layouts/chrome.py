@@ -50,6 +50,8 @@ class Chrome:
     back: TextLike = "Back"
     home: TextLike = "Home"
     close: TextLike = "Close"
+    undo: TextLike = "Undo"
+    redo: TextLike = "Redo"
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
     range_footer: Callable[[int, int], TextLike] = _default_range_footer
@@ -82,6 +84,8 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         back=resolve_text(chrome.back, localization).content,
         home=resolve_text(chrome.home, localization).content,
         close=resolve_text(chrome.close, localization).content,
+        undo=resolve_text(chrome.undo, localization).content,
+        redo=resolve_text(chrome.redo, localization).content,
         page_footer=lambda page, pages: resolve_text(chrome.page_footer(page, pages), localization).content,
         range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,
         approximate_total_footer=lambda first, last, total: (
