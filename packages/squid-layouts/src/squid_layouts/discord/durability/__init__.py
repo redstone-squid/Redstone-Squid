@@ -7,6 +7,8 @@ from typing import Any
 
 from squid_layouts.discord.mount import Mount
 from squid_layouts.discord.sessions import SessionKey
+from squid_layouts.discord.target import V2_TARGET
+from squid_layouts.discord.targets import DEFAULT_TARGETS, TargetRegistry
 from squid_layouts.runtime.component import Component, render_component_tree
 from squid_layouts.runtime.presentation import (
     CursorState,
@@ -29,6 +31,7 @@ from .stores import (
 )
 
 __all__ = [
+    "DEFAULT_TARGETS",
     "AdmissionToken",
     "ClaimToken",
     "ComponentRegistry",
@@ -63,6 +66,7 @@ __all__ = [
     "SnapshotCodec",
     "SnapshotError",
     "StoredSessionRecord",
+    "TargetRegistry",
     "Unreachable",
     "encode_session_scope",
 ]
@@ -94,6 +98,15 @@ class MountSnapshot:
     component_version: int
     components: tuple[ComponentSnapshot, ...]
     presentation: PresentationSnapshot
+    target_id: str = V2_TARGET.id
+    target_version: int = V2_TARGET.version
+    target_fingerprint: str = ""
+    """A digest of the profile this mount was planned against.
+
+    Recorded beside the id because an id alone does not pin the budgets. Recovery refuses a
+    profile that has since changed rather than rebuilding a stored render against limits it
+    was never fitted to.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,9 +182,13 @@ class DurableMountCodec:
 
 
 class SnapshotCodec:
-    """Canonical JSON codec for durable mount state protocol 1."""
+    """Canonical JSON codec for durable mount state protocol 2.
 
-    protocol = 1
+    Protocol 2 adds the target identity. A protocol 1 record has no way to say which message
+    mode it was planned for, so it is refused rather than assumed to be Components V2.
+    """
+
+    protocol = 2
 
     @classmethod
     def dumps(cls, snapshot: MountSnapshot) -> str:
@@ -187,6 +204,11 @@ class SnapshotCodec:
                 for component in snapshot.components
             ],
             "presentation": _presentation_to_dict(snapshot.presentation),
+            "target": {
+                "id": snapshot.target_id,
+                "version": snapshot.target_version,
+                "fingerprint": snapshot.target_fingerprint,
+            },
         }
         try:
             return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -226,12 +248,16 @@ class SnapshotCodec:
                     state=state,
                 )
             )
+        target = _object(raw.get("target"))
         return MountSnapshot(
             protocol,
             _string(raw, "component_key"),
             _integer(raw, "component_version"),
             tuple(decoded_components),
             _presentation_from_dict(presentation),
+            _string(target, "id"),
+            _integer(target, "version"),
+            _string(target, "fingerprint"),
         )
 
 
@@ -382,6 +408,9 @@ class ComponentRegistry:
                 dict(mount.presentation.disclosures),
                 dict(mount.presentation.strategies),
             ),
+            mount.target.id,
+            mount.target.version,
+            mount.target.fingerprint,
         )
         SnapshotCodec.dumps(snapshot)
         return snapshot
@@ -390,8 +419,18 @@ class ComponentRegistry:
         self,
         snapshot: MountSnapshot,
         context: RestoreContext | None = None,
+        *,
+        targets: TargetRegistry = DEFAULT_TARGETS,
         **mount_options: Any,
     ) -> Mount:
+        """Rebuild a mount from a snapshot, against the exact target it was planned for.
+
+        The target is resolved *before* anything is built, so an unavailable or changed
+        profile fails while the record is still just data — not after a mount exists and a
+        reader could already be clicking it.
+        """
+        target = targets.resolve(snapshot.target_id, snapshot.target_version, snapshot.target_fingerprint)
+        mount_options.setdefault("target", target)
         registration = self._registrations.get(snapshot.component_key)
         if registration is None:
             message = f"durable component {snapshot.component_key!r} is not registered"

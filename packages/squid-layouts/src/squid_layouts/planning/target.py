@@ -73,6 +73,16 @@ class ResourceCost:
 EMPTY_COST = ResourceCost()
 
 
+def _limit_values(limits: object) -> tuple[tuple[str, object], ...]:
+    """A limits object's fields, in name order, for a stable digest."""
+    if limits is None:
+        return ()
+    fields = getattr(limits, "__dataclass_fields__", None)
+    if fields is None:
+        return ()
+    return tuple(sorted((name, getattr(limits, name)) for name in fields))
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedExtension:
     """One target extension prepared and measured exactly once."""
@@ -117,6 +127,20 @@ class TargetProfile:
             return self.resources
         declared = getattr(self.limits, "budgets", None)
         return declared if isinstance(declared, Mapping) else {}
+
+    @property
+    def fingerprint(self) -> str:
+        """A digest of everything about this profile that changes what a legal document is.
+
+        Recovery compares it against the one a snapshot recorded. Two targets sharing an id
+        but differing in capabilities or limits would rebuild the mount against budgets the
+        stored render was never fitted to, and the resulting message would be legal only by
+        luck. Extensions and the dialect are excluded deliberately: they are process-local
+        objects, not facts about the message.
+        """
+        from squid_layouts.planning.identity import stable_fingerprint
+
+        return stable_fingerprint((self.id, self.version, sorted(self.capabilities), _limit_values(self.limits)))
 
     def capacity(self, name: str) -> int | None:
         """This target's remaining room on one axis, or None if it does not budget it."""
