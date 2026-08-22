@@ -16,6 +16,7 @@ from squid_layouts.discord import (
 )
 from squid_layouts.planning import (
     LayoutOverflowError,
+    SolveNoteCode,
     solve,
 )
 from squid_layouts.planning.solve import RPanel, RText, SolvedLayout
@@ -105,7 +106,7 @@ def _ladder_document(count: int, *, priorities: list[int] | None = None) -> list
 
 
 def _steps(solved: SolvedLayout) -> int:
-    return sum(1 for note in solved.notes if "stepped" in note)
+    return sum(1 for note in solved.notes if note.code is SolveNoteCode.VARIANT_STEP)
 
 
 class TestVariants:
@@ -137,13 +138,13 @@ class TestVariants:
             for index in range(12)
         ]
         solved = solve(panels)
-        assert any("exceed" in note for note in solved.notes)
+        assert any(note.code is SolveNoteCode.COMPONENT_BUDGET for note in solved.notes)
 
     def test_a_later_rung_can_resolve_a_hard_failure_without_component_pressure(self):
         solved = solve([Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))])
 
         assert _rendered(solved) == "plain"
-        assert not any("Never nodes need" in note for note in solved.notes)
+        assert not solved.failures
 
     def test_the_bounded_fallback_can_resolve_a_hard_failure(self):
         hard = Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))
@@ -153,7 +154,7 @@ class TestVariants:
 
         assert "plain" in _rendered(solved)
         assert solved.search_fallback
-        assert not any("Never nodes need" in note for note in solved.notes)
+        assert not solved.failures
 
     def test_reused_ladder_values_still_step_one_occurrence_at_a_time(self):
         shared = _ladder_document(1)[0]
@@ -237,9 +238,9 @@ class TestVariantLadders:
 
     def test_the_note_names_the_stepped_ladder_and_its_rung(self):
         solved = solve([self._rungs(index) for index in range(9)])
-        steps = [note for note in solved.notes if "stepped" in note]
-        assert steps[0] == "$.0 stepped to variant 2 of 3 (priority 0) under component pressure"
-        assert [note.split()[0] for note in steps] == ["$.0", "$.1", "$.2"]
+        steps = [note for note in solved.notes if note.code is SolveNoteCode.VARIANT_STEP]
+        assert steps[0].message == "$.0 stepped to variant 2 of 3 (priority 0) under layout pressure"
+        assert [note.message.split()[0] for note in steps] == ["$.0", "$.1", "$.2"]
 
     def test_global_search_skips_an_equal_priority_step_that_saves_nothing(self) -> None:
         filler = [Text(f"filler {index}") for index in range(37)]

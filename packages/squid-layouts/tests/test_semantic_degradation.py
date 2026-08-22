@@ -11,6 +11,7 @@ from squid_layouts import (
     truncate,
 )
 from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.planning import SolveNoteCode
 
 
 def test_semantic_prose_is_lossless_by_default() -> None:
@@ -29,7 +30,7 @@ def test_optional_explicitly_grants_whole_node_loss() -> None:
     result = plan((Paragraph("x" * 4000), optional(Paragraph("footnote"))), target=DEFAULT_TARGET)
 
     assert len(result.scene.children) == 1
-    assert any("dropped node" in event.message for event in result.report.events)
+    assert any(event.code == f"layout.{SolveNoteCode.NODE_DROPPED}" for event in result.report.events)
 
 
 def test_best_effort_only_relaxes_prose() -> None:
