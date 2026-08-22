@@ -38,6 +38,7 @@ from squid_layouts.primitives.nodes import (
 )
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.reactivity import _CURRENT, _State, report_undeclared_write
+from squid_layouts.runtime.resources import Resource, _ResourceDescriptor, observe_resources, unique_resources
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -176,6 +177,7 @@ class ComponentTree:
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
     deferred: tuple[Component, ...] = ()
+    resources: tuple[Resource[Any], ...] = ()
     """Embedded components expansion stopped at, in the order it met them.
 
     Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
@@ -192,6 +194,8 @@ class Component:
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _state_names: ClassVar[frozenset[str]] = frozenset()
+    _state_descriptors: ClassVar[dict[str, _State]] = {}
+    _resource_dependencies: ClassVar[dict[str, tuple[_ResourceDescriptor[Any, Any], ...]]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -202,6 +206,29 @@ class Component:
             if isinstance(descriptor, _State)
         }
         cls._state_names = frozenset(declared)
+        cls._state_descriptors = declared
+        declared_resources = {
+            name: descriptor
+            for klass in reversed(cls.__mro__)
+            for name, descriptor in vars(klass).items()
+            if isinstance(descriptor, _ResourceDescriptor)
+        }
+        dependency_map: dict[str, list[_ResourceDescriptor[Any, Any]]] = {}
+        for resource_name, descriptor in declared_resources.items():
+            for dependency in descriptor.depends:
+                state_descriptor = next(
+                    (candidate for candidate in declared.values() if candidate is dependency),
+                    None,
+                )
+                if state_descriptor is None:
+                    message = (
+                        f"{cls.__name__}.{resource_name} dependency must be an sl.state() field on the same component"
+                    )
+                    raise TypeError(message)
+                dependents = dependency_map.setdefault(state_descriptor._name, [])
+                if descriptor not in dependents:
+                    dependents.append(descriptor)
+        cls._resource_dependencies = {name: tuple(value) for name, value in dependency_map.items()}
         required = tuple(
             (name, descriptor._name) for name, descriptor in declared.items() if not descriptor.has_initial
         )
@@ -224,7 +251,10 @@ class Component:
             report_undeclared_write(self, name)
         object.__setattr__(self, name, value)
 
-    def _state_changed(self) -> None:
+    def _state_changed(self, names: frozenset[str]) -> None:
+        for name in names:
+            for descriptor in type(self)._resource_dependencies.get(name, ()):
+                descriptor.invalidate_for(self)
         self.invalidate()
 
     def _state_rolled_back(self) -> None:
@@ -268,7 +298,8 @@ class Component:
         if name not in type(self)._state_names:
             message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
             raise TypeError(message)
-        self.invalidate()
+        descriptor = type(self)._state_descriptors[name]
+        self._state_changed(frozenset((descriptor._name,)))
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
@@ -459,8 +490,9 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    nodes = tuple(expand(root, "$", context or {}))
-    return ComponentTree(nodes, components, tuple(assets), document_key, tuple(deferred))
+    with observe_resources() as observed:
+        nodes = tuple(expand(root, "$", context or {}))
+    return ComponentTree(nodes, components, tuple(assets), document_key, tuple(deferred), unique_resources(observed))
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
