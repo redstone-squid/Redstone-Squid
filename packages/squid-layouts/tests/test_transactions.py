@@ -14,7 +14,14 @@ from squid_layouts import (
 )
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import ComponentRuntime
-from squid_layouts.runtime.reactivity import export_state, readonly_transaction, restore_state
+from squid_layouts.runtime.reactivity import (
+    StateDelta,
+    block_writes,
+    export_state,
+    on_action_commit,
+    readonly_transaction,
+    restore_state,
+)
 
 
 class Uncopyable:
@@ -301,3 +308,68 @@ class TestAbstractBases:
 
         with pytest.raises(TypeError, match=r"Panel\.__init__ left declared state unassigned: profile"):
             Panel()
+
+
+class TestActionCommitHooks:
+    """The seam an undo entry's state capture comes from (see `sl.history`)."""
+
+    def test_the_delta_carries_both_directions(self):
+        panel = attached(Panel(Uncopyable()))
+        assert panel.declared == 0
+        seen: list[StateDelta] = []
+        with transaction():
+            on_action_commit(seen.append)
+            panel.declared = 7
+        (delta,) = seen
+        (change,) = delta.changes
+        assert (change.before, change.after) == (0, 7)
+
+    def test_a_field_still_on_its_default_is_recorded_as_unset(self):
+        """Its slot is materialized lazily, so restoring it means popping it again."""
+        panel = attached(Panel(Uncopyable()))
+        seen: list[StateDelta] = []
+        with transaction():
+            on_action_commit(seen.append)
+            panel.declared = 7
+        (delta,) = seen
+        (change,) = delta.changes
+        assert not change.existed_before
+        delta.restore_before()
+        assert panel.declared == 0
+
+    def test_a_rollback_runs_no_hooks(self):
+        panel = attached(Panel(Uncopyable()))
+        seen: list[StateDelta] = []
+        with pytest.raises(RuntimeError), transaction():
+            on_action_commit(seen.append)
+            panel.declared = 7
+            message = "the action failed"
+            raise RuntimeError(message)
+        assert seen == []
+
+    def test_reference_copied_state_is_not_copied_on_the_way_out(self):
+        service = Uncopyable()
+        panel = attached(Panel(service))
+        seen: list[StateDelta] = []
+        with transaction():
+            on_action_commit(seen.append)
+            panel.service = Uncopyable()
+        (delta,) = seen
+        (change,) = delta.changes
+        assert change.before is service
+
+    def test_one_key_registers_once(self):
+        key = object()
+        with transaction():
+            on_action_commit(lambda delta: None, key=key)
+            with pytest.raises(RuntimeError, match="already registered"):
+                on_action_commit(lambda delta: None, key=key)
+
+    def test_blocked_writes_name_their_reason(self):
+        panel = attached(Panel(Uncopyable()))
+        with transaction():
+            with pytest.raises(ReactiveWriteError, match="busy reversing"), block_writes("busy reversing"):
+                panel.declared = 7
+            # The block is scoped, not terminal: the transaction is still writable after it.
+            panel.declared = 9
+        assert panel.declared == 9
