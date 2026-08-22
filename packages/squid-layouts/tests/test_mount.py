@@ -76,6 +76,14 @@ from squid_layouts.primitives import (
     SelectMenu,
     Text,
 )
+from squid_layouts.profiling import (
+    ActionOutcome,
+    DispatchDisposition,
+    MemoryProfiler,
+    PresentationOutcome,
+    RuntimeTrace,
+    TraceOutcome,
+)
 from squid_layouts.runtime import ComponentRuntime
 from squid_layouts.runtime.reactivity import _CURRENT
 
@@ -171,6 +179,204 @@ def _refuse_handle(*args: Any, **kwargs: Any) -> _RefusingHandle:
 
 def _button(view: discord.ui.LayoutView) -> discord.ui.Button:
     return next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+
+
+def _profile_trace(profiler: MemoryProfiler) -> RuntimeTrace:
+    snapshot = profiler.snapshot()
+    traces = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
+    unique = {trace.trace_id: trace for trace in traces}
+    assert len(unique) == 1
+    return next(iter(unique.values()))
+
+
+class TestDispatchProfiling:
+    async def test_success_records_action_presentation_generation_and_stages(self) -> None:
+        profiler = MemoryProfiler()
+        component = Counter()
+        mount = Mount(component, access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+        submitted = mount.generation
+
+        await mount.dispatch("inc", fake_interaction(), generation=submitted)
+
+        trace = _profile_trace(profiler)
+        result = trace.result.dispatch
+        assert result is not None
+        assert result.disposition is DispatchDisposition.COMPLETED
+        assert result.action is ActionOutcome.HANDLED
+        assert result.presentation is PresentationOutcome.WRITTEN
+        assert result.generation.submitted == submitted
+        assert result.generation.active == submitted
+        assert not result.generation.rebased
+        aggregate = profiler.snapshot().aggregates[0]
+        assert aggregate.key.disposition is DispatchDisposition.COMPLETED
+        assert aggregate.key.action is ActionOutcome.HANDLED
+        assert aggregate.key.presentation is PresentationOutcome.WRITTEN
+        assert {span.name for span in trace.spans} >= {
+            "acknowledgement",
+            "access",
+            "binding",
+            "action_lock",
+            "handler",
+        }
+        acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
+        assert dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes) == {
+            "source": "interaction_write"
+        }
+
+    async def test_stale_and_rebased_are_distinct_generation_metadata(self) -> None:
+        stale_profiler = MemoryProfiler()
+        stale_mount = Mount(Counter(), access=Everyone(), profiler=stale_profiler, timeout=None)
+        commit_render(stale_mount)
+        submitted = stale_mount.generation
+        commit_render(stale_mount)
+
+        await stale_mount.dispatch("inc", fake_interaction(), generation=submitted)
+
+        stale = _profile_trace(stale_profiler).result.dispatch
+        assert stale is not None
+        assert stale.disposition is DispatchDisposition.STALE
+        assert not stale.generation.rebased
+
+        class Rebased(Component):
+            def render(self):
+                return Row((Button("run", self.run, "run", policy=ActionPolicy.REBASE),))
+
+            async def run(self, event: PressEvent) -> None: ...
+
+        rebase_profiler = MemoryProfiler()
+        rebase_mount = Mount(Rebased(), access=Everyone(), profiler=rebase_profiler, timeout=None)
+        commit_render(rebase_mount)
+        submitted = rebase_mount.generation
+        commit_render(rebase_mount)
+
+        await rebase_mount.dispatch("run", fake_interaction(), generation=submitted)
+
+        rebased = _profile_trace(rebase_profiler).result.dispatch
+        assert rebased is not None
+        assert rebased.disposition is DispatchDisposition.COMPLETED
+        assert rebased.generation.rebased
+
+    async def test_short_circuit_and_recovered_handler_failure_remain_visible(self) -> None:
+        class Stop(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None: ...
+
+        stopped_profiler = MemoryProfiler()
+        stopped = Mount(
+            Counter(),
+            access=Everyone(),
+            middleware=(Stop(),),
+            profiler=stopped_profiler,
+            timeout=None,
+        )
+        commit_render(stopped)
+        await stopped.dispatch("inc", fake_interaction())
+
+        stopped_result = _profile_trace(stopped_profiler).result.dispatch
+        assert stopped_result is not None
+        assert stopped_result.action is ActionOutcome.SHORT_CIRCUITED
+
+        class Broken(Counter):
+            async def increment(self, event: PressEvent) -> None:
+                self.count = 1
+                raise RuntimeError("caught")
+
+        class Catch(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                with pytest.raises(RuntimeError):
+                    await proceed()
+
+        recovered_profiler = MemoryProfiler()
+        recovered = Mount(
+            Broken(),
+            access=Everyone(),
+            middleware=(Catch(),),
+            profiler=recovered_profiler,
+            timeout=None,
+        )
+        commit_render(recovered)
+        await recovered.dispatch("inc", fake_interaction())
+
+        recovered_trace = _profile_trace(recovered_profiler)
+        recovered_result = recovered_trace.result.dispatch
+        assert recovered_result is not None
+        assert recovered_result.disposition is DispatchDisposition.COMPLETED
+        assert recovered_result.action is ActionOutcome.HANDLED
+        handler = next(span for span in recovered_trace.spans if span.name == "handler")
+        assert handler.outcome is TraceOutcome.FAILED
+
+    async def test_action_and_delivery_failures_have_different_dispositions(self, monkeypatch) -> None:
+        class Broken(Counter):
+            async def increment(self, event: PressEvent) -> None:
+                raise RuntimeError("action failed")
+
+        action_profiler = MemoryProfiler()
+        failed_action = Mount(
+            Broken(),
+            access=Everyone(),
+            profiler=action_profiler,
+            on_error=AsyncMock(),
+            timeout=None,
+        )
+        commit_render(failed_action)
+        await failed_action.dispatch("inc", fake_interaction())
+
+        action = _profile_trace(action_profiler).result.dispatch
+        assert action is not None
+        assert action.disposition is DispatchDisposition.ACTION_FAILED
+        assert action.action is ActionOutcome.FAILED
+
+        delivery_profiler = MemoryProfiler()
+        failed_delivery = Mount(Counter(), access=Everyone(), profiler=delivery_profiler, timeout=None)
+        commit_render(failed_delivery)
+        monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
+        with pytest.raises(discord.HTTPException):
+            await failed_delivery.dispatch("inc", fake_interaction())
+
+        delivered = _profile_trace(delivery_profiler).result.dispatch
+        assert delivered is not None
+        assert delivered.disposition is DispatchDisposition.DELIVERY_FAILED
+        assert delivered.action is ActionOutcome.HANDLED
+        assert delivered.presentation is PresentationOutcome.FAILED
+
+    async def test_watchdog_records_deadline_miss_and_acknowledgement_source(self) -> None:
+        started = anyio.Event()
+        release = anyio.Event()
+
+        class Slow(Component):
+            def render(self):
+                return Row((Button("slow", self.slow, "slow"),))
+
+            async def slow(self, event: PressEvent) -> None:
+                started.set()
+                await release.wait()
+
+        profiler = MemoryProfiler()
+        mount = Mount(
+            Slow(),
+            access=Everyone(),
+            profiler=profiler,
+            timeout=None,
+            acknowledgement_timeout=0.01,
+        )
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        async def dispatch() -> None:
+            await mount.dispatch("slow", interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(dispatch)
+            await started.wait()
+            await anyio.sleep(0.02)
+            release.set()
+
+        trace = _profile_trace(profiler)
+        acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
+        assert dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes) == {
+            "source": "watchdog"
+        }
+        assert trace.deadline_missed
 
 
 class TestRenderAndWire:

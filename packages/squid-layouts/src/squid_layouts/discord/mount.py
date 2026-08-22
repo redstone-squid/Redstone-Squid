@@ -52,6 +52,20 @@ from squid_layouts.planning.navigation import (
     default_nav,
 )
 from squid_layouts.primitives.nodes import Node
+from squid_layouts.profiling import (
+    ActionOutcome,
+    DetachedSpanRecorder,
+    DispatchDisposition,
+    DispatchResult,
+    GenerationDecision,
+    NoOpProfiler,
+    OperationKind,
+    OperationRecorder,
+    PresentationOutcome,
+    Profiler,
+    TraceOutcome,
+    TraceResult,
+)
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.runtime.component import Component, ComponentTree
@@ -72,6 +86,7 @@ from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
+_NOOP_PROFILER = NoOpProfiler()
 
 _MAX_LOAD_PASSES = 16
 """Component/resource tiers one delivery loads through -- not retries.
@@ -313,6 +328,53 @@ class MountSnapshot:
     metrics: PlanMetrics | None
 
 
+@dataclass(slots=True)
+class _DispatchProfile:
+    """Mutable operation-local facts frozen into a dispatch result at the terminal branch."""
+
+    operation: OperationRecorder
+    interaction: discord.Interaction
+    generation: GenerationDecision
+    acknowledgement: DetachedSpanRecorder
+    action: ActionOutcome = ActionOutcome.NOT_RUN
+    presentation: PresentationOutcome = PresentationOutcome.NOT_REQUIRED
+    finished: bool = False
+
+    def decide_generation(self, active: int, *, rebased: bool = False) -> None:
+        self.generation = GenerationDecision(self.generation.submitted, active, rebased)
+
+    def acknowledge(self, source: str) -> None:
+        if self.interaction.response.is_done():
+            self.acknowledgement.set_attribute("source", source)
+            self.acknowledgement.finish()
+
+    def finish(self, disposition: DispatchDisposition, error: Exception | None = None) -> None:
+        if self.finished:
+            return
+        self.finished = True
+        self.acknowledge("action")
+        outcome = (
+            TraceOutcome.CANCELLED
+            if disposition is DispatchDisposition.CANCELLED
+            else TraceOutcome.FAILED
+            if disposition
+            in {
+                DispatchDisposition.ACCESS_FAILED,
+                DispatchDisposition.ACTION_FAILED,
+                DispatchDisposition.DELIVERY_FAILED,
+            }
+            else TraceOutcome.COMPLETED
+        )
+        detail = None if error is None else f"{type(error).__module__}.{type(error).__qualname__}"
+        self.operation.set_result(
+            TraceResult(
+                outcome,
+                detail,
+                DispatchResult(disposition, self.action, self.presentation, self.generation),
+            )
+        )
+
+
 class Mount:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
@@ -329,6 +391,7 @@ class Mount:
         timeout: float | None = 900,
         on_error: ErrorHook | None = None,
         middleware: Sequence[ActionMiddleware] = (),
+        profiler: Profiler = _NOOP_PROFILER,
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
         acknowledgement_timeout: float = 2.5,
@@ -363,6 +426,7 @@ class Mount:
         self.access = access
         self.on_error = on_error
         self._middleware = _unique_by_identity(middleware)
+        self.profiler = profiler
         self.scheduler = scheduler
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
@@ -868,26 +932,67 @@ class Mount:
         generation: int | None = None,
     ) -> None:
         """The funnel: finished check -> access policy -> handler -> flush."""
-        if not await self._begin_dispatch(interaction):
-            return
-        binding = self._handlers.get(key)
-        if binding is None:
-            # A click raced a re-render that removed the control; acknowledge and move on.
-            await self.flush(interaction)
-            return
-        if values is not None:
-            binding = binding.routed(tuple(values))
-            if binding is None:
-                await self._acknowledge(interaction)
-                return
-            key = binding.key
+        kind = ActionKind.PRESS if values is None else ActionKind.SELECTION
+        with self.profiler.operation(
+            OperationKind.DISPATCH,
+            name=key,
+            attributes={"kind": kind.value},
+        ) as operation:
+            profile = _DispatchProfile(
+                operation,
+                interaction,
+                GenerationDecision(generation, self._generation),
+                operation.start_span("acknowledgement"),
+            )
+            try:
+                if not await self._begin_dispatch(interaction, profile):
+                    return
+                with operation.span("binding"):
+                    binding = self._handlers.get(key)
+                if binding is None:
+                    # A click raced a re-render that removed the control; acknowledge and move on.
+                    profile.presentation = await self.flush(interaction, profile=profile)
+                    profile.finish(DispatchDisposition.MISSING)
+                    return
+                if values is not None:
+                    with operation.span("selection"):
+                        binding = binding.routed(tuple(values))
+                    if binding is None:
+                        await self._acknowledge(interaction, profile=profile, source="invalid_selection")
+                        profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                        profile.finish(DispatchDisposition.INVALID_SELECTION)
+                        return
+                    key = binding.key
 
-        async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
-            await self._invoke(current, key, interaction, values, generation, active_generation, rebased)
+                async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+                    await self._invoke(
+                        current,
+                        key,
+                        interaction,
+                        values,
+                        generation,
+                        active_generation,
+                        rebased,
+                        profile,
+                    )
 
-        await self._dispatch_binding(
-            binding, key, interaction, generation, invoke, rebase=lambda: self._handlers.get(key)
-        )
+                await self._dispatch_binding(
+                    binding,
+                    key,
+                    interaction,
+                    generation,
+                    invoke,
+                    profile,
+                    rebase=lambda: self._handlers.get(key),
+                )
+            except anyio.get_cancelled_exc_class():
+                profile.action = ActionOutcome.CANCELLED
+                profile.finish(DispatchDisposition.CANCELLED)
+                raise
+            except Exception as error:
+                profile.presentation = PresentationOutcome.FAILED
+                profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+                raise
 
     async def dispatch_submit(
         self,
@@ -909,32 +1014,63 @@ class Mount:
         render dropped has no newer one; both run what the reader submitted, because
         discarding a filled-in form is the worse of the two surprises.
         """
-        if not await self._begin_dispatch(interaction):
-            return
-        binding = _SubmitBinding(key, handler, policy, spec=spec)
-
-        def rebase() -> ActionBinding | None:
-            newest = self._form_bindings.get(key)
-            if newest is None or newest.spec.field_keys != spec.field_keys:
-                return binding
-            return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
-
-        async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
-            resolved = current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
-            await self._invoke_submit(
-                current,
-                key,
+        with self.profiler.operation(
+            OperationKind.DISPATCH,
+            name=key,
+            attributes={"kind": ActionKind.SUBMIT.value},
+        ) as operation:
+            profile = _DispatchProfile(
+                operation,
                 interaction,
-                resolved,
-                values,
-                generation,
-                active_generation,
-                rebased,
+                GenerationDecision(generation, self._generation),
+                operation.start_span("acknowledgement"),
             )
+            try:
+                if not await self._begin_dispatch(interaction, profile):
+                    return
+                binding = _SubmitBinding(key, handler, policy, spec=spec)
 
-        await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=rebase)
+                def rebase() -> ActionBinding | None:
+                    newest = self._form_bindings.get(key)
+                    if newest is None or newest.spec.field_keys != spec.field_keys:
+                        return binding
+                    return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
 
-    async def _begin_dispatch(self, interaction: discord.Interaction) -> bool:
+                async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+                    resolved = (
+                        current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
+                    )
+                    await self._invoke_submit(
+                        current,
+                        key,
+                        interaction,
+                        resolved,
+                        values,
+                        generation,
+                        active_generation,
+                        rebased,
+                        profile,
+                    )
+
+                await self._dispatch_binding(
+                    binding,
+                    key,
+                    interaction,
+                    generation,
+                    invoke,
+                    profile,
+                    rebase=rebase,
+                )
+            except anyio.get_cancelled_exc_class():
+                profile.action = ActionOutcome.CANCELLED
+                profile.finish(DispatchDisposition.CANCELLED)
+                raise
+            except Exception as error:
+                profile.presentation = PresentationOutcome.FAILED
+                profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+                raise
+
+    async def _begin_dispatch(self, interaction: discord.Interaction, profile: _DispatchProfile) -> bool:
         # A mount sent through an unwaited interaction response never saw its own message; the
         # click is where it finally learns where it lives.
         self._note_address(interaction.message)
@@ -945,20 +1081,34 @@ class Mount:
             # nobody will see again.
             text = resolve_text(self.chrome.session_ended, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
+            profile.presentation = PresentationOutcome.WRITTEN
+            profile.acknowledge("mount_finished")
+            profile.finish(DispatchDisposition.MOUNT_FINISHED)
             return False
         try:
-            decision = await self.access.check(interaction)
+            with profile.operation.span(
+                "access",
+                attributes={"policy": f"{type(self.access).__module__}.{type(self.access).__qualname__}"},
+            ):
+                decision = await self.access.check(interaction)
         except Exception as error:
             await self.handle_error(interaction, error, "access")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACCESS_FAILED, error)
             return False
         if isinstance(decision, Denied):
             reason = self.chrome.not_yours if decision.reason is None else decision.reason
             text = resolve_text(reason, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
+            profile.presentation = PresentationOutcome.WRITTEN
+            profile.acknowledge("access_denied")
+            profile.finish(DispatchDisposition.ACCESS_DENIED)
             return False
         if not isinstance(decision, Allowed):
             error = TypeError(f"access policy returned unsupported decision {type(decision).__name__}")
             await self.handle_error(interaction, error, "access")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACCESS_FAILED, error)
             return False
         self._active = self.clock()
         if self.status is not None:
@@ -973,28 +1123,41 @@ class Mount:
         interaction: discord.Interaction,
         generation: int | None,
         invoke: Callable[[ActionBinding, bool, int], Awaitable[None]],
+        profile: _DispatchProfile,
         *,
         rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
             rebased = False
+            profile.decide_generation(self._generation)
             await invoke(binding, rebased, self._generation)
             return
 
-        async with self._action_lock:
+        with profile.operation.span("action_lock"):
+            await self._action_lock.acquire()
+        try:
+            profile.decide_generation(self._generation)
             if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
-                await self._acknowledge(interaction)
+                await self._acknowledge(interaction, profile=profile, source="stale")
+                profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                profile.finish(DispatchDisposition.STALE)
                 return
             rebased = binding.policy is ActionPolicy.REBASE and generation not in {None, self._generation}
+            profile.decide_generation(self._generation, rebased=rebased)
             if binding.policy is ActionPolicy.REBASE and rebase is not None:
                 # Resolved inside the lock: outside it, "newest" is whatever happened to be
                 # committed before this action started waiting for its turn.
-                refreshed = rebase()
+                with profile.operation.span("generation"):
+                    refreshed = rebase()
                 if refreshed is None:
-                    await self._acknowledge(interaction)
+                    await self._acknowledge(interaction, profile=profile, source="stale")
+                    profile.presentation = PresentationOutcome.ACKNOWLEDGED
+                    profile.finish(DispatchDisposition.STALE)
                     return
                 binding = refreshed
             await invoke(binding, rebased, self._generation)
+        finally:
+            self._action_lock.release()
 
     async def _invoke(
         self,
@@ -1005,10 +1168,13 @@ class Mount:
         submitted_generation: int | None,
         active_generation: int,
         rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
         async def watchdog() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
-            await self._acknowledge(interaction)
+            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
+            if deferred:
+                profile.operation.mark_deadline_missed()
 
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
@@ -1021,6 +1187,7 @@ class Mount:
                     submitted_generation,
                     active_generation,
                     rebased,
+                    profile,
                 )
                 tasks.cancel_scope.cancel()
 
@@ -1033,6 +1200,7 @@ class Mount:
         submitted_generation: int | None,
         active_generation: int,
         rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
         actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
         responder = ActionResponder(interaction, self)
@@ -1058,12 +1226,23 @@ class Mount:
                 await binding.handler(event)
 
         try:
-            await self._run_middleware(request, handle)
+            handled = await self._run_middleware(request, handle, profile.operation)
         except Exception as error:
+            profile.action = ActionOutcome.FAILED
             await self.handle_error(interaction, error, f"action:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACTION_FAILED, error)
             return
+        profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
+        profile.acknowledge("action")
         self._renew(interaction)
-        await self.flush(interaction)
+        try:
+            profile.presentation = await self.flush(interaction, profile=profile)
+        except Exception as error:
+            profile.presentation = PresentationOutcome.FAILED
+            profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+            raise
+        profile.finish(DispatchDisposition.COMPLETED)
 
     async def _invoke_submit(
         self,
@@ -1075,10 +1254,13 @@ class Mount:
         generation: int | None,
         active_generation: int,
         rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
         async def watchdog() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
-            await self._acknowledge(interaction)
+            deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
+            if deferred:
+                profile.operation.mark_deadline_missed()
 
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
@@ -1092,6 +1274,7 @@ class Mount:
                     generation,
                     active_generation,
                     rebased,
+                    profile,
                 )
                 tasks.cancel_scope.cancel()
 
@@ -1105,9 +1288,11 @@ class Mount:
         generation: int | None,
         active_generation: int,
         rebased: bool,
+        profile: _DispatchProfile,
     ) -> None:
         try:
-            evaluation = await spec.evaluate(values)
+            with profile.operation.span("form_evaluation"):
+                evaluation = await spec.evaluate(values)
             actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
             responder = ActionResponder(interaction, self)
             event = SubmitEvent(
@@ -1129,35 +1314,59 @@ class Mount:
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
                 )
-            else:
-                request = ActionRequest(
-                    event,
-                    key,
-                    ActionKind.SUBMIT,
-                    binding.policy,
-                    generation,
-                    active_generation,
-                    rebased,
-                )
+                profile.presentation = PresentationOutcome.WRITTEN
+                profile.acknowledge("validation_retry")
+                profile.finish(DispatchDisposition.VALIDATION_RETRY)
+                return
+            request = ActionRequest(
+                event,
+                key,
+                ActionKind.SUBMIT,
+                binding.policy,
+                generation,
+                active_generation,
+                rebased,
+            )
 
-                async def handle() -> None:
-                    context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
-                    with context:
-                        await binding.handler(event)
+            async def handle() -> None:
+                context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
+                with context:
+                    await binding.handler(event)
 
-                await self._run_middleware(request, handle)
+            handled = await self._run_middleware(request, handle, profile.operation)
+            profile.action = ActionOutcome.HANDLED if handled else ActionOutcome.SHORT_CIRCUITED
         except Exception as error:
+            profile.action = ActionOutcome.FAILED
             await self.handle_error(interaction, error, f"form:{key}")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACTION_FAILED, error)
             return
+        profile.acknowledge("action")
         self._renew(interaction)
-        await self.flush(interaction)
+        try:
+            profile.presentation = await self.flush(interaction, profile=profile)
+        except Exception as error:
+            profile.presentation = PresentationOutcome.FAILED
+            profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
+            raise
+        profile.finish(DispatchDisposition.COMPLETED)
 
-    async def _run_middleware(self, request: ActionRequest, endpoint: ActionProceed) -> None:
+    async def _run_middleware(
+        self,
+        request: ActionRequest,
+        endpoint: ActionProceed,
+        operation: OperationRecorder,
+    ) -> bool:
         """Compose the frozen mount middleware in first-listed, outermost order."""
 
+        handled = False
+
         async def invoke(index: int) -> None:
+            nonlocal handled
             if index == len(self._middleware):
-                await endpoint()
+                handled = True
+                with operation.span("handler"):
+                    await endpoint()
                 return
 
             active = True
@@ -1175,22 +1384,43 @@ class Mount:
                 await invoke(index + 1)
 
             try:
-                await self._middleware[index].dispatch(request, proceed)
+                middleware = self._middleware[index]
+                provenance = f"{type(middleware).__module__}.{type(middleware).__qualname__}"
+                with operation.span(f"middleware:{provenance}"):
+                    await middleware.dispatch(request, proceed)
             finally:
                 active = False
 
         await invoke(0)
+        return handled
 
-    async def _acknowledge(self, interaction: discord.Interaction) -> None:
+    async def _acknowledge(
+        self,
+        interaction: discord.Interaction,
+        *,
+        profile: _DispatchProfile | None = None,
+        source: str = "framework",
+    ) -> bool:
+        deferred = False
         if not interaction.response.is_done():
             await interaction.response.defer()
+            deferred = True
+        if profile is not None:
+            profile.acknowledge(source if deferred else "action")
+        return deferred
 
-    async def flush(self, interaction: discord.Interaction) -> None:
+    async def flush(
+        self,
+        interaction: discord.Interaction,
+        *,
+        profile: _DispatchProfile | None = None,
+    ) -> PresentationOutcome:
         """Apply pending state changes as an interaction edit, or just acknowledge."""
         acknowledge = False
+        presentation = PresentationOutcome.NO_CHANGE
         async with self._render_lock:
             if self._finished:
-                return
+                return PresentationOutcome.ABANDONED
             if not self._dirty:
                 acknowledge = True
             else:
@@ -1206,15 +1436,22 @@ class Mount:
                 if wrote is None:
                     self._rollback(candidate)
                     acknowledge = True
+                    presentation = PresentationOutcome.ABANDONED
                 else:
                     await self._commit_presented(candidate)
                     await self._settle_visible(candidate, through=source)
+                    presentation = PresentationOutcome.WRITTEN
+                    if profile is not None and wrote is source:
+                        profile.acknowledge("interaction_write")
                     # Only the interaction's own handle answers the click by editing through
                     # it. Delivery through the standing handle leaves the click unanswered,
                     # and Discord shows the user "This interaction failed" three seconds later.
                     acknowledge = wrote is not source
         if acknowledge:
-            await self._acknowledge(interaction)
+            await self._acknowledge(interaction, profile=profile, source="flush")
+            if presentation is PresentationOutcome.NO_CHANGE:
+                presentation = PresentationOutcome.ACKNOWLEDGED
+        return presentation
 
     async def finish_via(self, interaction: discord.Interaction) -> None:
         """Finish through an interaction edit — the shape a Close button wants."""
