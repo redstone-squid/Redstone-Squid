@@ -89,11 +89,20 @@ def aggregate(subject: MemoryProfiler, name: str):
     raise AssertionError(f"missing aggregate {name}")
 
 
+def span_aggregate(subject: MemoryProfiler, name: str):
+    for item in subject.snapshot().span_aggregates:
+        if item.key.span_name == name:
+            return item
+    raise AssertionError(f"missing span aggregate {name}")
+
+
 def test_identifier_width_and_nonzero_are_enforced() -> None:
-    with pytest.raises(ValueError, match="16 non-zero"):
+    with pytest.raises(ValueError, match=r"16 bytes.*all zero"):
         TraceId(bytes(16))
-    with pytest.raises(ValueError, match="8 non-zero"):
+    with pytest.raises(ValueError, match=r"8 bytes.*all zero"):
         SpanId(b"short")
+    assert TraceId(b"\x00" * 15 + b"\x01")
+    assert SpanId(b"\x00" * 7 + b"\x01")
 
 
 def test_root_and_nested_parentage_and_offsets() -> None:
@@ -188,6 +197,23 @@ def test_caught_child_failure_still_completes_operation() -> None:
 
     with subject.operation(OperationKind.DISPATCH, name="caught") as operation, operation.span("handler") as captured:
         captured.set_outcome(TraceOutcome.FAILED)
+
+    trace = trace_by_name(subject, "caught")
+    assert trace.result.outcome is TraceOutcome.COMPLETED
+    assert trace.spans[1].outcome is TraceOutcome.FAILED
+
+
+def test_escaping_exception_overrides_an_explicit_span_outcome() -> None:
+    clock = Clock()
+    subject = profiler(clock)
+
+    with (
+        subject.operation(OperationKind.DISPATCH, name="caught") as operation,
+        pytest.raises(ValueError),
+        operation.span("handler") as span,
+    ):
+        span.set_outcome(TraceOutcome.COMPLETED)
+        raise ValueError("the explicit success must not hide this")
 
     trace = trace_by_name(subject, "caught")
     assert trace.result.outcome is TraceOutcome.COMPLETED
@@ -366,14 +392,14 @@ def test_tail_sampling_prefers_fail_slow_and_deadline() -> None:
     assert [trace.name for trace in snapshot.failed] == ["fail"]
     assert [trace.name for trace in snapshot.deadline_misses] == ["miss"]
     assert snapshot.health.sampled_out == 0
-    assert len(calls) == 1
+    assert calls == []
 
 
 def test_all_operations_contribute_to_aggregates() -> None:
     clock = Clock()
     subject = profiler(clock, recent=0, slow=0, failed=0, deadline_misses=0)
 
-    with subject.operation(OperationKind.DISPATCH, name="first"):
+    with subject.operation(OperationKind.DISPATCH, name="first") as operation, operation.span("handler"):
         clock.advance(0.1)
     with subject.operation(OperationKind.DISPATCH, name="second"):
         clock.advance(0.1)
@@ -381,8 +407,10 @@ def test_all_operations_contribute_to_aggregates() -> None:
         clock.advance(0.1)
 
     assert subject.snapshot().recent == ()
-    assert subject.snapshot().health.sampled_out == 3
+    assert subject.snapshot().health.sampled_out == 0
+    assert subject.snapshot().health.dropped_traces == 3
     assert aggregate(subject, "first").lifetime.observations == 1
+    assert span_aggregate(subject, "handler").lifetime.observations == 1
     assert sum(item.lifetime.observations for item in subject.snapshot().aggregates) == 3
 
 
@@ -395,8 +423,21 @@ def test_zero_sized_buffers_record_zero_traces_and_counts() -> None:
 
     snapshot = subject.snapshot()
     assert snapshot.recent == ()
-    assert snapshot.health.sampled_out == 1
+    assert snapshot.health.sampled_out == 0
+    assert snapshot.health.dropped_traces == 1
     assert snapshot.aggregates[0].lifetime.observations == 1
+
+
+def test_disabled_failure_retention_is_dropped_not_sampled_out() -> None:
+    clock = Clock()
+    subject = profiler(clock, recent=0, slow=0, failed=0, deadline_misses=0, slow_threshold=1)
+
+    with pytest.raises(RuntimeError), subject.operation(OperationKind.DISPATCH, name="failed"):
+        raise RuntimeError
+
+    health = subject.snapshot().health
+    assert health.sampled_out == 0
+    assert health.dropped_traces == 1
 
 
 def test_recent_eviction_count() -> None:
@@ -419,12 +460,14 @@ def test_rolling_window_histograms_expire_without_new_traces() -> None:
     clock = Clock()
     subject = profiler(clock, window_seconds=10, window_slices=2)
 
-    with subject.operation(OperationKind.SEND, name="send"):
+    with subject.operation(OperationKind.SEND, name="send") as operation, operation.span("write"):
         clock.advance(0.5)
 
     assert aggregate(subject, "send").window.observations == 1
+    assert span_aggregate(subject, "write").window.observations == 1
     clock.advance(11)
     assert aggregate(subject, "send").window.observations == 0
+    assert span_aggregate(subject, "write").window.observations == 0
 
 
 def test_aggregate_overflow() -> None:
@@ -444,6 +487,9 @@ def test_aggregate_overflow() -> None:
 
     overflow = next(item for item in aggregates if item.key.name == "<overflow>")
     assert overflow.lifetime.observations == 2
+    assert overflow.key.operation is None
+    assert overflow.key.outcome is None
+    assert overflow.key.detail is None
 
 
 def test_zero_aggregate_key_bound_uses_single_overflow_key() -> None:
@@ -458,6 +504,26 @@ def test_zero_aggregate_key_bound_uses_single_overflow_key() -> None:
     assert len(subject.snapshot().aggregates) == 1
     assert subject.snapshot().aggregates[0].key.name == "<overflow>"
     assert subject.snapshot().aggregates[0].lifetime.observations == 2
+
+
+def test_span_aggregate_overflow_is_bounded_and_honest() -> None:
+    clock = Clock()
+    subject = profiler(clock, max_span_aggregate_keys=1)
+
+    with subject.operation(OperationKind.DISPATCH, name="action") as operation:
+        with operation.span("one"):
+            clock.advance(0.1)
+        with operation.span("two"):
+            clock.advance(0.1)
+        with operation.span("three"):
+            clock.advance(0.1)
+
+    aggregates = subject.snapshot().span_aggregates
+    assert len(aggregates) == 2
+    overflow = next(item for item in aggregates if item.key.span_name == "<overflow>")
+    assert overflow.key.operation is None
+    assert overflow.key.outcome is None
+    assert overflow.lifetime.observations == 2
 
 
 def test_percentile_rank_uses_ceiling() -> None:
@@ -489,6 +555,41 @@ def test_snapshot_json_exports_frozen_snapshot() -> None:
     assert decoded["recent"][0]["trace_id"] == str(subject.snapshot().recent[0].trace_id)
     assert decoded["recent"][0]["operation"] == "send"
     assert decoded["active"] == []
+
+
+def test_trace_start_is_relative_to_the_exported_wall_clock_anchor() -> None:
+    clock = Clock()
+    subject = profiler(clock)
+    clock.advance(2.0)
+
+    with subject.operation(OperationKind.SEND, name="send"):
+        clock.advance(0.1)
+
+    snapshot = subject.snapshot()
+    assert snapshot.recent[0].started == pytest.approx(2.0)
+    assert snapshot.started_at + timedelta(seconds=snapshot.recent[0].started) == datetime(
+        2026, 8, 22, 0, 0, 2, tzinfo=UTC
+    )
+
+
+def test_operation_recorder_expires_with_its_dynamic_scope() -> None:
+    clock = Clock()
+    subject = profiler(clock)
+
+    with subject.operation(OperationKind.DISPATCH, name="done") as operation:
+        link = subject.capture_link()
+
+    assert link is not None
+    assert subject.capture_link() is None
+    with operation.span("too-late"):
+        assert subject.capture_link() is None
+    operation.set_result(TraceResult(TraceOutcome.FAILED))
+    operation.mark_deadline_missed()
+
+    trace = trace_by_name(subject, "done")
+    assert [span.name for span in trace.spans] == ["done"]
+    assert trace.result.outcome is TraceOutcome.COMPLETED
+    assert not trace.deadline_missed
 
 
 def test_noop_profiler_does_not_inspect_inputs() -> None:
