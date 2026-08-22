@@ -96,6 +96,45 @@ class TestResourceState:
 
         assert panel.result.state == Ready("authoritative")
 
+    async def test_concurrent_settles_share_one_load(self) -> None:
+        entered = anyio.Event()
+        release = anyio.Event()
+        attempts = 0
+
+        async def load(_kind: str, _filters: tuple[str, ...]) -> str:
+            nonlocal attempts
+            attempts += 1
+            entered.set()
+            await release.wait()
+            return "shared"
+
+        panel = ResourcePanel(load)
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(panel.result._settle)
+            await entered.wait()
+            tasks.start_soon(panel.result._settle)
+            await anyio.sleep(0)
+            release.set()
+
+        assert attempts == 1
+        assert panel.result.state == Ready("shared")
+
+    async def test_cancellation_leaves_the_resource_pending(self) -> None:
+        entered = anyio.Event()
+
+        async def load(_kind: str, _filters: tuple[str, ...]) -> str:
+            entered.set()
+            await anyio.sleep_forever()
+            raise AssertionError("unreachable")
+
+        panel = ResourcePanel(load)
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(panel.result._settle)
+            await entered.wait()
+            tasks.cancel_scope.cancel()
+
+        assert panel.result.state == Pending()
+
 
 class TestResourceDependencies:
     async def test_a_committed_dependency_write_invalidates_with_the_previous_value(self) -> None:
