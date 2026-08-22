@@ -360,6 +360,25 @@ Use EXCLUSIVE for ordinary mutations, REBASE when the same logical action should
 newest state after waiting, PARALLEL_READ for side-effect-free reads, and IMMEDIATE only when
 concurrency is deliberately handled elsewhere.
 
+`Mount(..., middleware=(...))` installs application middleware directly; callers do not build a
+pipeline object. The mount freezes that sequence and treats the same instance repeated in it as
+one installation, while separately configured instances of the same class remain distinct. The
+first entry is outermost, completion unwinds in reverse, omitting `proceed()` short-circuits the
+handler, and the continuation is valid once and only during its middleware call.
+
+Middleware begins only after access, binding resolution, the concurrency gate, and stale-generation
+handling admit the action. Plan 31's per-action guards belong immediately before middleware. Its
+immutable `ActionRequest` carries the portable event, stable key, interaction kind, effective
+policy, submitted and active generations, and a `rebased` flag. Rebase is metadata: a rebased action
+may subsequently complete or fail, so it is not a terminal dispatch result.
+
+The handler's reactive transaction is the onion endpoint rather than a wrapper around the whole
+onion. An outer middleware may therefore catch a handler exception only after the handler's state
+writes have rolled back. Middleware is application policy, not component code; it receives no
+component or binding and should not mutate component state through captured references. A
+short-circuit still returns to the mount's acknowledgement/flush path, and the watchdog, Discord
+write, generation commit, and error presentation remain outside user middleware.
+
 Form submissions run the same funnel, so REBASE resolves the newest binding there too: a
 `FormTrigger` declares one per render, planning carries it in `PlanResult.form_bindings`, and
 a late submission is rebased onto the newest one for its key. It is rebased only when that

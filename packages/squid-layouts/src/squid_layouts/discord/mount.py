@@ -21,7 +21,18 @@ from urllib.parse import urlsplit
 import anyio
 import discord
 
-from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent, SelectionEvent, SubmitEvent
+from squid_layouts.actions import (
+    ActionBinding,
+    ActionKind,
+    ActionMiddleware,
+    ActionPolicy,
+    ActionProceed,
+    ActionRequest,
+    Actor,
+    PressEvent,
+    SelectionEvent,
+    SubmitEvent,
+)
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
@@ -145,6 +156,15 @@ class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `Reactor`)."""
 
     def schedule(self, mount: Mount) -> None: ...
+
+
+def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
+    """Freeze middleware while treating the same installed instance as idempotent."""
+    unique: list[ActionMiddleware] = []
+    for candidate in middleware:
+        if not any(existing is candidate for existing in unique):
+            unique.append(candidate)
+    return tuple(unique)
 
 
 class MountedView(discord.ui.LayoutView):
@@ -312,6 +332,7 @@ class Mount:
         strict: bool = False,
         timeout: float | None = 900,
         on_error: ErrorHook | None = None,
+        middleware: Sequence[ActionMiddleware] = (),
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
         acknowledgement_timeout: float = 2.5,
@@ -345,6 +366,7 @@ class Mount:
         self.timeout = timeout
         self.access = access
         self.on_error = on_error
+        self._middleware = _unique_by_identity(middleware)
         self.scheduler = scheduler
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
@@ -870,8 +892,8 @@ class Mount:
                 return
             key = binding.key
 
-        async def invoke(current: ActionBinding) -> None:
-            await self._invoke(current, key, interaction, values)
+        async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
+            await self._invoke(current, key, interaction, values, generation, active_generation, rebased)
 
         await self._dispatch_binding(
             binding, key, interaction, generation, invoke, rebase=lambda: self._handlers.get(key)
@@ -907,9 +929,18 @@ class Mount:
                 return binding
             return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
 
-        async def invoke(current: ActionBinding) -> None:
+        async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
             resolved = current.spec if isinstance(current, _SubmitBinding) and current.spec is not None else spec
-            await self._invoke_submit(current, key, interaction, resolved, values, generation)
+            await self._invoke_submit(
+                current,
+                key,
+                interaction,
+                resolved,
+                values,
+                generation,
+                active_generation,
+                rebased,
+            )
 
         await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=rebase)
 
@@ -951,18 +982,20 @@ class Mount:
         key: str,
         interaction: discord.Interaction,
         generation: int | None,
-        invoke: Callable[[ActionBinding], Awaitable[None]],
+        invoke: Callable[[ActionBinding, bool, int], Awaitable[None]],
         *,
         rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
-            await invoke(binding)
+            rebased = False
+            await invoke(binding, rebased, self._generation)
             return
 
         async with self._action_lock:
             if binding.policy is ActionPolicy.EXCLUSIVE and generation not in {None, self._generation}:
                 await self._acknowledge(interaction)
                 return
+            rebased = binding.policy is ActionPolicy.REBASE and generation not in {None, self._generation}
             if binding.policy is ActionPolicy.REBASE and rebase is not None:
                 # Resolved inside the lock: outside it, "newest" is whatever happened to be
                 # committed before this action started waiting for its turn.
@@ -971,7 +1004,7 @@ class Mount:
                     await self._acknowledge(interaction)
                     return
                 binding = refreshed
-            await invoke(binding)
+            await invoke(binding, rebased, self._generation)
 
     async def _invoke(
         self,
@@ -979,6 +1012,9 @@ class Mount:
         key: str,
         interaction: discord.Interaction,
         values: list[str] | None,
+        submitted_generation: int | None,
+        active_generation: int,
+        rebased: bool,
     ) -> None:
         async def watchdog() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
@@ -987,7 +1023,15 @@ class Mount:
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(watchdog)
-                await self._invoke_and_flush(binding, key, interaction, values)
+                await self._invoke_and_flush(
+                    binding,
+                    key,
+                    interaction,
+                    values,
+                    submitted_generation,
+                    active_generation,
+                    rebased,
+                )
                 tasks.cancel_scope.cancel()
 
     async def _invoke_and_flush(
@@ -996,6 +1040,9 @@ class Mount:
         key: str,
         interaction: discord.Interaction,
         values: list[str] | None,
+        submitted_generation: int | None,
+        active_generation: int,
+        rebased: bool,
     ) -> None:
         actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
         responder = ActionResponder(interaction, self)
@@ -1005,12 +1052,25 @@ class Mount:
             if values is None
             else SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
         )
-        try:
+        request = ActionRequest(
+            event,
+            key,
+            ActionKind.PRESS if values is None else ActionKind.SELECTION,
+            binding.policy,
+            submitted_generation,
+            active_generation,
+            rebased,
+        )
+
+        async def handle() -> None:
             context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
             with context:
                 await binding.handler(event)
+
+        try:
+            await self._run_middleware(request, handle)
         except Exception as error:
-            await self.handle_error(interaction, error, f"handler:{key}")
+            await self.handle_error(interaction, error, f"action:{key}")
             return
         self._renew(interaction)
         await self.flush(interaction)
@@ -1023,6 +1083,8 @@ class Mount:
         spec: FormSpec,
         values: Mapping[str, object],
         generation: int | None,
+        active_generation: int,
+        rebased: bool,
     ) -> None:
         async def watchdog() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
@@ -1031,7 +1093,16 @@ class Mount:
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(watchdog)
-                await self._invoke_submit_and_flush(binding, key, interaction, spec, values, generation)
+                await self._invoke_submit_and_flush(
+                    binding,
+                    key,
+                    interaction,
+                    spec,
+                    values,
+                    generation,
+                    active_generation,
+                    rebased,
+                )
                 tasks.cancel_scope.cancel()
 
     async def _invoke_submit_and_flush(
@@ -1042,6 +1113,8 @@ class Mount:
         spec: FormSpec,
         values: Mapping[str, object],
         generation: int | None,
+        active_generation: int,
+        rebased: bool,
     ) -> None:
         try:
             evaluation = await spec.evaluate(values)
@@ -1067,14 +1140,56 @@ class Mount:
                     actor_id=interaction.user.id,
                 )
             else:
-                context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
-                with context:
-                    await binding.handler(event)
+                request = ActionRequest(
+                    event,
+                    key,
+                    ActionKind.SUBMIT,
+                    binding.policy,
+                    generation,
+                    active_generation,
+                    rebased,
+                )
+
+                async def handle() -> None:
+                    context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
+                    with context:
+                        await binding.handler(event)
+
+                await self._run_middleware(request, handle)
         except Exception as error:
             await self.handle_error(interaction, error, f"form:{key}")
             return
         self._renew(interaction)
         await self.flush(interaction)
+
+    async def _run_middleware(self, request: ActionRequest, endpoint: ActionProceed) -> None:
+        """Compose the frozen mount middleware in first-listed, outermost order."""
+
+        async def invoke(index: int) -> None:
+            if index == len(self._middleware):
+                await endpoint()
+                return
+
+            active = True
+            called = False
+
+            async def proceed() -> None:
+                nonlocal called
+                if not active:
+                    message = "action middleware proceed() is only valid during dispatch()"
+                    raise RuntimeError(message)
+                if called:
+                    message = "action middleware proceed() may only be called once"
+                    raise RuntimeError(message)
+                called = True
+                await invoke(index + 1)
+
+            try:
+                await self._middleware[index].dispatch(request, proceed)
+            finally:
+                active = False
+
+        await invoke(0)
 
     async def _acknowledge(self, interaction: discord.Interaction) -> None:
         if not interaction.response.is_done():
