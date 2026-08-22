@@ -59,10 +59,10 @@ from squid_layouts.planning.target import ResourceCost, TargetProfile
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Boundary,
     Break,
     Budget,
     Button,
-    Embed,
     Extension,
     File,
     Footer,
@@ -328,8 +328,8 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
         raise LayoutInvariantError(message)
 
     def walk(node: Node, path: str) -> None:
-        if isinstance(node, Embed):
-            fail(path, "Embed must be expanded by a component mount before planning")
+        if isinstance(node, Boundary):
+            fail(path, "Boundary must be expanded by a component mount before planning")
         overflow = getattr(node, "overflow", None)
         if isinstance(overflow, Paginate):
             if overflow.key is None:

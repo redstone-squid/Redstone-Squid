@@ -171,7 +171,7 @@ class _ComponentControls[StateT]:
 
     def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]:
         return tuple(
-            self.owner.embed(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
+            self.owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
             for index, item in enumerate(content)
         )
 
