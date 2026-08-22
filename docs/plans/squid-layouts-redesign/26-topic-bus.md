@@ -1,5 +1,8 @@
 # 26 — Topic bus and expiry chrome
 
+**Landed.** Plan 39 supersedes §D's status-only policy for mounts that opt into an explicit
+ephemeral handoff; the reactor and default paused-status behaviour here remain its foundation.
+
 ## Problem
 
 squid-layouts has no cross-mount refresh primitive. `invalidate()` is a panel saying "I
