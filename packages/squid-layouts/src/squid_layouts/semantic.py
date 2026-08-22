@@ -6,9 +6,10 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Literal
 
-from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.forms import FormSpec, SubmitHandler
+from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.text import TextLike
@@ -373,6 +374,8 @@ class FormTrigger:
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
+    guard: Guard | None = None
+    """Admission for the press that opens the form; the submission is not re-admitted."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -385,6 +388,10 @@ class Action:
     available: bool = True
     allow_grouping: bool | None = None
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    guard: Guard | None = None
+    """Whether this press may execute now. `available` is the render-time question."""
+    feedback: Feedback | None = None
+    """Busy feedback for a handler slow enough that the reader needs to see it running."""
 
 
 @dataclass(frozen=True, slots=True)

@@ -13,7 +13,9 @@ import discord
 import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
+import squid_layouts as sl
 from squid_layouts import (
+    ActionEvent,
     ActionKind,
     ActionMiddleware,
     ActionPolicy,
@@ -57,7 +59,7 @@ from squid_layouts.discord import (
     Users,
     delivery,
 )
-from squid_layouts.discord.mount import _custom_id
+from squid_layouts.discord.mount import _BusyPaint, _custom_id
 from squid_layouts.discord.testing import (
     assert_within_limits,
     commit_render,
@@ -2975,3 +2977,334 @@ class TestLoading:
 
         with pytest.raises(LayoutInvariantError, match="did not settle"):
             await mount.send(delivered_to(fake_message()))
+
+
+class _GuardedPanel(Component):
+    """One semantic action whose admission and busy policy the test supplies."""
+
+    count: int = state(0)
+
+    def __init__(
+        self,
+        *,
+        guard: sl.Guard | None = None,
+        feedback: sl.Feedback | None = None,
+        policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+        run: Callable[[], Awaitable[Any]] | None = None,
+    ) -> None:
+        self.guard = guard
+        self.feedback = feedback
+        self.policy = policy
+        self.run = run
+
+    def render(self):
+        return sl.actions(
+            sl.action(
+                "Go",
+                self.go,
+                key="go",
+                guard=self.guard,
+                feedback=self.feedback,
+                policy=self.policy,
+            ),
+            key="panel",
+        )
+
+    async def go(self, event: ActionEvent) -> None:
+        if self.run is not None:
+            await self.run()
+        self.count += 1
+
+
+def _notice_text(interaction: Any) -> list[str]:
+    view = interaction.response.send_message.await_args.kwargs["view"]
+    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+
+
+class TestGuards:
+    async def test_a_denial_runs_no_handler_and_costs_one_ephemeral_message(self):
+        panel = _GuardedPanel(guard=sl.guards.when(lambda event: False, reason="Not for you."))
+        mount = Mount(panel, access=Everyone(), timeout=None)
+        commit_render(mount)
+        generation = mount.generation
+        interaction = fake_interaction()
+
+        await mount.dispatch("go", interaction)
+
+        assert panel.count == 0
+        assert mount.generation == generation
+        assert _notice_text(interaction) == ["Not for you."]
+        assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
+
+    async def test_a_reasonless_denial_falls_back_to_chrome(self):
+        mount = Mount(_GuardedPanel(guard=sl.guards.once()), access=Everyone(), timeout=None)
+        commit_render(mount)
+        await mount.dispatch("go", fake_interaction())
+
+        interaction = fake_interaction()
+        await mount.dispatch("go", interaction)
+
+        assert _notice_text(interaction) == [Chrome().not_now]
+
+    async def test_a_delay_bearing_denial_says_how_long_to_wait(self):
+        mount = Mount(_GuardedPanel(guard=sl.guards.cooldown(30)), access=Everyone(), timeout=None)
+        commit_render(mount)
+        await mount.dispatch("go", fake_interaction())
+
+        interaction = fake_interaction()
+        await mount.dispatch("go", interaction)
+
+        assert _notice_text(interaction) == ["Try again in 30 seconds."]
+
+    async def test_a_denial_is_traced_as_its_own_disposition(self):
+        profiler = MemoryProfiler()
+        mount = Mount(
+            _GuardedPanel(guard=sl.guards.when(lambda event: False, reason="No.")),
+            access=Everyone(),
+            timeout=None,
+            profiler=profiler,
+        )
+        commit_render(mount)
+
+        await mount.dispatch("go", fake_interaction())
+
+        dispatch = _profile_trace(profiler).result.dispatch
+        assert dispatch is not None
+        assert dispatch.disposition is DispatchDisposition.GUARD_DENIED
+        assert dispatch.action is ActionOutcome.NOT_RUN
+
+    async def test_a_raising_guard_reaches_the_error_hook_without_admitting(self):
+        error = RuntimeError("permission service unavailable")
+
+        async def broken(event) -> bool:
+            raise error
+
+        hook = AsyncMock()
+        profiler = MemoryProfiler()
+        panel = _GuardedPanel(guard=sl.guards.permission(broken))
+        mount = Mount(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("go", interaction)
+
+        assert panel.count == 0
+        hook.assert_awaited_once_with(interaction, error, "guard:go")
+        dispatch = _profile_trace(profiler).result.dispatch
+        assert dispatch is not None
+        assert dispatch.disposition is DispatchDisposition.GUARD_FAILED
+
+    async def test_admission_runs_under_every_concurrency_policy(self):
+        for policy in ActionPolicy:
+            panel = _GuardedPanel(guard=sl.guards.once(), policy=policy)
+            mount = Mount(panel, access=Everyone(), timeout=None)
+            commit_render(mount)
+
+            await mount.dispatch("go", fake_interaction())
+            await mount.dispatch("go", fake_interaction())
+
+            assert panel.count == 1, policy
+
+    async def test_a_stale_press_is_rejected_before_its_guard_is_consulted(self):
+        panel = _GuardedPanel(guard=sl.guards.once())
+        mount = Mount(panel, access=Everyone(), timeout=None)
+        commit_render(mount)
+        stale = mount.generation - 1
+
+        await mount.dispatch("go", fake_interaction(), generation=stale)
+        await mount.dispatch("go", fake_interaction())
+
+        assert panel.count == 1
+
+    async def test_a_guard_survives_the_collapse_of_a_row_into_a_select(self):
+        class Crowd(Component):
+            pressed: int = state(0)
+
+            def render(self):
+                return sl.actions(
+                    *(
+                        sl.action(f"Act {index}", self.act, key=f"act{index}", guard=sl.guards.once())
+                        for index in range(8)
+                    ),
+                    key="crowd",
+                    display=sl.ActionDisplay.GROUPED,
+                )
+
+            async def act(self, event: ActionEvent) -> None:
+                self.pressed += 1
+
+        crowd = Crowd()
+        mount = Mount(crowd, access=Everyone(), timeout=None)
+        commit_render(mount)
+        (picker,) = set(mount.snapshot().handler_keys) - {f"act{index}" for index in range(8)}
+
+        await mount.dispatch(picker, fake_interaction(), ["act3"])
+        await mount.dispatch(picker, fake_interaction(), ["act3"])
+        await mount.dispatch(picker, fake_interaction(), ["act4"])
+
+        assert crowd.pressed == 2
+
+    async def test_a_form_trigger_guards_the_press_and_not_the_submission(self):
+        submitted = AsyncMock()
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+        class Panel(Component):
+            seen: int = state(0)
+
+            def render(self):
+                return sl_form(spec, key="rename", on_submit=submitted, guard=sl.guards.once())
+
+        mount = Mount(Panel(), access=Everyone(), timeout=None)
+        commit_render(mount)
+
+        opened = fake_interaction()
+        await mount.dispatch("rename", opened)
+        assert opened.response.send_modal.await_count == 1
+
+        refused = fake_interaction()
+        await mount.dispatch("rename", refused)
+        assert refused.response.send_modal.await_count == 0
+
+        # The submission completes a press already admitted, so `once` does not eat it.
+        await mount.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submitted)
+        submitted.assert_awaited_once()
+
+
+class TestBusyFeedback:
+    @staticmethod
+    def _labels(view: discord.ui.LayoutView) -> list[tuple[object, bool]]:
+        return [(item.label, item.disabled) for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+
+    @staticmethod
+    async def _press(mount: Mount, interaction: Any, release: asyncio.Event) -> None:
+        """Dispatch a press whose handler is held open until the interim has painted."""
+
+        async def press() -> None:
+            await mount.dispatch("go", interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(press)
+            while not interaction.response.edit_message.await_count:
+                await asyncio.sleep(0)
+            release.set()
+
+    async def test_a_fast_handler_paints_nothing(self):
+        panel = _GuardedPanel(feedback=sl.Feedback())
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("go", interaction)
+
+        assert panel.count == 1
+        # One write, and it is the finished render: no interim ever reached Discord.
+        assert interaction.response.edit_message.await_count == 1
+        assert self._labels(interaction.response.edit_message.await_args.kwargs["view"]) == [("Go", False)]
+
+    async def test_a_slow_handler_disables_the_panel_and_relabels_the_press(self):
+        release = asyncio.Event()
+        panel = _GuardedPanel(feedback=sl.Feedback(pending="Rendering…"), run=release.wait)
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await self._press(mount, interaction, release)
+
+        interim = interaction.response.edit_message.await_args.kwargs["view"]
+        assert self._labels(interim) == [("Rendering…", True)]
+        # The interim edit answered the click, so nothing deferred it.
+        assert interaction.response.defer.await_count == 0
+        assert panel.count == 1
+        final = interaction.followup.edit_message.await_args.kwargs["view"]
+        assert self._labels(final) == [("Go", False)]
+
+    async def test_the_pending_label_falls_back_to_chrome(self):
+        release = asyncio.Event()
+        panel = _GuardedPanel(feedback=sl.Feedback(), run=release.wait)
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await self._press(mount, interaction, release)
+
+        interim = interaction.response.edit_message.await_args.kwargs["view"]
+        assert self._labels(interim) == [(Chrome().working, True)]
+
+    async def test_a_handler_error_puts_the_live_panel_back_before_the_error_hook(self):
+        order: list[str] = []
+        release = asyncio.Event()
+
+        async def fail() -> None:
+            await release.wait()
+            raise RuntimeError("render failed")
+
+        async def hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
+            order.append(f"hook:{source}")
+
+        panel = _GuardedPanel(feedback=sl.Feedback(), run=fail)
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await self._press(mount, interaction, release)
+
+        restored = interaction.followup.edit_message.await_args.kwargs["view"]
+        assert self._labels(restored) == [("Go", False)]
+        assert order == ["hook:action:go"]
+        assert panel.count == 0
+
+    async def test_restore_on_error_false_leaves_the_interim_up(self):
+        release = asyncio.Event()
+
+        async def fail() -> None:
+            await release.wait()
+            raise RuntimeError("render failed")
+
+        panel = _GuardedPanel(feedback=sl.Feedback(restore_on_error=False), run=fail)
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await self._press(mount, interaction, release)
+
+        assert interaction.followup.edit_message.await_count == 0
+
+    async def test_an_action_that_changes_nothing_still_restores_the_panel(self):
+        release = asyncio.Event()
+
+        class Idle(Component):
+            def __init__(self) -> None:
+                self.ran = False
+
+            def render(self):
+                return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.Feedback()), key="panel")
+
+            async def go(self, event: ActionEvent) -> None:
+                await release.wait()
+                self.ran = True
+
+        panel = Idle()
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await self._press(mount, interaction, release)
+
+        assert panel.ran
+        assert not mount.pending
+        restored = interaction.followup.edit_message.await_args.kwargs["view"]
+        assert self._labels(restored) == [("Go", False)]
+
+    async def test_a_late_watchdog_paints_nothing_over_the_finished_render(self):
+        panel = _GuardedPanel(feedback=sl.Feedback())
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
+        commit_render(mount)
+        interaction = fake_interaction()
+        busy = _BusyPaint(mount, "go", sl.Feedback(), interaction)
+        profile = SimpleNamespace(acknowledge=lambda source: None)
+
+        assert await busy.close() is False
+        await busy.show(cast(Any, profile))
+
+        assert busy.shown is False
+        assert interaction.response.edit_message.await_count == 0

@@ -2,7 +2,19 @@
 
 from importlib import import_module
 
-from squid_layouts import forms, html, patterns, planning, primitives, profiling, runtime, scene, semantic, sources
+from squid_layouts import (
+    forms,
+    guards,
+    html,
+    patterns,
+    planning,
+    primitives,
+    profiling,
+    runtime,
+    scene,
+    semantic,
+    sources,
+)
 from squid_layouts.actions import (
     ActionEvent,
     ActionKind,
@@ -12,6 +24,7 @@ from squid_layouts.actions import (
     ActionRequest,
     ActionResponder,
     Actor,
+    Feedback,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -101,6 +114,13 @@ from squid_layouts.forms import (
     TextField,
     TimeField,
     UploadedFile,
+)
+from squid_layouts.guards import (
+    ADMIT,
+    Guard,
+    GuardLedger,
+    GuardScope,
+    GuardVerdict,
 )
 from squid_layouts.palette import DEFAULT_PALETTE, INHERIT, Accent, AccentDefault, Palette
 from squid_layouts.patterns import (
@@ -311,6 +331,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "ADMIT",
     "CLOSED",
     "DEFAULT_CHROME",
     "DEFAULT_PALETTE",
@@ -395,6 +416,7 @@ __all__ = [
     "ExtensionField",
     "Failed",
     "FallbackContent",
+    "Feedback",
     "Field",
     "FieldError",
     "Fields",
@@ -412,6 +434,10 @@ __all__ = [
     "FormValidationPolicy",
     "FormValueError",
     "Group",
+    "Guard",
+    "GuardLedger",
+    "GuardScope",
+    "GuardVerdict",
     "Heading",
     "History",
     "HistoryEntry",
@@ -572,6 +598,7 @@ __all__ = [
     "form",
     "forms",
     "group",
+    "guards",
     "heading",
     "history",
     "history_actions",

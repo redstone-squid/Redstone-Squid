@@ -1,6 +1,6 @@
 """Discord Components V2 target, renderer, and runtime adapter."""
 
-from squid_layouts.discord import delivery, devtools, durability, live
+from squid_layouts.discord import delivery, devtools, durability, guards, live
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.compose import Composition, compose, render_static
@@ -221,6 +221,7 @@ __all__ = [
     "devtools",
     "durability",
     "fragment",
+    "guards",
     "live",
     "measure",
     "mounts",
