@@ -12,6 +12,39 @@ class DegradationEffect:
     truncated_chars: int = 0
     spilled_items: int = 0
     dropped_nodes: int = 0
+    reformatted_nodes: int = 0
+    """Regions kept whole but redrawn in another shape, by an explicitly non-exact variant."""
+    lossy_nodes: int = 0
+    """Regions an explicitly lossy variant does not show at all."""
+
+
+# One ordering of the loss axes, shared by every accumulator here. Adding an axis in one
+# place and forgetting another is how a profile silently stops comparing what it claims to.
+_AXIS_NAMES = (
+    "dropped_nodes",
+    "spilled_items",
+    "truncated_chars",
+    "semantic_steps",
+    "reformatted_nodes",
+    "lossy_nodes",
+)
+_AXES = len(_AXIS_NAMES)
+
+type Tie = tuple[int | str, ...]
+"""One effect's priority, path, and every axis, for the final deterministic comparison."""
+
+
+def _axes(effect: DegradationEffect) -> tuple[int, ...]:
+    return tuple(getattr(effect, name) for name in _AXIS_NAMES)
+
+
+def _tie(effect: DegradationEffect) -> Tie:
+    return (effect.priority, effect.path, *_axes(effect))
+
+
+def _accumulate(totals: list[int], effect: DegradationEffect) -> None:
+    for index, value in enumerate(_axes(effect)):
+        totals[index] += value
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,11 +54,28 @@ class DegradationLevel:
     spilled_items: int = 0
     truncated_chars: int = 0
     semantic_steps: int = 0
+    reformatted_nodes: int = 0
+    lossy_nodes: int = 0
 
     @property
-    def rank(self) -> tuple[int, int, int, int]:
-        """Order severe losses before semantic substitutions when minimizing."""
-        return self.dropped_nodes, self.spilled_items, self.truncated_chars, self.semantic_steps
+    def rank(self) -> tuple[int, int, int, int, int, int]:
+        """Order severe losses before semantic substitutions when minimizing.
+
+        A lossy variant hides whole authored regions, so it leads. Reformatting sits below
+        truncation because it keeps every character the author wrote, only in another shape.
+        """
+        return (
+            self.lossy_nodes,
+            self.dropped_nodes,
+            self.spilled_items,
+            self.truncated_chars,
+            self.reformatted_nodes,
+            self.semantic_steps,
+        )
+
+
+def _level_values(level: DegradationLevel) -> list[int]:
+    return [getattr(level, name) for name in _AXIS_NAMES]
 
 
 @total_ordering
@@ -34,43 +84,20 @@ class DegradationProfile:
     """Loss grouped by author priority, with deterministic paths as the final tie."""
 
     levels: tuple[DegradationLevel, ...] = ()
-    ties: tuple[tuple[int, str, int, int, int, int], ...] = ()
+    ties: tuple[Tie, ...] = ()
 
     @classmethod
     def from_effects(cls, effects: list[DegradationEffect]) -> DegradationProfile:
         totals: dict[int, list[int]] = {}
         for effect in effects:
-            level = totals.setdefault(effect.priority, [0, 0, 0, 0])
-            level[0] += effect.dropped_nodes
-            level[1] += effect.spilled_items
-            level[2] += effect.truncated_chars
-            level[3] += effect.semantic_steps
+            totals.setdefault(effect.priority, [0] * _AXES)
+            _accumulate(totals[effect.priority], effect)
         levels = tuple(
             DegradationLevel(priority, *values)
             for priority, values in sorted(totals.items(), reverse=True)
             if any(values)
         )
-        ties = tuple(
-            sorted(
-                (
-                    effect.priority,
-                    effect.path,
-                    effect.dropped_nodes,
-                    effect.spilled_items,
-                    effect.truncated_chars,
-                    effect.semantic_steps,
-                )
-                for effect in effects
-                if any(
-                    (
-                        effect.dropped_nodes,
-                        effect.spilled_items,
-                        effect.truncated_chars,
-                        effect.semantic_steps,
-                    )
-                )
-            )
-        )
+        ties = tuple(sorted(_tie(effect) for effect in effects if any(_axes(effect))))
         return cls(levels, ties)
 
     @property
@@ -78,43 +105,22 @@ class DegradationProfile:
         return not self.levels
 
     def with_effect(self, effect: DegradationEffect) -> DegradationProfile:
-        totals = {
-            level.priority: [
-                level.dropped_nodes,
-                level.spilled_items,
-                level.truncated_chars,
-                level.semantic_steps,
-            ]
-            for level in self.levels
-        }
-        level = totals.setdefault(effect.priority, [0, 0, 0, 0])
-        level[0] += effect.dropped_nodes
-        level[1] += effect.spilled_items
-        level[2] += effect.truncated_chars
-        level[3] += effect.semantic_steps
+        totals = {level.priority: _level_values(level) for level in self.levels}
+        totals.setdefault(effect.priority, [0] * _AXES)
+        _accumulate(totals[effect.priority], effect)
         levels = tuple(
             DegradationLevel(priority, *values)
             for priority, values in sorted(totals.items(), reverse=True)
             if any(values)
         )
-        tie = (
-            effect.priority,
-            effect.path,
-            effect.dropped_nodes,
-            effect.spilled_items,
-            effect.truncated_chars,
-            effect.semantic_steps,
-        )
-        return DegradationProfile(levels, tuple(sorted((*self.ties, tie))))
+        return DegradationProfile(levels, tuple(sorted((*self.ties, _tie(effect)))))
 
     def merged(self, other: DegradationProfile) -> DegradationProfile:
         totals: dict[int, list[int]] = {}
         for level in (*self.levels, *other.levels):
-            aggregate = totals.setdefault(level.priority, [0, 0, 0, 0])
-            aggregate[0] += level.dropped_nodes
-            aggregate[1] += level.spilled_items
-            aggregate[2] += level.truncated_chars
-            aggregate[3] += level.semantic_steps
+            aggregate = totals.setdefault(level.priority, [0] * _AXES)
+            for index, value in enumerate(_level_values(level)):
+                aggregate[index] += value
         levels = tuple(
             DegradationLevel(priority, *values)
             for priority, values in sorted(totals.items(), reverse=True)
@@ -122,9 +128,9 @@ class DegradationProfile:
         )
         return DegradationProfile(levels, tuple(sorted((*self.ties, *other.ties))))
 
-    def _rank(self, priorities: tuple[int, ...]) -> tuple[tuple[int, int, int, int], ...]:
+    def _rank(self, priorities: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
         by_priority = {level.priority: level.rank for level in self.levels}
-        return tuple(by_priority.get(priority, (0, 0, 0, 0)) for priority in priorities)
+        return tuple(by_priority.get(priority, (0,) * _AXES) for priority in priorities)
 
     def __lt__(self, other: object) -> bool:
         if not isinstance(other, DegradationProfile):
@@ -150,18 +156,21 @@ class DegradationRecorder:
         truncated_chars: int = 0,
         spilled_items: int = 0,
         dropped_nodes: int = 0,
+        reformatted_nodes: int = 0,
+        lossy_nodes: int = 0,
     ) -> None:
-        if any((semantic_steps, truncated_chars, spilled_items, dropped_nodes)):
-            self.effects.append(
-                DegradationEffect(
-                    priority,
-                    path,
-                    semantic_steps,
-                    truncated_chars,
-                    spilled_items,
-                    dropped_nodes,
-                )
-            )
+        effect = DegradationEffect(
+            priority,
+            path,
+            semantic_steps,
+            truncated_chars,
+            spilled_items,
+            dropped_nodes,
+            reformatted_nodes,
+            lossy_nodes,
+        )
+        if any(_axes(effect)):
+            self.effects.append(effect)
 
     def freeze(self) -> DegradationProfile:
         return DegradationProfile.from_effects(self.effects)

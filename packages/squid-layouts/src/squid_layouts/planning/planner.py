@@ -45,6 +45,8 @@ from squid_layouts.planning.measure import (
     RZonedTime,
     SolveNote,
     SolveNoteCode,
+    SolveNoteSeverity,
+    lossy_notes,
     measure,
 )
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
@@ -311,7 +313,10 @@ def _lower_children(
                 # numbering is stable for the rest of the plan.
                 lowered.append(
                     Variants(
-                        tuple(Variant(_lower_children(variant.nodes, target, limits)) for variant in supported),
+                        tuple(
+                            Variant(_lower_children(variant.nodes, target, limits), fidelity=variant.fidelity)
+                            for variant in supported
+                        ),
                         priority,
                     )
                 )
@@ -633,8 +638,11 @@ def _fallback_profile(occurrences: Sequence[FallbackAxis], selected: Mapping[str
 
 def _fallback_notes(occurrences: Sequence[FallbackAxis], selected: Mapping[str, int]) -> list[SolveNote]:
     return [
+        # A semantic fallback branch is the author naming a *lesser* representation, so it
+        # stays loss. A primitive ladder rung only says "another shape"; fidelity says whether
+        # that shape costs anything.
         SolveNote(
-            SolveNoteCode.VARIANT_STEP,
+            SolveNoteCode.SEMANTIC_FALLBACK,
             f"{occurrence.path} stepped to variant {step + 2} of {occurrence.branches} "
             "(priority 0) under layout pressure",
         )
@@ -844,8 +852,8 @@ def plan(
             ),
         )
     _reconcile_pagers(measured, broker)
-    if strict and measured.notes:
-        raise LayoutDegradedError("; ".join(note.message for note in measured.notes))
+    if strict and (lossy := lossy_notes(measured.notes)):
+        raise LayoutDegradedError("; ".join(note.message for note in lossy))
     hard_failures = measured.failures
     if hard_failures:
         message = "; ".join(note.message for note in hard_failures)
@@ -868,7 +876,11 @@ def plan(
                 code=f"layout.{note.code}",
                 path="$",
                 message=note.message,
-                severity=PlanSeverity.DEGRADATION,
+                severity=(
+                    PlanSeverity.ADAPTATION
+                    if note.severity is SolveNoteSeverity.ADAPTATION
+                    else PlanSeverity.DEGRADATION
+                ),
             )
             for note in measured.notes
         ),

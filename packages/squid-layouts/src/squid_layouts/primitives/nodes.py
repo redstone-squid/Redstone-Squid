@@ -8,6 +8,7 @@ resulting scene — authors never do budget arithmetic.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, Feedback, PressHandler, SelectionHandler
 from squid_layouts.forms import FormBinding
@@ -298,6 +299,26 @@ class Break:
     keep_with_next: bool = False
 
 
+class Fidelity(StrEnum):
+    """How faithfully one variant reproduces the region it represents.
+
+    Rung order is a *preference*, not a loss ladder. A later rung may be a perfectly
+    faithful alternative — paginating a long region loses nothing — so the solver must be
+    told which rungs actually cost the reader something rather than inferring it from
+    position. Without this, an exact but late rung would be priced as loss and a lossy
+    early rung would be priced as free, and `strict=True` could reject neither honestly.
+    """
+
+    EXACT = "exact"
+    """Every authored element survives, in a shape the target renders faithfully."""
+
+    REFORMATTED = "reformatted"
+    """Every element survives in a different shape: a table as lines, fields as prose."""
+
+    LOSSY = "lossy"
+    """Something the author wrote is not shown at all."""
+
+
 @dataclass(frozen=True, slots=True)
 class Variant:
     """One structural representation of a region and the capabilities it requires.
@@ -305,10 +326,15 @@ class Variant:
     ``nodes`` is a tuple because a variant may lower to several nodes — an ActionGroup becomes
     one Row per five buttons — and splicing them into the parent is exact where wrapping them
     in a Panel would invent the very container component the ladder exists to save.
+
+    ``fidelity`` defaults to :attr:`Fidelity.EXACT` because most alternatives are: an author
+    writing a ladder by hand is usually offering a smaller faithful shape. A library adapter
+    offering a rung that reformats or discards content must say so explicitly.
     """
 
     nodes: tuple[Node, ...]
     requires: frozenset[str] = frozenset()
+    fidelity: Fidelity = Fidelity.EXACT
 
     def __post_init__(self) -> None:
         if not self.nodes:
@@ -323,6 +349,10 @@ class Variants:
     Overflow policies shrink *text*; nothing they do returns a component, so a document with
     too many components would otherwise only be reportable. A ladder gives the solver
     something to give up: a button panel stepping to one select, a gallery to a link row.
+
+    A rung's *position* prices preference; its :class:`Fidelity` prices loss. A later exact
+    rung therefore beats an earlier reformatted one, and `strict=True` rejects the reformatted
+    or lossy rung it would otherwise have to accept silently.
 
     Rungs unsupported by the target are dropped at planning time; the survivors form a budget
     ladder. The solver opens every ladder at rung 0 and searches reachable rung assignments
@@ -346,7 +376,7 @@ class Variants:
 
     @classmethod
     def of(cls, *rungs: Node | Variant, priority: int = 0) -> Variants:
-        """Build a ladder from bare nodes, wrapping each in a capability-free Variant."""
+        """Build a ladder from bare nodes, wrapping each in an exact, capability-free Variant."""
         return cls(tuple(rung if isinstance(rung, Variant) else Variant((rung,)) for rung in rungs), priority)
 
 
