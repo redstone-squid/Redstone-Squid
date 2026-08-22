@@ -57,17 +57,22 @@ unreachable rather than merely discouraged:
 A shared namespace is a class, declared the way a component declares its own state.
 
 ```python
-class Preferences(sl.Shared):
+@dataclass(frozen=True, slots=True)
+class Member:
+    user_id: int
+    guild_id: int
+
+class Preferences(sl.Shared[Member]):
     theme: Theme = sl.cell(Theme.SYSTEM)
     locale: Locale = sl.cell(Locale.EN)
 
-class Workspace(sl.Shared):
+class Workspace(sl.Shared[Member]):
     selected: int | None = sl.cell(None)
     filters: tuple[str, ...] = sl.cell(())
 
 store = sl.SharedStore(bus)                       # the host's TopicBus, per §7
-preferences = Preferences(store, sl.Scope("prefs", user.id, guild.id))
-workspace = Workspace(store, sl.Scope("session", session.id))
+preferences = Preferences(store, Member(user.id, guild.id))
+workspace = Workspace(store, Member(user.id, guild.id))
 
 class Toolbar(sl.Component):
     def __init__(self, preferences: Preferences, workspace: Workspace) -> None:
@@ -93,15 +98,18 @@ descriptor mechanics, reading through a store instead of an instance `__dict__`.
 | `handle.cell = value` | Write. Staged inside an action, committed immediately outside one. |
 | `del handle.cell` | Reset to the declared default. A write, and never a read, so never guarded. |
 | `handle.topics.cell` | The cell's bus address, for a host that wants to follow it by hand (§7). |
+| `handle.scope` | The address this handle is bound to, typed (§2). |
 
 That is the whole surface. There is no `get`, `set`, `watch`, `update`, `expect` or
 `compare_and_set`; *Rejected alternatives* records why each is absent.
 
-**The handle is typed by what it holds.** `Preferences` is a real type, so a component
+**The handle is typed by what it holds, and by where it holds it.** `Preferences` is a real type, so a component
 that wants preferences asks for `Preferences`, `sl.ContextKey[Preferences]` says which
 binding it means, and reading a workspace cell off a preferences handle is an attribute
 error before it is anything else. An untyped handle carrying free-standing atom keys
-would have made that a silent read of a default.
+would have made that a silent read of a default. `sl.Shared[Member]` types the address
+the same way, so `handle.scope.guild_id` is an `int` and the two ids cannot be passed in
+the wrong order.
 
 ### 2. Cells and scopes
 
@@ -118,41 +126,82 @@ nothing declared twice and nothing that can drift from the variable it is assign
 something it is a value in the declared type — `None`, or a member of the enum. A store
 that cannot report absence cannot grow a presence protocol later by accident.
 
-**`Scope` is a frozen, hashable address** and nothing else: no fallback, no inheritance,
-no lifetime, no persistence. One class bound to two scopes is two independent sets of
-cells, and one action may write both.
+**A cell is keyed `(descriptor, scope)`.** Descriptors are unique to their class, so two
+namespaces at one address cannot collide and no namespace discriminator is needed inside
+the address. One class bound to two scopes is two independent sets of cells, and one
+action may write both.
+
+**The scope is a value the application declares**, and `Shared` is generic in it. It must
+be frozen and hashable and mean nothing else: no fallback, no inheritance, no lifetime, no
+persistence. A frozen dataclass is the intended shape, and it is an idiom the author
+already has — nothing about it is the store's invention.
+
+```python
+@dataclass(frozen=True, slots=True)
+class Member:
+    user_id: int
+    guild_id: int
+
+class Preferences(sl.Shared[Member]): ...
+```
+
+Declaring the type is worth the four lines. It makes the address ordered by name rather
+than by position, it makes `handle.scope` readable and typed, and it makes co-scoping —
+two namespaces deliberately sharing one address, and so one `discard` (§3) — something
+you opt into by naming the type rather than something two equal integer tuples can do by
+accident. `sl.Shared` unparameterised means `sl.Shared[sl.Scope]`, and `sl.Scope(*parts)`
+remains for a namespace small enough not to want a declared address; §3 says what that
+costs.
+
+An unhashable scope, or a dataclass that is not frozen, raises when the handle is
+constructed. That is a store-correctness failure rather than a matter of style — cells
+keyed by a value that can change are cells nothing can reach again.
 
 **A few attribute names are reserved** — `topics`, and the handle's own `store` and
 `scope`. Declaring a cell with one of those names raises at class creation (§4).
 
 ### 3. Lifetime: the store is not immortal
 
-A bot process runs for weeks across thousands of guilds. `Scope("prefs", user.id,
-guild.id)` keyed into a plain dict is an unbounded leak, and it is the failure this design
-is most likely to ship with, because it never shows up in a test that finishes.
+A bot process runs for weeks across thousands of guilds. `Member(user.id, guild.id)`
+keyed into a plain dict is an unbounded leak, and it is the failure this design is most
+likely to ship with, because it never shows up in a test that finishes.
 
-**A scope's cells live exactly as long as some handle to that scope.** Constructing
-`Preferences(store, scope)` registers a weak reference with the store; the weakref
-callback of the last live handle drops the scope's cells. Handles are the only input to
-the decision, because anything that watches a cell reached it through a handle it still
-holds — a mount following `preferences.topics.theme` holds the component that holds the
-handle.
+**A namespace's cells at an address live exactly as long as some handle to that pair.**
+Constructing `Preferences(store, address)` registers a weak reference with the store; the
+weakref callback of the last live handle drops that namespace's cells at that address.
+Handles are the only input to the decision, because anything that watches a cell reached
+it through a handle it still holds — a mount following `preferences.topics.theme` holds
+the component that holds the handle.
+
+**The bucket is `(class, scope)`, not the scope alone.** It is what a weakref to a handle
+gives you, since a handle knows its own class; bucketing per scope would mean deliberately
+discarding that. It is also the better answer: `Preferences` and `Workspace` at one
+address drop independently, each when its own last handle dies, instead of a live
+`Workspace` keeping `Preferences` cells alive for as long as it lasts.
 
 Dropping on the weakref callback rather than sweeping at the next commit is deliberate: a
 store nobody is writing to gets no commits, and that is exactly the idle store that is
 leaking.
 
-- **`store.discard(scope)`** drops it now, for a host that knows the session is over. The
-  session registry's `on_finish` is the obvious caller.
-- **`store.scopes()`** returns the live scopes, for devtools ([25](25-devtools-cog.md))
-  and for the leak test.
+- **`store.discard(scope)`** drops every namespace at that address now, for a host that
+  knows the session is over. The session registry's `on_finish` is the obvious caller,
+  and it sweeps across classes because a host that knows a session ended usually does not
+  know which panels bound namespaces to it.
+- **`store.bindings()`** returns the live `(class, scope)` pairs, for devtools
+  ([25](25-devtools-cog.md)) and for the leak test.
+
+**`discard` is the reason to declare a scope type.** Its sweep is by address value, so two
+namespaces at equal addresses are discarded together — intended when they co-scope on
+purpose, and a hazard with bare `sl.Scope(5)`, where an unrelated namespace that also
+reached for `sl.Scope(5)` is swept with it. `Member(...)` and `Session(...)` are never
+equal no matter what integers they hold.
 
 **The hazard this creates, stated out loud.** A dropped scope reads back as defaults, and
 because §2 has no absence API that is indistinguishable from a scope nobody ever wrote.
 For view state the answer is right — nobody was looking — but it means a premature drop
 is silent, looks like normal operation, and will be reported as "it forgot my filter"
-rather than as a bug in lifetime. `store.scopes()` and the devtools view exist partly so
-that this is observable at all.
+rather than as a bug in lifetime. `store.bindings()` and the devtools view exist partly
+so that this is observable at all.
 
 ### 4. Values: a cell holds what you do not mutate in place
 
@@ -181,7 +230,7 @@ mutations behind revision guards that cannot see them.
 common mistake is a hard error at no cost, because the type has no mutating method:
 
 ```python
-class Workspace(sl.Shared):
+class Workspace(sl.Shared[Member]):
     filters: tuple[str, ...] = sl.cell(())
 
 workspace.filters.append(tag)          # AttributeError, at typecheck and at runtime
@@ -363,6 +412,10 @@ it was constructed with.**
    by both the automatic path and a host that wants `reactor.follow(mount,
    preferences.topics.theme)` by hand. Every topic is a `Topic`, so the attribute proxy
    loses no type information; an unknown name raises listing the class's cells.
+   `topics.py` declares `type Topic = Hashable`, so the address *is* the `(descriptor,
+   scope)` pair — both halves are hashable by §2's rules. Nothing has to be encoded into
+   a string, which means no canonical form to get wrong and no collision surface invented
+   on the way to the bus.
 2. During render, a cell read records `(store, scope, descriptor)` into a
    render-observation collector — the ContextVar shape `provide()`/`inject()` already
    uses. This is why there is no separate `watch()`: the context the read happens in is
@@ -460,7 +513,7 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 | # | Deliverable | Exit criteria |
 |---|---|---|
 | 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. Testable with no store. **Shipped.** |
-| 1 | `Shared`, `cell`, `Scope`, `SharedStore`; attribute read/write/`del`; immediate-outside-an-action behaviour; the declaration check; scope lifetime. | Descriptor identity, defaults, per-scope independence, equal-value no-op, reserved and mutable-typed names raising at class creation, `discard` and drop-on-last-handle. |
+| 1 | `Shared[ScopeT]`, `cell`, `Scope`, `SharedStore`; attribute read/write/`del`; immediate-outside-an-action behaviour; the declaration check; scope lifetime. | Descriptor identity, defaults, per-scope independence, equal-value no-op, reserved and mutable-typed names raising at class creation, an unhashable or unfrozen scope raising at construction, `discard` sweeping every class at one address, and drop-on-last-handle bucketed per `(class, scope)`. |
 | 2 | Overlays, read-your-writes, read-revision tracking, prepare/apply. | A raising handler leaks no staged value; read-and-write conflicts raise `SharedConflict`, read-only actions do not; ABA is caught; a later write does not clear the guard. |
 | 3 | Render observation, `topics`, stage-time follow reconciliation, publication on commit. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; no follow outlives its mount. |
 | 4 | Shared deltas in history, evolving guards, validating `can_undo`, `HistoryConflict`, the reservation if §8a's test justifies it. | One entry undoes local plus multi-scope shared state; an intervening write disables the control and refuses the press; the inverse race produces no partial world. |
@@ -472,11 +525,13 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
   prepare/apply ordering, a failing prepare applying nothing, a raising hook leaving the
   action committed and notified.
 - `packages/squid-layouts/tests/test_shared_store.py` (new): descriptor identity and scope
-  keying; defaults and `del`; the equality no-op; a `list`-typed cell and a reserved name
-  each raising at class creation; immediate writes outside an action; staging,
-  read-your-writes and rollback inside one; a read-and-write conflict including A→B→A; a
-  read-only action not conflicting; guard stickiness after a later write; `discard`,
-  drop-on-last-handle, and a bind/discard loop that ends with no cells.
+  keying, including two namespaces at one address not colliding; defaults and `del`; the
+  equality no-op; a `list`-typed cell and a reserved name each raising at class creation;
+  an unhashable and an unfrozen scope raising at construction; immediate writes outside an
+  action; staging, read-your-writes and rollback inside one; a read-and-write conflict
+  including A→B→A; a read-only action not conflicting; guard stickiness after a later
+  write; a live handle of one class *not* keeping another class's cells alive at the same
+  address; `discard` sweeping both; and a bind/discard loop that ends with no cells.
 - `packages/squid-layouts/tests/test_shared_reactivity.py` (new): a read outside a render
   records no dependency; observation reconciliation across renders; two mounts refreshed
   once each by one commit through a real bus and `drain()`; a discarded staged render
@@ -525,6 +580,18 @@ is a finding about the API, not a reason to wait for a consumer.
   keys off the context the read happens in, which is information the runtime already has.
   A second reader would have let a render read a cell without recording a dependency —
   silent staleness, and the mistake nobody would find.
+- **A namespace discriminator inside the address** (`Scope("prefs", user.id, guild.id)`).
+  It did nothing for keying, because a cell is `(descriptor, scope)` and descriptors are
+  class-unique. Its only real effect was to separate lifetime buckets, which §3 now does
+  per `(class, scope)` — correctly, and without a hand-maintained string that has to agree
+  across every construction site.
+- **Address fields declared on the `Shared` class**, bare annotations beside marked cells:
+  `user_id: int` next to `theme = sl.cell(...)`. It reads well and it is the natural use
+  of the annotation slot the cells left free. It loses on machinery and on `discard`:
+  `Shared` would have to generate an `__init__` from annotations, reimplementing part of
+  `@dataclass` for a closed set of fields, and `store.discard(session_id=x)` would become
+  a query across classes with different address shapes instead of a lookup. A declared
+  frozen dataclass gets the same typing from an idiom the author already knows.
 - **Designed-for multi-store transactions.** Nothing has produced a case where two stores
   take part in one action. The participant loop is a list, so it falls out and one test
   pins the atomicity property; no cross-store guarantee beyond prepare-all-then-apply-all
