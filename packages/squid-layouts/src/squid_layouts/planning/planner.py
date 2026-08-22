@@ -443,6 +443,7 @@ class _Candidate:
     broker: CursorCoordinator
     structural: DegradationProfile
     cost: CostVector
+    capacities: Mapping[str, int]
 
     @property
     def degradation(self) -> DegradationProfile:
@@ -450,7 +451,7 @@ class _Candidate:
 
     @property
     def feasible(self) -> bool:
-        return self.layout.components <= self.layout.limits.total_components and not self.layout.failures
+        return self.layout.fits(self.capacities) and not self.layout.failures
 
     @property
     def rank(self) -> tuple[DegradationProfile, CostVector]:
@@ -538,6 +539,7 @@ class _Search:
             broker,
             structural,
             assignment_cost(decisions.strategies, strategies),
+            self.target.capacities,
         )
 
     def successors(self, candidate: _Candidate, remaining: int) -> _Expansion:
@@ -615,6 +617,44 @@ class _Search:
         )
 
 
+@dataclass(slots=True)
+class _ParetoArchive:
+    """The non-dominated states seen so far, in fidelity and per-axis resource cost.
+
+    A state is worth expanding only if it reaches somewhere no explored state already
+    reaches more cheaply. "More cheaply" is per axis and never traded: a candidate that
+    spends fewer components but more embed text is not dominated by one that does the
+    reverse, because a document blocked on components and a document blocked on embed text
+    need different steps to become feasible. Collapsing that to a scalar is exactly how a
+    component-only heuristic starves a second budget.
+    """
+
+    points: list[tuple[DegradationProfile, ResourceCost]] = field(default_factory=list)
+
+    def admit(self, candidate: _Candidate) -> bool:
+        """Record this candidate and report whether anything already dominates it."""
+        point = (candidate.degradation, candidate.layout.cost)
+        for degradation, cost in self.points:
+            if degradation <= point[0] and not point[1].cheaper_anywhere(cost):
+                return False
+        self.points = [
+            existing
+            for existing in self.points
+            if not (point[0] <= existing[0] and not existing[1].cheaper_anywhere(point[1]))
+        ]
+        self.points.append(point)
+        return True
+
+
+def _overspend(candidate: _Candidate) -> int:
+    """How far past its budgets a candidate is, summed over every axis it overspends.
+
+    Only used to keep the least-bad infeasible answer when nothing fits, so a single
+    comparable number is enough — the report already names the axes individually.
+    """
+    return sum(spent - capacity for _axis, spent, capacity in candidate.layout.cost.over(candidate.capacities))
+
+
 def _canonical_strategies(axes: Sequence[StrategyAxis], selected: Mapping[str, str]) -> dict[str, str]:
     """Keep a valid choice per reachable axis; a newly reachable one opens at its cheapest."""
     resolved: dict[str, str] = {}
@@ -667,6 +707,8 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
     states_explored = 0
     guided = False
 
+    archive = _ParetoArchive()
+
     while frontier and states_explored < search_budget:
         structural, cost, _order, state = heappop(frontier)
         if best is not None and best.rank <= (structural, cost):
@@ -675,11 +717,13 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
         states_explored += 1
         if candidate.feasible and (best is None or candidate.rank < best.rank):
             best = candidate
-        if nearest is None or (candidate.layout.components, *candidate.rank) < (
-            nearest.layout.components,
-            *nearest.rank,
-        ):
+        if nearest is None or (_overspend(candidate), *candidate.rank) < (_overspend(nearest), *nearest.rank):
             nearest = candidate
+        if not archive.admit(candidate):
+            # Dominated: no better on fidelity and no cheaper on any axis than something
+            # already explored. Its successors are reachable from that one for less, so
+            # expanding it would only re-walk the same ground.
+            continue
         expansion = search.successors(candidate, search_budget - states_explored)
         guided = guided or expansion.guided
         for bound, bound_cost, successor in expansion.successors:
@@ -816,14 +860,18 @@ def plan(
     lowered = resolve_variants(selected.lowered, dict(selected.state.variants))
     measured = selected.layout
     root_events: tuple[PlanEvent, ...] = ()
-    if measured.components > limits.total_components:
+    capacities = target.capacities
+    overspent = target.over_capacity(measured.cost)
+    if overspent:
+        # Every offending axis, not the first: a document over two budgets should hear about
+        # both rather than come back round the loop to discover the second.
+        blown = "; ".join(f"{spent} {axis} exceed target maximum {capacity}" for axis, spent, capacity in overspent)
         local_pagers = [*broker.pagers, *measured.pagers]
         if local_pagers:
             keys = ", ".join(repr(pager.key) for pager in local_pagers)
             message = (
-                f"{measured.components} components exceed target maximum {limits.total_components} after local "
-                f"pagination ({keys}). Local and root pagination are never simultaneous; fold component groups, "
-                "split the document, or move the long local collection onto its own screen."
+                f"{blown} after local pagination ({keys}). Local and root pagination are never simultaneous; "
+                "fold component groups, split the document, or move the long local collection onto its own screen."
             )
             raise UnsolvableLayoutError(message)
         if document.key is None or nav is None:
@@ -832,11 +880,12 @@ def plan(
                 if document.key is None
                 else "plan with navigation controls or split the static document"
             )
-            message = f"{measured.components} components exceed target maximum {limits.total_components}; {remedy}"
+            message = f"{blown}; {remedy}"
             raise UnsolvableLayoutError(message)
         measured, root_pages = _root_paginate(
             lowered,
             key=document.key,
+            capacities=capacities,
             target_limits=limits,
             chrome=chrome,
             nav=nav,
@@ -946,6 +995,7 @@ def _root_paginate(
     nodes: Sequence[Node],
     *,
     key: str,
+    capacities: Mapping[str, int],
     target_limits: V2Limits,
     chrome: Chrome,
     nav: PlannedNav,
@@ -975,15 +1025,16 @@ def _root_paginate(
     for node in nodes:
         candidate = (*current, node)
         probe = measure_page(candidate, 0, maximum_pages)
-        if current and (probe.components > target_limits.total_components or probe.overflowed):
+        if current and (not probe.fits(capacities) or probe.overflowed):
             pages.append(current)
             current = (node,)
             probe = measure_page(current, 0, maximum_pages)
         else:
             current = candidate
-        if probe.components > target_limits.total_components:
+        if not probe.fits(capacities):
+            blown = ", ".join(f"{axis} {spent}/{capacity}" for axis, spent, capacity in probe.cost.over(capacities))
             message = (
-                f"root page {len(pages) + 1} cannot fit node {type(node).__name__}; "
+                f"root page {len(pages) + 1} cannot fit node {type(node).__name__} ({blown}); "
                 "give that node a structural fallback or move it to another screen"
             )
             raise UnsolvableLayoutError(message)
