@@ -26,6 +26,63 @@ class TraceOutcome(StrEnum):
     ABANDONED = "abandoned"
 
 
+class DispatchDisposition(StrEnum):
+    """Terminal result of one mounted action dispatch."""
+
+    MOUNT_FINISHED = "mount_finished"
+    ACCESS_DENIED = "access_denied"
+    ACCESS_FAILED = "access_failed"
+    MISSING = "missing"
+    INVALID_SELECTION = "invalid_selection"
+    STALE = "stale"
+    VALIDATION_RETRY = "validation_retry"
+    COMPLETED = "completed"
+    ACTION_FAILED = "action_failed"
+    DELIVERY_FAILED = "delivery_failed"
+    CANCELLED = "cancelled"
+
+
+class ActionOutcome(StrEnum):
+    """How far an admitted portable action chain progressed."""
+
+    NOT_RUN = "not_run"
+    HANDLED = "handled"
+    SHORT_CIRCUITED = "short_circuited"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class PresentationOutcome(StrEnum):
+    """How the presentation required by an operation settled."""
+
+    NOT_REQUIRED = "not_required"
+    ACKNOWLEDGED = "acknowledged"
+    NO_CHANGE = "no_change"
+    WRITTEN = "written"
+    ABANDONED = "abandoned"
+    FAILED = "failed"
+    SUPERSEDED = "superseded"
+
+
+@dataclass(frozen=True, slots=True)
+class GenerationDecision:
+    """Submitted and admitted render generations for one dispatch."""
+
+    submitted: int | None
+    active: int
+    rebased: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class DispatchResult:
+    """Independent terminal, action, presentation, and generation dispatch facts."""
+
+    disposition: DispatchDisposition
+    action: ActionOutcome
+    presentation: PresentationOutcome
+    generation: GenerationDecision
+
+
 type AttributeValue = str | int | float | bool | None
 
 
@@ -81,6 +138,7 @@ class TraceResult:
 
     outcome: TraceOutcome
     detail: str | None = None
+    dispatch: DispatchResult | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +231,9 @@ class AggregateKey:
     name: str
     outcome: TraceOutcome | None
     detail: str | None
+    disposition: DispatchDisposition | None
+    action: ActionOutcome | None
+    presentation: PresentationOutcome | None
 
 
 @dataclass(frozen=True, slots=True)
