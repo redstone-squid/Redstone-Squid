@@ -859,6 +859,59 @@ class TestLifecycle:
         reactor.schedule(mount)
         assert reactor._queue.qsize() == 1
 
+    async def test_expired_handle_marks_dirty_without_loading_or_staging(self):
+        class Loaded(Component):
+            def __init__(self) -> None:
+                self.loads = 0
+
+            async def on_load(self) -> None:
+                self.loads += 1
+
+            def render(self):
+                return Text("loaded")
+
+        component = Loaded()
+        mount = Mount(component, timeout=None)
+        await mount.send(delivered_to(fake_message()))
+        component._loaded = False
+        mount._handle = delivery.handle_from(fake_interaction(expired=True))
+        issued = mount._issued
+
+        await mount.refresh_now()
+
+        assert component.loads == 1
+        assert mount._issued == issued
+        assert mount.pending
+
+    async def test_accepted_click_clears_status_and_flushes_without_it(self):
+        mount = Mount(Counter(), timeout=None)
+        await mount.send(delivered_to(fake_message()))
+        mount.status = "Live updates paused"
+        mount.invalidate()
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction)
+
+        written = interaction.response.edit_message.await_args.kwargs["view"]
+        assert "Live updates paused" not in str(written.to_components())
+        assert mount.status is None
+
+    async def test_background_refreshes_preserve_the_interaction_idle_budget(self, monkeypatch):
+        now = 100.0
+        monkeypatch.setattr("squid_layouts.discord.mount.time.monotonic", lambda: now)
+        mount = Mount(Counter(), timeout=30)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+
+        for elapsed in range(1, 11):
+            now = 100.0 + elapsed
+            await mount.refresh_now()
+
+        written = message.edit.await_args.kwargs["view"]
+        assert written.timeout == 20
+        assert mount.snapshot().idle == 10
+        assert mount.snapshot().expires_in == 20
+
 
 class TestDeliveryAtomicity:
     """A render becomes the mount's state only once Discord has accepted it."""
