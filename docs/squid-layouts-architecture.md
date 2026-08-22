@@ -45,9 +45,10 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
 
 sl.discord.compose is the Discord convenience path: plan for sl.discord.Target, draw with
-sl.discord.Renderer, then strictly audit the result. Detached composition can pass
-reserved_text; composing the complete document is preferable because the planner can see
-every cost. It never adopts an arbitrary existing `discord.py` view: renderers own their
+sl.discord.Renderer, then strictly audit the result. Detached composition passes a
+reservation, measured from the host view rather than counted by hand; composing the complete
+document is preferable because the planner can see every cost. A reservation is applied by
+planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
 ## Semantic authoring, adaptation, and exact primitives

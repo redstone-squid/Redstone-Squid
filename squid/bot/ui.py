@@ -40,7 +40,6 @@ __all__ = [
     "card_layout",
     "create_mount",
     "destination",
-    "display_text_length",
     "error_layout",
     "help_layout",
     "info_layout",
@@ -202,15 +201,20 @@ def destination(
     return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
 
 
-def render_item(node: ui.LayoutNode, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:
+def render_item(
+    node: ui.LayoutNode,
+    *,
+    locale: str | None = None,
+    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
+) -> discord.ui.Item[Any]:
     """Render one node to a detached item, for composition into a larger layout.
 
     The build card uses this: it renders as an engine-solved Container that callers (vote
     cards, search detail) then embed or extend. A detached item escapes the engine's view of
-    the message, so callers pass ``reserved_text`` for whatever else the message will carry;
+    the message, so callers pass what the rest of the message will spend;
     composing the whole document with `ui.discord.render_static` is better still where possible.
     """
-    view = render_static([node], locale=locale, reserved_text=reserved_text)
+    view = render_static([node], locale=locale, reservation=reservation)
     item = view.children[0]
     view.remove_item(item)
     return item
@@ -221,7 +225,7 @@ def render_static(
     *,
     locale: str | None = None,
     strict: bool = False,
-    reserved_text: int = 0,
+    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
 ) -> discord.ui.LayoutView:
     """Render a sessionless document through the bot's chrome and catalogue."""
     return ui.discord.render_static(
@@ -229,17 +233,8 @@ def render_static(
         chrome=CHROME,
         localization=localization_for(locale),
         strict=strict,
-        reserved_text=reserved_text,
+        reservation=reservation,
     )
-
-
-def display_text_length(view: discord.ui.LayoutView) -> int:
-    """Display characters already spent in `view`.
-
-    Hand-assembled V1 views compose engine-solved items with items of their own; passing this
-    as `reserved_text` tells the engine how much of the message budget is already gone.
-    """
-    return sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
 def truncate_display_text(content: str, limit: int) -> str:

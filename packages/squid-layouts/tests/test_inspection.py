@@ -212,3 +212,60 @@ def test_measurement_always_agrees_with_discordpy(view: discord.ui.LayoutView):
     reservation = measure(view)
     assert reservation.cost.get("components") == view._total_children
     assert reservation.cost.get("display_text") == view.content_length()
+
+
+class TestReservationAxes:
+    """A reservation is a smaller target, so every axis behaves the same way."""
+
+    def test_text_reservation_shrinks_the_text_budget(self):
+        target = sl.discord.Target().reserve(sl.discord.ResourceCost({"display_text": 1000}))
+        assert target.limits.total_text == LIMITS.total_text - 1000
+
+    def test_component_reservation_shrinks_the_component_budget(self):
+        target = sl.discord.Target().reserve(sl.discord.ResourceCost({"components": 6}))
+        assert target.limits.total_components == LIMITS.total_components - 6
+
+    def test_local_caps_are_untouched(self):
+        reserved = sl.discord.Target().reserve(
+            sl.discord.ResourceCost({"display_text": 500, "components": 5, "attachments": 2})
+        )
+        assert reserved.limits.row_buttons == LIMITS.row_buttons
+        assert reserved.limits.section_texts == LIMITS.section_texts
+        assert reserved.limits.select_options == LIMITS.select_options
+
+    def test_unknown_resources_are_rejected(self):
+        with pytest.raises(sl.LayoutInvariantError, match="no reservable resource"):
+            sl.discord.Target().reserve(sl.discord.ResourceCost({"pixels": 1}))
+
+    def test_reservation_never_goes_negative(self):
+        reserved = sl.discord.Target().reserve(sl.discord.ResourceCost({"display_text": LIMITS.total_text * 2}))
+        assert reserved.limits.total_text == 0
+
+    def test_identity_is_preserved(self):
+        reserved = sl.discord.Target().reserve(sl.discord.ResourceCost({"components": 1}))
+        assert reserved.id == "discord.components-v2"
+        assert reserved.capabilities == sl.discord.Target().capabilities
+        assert "discord.item" in reserved.extensions
+
+
+class TestReservedPlanning:
+    """The planner must honour every axis it is handed, not only display text."""
+
+    def test_text_reservation_shrinks_the_composed_view(self):
+        body = sl.primitives.Text("x" * 5000)
+        reserved = sl.discord.compose([body], reservation=sl.discord.ResourceCost({"display_text": 1500})).view
+        assert reserved.content_length() <= LIMITS.total_text - 1500
+
+    def test_component_reservation_is_enforced(self):
+        # Twelve text components fit an unreserved message and cannot fit five, so the
+        # reservation has to be the difference between composing and refusing.
+        document = [sl.primitives.Text(f"line {index}") for index in range(12)]
+        assert len(list(sl.discord.compose(document).view.walk_children())) == 12
+        with pytest.raises(sl.UnsolvableLayoutError):
+            sl.discord.compose(document, reservation=sl.discord.ResourceCost({"components": 35}))
+
+    def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):
+        host = _view(discord.ui.TextDisplay("h" * 2000))
+        fragment_view = sl.discord.compose([sl.primitives.Text("f" * 5000)], reservation=measure(host).cost).view
+        combined = host.content_length() + fragment_view.content_length()
+        assert combined <= LIMITS.total_text

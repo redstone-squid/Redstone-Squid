@@ -98,13 +98,15 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Render a standalone Components V2 layout for the build."""
         return render_static([await self.render_node()])
 
-    async def render_container(self, *, reserved_text: int = 0) -> discord.ui.Container[discord.ui.LayoutView]:
+    async def render_container(
+        self, *, reservation: sl.discord.ResourceCost = sl.discord.EMPTY_RESERVATION
+    ) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
 
-        ``reserved_text`` withholds display characters the caller spends on the rest of the
-        message, so the card shrinks to leave room for content the solver cannot see.
+        ``reservation`` withholds whatever the caller spends on the rest of the message, so
+        the card shrinks to leave room for content the solver cannot see.
         """
-        container = render_item(await self.render_node(), reserved_text=reserved_text)
+        container = render_item(await self.render_node(), reservation=reservation)
         assert isinstance(container, discord.ui.Container)
         return container
 

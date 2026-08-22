@@ -54,6 +54,11 @@ class Target(TargetProfile):
             ),
             limits=limits,
             extensions={"discord.item": _DiscordItemExtension()},
+            resources={
+                "display_text": "total_text",
+                "components": "total_components",
+                "attachments": "attachments",
+            },
         )
 
 
