@@ -31,6 +31,10 @@ def _default_total_range_footer(first: int, last: int, total: int) -> TextLike:
     return f"{first}\N{EN DASH}{last} of {total}"
 
 
+def _default_page_option(page: int) -> TextLike:
+    return f"Page {page}"
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
@@ -54,6 +58,10 @@ class Chrome:
     """Visible range and approximate source total."""
     total_range_footer: Callable[[int, int, int], TextLike] = _default_total_range_footer
     """Visible range and exact source total."""
+    jump_to_page: TextLike = "Jump to a page"
+    """Placeholder on the jump select a seekable paginator can offer."""
+    page_option: Callable[[int], TextLike] = _default_page_option
+    """One entry of that select; called with a 1-based page number."""
 
 
 DEFAULT_CHROME = Chrome()
@@ -82,4 +90,6 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         total_range_footer=lambda first, last, total: (
             resolve_text(chrome.total_range_footer(first, last, total), localization).content
         ),
+        jump_to_page=resolve_text(chrome.jump_to_page, localization).content,
+        page_option=lambda page: resolve_text(chrome.page_option(page), localization).content,
     )

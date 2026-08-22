@@ -35,10 +35,10 @@ by their own tests. In rough order of value:
   `squid/bot/errors.py` go too.
 - **Delivery call sites** — `ui.reply(ctx, view, visibility=...)` exists; migrate
   `reply_layout`/`deliver_privately`/ad-hoc `ctx.send` sites organically.
-- **`search_view.py` compat shims** (`to_components()`, `build_view(disabled=…)`,
-  `search_view.py:242-246`) — the last two `Mount.build_view` consumers, and themselves
-  the staged-but-never-committed hazard the 2026-08-21 external audit flagged. When
-  they go, `build_view` goes private (`_stage_view`) so a never-committed generation
+- ~~**`search_view.py` compat shims**~~ — **done**. The shims (`to_components()`,
+  `walk_children()`, `bind_message()`, `on_timeout()`, `render_detail()`,
+  `build_view(disabled=…)`) are deleted and their two tests rewritten against the real
+  mount, so `build_view` is now private as `_stage_view`: a never-committed generation
   can no longer be handed to a send path.
 - **`squid/bot/utils/components.py`** — delete when `card_container`,
   `truncate_display_text` (starboard/render.py, voting/rendering.py, build_handler sponsor
