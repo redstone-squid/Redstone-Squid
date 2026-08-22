@@ -1,6 +1,7 @@
 """Discord form presentation, submission funnel, and validation retry."""
 
 from typing import cast
+from unittest.mock import AsyncMock, Mock
 
 import discord
 import pytest
@@ -35,6 +36,14 @@ def _component(modal: discord.ui.Modal) -> discord.ui.Item:
                 options=(sl.ChoiceOption("a", "A", "a"), sl.ChoiceOption("b", "B", "b")),
             ),
             discord.ui.RadioGroup,
+        ),
+        (
+            sl.MultiChoiceField(
+                key="value",
+                label="Value",
+                options=(sl.ChoiceOption("a", "A", "a"), sl.ChoiceOption("b", "B", "b")),
+            ),
+            discord.ui.Select,
         ),
         (sl.BoolField(key="value", label="Value"), discord.ui.Checkbox),
         (EntityField(key="value", label="Value", entity_type=EntityType.ROLE), discord.ui.RoleSelect),
@@ -97,6 +106,72 @@ def test_modal_budget_rejects_implicit_chunking() -> None:
 
     with pytest.raises(sl.LayoutInvariantError, match="1-5"):
         build_form_modal(spec, on_submit=_ignore_raw)
+
+
+def test_multi_choice_builds_select_cardinality_and_defaults() -> None:
+    field = sl.MultiChoiceField(
+        key="values",
+        label="Values",
+        required=False,
+        options=tuple(sl.ChoiceOption(str(index), f"Choice {index}", index) for index in range(4)),
+        minimum=1,
+        maximum=3,
+    )
+    modal = build_form_modal(sl.FormSpec("Many", (field,), prefill={"values": (1, "3")}), on_submit=_ignore_raw)
+
+    component = _component(modal)
+    assert isinstance(component, discord.ui.Select)
+    assert component.min_values == 1
+    assert component.max_values == 3
+    assert [option.value for option in component.options if option.default] == ["1", "3"]
+
+
+def test_multi_choice_rejects_more_than_twenty_five_options() -> None:
+    field = sl.MultiChoiceField(
+        key="values",
+        label="Values",
+        options=tuple(sl.ChoiceOption(str(index), f"Choice {index}", index) for index in range(26)),
+    )
+
+    with pytest.raises(sl.LayoutInvariantError, match="1-25"):
+        build_form_modal(sl.FormSpec("Many", (field,)), on_submit=_ignore_raw)
+
+
+async def test_file_reader_wraps_discord_attachments_in_portable_values() -> None:
+    submitted: dict[str, object] = {}
+
+    async def capture(_interaction, values: dict[str, object]) -> None:
+        submitted.update(values)
+
+    modal = build_form_modal(sl.FormSpec("Upload", (FileField(key="file", label="File"),)), on_submit=capture)
+    component = _component(modal)
+    assert isinstance(component, discord.ui.FileUpload)
+    attachment = Mock(spec=discord.Attachment)
+    attachment.filename = "build.litematic"
+    attachment.content_type = "application/octet-stream"
+    attachment.size = 42
+    attachment.url = "https://cdn.example.invalid/build.litematic"
+    attachment.read = AsyncMock(return_value=b"schematic")
+    component._values = [attachment]  # pyrefly: ignore[missing-attribute]
+
+    await modal.on_submit(fake_interaction())
+
+    uploaded = cast(tuple[sl.UploadedFile, ...], submitted["file"])[0]
+    assert (uploaded.name, uploaded.media_type, uploaded.size, uploaded.url) == (
+        "build.litematic",
+        "application/octet-stream",
+        42,
+        "https://cdn.example.invalid/build.litematic",
+    )
+    assert await uploaded.read() == b"schematic"
+
+
+def test_file_field_rejects_more_than_ten_uploads() -> None:
+    with pytest.raises(sl.LayoutInvariantError, match="0-10"):
+        build_form_modal(
+            sl.FormSpec("Upload", (FileField(key="file", label="File", maximum=11),)),
+            on_submit=_ignore_raw,
+        )
 
 
 class DurationPanel(sl.Component):
