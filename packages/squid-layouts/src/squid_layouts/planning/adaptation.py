@@ -15,7 +15,17 @@ from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import COMPONENTS, V2Limits
 from squid_layouts.planning.measure import measure_nodes, split_text_node, text_total
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
-from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.primitives.constraints import (
+    Alt,
+    Condense,
+    Drop,
+    Never,
+    Overflow,
+    Paginate,
+    Spill,
+    Truncate,
+    alts,
+)
 from squid_layouts.primitives.nodes import (
     ActionGroup as PrimitiveActionGroup,
 )
@@ -23,6 +33,11 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    Card,
+    CardField,
+    CardFooter,
+    CardMedia,
+    Fidelity,
     Footer,
     FormButton,
     Gallery,
@@ -38,7 +53,10 @@ from squid_layouts.primitives.nodes import (
     Text,
     Thumbnail,
     Time,
+    Variant,
+    Variants,
     ZonedTime,
+    card_text,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
@@ -317,6 +335,8 @@ def lower_semantics(
     lowered: list[Node] = []
     for index, node in enumerate(nodes):
         lowered.extend(_node(node, f"$.{index}", context))
+    if _cards(context):
+        lowered = _settle(_fold(lowered, context), context)
     return SemanticLowering(
         tuple(lowered),
         tuple(context.assets),
@@ -385,6 +405,22 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
         ):
+            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            if _cards(context):
+                # One semantic region, one card: its heading is the embed title, its accent is
+                # the embed colour, and its lead image is the thumbnail. Nothing has to be
+                # guessed, because the semantic node already said which was which.
+                return [
+                    _region(
+                        Card(
+                            title=None if heading is None else _resolve(heading, context),
+                            thumbnail=None if not thumbnail else CardMedia(thumbnail),
+                            accent=resolved_accent,
+                        ),
+                        _children(children, path, context),
+                        context,
+                    )
+                ]
             contents: list[Node] = []
             if heading is not None:
                 title = PrimitiveHeading(_resolve(heading, context), overflow=Never())
@@ -396,10 +432,12 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             elif thumbnail:
                 contents.append(Gallery((thumbnail,)))
             contents.extend(_children(children, path, context))
-            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
             return [Panel(tuple(contents), accent=resolved_accent)]
         case Aside(children=children, tone=tone):
-            return [Panel(tuple(_children(children, path, context)), accent=context.palette.tone(tone))]
+            accent = context.palette.tone(tone)
+            if _cards(context):
+                return [_region(Card(accent=accent), _children(children, path, context), context)]
+            return [Panel(tuple(_children(children, path, context)), accent=accent)]
         case Heading(content=content, level=level):
             return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never())]
         case Paragraph(content=content):
@@ -411,6 +449,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             lines = tuple(f"{marker(index)} {_resolve(item.content, context)}" for index, item in enumerate(items))
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
+            if "layout.embed_fields" in context.capabilities:
+                entries = _card_fields(fields, context)
+                per_card = getattr(context.limits, "embed_fields", 25)
+                # More fields than one embed holds continue into the next card. Lossless:
+                # every field is still shown, in order, on an adjacent embed.
+                return [
+                    _Fragment(fields=tuple(entries[start : start + per_card]))
+                    for start in range(0, len(entries), per_card)
+                ]
             return [Lines(tuple(_field_entry(field, context) for field in fields), overflow=Condense())]
         case Quote(content=content, attribution=attribution):
             value = "> " + _resolve(content, context).replace("\n", "\n> ")
@@ -420,6 +467,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Code(content=content, language=language):
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
+            if _cards(context):
+                # The description rides along even where Discord will not show it: it is the
+                # author's alternative text, and a scene that dropped it could not restore it.
+                return [
+                    Card(
+                        image=CardMedia(media.url, media.description),
+                        footer=None if caption is None else CardFooter(_resolve(caption, context)),
+                    )
+                ]
             children: list[Node] = [Gallery((media.url,))]
             if caption is not None:
                 children.append(Footer(_resolve(caption, context)))
@@ -440,6 +496,19 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             text = resolved_label
             if description is not None:
                 text += f"\n{_resolve(description, context)}"
+            if _cards(context):
+                # No file *component* exists outside Components V2. The asset still uploads and
+                # the label and description still show; what is lost is the dedicated
+                # affordance, which the report says out loud rather than leaving to be noticed.
+                context.events.append(
+                    PlanEvent(
+                        code="download.attachment_only",
+                        path=path,
+                        message=f"{path}: a classic message shows {asset.name!r} as an attachment, not a file component",
+                        severity=PlanSeverity.DEGRADATION,
+                    )
+                )
+                return [Text(text, overflow=Never())]
             return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type)]
         case Status(content=content, tone=tone):
             prefix = {
@@ -476,6 +545,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Table():
             return _table(node, path, context)
         case Panel(children=children, accent=accent):
+            # The exact primitive, not a semantic region: it stays a Container and the classic
+            # dialect refuses it by name. Quietly turning an author's `Panel` into an embed
+            # would be reinterpreting a shape they chose for its own sake.
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
             return [_primitive(node, context)]
@@ -551,6 +623,183 @@ def _strategy_axis(
 
 def _resolve(value: TextLike, context: _Context) -> str:
     return resolve_text(value, context.localization).content
+
+
+@dataclass(frozen=True, slots=True)
+class _Fragment(Card):
+    """A card holding loose prose or fields rather than an authored region.
+
+    Fragments fold into their neighbours; an `Article`, `Aside`, or `Figure` produces a plain
+    `Card` and never does. Only this layer can tell the two apart — after lowering, both are
+    just cards, and merging two authored regions into one embed would change the author's
+    grouping rather than express it.
+    """
+
+
+def _fold(nodes: Sequence[Node], context: _Context) -> list[Node]:
+    """Fold consecutive fragments into as few legal cards as possible.
+
+    Loose prose has to live somewhere, and a classic message's only home for prose beside an
+    explicit `Content` is an embed description. Consecutive prose therefore becomes one
+    implicit card and the first suitable heading becomes its title — later headings stay in
+    the description as formatted text, because an embed has one title.
+
+    A fragment that would overflow a card's own shape opens a continuation card. Continuations
+    are exact: everything the author wrote is still shown, in the same order.
+    """
+    limits = context.limits
+    folded: list[Node] = []
+    open_card: _Fragment | None = None
+
+    def flush() -> None:
+        nonlocal open_card
+        if open_card is not None:
+            folded.append(open_card)
+            open_card = None
+
+    for node in nodes:
+        fragment = _as_fragment(node, open_card)
+        if fragment is None:
+            flush()
+            folded.append(node)
+            continue
+        merged = None if open_card is None else _merge(open_card, fragment, limits)
+        if merged is None:
+            flush()
+            open_card = fragment
+        else:
+            open_card = merged
+    flush()
+    return folded
+
+
+def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
+    """This node as a foldable card fragment, or None if it stands on its own."""
+    if isinstance(node, _Fragment):
+        return node
+    if isinstance(node, Footer):
+        # A trailing note is what the footer slot is for. One anywhere else stays subtle
+        # description text, because an embed has exactly one footer.
+        if open_card is not None and open_card.footer is None:
+            return _Fragment(footer=CardFooter(node.content))
+        return _Fragment(children=(node,))
+    if isinstance(node, PrimitiveHeading):
+        # "Suitable" means it can actually be a title: it has to come before any body text,
+        # or the description would read as though it began mid-sentence.
+        leading = open_card is None or (open_card.title is None and not open_card.children)
+        if leading:
+            return _Fragment(title=Text(node.content, overflow=node.overflow))
+        return _Fragment(children=(node,))
+    if isinstance(node, Text | PrimitiveCode | Lines | Time | ZonedTime):
+        return _Fragment(children=(node,))
+    return None
+
+
+def _merge(first: _Fragment, second: _Fragment, limits: V2Limits) -> _Fragment | None:
+    """Fold `second` into `first`, or None when the result would not be one legal embed."""
+    if len(first.fields) + len(second.fields) > getattr(limits, "embed_fields", 25):
+        return None
+    for slot in ("title", "url", "footer", "author", "image", "thumbnail", "timestamp"):
+        if getattr(first, slot) is not None and getattr(second, slot) is not None:
+            return None
+    if first.accent is not None and second.accent is not None and first.accent != second.accent:
+        return None
+    return _Fragment(
+        children=(*first.children, *second.children),
+        title=first.title if first.title is not None else second.title,
+        url=first.url if first.url is not None else second.url,
+        fields=(*first.fields, *second.fields),
+        footer=first.footer if first.footer is not None else second.footer,
+        author=first.author if first.author is not None else second.author,
+        accent=first.accent if first.accent is not None else second.accent,
+        image=first.image if first.image is not None else second.image,
+        thumbnail=first.thumbnail if first.thumbnail is not None else second.thumbnail,
+        timestamp=first.timestamp if first.timestamp is not None else second.timestamp,
+    )
+
+
+def _settle(nodes: Sequence[Node], context: _Context) -> list[Node]:
+    """Close every still-open fragment. Folding leaves them open so a parent can absorb them."""
+    return [_close(node, context) if isinstance(node, _Fragment) else node for node in nodes]
+
+
+def _close(card: _Fragment, context: _Context) -> Node:
+    """Settle a folded card, offering the reformatted alternative where one exists."""
+    plain = Card(
+        children=card.children,
+        title=card.title,
+        url=card.url,
+        fields=card.fields,
+        footer=card.footer,
+        author=card.author,
+        accent=card.accent,
+        image=card.image,
+        thumbnail=card.thumbnail,
+        timestamp=card.timestamp,
+    )
+    if not card.fields:
+        return plain
+    # Real embed fields are exact. Spelling the same values as description lines keeps every
+    # one of them but reformats the block, so the solver is told which is which rather than
+    # inferring loss from a rung number.
+    lines = Lines(
+        tuple(f"**{_slot_text(field.name)}:** {_slot_text(field.value)}" for field in card.fields),
+        overflow=Condense(),
+    )
+    reformatted = replace(plain, fields=(), children=(*plain.children, lines))
+    return Variants((Variant((plain,)), Variant((reformatted,), fidelity=Fidelity.REFORMATTED)))
+
+
+def _slot_text(value: object) -> str:
+    return card_text(value).content  # type: ignore[arg-type]
+
+
+def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
+    """One authored region as one card, absorbing whatever its body folded into.
+
+    A region's body is already folded, so the common case is a single fragment that merges
+    straight in. Anything the region cannot hold — a second image, a 26th field — stays a
+    sibling card, which is a continuation rather than a loss.
+    """
+    fragment = _Fragment(
+        title=card.title,
+        url=card.url,
+        footer=card.footer,
+        author=card.author,
+        accent=card.accent,
+        image=card.image,
+        thumbnail=card.thumbnail,
+        timestamp=card.timestamp,
+    )
+    folded = _settle(_fold([fragment, *body], context), context)
+    if len(folded) == 1:
+        return folded[0]
+    # A region that needs continuation cards is still one region: keeping them together stops
+    # root pagination cutting between a heading and the rest of what it introduced.
+    return Break(tuple(folded), keep_with_next=True)
+
+
+def _cards(context: _Context) -> bool:
+    """Whether this target draws regions as embeds rather than as container components."""
+    return "layout.embed" in context.capabilities
+
+
+def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
+    """Real embed fields, keeping the name/value split the semantic node already made.
+
+    This is the whole reason lowering has to know the target. `_field_entry` flattens a field
+    into one line of text, and a target that decided embed structure downstream of lowering
+    would have nothing left to decide with.
+    """
+    entries: list[CardField] = []
+    for field in fields:
+        value = _resolve(field.value, context)
+        # A field's own ladder is its overflow policy, so the solver steps it down its
+        # author-written rungs before anything is trimmed mid-string.
+        rungs = [rung for fallback in field.fallbacks if len(rung := _resolve(fallback, context)) <= len(value)]
+        policy: Overflow = alts(*rungs) if rungs else Never()
+        entries.append(CardField(name=_resolve(field.label, context), value=Text(value, overflow=policy)))
+    return entries
 
 
 def _primitive(node: Node, context: _Context) -> Node:
@@ -629,7 +878,7 @@ def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> l
     lowered: list[Node] = []
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))
-    return lowered
+    return _fold(lowered, context) if _cards(context) else lowered
 
 
 @dataclass(frozen=True, slots=True)

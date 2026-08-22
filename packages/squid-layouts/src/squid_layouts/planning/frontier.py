@@ -21,7 +21,7 @@ from squid_layouts.planning.measure import (
     _prune,
 )
 from squid_layouts.planning.target import ResourceCost
-from squid_layouts.primitives.nodes import Break, Budget, Fidelity, Node, Panel, Variants
+from squid_layouts.primitives.nodes import Break, Budget, Card, Fidelity, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]
 type Positions = Mapping[VariantPath, int]
@@ -49,7 +49,12 @@ def walk_ladders(nodes: Sequence[Node], positions: Positions, visit) -> None:
                 # their positions rather than reinterpreting them against a different subtree.
                 for index, child in enumerate(variants[rung].nodes):
                     walk(child, (*path, rung, index))
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
+            case (
+                Panel(children=children)
+                | Budget(children=children)
+                | Break(children=children)
+                | Card(children=children)
+            ):
                 for index, child in enumerate(children):
                     walk(child, (*path, "panel", index))
             case _:
@@ -174,7 +179,12 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
                     if total > cutoff:
                         return cutoff + 1
                 return total
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
+            case (
+                Panel(children=children)
+                | Budget(children=children)
+                | Break(children=children)
+                | Card(children=children)
+            ):
                 return multiply([count_node(child) for child in children])
             case _:
                 return 1
@@ -245,7 +255,7 @@ def resolve_variants(nodes: Sequence[Node], positions: Positions) -> list[Node]:
                 for index, child in enumerate(children):
                     inner.extend(rewrite(child, (*path, "panel", index)))
                 return [Panel(children=tuple(inner), accent=accent)]
-            case Budget(children=children) | Break(children=children):
+            case Budget(children=children) | Break(children=children) | Card(children=children):
                 inner = []
                 for index, child in enumerate(children):
                     inner.extend(rewrite(child, (*path, "panel", index)))

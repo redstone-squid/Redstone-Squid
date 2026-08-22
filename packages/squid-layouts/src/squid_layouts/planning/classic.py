@@ -78,7 +78,6 @@ BLOCK_JOIN = "\n\n"
 
 
 def _lower(nodes: Sequence[Node], target: TargetProfile, limits: ClassicLimits) -> tuple[Node, ...]:
-    """Rewrite lowered nodes into classic shape: legal rows, one card per embed."""
     lowered: list[Node] = []
     for node in nodes:
         match node:

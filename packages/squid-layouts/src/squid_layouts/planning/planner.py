@@ -56,6 +56,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    Card,
     Extension,
     Node,
     Panel,
@@ -743,7 +744,7 @@ def _cacheable(nodes: Sequence[Node]) -> bool:
             return False
         if isinstance(node, Variants):
             return all(check(child) for variant in node.variants for child in variant.nodes)
-        if isinstance(node, Panel | Budget | Break):
+        if isinstance(node, Panel | Budget | Break | Card):
             return all(check(child) for child in node.children)
         return True
 
