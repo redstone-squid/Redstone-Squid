@@ -57,6 +57,14 @@ class SpanRecorder(Protocol):
 
     def set_outcome(self, outcome: TraceOutcome) -> None: ...
 
+    def set_attribute(self, key: str, value: AttributeValue) -> None: ...
+
+
+class DetachedSpanRecorder(SpanRecorder, Protocol):
+    """A manually finished span for work that overlaps its lexical caller."""
+
+    def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None: ...
+
 
 class OperationRecorder(Protocol):
     """Controls one operation and creates structurally nested spans."""
@@ -72,6 +80,14 @@ class OperationRecorder(Protocol):
     def set_result(self, result: TraceResult) -> None: ...
 
     def mark_deadline_missed(self) -> None: ...
+
+    def start_span(
+        self,
+        name: str,
+        *,
+        attributes: Mapping[str, AttributeValue] | None = None,
+        links: Sequence[TraceLink] = (),
+    ) -> DetachedSpanRecorder: ...
 
 
 class Profiler(Protocol):
@@ -196,6 +212,9 @@ class _NoOpSpan(AbstractContextManager[SpanRecorder]):
     def set_outcome(self, outcome: TraceOutcome) -> None:
         pass
 
+    def set_attribute(self, key: str, value: AttributeValue) -> None:
+        pass
+
 
 class _NoOpOperation(_NoOpSpan, OperationRecorder):
     def span(
@@ -213,7 +232,22 @@ class _NoOpOperation(_NoOpSpan, OperationRecorder):
     def mark_deadline_missed(self) -> None:
         pass
 
+    def start_span(
+        self,
+        name: str,
+        *,
+        attributes: Mapping[str, AttributeValue] | None = None,
+        links: Sequence[TraceLink] = (),
+    ) -> DetachedSpanRecorder:
+        return _NOOP_DETACHED
 
+
+class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
+    def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None:
+        pass
+
+
+_NOOP_DETACHED = _NoOpDetachedSpan()
 _NOOP = _NoOpOperation()
 
 
@@ -305,6 +339,10 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
         if self._span is not None:
             self._span.outcome = outcome
 
+    def set_attribute(self, key: str, value: AttributeValue) -> None:
+        if self._span is not None:
+            self._profiler._set_span_attribute(self._trace, self._span, key, value)
+
     def _reset_context(self) -> None:
         if self._token is None:
             return
@@ -391,6 +429,28 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         if self._trace is not None and not self._trace.closed:
             self._trace.deadline_missed = True
 
+    def start_span(
+        self,
+        name: str,
+        *,
+        attributes: Mapping[str, AttributeValue] | None = None,
+        links: Sequence[TraceLink] = (),
+    ) -> DetachedSpanRecorder:
+        if self._trace is None or self._fallback or self._trace.closed:
+            return _NOOP_DETACHED
+        current = _current.get()
+        parent = (
+            current.span_id
+            if current is not None and current.profiler is self._profiler and current.trace is self._trace
+            else self._trace.root_span_id
+        )
+        try:
+            span = self._profiler._start_span(self._trace, parent, name, attributes, links)
+        except BaseException:
+            self._profiler._note_internal_failure()
+            return _NOOP_DETACHED
+        return _DetachedSpan(self._profiler, self._trace, span)
+
     def _reset_context(self) -> None:
         if self._token is None:
             return
@@ -398,6 +458,28 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
             _current.reset(self._token)
         except BaseException:
             self._profiler._note_internal_failure()
+
+
+class _DetachedSpan(DetachedSpanRecorder):
+    def __init__(self, profiler: MemoryProfiler, trace: _MutableTrace, span: _MutableSpan) -> None:
+        self._profiler = profiler
+        self._trace = trace
+        self._span = span
+        self._finished = False
+
+    def set_outcome(self, outcome: TraceOutcome) -> None:
+        if not self._finished and not self._trace.closed:
+            self._span.outcome = outcome
+
+    def set_attribute(self, key: str, value: AttributeValue) -> None:
+        if not self._finished:
+            self._profiler._set_span_attribute(self._trace, self._span, key, value)
+
+    def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None:
+        if self._finished or self._trace.closed:
+            return
+        self._finished = True
+        self._profiler._finish_span(self._trace, self._span, self._span.outcome or outcome)
 
 
 def _outcome_for_exception(error: BaseException | None) -> TraceOutcome:
@@ -660,6 +742,8 @@ class MemoryProfiler:
         try:
             ended = self._clock()
             with self._lock:
+                if trace.closed or span.ended is not None:
+                    return
                 span.ended = ended
                 span.outcome = outcome
         except BaseException:
@@ -867,6 +951,23 @@ class MemoryProfiler:
         with self._lock:
             self._rejected_attributes += rejected
         return tuple(retained)
+
+    def _set_span_attribute(
+        self,
+        trace: _MutableTrace,
+        span: _MutableSpan,
+        key: str,
+        value: AttributeValue,
+    ) -> None:
+        try:
+            with self._lock:
+                if trace.closed or span.ended is not None:
+                    return
+                attributes = {attribute.key: attribute.value for attribute in span.attributes}
+                attributes[key] = value
+                span.attributes = self._bounded_attributes(attributes)
+        except BaseException:
+            self._note_internal_failure()
 
     def _bounded_links(self, links: Sequence[TraceLink]) -> tuple[tuple[TraceLink, ...], int]:
         retained: list[TraceLink] = []
