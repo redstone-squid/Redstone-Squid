@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-22 02:55+0000\n"
+"POT-Creation-Date: 2026-08-22 03:07+0000\n"
 "PO-Revision-Date: 2026-07-31 15:06+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: zh_Hans_CN\n"
@@ -758,7 +758,7 @@ msgstr ""
 msgid "Build not found."
 msgstr "找不到该构造。"
 
-#: squid/bot/submission/ui/views.py:1251
+#: squid/bot/submission/ui/views.py:1254
 msgid "Build preview unavailable."
 msgstr ""
 
@@ -884,8 +884,8 @@ msgstr ""
 msgid "Candidate {build_id} has no typed category facts."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:802 squid/bot/submission/ui/views.py:1234
-#: squid/bot/submission/ui/views.py:1240
+#: squid/bot/submission/ui/views.py:802 squid/bot/submission/ui/views.py:1237
+#: squid/bot/submission/ui/views.py:1243
 msgid "Cannot edit this build"
 msgstr ""
 
@@ -1463,8 +1463,8 @@ msgstr ""
 #: squid/bot/settings.py:117 squid/bot/settings.py:148
 #: squid/bot/settings.py:191 squid/bot/settings.py:200
 #: squid/bot/settings.py:223 squid/bot/submission/edit.py:84
-#: squid/bot/submission/search.py:282 squid/bot/submission/search.py:314
-#: squid/bot/submission/search.py:377
+#: squid/bot/submission/search.py:282 squid/bot/submission/search.py:315
+#: squid/bot/submission/search.py:378
 msgid "Error"
 msgstr "错误"
 
@@ -1848,7 +1848,7 @@ msgstr "内部错误"
 msgid "Internal server error"
 msgstr "内部服务器错误"
 
-#: squid/bot/submission/search.py:386
+#: squid/bot/submission/search.py:387
 #, python-brace-format
 msgid "Internal state for build #{id} is attached."
 msgstr ""
@@ -2258,7 +2258,7 @@ msgid "No build credits a creator by that name."
 msgstr ""
 
 #: squid/bot/submission/edit.py:84 squid/bot/submission/search.py:282
-#: squid/bot/submission/search.py:314 squid/bot/submission/search.py:377
+#: squid/bot/submission/search.py:315 squid/bot/submission/search.py:378
 msgid "No build with that ID."
 msgstr "没有该 ID 对应的构造。"
 
@@ -2469,7 +2469,7 @@ msgid "Only the door type and opening size are required."
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:819 squid/bot/submission/ui/views.py:850
-#: squid/bot/submission/ui/views.py:1189 squid/bot/submission/ui/views.py:1230
+#: squid/bot/submission/ui/views.py:1192 squid/bot/submission/ui/views.py:1233
 msgid "Only the pending build's submitter or a trusted staff member can edit it."
 msgstr ""
 
@@ -3436,11 +3436,11 @@ msgstr ""
 msgid "Submission form"
 msgstr "提交表单"
 
-#: squid/bot/submission/search.py:338
+#: squid/bot/submission/search.py:339
 msgid "Submission has been confirmed."
 msgstr "提交已确认。"
 
-#: squid/bot/submission/search.py:359
+#: squid/bot/submission/search.py:360
 msgid "Submission has been denied."
 msgstr "提交已被拒绝。"
 
@@ -3470,8 +3470,8 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/submission/search.py:250 squid/bot/submission/search.py:338
-#: squid/bot/submission/search.py:359
+#: squid/bot/submission/search.py:250 squid/bot/submission/search.py:339
+#: squid/bot/submission/search.py:360
 msgid "Success"
 msgstr "成功"
 
@@ -3674,15 +3674,15 @@ msgstr ""
 msgid "The ID of the build to edit."
 msgstr ""
 
-#: squid/bot/submission/search.py:368
+#: squid/bot/submission/search.py:369
 msgid "The ID of the build whose debug details you want to see."
 msgstr "你要查看调试详情的构造 ID。"
 
-#: squid/bot/submission/search.py:329
+#: squid/bot/submission/search.py:330
 msgid "The ID of the build you want to confirm."
 msgstr "你要确认的构造 ID。"
 
-#: squid/bot/submission/search.py:346
+#: squid/bot/submission/search.py:347
 msgid "The ID of the build you want to deny."
 msgstr "你要拒绝的构造 ID。"
 
@@ -4059,7 +4059,7 @@ msgstr ""
 msgid "This does not look like a build."
 msgstr "这看起来不像是一个构造。"
 
-#: squid/bot/submission/ui/views.py:813 squid/bot/submission/ui/views.py:1183
+#: squid/bot/submission/ui/views.py:813 squid/bot/submission/ui/views.py:1186
 msgid "This edit session expired. Reopen the build to start again."
 msgstr ""
 
@@ -5885,3 +5885,4 @@ msgstr ""
 
 #~ msgid "_Not found_ (`{id}`)"
 #~ msgstr ""
+
