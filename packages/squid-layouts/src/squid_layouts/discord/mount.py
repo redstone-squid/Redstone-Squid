@@ -47,6 +47,7 @@ from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import readonly_transaction, transaction
+from squid_layouts.runtime.resources import Resource, ResourceDelivery
 from squid_layouts.scene.model import (
     PlanMetrics,
     PlanReport,
@@ -65,11 +66,12 @@ from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 logger = logging.getLogger(__name__)
 
 _MAX_LOAD_PASSES = 16
-"""Embedding tiers one delivery loads through -- not retries.
+"""Component/resource tiers one delivery loads through -- not retries.
 
-Each pass loads a tier and renders to reveal the next, so this bounds nesting depth. It only
-trips on an `on_load` that keeps embedding freshly unloaded components, which is a loop rather
-than a deep tree.
+Each pass loads a tier and renders to reveal the next, so this bounds nesting depth. It
+only trips on an `on_load` that keeps embedding freshly unloaded components or a resource
+whose settled render reveals another pending atomic resource forever; either is a loop
+rather than a deep tree.
 """
 
 
@@ -622,13 +624,16 @@ class Mount:
     # --- Loading -----------------------------------------------------------------------
 
     async def _stage_loaded(self, *, disabled: bool = False) -> _Candidate:
-        """Stage a candidate whose every component has completed its `on_load`.
+        """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
         tier's loaded render is what reveals the next. Siblings within a tier load together.
         A tier that still owes loads is never drawn -- only rendered, and only to find out
         who they are -- so an incomplete document is never planned. A tree that declares no
         loads is rendered and drawn exactly once, as it was before this existed.
+
+        Pending atomic resources use the same discovery passes. Their pending render is
+        complete but deliberately not drawn or delivered; failed state is settled state.
 
         A raise leaves every completed load completed, every other one eligible to retry, and
         nothing staged, so the mount is exactly as deliverable as it was.
@@ -638,11 +643,61 @@ class Mount:
                 await self._load_all((root,))
                 continue
             tree = self.runtime.render(defer=_needs_load)
-            if not tree.deferred:
-                return self._draw(tree, disabled=disabled)
-            await self._load_all(tree.deferred)
-        message = f"mount {self.id}: on_load did not settle in {_MAX_LOAD_PASSES} passes"
+            if tree.deferred:
+                await self._load_all(tree.deferred)
+                continue
+            atomic = self._pending_resources(tree, ResourceDelivery.ATOMIC)
+            if atomic:
+                await self._settle_resources(atomic)
+                continue
+            return self._draw(tree, disabled=disabled)
+        message = f"mount {self.id}: component and resource loading did not settle in {_MAX_LOAD_PASSES} passes"
         raise LayoutInvariantError(message)
+
+    @staticmethod
+    def _pending_resources(tree: ComponentTree, delivery: ResourceDelivery) -> tuple[Resource[Any], ...]:
+        return tuple(resource for resource in tree.resources if resource.delivery is delivery and resource.pending)
+
+    async def _settle_resources(self, resources: Sequence[Resource[Any]]) -> None:
+        """Settle one observed resource tier concurrently under this render operation."""
+        if len(resources) == 1:
+            await resources[0]._settle()
+            return
+        async with anyio.create_task_group() as tasks:
+            for resource in resources:
+                tasks.start_soon(resource._settle)
+
+    async def _settle_visible(self, committed: _Candidate, *, through: deliver.EditHandle | None = None) -> None:
+        """Advance visible resources from their committed pending paint to settled paints."""
+        candidate = committed
+        for _ in range(_MAX_LOAD_PASSES):
+            resources = self._pending_resources(candidate.tree, ResourceDelivery.VISIBLE)
+            if not resources or self.runtime.dirty:
+                return
+            if self._handle is None or self._handle.expired():
+                self._dirty = True
+                return
+            await self._settle_resources(resources)
+            settled: _Candidate | None = None
+            try:
+                settled = await self._stage_loaded()
+                wrote = await self._deliver(settled, through=through)
+            except Exception:
+                if settled is not None:
+                    self._rollback(settled)
+                logger.exception("mount %s could not deliver a settled resource render", self.id)
+                return
+            if wrote is None:
+                self._rollback(settled)
+                return
+            self._commit(settled)
+            candidate = settled
+        self._dirty = True
+        logger.error(
+            "mount %s: visible resources did not settle in %s passes",
+            self.id,
+            _MAX_LOAD_PASSES,
+        )
 
     async def _load_all(self, components: Sequence[Component]) -> None:
         """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
@@ -681,8 +736,8 @@ class Mount:
             if self._pending is not None:
                 self._pending.view.stop()
                 self._pending = None
-            # The loaded render is the first one the reader sees: one delivery, no loading
-            # paint. A raise here delivered nothing and staged nothing.
+            # Component on_load and atomic resources settle first. Visible resources
+            # deliberately make this the pending paint and settle after it commits.
             candidate = await self._stage_loaded()
             try:
                 receipt = await destination(candidate.view, _attachment_files(candidate.assets))
@@ -698,6 +753,7 @@ class Mount:
                 self._note_address(receipt.message)
             self._active = self.clock()
             self._commit(candidate)
+            await self._settle_visible(candidate)
             return receipt.message
 
     def _swap_view(self, view: MountedView) -> None:
@@ -990,6 +1046,7 @@ class Mount:
                     acknowledge = True
                 else:
                     self._commit(candidate)
+                    await self._settle_visible(candidate, through=source)
                     # Only the interaction's own handle answers the click by editing through
                     # it. Delivery through the standing handle leaves the click unanswered,
                     # and Discord shows the user "This interaction failed" three seconds later.
@@ -1064,6 +1121,7 @@ class Mount:
                 logger.debug("mount %s has no live edit handle; render deferred", self.id)
                 return
             self._commit(candidate)
+            await self._settle_visible(candidate)
 
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
