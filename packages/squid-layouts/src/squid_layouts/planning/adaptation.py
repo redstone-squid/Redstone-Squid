@@ -779,6 +779,12 @@ def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
     return Break(tuple(folded), keep_with_next=True)
 
 
+def _individual_fits(controls: int, limits: V2Limits) -> bool:
+    """Whether this many controls could be drawn one per button, in this target's units."""
+    rows = (controls + limits.row_buttons - 1) // limits.row_buttons
+    return limits.fits_controls(controls, rows)
+
+
 def _cards(context: _Context) -> bool:
     """Whether this target draws regions as embeds rather than as container components."""
     return "layout.embed" in context.capabilities
@@ -1297,8 +1303,7 @@ def _navigation_axis(
 ) -> StrategyAxis:
     available = tuple(destination for destination in node.destinations if destination.available)
     strategies = ["individual"]
-    individual_components = len(available) + (len(available) + limits.row_buttons - 1) // limits.row_buttons
-    if individual_components > limits.total_components:
+    if not _individual_fits(len(available), limits):
         strategies.remove("individual")
     if available:
         strategies.append("grouped")
@@ -1580,8 +1585,7 @@ def _action_axis(
     if not any(isinstance(item, ActionGroup) for item in node.items):
         forced_pager = len(actions) > 75
     available = ["grouped", "paged"] if forced_pager else ["individual", "grouped"]
-    individual_components = len(actions) + (len(actions) + limits.row_buttons - 1) // limits.row_buttons
-    if individual_components > limits.total_components and "individual" in available:
+    if not _individual_fits(len(actions), limits) and "individual" in available:
         available.remove("individual")
     preferred = {
         ActionDisplay.INDIVIDUAL: "individual",

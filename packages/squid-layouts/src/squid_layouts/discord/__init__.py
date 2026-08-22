@@ -1,8 +1,9 @@
 """Discord Components V2 target, renderer, and runtime adapter."""
 
-from squid_layouts.discord import delivery, devtools, durability, guards, live, presentation
+from squid_layouts.discord import classic, delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder
+from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
 from squid_layouts.discord.delivery import (
@@ -58,7 +59,7 @@ from squid_layouts.discord.mount import (
 from squid_layouts.discord.navigation import Navigator
 from squid_layouts.discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
 from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
-from squid_layouts.discord.renderer import Renderer, RoutedItem, StaticView, Wire
+from squid_layouts.discord.renderer import RoutedItem, StaticView, V2Renderer, Wire
 from squid_layouts.discord.routing import (
     Middleware,
     RouteComponent,
@@ -131,6 +132,7 @@ __all__ = [
     "AuditReport",
     "Check",
     "ClassicLimits",
+    "ClassicRenderer",
     "CollisionDecision",
     "CollisionPolicy",
     "Composition",
@@ -182,7 +184,6 @@ __all__ = [
     "Reject",
     "Rejected",
     "RejectionReason",
-    "Renderer",
     "Replace",
     "ReplaceOldest",
     "ReplacementProtection",
@@ -205,6 +206,7 @@ __all__ = [
     "SessionSummary",
     "StaleHandleError",
     "StaleReservationError",
+    "StaticClassicView",
     "StaticView",
     "Target",
     "TextInputSpec",
@@ -213,12 +215,15 @@ __all__ = [
     "UserScope",
     "Users",
     "V2Limits",
+    "V2Renderer",
     "Violation",
     "ViolationCode",
     "Wire",
     "audit",
+    "audit_classic_payload",
     "build_form_modal",
     "build_modal",
+    "classic",
     "compose",
     "conform",
     "conform_modal",

@@ -18,7 +18,7 @@ class StubStickyMessage(StickyMessage):
 
     async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
         self.render_count += 1
-        return sl.discord.render_static([])
+        return sl.discord.render_static([]).layout
 
 
 def _make_channel(channel_id: int = 12345) -> Any:
@@ -128,7 +128,7 @@ async def test_functional_sticky_message_uses_renderer_callback() -> None:
     async def custom_render(ch: TextChannel) -> discord.ui.LayoutView:
         nonlocal called
         called = True
-        return sl.discord.render_static([])
+        return sl.discord.render_static([]).layout
 
     sticky = FunctionalStickyMessage(custom_render)
     channel = _make_channel()
