@@ -28,9 +28,11 @@ class ComponentRuntime:
         self.context = dict(context or {})
         self.plan_cache = PlanCache(32)
         self.components: dict[str, Component] = {}
+        self.revision = 0
         self.dirty = True
 
     def invalidate(self) -> None:
+        self.revision += 1
         self.dirty = True
         if self.on_invalidate is not None:
             self.on_invalidate()
@@ -47,7 +49,7 @@ class ComponentRuntime:
         """
         return render_component_tree(self.root, runtime=self, context=self.context, defer=defer)
 
-    def commit(self, tree: ComponentTree) -> None:
+    def commit(self, tree: ComponentTree, *, rendered_revision: int | None = None) -> None:
         """Publish one successfully planned tree and reconcile keyed lifecycle hooks."""
         if tree.deferred:
             # A discovery tree is missing subtrees; committing one would unmount live
@@ -76,7 +78,7 @@ class ComponentRuntime:
         for _, component in sorted(added, key=lambda item: depth(item[0])):
             component.on_mount()
         self.components = dict(tree.components)
-        self.dirty = False
+        self.dirty = rendered_revision is not None and self.revision != rendered_revision
 
     def finish(self) -> None:
         """Unmount the current tree from leaves to root."""
