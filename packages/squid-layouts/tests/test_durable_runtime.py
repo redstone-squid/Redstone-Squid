@@ -1,6 +1,7 @@
 """End-to-end durable session coordination without Discord network I/O."""
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import anyio
@@ -52,7 +53,7 @@ class FakeFrontend:
             receipt.handle,
         )
 
-    async def reconnect(self, bindings: tuple[RecoveredBinding, ...]):
+    async def reconnect(self, bindings: Sequence[RecoveredBinding]):
         for binding in bindings:
             message_id = binding.locator.values["message_id"]
             assert isinstance(message_id, int)
