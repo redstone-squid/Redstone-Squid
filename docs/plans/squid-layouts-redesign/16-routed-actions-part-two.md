@@ -346,10 +346,11 @@ remains rejected: middleware controls flow but does not grow a mutable request-s
 
 ### Stage 8 — Stable feature route groups
 
-`RouteNamespace("r")` creates feature groups whose prefixes compose when identities are
-defined, not when a router includes them. `polls.define("close")` therefore returns the
-final `r:polls:close` `Route`, and `Route.id()` remains context-free and unambiguous.
-Aliases stay absolute because they name already-emitted ids.
+The namespace is an ordinary root `RouteGroup("r")`; `root.group("polls")` creates a child
+whose prefix composes immediately. `polls.define("close")` therefore returns the final
+`r:polls:close` `Route`, and `Route.id()` remains context-free and unambiguous. `Router`
+validates that a namespace group has exactly one segment and derives its gone fallback from
+that prefix. Aliases stay absolute because they name already-emitted ids.
 
 The bot's stable route catalogue becomes a package outside reloadable extension subtrees,
 with poll, build, consent and redstoner groups included by one root router. Groups own route
