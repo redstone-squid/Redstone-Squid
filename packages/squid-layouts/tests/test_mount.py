@@ -154,7 +154,7 @@ def _button(view: discord.ui.LayoutView) -> discord.ui.Button:
 
 
 class TestRenderAndWire:
-    def test_build_view_wires_handlers(self):
+    def test_stage_view_wires_handlers(self):
         mount = Mount(Counter(), timeout=None)
         view = commit_render(mount)
         button = _button(view)
@@ -744,14 +744,14 @@ class TestLifecycle:
 class TestDeliveryAtomicity:
     """A render becomes the mount's state only once Discord has accepted it."""
 
-    def test_build_view_stages_without_committing(self):
+    def test_stage_view_stages_without_committing(self):
         """The stage-only escape hatch renders the tree and publishes none of it.
 
         Committing is `send`'s and `flush`'s job; `TestSend` covers the other half.
         """
         mount = Mount(Counter(), timeout=None)
 
-        mount.build_view()
+        mount._stage_view()
 
         assert mount._handlers == {}
         assert mount._generation == 0
@@ -958,7 +958,7 @@ class TestSend:
     async def test_send_supersedes_a_render_that_was_only_staged(self):
         component = Counter()
         mount = Mount(component, timeout=None)
-        staged = mount.build_view()
+        staged = mount._stage_view()
         component.count = 5
 
         destination = _Destination(fake_message())
@@ -1699,12 +1699,12 @@ class TestLoading:
 
         assert log.count("load:panel") == 1
 
-    async def test_build_view_renders_without_loading(self):
+    async def test_stage_view_renders_without_loading(self):
         """The stage-only escape hatch is sync, so it cannot load — and does not pretend to."""
         log: list[str] = []
         mount = Mount(Leaf(log, "panel"), timeout=None)
 
-        mount.build_view()
+        mount._stage_view()
         await mount.finish(disable=True)
 
         assert log == ["render:panel"]

@@ -57,6 +57,8 @@ from squid_layouts.planning.navigation import (
     NavigationState,
     default_nav,
     navigation_controls,
+    page_select_nav,
+    seek_control,
 )
 
 __all__ = [
@@ -120,10 +122,12 @@ __all__ = [
     "mounts",
     "native",
     "navigation_controls",
+    "page_select_nav",
     "render_static",
     "reply_to",
     "respond_to",
     "responder",
     "routers",
+    "seek_control",
     "trim",
 ]

@@ -86,6 +86,10 @@ class SourceRankedList[EntryT](Component):
         if self.loaded is not None:
             await self._publish(self.loader.next(self.loaded))
 
+    async def _seek(self, page: int) -> None:
+        """Jump to a zero-based page. Only bound when the source declared it can."""
+        await self._publish(self.loader.load(Position(offset=page * self.page_size)))
+
     async def _publish(self, pending: Awaitable[LoadedWindow[RankedEntry | EntryT] | None]) -> None:
         loaded = await pending
         if loaded is not None:
@@ -114,12 +118,15 @@ class SourceRankedList[EntryT](Component):
             if window.items
             else self._hook(self.empty, total, name="empty")
         )
-        navigable = window.has_next or (capabilities.backward and window.has_previous)
         extent = (
             max(1, (window.total + self.page_size - 1) // self.page_size)
             if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None
             else None
         )
+        # A cursor that can address a page is navigable on every page, the last one included.
+        # Without this a forward-only jumpable source loses its whole navigation the moment a
+        # jump lands on the end -- including the control that could take the reader back.
+        navigable = window.has_next or (capabilities.backward and window.has_previous) or (extent or 0) > 1
         visible_range = (
             (window.position.offset + 1, window.position.offset + len(window.items))
             if capabilities.offsets and window.items
@@ -139,12 +146,19 @@ class SourceRankedList[EntryT](Component):
                         previous_key=f"{self.key}.previous",
                         next_key=f"{self.key}.next",
                         extent=extent,
+                        page=window.position.offset // self.page_size if capabilities.offsets else None,
                         visible_range=visible_range,
                         total=total,
                         count=capabilities.count,
+                        seek_key=f"{self.key}.seek",
+                        seek_label=chrome.jump_to_page,
+                        page_option=chrome.page_option,
                     ),
                     self._previous,
                     self._next,
+                    # Bound only where the source can address a page at all, so a factory
+                    # can tell "no jump control here" from "jump to page 0".
+                    self._seek if extent is not None else None,
                 )
             )
             if navigable

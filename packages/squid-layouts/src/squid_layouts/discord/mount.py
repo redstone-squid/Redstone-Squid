@@ -404,13 +404,14 @@ class Mount:
 
     # --- Rendering ---------------------------------------------------------------------
 
-    def build_view(self, *, disabled: bool = False) -> MountedView:
+    def _stage_view(self, *, disabled: bool = False) -> MountedView:
         """Stage a render of the component's current state into a fresh view, committing none of it.
 
-        The escape hatch for a host that only wants the rendered components — nothing here
-        moves handlers, lifecycle hooks, page positions or the live generation. Delivery goes
-        through :meth:`send` or :meth:`flush`, which stage their own render and commit it;
-        a view staged here and never delivered is superseded by the next one.
+        Private, because a staged generation is not the mount's state: nothing here moves
+        handlers, lifecycle hooks, page positions or the live generation, so handing one to a
+        send path shows Discord a generation the mount does not own. Delivery goes through
+        :meth:`send` or :meth:`flush`, which stage their own render and commit it; a view
+        staged here and never delivered is superseded by the next one.
         """
         pending = self._pending
         candidate = self._stage(disabled=disabled)
@@ -455,7 +456,11 @@ class Mount:
                 async def next_(event: PressEvent) -> None:
                     await self._move_cursor(state.key, 1)
 
-                return self.nav(NavigationContext(state, previous, next_))
+                async def seek(page: int) -> None:
+                    self._seek_cursor(state.key, page)
+
+                # A materialized cursor always knows its own extent, so it can always seek.
+                return self.nav(NavigationContext(state, previous, next_, seek))
 
             composition = compose(
                 rendered,
@@ -539,6 +544,14 @@ class Mount:
             self.presentation.move_cursor(key, Position(offset=cursor.position.offset + delta))
             self.invalidate()
 
+    def _seek_cursor(self, key: str, page: int) -> None:
+        """Jump one cursor to a zero-based page, clamped to what it actually holds."""
+        cursor = self.presentation.cursor(key)
+        if cursor.position.offset == page:
+            return
+        self.presentation.move_cursor(key, Position(offset=page))
+        self.invalidate()
+
     def reset_cursor(self, key: str | None = None) -> None:
         """Forget one cursor position, or every position when key is omitted."""
         if key is None:
@@ -550,7 +563,7 @@ class Mount:
     def attachment_files(self) -> list[discord.File]:
         """Materialize a fresh Discord file set from the current declarative assets.
 
-        A staged render's assets win, so files fetched alongside a `build_view()` belong to
+        A staged render's assets win, so files fetched alongside a `_stage_view()` belong to
         that render rather than to the generation it will replace.
         """
         return _attachment_files(self._pending.assets if self._pending is not None else self._assets)
@@ -612,7 +625,7 @@ class Mount:
         """
         if self._finished:
             return None
-        # A render staged by `build_view` and never delivered is superseded, not delivered.
+        # A render staged by `_stage_view` and never delivered is superseded, not delivered.
         if self._pending is not None:
             self._pending.view.stop()
             self._pending = None

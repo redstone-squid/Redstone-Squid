@@ -6,8 +6,9 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount
+from squid_layouts.discord import Mount, NavigationContext, page_select_nav
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_layouts.planning.navigation import SEEK_OPTION_LIMIT, _seek_pages
 from squid_layouts.primitives import Button, Lines, Row
 from squid_layouts.scene import SceneRoutedButton, SceneRoutedSelect
 from squid_layouts.semantic import Stack
@@ -262,6 +263,64 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     assert source.requests[-1] == Position("Grace", 2, sl.Direction.FORWARD)
     assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(edited)
     assert "-# Page 2 of 3" in _texts(edited)
+
+
+async def test_a_jumpable_source_seeks_by_page() -> None:
+    source = ScoreSource(
+        (("Ada", 30), ("Grace", 20), ("Edsger", 10), ("Barbara", 5), ("Donald", 1)),
+        capabilities=sl.SourceCapabilities(offsets=True, jumpable=True, count=sl.CountPrecision.EXACT),
+    )
+    mount = Mount(
+        sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        timeout=None,
+        nav=page_select_nav,
+    )
+    await mount.send(delivered_to(fake_message()))
+
+    interaction = fake_interaction()
+    await mount.dispatch("stream.seek", interaction, ["2"])
+
+    # Page 2 of a page_size=2 source is item offset 4, not item offset 2.
+    assert source.requests[-1] == Position(offset=4)
+    edited = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "-# Page 3 of 3" in _texts(edited)
+
+
+async def test_a_sequential_source_offers_no_jump_control() -> None:
+    source = ScoreSource(
+        (("Ada", 30), ("Grace", 20), ("Edsger", 10)),
+        capabilities=sl.SourceCapabilities(offsets=True, count=sl.CountPrecision.EXACT),
+    )
+    seen: list[NavigationContext] = []
+
+    def nav(context):
+        seen.append(context)
+        return page_select_nav(context)
+
+    mount = Mount(
+        sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        timeout=None,
+        nav=nav,
+    )
+    await mount.send(delivered_to(fake_message()))
+
+    assert seen[-1].on_seek is None
+    assert mount._view is not None
+    assert not [item for item in mount._view.walk_children() if isinstance(item, discord.ui.Select)]
+
+
+@pytest.mark.parametrize(
+    ("page", "extent"),
+    [(0, 2), (0, 25), (12, 26), (0, 200), (137, 200), (199, 200), (500, 5000)],
+)
+def test_a_jump_select_always_fits_and_always_offers_the_visible_page(page: int, extent: int) -> None:
+    pages = _seek_pages(page, extent)
+
+    assert len(pages) <= SEEK_OPTION_LIMIT
+    assert pages == sorted(set(pages))
+    assert page in pages
+    assert pages[0] == 0
+    assert pages[-1] == extent - 1
 
 
 async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
