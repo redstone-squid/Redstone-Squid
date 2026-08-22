@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 class Reactor:
     """Own concurrent, per-mount-coalesced refreshes and live-update expiry checks.
 
@@ -26,6 +30,7 @@ class Reactor:
         concurrency: Maximum number of different mounts refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
         expiry_margin: How far ahead of token expiry to show paused-update chrome.
+        clock: UTC wall clock used to compare interaction-token deadlines.
     """
 
     def __init__(
@@ -35,6 +40,7 @@ class Reactor:
         concurrency: int = 4,
         sweep_interval: float = 10.0,
         expiry_margin: float = 60.0,
+        clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         if concurrency < 1:
             message = "reactor concurrency must be at least one"
@@ -49,6 +55,7 @@ class Reactor:
         self.concurrency = concurrency
         self.sweep_interval = sweep_interval
         self.expiry_margin = timedelta(seconds=expiry_margin)
+        self.clock = clock
         self._queue: asyncio.Queue[Mount] = asyncio.Queue()
         self._queued: set[str] = set()
         self._in_flight: set[str] = set()
@@ -161,10 +168,11 @@ class Reactor:
     async def _sweep(self) -> None:
         while True:
             await anyio.sleep(self.sweep_interval)
-            self._sweep_once(datetime.now(UTC))
+            self._sweep_once()
 
-    def _sweep_once(self, now: datetime) -> None:
+    def _sweep_once(self) -> None:
         """Schedule the final honest refresh for handles approaching expiry."""
+        now = self.clock()
         for mount in tuple(self._followed):
             handle = mount.handle
             if mount.finished or handle is None or handle.permanent or handle.expires_at is None:
