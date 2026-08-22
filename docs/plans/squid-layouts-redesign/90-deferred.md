@@ -67,16 +67,12 @@ are not re-derived or accidentally adopted later.
   non-degradability free. The degradation ladder (button grid → text grid +
   coordinate select → paged select) is the semantic-node promotion, and it waits for
   a real consumer.
-- **`sl.resource` descriptor** (declared `pending | ready | failed` state with
-  `.reload()`), cut from plan 09. Under awaited `on_load` the pending state is never
-  observable at first paint, and without a dependency model it worsens its motivating
-  consumer: `SettingsPanel` fetches `_preset`/`_weights` as a function of `self._kind`,
-  which needs declared deps and an optimistic set before `.reload()` beats the explicit
-  `open_voting` method. Revisit only with a dependency design (declared deps or tracked
-  reads during the fetch), plus a staleness guard for out-of-order reloads. Plan
-  [21](21-cursor-sources.md) extracts the position policy without touching this; its
-  §5 commits cursor fetching and the load-phase/dependency design to be designed
-  together.
+- **`sl.resource` descriptor** — resolved 2026-08-22 by [30](30-resources.md). Explicit
+  `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
+  resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
+  the optimistic set the motivating `SettingsPanel` case required. Visible and awaited
+  loading share one `Pending | Ready | Failed` state machine and differ only in whether the
+  mount commits the pending discovery render before settling it.
 - **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
   in the architecture doc's gaps; superseded by plan [18](18-forms.md) (2026-08-21).
 - **Multi-message rendering** (one logical UI spanning several messages). Two features
