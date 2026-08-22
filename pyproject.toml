@@ -218,6 +218,10 @@ ruff = { ANDROID_API_LEVEL = "24", CARGO_PROFILE_RELEASE_LTO = "off" }
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+# Spike prototypes under docs/plans/ are evidence for a design decision, written to
+# mirror the shape they argue about rather than this project's standards. They are
+# never imported by anything shipped, and pyrefly already excludes docs/ by omission.
+extend-exclude = ["docs/plans/**/spikes/"]
 
 [tool.ruff.lint]
 select = [
