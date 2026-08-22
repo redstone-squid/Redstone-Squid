@@ -13,6 +13,7 @@ import pytest
 from squid_layouts import Component, TopicBus
 from squid_layouts.discord import Everyone, Mount, Reactor, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
+from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
 
 
 class Empty(Component):
@@ -38,7 +39,7 @@ async def test_reactor_refreshes_different_mounts_concurrently() -> None:
     ]
 
     def refresh_for(mount: Mount):
-        async def refresh() -> None:
+        async def refresh(*, links: tuple[TraceLink, ...] = ()) -> None:
             started.add(mount.id)
             if len(started) == 2:
                 both_started.set()
@@ -67,7 +68,7 @@ async def test_publish_during_refresh_redelivers_without_overlap() -> None:
     calls = 0
     running = False
 
-    async def refresh() -> None:
+    async def refresh(*, links: tuple[TraceLink, ...] = ()) -> None:
         nonlocal calls, running
         assert not running
         running = True
@@ -89,6 +90,44 @@ async def test_publish_during_refresh_redelivers_without_overlap() -> None:
         tasks.cancel_scope.cancel()
 
     assert calls == 2
+    assert reactor.snapshot().scheduled == 2
+    assert reactor.snapshot().coalesced == 1
+    assert reactor.snapshot().delivered == 2
+
+
+async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> None:
+    monotonic = 100.0
+
+    def clock() -> float:
+        return monotonic
+
+    profiler = MemoryProfiler(clock=clock)
+    reactor = Reactor(profiler=profiler, monotonic=clock)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor, profiler=profiler)
+    received_links: tuple[TraceLink, ...] = ()
+
+    async def refresh(*, links: tuple[TraceLink, ...] = ()) -> None:
+        nonlocal monotonic, received_links
+        received_links = links
+        monotonic += 0.5
+
+    mount.refresh_now = refresh  # pyrefly: ignore
+    with profiler.operation(OperationKind.DISPATCH, name="save"):
+        reactor.schedule(mount)
+        reactor.schedule(mount)
+    monotonic += 2.0
+
+    await _drain_reactor(reactor)
+
+    snapshot = profiler.snapshot()
+    producer = next(trace for trace in snapshot.recent if trace.name == "save")
+    delivery = snapshot.slow[0]
+    queue_wait = next(span for span in delivery.spans if span.name == "queue_wait")
+    assert delivery.operation is OperationKind.REACTOR_DELIVERY
+    assert delivery.duration == pytest.approx(2.5)
+    assert delivery.links[0].trace_id == producer.trace_id
+    assert dict((attribute.key, attribute.value) for attribute in queue_wait.attributes)["triggers"] == 2
+    assert received_links[0].trace_id == delivery.trace_id
 
 
 async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
