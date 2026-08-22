@@ -32,6 +32,7 @@ from squid_layouts.discord.renderer import Renderer
 from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
+from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
@@ -300,6 +301,7 @@ class Mount:
         access: AccessPolicy,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
+        palette: Palette = DEFAULT_PALETTE,
         limits: V2Limits = LIMITS,
         strict: bool = False,
         timeout: float | None = 900,
@@ -319,6 +321,7 @@ class Mount:
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
         self._chrome = chrome
         self.localization = localization
+        self.palette = palette
         self.chrome = localize_chrome(chrome, localization)
         self.nav = nav if nav is not None else default_nav
         self.runtime = ComponentRuntime(
@@ -505,6 +508,7 @@ class Mount:
                 limits=self.limits,
                 chrome=self._chrome,
                 localization=self.localization,
+                palette=self.palette,
                 strict=self.strict,
                 nav=nav,
                 session=self.presentation,
@@ -585,6 +589,13 @@ class Mount:
         self.chrome = localize_chrome(self._chrome, localization)
         self.runtime.set_context(CHROME_CONTEXT, self.chrome)
         self.runtime.set_context(LOCALIZATION_CONTEXT, localization)
+        self.invalidate()
+
+    def use_palette(self, palette: Palette) -> None:
+        """Change the presentation colours used by the next render."""
+        if palette == self.palette:
+            return
+        self.palette = palette
         self.invalidate()
 
     async def _move_cursor(self, key: str, delta: int) -> None:
