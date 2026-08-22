@@ -2,13 +2,18 @@
 
 from squid_layouts.profiling.export import snapshot_json
 from squid_layouts.profiling.model import (
+    ActionOutcome,
     ActiveSpanSnapshot,
     ActiveTraceSnapshot,
     AggregateKey,
     AttributeValue,
+    DispatchDisposition,
+    DispatchResult,
+    GenerationDecision,
     HistogramSnapshot,
     OperationAggregate,
     OperationKind,
+    PresentationOutcome,
     ProfilerHealth,
     RuntimeSnapshot,
     RuntimeSpan,
@@ -32,17 +37,22 @@ from squid_layouts.profiling.profiler import (
 )
 
 __all__ = [
+    "ActionOutcome",
     "ActiveSpanSnapshot",
     "ActiveTraceSnapshot",
     "AggregateKey",
     "AttributeValue",
     "DetachedSpanRecorder",
+    "DispatchDisposition",
+    "DispatchResult",
+    "GenerationDecision",
     "HistogramSnapshot",
     "MemoryProfiler",
     "NoOpProfiler",
     "OperationAggregate",
     "OperationKind",
     "OperationRecorder",
+    "PresentationOutcome",
     "Profiler",
     "ProfilerHealth",
     "RuntimeSnapshot",

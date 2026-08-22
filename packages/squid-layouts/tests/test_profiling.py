@@ -513,6 +513,9 @@ def test_aggregate_overflow() -> None:
     assert overflow.key.operation is None
     assert overflow.key.outcome is None
     assert overflow.key.detail is None
+    assert overflow.key.disposition is None
+    assert overflow.key.action is None
+    assert overflow.key.presentation is None
 
 
 def test_zero_aggregate_key_bound_uses_single_overflow_key() -> None:
