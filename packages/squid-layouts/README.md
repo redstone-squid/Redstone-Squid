@@ -183,6 +183,24 @@ short-circuits; calling it twice or after `dispatch` returns is an error. The ro
 initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
 short-circuit cannot produce Discord's generic interaction failure.
 
+### Computed values
+
+`sl.computed` caches synchronous derived values against explicit `sl.state` dependencies. A write
+to any other state field may re-render the component, but it does not recompute the value:
+
+```python
+class SearchResults(sl.Component):
+    query: str = sl.state("")
+    filters: frozenset[str] = sl.state(frozenset())
+
+    @sl.computed(depends=(query, filters))
+    def visible_results(self) -> tuple[Result, ...]:
+        return apply_filters(search(self.query), self.filters)
+```
+
+Dependencies must be `sl.state` descriptors declared on the same component. The explicit
+declaration is required; there is no component-wide invalidation mode.
+
 ### Reactive async resources
 
 `sl.resource` keeps async data in a synchronous, renderable state machine. Dependencies are the
