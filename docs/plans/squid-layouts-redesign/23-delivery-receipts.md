@@ -36,15 +36,18 @@ edit `@original` without ever fetching the message.
    by `Destination`. `Mount.send` keeps the handle; the message feeds address and
    snapshot only. `DeliveryAbandoned` semantics are unchanged. Amends plan 15 §1.
 2. **Adapters say what they know:**
-   - `reply_to` → message + permanent `_MessageHandle` (bot token; today's truth).
+   - `reply_to` on a plain command context → message + permanent channel-message handle.
+     On an interaction-backed context it records original-response or followup authority,
+     matching the endpoint `Context.send` selected.
    - `respond_to`, fresh path, `wait=False` → no message, plus a new
      `_OriginalHandle(interaction)` writing via `edit_original_response` — no fetch,
      `expires_at` known. Closes the no-standing-handle gap for free.
    - fresh path, `wait=True` → message + the same `_OriginalHandle`. The fetched
      `InteractionMessage` is evidence of *where*, not of permanence.
-   - followup, `wait=True` → message + a webhook-token handle. `wait=False` → neither:
-     an unwaited followup has no id and is not `@original`; the receipt makes that
-     honest instead of implicit.
+   - followup → message + a webhook-message handle. Implementation-time verification
+     corrected the draft here: Discord interaction followups always wait, and discord.py
+     2.7.1 forces `wait=True` for application webhooks even when the caller passed false.
+     The adapter retains that free message id and authority.
 3. **Handles are named by the endpoint they perform** — bot-token channel edit,
    webhook `@original`, webhook message edit — so the protocol operation is the
    contract and discord.py stays transport (see the architecture doc's
@@ -52,10 +55,12 @@ edit `@original` without ever fetching the message.
 4. **The heuristic permanence read is deleted.** `handle_for(message)` survives only
    where the message really was sent with bot credentials; `handle_from(interaction)`
    is unchanged.
-5. **Optional upgrade path, verify at implementation time**: whether a public original
-   response can be re-fetched through the channel as a plain `Message` and edited with
-   the bot token. If so, a mount holding an expiring handle on a public message may
-   trade up in the background. Not load-bearing; the receipt is correct without it.
+5. **Optional upgrade path, checked and rejected**: a public response can be fetched
+   through the channel endpoint when the bot has View Channel and Read Message History,
+   but the Discord docs do not grant bot-token edit authority over a message created by
+   the interaction webhook. Fetching proves location, not authority — the same category
+   error this plan removes — so there is no speculative trade-up. The mount keeps the
+   correct expiring receipt and renews it from clicks.
 
 ## Verification
 
@@ -64,12 +69,32 @@ edit `@original` without ever fetching the message.
   raises, drops the handle, and the next click renews and delivers the pending render.
 - `respond_to(wait=False)`: a standing handle exists at commit; out-of-band refresh
   works inside the 15-minute window with zero fetch round trips.
-- Followup `wait=False`: no handle; the first click mints one (existing pending
-  semantics).
-- `reply_to`: unchanged — permanent, background edits indefinitely.
+- Followup `wait=False`: discord.py's forced wait returns a message and webhook handle;
+  a real-library pin protects that version-sensitive behavior.
+- `reply_to`: plain contexts remain permanent; interaction-backed contexts retain the
+  interaction authority actually used.
 - Host: `search.py:290` gains background-refresh coverage across the expiry boundary.
+
+## Implemented API
+
+`Destination` now returns the frozen receipt directly:
+
+```python
+receipt = sl.discord.DeliveryReceipt(message, handle)
+```
+
+`Mount.send` still returns `discord.Message | None` for caller compatibility, but commits
+`receipt.handle` verbatim and uses `receipt.message` only for its return value, address, and
+diagnostic snapshot. `_ChannelMessageHandle`, `_OriginalResponseHandle`, and
+`_WebhookMessageHandle` name their write endpoints; `handle_for(message)` is therefore only
+the permanent bot-token constructor, with no ephemerality heuristic.
+
+Real discord.py pins cover `InteractionMessage.edit` → `edit_original_response`,
+`WebhookMessage.edit` → webhook message edit, and application-webhook forced wait. The host
+`/build view` test covers stale background refresh through pending-render repair on the next
+click.
 
 ## Status
 
-Agreed 2026-08-21 (external audit, verified in-repo and against discord.py 2.7.1); not
-started.
+Implemented 2026-08-21 in `c83a203f` (receipt and handles), `5077a0f5` (host expiry
+regression), and `13cbf8c9` (verified followup correction).
