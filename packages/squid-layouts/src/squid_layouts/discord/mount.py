@@ -135,6 +135,12 @@ class FinishHook(Protocol):
     def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
 
 
+class PresentedHook(Protocol):
+    """Observer told that Discord accepted and the mount committed a generation."""
+
+    def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
+
+
 class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `Reactor`)."""
 
@@ -360,6 +366,7 @@ class Mount:
         self._dirty = False
         self._finished = False
         self._finish_hooks: list[FinishHook] = []
+        self._presented_hooks: list[PresentedHook] = []
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
@@ -558,6 +565,15 @@ class Mount:
         # so the first moment it is worth listing as live. Idempotent after the first.
         live.track(self)
 
+    async def _commit_presented(self, candidate: _Candidate) -> None:
+        """Commit one successfully delivered candidate and notify durability observers."""
+        self._commit(candidate)
+        for hook in tuple(self._presented_hooks):
+            try:
+                await hook(self)
+            except Exception:
+                logger.exception("presented hook failed for mount %s", self.id)
+
     def _rollback(self, candidate: _Candidate) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
 
@@ -697,7 +713,7 @@ class Mount:
             if wrote is None:
                 self._rollback(settled)
                 return
-            self._commit(settled)
+            await self._commit_presented(settled)
             candidate = settled
         self._dirty = True
         logger.error(
@@ -758,7 +774,7 @@ class Mount:
             if receipt.message is not None:
                 self._note_address(receipt.message)
             self._active = self.clock()
-            self._commit(candidate)
+            await self._commit_presented(candidate)
             await self._settle_visible(candidate)
             return deliver.Delivered(receipt)
 
@@ -1061,7 +1077,7 @@ class Mount:
                     self._rollback(candidate)
                     acknowledge = True
                 else:
-                    self._commit(candidate)
+                    await self._commit_presented(candidate)
                     await self._settle_visible(candidate, through=source)
                     # Only the interaction's own handle answers the click by editing through
                     # it. Delivery through the standing handle leaves the click unanswered,
@@ -1136,8 +1152,12 @@ class Mount:
                 self._rollback(candidate)
                 logger.debug("mount %s has no live edit handle; render deferred", self.id)
                 return
-            self._commit(candidate)
+            await self._commit_presented(candidate)
             await self._settle_visible(candidate)
+
+    def on_presented(self, callback: PresentedHook) -> None:
+        """Observe future generations after Discord delivery and local commit both succeed."""
+        self._presented_hooks.append(callback)
 
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
