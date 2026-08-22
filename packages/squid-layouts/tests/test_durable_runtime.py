@@ -1,7 +1,8 @@
 """End-to-end durable session coordination without Discord network I/O."""
 
 import json
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 import anyio
@@ -16,12 +17,14 @@ from squid_layouts.discord.durability import (
     DurableSessionCodec,
     DurableSessionRuntime,
     MemorySnapshotStore,
+    Missing,
     MountLocator,
     NotDurable,
     Promoted,
     Reconnected,
     RecoveredBinding,
     SnapshotError,
+    Unreachable,
 )
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
@@ -37,6 +40,8 @@ class Counter(sl.Component):
 @dataclass(slots=True)
 class FakeFrontend:
     reject_next: bool = False
+    missing_ids: frozenset[str] = frozenset()
+    unreachable_ids: frozenset[str] = frozenset()
 
     async def promote(self, mount: sl.discord.Mount, receipt: DeliveryReceipt):
         if self.reject_next:
@@ -54,6 +59,14 @@ class FakeFrontend:
         )
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]):
+        missing = tuple(binding.record_mount_id for binding in bindings if binding.record_mount_id in self.missing_ids)
+        if missing:
+            return Missing(missing, tuple("test message is gone" for _ in missing))
+        unreachable = tuple(
+            binding.record_mount_id for binding in bindings if binding.record_mount_id in self.unreachable_ids
+        )
+        if unreachable:
+            return Unreachable(unreachable, tuple("test frontend is unavailable" for _ in unreachable))
         for binding in bindings:
             message_id = binding.locator.values["message_id"]
             assert isinstance(message_id, int)
@@ -76,6 +89,7 @@ def runtime(
     frontend: FakeFrontend,
     *,
     sessions: SessionRegistry | None = None,
+    clock: Callable[[], float] = time.time,
 ) -> DurableSessionRuntime:
     return DurableSessionRuntime(
         sessions=SessionRegistry() if sessions is None else sessions,
@@ -84,17 +98,25 @@ def runtime(
         frontend=frontend,
         lease_seconds=1.0,
         maintenance_interval=0.01,
+        clock=clock,
     )
 
 
-async def open_counter(runtime: DurableSessionRuntime, *, message_id: int = 99):
+async def open_counter(
+    runtime: DurableSessionRuntime,
+    *,
+    message_id: int = 99,
+    key: SessionKey | None = None,
+    expires_at: float | None = None,
+):
     mount = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
     result = await runtime.open(
         mount,
         delivered_to(fake_message(message_id=message_id)),
         recipe="counter",
-        key=SessionKey.user("counter", 7),
+        key=SessionKey.user("counter", 7) if key is None else key,
         actor_id=7,
+        expires_at=expires_at,
     )
     return mount, result
 
@@ -216,7 +238,8 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
         contender = runtime(store, FakeFrontend())
         contender.owner = "second"
         async with anyio.create_task_group() as contender_tasks:
-            await contender_tasks.start(contender.run)
+            report = await contender_tasks.start(contender.run)
+            assert len(report.claimed_elsewhere) == 1
             mount = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
             result = await contender.open(
                 mount,
@@ -229,4 +252,134 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
             assert isinstance(result, Opened)
             assert await store.load(first.session.id) is None
             contender_tasks.cancel_scope.cancel()
+        tasks.cancel_scope.cancel()
+
+
+async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
+    store = MemorySnapshotStore()
+    first_runtime = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first_runtime.run)
+        _, healthy = await open_counter(first_runtime, message_id=1, key=SessionKey.user("healthy", 7))
+        _, broken = await open_counter(first_runtime, message_id=2, key=SessionKey.user("broken", 7))
+        assert isinstance(healthy, Opened)
+        assert isinstance(broken, Opened)
+        broken_id = broken.session.id
+        tasks.cancel_scope.cancel()
+
+    stored = await store.load(broken_id)
+    assert stored is not None
+    token = await store.claim(broken_id, "corruptor", 1.0)
+    assert token is not None
+    assert await store.save(token, stored.summary_payload, "{")
+    assert await store.release(token)
+
+    second_runtime = runtime(store, FakeFrontend())
+    async with anyio.create_task_group() as tasks:
+        report = await tasks.start(second_runtime.run)
+
+        assert tuple(item.session_key for item in report.restored) == (SessionKey.user("healthy", 7),)
+        assert tuple(item.record_key for item in report.incompatible) == (broken_id,)
+        assert await store.load(broken_id) is not None
+        tasks.cancel_scope.cancel()
+
+
+async def test_missing_root_is_reported_and_deleted() -> None:
+    store = MemorySnapshotStore()
+    first_runtime = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first_runtime.run)
+        _, opened = await open_counter(first_runtime)
+        assert isinstance(opened, Opened)
+        record_id = opened.session.id
+        tasks.cancel_scope.cancel()
+
+    second_runtime = runtime(store, FakeFrontend(missing_ids=frozenset({"root"})))
+    async with anyio.create_task_group() as tasks:
+        report = await tasks.start(second_runtime.run)
+
+        assert tuple(item.record_key for item in report.missing) == (record_id,)
+        assert await store.load(record_id) is None
+        tasks.cancel_scope.cancel()
+
+
+async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
+    store = MemorySnapshotStore()
+    first_runtime = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first_runtime.run)
+        _, opened = await open_counter(first_runtime, message_id=1)
+        assert isinstance(opened, Opened)
+        child = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
+        attached = await opened.session.attach(
+            child,
+            delivered_to(fake_message(message_id=2)),
+            recipe="counter",
+            actor_id=8,
+        )
+        assert isinstance(attached, Opened)
+        stored = await store.load(opened.session.id)
+        assert stored is not None
+        child_id = DurableSessionCodec.loads(stored.snapshot_payload).mounts[1].id
+        record_id = opened.session.id
+        tasks.cancel_scope.cancel()
+
+    second_runtime = runtime(store, FakeFrontend(missing_ids=frozenset({child_id})))
+    async with anyio.create_task_group() as tasks:
+        report = await tasks.start(second_runtime.run)
+
+        assert tuple(item.record_key for item in report.restored) == (record_id,)
+        with anyio.fail_after(1):
+            while True:
+                stored = await store.load(record_id)
+                assert stored is not None
+                if len(DurableSessionCodec.loads(stored.snapshot_payload).mounts) == 1:
+                    break
+                await anyio.sleep(0)
+        tasks.cancel_scope.cancel()
+
+
+async def test_expired_record_is_deleted_before_reconnection() -> None:
+    store = MemorySnapshotStore()
+    first_runtime = runtime(store, FakeFrontend(), clock=lambda: 0.0)
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first_runtime.run)
+        _, opened = await open_counter(first_runtime, expires_at=10.0)
+        assert isinstance(opened, Opened)
+        record_id = opened.session.id
+        tasks.cancel_scope.cancel()
+
+    second_runtime = runtime(store, FakeFrontend(), clock=lambda: 11.0)
+    async with anyio.create_task_group() as tasks:
+        report = await tasks.start(second_runtime.run)
+
+        assert tuple(item.record_key for item in report.expired) == (record_id,)
+        assert await store.load(record_id) is None
+        tasks.cancel_scope.cancel()
+
+
+async def test_unreachable_record_is_retained_and_released() -> None:
+    store = MemorySnapshotStore()
+    first_runtime = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first_runtime.run)
+        _, opened = await open_counter(first_runtime)
+        assert isinstance(opened, Opened)
+        record_id = opened.session.id
+        tasks.cancel_scope.cancel()
+
+    second_runtime = runtime(store, FakeFrontend(unreachable_ids=frozenset({"root"})))
+    async with anyio.create_task_group() as tasks:
+        report = await tasks.start(second_runtime.run)
+
+        assert tuple(item.record_key for item in report.unreachable) == (record_id,)
+        assert await store.load(record_id) is not None
+        probe = await store.claim(record_id, "later-runtime", 1.0)
+        assert probe is not None
+        assert await store.release(probe)
         tasks.cancel_scope.cancel()
