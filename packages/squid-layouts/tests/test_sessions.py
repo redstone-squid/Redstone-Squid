@@ -4,7 +4,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import anyio
-import discord
 import pytest
 
 import squid_layouts as sl
@@ -47,7 +46,7 @@ _DEFAULT_MESSAGE = object()
 def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
     delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         handle = None if delivered is None else sl.discord.delivery.handle_for(delivered)
         return sl.discord.DeliveryReceipt(delivered, handle)
 
@@ -55,7 +54,7 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
 
 
 def slowly() -> sl.discord.Destination:
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         await anyio.sleep(0)
         message = fake_message()
         return sl.discord.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
@@ -64,14 +63,14 @@ def slowly() -> sl.discord.Destination:
 
 
 def abandoning() -> sl.discord.Destination:
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         raise sl.discord.DeliveryAbandoned
 
     return send
 
 
 def failing(error: Exception) -> sl.discord.Destination:
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
         raise error
 
     return send

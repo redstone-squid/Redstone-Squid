@@ -15,6 +15,7 @@ import discord
 
 from squid_layouts.discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
 from squid_layouts.discord.mount import Mount, MountedView
+from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.planning.limits import LIMITS, V2Limits
 
 type ComponentPayload = dict[str, Any]
@@ -103,18 +104,22 @@ def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> lis
     return problems
 
 
-def _fake_message_shape(message_id: int, *, ephemeral: bool, channel_id: int, guild_id: int | None) -> Any:
+def _fake_message_shape(
+    message_id: int, *, ephemeral: bool, channel_id: int, guild_id: int | None, components_v2: bool = True
+) -> Any:
     """The read-only half of a message: what it is and where it lives."""
     return SimpleNamespace(
         id=message_id,
-        flags=SimpleNamespace(components_v2=True, ephemeral=ephemeral),
+        flags=SimpleNamespace(components_v2=components_v2, ephemeral=ephemeral),
         channel=SimpleNamespace(id=channel_id),
         guild=None if guild_id is None else SimpleNamespace(id=guild_id),
         jump_url=f"https://discord.com/channels/{guild_id or '@me'}/{channel_id}/{message_id}",
     )
 
 
-def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = False) -> Any:
+def fake_interaction(
+    user_id: int = 1, *, message_id: int = 99, expired: bool = False, components_v2: bool = True
+) -> Any:
     """A minimal interaction double for exercising mounts without Discord.
 
     `response.is_done()` starts false; flip `interaction.response._done` to simulate a
@@ -142,7 +147,7 @@ def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = 
     response.defer = _responds(discord.InteractionResponseType.deferred_message_update)
     response.send_message = _responds(discord.InteractionResponseType.channel_message)
     response.send_modal = _responds(discord.InteractionResponseType.modal)
-    message = _fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7)
+    message = _fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7, components_v2=components_v2)
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
         message=message,
@@ -156,10 +161,21 @@ def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = 
 
 
 def fake_message(
-    *, message_id: int = 99, ephemeral: bool = False, channel_id: int = 5, guild_id: int | None = 7
+    *,
+    message_id: int = 99,
+    ephemeral: bool = False,
+    channel_id: int = 5,
+    guild_id: int | None = 7,
+    components_v2: bool = True,
 ) -> Any:
-    """A minimal message double whose `edit` returns itself, as Discord's does."""
-    message = _fake_message_shape(message_id, ephemeral=ephemeral, channel_id=channel_id, guild_id=guild_id)
+    """A minimal message double whose `edit` returns itself, as Discord's does.
+
+    `components_v2=False` is a pre-Components-V2 message, which is what the classic-to-V2
+    transition needs something to start from.
+    """
+    message = _fake_message_shape(
+        message_id, ephemeral=ephemeral, channel_id=channel_id, guild_id=guild_id, components_v2=components_v2
+    )
     message.edit = AsyncMock()
     message.edit.return_value = message
     return message
@@ -174,7 +190,7 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destinati
 
     authority = handle if handle is not None else handle_for(message)
 
-    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> DeliveryReceipt:
+    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
         return DeliveryReceipt(message, authority)
 
     return send
