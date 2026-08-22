@@ -1,7 +1,8 @@
 """Discord composition convenience built on the portable plan/draw seam."""
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import discord
@@ -20,12 +21,22 @@ from squid_layouts.planning.planner import EMPTY_RESERVATION
 from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
+from squid_layouts.profiling import OperationRecorder, SpanRecorder
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanResult
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder | None]:
+    if profile is None:
+        yield None
+        return
+    with profile.span(name) as span:
+        yield span
 
 
 @dataclass(slots=True)
@@ -69,24 +80,31 @@ def compose(
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
+    profile: OperationRecorder | None = None,
 ) -> Composition:
     """Plan a logical document, then draw its resolved Discord scene."""
-    result = plan_document(
-        rendered,
-        target=Target(limits),
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        strict=strict,
-        reservation=reservation,
-        positions=positions,
-        nav=nav,
-        session=session,
-        cache=cache,
-        search_budget=search_budget,
-    )
+    with _span(profile, "planner") as planner_span:
+        result = plan_document(
+            rendered,
+            target=Target(limits),
+            chrome=chrome,
+            localization=localization,
+            palette=palette,
+            strict=strict,
+            reservation=reservation,
+            positions=positions,
+            nav=nav,
+            session=session,
+            cache=cache,
+            search_budget=search_budget,
+        )
+        if planner_span is not None:
+            planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
+            planner_span.set_attribute("states_explored", result.metrics.states_explored)
+            planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
     drawer = renderer if renderer is not None else Renderer(limits=limits)
-    view = drawer.draw(result.scene, plan=result, wire=wire)
+    with _span(profile, "renderer"):
+        view = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
     return Composition(view=view, plan=result)

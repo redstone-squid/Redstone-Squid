@@ -139,6 +139,7 @@ class TraceResult:
     outcome: TraceOutcome
     detail: str | None = None
     dispatch: DispatchResult | None = None
+    presentation: PresentationOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)
