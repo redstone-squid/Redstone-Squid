@@ -128,3 +128,47 @@ def test_extension_field_uses_its_portable_fallback() -> None:
     result = sl.plan(sl.form(spec, key="native", on_submit=_submitted), target=target)
 
     assert isinstance(result.scene.children[0], SceneRow)
+
+
+@dataclass(frozen=True, slots=True)
+class BrokenField(sl.FormField[str]):
+    """A field with a bug in its parser, as opposed to input a reader can correct."""
+
+    def parse(self, raw: object) -> str | None:
+        return raw.no_such_attribute  # type: ignore[attr-defined]
+
+
+async def test_a_bug_in_a_field_propagates_instead_of_becoming_a_field_error() -> None:
+    spec = sl.FormSpec("Broken", (BrokenField(key="broken", label="Broken"),))
+
+    with pytest.raises(AttributeError):
+        await spec.evaluate({"broken": "value"})
+
+
+@dataclass(frozen=True, slots=True)
+class CorrectableField(sl.FormField[str]):
+    def parse(self, raw: object) -> str | None:
+        if raw != "good":
+            message = "Type 'good'."
+            raise sl.FormValueError(message)
+        return "good"
+
+
+async def test_form_value_error_is_still_reported_to_the_reader() -> None:
+    spec = sl.FormSpec("Correctable", (CorrectableField(key="pick", label="Pick"),))
+
+    evaluated = await spec.evaluate({"pick": "bad"})
+
+    assert evaluated.errors == (sl.FieldError("pick", "Type 'good'."),)
+
+
+async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> None:
+    def parse(value: str) -> int:
+        message = "Durations look like 30m."
+        raise ValueError(message)
+
+    spec = sl.FormSpec("Duration", (sl.DurationField(key="for", label="For", parser=parse),))
+
+    evaluated = await spec.evaluate({"for": "banana"})
+
+    assert evaluated.errors == (sl.FieldError("for", "Durations look like 30m."),)

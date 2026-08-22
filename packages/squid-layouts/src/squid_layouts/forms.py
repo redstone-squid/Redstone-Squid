@@ -41,12 +41,17 @@ class FormValidationPolicy(StrEnum):
     ACCEPT_AND_MARK = "accept_and_mark"
 
 
-class _FieldValueError(ValueError):
-    """A user-correctable parse failure, converted to :class:`FieldError`."""
+class FormValueError(ValueError):
+    """A user-correctable parse failure, converted to :class:`FieldError`.
+
+    The one failure boundary :meth:`FormSpec.evaluate` treats as validation. Anything else a
+    field raises is a bug, and propagates to the mount's error hook rather than being shown to
+    the reader as if they had typed something wrong.
+    """
 
 
 def _invalid(message: str) -> NoReturn:
-    raise _FieldValueError(message)
+    raise FormValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +95,11 @@ class FormField[ValueT]:
         return replace(self, key=self.key or name, label=label)
 
     def parse(self, raw: object) -> ValueT | None:
-        """Parse one submitted adapter value."""
+        """Parse one submitted adapter value.
+
+        Raise :class:`FormValueError` for anything the reader can correct. Every other
+        exception is a programmer error and is left to propagate.
+        """
         raise NotImplementedError
 
     def format_prefill(self, value: object) -> object:
@@ -195,13 +204,19 @@ class DurationField(FormField[int]):
     maximum: int | None = None
     placeholder: TextLike | None = None
     parser: Callable[[str], int] | None = dataclass_field(default=None, repr=False, compare=False)
+    """Replaces the compact-duration grammar; signals bad input with `ValueError`."""
 
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
         source = str(raw).strip()
         if self.parser is not None:
-            value = self.parser(source)
+            # A custom parser states its complaint in the exception; `ValueError` is what a
+            # domain parser naturally raises for input the reader can fix.
+            try:
+                value = self.parser(source)
+            except ValueError as error:
+                _invalid(str(error) or "Enter a valid duration.")
         else:
             match = _DURATION.fullmatch(source)
             if match is None:
@@ -353,6 +368,11 @@ class FormSpec:
         object.__setattr__(self, "fields", normalized)
         object.__setattr__(self, "prefill", MappingProxyType(dict(self.prefill)))
 
+    @property
+    def field_keys(self) -> tuple[str, ...]:
+        """The submitted keys this schema parses, in declaration order."""
+        return tuple(field.key for field in self.fields)
+
     async def evaluate(self, attempted: Mapping[str, object]) -> FormEvaluation:
         """Parse every field, then run cross-field validation only after parsing succeeds."""
         raw = MappingProxyType(dict(attempted))
@@ -361,10 +381,8 @@ class FormSpec:
         for field in self.fields:
             try:
                 values[field.key] = field.parse(raw.get(field.key))
-            except _FieldValueError as error:
+            except FormValueError as error:
                 errors.append(FieldError(field.key, str(error)))
-            except Exception as error:
-                errors.append(FieldError(field.key, str(error) or type(error).__name__))
         if not errors and self.validator is not None:
             validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
