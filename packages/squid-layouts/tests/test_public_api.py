@@ -20,6 +20,9 @@ def test_root_is_semantic_first() -> None:
     assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
     assert {"CollectionEditor", "CollectionEntry", "CollectionState", "CollectionChangeHandler"} <= set(sl.__all__)
     assert {"Download", "download"} <= set(sl.__all__)
+    assert {"Resource", "ResourceDelivery", "ResourceState", "Pending", "Ready", "Failed", "resource"} <= set(
+        sl.__all__
+    )
     assert {
         "CountPrecision",
         "Direction",
