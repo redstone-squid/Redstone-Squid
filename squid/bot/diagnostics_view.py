@@ -25,7 +25,9 @@ class ErrorReportBrowser(sl.Component):
     every row the select can offer, so opening one is a re-render, not a round trip.
     """
 
-    detail: ErrorReport | None = sl.state(None)
+    # Opaque: a stored report is a value this browser shows and never writes to, and its
+    # redacted `context` mapping is a plain dict, which the state immutability check refuses.
+    detail: ErrorReport | None = sl.state(None, opaque=True)
     matches: int = sl.state(1)
 
     def __init__(

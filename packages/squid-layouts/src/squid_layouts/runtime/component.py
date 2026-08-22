@@ -1,8 +1,9 @@
 """Stateful components: render() is a pure function of state; mutating state re-renders.
 
-A component describes *what the message should say now*. Interaction callbacks just mutate
-declared state; assignments and in-place list, dict, or set mutations schedule the mount to
-re-render. Components never touch discord.py objects directly.
+A component describes *what the message should say now*. Interaction callbacks assign
+declared state, and every assignment schedules the mount to re-render. State values are
+immutable and replaced rather than mutated. Components never touch discord.py objects
+directly.
 
 Components compose through explicit keyed Boundary nodes, so two instances of the same
 child class can appear in one message without their controls or pagers cross-wiring. Only the
@@ -150,7 +151,7 @@ def _is_abstract(cls: type) -> bool:
 
 def _checked_init(
     original: Callable[..., None],
-    required: tuple[tuple[str, str], ...],
+    required: tuple[tuple[str, _State], ...],
 ) -> Callable[..., None]:
     """Wrap ``__init__`` so state declared without an initial value must be assigned."""
 
@@ -161,7 +162,7 @@ def _checked_init(
         # otherwise trip the base's wrapper before it had finished assigning.
         if type(self).__init__ is not __init__:
             return
-        missing = sorted(name for name, slot in required if slot not in self.__dict__)
+        missing = sorted(name for name, descriptor in required if not descriptor.is_set(self))
         if missing:
             message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
             raise TypeError(message)
@@ -272,9 +273,7 @@ class Component:
             message = f"{cls.__name__} has a computed dependency cycle: {', '.join(cyclic)}"
             raise TypeError(message)
         cls._computed_descriptors = tuple(ordered_computed)
-        required = tuple(
-            (name, descriptor._name) for name, descriptor in declared.items() if not descriptor.has_initial
-        )
+        required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
         if required and not _is_abstract(cls):
             # Wrap even an inherited __init__, so adding a required field to a subclass that
             # defines no constructor of its own is still checked.
@@ -345,15 +344,16 @@ class Component:
     def mutated(self, name: str) -> None:
         """Re-render because declared state changed in place where nothing observed it.
 
-        Assignment and list, dict, and set mutation are observed already. Reach for this only
-        when a field's *contents* changed some other way, such as setting an attribute on the
-        object a ``copy="ref"`` field holds. It schedules the draw; it cannot roll the change
+        Assignment is observed already, and a state value is immutable, so the only field
+        whose *contents* can change behind the framework's back is an ``opaque=True`` one --
+        a collaborator the component holds. It schedules the draw; it cannot roll the change
         back, and naming the field keeps the call tied to the declaration it depends on.
         """
         if name not in type(self)._state_names:
             message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
             raise TypeError(message)
         descriptor = type(self)._state_descriptors[name]
+        descriptor.mutated(self)
         self._state_changed(frozenset((descriptor._name,)))
 
     def invalidate(self) -> None:

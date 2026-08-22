@@ -39,7 +39,7 @@ class Lookup[ItemT](Component):
     """Search a windowed domain source and retain the resolved items a reader picks."""
 
     query: str | None = state(None)
-    picked: tuple[ItemT, ...] = state((), persist=False, copy="ref")
+    picked: tuple[ItemT, ...] = state((), persist=False, opaque=True)
     _request: _LookupRequest = state(default=_LookupRequest(), persist=False)
 
     def __init__(
