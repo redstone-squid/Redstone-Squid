@@ -113,6 +113,7 @@ type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
 type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
 type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
 type ToggleOwnership = Ownership[bool, ToggleEvent]
+type ScaleOwnership = Ownership[int | None, ScaleEvent]
 type NavOwnership = Ownership[str | None, NavigateEvent]
 
 # The engine-managed default of each stateful node, named for the state it seeds.
@@ -120,6 +121,7 @@ UNSELECTED: ChoiceOwnership = Managed(())
 UNOPENED: ItemOwnership = Managed(None)
 CLOSED: DisclosureOwnership = Managed(initial=False)
 OFF: ToggleOwnership = Managed(initial=False)
+UNRATED: ScaleOwnership = Managed(None)
 FIRST_DESTINATION: NavOwnership = Managed(None)
 
 
@@ -458,6 +460,13 @@ class OpenEvent[ValueT](ActionEvent):
     """The reader asked to open something: one of N entries, or one disclosure."""
 
     opened: ValueT
+
+
+@dataclass(frozen=True, slots=True)
+class ScaleEvent(ActionEvent):
+    """The reader picked one point on an ordinal scale."""
+
+    value: int = 0
 
 
 @dataclass(frozen=True, slots=True)

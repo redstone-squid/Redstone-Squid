@@ -280,3 +280,46 @@ async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> 
     evaluated = await spec.evaluate({"for": "banana"})
 
     assert evaluated.errors == (sl.FieldError("for", "Durations look like 30m."),)
+
+
+def test_scale_field_parses_a_picked_point_and_a_typed_one() -> None:
+    field = sl.ScaleField(key="score", label="Score")
+
+    assert field.parse("3") == 3
+    assert field.parse(5) == 5
+    assert [option for option in field.points] == [1, 2, 3, 4, 5]
+
+
+def test_scale_field_rejects_values_outside_its_span() -> None:
+    field = sl.ScaleField(key="score", label="Score", minimum=1, maximum=5)
+
+    with pytest.raises(sl.FormValueError, match="from 1 to 5"):
+        field.parse("6")
+    with pytest.raises(sl.FormValueError, match="from 1 to 5"):
+        field.parse("0")
+    with pytest.raises(sl.FormValueError, match="whole number"):
+        field.parse("great")
+
+
+def test_scale_field_labels_named_points_and_numbers_the_rest() -> None:
+    field = sl.ScaleField(key="score", labels={1: "Poor", 5: "Excellent"})
+
+    assert field.label_for(1) == "Poor"
+    assert field.label_for(3) == "3"
+    assert field.label_for(5) == "Excellent"
+
+
+def test_scale_field_prefill_is_the_option_key() -> None:
+    field = sl.ScaleField(key="score")
+
+    assert field.format_prefill(4) == "4"
+    assert field.format_prefill(None) is None
+
+
+def test_scale_field_needs_a_span_to_pick_from() -> None:
+    with pytest.raises(ValueError, match="maximum greater than minimum"):
+        sl.ScaleField(key="score", minimum=3, maximum=3)
+
+
+def test_scale_is_the_short_alias() -> None:
+    assert sl.Scale is sl.ScaleField

@@ -86,6 +86,9 @@ class Chrome:
     remove: TextLike = "Remove"
     move_up: TextLike = "Move up"
     move_down: TextLike = "Move down"
+    review: TextLike = "Review"
+    finish: TextLike = "Finish"
+    unanswered: TextLike = "Not answered yet"
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
     range_footer: Callable[[int, int], TextLike] = _default_range_footer
@@ -140,6 +143,9 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         remove=resolve_text(chrome.remove, localization).content,
         move_up=resolve_text(chrome.move_up, localization).content,
         move_down=resolve_text(chrome.move_down, localization).content,
+        review=resolve_text(chrome.review, localization).content,
+        finish=resolve_text(chrome.finish, localization).content,
+        unanswered=resolve_text(chrome.unanswered, localization).content,
         page_footer=lambda page, pages: resolve_text(chrome.page_footer(page, pages), localization).content,
         range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,
         approximate_total_footer=lambda first, last, total: (

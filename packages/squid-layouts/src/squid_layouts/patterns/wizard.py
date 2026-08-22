@@ -4,13 +4,16 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
-from squid_layouts.factories import actions, heading, progress, stack
-from squid_layouts.forms import Form, FormLike, FormSpec
+from squid_layouts.factories import actions, field, fields, heading, progress, stack
+from squid_layouts.forms import Form, FormField, FormLike, FormSpec
 from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
-from squid_layouts.semantic import Action, ActionDisplay, FormTrigger, RoutedAction
+from squid_layouts.semantic import Action, ActionDisplay, FormTrigger, LayoutNode, RoutedAction, Tone
 from squid_layouts.text import TextLike
+
+REVIEW_STEP = "@review"
+"""The reserved `WizardState.current` value naming the review screen rather than a step."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,12 +25,29 @@ class WizardAnswer:
 
 
 @dataclass(frozen=True, slots=True)
+class WizardReview:
+    """A final screen that shows every answer and lets the reader jump back to one."""
+
+    label: TextLike | None = None
+    """Heading and control wording for the review destination; `None` uses chrome."""
+    summarize: Callable[[WizardAnswers], ContentLike] | None = None
+    """Replace the default per-step rows with content of your own."""
+
+
+@dataclass(frozen=True, slots=True)
 class WizardState:
-    """Current step plus every retained answer, including hidden branch orphans."""
+    """Current step plus every retained answer, including hidden branch orphans.
+
+    Where the reader *is* and where the reader *returns to* are two facts, so they are two
+    fields: `current` holds `REVIEW_STEP` while the review screen is up, and `reviewing`
+    says review is home -- it stays set while a jumped edit is in progress, which is what
+    makes that edit come back rather than resuming the march.
+    """
 
     current: str
     answers: tuple[WizardAnswer, ...] = ()
     complete: bool = False
+    reviewing: bool = False
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -64,10 +84,18 @@ type WizardFinishHandler = Callable[[PatternEvent[WizardState], WizardAnswers], 
 class Wizard:
     """A pure branching wizard whose step list is recomputed after every answer."""
 
-    def __init__(self, title: TextLike, steps: StepSource, *, key: str = "wizard") -> None:
+    def __init__(
+        self,
+        title: TextLike,
+        steps: StepSource,
+        *,
+        key: str = "wizard",
+        review: WizardReview | bool = False,
+    ) -> None:
         self.key = require_key(key, name="Wizard.key")
         self.title = title
         self.steps = steps
+        self.review = WizardReview() if review is True else (review or None)
         initial_steps = self._steps(())
         if not initial_steps:
             message = "Wizard needs at least one initial step"
@@ -109,6 +137,9 @@ class Wizard:
         if len(set(keys)) != len(keys):
             message = f"Wizard step keys must be unique: {keys!r}"
             raise ValueError(message)
+        if REVIEW_STEP in keys:
+            message = f"Wizard step key {REVIEW_STEP!r} is reserved for the review screen"
+            raise ValueError(message)
         return resolved
 
     def live_steps(self, state: WizardState) -> tuple[WizardStep, ...]:
@@ -121,6 +152,11 @@ class Wizard:
         return MappingProxyType(
             {step.key: retained[step.key] for step in self.live_steps(state) if step.key in retained}
         )
+
+    def answered(self, state: WizardState) -> bool:
+        """Whether every live form step has an answer — what gates Finish."""
+        retained = self._answer_map(state.answers)
+        return all(step.key in retained for step in self.live_steps(state) if step.form is not None)
 
     @staticmethod
     def _store(
@@ -145,12 +181,32 @@ class Wizard:
     ) -> WizardState:
         del values
         live = self.live_steps(state)
+        at_review = state.current == REVIEW_STEP
+        # Review is home once visited, so an edit reached from it returns there rather than
+        # silently resuming the march and losing the reader's place.
+        returns_to_review = self.review is not None and state.reviewing
+        if self.review is not None and action == "review":
+            return replace(state, current=REVIEW_STEP, reviewing=True, complete=False)
+        if self.review is not None and action.startswith("goto:"):
+            step_key = action.removeprefix("goto:")
+            if step_key not in {step.key for step in live}:
+                return state
+            return replace(state, current=step_key, reviewing=True, complete=False)
         index = self._index(live, state.current)
         if action == "back":
+            if at_review:
+                return state
+            if returns_to_review:
+                return replace(state, current=REVIEW_STEP, complete=False)
             return replace(state, current=live[max(0, index - 1)].key, complete=False)
         if action == "next":
+            if returns_to_review:
+                return replace(state, current=REVIEW_STEP, complete=False)
             return replace(state, current=live[min(len(live) - 1, index + 1)].key, complete=False)
         if action == "finish":
+            # The state machine enforces completeness; the render only reflects it.
+            if self.review is not None and not self.answered(state):
+                return state
             return replace(state, complete=True)
         if not action.startswith("submit:") or submitted is None:
             return state
@@ -161,11 +217,15 @@ class Wizard:
         submitted_index = self._index(live, step_key)
         answers = self._store(state.answers, step_key, submitted)
         recomputed = self._steps(answers)
+        if returns_to_review:
+            return WizardState(REVIEW_STEP, answers, reviewing=True)
         recomputed_index = next(
             (position for position, step in enumerate(recomputed) if step.key == step_key),
             min(submitted_index, len(recomputed) - 1),
         )
         if recomputed_index >= len(recomputed) - 1:
+            if self.review is not None:
+                return WizardState(REVIEW_STEP, answers, reviewing=True)
             return WizardState(recomputed[recomputed_index].key, answers, complete=True)
         return WizardState(recomputed[recomputed_index + 1].key, answers)
 
@@ -182,18 +242,89 @@ class Wizard:
         step = next((candidate for candidate in self.live_steps(state) if candidate.key == key), None)
         return None if step is None or step.form is None else self._prefilled(step, state)
 
+    @staticmethod
+    def _summarize_step(step: WizardStep, answer: Mapping[str, object] | None, unanswered: TextLike) -> TextLike:
+        """One step's answers as a single line, each value through its field's prefill form."""
+        if step.form is None or answer is None:
+            return unanswered
+        shown = [
+            text for form_field in step.form.fields if (text := _prefill_text(form_field, answer.get(form_field.key)))
+        ]
+        return ", ".join(shown) if shown else unanswered
+
+    def _render_review(
+        self,
+        state: WizardState,
+        controls: PatternControls[WizardState],
+        review: WizardReview,
+    ) -> RenderResult:
+        live = self.live_steps(state)
+        answered = self._answer_map(state.answers)
+        steps = tuple(step for step in live if step.form is not None)
+        if review.summarize is not None:
+            body: tuple[LayoutNode, ...] = controls.content(
+                normalize_content(review.summarize(self.live_answers(state)), name=f"Wizard {self.key!r} review"),
+                prefix=f"{self.key}-review",
+            )
+        else:
+            body = (
+                (
+                    fields(
+                        *(
+                            field(
+                                step.label,
+                                self._summarize_step(step, answered.get(step.key), controls.chrome.unanswered),
+                            )
+                            for step in steps
+                        )
+                    ),
+                )
+                if steps
+                else ()
+            )
+
+        return stack(
+            heading(self.title),
+            heading(review.label if review.label is not None else controls.chrome.review, level=3),
+            *body,
+            actions(
+                *(controls.action(step.label, f"goto:{step.key}", key=f"{self.key}.goto.{step.key}") for step in steps),
+                key=f"{self.key}.review",
+            )
+            if steps
+            else None,
+            actions(
+                controls.action(
+                    controls.chrome.finish,
+                    "finish",
+                    key=f"{self.key}.finish",
+                    tone=Tone.SUCCESS,
+                    available=self.answered(state),
+                ),
+                key=f"{self.key}.chrome",
+                display=ActionDisplay.INDIVIDUAL,
+            ),
+        )
+
     def render(self, state: WizardState, controls: PatternControls[WizardState]) -> RenderResult:
+        if self.review is not None and state.current == REVIEW_STEP:
+            return self._render_review(state, controls, self.review)
         live = self.live_steps(state)
         index = self._index(live, state.current)
         current = live[index]
         next_step = live[index + 1] if index + 1 < len(live) else None
+        # A step reached by jumping back from review returns there when it is done, so its
+        # primary control says "edit this", not "continue the march".
+        editing = self.review is not None and state.reviewing
+        last_label = controls.chrome.review if self.review is not None else controls.chrome.finish
+        last_action = "review" if self.review is not None else "finish"
 
         if current.form is not None:
             primary = controls.form(
                 self._prefilled(current, state),
                 f"submit:{current.key}",
                 key=f"{self.key}.{current.key}",
-                label="Finish" if next_step is None else "Continue",
+                label=controls.chrome.edit if editing else last_label if next_step is None else "Continue",
             )
         elif next_step is not None and next_step.form is not None:
             primary = controls.form(
@@ -202,10 +333,12 @@ class Wizard:
                 key=f"{self.key}.{next_step.key}",
                 label=controls.chrome.next,
             )
+        elif editing:
+            primary = controls.action(controls.chrome.review, "review", key=f"{self.key}.primary")
         else:
             primary = controls.action(
-                "Finish" if next_step is None else controls.chrome.next,
-                "finish" if next_step is None else "next",
+                last_label if next_step is None else controls.chrome.next,
+                last_action if next_step is None else "next",
                 key=f"{self.key}.primary",
             )
 
@@ -220,10 +353,20 @@ class Wizard:
                     controls.chrome.back,
                     "back",
                     key=f"{self.key}.back",
-                    available=index > 0,
+                    available=index > 0 or editing,
                 ),
                 primary if isinstance(primary, Action | RoutedAction) else None,
                 key=f"{self.key}.chrome",
                 display=ActionDisplay.INDIVIDUAL,
             ),
         )
+
+
+def _prefill_text(form_field: FormField[object], value: object) -> str:
+    """One answer value as review text, through the field's own prefill conversion."""
+    if value is None:
+        return ""
+    shown = form_field.format_prefill(value)
+    if isinstance(shown, list | tuple):
+        return ", ".join(str(item) for item in shown)
+    return str(shown)

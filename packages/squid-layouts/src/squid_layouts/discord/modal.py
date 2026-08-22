@@ -28,6 +28,7 @@ from squid_layouts.forms import (
     FormValueError,
     IntField,
     MultiChoiceField,
+    ScaleField,
     TextAreaField,
     TextField,
     TimeField,
@@ -201,6 +202,33 @@ def _form_component(
 ) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
     if isinstance(field, TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField):
         component = _text_input(field, prefill, localization)
+        return component, lambda: component.value
+    if isinstance(field, ScaleField):
+        points = field.points
+        prefilled = None if prefill is None else str(field.format_prefill(prefill))
+        if len(points) <= 10:
+            component = discord.ui.RadioGroup(
+                custom_id=field.key,
+                required=field.required,
+                options=[
+                    discord.RadioGroupOption(
+                        label=_resolve(field.label_for(point), localization),
+                        value=str(point),
+                        default=str(point) == prefilled,
+                    )
+                    for point in points
+                ],
+            )
+            return component, lambda: component.value
+        # Wider than Discord's radio group allows, so the honest fallback is the number
+        # itself; `ScaleField.parse` reads the typed value exactly as it reads a picked one.
+        component = discord.ui.TextInput(
+            custom_id=field.key,
+            style=discord.TextStyle.short,
+            default=prefilled,
+            placeholder=f"{field.minimum}\N{EN DASH}{field.maximum}",
+            required=field.required,
+        )
         return component, lambda: component.value
     if isinstance(field, ChoiceField):
         if not 2 <= len(field.options) <= 10:
