@@ -1,11 +1,13 @@
 """An explicitly asynchronous ranking component backed by a window source."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
 
 from squid_layouts.actions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.factories import heading, note, stack
+from squid_layouts.factories import action, actions, heading, note, stack
 from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
 from squid_layouts.patterns._ranked import Projector, RankedEntry, RankedRows
 from squid_layouts.planning.navigation import (
@@ -17,6 +19,7 @@ from squid_layouts.planning.navigation import (
 from squid_layouts.primitives import Lines
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
+from squid_layouts.runtime.resources import Failed, Pending, Ready, resource
 from squid_layouts.semantic import LayoutNode
 from squid_layouts.sources import (
     ORIGIN,
@@ -32,10 +35,16 @@ from squid_layouts.text import TextLike
 type SourceContentHook = ContentLike | Callable[[int | None], ContentLike]
 
 
-class SourceRankedList[EntryT](Component):
-    """Render a ranking whose windows are loaded by interaction handlers."""
+@dataclass(frozen=True, slots=True)
+class _WindowRequest:
+    operation: Literal["refresh", "previous", "next", "seek"] = "refresh"
+    position: Position | None = None
 
-    loaded: LoadedWindow[RankedEntry | EntryT] | None = state(None, persist=False, copy="ref")
+
+class SourceRankedList[EntryT](Component):
+    """Render a ranking whose visible async resource is backed by a window source."""
+
+    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, copy="ref")
 
     def __init__(
         self,
@@ -51,6 +60,9 @@ class SourceRankedList[EntryT](Component):
         footer: SourceContentHook | None = None,
         empty: ContentLike = "No entries",
         initial_position: Position = ORIGIN,
+        loading: TextLike = "Loading…",
+        load_failed: TextLike = "Could not load entries.",
+        retry: TextLike = "Retry",
     ) -> None:
         self.key = require_key(key, name="SourceRankedList.key")
         if page_size < 1:
@@ -65,35 +77,45 @@ class SourceRankedList[EntryT](Component):
         self.empty = normalize_content(empty, name="SourceRankedList.empty")
         self.loader = WindowLoader(source, page_size, self.rows.identity_of, initial=initial_position)
 
-    async def on_load(self) -> None:
-        loaded = await self.loader.load()
+        self.loading = loading
+        self.load_failed = load_failed
+        self.retry = retry
+
+    @resource(depends=(_request,))
+    async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
+        state = self.loaded.state
+        previous = state.previous.value if isinstance(state, Pending | Failed) and state.previous is not None else None
+        match self._request:
+            case _WindowRequest("previous") if previous is not None:
+                loaded = await self.loader.previous(previous)
+            case _WindowRequest("next") if previous is not None:
+                loaded = await self.loader.next(previous)
+            case _WindowRequest("seek", position):
+                loaded = await self.loader.load(position, previous=previous)
+            case _:
+                loaded = await self.loader.load(previous=previous)
         if loaded is None:
-            message = "initial source window was superseded before it loaded"
+            message = "source window request was superseded before it loaded"
             raise LayoutInvariantError(message)
-        self.loaded = loaded
+        return loaded
 
     async def refresh(self) -> None:
         """Refresh around the currently visible anchor."""
-        if self.loaded is None:
-            return
-        await self._publish(self.loader.load(previous=self.loaded))
+        self._request = _WindowRequest()
+        await self.loaded._settle()
 
     async def _previous(self, _event: ActionEvent) -> None:
-        if self.loaded is not None:
-            await self._publish(self.loader.previous(self.loaded))
+        self._request = _WindowRequest("previous")
 
     async def _next(self, _event: ActionEvent) -> None:
-        if self.loaded is not None:
-            await self._publish(self.loader.next(self.loaded))
+        self._request = _WindowRequest("next")
 
     async def _seek(self, page: int) -> None:
         """Jump to a zero-based page. Only bound when the source declared it can."""
-        await self._publish(self.loader.load(Position(offset=page * self.page_size)))
+        self._request = _WindowRequest("seek", Position(offset=page * self.page_size))
 
-    async def _publish(self, pending: Awaitable[LoadedWindow[RankedEntry | EntryT] | None]) -> None:
-        loaded = await pending
-        if loaded is not None:
-            self.loaded = loaded
+    async def _retry(self, _event: ActionEvent) -> None:
+        self._request = _WindowRequest(self._request.operation, self._request.position)
 
     def _hook(self, hook: SourceContentHook, total: int | None, *, name: str) -> tuple[LayoutNode, ...]:
         value = hook(total) if callable(hook) else hook
@@ -104,10 +126,37 @@ class SourceRankedList[EntryT](Component):
         )
 
     def render(self) -> RenderResult:
-        loaded = self.loaded
-        if loaded is None:
-            message = "SourceRankedList rendered before its initial window loaded"
-            raise LayoutInvariantError(message)
+        match self.loaded.state:
+            case Pending(previous=None):
+                return self._status(self.loading)
+            case Failed(previous=None):
+                return self._status(self.load_failed, retry=True)
+            case Pending(previous=Ready(value=loaded)):
+                return self._render_loaded(loaded, status=self.loading)
+            case Failed(previous=Ready(value=loaded)):
+                return self._render_loaded(loaded, status=self.load_failed, retry=True)
+            case Ready(value=loaded):
+                return self._render_loaded(loaded)
+
+    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult:
+        return stack(
+            heading(self.heading) if self.heading is not None else None,
+            note(message),
+            actions(
+                action(self.retry, self._retry, key=f"{self.key}.retry"),
+                key=f"{self.key}.load-actions",
+            )
+            if retry
+            else None,
+        )
+
+    def _render_loaded(
+        self,
+        loaded: LoadedWindow[RankedEntry | EntryT],
+        *,
+        status: TextLike | None = None,
+        retry: bool = False,
+    ) -> RenderResult:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window
@@ -156,8 +205,6 @@ class SourceRankedList[EntryT](Component):
                     ),
                     self._previous,
                     self._next,
-                    # Bound only where the source can address a page at all, so a factory
-                    # can tell "no jump control here" from "jump to page 0".
                     self._seek if extent is not None else None,
                 )
             )
@@ -172,6 +219,13 @@ class SourceRankedList[EntryT](Component):
             note(numeric_footer) if navigable and numeric_footer is not None else None,
             *navigation,
             *(self._hook(self.footer, total, name="footer") if self.footer is not None else ()),
+            note(status) if status is not None else None,
+            actions(
+                action(self.retry, self._retry, key=f"{self.key}.retry"),
+                key=f"{self.key}.load-actions",
+            )
+            if retry
+            else None,
         )
 
 
