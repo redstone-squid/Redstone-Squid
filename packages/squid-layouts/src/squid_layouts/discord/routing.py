@@ -33,6 +33,7 @@ import annotationlib
 import inspect
 import logging
 import re
+import weakref
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -54,6 +55,9 @@ something outside the handler's module has to build ids from it."""
 
 type GoneHook[BotT: discord.Client] = Callable[[discord.Interaction[BotT]], Awaitable[None]]
 """A friendly response for a control retired from a reserved router namespace."""
+
+_INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakref.WeakKeyDictionary()
+"""Routers installed per client, so `register` can refuse the second router a click would wake."""
 
 
 class RouteComponent(StrEnum):
@@ -92,9 +96,28 @@ def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) ->
     signature = inspect.signature(handler, annotation_format=annotationlib.Format.FORWARDREF)
     parameters = list(signature.parameters.values())
     required = 2 if component is RouteComponent.SELECT else 1
+    detail = "the interaction and selected values" if component is RouteComponent.SELECT else "the interaction"
     if len(parameters) < required:
-        detail = "the interaction and selected values" if component is RouteComponent.SELECT else "the interaction"
         message = f"route handler {handler.__qualname__!r} must take {detail} first"
+        raise ValueError(message)
+    positional = (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    for parameter in parameters[:required]:
+        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
+            break
+        if parameter.kind not in positional:
+            message = (
+                f"route handler {handler.__qualname__!r} must take {detail} positionally, "
+                f"but {parameter.name!r} is {parameter.kind.description}"
+            )
+            raise ValueError(message)
+    unfeedable = [
+        parameter.name for parameter in parameters[required:] if parameter.kind is inspect.Parameter.POSITIONAL_ONLY
+    ]
+    if unfeedable:
+        message = (
+            f"route handler {handler.__qualname__!r} takes {unfeedable} positional-only, "
+            "but route parameters are passed by name"
+        )
         raise ValueError(message)
     if any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters):
         return None
@@ -281,10 +304,45 @@ class Router[BotT: discord.Client]:
         """Install this router's dispatch item on ``client``, freezing the route table.
 
         Safe to call for more than one client — a test suite builds a fresh bot per case —
-        but not before every route is added, since the template is built here.
+        but not before every route is added, since the template is built here. Registering
+        the same router on the same client again is a no-op: discord.py's `ViewStore`
+        schedules one call per matching dynamic item, so a second install would dispatch
+        every click twice. A *different* router is rejected when any custom id could reach
+        both, with the same exact-intersection check `add()` uses, because the losing
+        router would answer ids it does not own with a warning or its gone hook.
         """
+        installed = _INSTALLED.setdefault(client, [])
+        if self in installed:
+            return
+        for other in installed:
+            collision = self._collision(other)
+            if collision is not None:
+                message = f"client already has a router this one collides with: {collision}"
+                raise ValueError(message)
         self._registered = True
+        installed.append(self)
         client.add_dynamic_items(_dispatch_item(self))
+
+    def _collision(self, other: Router[Any]) -> str | None:
+        """Why this router's accepted ids intersect ``other``'s, or None if disjoint.
+
+        Component kinds are ignored on purpose: templates match custom ids, not component
+        kinds, so a button route in one router still wakes another router's dispatch item
+        when the id languages intersect.
+        """
+        if self.namespace is not None and self.namespace == other.namespace:
+            return f"both reserve the namespace {self.namespace!r}"
+        for registration in self._routes:
+            if other.namespace is not None and registration.route.accepts_first_segment(other.namespace):
+                return f"route {registration.route.format!r} enters the reserved namespace {other.namespace!r}"
+        for registration in other._routes:
+            if self.namespace is not None and registration.route.accepts_first_segment(self.namespace):
+                return f"route {registration.route.format!r} enters the reserved namespace {self.namespace!r}"
+        for mine in self._routes:
+            for theirs in other._routes:
+                if mine.route.overlaps(theirs.route):
+                    return f"route {mine.route.format!r} overlaps {theirs.route.format!r}"
+        return None
 
     async def dispatch(
         self,

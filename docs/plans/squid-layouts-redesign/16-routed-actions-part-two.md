@@ -295,9 +295,14 @@ into separate routes; the planner never invents state or silently changes transp
 canonical format, parameter converters, aliases, and handler provenance. Owner-only
 `!dev routes` renders the live table privately alongside `!dev ui`.
 
-## Remaining: registration hardening (2026-08-21 external audit)
+## Registration hardening (2026-08-21 external audit; shipped 2026-08-22)
 
-Two dispatch-boundary gaps, both verified in-repo:
+Two dispatch-boundary gaps, both verified in-repo and since closed — `register` now keeps a
+weak per-client router list (same pair is a no-op, an id-language intersection with an
+already-installed router is rejected, namespaces included), and `_accepted` checks kinds:
+leading parameters must bind positionally and positional-only parameters beyond them are
+rejected at registration. Covered by `TestClientRegistration` and `TestHandlerKinds` in
+`test_routing.py`. The original findings:
 
 - **`Router.register` is not idempotent per client.** Every call builds a fresh
   `RoutedDispatch` class over the same template (`discord/routing.py:287`); the same
