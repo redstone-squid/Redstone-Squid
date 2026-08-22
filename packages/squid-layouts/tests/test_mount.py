@@ -1216,7 +1216,8 @@ class TestSend:
 
         sent = await mount.send(destination)
 
-        assert sent is message
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.receipt.message is message
         assert "inc" in mount._handlers
         assert mount._generation == 1
         assert not mount.pending
@@ -1239,7 +1240,8 @@ class TestSend:
         sent = await mount.send(_Destination(None))
 
         # Delivered, so the render is live -- but nothing came back to write through.
-        assert sent is None
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.receipt.message is None
         assert mount._generation == 1
         assert not mount.pending
         assert mount.handle is None
@@ -1257,14 +1259,16 @@ class TestSend:
         sent = await mount.send(abandoned)
 
         # Nothing reached Discord, so nothing is live: no handlers, no handle, still dirty.
-        assert sent is None
+        assert isinstance(sent, delivery.Abandoned)
         assert mount._generation == 0
         assert mount._handlers == {}
         assert mount.handle is None
         assert mount.pending
 
         message = fake_message()
-        assert await mount.send(_Destination(message)) is message
+        resent = await mount.send(_Destination(message))
+        assert isinstance(resent, delivery.Delivered)
+        assert resent.receipt.message is message
         # Generation 2, not 1: the abandoned candidate does not hand its control ids on.
         assert mount._generation == 2
         assert not mount.pending
@@ -1320,7 +1324,7 @@ class TestSend:
         await mount.finish(disable=False)
         destination = _Destination(fake_message())
 
-        assert await mount.send(destination) is None
+        assert isinstance(await mount.send(destination), delivery.Abandoned)
         assert destination.calls == []
 
 
@@ -1652,7 +1656,8 @@ class TestDestinations:
 
         sent = await mount.send(delivery.respond_to(interaction, wait=False))
 
-        assert sent is None
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.receipt.message is None
         assert mount.handle is not None and not mount.handle.permanent
         assert mount.handle.expires_at == interaction.expires_at
         interaction.original_response.assert_not_awaited()
@@ -1672,7 +1677,8 @@ class TestDestinations:
 
         sent = await mount.send(delivery.respond_to(interaction, ephemeral=False, wait=True))
 
-        assert sent is message
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.receipt.message is message
         assert mount.handle is not None and not mount.handle.permanent
         assert mount.handle.expires_at == interaction.expires_at
 
@@ -1707,7 +1713,8 @@ class TestDestinations:
 
         sent = await mount.send(delivery.respond_to(interaction, wait=False))
 
-        assert sent is message
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.receipt.message is message
         assert mount.handle is not None
         assert not mount.handle.permanent
 
