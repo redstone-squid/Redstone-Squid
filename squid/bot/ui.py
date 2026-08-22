@@ -111,6 +111,8 @@ CHROME = ui.Chrome(
     back=L(t"Back"),
     home=L(t"Home"),
     close=L(t"Close"),
+    on=L(t"On"),
+    off=L(t"Off"),
     page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
 )
 _OPEN_LINK = L(t"Open link")
