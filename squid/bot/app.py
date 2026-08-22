@@ -51,7 +51,7 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid_layouts import TopicBus
-from squid_layouts.discord import MountRegistry, Reactor
+from squid_layouts.discord import Reactor, SessionRegistry
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -156,7 +156,7 @@ class RedstoneSquid(Bot):
         self.account_ids = AccountIdCache()
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
-        self.mounts = MountRegistry()
+        self.mounts = SessionRegistry()
         self.topic_bus = TopicBus()
         self.layout_reactor = Reactor(self.topic_bus)
 

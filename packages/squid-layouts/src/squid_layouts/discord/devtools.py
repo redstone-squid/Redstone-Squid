@@ -12,7 +12,7 @@ from squid_layouts.discord.devtools_view import MountInspector, metrics_text, pl
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.mount import MountSnapshot, owned_mount
 from squid_layouts.discord.routing import routers
-from squid_layouts.discord.sessions import MountRegistry
+from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
 from squid_layouts.semantic import LayoutNode
@@ -33,7 +33,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     def __init__(
         self,
         check: DevToolsCheck[BotT] = _owner_only,
-        registry: MountRegistry | None = None,
+        registry: SessionRegistry | None = None,
     ) -> None:
         self._check = check
         self._registry = registry

@@ -57,11 +57,13 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
-    assert sl.discord.MountRegistry
+    assert sl.discord.SessionRegistry
     assert sl.discord.routers
     assert sl.discord.Renderer
     assert sl.discord.SessionKey
-    assert sl.discord.WhenOpen
+    assert sl.discord.SessionPolicy
+    assert not hasattr(sl.discord, "MountRegistry")
+    assert not hasattr(sl.discord, "WhenOpen")
     assert sl.discord.durability.MountManager
     assert sl.TopicBus
     assert sl.discord.Reactor.follow

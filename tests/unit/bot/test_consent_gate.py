@@ -14,9 +14,8 @@ import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
-from squid.bot.utils.mount_registry import MountRegistry, SessionKey
-from squid_layouts.discord import Everyone
-from squid_layouts.discord.testing import fake_message
+from squid_layouts.discord import Everyone, Opened, SessionKey, SessionRegistry
+from squid_layouts.discord.testing import delivered_to, fake_message
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123
@@ -46,7 +45,7 @@ def make_context() -> Any:
             author=SimpleNamespace(id=USER_ID),
             interaction=None,
             send=AsyncMock(return_value=fake_message(message_id=1)),
-            bot=SimpleNamespace(mounts=MountRegistry()),
+            bot=SimpleNamespace(mounts=SessionRegistry()),
         ),
     )
 
@@ -165,19 +164,19 @@ async def _collect(into: list[Any], awaitable: Any) -> None:
 async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
     """Two prompts for one user leave the first's waiter stranded whichever one wins."""
     ctx = make_context()
-    key = SessionKey("consent", USER_ID)
+    key = SessionKey.user("consent", USER_ID)
     outcomes: list[Any] = []
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID)))
-        while ctx.bot.mounts.get(key) is None:
+        while not ctx.bot.mounts.get(key):
             await anyio.sleep(0)
         first = ctx.bot.mounts.get(key)
 
         second = await prompt_for_consent(ctx, user_id=USER_ID)
 
         assert second is NOT_ASKED
-        assert ctx.bot.mounts.get(key) is first  # the one being awaited is the one that stands
+        assert ctx.bot.mounts.get(key) == first  # the one being awaited is the one that stands
         await ctx.bot.mounts.close(key, disable=False)
 
     assert outcomes == [None]
@@ -192,6 +191,8 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     """
     ctx = make_context()
     parent = sl.discord.Mount(_Blank(), access=Everyone(), timeout=None)
+    parent_opened = await ctx.bot.mounts.open(parent, delivered_to(fake_message()))
+    assert isinstance(parent_opened, Opened)
     outcomes: list[Any] = []
 
     # Bounded well under the prompt's own 120 s: a wait that only ends when the timeout
@@ -199,7 +200,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(ctx, user_id=USER_ID, parent=parent)))
-            while ctx.bot.mounts.get(SessionKey("consent", USER_ID)) is None:
+            while len(parent_opened.session.mounts) == 1:
                 await anyio.sleep(0)
 
             await parent.finish(disable=False)

@@ -1,67 +1,341 @@
-"""One logical UI session per key, and what happens when a second one opens.
-
-`Mount.lock_to` answers "who may click this"; nothing answered "how many of these may
-exist". This registry owns that operational policy: a key names the session, `WhenOpen`
-says what a second one does to the first, and `parent=` ties a mount spawned mid-handler to
-the mount that spawned it so closing the parent does not leave a clickable orphan behind.
-
-The layout core stays presentational; `squid_layouts.discord` is the operations layer. See
-`docs/plans/squid-layouts-redesign/24-session-registry-move.md` for that placement decision.
-Rejection wording remains with the host call site, so the registry stays testable against
-stub mounts and reusable across applications.
-"""
+"""Live Discord sessions, their attachment trees, and keyed cardinality policy."""
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Hashable, Iterator
+from collections.abc import AsyncIterator, Hashable, Iterator, Sequence
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from enum import Enum, auto
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Protocol
 
 import discord
 
-from squid_layouts.discord.delivery import DeliveryReceipt, Destination
+from squid_layouts.discord.access import Owner
+from squid_layouts.discord.delivery import Abandoned, Destination
 from squid_layouts.discord.mount import Mount
+from squid_layouts.runtime.component import Component
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class SessionKey:
-    """Shipped convention for identifying one logical UI session.
+class UserScope:
+    """A session scoped to one Discord user."""
 
-    `scope` is whatever the session is per: a guild for a settings panel or a resource for
-    an edit session. `None` means the session is user-global. Registry callers may use any
-    hashable key instead when their application has different scoping needs.
-    """
+    user_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class GuildScope:
+    """A session scoped to one Discord guild."""
+
+    guild_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class UserGuildScope:
+    """A session scoped to one user within one guild."""
+
+    user_id: int
+    guild_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class GlobalScope:
+    """A process-global session scope."""
+
+
+@dataclass(frozen=True, slots=True)
+class CustomScope:
+    """An application-defined stable, hashable scope."""
+
+    value: Hashable
+
+
+type SessionScope = UserScope | GuildScope | UserGuildScope | GlobalScope | CustomScope
+
+
+@dataclass(frozen=True, slots=True)
+class SessionKey:
+    """The conventional serializable spelling for a keyed logical session."""
 
     name: str
-    user_id: int
-    scope: int | None = None
+    scope: SessionScope
+
+    @classmethod
+    def user(cls, name: str, user_id: int) -> SessionKey:
+        return cls(name, UserScope(user_id))
+
+    @classmethod
+    def guild(cls, name: str, guild_id: int) -> SessionKey:
+        return cls(name, GuildScope(guild_id))
+
+    @classmethod
+    def user_guild(cls, name: str, user_id: int, guild_id: int) -> SessionKey:
+        return cls(name, UserGuildScope(user_id, guild_id))
+
+    @classmethod
+    def global_(cls, name: str) -> SessionKey:
+        return cls(name, GlobalScope())
+
+    @classmethod
+    def custom(cls, name: str, scope: Hashable) -> SessionKey:
+        return cls(name, CustomScope(scope))
 
 
-class WhenOpen(Enum):
-    """What opening a session does to the one already under its key."""
+class RejectionReason(Enum):
+    """Why a session request was refused before delivery."""
 
-    REPLACE = auto()
-    """Finish the incumbent and open the new one."""
-
-    REJECT = auto()
-    """Leave the incumbent alone and deliver nothing."""
+    COLLISION = "collision"
+    PROTECTED = "protected"
+    SESSION_FINISHED = "session_finished"
 
 
-@dataclass(slots=True)
-class _Entry:
-    mount: Mount
-    key: Hashable | None
+@dataclass(frozen=True, slots=True)
+class Opened:
+    """A session is live and registered."""
+
+    session: Session
 
 
-class MountRegistry:
-    """The live UI sessions this process owns, by key and by parent."""
+@dataclass(frozen=True, slots=True)
+class Rejected:
+    """Admission was refused without attempting delivery."""
+
+    occupants: tuple[Session, ...]
+    reason: RejectionReason
+
+
+type OpenResult = Opened | Rejected | Abandoned
+
+
+@dataclass(frozen=True, slots=True)
+class OpeningRequest:
+    """The context a collision or protection policy uses to judge replacement."""
+
+    key: Hashable
+    newcomer: Session
+    actor_id: int | None
+    required_victims: int
+
+
+@dataclass(frozen=True, slots=True)
+class Replace:
+    """Replace these exact occupants."""
+
+    victims: tuple[Session, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Refuse:
+    """Keep every occupant and decline the open."""
+
+    reason: RejectionReason = RejectionReason.COLLISION
+
+
+type CollisionDecision = Replace | Refuse
+
+
+class CollisionPolicy(Protocol):
+    """Select exact replacement victims when a key exceeds its session limit."""
+
+    def select(self, request: OpeningRequest, occupants: tuple[Session, ...]) -> CollisionDecision: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Reject:
+    """Reject any open that would exceed the key's limit."""
+
+    def select(self, request: OpeningRequest, occupants: tuple[Session, ...]) -> CollisionDecision:
+        return Refuse()
+
+
+@dataclass(frozen=True, slots=True)
+class ReplaceOldest:
+    """Retire the oldest occupants needed to admit the newcomer."""
+
+    def select(self, request: OpeningRequest, occupants: tuple[Session, ...]) -> CollisionDecision:
+        return Replace(occupants[: request.required_victims])
+
+
+class ReplacementProtection(Protocol):
+    """Decide whether one collision victim may be retired."""
+
+    def allows(self, request: OpeningRequest, victim: Session) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
+class ProtectCrossUserAttachments:
+    """Keep sessions that another participant or attachment actor is using."""
+
+    def allows(self, request: OpeningRequest, victim: Session) -> bool:
+        actor_id = request.actor_id
+        if actor_id is None:
+            return not victim.participants and not victim.attachment_actors
+        return not (victim.participants - {actor_id}) and not (victim.attachment_actors - {actor_id})
+
+
+@dataclass(frozen=True, slots=True)
+class Unprotected:
+    """Allow every collision-selected replacement."""
+
+    def allows(self, request: OpeningRequest, victim: Session) -> bool:
+        return True
+
+
+@dataclass(frozen=True, slots=True)
+class SessionPolicy:
+    """Cardinality, collision, and replacement protection for one open."""
+
+    limit: int | None = 1
+    collision: CollisionPolicy = field(default_factory=ReplaceOldest)
+    protect: ReplacementProtection = field(default_factory=ProtectCrossUserAttachments)
+
+    def __post_init__(self) -> None:
+        if self.limit is not None and self.limit <= 0:
+            message = "session limit must be positive or None"
+            raise ValueError(message)
+
+
+DEFAULT_SESSION_POLICY = SessionPolicy()
+
+
+class Session:
+    """One root mount and every child mount in its operational lifetime."""
+
+    def __init__(
+        self,
+        registry: SessionRegistry,
+        root: Mount,
+        *,
+        key: Hashable | None,
+        actor_id: int | None,
+    ) -> None:
+        self.key = key
+        self.root = root
+        self._registry = registry
+        self._mounts: list[Mount] = [root]
+        self._parent: dict[Mount, Mount | None] = {root: None}
+        self._actor: dict[Mount, int | None] = {root: actor_id}
+        self._participants = frozenset() if actor_id is None else frozenset({actor_id})
+        self._lifecycle_lock = asyncio.Lock()
+        self._finishing = False
+        self._closed = False
+
+    @property
+    def mounts(self) -> tuple[Mount, ...]:
+        """The root followed by attached mounts in registration order."""
+        return tuple(self._mounts)
+
+    @property
+    def participants(self) -> frozenset[int]:
+        """Operational actors already attributed to this session."""
+        return self._participants
+
+    @property
+    def attachment_actors(self) -> frozenset[int]:
+        """Actors attributed to non-root mounts, for replacement protection."""
+        return frozenset(actor for mount, actor in self._actor.items() if mount is not self.root and actor is not None)
+
+    async def attach(
+        self,
+        mount: Mount,
+        destination: Destination,
+        *,
+        actor_id: int | None = None,
+        parent: Mount | None = None,
+    ) -> OpenResult:
+        """Deliver and attach a child mount to this session."""
+        async with self._lifecycle_lock:
+            if self._closed or self.root.finished:
+                return Rejected((self,), RejectionReason.SESSION_FINISHED)
+            parent = self.root if parent is None else parent
+            if parent not in self._parent or parent.finished:
+                return Rejected((self,), RejectionReason.SESSION_FINISHED)
+            result = await mount.send(destination)
+            if isinstance(result, Abandoned):
+                return result
+            self._mounts.append(mount)
+            self._parent[mount] = parent
+            self._actor[mount] = actor_id
+            self._registry._index_mount(self, mount)
+            mount.on_finish(self._mount_finished)
+            return Opened(self)
+
+    async def finish(self, *, disable: bool = True) -> None:
+        """Finish every mount depth-first and unregister the session."""
+        async with self._lifecycle_lock:
+            if self._closed:
+                return
+            self._finishing = True
+            try:
+                await self._finish_mounts(self._depth_first(self.root), disable=disable)
+            finally:
+                self._registry._forget(self)
+                self._closed = True
+                self._finishing = False
+
+    def _activate(self) -> None:
+        self._registry._index_mount(self, self.root)
+        self.root.on_finish(self._mount_finished)
+
+    async def _mount_finished(self, mount: Mount) -> None:
+        if self._finishing or self._closed:
+            return
+        async with self._lifecycle_lock:
+            if self._finishing or self._closed or mount not in self._parent:
+                return
+            self._finishing = True
+            try:
+                if mount is self.root:
+                    descendants = tuple(
+                        candidate for candidate in self._depth_first(self.root) if candidate is not mount
+                    )
+                    await self._finish_mounts(descendants)
+                    self._registry._forget(self)
+                    self._closed = True
+                    return
+                branch = self._depth_first(mount)
+                await self._finish_mounts(tuple(candidate for candidate in branch if candidate is not mount))
+                self._detach(branch)
+            finally:
+                self._finishing = False
+
+    def _depth_first(self, root: Mount) -> tuple[Mount, ...]:
+        ordered: list[Mount] = []
+
+        def visit(parent: Mount) -> None:
+            for child in tuple(self._mounts):
+                if self._parent.get(child) is parent:
+                    visit(child)
+            ordered.append(parent)
+
+        visit(root)
+        return tuple(ordered)
+
+    async def _finish_mounts(self, mounts: Sequence[Mount], *, disable: bool = True) -> None:
+        for mount in mounts:
+            try:
+                await mount.finish(disable=disable)
+            except Exception:
+                logger.exception("could not finish mount %s in session %r", mount.id, self.key)
+
+    def _detach(self, branch: Sequence[Mount]) -> None:
+        for mount in branch:
+            self._registry._unindex_mount(self, mount)
+            self._parent.pop(mount, None)
+            self._actor.pop(mount, None)
+            if mount in self._mounts:
+                self._mounts.remove(mount)
+
+
+class SessionRegistry:
+    """The live logical sessions owned by this process."""
 
     def __init__(self) -> None:
-        self._by_key: dict[Hashable, _Entry] = {}
-        self._children: dict[Mount, list[_Entry]] = {}
+        self._by_key: dict[Hashable, list[Session]] = {}
+        self._by_mount: dict[Mount, Session] = {}
+        self._sessions: list[Session] = []
         self._locks: dict[Hashable, asyncio.Lock] = {}
         self._waiting: dict[Hashable, int] = {}
 
@@ -71,164 +345,111 @@ class MountRegistry:
         destination: Destination,
         *,
         key: Hashable | None = None,
-        policy: WhenOpen = WhenOpen.REPLACE,
-        parent: Mount | None = None,
-    ) -> Mount | None:
-        """Send `mount` through `destination` and register it as a session.
-
-        Returns:
-            The mount once it is live, or `None` when nothing was delivered. A `REJECT`
-            policy declines to open a second session, while a destination can independently
-            abandon delivery. Callers that need to distinguish those cases can check
-            `get(key)` before opening.
-
-        `policy` applies only when `key` is given. A keyless open still registers for parent
-        cascade and still sends; it simply has no instance limit.
-        """
+        policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+        actor_id: int | None = None,
+    ) -> OpenResult:
+        """Admit, deliver, and register one new root session."""
         if key is None:
-            return await self._deliver(mount, destination, key=None, parent=parent)
-        # Held across the send and the incumbent's finish: two invocations in flight would
-        # otherwise both see no incumbent and both survive.
+            return await self._open_locked(mount, destination, key=None, policy=policy, actor_id=actor_id)
         async with self._lock_for(key):
-            incumbent = self._by_key.get(key)
-            if incumbent is not None and incumbent.mount.finished:
-                # Defence in depth. `on_finish` clears entries from every terminal path, so
-                # this should be unreachable -- but a stale entry under REJECT would lock a
-                # caller out of the session for the process's lifetime.
-                logger.warning("session %s held a finished mount; discarding it", key)
-                self._forget(incumbent)
-                incumbent = None
-            if incumbent is not None and policy is WhenOpen.REJECT:
-                return None
-            opened = await self._deliver(mount, destination, key=key, parent=parent)
-            if opened is not None and incumbent is not None:
-                # Only now: a failed or abandoned send must leave the incumbent standing
-                # rather than costing the caller both panels.
-                await incumbent.mount.finish()
-            return opened
+            return await self._open_locked(mount, destination, key=key, policy=policy, actor_id=actor_id)
 
-    def get(self, key: Hashable) -> Mount | None:
-        """Return the mount currently holding `key`, if any."""
-        entry = self._by_key.get(key)
-        return None if entry is None else entry.mount
+    def get(self, key: Hashable) -> tuple[Session, ...]:
+        """Return every session currently occupying `key`, oldest first."""
+        return tuple(self._by_key.get(key, ()))
+
+    def session_for(self, mount: Mount) -> Session | None:
+        """Return the logical session that owns `mount`, if this registry knows it."""
+        return self._by_mount.get(mount)
 
     async def close(self, key: Hashable, *, disable: bool = True) -> None:
-        """Finish the session under `key`, if one is open."""
-        entry = self._by_key.get(key)
-        if entry is not None:
-            await entry.mount.finish(disable=disable)
+        """Finish every session under `key`."""
+        for session in self.get(key):
+            await session.finish(disable=disable)
 
     async def close_all(self, *, disable: bool = True) -> None:
-        """Finish every session this registry knows about.
-
-        One unreachable message must not leave the rest of them live: this commonly runs at
-        shutdown, where the alternative to a disabled panel is one that stays clickable and
-        answers nothing.
-        """
-        for _, mount in list(self.active()):
+        """Finish every session, isolating one teardown failure from the rest."""
+        for session in tuple(self._sessions):
             try:
-                await mount.finish(disable=disable)
+                await session.finish(disable=disable)
             except Exception:
-                logger.exception("could not close mount %s", mount.id)
+                logger.exception("could not close session %r", session.key)
 
-    def active(self) -> Iterator[tuple[Hashable | None, Mount]]:
-        """Yield every live session, keyed ones first and each mount at most once."""
-        seen: set[Mount] = set()
-        for entry in list(self._by_key.values()):
-            seen.add(entry.mount)
-            yield entry.key, entry.mount
-        for children in list(self._children.values()):
-            for child in list(children):
-                if child.mount not in seen:
-                    seen.add(child.mount)
-                    yield child.key, child.mount
+    def active(self) -> Iterator[Session]:
+        """Yield every live session in registration order."""
+        yield from tuple(self._sessions)
 
-    async def _deliver(
+    async def _open_locked(
         self,
         mount: Mount,
         destination: Destination,
         *,
         key: Hashable | None,
-        parent: Mount | None,
-    ) -> Mount | None:
-        """Send, and register only what actually reached Discord.
+        policy: SessionPolicy,
+        actor_id: int | None,
+    ) -> OpenResult:
+        occupants = () if key is None else self._live_occupants(key)
+        newcomer = Session(self, mount, key=key, actor_id=actor_id)
+        victims: tuple[Session, ...] = ()
+        if key is not None and policy.limit is not None and len(occupants) >= policy.limit:
+            required = len(occupants) + 1 - policy.limit
+            request = OpeningRequest(key, newcomer, actor_id, required)
+            decision = policy.collision.select(request, occupants)
+            if isinstance(decision, Refuse):
+                return Rejected(occupants, decision.reason)
+            victims = decision.victims
+            if (
+                len(victims) != required
+                or len(set(victims)) != len(victims)
+                or any(victim not in occupants for victim in victims)
+            ):
+                message = "collision policy must select the exact required occupants"
+                raise ValueError(message)
+            if any(not policy.protect.allows(request, victim) for victim in victims):
+                return Rejected(occupants, RejectionReason.PROTECTED)
 
-        `Mount.send` returns `None` for two different outcomes -- delivered without a handle,
-        and abandoned without delivering -- so the flag reads the one that matters. A
-        destination that abandons raises `DeliveryAbandoned`, which the mount swallows on its
-        way to returning `None`; setting the flag after the await is what separates them. A
-        destination that fails outright propagates and leaves the mount re-sendable.
-        """
-        delivered = False
+        result = await mount.send(destination)
+        if isinstance(result, Abandoned):
+            return result
 
-        async def watched(view: discord.ui.LayoutView, files: list[discord.File]) -> DeliveryReceipt:
-            nonlocal delivered
-            receipt = await destination(view, files)
-            delivered = True
-            return receipt
-
-        await mount.send(watched)
-        if not delivered:
-            logger.debug("session %s was not delivered; nothing registered", key)
-            return None
-
-        entry = _Entry(mount=mount, key=key)
+        self._sessions.append(newcomer)
         if key is not None:
-            self._by_key[key] = entry
+            self._by_key.setdefault(key, []).append(newcomer)
+        newcomer._activate()
+        for victim in victims:
+            await victim.finish()
+        return Opened(newcomer)
 
-        async def release(finished: Mount) -> None:
-            self._forget(entry)
+    def _live_occupants(self, key: Hashable) -> tuple[Session, ...]:
+        occupants = self._by_key.get(key, [])
+        for session in tuple(occupants):
+            if session.root.finished:
+                logger.warning("session %s held a finished root; discarding it", key)
+                self._forget(session)
+        return tuple(self._by_key.get(key, ()))
 
-        mount.on_finish(release)
-        if parent is not None:
-            await self._attach(parent, entry)
-        return mount
+    def _index_mount(self, session: Session, mount: Mount) -> None:
+        self._by_mount[mount] = session
 
-    def _forget(self, entry: _Entry) -> None:
-        """Drop `entry`'s key, if it still holds it.
+    def _unindex_mount(self, session: Session, mount: Mount) -> None:
+        if self._by_mount.get(mount) is session:
+            del self._by_mount[mount]
 
-        Identity-checked rather than deleted by key: `REPLACE` registers the newcomer before
-        awaiting the incumbent's finish, so the incumbent's own hook fires against a key that
-        already belongs to someone else.
-        """
-        if entry.key is None:
-            return
-        if self._by_key.get(entry.key) is entry:
-            del self._by_key[entry.key]
-
-    async def _attach(self, parent: Mount, child: _Entry) -> None:
-        """Tie `child`'s lifetime to `parent`.
-
-        `parent` need not be registered itself: a panel not using the registry is still a
-        perfectly good parent, and the hook is all the cascade needs.
-        """
-        if parent.finished:
-            # Nothing is left to wait for. A hook registered now would never fire, so the
-            # child would outlive a parent that is already gone.
-            await child.mount.finish()
-            return
-        children = self._children.get(parent)
-        if children is None:
-            children = self._children[parent] = []
-            parent.on_finish(self._cascade)
-        children.append(child)
-
-    async def _cascade(self, parent: Mount) -> None:
-        """Finish everything opened from inside `parent`, depth-first.
-
-        Grandchildren follow by induction: each child's own finish fires its own cascade, and
-        `Mount`'s finished guard terminates the recursion.
-        """
-        for child in self._children.pop(parent, ()):
-            try:
-                await child.mount.finish()
-            except Exception:
-                # One unreachable message must not strand its siblings.
-                logger.exception("could not finish a child mount of %s", parent.id)
+    def _forget(self, session: Session) -> None:
+        if session in self._sessions:
+            self._sessions.remove(session)
+        if session.key is not None:
+            occupants = self._by_key.get(session.key)
+            if occupants is not None and session in occupants:
+                occupants.remove(session)
+                if not occupants:
+                    del self._by_key[session.key]
+        for mount in session.mounts:
+            self._unindex_mount(session, mount)
 
     @asynccontextmanager
     async def _lock_for(self, key: Hashable) -> AsyncIterator[None]:
-        """Serialize opens on one key, keeping no lock for a key nobody is using."""
+        """Serialize opens on one key, keeping no idle lock objects."""
         lock = self._locks.get(key)
         if lock is None:
             lock = self._locks[key] = asyncio.Lock()
@@ -243,3 +464,25 @@ class MountRegistry:
             else:
                 del self._waiting[key]
                 del self._locks[key]
+
+
+async def open_personal(
+    sessions: SessionRegistry,
+    component: Component,
+    interaction: discord.Interaction,
+    *,
+    key: Hashable,
+    policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+    **mount_options: Any,
+) -> OpenResult:
+    """Open the common owner-only, ephemeral interaction session path."""
+    mount = Mount(component, access=Owner(interaction.user.id), **mount_options)
+    from squid_layouts.discord.delivery import respond_to
+
+    return await sessions.open(
+        mount,
+        respond_to(interaction, ephemeral=True),
+        key=key,
+        policy=policy,
+        actor_id=interaction.user.id,
+    )
