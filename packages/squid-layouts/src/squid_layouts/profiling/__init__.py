@@ -22,13 +22,21 @@ from squid_layouts.profiling.model import (
     TraceOutcome,
     TraceResult,
 )
-from squid_layouts.profiling.profiler import MemoryProfiler, NoOpProfiler, OperationRecorder, Profiler, SpanRecorder
+from squid_layouts.profiling.profiler import (
+    DetachedSpanRecorder,
+    MemoryProfiler,
+    NoOpProfiler,
+    OperationRecorder,
+    Profiler,
+    SpanRecorder,
+)
 
 __all__ = [
     "ActiveSpanSnapshot",
     "ActiveTraceSnapshot",
     "AggregateKey",
     "AttributeValue",
+    "DetachedSpanRecorder",
     "HistogramSnapshot",
     "MemoryProfiler",
     "NoOpProfiler",
