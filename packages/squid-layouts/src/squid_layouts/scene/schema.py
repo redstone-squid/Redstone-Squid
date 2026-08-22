@@ -59,6 +59,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                 for kind in (
                     "text",
                     "time",
+                    "file",
                     "separator",
                     "link",
                     "button",
@@ -90,6 +91,17 @@ SCENE_SCHEMA: dict[str, Any] = {
             "instant",
             "style",
             "prefix",
+        ),
+        "file": _node(
+            "file",
+            {
+                "asset_key": {"type": "string"},
+                "name": {"type": "string"},
+                "media_type": {"type": "string"},
+            },
+            "asset_key",
+            "name",
+            "media_type",
         ),
         "separator": _node(
             "separator",

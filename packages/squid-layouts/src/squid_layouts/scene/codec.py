@@ -13,6 +13,7 @@ from squid_layouts.scene.model import (
     SceneButton,
     SceneDocument,
     SceneExtension,
+    SceneFile,
     SceneGallery,
     SceneGalleryItem,
     SceneLink,
@@ -139,6 +140,8 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton)
             return {"kind": "text", "content": content, "dialect": dialect.value}
         case SceneTime(instant=instant, style=style, prefix=prefix):
             return {"kind": "time", "instant": instant, "style": style, "prefix": prefix}
+        case SceneFile(asset_key=asset_key, name=name, media_type=media_type):
+            return {"kind": "file", "asset_key": asset_key, "name": name, "media_type": media_type}
         case SceneSeparator(large=large, visible=visible):
             return {"kind": "separator", "large": large, "visible": visible}
         case SceneLink(label=label, url=url):
@@ -251,6 +254,12 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
                 _string(raw, "instant"),
                 _string(raw, "style"),
                 _optional_string(raw, "prefix"),
+            )
+        case "file":
+            return SceneFile(
+                _string(raw, "asset_key"),
+                _string(raw, "name"),
+                _string(raw, "media_type"),
             )
         case "separator":
             return SceneSeparator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))

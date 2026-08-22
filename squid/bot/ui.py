@@ -113,6 +113,7 @@ CHROME = ui.Chrome(
     close=L(t"Close"),
     on=L(t"On"),
     off=L(t"Off"),
+    download=L(t"Download"),
     confirm=L(t"Confirm"),
     cancel=L(t"Cancel"),
     decided=lambda label: L(t"You chose {label}.", label=label),

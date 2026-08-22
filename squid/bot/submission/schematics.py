@@ -17,7 +17,7 @@ from discord.ext.commands import Context
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
-from squid.bot.ui import render_static
+from squid.bot.ui import render_static, send_component
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import requires
@@ -48,6 +48,16 @@ WRITABLE_EXTENSIONS = {
 }
 """The formats the engine can write. Legacy `.schematic` and structure `.nbt` are read-only, so
 they are accepted as uploads but never offered as a download target."""
+
+
+class _DownloadDocument(sl.Component):
+    def __init__(self, label: sl.TextLike, asset: sl.Asset, *, description: sl.TextLike | None = None) -> None:
+        self.label = label
+        self.asset = asset
+        self.description = description
+
+    def render(self) -> sl.LayoutNode:
+        return sl.download(self.label, self.asset, key="download", description=self.description)
 
 
 class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
@@ -115,9 +125,14 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             return
 
         data, _losses = await self.schematics.convert(build_id, ConvertRequest(target_format=file_format))
-        await ctx.send(
-            file=discord.File(io.BytesIO(data), filename=f"build-{build_id}.{WRITABLE_EXTENSIONS[file_format]}"),
-            allowed_mentions=no_mentions(),
+        name = f"build-{build_id}.{WRITABLE_EXTENSIONS[file_format]}"
+        await send_component(
+            ctx,
+            _DownloadDocument(
+                t(locale, _("Download schematic")),
+                sl.Asset("schematic", name, "application/octet-stream", sl.InlineAsset(data)),
+            ),
+            locale=locale,
         )
 
     @autocompletes(build_id="builds")
@@ -188,10 +203,19 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             ConvertRequest(target_format=SchematicFormat.LITEMATIC, target_data_version=data_version),
             version_label=version,
         )
-        await ctx.send(
-            view=text_layout(f"{t(locale, _('Conversion report:'))}\n{summarise_losses(losses)}"),
-            file=discord.File(io.BytesIO(data), filename=f"build-{build_id}-converted.litematic"),
-            allowed_mentions=no_mentions(),
+        await send_component(
+            ctx,
+            _DownloadDocument(
+                t(locale, _("Download converted schematic")),
+                sl.Asset(
+                    "schematic",
+                    f"build-{build_id}-converted.litematic",
+                    "application/octet-stream",
+                    sl.InlineAsset(data),
+                ),
+                description=f"{t(locale, _('Conversion report:'))} {summarise_losses(losses)}",
+            ),
+            locale=locale,
         )
 
     @autocompletes(build_id="builds")
