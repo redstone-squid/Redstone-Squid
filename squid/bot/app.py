@@ -25,7 +25,6 @@ from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.mount_registry import MountRegistry
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -50,6 +49,7 @@ from squid.runtime import (
     start_log_capture,
     start_permission_epoch_watch,
 )
+from squid_layouts.discord import MountRegistry
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]

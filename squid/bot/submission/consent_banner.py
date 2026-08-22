@@ -13,9 +13,9 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
 from squid.bot.ui import CardField, render_static
 from squid.bot.utils.components import no_mentions, reply_layout, text_layout
-from squid.bot.utils.mount_registry import SessionKey, WhenOpen
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
+from squid_layouts.discord import SessionKey, WhenOpen
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
