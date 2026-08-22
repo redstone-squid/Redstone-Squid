@@ -24,6 +24,8 @@ def test_root_is_semantic_first() -> None:
         "TimeField",
         "Timestamp",
         "TimeStyle",
+        "ZonedDateTime",
+        "ZonedDateTimeField",
         "timestamp",
     } <= set(sl.__all__)
     assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
