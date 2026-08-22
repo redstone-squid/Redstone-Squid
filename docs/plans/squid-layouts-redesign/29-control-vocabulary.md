@@ -341,13 +341,30 @@ class DateTimeField(FormField[datetime]):
     minimum: datetime | None = None
     maximum: datetime | None = None
     placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
 ```
 
 Parsing uses `time.fromisoformat` and `datetime.fromisoformat` (including a space separator),
-with existing “Enter a …” errors and inclusive bounds. A naive submitted datetime receives
-the field timezone; returned values are always aware. Prefill uses ISO format. Short aliases
-are `Time` and `DateTime`. The timezone belongs on the field so the host can supply the
-guild/user zone; a form never returns a naive datetime.
+with existing “Enter a …” errors and inclusive instant bounds. A naive submitted datetime is
+resolved in the field timezone; returned values are always aware. UTC, fixed-offset zones, and
+ordinary regional-zone times have one result. Regional-zone overlaps and gaps use separate
+strict-by-default policies:
+
+- `AmbiguousTimePolicy.REJECT | EARLIER | LATER` rejects a repeated wall time or selects its
+  chronologically earlier or later instant.
+- `NonexistentTimePolicy.REJECT | SHIFT_FORWARD` rejects a skipped wall time or moves it by the
+  transition gap, preserving its position within that gap (`02:30` becomes `03:30` across a
+  one-hour jump).
+
+The split follows Noda Time's composable overlap/gap model rather than Temporal's single
+`compatible | earlier | later | reject` option: authors can resolve an overlap while still
+rejecting nonexistent reader input, and `earlier` never acquires the surprising second meaning
+of shifting a skipped time backwards. Boundary snapping and backwards shifting remain deferred
+until a consumer needs them. Explicitly offset input already identifies an instant and bypasses
+the local-time policies; the field timezone is only the interpretation context for naive input.
+Prefill uses ISO format. Short aliases are `Time` and `DateTime`. The timezone belongs on the
+field so the host can supply the guild/user zone; a form never returns a naive datetime.
 
 Consumers: poll deadlines and close-time display, claims/account timestamps, and diagnostics
 uptime.
