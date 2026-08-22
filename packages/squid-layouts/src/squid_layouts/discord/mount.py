@@ -272,7 +272,7 @@ class MountSnapshot:
     age: float
     """Seconds since the mount was constructed."""
     idle: float
-    """Seconds since the last render or click — what the timeout actually counts."""
+    """Seconds since the initial send or last accepted click — what the timeout counts."""
     expires_in: float | None
     """Seconds of idle timeout left, or `None` for a mount that never times out."""
     lock_to: frozenset[int] | None
@@ -796,7 +796,6 @@ class Mount:
         await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=rebase)
 
     async def _begin_dispatch(self, interaction: discord.Interaction) -> bool:
-        self._active = self.clock()
         # A mount sent through an unwaited interaction response never saw its own message; the
         # click is where it finally learns where it lives.
         self._note_address(interaction.message)
@@ -812,6 +811,7 @@ class Mount:
             text = resolve_text(self.chrome.not_yours, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
             return False
+        self._active = self.clock()
         if self.status is not None:
             self.status = None
             self.invalidate()
