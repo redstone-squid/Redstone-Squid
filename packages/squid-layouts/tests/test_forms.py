@@ -356,7 +356,7 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
 
     result = sl.plan(sl.form(spec, key="edit", label="Edit", on_submit=_submitted), target=target)
 
-    row = result.scene.children[0]
+    row = result.scene.components_v2.children[0]
     assert isinstance(row, SceneRow)
     assert isinstance(row.items[0], SceneButton)
     assert row.items[0].action == "edit"
@@ -394,7 +394,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
 
     result = sl.plan(sl.form(spec, key="native", on_submit=_submitted), target=target)
 
-    assert isinstance(result.scene.children[0], SceneRow)
+    assert isinstance(result.scene.components_v2.children[0], SceneRow)
 
 
 @dataclass(frozen=True, slots=True)

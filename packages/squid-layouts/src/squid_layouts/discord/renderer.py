@@ -226,7 +226,7 @@ class Renderer:
                 case SceneExtension():
                     return extension(node)
 
-        for child in scene.children:
+        for child in scene.components_v2.children:
             view.add_item(item(child))
 
         if self.audit:

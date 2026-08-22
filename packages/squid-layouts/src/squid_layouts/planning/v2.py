@@ -50,6 +50,7 @@ from squid_layouts.primitives.nodes import (
 )
 from squid_layouts.scene.model import (
     SceneButton,
+    SceneComponentsV2,
     SceneExtension,
     SceneFile,
     SceneGallery,
@@ -372,8 +373,8 @@ class V2Dialect:
     ) -> tuple[MeasuredLayout, int]:
         return _paginate_v2(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)
 
-    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> tuple[SceneNode, ...]:
-        return _V2Converter(bindings).children(children)
+    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> SceneComponentsV2:
+        return SceneComponentsV2(_V2Converter(bindings).children(children))
 
 
 V2_DIALECT = V2Dialect()

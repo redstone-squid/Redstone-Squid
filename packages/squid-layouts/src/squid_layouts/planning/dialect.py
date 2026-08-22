@@ -39,6 +39,7 @@ from squid_layouts.primitives.nodes import (
     Thumbnail,
 )
 from squid_layouts.scene.model import (
+    SceneBody,
     SceneButton,
     SceneExtension,
     SceneLink,
@@ -141,6 +142,6 @@ class TargetDialect(Protocol):
         """Split an over-budget document into the fewest lossless pages this target allows."""
         ...
 
-    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> object:
+    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> SceneBody:
         """Build the exact scene body a renderer for this target will draw."""
         ...

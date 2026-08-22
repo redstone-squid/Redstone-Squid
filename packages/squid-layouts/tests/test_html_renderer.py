@@ -10,6 +10,7 @@ from squid_layouts.html import Renderer
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     SceneButton,
+    SceneComponentsV2,
     SceneDocument,
     SceneGallery,
     SceneGalleryItem,
@@ -28,18 +29,20 @@ def _scene() -> SceneDocument:
         protocol=SceneCodec.protocol,
         target="discord.components-v2",
         target_version=1,
-        children=(
-            ScenePanel(
-                (
-                    SceneText("<script>alert(1)</script>"),
-                    SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
-                    SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
-                    SceneRow((SceneButton("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
-                    SceneSelect((SceneOption("One", "1"),), "form.choice"),
-                    SceneGallery((SceneGalleryItem("https://example.invalid/image.png", "preview"),)),
+        body=SceneComponentsV2(
+            (
+                ScenePanel(
+                    (
+                        SceneText("<script>alert(1)</script>"),
+                        SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
+                        SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
+                        SceneRow((SceneButton("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
+                        SceneSelect((SceneOption("One", "1"),), "form.choice"),
+                        SceneGallery((SceneGalleryItem("https://example.invalid/image.png", "preview"),)),
+                    ),
+                    accent=0x5865F2,
                 ),
-                accent=0x5865F2,
-            ),
+            )
         ),
     )
 

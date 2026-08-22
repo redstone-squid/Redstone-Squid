@@ -4,14 +4,24 @@ import hashlib
 import json
 from collections.abc import Mapping
 from copy import deepcopy
-from typing import Any
+from typing import Any, cast
 
 from squid_layouts.actions import ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.model import (
     SceneAsset,
+    SceneBody,
     SceneButton,
+    SceneClassicMessage,
+    SceneClassicRow,
+    SceneComponentsV2,
+    SceneControl,
     SceneDocument,
+    SceneEmbed,
+    SceneEmbedAuthor,
+    SceneEmbedField,
+    SceneEmbedFooter,
+    SceneEmbedMedia,
     SceneExtension,
     SceneFile,
     SceneGallery,
@@ -83,7 +93,7 @@ class SceneCodec:
             "protocol": scene.protocol,
             "target": scene.target,
             "target_version": scene.target_version,
-            "children": [_node_to_dict(child) for child in scene.children],
+            "body": _body_to_dict(scene.body),
             "assets": [
                 {"key": asset.key, "name": asset.name, "media_type": asset.media_type} for asset in scene.assets
             ],
@@ -104,17 +114,16 @@ class SceneCodec:
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
             raise SceneCodecError(msg)
-        children = raw.get("children")
         assets = raw.get("assets", [])
         pagers = raw.get("pagers", [])
-        if not isinstance(children, list) or not isinstance(assets, list) or not isinstance(pagers, list):
-            msg = "scene children, assets, and pagers must be arrays"
+        if not isinstance(assets, list) or not isinstance(pagers, list):
+            msg = "scene assets and pagers must be arrays"
             raise SceneCodecError(msg)
         return SceneDocument(
             protocol=protocol,
             target=_string(raw, "target"),
             target_version=_integer(raw, "target_version"),
-            children=tuple(_node_from_dict(_object(child)) for child in children),
+            body=_body_from_dict(_object(raw.get("body"))),
             assets=tuple(
                 SceneAsset(
                     key=_string(_object(asset), "key"),
@@ -133,6 +142,136 @@ class SceneCodec:
                 for pager in pagers
             ),
         )
+
+
+def _body_to_dict(body: SceneBody) -> dict[str, Any]:
+    match body:
+        case SceneComponentsV2(children=children):
+            return {"kind": "components_v2", "children": [_node_to_dict(child) for child in children]}
+        case SceneClassicMessage(content=content, embeds=embeds, rows=rows):
+            return {
+                "kind": "classic_message",
+                "content": content,
+                "embeds": [_embed_to_dict(embed) for embed in embeds],
+                "rows": [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows],
+            }
+
+
+def _body_from_dict(raw: Mapping[str, Any]) -> SceneBody:
+    kind = _string(raw, "kind")
+    match kind:
+        case "components_v2":
+            children = raw.get("children")
+            if not isinstance(children, list):
+                msg = "components_v2 children must be an array"
+                raise SceneCodecError(msg)
+            return SceneComponentsV2(tuple(_node_from_dict(_object(child)) for child in children))
+        case "classic_message":
+            embeds = raw.get("embeds")
+            rows = raw.get("rows")
+            if not isinstance(embeds, list) or not isinstance(rows, list):
+                msg = "classic_message embeds and rows must be arrays"
+                raise SceneCodecError(msg)
+            return SceneClassicMessage(
+                content=_optional_string(raw, "content"),
+                embeds=tuple(_embed_from_dict(_object(embed)) for embed in embeds),
+                rows=tuple(_row_from_dict(_object(row)) for row in rows),
+            )
+        case _:
+            msg = f"unknown scene body kind {kind!r}"
+            raise SceneCodecError(msg)
+
+
+def _row_from_dict(raw: Mapping[str, Any]) -> SceneClassicRow:
+    controls = raw.get("controls")
+    if not isinstance(controls, list):
+        msg = "classic row controls must be an array"
+        raise SceneCodecError(msg)
+    decoded = tuple(_node_from_dict(_object(control)) for control in controls)
+    if not all(
+        isinstance(
+            control, SceneLink | SceneButton | SceneRoutedButton | SceneSelect | SceneRoutedSelect | SceneExtension
+        )
+        for control in decoded
+    ):
+        msg = "classic row contains an unsupported control"
+        raise SceneCodecError(msg)
+    return SceneClassicRow(cast(tuple[SceneControl, ...], decoded))
+
+
+def _embed_to_dict(embed: SceneEmbed) -> dict[str, Any]:
+    return {
+        "title": embed.title,
+        "url": embed.url,
+        "description": embed.description,
+        "fields": [{"name": field.name, "value": field.value, "inline": field.inline} for field in embed.fields],
+        "footer": None if embed.footer is None else {"text": embed.footer.text, "icon_url": embed.footer.icon_url},
+        "author": (
+            None
+            if embed.author is None
+            else {"name": embed.author.name, "url": embed.author.url, "icon_url": embed.author.icon_url}
+        ),
+        "colour": embed.colour,
+        "image": _media_to_dict(embed.image),
+        "thumbnail": _media_to_dict(embed.thumbnail),
+        "timestamp": embed.timestamp,
+    }
+
+
+def _media_to_dict(media: SceneEmbedMedia | None) -> dict[str, Any] | None:
+    return None if media is None else {"url": media.url, "description": media.description}
+
+
+def _embed_from_dict(raw: Mapping[str, Any]) -> SceneEmbed:
+    fields = raw.get("fields")
+    if not isinstance(fields, list):
+        msg = "embed fields must be an array"
+        raise SceneCodecError(msg)
+    colour = raw.get("colour")
+    if not (colour is None or (isinstance(colour, int) and not isinstance(colour, bool))):
+        msg = "embed colour must be an integer or null"
+        raise SceneCodecError(msg)
+    footer = raw.get("footer")
+    author = raw.get("author")
+    return SceneEmbed(
+        title=_optional_string(raw, "title"),
+        url=_optional_string(raw, "url"),
+        description=_optional_string(raw, "description"),
+        fields=tuple(
+            SceneEmbedField(
+                name=_string(_object(field), "name"),
+                value=_string(_object(field), "value"),
+                inline=_boolean(_object(field), "inline"),
+            )
+            for field in fields
+        ),
+        footer=(
+            None
+            if footer is None
+            else SceneEmbedFooter(
+                text=_string(_object(footer), "text"), icon_url=_optional_string(_object(footer), "icon_url")
+            )
+        ),
+        author=(
+            None
+            if author is None
+            else SceneEmbedAuthor(
+                name=_string(_object(author), "name"),
+                url=_optional_string(_object(author), "url"),
+                icon_url=_optional_string(_object(author), "icon_url"),
+            )
+        ),
+        colour=colour,
+        image=_media_from_dict(raw.get("image")),
+        thumbnail=_media_from_dict(raw.get("thumbnail")),
+        timestamp=_optional_string(raw, "timestamp"),
+    )
+
+
+def _media_from_dict(raw: Any) -> SceneEmbedMedia | None:
+    if raw is None:
+        return None
+    return SceneEmbedMedia(url=_string(_object(raw), "url"), description=_optional_string(_object(raw), "description"))
 
 
 def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton) -> dict[str, Any]:

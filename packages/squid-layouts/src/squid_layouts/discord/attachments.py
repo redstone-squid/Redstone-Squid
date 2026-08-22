@@ -12,12 +12,31 @@ from urllib.parse import urlsplit
 import discord
 
 from squid_layouts.assets import Asset, InlineAsset, StoredAsset
-from squid_layouts.scene.model import PlanResult, SceneFile, SceneNode, ScenePanel
+from squid_layouts.scene.model import (
+    PlanResult,
+    SceneClassicMessage,
+    SceneComponentsV2,
+    SceneDocument,
+    SceneFile,
+    SceneNode,
+    ScenePanel,
+)
+
+
+def scene_nodes(scene: SceneDocument) -> tuple[SceneNode, ...]:
+    """Every drawable node in a scene, whichever kind of message it resolved to."""
+    match scene.body:
+        case SceneComponentsV2(children=children):
+            return children
+        case SceneClassicMessage(rows=rows):
+            # A classic body's text lives in embeds, which cannot reference a file; only its
+            # controls can carry a link, and only rows hold controls.
+            return tuple(control for row in rows for control in row.controls)
 
 
 def attachment_assets(plan: PlanResult) -> tuple[Asset, ...]:
     """The assets a plan expects to be uploaded, excluding ones already served by URL."""
-    linked = linked_file_assets(plan.scene.children, plan.resources)
+    linked = linked_file_assets(scene_nodes(plan.scene), plan.resources)
     return tuple(
         asset
         for scene_asset in plan.scene.assets

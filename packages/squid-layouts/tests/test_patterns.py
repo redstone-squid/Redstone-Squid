@@ -94,14 +94,14 @@ def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
 
     rendered = sl.RouterShell(route).render(small, small.initial_state)
     scene = sl.plan(rendered, target=sl.discord.DEFAULT_TARGET).scene
-    buttons = [item for row in scene.children if hasattr(row, "items") for item in row.items]
+    buttons = [item for row in scene.components_v2.children if hasattr(row, "items") for item in row.items]
     assert all(isinstance(item, SceneRoutedButton) for item in buttons)
     assert routes[-1] == sl.PatternRoute("select:two", sl.TabsState("two"), "next")
 
     many = sl.Tabs([sl.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
     routed = sl.RouterShell(route).render(many, many.initial_state)
     routed_scene = sl.plan(routed, target=sl.discord.DEFAULT_TARGET).scene
-    assert isinstance(routed_scene.children[0], SceneRoutedSelect)
+    assert isinstance(routed_scene.components_v2.children[0], SceneRoutedSelect)
     assert routes[-1] == sl.PatternRoute("select", sl.TabsState("0"), "input")
 
 
