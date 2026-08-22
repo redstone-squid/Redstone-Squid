@@ -34,7 +34,7 @@ class Panel(Component):
     history: History = history(limit=3)
     channel: int | None = state(None)
     page: int = state(1)
-    build: object = state(None, copy="ref")
+    build: object = state(None, opaque=True)
 
     def __init__(self, world: World) -> None:
         self.world = world

@@ -123,6 +123,7 @@ from squid_layouts.forms import (
     UploadedFile,
     ZonedDateTimeField,
 )
+from squid_layouts.frozen import FrozenMapping
 from squid_layouts.guards import (
     ADMIT,
     Guard,
@@ -192,6 +193,7 @@ from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
 from squid_layouts.runtime.reactivity import (
     ActionParticipant,
+    MutableStateError,
     ReactiveWriteError,
     StateDelta,
     UndeclaredStateError,
@@ -452,6 +454,7 @@ __all__ = [
     "FormTrigger",
     "FormValidationPolicy",
     "FormValueError",
+    "FrozenMapping",
     "Group",
     "Guard",
     "GuardLedger",
@@ -495,6 +498,7 @@ __all__ = [
     "MultiChoiceGroup",
     "MultiChoicePanel",
     "MultiChoiceState",
+    "MutableStateError",
     "NavOwnership",
     "NavigateEvent",
     "Navigation",

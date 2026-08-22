@@ -19,6 +19,7 @@ from squid_layouts.runtime.presentation import (
 )
 from squid_layouts.runtime.reactivity import (
     ActionParticipant,
+    MutableStateError,
     ReactiveWriteError,
     StateChange,
     StateDelta,
@@ -67,6 +68,7 @@ __all__ = [
     "History",
     "HistoryEntry",
     "HistoryError",
+    "MutableStateError",
     "Pending",
     "PresentationSession",
     "ReactiveWriteError",

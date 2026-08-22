@@ -484,7 +484,7 @@ class SubmissionFormComponent(sl.Component):
     closed: bool = sl.state(default=False)
     # The draft this workspace edits. Held by reference: the modals mutate it through their
     # own reference, so the handlers report that with mutated("build").
-    build: BuildDraft = sl.state(copy="ref")
+    build: BuildDraft = sl.state(opaque=True)
 
     def __init__(
         self,
@@ -1000,8 +1000,8 @@ class BuildEditComponent(sl.Component):
     locale: str | None = sl.state(None, persist=False)
     # Both are large object graphs the editor replaces wholesale, so they snapshot by reference:
     # assignment rolls back, in-place mutation of the Build does not.
-    build: Build = sl.state(copy="ref")
-    _node: sl.LayoutNode | None = sl.state(None, copy="ref")
+    build: Build = sl.state(opaque=True)
+    _node: sl.LayoutNode | None = sl.state(None, opaque=True)
 
     def __init__(
         self,

@@ -111,6 +111,14 @@ The check is skipped for it and the promise sits at the declaration where a read
 see it. The concept survives the rename because it is now the only escape hatch there is;
 what it stops meaning is a copying strategy, since no snapshot copies anything any more.
 
+**A mapping needs a container the check accepts.** `MappingProxyType` is the package's
+existing immutable-mapping idiom and it is read-only rather than immutable: it hashes not at
+all, and whoever still holds the dict underneath can rewrite it. `sl.FrozenMapping`
+(`frozen.py`) is a `Mapping` that copies its entries once and caches its own hash, so a
+mapping can be state. `Editor`'s committed section values and the bot's channel-settings
+field are the in-tree cases; both were mappings in state already, one behind a proxy and one
+mutated in place.
+
 ### 2. Reads are tracked
 
 A read records itself with whatever is currently consuming — a computed being evaluated, or
@@ -257,8 +265,14 @@ Small, because the counts in *Problem* say it is.
 
 - **4 `depends=` sites** lose the argument: `patterns/source_ranked.py:84`,
   `patterns/browser.py:85`, `patterns/lookup.py:90`, `squid/bot/layout_showcase.py:144`.
-- **2 in-place mutations**, both in `tests/test_mount.py` (148, 1304), become replacement.
-- **12 `copy="ref"` sites** become `opaque=True`.
+- **In-place mutations become replacement.** `tests/test_mount.py` (148, 1304, 1894),
+  `tests/test_durability.py:167`, and -- missed by the original count, which read only the
+  package -- `squid/bot/settings_view.py:398`, which becomes a `FrozenMapping` replacement.
+- **14 `copy="ref"` sites** become `opaque=True`: 5 in `patterns/`, 5 in `squid/bot/`, 4 in
+  the tests.
+- **3 mutable state declarations** become tuples: `tests/test_mount.py` (132, 1297, 1885) and
+  `tests/test_durability.py:25`. The original count of 0 was taken over `patterns/` and
+  `squid/`, which are indeed clean; the tests are not.
 - **2 strict-mode sites**: the autouse fixture in `tests/conftest.py` is deleted rather than
   inverted, and `tests/test_transactions.py` loses the warning-path case at 71 while keeping
   the raising cases at 66 and 93.
