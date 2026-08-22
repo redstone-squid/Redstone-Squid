@@ -32,6 +32,16 @@ from squid_layouts.runtime.reactivity import (
     strict_state,
     transaction,
 )
+from squid_layouts.runtime.resources import (
+    Failed,
+    Pending,
+    Ready,
+    Resource,
+    ResourceDelivery,
+    ResourceNotReadyError,
+    ResourceState,
+    resource,
+)
 
 
 def __getattr__(name: str):
@@ -50,11 +60,18 @@ __all__ = [
     "CursorState",
     "CursorUpdate",
     "DisclosureState",
+    "Failed",
     "History",
     "HistoryEntry",
     "HistoryError",
+    "Pending",
     "PresentationSession",
     "ReactiveWriteError",
+    "Ready",
+    "Resource",
+    "ResourceDelivery",
+    "ResourceNotReadyError",
+    "ResourceState",
     "SelectionState",
     "SessionUpdate",
     "StateChange",
@@ -72,6 +89,7 @@ __all__ = [
     "history",
     "history_actions",
     "on_action_commit",
+    "resource",
     "restore_state",
     "state",
     "strict_state",
