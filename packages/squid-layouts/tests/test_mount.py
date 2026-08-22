@@ -1,5 +1,6 @@
 """Reactive core tests: state, dispatch funnel, flush, lifecycle."""
 
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
@@ -14,6 +15,8 @@ from squid_layouts import (
     Asset,
     Component,
     Document,
+    FormField,
+    FormSpec,
     InlineAsset,
     LayoutInvariantError,
     LayoutNode,
@@ -631,6 +634,25 @@ class TestErrors:
         (_interaction, error, source), _ = hook.await_args
         assert isinstance(error, RuntimeError)
         assert source == "handler:x"
+
+    async def test_a_field_parser_bug_reaches_the_error_hook(self):
+        """A bug in `parse` is not a validation error, so it must not read as one."""
+
+        @dataclass(frozen=True, slots=True)
+        class Broken(FormField[str]):
+            def parse(self, raw: object) -> str | None:
+                return raw.no_such_attribute  # type: ignore[attr-defined]
+
+        spec = FormSpec("Broken", (Broken(key="broken", label="Broken"),))
+        hook = AsyncMock()
+        mount = Mount(Component(), timeout=None, on_error=hook)
+
+        await mount.dispatch_submit("f", fake_interaction(), spec, {"broken": "x"}, AsyncMock())
+
+        assert hook.await_args is not None
+        (_interaction, error, source), _ = hook.await_args
+        assert isinstance(error, AttributeError)
+        assert source == "form:f"
 
     async def test_failed_handler_rolls_back_all_state_changes(self):
         class Boom(Component):

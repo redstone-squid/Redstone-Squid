@@ -24,6 +24,7 @@ from squid_layouts.forms import (
     FloatField,
     FormField,
     FormSpec,
+    FormValueError,
     IntField,
     TextAreaField,
     TextField,
@@ -61,7 +62,7 @@ class EntityField(ExtensionField[object]):
         if not values:
             if self.required:
                 message = "This field is required."
-                raise ValueError(message)
+                raise FormValueError(message)
             return None if self.maximum == 1 else ()
         return values[0] if self.maximum == 1 else values
 
@@ -79,7 +80,7 @@ class FileField(ExtensionField[object]):
         if not values:
             if self.required:
                 message = "This field is required."
-                raise ValueError(message)
+                raise FormValueError(message)
             return None if self.maximum == 1 else ()
         return values[0] if self.maximum == 1 else values
 
