@@ -461,7 +461,6 @@ class _Search:
     localization: Localization
     palette: Palette
     presentation: PresentationSession
-    reservation: ResourceCost
     positions: Mapping[str, Position] | None
     nav: PlannedNav | None
 
@@ -505,7 +504,6 @@ class _Search:
             resolve_variants(lowered, variants),
             limits=self.limits,
             chrome=self.chrome,
-            reserved_text=self.reservation.get("display_text"),
             nav=self.nav,
         )
         structural = _fallback_profile(decisions.fallbacks, fallbacks).merged(variant_profile(lowered, variants))
@@ -725,6 +723,8 @@ def plan(
         message = "planner search budget must be positive"
         raise ValueError(message)
     document = as_document(rendered)
+    # Every axis is withheld the same way: by planning against a smaller target.
+    target = target.reserve(reservation)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
@@ -786,7 +786,6 @@ def plan(
             localization=localization,
             palette=palette,
             presentation=presentation,
-            reservation=reservation,
             positions=positions,
             nav=nav,
         ),
@@ -822,7 +821,6 @@ def plan(
             key=document.key,
             target_limits=limits,
             chrome=chrome,
-            reserved_text=reservation.get("display_text"),
             nav=nav,
             broker=broker,
         )
@@ -928,7 +926,6 @@ def _root_paginate(
     key: str,
     target_limits: V2Limits,
     chrome: Chrome,
-    reserved_text: int,
     nav: PlannedNav,
     broker: CursorCoordinator,
 ) -> tuple[MeasuredLayout, int]:
@@ -944,7 +941,6 @@ def _root_paginate(
             limits=target_limits,
             chrome=chrome,
             strict=False,
-            reserved_text=reserved_text,
             nav=nav,
         )
 
