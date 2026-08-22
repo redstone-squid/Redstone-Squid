@@ -37,7 +37,7 @@ class TraceId:
 
     def __post_init__(self) -> None:
         if len(self.value) != 16 or not any(self.value):
-            message = "trace IDs must contain 16 non-zero bytes"
+            message = "trace IDs must contain 16 bytes and cannot be all zero"
             raise ValueError(message)
 
     def __str__(self) -> str:
@@ -52,7 +52,7 @@ class SpanId:
 
     def __post_init__(self) -> None:
         if len(self.value) != 8 or not any(self.value):
-            message = "span IDs must contain 8 non-zero bytes"
+            message = "span IDs must contain 8 bytes and cannot be all zero"
             raise ValueError(message)
 
     def __str__(self) -> str:
@@ -169,9 +169,9 @@ class HistogramSnapshot:
 class AggregateKey:
     """Bounded low-cardinality identity for an operation aggregate."""
 
-    operation: OperationKind
+    operation: OperationKind | None
     name: str
-    outcome: TraceOutcome
+    outcome: TraceOutcome | None
     detail: str | None
 
 
@@ -180,6 +180,25 @@ class OperationAggregate:
     """Lifetime and recent-window latency for one aggregate key."""
 
     key: AggregateKey
+    lifetime: HistogramSnapshot
+    window: HistogramSnapshot
+
+
+@dataclass(frozen=True, slots=True)
+class SpanAggregateKey:
+    """Bounded low-cardinality identity for a span aggregate."""
+
+    operation: OperationKind | None
+    operation_name: str
+    span_name: str
+    outcome: TraceOutcome | None
+
+
+@dataclass(frozen=True, slots=True)
+class SpanAggregate:
+    """Lifetime and recent-window latency for one span key."""
+
+    key: SpanAggregateKey
     lifetime: HistogramSnapshot
     window: HistogramSnapshot
 
@@ -194,6 +213,7 @@ class ProfilerHealth:
     retained_failed: int
     retained_deadline_misses: int
     sampled_out: int
+    dropped_traces: int
     evicted: int
     rejected_attributes: int
     internal_failures: int
@@ -215,4 +235,5 @@ class RuntimeSnapshot:
     failed: tuple[RuntimeTrace, ...]
     deadline_misses: tuple[RuntimeTrace, ...]
     aggregates: tuple[OperationAggregate, ...]
+    span_aggregates: tuple[SpanAggregate, ...]
     health: ProfilerHealth
