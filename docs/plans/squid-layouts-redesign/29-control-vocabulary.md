@@ -366,6 +366,48 @@ the local-time policies; the field timezone is only the interpretation context f
 Prefill uses ISO format. Short aliases are `Time` and `DateTime`. The timezone belongs on the
 field so the host can supply the guild/user zone; a form never returns a naive datetime.
 
+That instant-only contract remains useful but does not preserve a named zone. The portable
+zoned value makes the distinction explicit:
+
+```python
+@dataclass(frozen=True, slots=True)
+class ZonedDateTime:
+    instant: datetime  # aware and normalized to UTC
+    timezone: str      # validated IANA key
+
+    @property
+    def local(self) -> datetime: ...
+
+    def isoformat(self) -> str: ...
+
+@dataclass(frozen=True, slots=True)
+class ZonedDateTimeField(FormField[ZonedDateTime]):
+    timezone: str = "UTC"
+    minimum: datetime | None = None
+    maximum: datetime | None = None
+    placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
+```
+
+The field's author-configured zone is visible beside the input and is part of the returned
+value. Naive input uses the overlap/gap policies above. An explicit offset must be valid for
+that wall time in the configured zone; in an overlap it selects the exact occurrence, while a
+conflict or gap is a field error. Prefill includes the local offset so an overlap round-trips
+without losing which occurrence was chosen. Bounds compare the resolved UTC instant.
+
+`ZonedTimestamp(value, label=None)` and `zoned_timestamp()` are the visible output pair.
+Unlike `Timestamp`, which intentionally renders in each Discord viewer's timezone, zoned
+output renders deterministic explicit text such as
+`2026-08-22 10:30:00-04:00[America/New_York]`. Its primitive and `SceneZonedTime` retain the
+UTC instant, IANA key, and optional prefix. Discord emits text; HTML emits the same text in a
+`<time>` whose `datetime` is UTC and whose `data-squid-timezone` carries the IANA key. The
+experimental scene protocol remains version 1 and gains the `zoned_time` kind in place.
+
+Reader-selected timezone controls, locale-dependent zoned styles, fixed-offset-only zone
+identities, and text interpolation remain deferred. Existing `DateTimeField`, `Timestamp`,
+and timestamp interpolation contracts do not change.
+
 Consumers: poll deadlines and close-time display, claims/account timestamps, and diagnostics
 uptime.
 
@@ -378,8 +420,9 @@ uptime.
 
 - `test_toggle.py`: factory, managed/controlled writes, invalidation, stale-session ownership,
   keyed rewrite, and lowering shape.
-- `test_forms.py`: multi-choice ordering/cardinality/required/prefill/duplicates and temporal
-  parsing, bounds, zoning, and prefill.
+- `test_temporal.py` and `test_forms.py`: zoned value identity/formatting, multi-choice
+  ordering/cardinality/required/prefill/duplicates, and temporal parsing, bounds, zoning,
+  offset validation, and prefill.
 - `test_form_discord.py`: select shape and 25-option limit; upload wrapping and 10-file limit.
 - `test_decision_pattern.py`: one-way decision, disabled controls, confirm handlers/tone, and
   finish events.
