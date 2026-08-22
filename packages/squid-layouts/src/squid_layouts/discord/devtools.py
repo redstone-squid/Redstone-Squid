@@ -11,15 +11,27 @@ from squid_layouts.discord import delivery
 from squid_layouts.discord.devtools_view import MountInspector, metrics_text, plan_text, scene_attachment
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.mount import MountSnapshot, owned_mount
+from squid_layouts.discord.reactor import Reactor
 from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
+from squid_layouts.profiling import (
+    NoOpProfiler,
+    OperationAggregate,
+    OperationKind,
+    Profiler,
+    RuntimeTrace,
+    SpanAggregate,
+    snapshot_json,
+)
 from squid_layouts.semantic import LayoutNode
+from squid_layouts.topics import TopicBus
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
 SESSION_SECONDS = 300
+_PERCENTILE_SAMPLE_FLOOR = 20
 
 
 async def _owner_only[BotT: commands.Bot](ctx: Context[BotT]) -> bool:
@@ -34,9 +46,24 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         self,
         check: DevToolsCheck[BotT] = _owner_only,
         registry: SessionRegistry | None = None,
+        *,
+        profiler: Profiler | None = None,
+        reactor: Reactor | None = None,
+        bus: TopicBus | None = None,
     ) -> None:
         self._check = check
         self._registry = registry
+        self._reactor = reactor
+        self._bus = bus if bus is not None else reactor.bus if reactor is not None else None
+        self._profiler = (
+            profiler
+            if profiler is not None
+            else reactor.profiler
+            if reactor is not None
+            else self._bus.profiler
+            if self._bus is not None
+            else NoOpProfiler()
+        )
 
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
     async def cog_check(self, ctx: Context[BotT]) -> bool:
@@ -94,6 +121,29 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         if snapshot is not None:
             await self._send(ctx, [section(code(metrics_text(snapshot)), heading=f"Metrics for mount {mount_id}")])
 
+    @ui_group.command(name="profile")
+    async def profile_mount(self, ctx: Context[BotT], mount_id: str) -> None:
+        """Show retained dispatch and delivery traces for one mount."""
+        snapshot = self._profiler.snapshot()
+        retained = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
+        traces = {
+            trace.trace_id: trace
+            for trace in retained
+            if any(
+                attribute.key == "mount_id" and attribute.value == mount_id
+                for span in trace.spans
+                if span.parent_span_id is None
+                for attribute in span.attributes
+            )
+        }
+        ordered = sorted(traces.values(), key=lambda trace: trace.started, reverse=True)[:12]
+        body = (
+            f"No retained profiles for mount {mount_id}."
+            if not ordered
+            else "\n\n".join(_trace_text(trace) for trace in ordered)
+        )
+        await self._send(ctx, [section(code(body), heading=f"Profile for mount {mount_id}")])
+
     @dev_group.command(name="routes")
     async def list_routes(self, ctx: Context[BotT]) -> None:
         """List routed controls installed on this command's client."""
@@ -113,6 +163,72 @@ class DevTools[BotT: commands.Bot](commands.Cog):
                     lines.append(f"         middleware: {' -> '.join(route.middleware)}")
         body = "No routers are installed on this client." if not lines else "\n".join(lines)
         await self._send(ctx, [section(code(body), heading="Routed controls")])
+
+    @dev_group.group(name="profile", invoke_without_command=True)
+    async def profile_group(self, ctx: Context[BotT]) -> None:
+        """Inspect bounded runtime latency and queue diagnostics."""
+        await ctx.send_help("dev profile")
+
+    @profile_group.command(name="actions")
+    async def profile_actions(self, ctx: Context[BotT]) -> None:
+        """Show mounted and routed action latency aggregates."""
+        snapshot = self._profiler.snapshot()
+        actions = tuple(
+            aggregate
+            for aggregate in snapshot.aggregates
+            if aggregate.key.operation in {OperationKind.DISPATCH, OperationKind.ROUTE_DISPATCH}
+        )
+        body = "No action profiles have been observed." if not actions else "\n".join(map(_aggregate_text, actions))
+        await self._send(ctx, [section(code(body), heading="Action profiles")])
+
+    @profile_group.command(name="queues")
+    async def profile_queues(self, ctx: Context[BotT]) -> None:
+        """Show Reactor and TopicBus pressure with delivery latency aggregates."""
+        lines: list[str] = []
+        if self._reactor is not None:
+            reactor = self._reactor.snapshot()
+            lines.append(
+                "reactor  "
+                f"queued={reactor.queued} in_flight={reactor.in_flight} redeliver={reactor.redeliver} "
+                f"scheduled={reactor.scheduled} coalesced={reactor.coalesced} "
+                f"delivered={reactor.delivered} failed={reactor.failed}"
+            )
+        if self._bus is not None:
+            bus = self._bus.snapshot()
+            lines.append(
+                f"topics   known={len(bus.topics)} queued={bus.queued} in_flight={bus.in_flight} "
+                f"delivered={bus.delivered} failed={bus.failed}"
+            )
+        snapshot = self._profiler.snapshot()
+        queue_operations = {
+            OperationKind.REACTOR_DELIVERY,
+            OperationKind.TOPIC_DELIVERY,
+            OperationKind.REFRESH,
+        }
+        lines.extend(
+            _aggregate_text(aggregate)
+            for aggregate in snapshot.aggregates
+            if aggregate.key.operation in queue_operations
+        )
+        lines.extend(
+            _span_aggregate_text(aggregate)
+            for aggregate in snapshot.span_aggregates
+            if aggregate.key.operation in queue_operations
+            and (aggregate.key.span_name == "queue_wait" or aggregate.key.span_name.startswith("subscriber:"))
+        )
+        body = "No queue diagnostics are configured or observed." if not lines else "\n".join(lines)
+        await self._send(ctx, [section(code(body), heading="Queue profiles")])
+
+    @profile_group.command(name="export")
+    async def profile_export(self, ctx: Context[BotT]) -> None:
+        """Attach the current immutable runtime snapshot as JSON."""
+        snapshot = self._profiler.snapshot()
+        encoded = snapshot_json(snapshot, indent=2).encode()
+        await self._send(
+            ctx,
+            [paragraph(f"Runtime profile `{snapshot.process_id}` — {len(encoded)} bytes.")],
+            files=[discord.File(io.BytesIO(encoded), filename=f"runtime-profile-{snapshot.process_id}.json")],
+        )
 
     async def _open(self, ctx: Context[BotT], *, focus: str | None) -> None:
         inspector = MountInspector(focus=focus, registry=self._registry)
@@ -148,3 +264,44 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
 
 __all__ = ["DevTools", "DevToolsCheck"]
+
+
+def _aggregate_text(aggregate: OperationAggregate) -> str:
+    key = aggregate.key
+    histogram = aggregate.window if aggregate.window.observations else aggregate.lifetime
+    count = histogram.observations
+    average = 0.0 if count == 0 else histogram.total / count
+    identity = key.disposition or key.outcome or "all"
+    line = f"{key.operation or 'overflow'} {key.name} {identity} n={count} avg={_milliseconds(average)}"
+    if count >= _PERCENTILE_SAMPLE_FLOOR:
+        line += f" p50={_milliseconds(histogram.percentile(0.5))} p95={_milliseconds(histogram.percentile(0.95))}"
+    return line
+
+
+def _milliseconds(seconds: float | None) -> str:
+    return "—" if seconds is None else f"{seconds * 1000:.1f}ms"
+
+
+def _span_aggregate_text(aggregate: SpanAggregate) -> str:
+    key = aggregate.key
+    histogram = aggregate.window if aggregate.window.observations else aggregate.lifetime
+    count = histogram.observations
+    average = 0.0 if count == 0 else histogram.total / count
+    line = f"span     {key.operation}:{key.span_name} {key.outcome or 'all'} n={count} avg={_milliseconds(average)}"
+    if count >= _PERCENTILE_SAMPLE_FLOOR:
+        line += f" p50={_milliseconds(histogram.percentile(0.5))} p95={_milliseconds(histogram.percentile(0.95))}"
+    return line
+
+
+def _trace_text(trace: RuntimeTrace) -> str:
+    disposition = "" if trace.result.dispatch is None else f" {trace.result.dispatch.disposition}"
+    flags = " deadline-missed" if trace.deadline_missed else ""
+    lines = [
+        f"{trace.operation} {trace.name} {trace.result.outcome}{disposition} {_milliseconds(trace.duration)}{flags}"
+    ]
+    lines.extend(
+        f"  {span.name} {span.outcome} {_milliseconds(span.duration)}"
+        for span in trace.spans
+        if span.parent_span_id is not None
+    )
+    return "\n".join(lines)
