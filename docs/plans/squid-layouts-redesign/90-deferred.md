@@ -67,7 +67,7 @@ are not re-derived or accidentally adopted later.
   non-degradability free. The degradation ladder (button grid → text grid +
   coordinate select → paged select) is the semantic-node promotion, and it waits for
   a real consumer.
-- **`sl.resource` descriptor** — resolved 2026-08-22 by [30](30-resources.md). Explicit
+- **`sl.resource` descriptor** — resolved 2026-08-22 by [33](33-resources.md). Explicit
   `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
   resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
   the optimistic set the motivating `SettingsPanel` case required. Visible and awaited
