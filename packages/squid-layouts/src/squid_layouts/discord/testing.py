@@ -178,7 +178,7 @@ def delivered_to(message: Any, *, handle: EditHandle | None = None) -> Destinati
 def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     """Stage a render and commit it with no Discord delivery — `Mount.send` to nowhere.
 
-    `Mount.build_view` only stages; handlers and the live generation move when a delivery
+    `Mount._stage_view` only stages; handlers and the live generation move when a delivery
     lands. Tests that never touch Discord say where that point is with this, rather than
     driving a destination that would only ever hand back `None`.
 
@@ -187,7 +187,7 @@ def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     `on_load` -- a test that wants a loaded render wants the real seam,
     `await mount.send(delivered_to(fake_message()))`.
     """
-    view = mount.build_view(disabled=disabled)
+    view = mount._stage_view(disabled=disabled)
     candidate = mount._pending
     assert candidate is not None and candidate.view is view
     mount._commit(candidate)

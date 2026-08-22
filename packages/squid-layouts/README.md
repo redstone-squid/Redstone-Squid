@@ -166,7 +166,8 @@ the anchor, and `BACKWARD` for rows before it. Every `Window` returns the source
 fingerprints only visible identities and drops a fetch that completes after a newer request.
 
 `SourceCapabilities` separately declares backward traversal, known offsets, arbitrary jumps, and
-`CountPrecision`. Exact jumpable sources get page counts; exact or approximate sequential sources get
+`CountPrecision`. Exact jumpable sources get page counts and an `on_seek` on their
+`NavigationContext`, which takes a zero-based page; exact or approximate sequential sources get
 range totals; offset-only sources get a range; keyset-only sources get no numeric footer. A source that
 declares no count must return `total=None`. Source-backed rankings are components because fetching stays
 outside planning and cannot run in `RouterShell.render()`.

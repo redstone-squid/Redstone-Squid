@@ -255,7 +255,7 @@ still owes a load, so the tier is loaded and then re-rendered rather than render
 delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
 for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
 leaves the load eligible to retry. `Mount.send`, `flush` and `refresh_now` load; `finish`,
-`finish_via` and `build_view` deliberately do not. Data the component can degrade without
+`finish_via` and `_stage_view` deliberately do not. Data the component can degrade without
 belongs in declared state with a render branch, refreshed by a handler.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
@@ -307,6 +307,16 @@ A paginator scene record contains a content fingerprint. When content under one 
 reordering where possible. `per=N` is count-based pagination; the default fills by target text
 budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
 All use the same `NavFactory`.
+
+A `NavFactory` receives `on_previous`, `on_next`, and `on_seek`. `on_seek` takes a zero-based
+page and is present only where the cursor can address one: always for a materialized cursor,
+and for a source window only when it declares `SourceCapabilities.jumpable` with an exact count.
+It is a page rather than a `Position` because `NavigationState.position.offset` is a page index
+for a materialized cursor but an item offset for a source window; `NavigationState.page` is the
+comparable one, and pairs with `extent`. The stock `default_nav` draws no jump control, since a
+select costs a whole component row on every paginator in the process; `sl.discord.page_select_nav`
+opts into one, offering every page when there are at most 25 and an evenly spaced ladder across
+the whole range beyond that.
 
 `sl.paged(container, key=..., chars=...)` applies an author-sized budget and pages between the
 container's heterogeneous children. Children are atomic unless a text child must split;

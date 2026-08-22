@@ -25,6 +25,7 @@ from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, SourceM
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_message
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -330,25 +331,29 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
         author_id=123,
     )
 
-    payload = view.to_components()
+    mount = view.mount()
+
+    payload = commit_render(mount).to_components()
     select_options = payload[1]["components"][0]["options"]
     assert [option["label"] for option in select_options] == ["Smallest 2x2 door", "Fast door"]
     assert "Close" in str(payload)
 
-    view.render_detail(record)
-    assert "View build" in str(view.to_components())
+    view.detail_index = view.hits.index(record)
+    assert "View build" in str(commit_render(mount).to_components())
 
 
 @pytest.mark.asyncio
 async def test_search_timeout_visibly_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
-    message = AsyncMock(spec=discord.Message)
-    view.bind_message(cast(discord.Message, message))
+    mount = view.mount()
+    message = fake_message()
+    await mount.send(delivered_to(message))
 
-    await view.on_timeout()
+    await mount.finish()  # what a timeout does: disable and edit through the standing handle
 
-    controls = [child for child in view.walk_children() if isinstance(child, discord.ui.Button | discord.ui.Select)]
+    message.edit.assert_awaited_once()
+    disabled = message.edit.await_args.kwargs["view"]
+    controls = [child for child in disabled.walk_children() if isinstance(child, discord.ui.Button | discord.ui.Select)]
     assert controls
     assert all(control.disabled for control in controls)
-    message.edit.assert_awaited_once()
