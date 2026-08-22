@@ -37,7 +37,7 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import _CURRENT, _State, report_undeclared_write
+from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write
 from squid_layouts.runtime.resources import Resource, _ResourceDescriptor, observe_resources, unique_resources
 from squid_layouts.semantic import (
     Action as SemanticAction,
@@ -197,6 +197,8 @@ class Component:
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
     _resource_dependencies: ClassVar[dict[str, tuple[_ResourceDescriptor[Any, Any], ...]]] = {}
+    _computed_dependencies: ClassVar[dict[str, tuple[_Computed, ...]]] = {}
+    _computed_descriptors: ClassVar[tuple[_Computed, ...]] = ()
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -208,14 +210,20 @@ class Component:
         }
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
+        declared_computed = {
+            name: descriptor
+            for klass in reversed(cls.__mro__)
+            for name, descriptor in vars(klass).items()
+            if isinstance(descriptor, _Computed)
+        }
         declared_resources = {
             name: descriptor
             for klass in reversed(cls.__mro__)
             for name, descriptor in vars(klass).items()
             if isinstance(descriptor, _ResourceDescriptor)
         }
-        dependency_map: dict[str, list[_ResourceDescriptor[Any, Any]]] = {}
-        for resource_name, descriptor in declared_resources.items():
+        resource_dependency_map: dict[str, list[_ResourceDescriptor[Any, Any]]] = {}
+        for member_name, descriptor in declared_resources.items():
             for dependency in descriptor.depends:
                 state_descriptor = next(
                     (candidate for candidate in declared.values() if candidate is dependency),
@@ -223,13 +231,30 @@ class Component:
                 )
                 if state_descriptor is None:
                     message = (
-                        f"{cls.__name__}.{resource_name} dependency must be an sl.state() field on the same component"
+                        f"{cls.__name__}.{member_name} dependency must be an sl.state() field on the same component"
                     )
                     raise TypeError(message)
-                dependents = dependency_map.setdefault(state_descriptor._name, [])
+                dependents = resource_dependency_map.setdefault(state_descriptor._name, [])
                 if descriptor not in dependents:
                     dependents.append(descriptor)
-        cls._resource_dependencies = {name: tuple(value) for name, value in dependency_map.items()}
+        cls._resource_dependencies = {name: tuple(value) for name, value in resource_dependency_map.items()}
+        computed_dependency_map: dict[str, list[_Computed]] = {}
+        for member_name, descriptor in declared_computed.items():
+            for dependency in descriptor.depends:
+                state_descriptor = next(
+                    (candidate for candidate in declared.values() if candidate is dependency),
+                    None,
+                )
+                if state_descriptor is None:
+                    message = (
+                        f"{cls.__name__}.{member_name} dependency must be an sl.state() field on the same component"
+                    )
+                    raise TypeError(message)
+                dependents = computed_dependency_map.setdefault(state_descriptor._name, [])
+                if descriptor not in dependents:
+                    dependents.append(descriptor)
+        cls._computed_dependencies = {name: tuple(value) for name, value in computed_dependency_map.items()}
+        cls._computed_descriptors = tuple(declared_computed.values())
         required = tuple(
             (name, descriptor._name) for name, descriptor in declared.items() if not descriptor.has_initial
         )
@@ -256,9 +281,13 @@ class Component:
         for name in names:
             for descriptor in type(self)._resource_dependencies.get(name, ()):
                 descriptor.invalidate_for(self)
+            for descriptor in type(self)._computed_dependencies.get(name, ()):
+                descriptor.invalidate_for(self)
         self.invalidate()
 
     def _state_rolled_back(self) -> None:
+        for descriptor in type(self)._computed_descriptors:
+            descriptor.invalidate_for(self)
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
     def render(self) -> RenderResult:

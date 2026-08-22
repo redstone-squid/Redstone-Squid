@@ -1432,11 +1432,12 @@ class TestStateDescriptor:
     def test_computed_values_cache_until_state_changes(self):
         class Derived(Component):
             count: int = state(1)
+            unrelated: int = state(0)
 
             def __init__(self) -> None:
                 self.calls = 0
 
-            @computed
+            @computed(depends=(count,))
             def doubled(self) -> int:
                 self.calls += 1
                 return self.count * 2
@@ -1449,9 +1450,28 @@ class TestStateDescriptor:
         assert component.doubled == 2
         assert component.calls == 1
 
+        component.unrelated = 1
+        assert component.doubled == 2
+        assert component.calls == 1
+
         component.count = 3
         assert component.doubled == 6
         assert component.calls == 2
+
+    def test_computed_dependencies_must_be_state_on_the_same_component(self):
+        foreign = state(1)
+
+        with pytest.raises(TypeError, match=r"Derived.doubled dependency must be an sl.state\(\) field"):
+
+            class Derived(Component):
+                count: int = state(1)
+
+                @computed(depends=(foreign,))
+                def doubled(self) -> int:
+                    return self.count * 2
+
+                def render(self):
+                    return Text(str(self.doubled))
 
     def test_batch_coalesces_invalidations(self):
         class Pair(Component):

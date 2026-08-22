@@ -648,24 +648,32 @@ def restore_state(owner: ReactiveOwner, values: Mapping[str, Any]) -> None:
 
 
 class _Computed:
-    def __init__(self, function: Callable[[Any], Any]) -> None:
+    def __init__(self, function: Callable[[Any], Any], *, depends: tuple[object, ...]) -> None:
         self._function = function
+        self.depends = depends
+        self.public_name = function.__name__
         self._name = ""
 
     def __set_name__(self, owner: type, name: str) -> None:
+        self.public_name = name
         self._name = f"__computed_{name}"
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
         if instance is None:
             return self
-        revision = instance.__dict__.get("_state_revision", 0)
-        cached = instance.__dict__.get(self._name)
-        if cached is None or cached[0] != revision:
-            cached = (revision, self._function(instance))
-            instance.__dict__[self._name] = cached
-        return cached[1]
+        if self._name not in instance.__dict__:
+            instance.__dict__[self._name] = self._function(instance)
+        return instance.__dict__[self._name]
+
+    def invalidate_for(self, instance: ReactiveOwner) -> None:
+        """Discard an already-materialized value after a dependency commit."""
+        instance.__dict__.pop(self._name, None)
 
 
-def computed(function: Callable[[Any], Any]) -> Any:
-    """Cache a derived value until this component tree invalidates again."""
-    return _Computed(function)
+def computed(*, depends: tuple[object, ...]) -> Callable[[Callable[[Any], Any]], _Computed]:
+    """Cache a derived value until one of its declared state dependencies changes."""
+
+    def decorate(function: Callable[[Any], Any]) -> _Computed:
+        return _Computed(function, depends=depends)
+
+    return decorate
