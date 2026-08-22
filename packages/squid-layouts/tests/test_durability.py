@@ -1,7 +1,11 @@
 """Versioned durable state for keyed component trees."""
 
+import time
+from collections.abc import Callable
 from dataclasses import replace
+from pathlib import Path
 
+import anyio
 import pytest
 
 from squid_layouts import (
@@ -13,11 +17,13 @@ from squid_layouts.discord import Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,
     DurableMountCodec,
+    LeaseSnapshotStore,
     MemorySnapshotStore,
     MountLocator,
     MountManager,
     SnapshotCodec,
     SnapshotError,
+    SQLiteSnapshotStore,
 )
 from squid_layouts.discord.testing import commit_render
 from squid_layouts.primitives import (
@@ -49,6 +55,67 @@ def _registry(*, version: int = 1) -> ComponentRegistry:
     registry = ComponentRegistry()
     registry.register("counter", version=version, factory=DurableRoot)
     return registry
+
+
+def _snapshot_store(kind: str, path: Path, clock: Callable[[], float]) -> LeaseSnapshotStore:
+    if kind == "memory":
+        return MemorySnapshotStore(clock=clock)
+    return SQLiteSnapshotStore(path, table_name="durable_sessions", clock=clock)
+
+
+@pytest.mark.parametrize("kind", ["memory", "sqlite"])
+async def test_snapshot_store_contract(kind: str, tmp_path: Path) -> None:
+    now = [100.0]
+    clock = lambda: now[0]
+    store = _snapshot_store(kind, tmp_path / "snapshots.sqlite3", clock)
+
+    assert await store.load("missing") is None
+    await store.save("second", "payload 2")
+    await store.save("first", "payload 1")
+    assert await store.list_keys() == ("first", "second")
+    assert await store.load("first") == "payload 1"
+
+    assert await store.claim("first", "alpha", 110.0)
+    assert not await store.claim("first", "beta", 120.0)
+    now[0] = 110.0
+    assert not await store.claim("first", "beta", 120.0)
+    now[0] = 110.1
+    assert await store.claim("first", "beta", 120.0)
+    assert not await store.renew("first", "alpha", 130.0)
+    assert await store.renew("first", "beta", 130.0)
+
+    await store.save("first", "replacement")
+    assert not await store.claim("first", "alpha", 140.0)
+    await store.release("first", "alpha")
+    assert not await store.claim("first", "alpha", 140.0)
+    await store.release("first", "beta")
+    assert await store.claim("first", "alpha", 140.0)
+
+    await store.delete("first")
+    assert await store.load("first") is None
+    assert not await store.renew("first", "alpha", 150.0)
+
+
+async def test_sqlite_snapshot_store_serializes_lease_contention(tmp_path: Path) -> None:
+    path = tmp_path / "snapshots.sqlite3"
+    writer = SQLiteSnapshotStore(path)
+    await writer.save("session", "payload")
+    contenders = [SQLiteSnapshotStore(path), SQLiteSnapshotStore(path)]
+    results: list[bool] = []
+
+    async def claim(store: SQLiteSnapshotStore, owner: str) -> None:
+        results.append(await store.claim("session", owner, time.time() + 30))
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(claim, contenders[0], "first")
+        tasks.start_soon(claim, contenders[1], "second")
+
+    assert sorted(results) == [False, True]
+
+
+def test_snapshot_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="SQL identifier"):
+        SQLiteSnapshotStore(tmp_path / "snapshots.sqlite3", table_name="snapshots; DROP TABLE users")
 
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:
