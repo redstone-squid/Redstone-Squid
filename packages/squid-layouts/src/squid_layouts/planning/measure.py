@@ -56,9 +56,11 @@ from squid_layouts.primitives.nodes import (
     Thumbnail,
     Time,
     Variants,
+    ZonedTime,
 )
 from squid_layouts.primitives.styles import Color
 from squid_layouts.sources import Position
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
@@ -145,6 +147,12 @@ class RTime:
 
 
 @dataclass(frozen=True, slots=True)
+class RZonedTime:
+    value: ZonedDateTime
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RSection:
     texts: list[RText]
     accessory: Thumbnail | LinkButton | RawItem
@@ -166,6 +174,7 @@ class RGroup:
 type Realized = (
     RText
     | RTime
+    | RZonedTime
     | RSection
     | RPanel
     | RGroup
@@ -575,6 +584,9 @@ class _Builder:
                 unix = int(instant.timestamp())
                 self.raw_text_cost += len(prefix or "") + len(f"<t:{unix}:{style}>")
                 return RTime(instant, style, prefix)
+            case ZonedTime(value=value, prefix=prefix):
+                self.raw_text_cost += len(prefix or "") + len(value.isoformat())
+                return RZonedTime(value, prefix)
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
                     self.notes.append(

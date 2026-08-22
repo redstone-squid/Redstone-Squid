@@ -12,6 +12,7 @@ from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
 
@@ -366,6 +367,14 @@ class Timestamp:
 
 
 @dataclass(frozen=True, slots=True)
+class ZonedTimestamp:
+    """An exact instant rendered visibly in its named timezone."""
+
+    value: ZonedDateTime
+    label: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FormTrigger:
     """A content entry point that presents a portable form."""
 
@@ -657,6 +666,7 @@ type SemanticNode = (
     | Progress
     | Measure
     | Timestamp
+    | ZonedTimestamp
     | FormTrigger
     | Actions
     | Choices
