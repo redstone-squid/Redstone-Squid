@@ -106,6 +106,8 @@ from squid_layouts.semantic import (
     Status,
     Table,
     TableDisplay,
+    Toggle,
+    ToggleEvent,
     Tone,
     Truncated,
     Unbreakable,
@@ -360,6 +362,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _media(node, path, context)
         case Details():
             return _details(node, path, context)
+        case Toggle():
+            return _toggle(node, context)
         case Status(content=content, tone=tone):
             prefix = {
                 Tone.INFO: "\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16} ",
@@ -1071,6 +1075,37 @@ def _details(node: Details, path: str, context: _Context) -> list[Node]:
     if open_:
         result.extend(_children(node.children, path, context))
     return result
+
+
+def _toggle(node: Toggle, context: _Context) -> list[Node]:
+    match node.on:
+        case Controlled(value=value):
+            on = value
+        case Managed(initial=initial):
+            on = context.session.toggle(node.key, initial=initial).on
+
+    async def flip(event: PressEvent) -> None:
+        match node.on:
+            case Controlled(on_change=on_change):
+                await on_change(ToggleEvent(event.actor, event.responder, event.locale, event.context, not on))
+            case Managed(initial=initial):
+                await event.acknowledge()
+                current = context.session.toggle(node.key, initial=initial).on
+                context.session.set_toggle(node.key, on=not current)
+                event.invalidate()
+
+    state_label = node.on_label if on else node.off_label
+    if state_label is None:
+        state_label = context.chrome.on if on else context.chrome.off
+    label = f"{_resolve(node.label, context)}: {_resolve(state_label, context)}"
+    button = Button(
+        label,
+        flip,
+        node.key,
+        style=_button_style(node.tone, Emphasis.NORMAL),
+        disabled=not node.available,
+    )
+    return [Row((button,))]
 
 
 def _table_axis(node: Table, path: str, session: PresentationSession) -> StrategyAxis:

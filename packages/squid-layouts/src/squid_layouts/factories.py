@@ -26,6 +26,7 @@ from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
     CLOSED,
     FIRST_DESTINATION,
+    OFF,
     UNOPENED,
     UNSELECTED,
     Action,
@@ -81,6 +82,8 @@ from squid_layouts.semantic import (
     Table,
     TableDisplay,
     TableRow,
+    Toggle,
+    ToggleOwnership,
     Tone,
 )
 from squid_layouts.text import ResolvedText, TextLike, md
@@ -432,6 +435,20 @@ def action(
 ) -> Action:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id."""
     return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy)
+
+
+def toggle(
+    label: TextValue,
+    *,
+    key: str,
+    on: ToggleOwnership = OFF,
+    on_label: TextValue | None = None,
+    off_label: TextValue | None = None,
+    tone: Tone = Tone.NEUTRAL,
+    available: bool = True,
+) -> Toggle:
+    """A boolean control; ``on`` declares whether the author or session owns its state."""
+    return Toggle(key, _text(label), on, _opt_text(on_label), _opt_text(off_label), tone, available)
 
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:
