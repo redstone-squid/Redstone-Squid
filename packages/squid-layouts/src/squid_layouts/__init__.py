@@ -5,7 +5,11 @@ from importlib import import_module
 from squid_layouts import forms, html, patterns, planning, primitives, runtime, scene, semantic, sources
 from squid_layouts.actions import (
     ActionEvent,
+    ActionKind,
+    ActionMiddleware,
     ActionPolicy,
+    ActionProceed,
+    ActionRequest,
     ActionResponder,
     Actor,
     PressEvent,
@@ -323,7 +327,11 @@ __all__ = [
     "ActionDisplay",
     "ActionEvent",
     "ActionGroup",
+    "ActionKind",
+    "ActionMiddleware",
     "ActionPolicy",
+    "ActionProceed",
+    "ActionRequest",
     "ActionResponder",
     "Actions",
     "Actor",

@@ -14,7 +14,11 @@ import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 from squid_layouts import (
+    ActionKind,
+    ActionMiddleware,
     ActionPolicy,
+    ActionProceed,
+    ActionRequest,
     Asset,
     Component,
     Document,
@@ -813,6 +817,210 @@ class TestActionPolicy:
         assert isinstance(hook.await_args.args[1], ReactiveWriteError)
 
 
+class TestActionMiddleware:
+    def test_the_base_class_requires_dispatch(self) -> None:
+        with pytest.raises(TypeError, match="abstract"):
+            cast(Any, ActionMiddleware)()
+
+    async def test_middleware_is_outermost_first_and_repeated_instances_are_idempotent(self) -> None:
+        seen: list[str] = []
+
+        class Record(ActionMiddleware):
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                seen.append(f"{self.name}:before")
+                await proceed()
+                seen.append(f"{self.name}:after")
+
+        class Subject(Counter):
+            async def increment(self, event: PressEvent) -> None:
+                seen.append("handler")
+                await super().increment(event)
+
+        first = Record("first")
+        mount = Mount(
+            Subject(),
+            access=Everyone(),
+            middleware=(first, first, Record("second")),
+            timeout=None,
+        )
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction())
+
+        assert seen == ["first:before", "second:before", "handler", "second:after", "first:after"]
+
+    async def test_short_circuit_skips_the_handler_and_still_acknowledges(self) -> None:
+        class Stop(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None: ...
+
+        component = Counter()
+        mount = Mount(component, access=Everyone(), middleware=(Stop(),), timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction)
+
+        assert component.count == 0
+        interaction.response.defer.assert_awaited_once_with()
+
+    async def test_middleware_may_handle_a_rolled_back_handler_error(self) -> None:
+        class Broken(Component):
+            count: int = state(0)
+
+            def render(self):
+                return Row((Button("break", self.break_, "break"),))
+
+            async def break_(self, event: PressEvent) -> None:
+                self.count = 1
+                raise RuntimeError("boom")
+
+        seen: list[str] = []
+
+        class Catch(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                try:
+                    await proceed()
+                except RuntimeError:
+                    seen.append("caught")
+
+        component = Broken()
+        hook = AsyncMock()
+        mount = Mount(component, access=Everyone(), middleware=(Catch(),), on_error=hook, timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch("break", fake_interaction())
+
+        assert seen == ["caught"]
+        assert component.count == 0
+        hook.assert_not_awaited()
+
+    async def test_unhandled_middleware_error_reaches_the_mount_error_hook(self) -> None:
+        error = RuntimeError("policy service unavailable")
+
+        class Fail(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                raise error
+
+        hook = AsyncMock()
+        mount = Mount(Counter(), access=Everyone(), middleware=(Fail(),), on_error=hook, timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction)
+
+        hook.assert_awaited_once_with(interaction, error, "action:inc")
+
+    async def test_proceed_is_one_shot_and_expires_after_dispatch(self) -> None:
+        saved: list[ActionProceed] = []
+
+        class SaveAndRepeat(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                saved.append(proceed)
+                await proceed()
+                await proceed()
+
+        hook = AsyncMock()
+        component = Counter()
+        mount = Mount(component, access=Everyone(), middleware=(SaveAndRepeat(),), on_error=hook, timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction())
+
+        assert component.count == 1
+        assert hook.await_args is not None
+        assert "may only be called once" in str(hook.await_args.args[1])
+        with pytest.raises(RuntimeError, match="only valid during"):
+            await saved[0]()
+
+    async def test_request_marks_rebase_as_generation_metadata(self) -> None:
+        requests: list[ActionRequest] = []
+
+        class Capture(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                requests.append(request)
+                await proceed()
+
+        class Rebased(Component):
+            current = False
+
+            def render(self):
+                handler = self.new if self.current else self.old
+                return Row((Button("run", handler, "run", policy=ActionPolicy.REBASE),))
+
+            async def old(self, event: PressEvent) -> None: ...
+
+            async def new(self, event: PressEvent) -> None: ...
+
+        component = Rebased()
+        mount = Mount(component, access=Everyone(), middleware=(Capture(),), timeout=None)
+        commit_render(mount)
+        submitted = mount.generation
+        component.current = True
+        commit_render(mount)
+        active = mount.generation
+
+        await mount.dispatch("run", fake_interaction(), generation=submitted)
+
+        assert requests == [
+            ActionRequest(
+                requests[0].event,
+                "run",
+                ActionKind.PRESS,
+                ActionPolicy.REBASE,
+                submitted,
+                active,
+                rebased=True,
+            )
+        ]
+
+    async def test_stale_exclusive_action_never_enters_middleware(self) -> None:
+        entered = False
+
+        class Capture(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                nonlocal entered
+                entered = True
+                await proceed()
+
+        mount = Mount(Counter(), access=Everyone(), middleware=(Capture(),), timeout=None)
+        commit_render(mount)
+        stale = mount.generation
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction(), generation=stale)
+
+        assert not entered
+
+    async def test_selection_and_submission_have_explicit_kinds(self) -> None:
+        kinds: list[ActionKind] = []
+
+        class Capture(ActionMiddleware):
+            async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+                kinds.append(request.kind)
+                await proceed()
+
+        class Picker(Component):
+            def render(self):
+                return SelectMenu((Option("A", "a"),), self.pick, "pick")
+
+            async def pick(self, event: SelectionEvent) -> None: ...
+
+        middleware = Capture()
+        picker = Mount(Picker(), access=Everyone(), middleware=(middleware,), timeout=None)
+        commit_render(picker)
+        await picker.dispatch("pick", fake_interaction(), ["a"])
+
+        submit = AsyncMock()
+        form_mount = Mount(Component(), access=Everyone(), middleware=(middleware,), timeout=None)
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+        await form_mount.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
+
+        assert kinds == [ActionKind.SELECTION, ActionKind.SUBMIT]
+
+
 class TestErrors:
     async def test_handler_error_goes_to_hook(self):
         class Boom(Component):
@@ -832,7 +1040,7 @@ class TestErrors:
         assert hook.await_args is not None
         (_interaction, error, source), _ = hook.await_args
         assert isinstance(error, RuntimeError)
-        assert source == "handler:x"
+        assert source == "action:x"
 
     async def test_a_field_parser_bug_reaches_the_error_hook(self):
         """A bug in `parse` is not a validation error, so it must not read as one."""
