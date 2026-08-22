@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import V2Limits
@@ -606,50 +607,28 @@ def _break_region(
     if not items:
         return [()]
     costs = [measure_nodes(item.nodes, limits=limits) for item in items]
-    total = sum(cost.chars for cost in costs)
-    count = len(items)
-    winner: tuple[int, int, float, tuple[int, ...], tuple[int, ...]] | None = None
-    for page_count in range(1, count + 1):
-        ideal = total / page_count
-        type State = tuple[int, float, tuple[int, ...], tuple[int, ...]]
-        states: dict[tuple[int, int], State] = {(0, 0): (0, 0.0, (), ())}
-        for used in range(1, page_count + 1):
-            for end in range(1, count + 1):
-                best: State | None = None
-                for start in range(end):
-                    previous = states.get((used - 1, start))
-                    if previous is None:
-                        continue
-                    if end < count and items[end - 1].keep_with_next:
-                        continue
-                    page_chars = sum(cost.chars for cost in costs[start:end])
-                    page_components = sum(cost.components for cost in costs[start:end])
-                    if page_chars > chars or page_components > limits.total_components:
-                        continue
-                    violation = int(used < page_count and page_chars < min_fill)
-                    violation += int(used == page_count and end - start < widows)
-                    candidate = (
-                        previous[0] + violation,
-                        previous[1] + (page_chars - ideal) ** 2,
-                        (*previous[2], -end),
-                        (*previous[3], end),
-                    )
-                    if best is None or candidate < best:
-                        best = candidate
-                if best is not None:
-                    states[(used, end)] = best
-        state = states.get((page_count, count))
-        if state is None:
-            continue
-        candidate = (state[0], page_count, state[1], state[2], state[3])
-        if winner is None or candidate < winner:
-            winner = candidate
-    if winner is None:
+    try:
+        cuts = balanced_breaks(
+            [
+                BreakItem(
+                    cost.chars,
+                    cost.components,
+                    break_after=not item.keep_with_next,
+                )
+                for item, cost in zip(items, costs, strict=True)
+            ],
+            max_chars=chars,
+            max_components=limits.total_components,
+            min_fill=min_fill,
+            widows=widows,
+            ideal_total=sum(cost.chars for cost in costs),
+        )
+    except ValueError as error:
         message = f"{path}: region has no feasible break set within its {chars}-character page budget"
-        raise UnsolvableLayoutError(message)
+        raise UnsolvableLayoutError(message) from error
     pages: list[tuple[_RegionItem, ...]] = []
     start = 0
-    for end in winner[4]:
+    for end in cuts:
         pages.append(tuple(items[start:end]))
         start = end
     return pages
