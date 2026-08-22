@@ -1,6 +1,6 @@
 # squid-layouts
 
-A declarative, limits-aware UI engine with Discord Components V2 and HTML renderers.
+A declarative, limits-aware UI engine with Discord Components V2, classic-message, and HTML renderers.
 
 Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
 40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
@@ -26,7 +26,9 @@ class Counter(sl.Component):
 ```
 
 See [the architecture and API interaction guide](../../docs/squid-layouts-architecture.md)
-for component composition, planning, renderers, action policies, and durable mounts.
+for component composition, planning, renderers, action policies, and durable mounts, and
+[Classic Discord messages](docs/classic-messages.md) for the second target: content, embeds,
+and action rows, from the same semantic document.
 
 ## The layers
 
@@ -35,7 +37,9 @@ for component composition, planning, renderers, action policies, and durable mou
    Authors may express a display preference and flexibility, but never an exact Discord shape.
    The lowercase factories (`sl.section`, `sl.actions`, `sl.field`, …) are the recommended
    authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
-2. **Target adapters** select lossless representations. For example, 36 semantic actions become
+2. **Target adapters** select lossless representations, per target: one document becomes a
+   `LayoutView` under `V2_TARGET` and content, embeds, and action rows under `CLASSIC_TARGET`.
+   For example, 36 semantic actions become
    two pickers containing 25 and 11 options; explicit action groups never merge. Strategy state
    supplies hysteresis, so small data changes do not reshuffle a familiar UI.
 3. **Exact primitives** live under `squid_layouts.primitives`. `Row`, `SelectMenu`, `Panel`,
