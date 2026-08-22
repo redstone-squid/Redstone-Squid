@@ -70,6 +70,35 @@ path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
 other processes; `sl.discord.durability.MountManager` provides opt-in versioned state checkpoints.
 
+### Live updates across mounts
+
+`TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
+address changed; every subscriber re-reads the application's source of truth. It is not durable,
+and queued topics disappear with the process. Exact matching means hosts should construct every
+topic through one vocabulary function rather than mixing values such as `("build", 123)` and
+`("build", "123")`.
+
+```python
+bus = sl.TopicBus()
+reactor = sl.discord.Reactor(bus)
+mount = sl.discord.Mount(panel, scheduler=reactor)
+reactor.follow(mount, ("build", "123"))  # subscribe before the first read/send
+await mount.send(sl.discord.respond_to(interaction))
+
+# The host visibly owns both long-running coroutines.
+async with anyio.create_task_group() as tasks:
+    tasks.start_soon(bus.run)
+    tasks.start_soon(reactor.run)
+```
+
+`publish()` is a synchronous enqueue for the event-loop thread. A distributed application bridges
+its own durable change feed, NOTIFY listener, or queue consumer into the local bus. Publish where
+the application already funnels committed changes; do not subscribe a durable projection that
+already has a reconciler, because that would give one message two competing writers. For tests,
+call `publish()`, then `await bus.drain()` and assert without starting background work or sleeping.
+Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
+`Mount(clock=...)`; production callers normally keep their defaults.
+
 ## Interaction patterns and two shells
 
 `Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines.
@@ -174,7 +203,8 @@ outside planning and cannot run in `RouterShell.render()`.
 
 ## Host integration rules
 
-- The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The adapter never spawns tasks — start
+- The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The
+  adapter never starts background work on its own — start `sl.TopicBus.run()` and
   `sl.discord.Reactor.run()` under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;

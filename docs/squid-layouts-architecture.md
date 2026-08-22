@@ -285,6 +285,24 @@ which is the one place webhook tokens and response shapes are understood. When n
 live the render waits in `Mount.pending` for the next interaction — `refresh()` has always
 promised the next opportunity rather than the current instant.
 
+Cross-mount refresh uses a payload-free `sl.TopicBus`: a topic is an exact hashable address,
+not state. Subscribers re-read application services before asking their mount to refresh, so the
+data layer remains the only source of truth. Publishes coalesce per topic, reactor scheduling
+coalesces per mount, and different mounts refresh concurrently without one mount rendering over
+itself. The host supervises `TopicBus.run()` and `Reactor.run()` explicitly. `TopicBus.drain()` is
+the deterministic no-background-task seam for subscriber tests.
+
+Publish from the existing committed-change funnel or durable change-feed drain. Never attach the
+bus to a message already owned by a durable reconciliation loop: that creates a second writer. In
+this bot, build panels follow `("build", str(build_id))`, while posted build cards remain solely
+owned by the Discord reconciliation queue. The same queue drain publishes locally after a
+successful reconciliation, which carries database changes from other processes into live panels.
+
+A followed mount with expiring interaction credentials is swept before its handle dies. Its final
+reachable render includes “Live updates paused — press any control to resume”; an accepted click
+renews the handle, clears the framework-drawn status, and flushes current state. Background edits
+retain the remaining idle timeout rather than restarting the mount's lifetime.
+
 | Policy | Concurrency | Stale control | State writes |
 |---|---|---|---|
 | EXCLUSIVE | serialized per mount | ignored and acknowledged | transactional |
