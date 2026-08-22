@@ -189,7 +189,43 @@ component state is what lets a large amount of the current transaction go:
 `born`/`protects`, `block_writes`, `readonly_transaction`, `strict_state` and
 `report_undeclared_write` are unaffected and stay as they are.
 
-### 5. One node type
+### 5. Undeclared writes raise, and `strict_state()` goes
+
+`Component.__setattr__` reports a transaction-time write to an attribute that is not
+declared state, and `strict_state()` decides whether that report is a log line or an
+`UndeclaredStateError`. The check stays and becomes the only behaviour; the flag goes.
+
+The order inside `__setattr__` is what makes this a correctness change rather than a
+volume change:
+
+```python
+if _CURRENT.get() is not None and name not in _FRAMEWORK_ATTRIBUTES and name not in type(self)._state_names:
+    report_undeclared_write(self, name)      # raises
+object.__setattr__(self, name, value)        # never reached
+```
+
+Under the warning path the write lands and is never rolled back, which is exactly the
+damage the warning describes. Under the raise path it never lands and the transaction rolls
+back whole. **The lax mode is the only one that produces the corruption it warns about.**
+
+Three things make the removal cheap:
+
+- **The check already fires almost nowhere.** `Component.__new__`
+  (`runtime/component.py:283-288`) notes components born mid-action, so a handler that
+  builds a component assigns to it freely, and so does every `__init__`. What is left is a
+  write to a *pre-existing* component inside an action, which under §1's single rule is
+  always a bug.
+- **The suite already runs strict.** `tests/conftest.py` enables it autouse and nothing in
+  `squid/` calls it, so the only in-tree behaviour that changes is
+  `tests/test_transactions.py:71`, which exists to exercise the warning.
+- **A raising handler is already handled.** It travels the ordinary `handle_error` path, so
+  the reader sees an error rather than a silently stale panel. "It would crash production"
+  overstates what happens.
+
+`UndeclaredStateError` stays as the single outcome. `_STRICT`, `strict_state()` and its two
+exports go.
+
+### 6. One node type
 
 40 §2 makes a shared namespace a `ReactiveOwner` so it can reuse the component-state
 machinery. With cells staging and tracking their own reads, the two stop being similar
@@ -215,15 +251,19 @@ consequences are worth naming:
   well; the guard stays on values, because a version guard would reintroduce the A→B→A
   false positive 40 rejected on its own terms.
 
-### 6. Migration
+### 7. Migration
 
-Small, because §1's counts say it is.
+Small, because the counts in *Problem* say it is.
 
 - **4 `depends=` sites** lose the argument: `patterns/source_ranked.py:84`,
   `patterns/browser.py:85`, `patterns/lookup.py:90`, `squid/bot/layout_showcase.py:144`.
 - **2 in-place mutations**, both in `tests/test_mount.py` (148, 1304), become replacement.
 - **12 `copy="ref"` sites** become `opaque=True`.
-- **Nothing else.** No declared state anywhere uses a mutable default or factory.
+- **2 strict-mode sites**: the autouse fixture in `tests/conftest.py` is deleted rather than
+  inverted, and `tests/test_transactions.py` loses the warning-path case at 71 while keeping
+  the raising cases at 66 and 93.
+- **Nothing else.** No declared state anywhere uses a mutable default or factory, and
+  nothing outside the tests calls `strict_state()`.
 
 ## Phases
 
@@ -231,7 +271,7 @@ Small, because §1's counts say it is.
 |---|---|---|
 | 1 | `_Cell` with value and version; immutability check; `opaque=`; delete the proxy subsystem. | `MutableStateError` on a list, on `(1, [2])`, on a frozen dataclass with a list field; an `opaque=` field accepting a service; `ReactiveList`/`Dict`/`Set`/`_ReactiveMixin`/`_observe` gone and the two test call sites migrated. |
 | 2 | Read tracking, `untracked()`; computed without `depends=`; versions, settle, the write epoch. | A computed never stale; a conditional dependency recomputing nothing when the unread branch's input changes; a diamond recomputing the shared node once; a computed whose value settles unchanged not propagating; a computed nobody reads never evaluated; a dropped reader collected while its source lives. |
-| 3 | Cells stage through the transaction; delete `_Snapshot`, `_plain`, `_restore`, `CopyMode`. | Rollback by dropping the overlay; read-your-writes; the delta built from the overlay; `export_state`/`restore_state` round-tripping without `_plain`; `block_writes`, `readonly_transaction` and `strict_state` unchanged. |
+| 3 | Cells stage through the transaction; delete `_Snapshot`, `_plain`, `_restore`, `CopyMode`; undeclared writes always raise and `strict_state` is deleted. | Rollback by dropping the overlay; read-your-writes; the delta built from the overlay; `export_state`/`restore_state` round-tripping without `_plain`; an undeclared write raising with no transaction flag set *and* leaving the attribute unwritten; a component built mid-action still assigning freely; `block_writes` and `readonly_transaction` unchanged. |
 | 4 | Unify 40's `sl.cell()` onto `_Cell`; rewrite 40 §2, §4 and §5 to match. | A `@sl.computed` depending on a shared cell recomputing when another owner writes it; 40's bus publication and value guard unchanged; one action writing component and shared cells committing once. |
 | 5 | Docs, devtools cell/version inspection, migration of the 18 call sites. | The showcase and `patterns/` free of `depends=` and `copy=`; devtools showing a cell's version and a computed's current source set. |
 
@@ -243,7 +283,9 @@ Small, because §1's counts say it is.
   the diamond; the settle cut-off; laziness; `untracked()`; a raising computed failing at
   read rather than at commit; a dropped reader collected.
 - `tests/test_transactions.py`: rollback by overlay drop; read-your-writes; the delta from
-  the overlay; the phase-0 participant ordering unchanged.
+  the overlay; the phase-0 participant ordering unchanged; an undeclared write raising
+  unconditionally and leaving the attribute absent; the autouse `strict_state` fixture in
+  `conftest.py` removed rather than inverted.
 - `tests/test_durability.py`: `export_state`/`restore_state` with no `_plain`.
 - `spikes/41/compare.py` and `probe2.py` become the shape of the regression tests; the
   leak assertion in particular ports directly.
@@ -307,6 +349,20 @@ promoted into the package.
 - **Keeping `depends=` as an optional override.** A second way to express the same fact,
   which can disagree with the first. The tracked set is what the code actually read; a
   declared set that differs from it is either redundant or wrong.
+- **`__slots__` on components.** The structural version of §5: generate slots from the
+  declared cells so an undeclared attribute is a native `AttributeError` — no runtime check,
+  no ContextVar read on the write path, and enforced outside transactions too. Counted and
+  rejected: 174 undeclared `self.X = ...` assignments across the `__init__` methods of 66
+  `Component` subclasses are collaborators, callbacks and config rather than state, and the
+  framework reads or writes `__dict__` in 16 places across 7 modules. Slots would need a
+  declaration syntax invented for the first group and a redesign for the second, to catch a
+  class of bug the always-raising check already catches.
+- **Keeping `strict_state()` with its default flipped.** An opt-out for an operator facing a
+  crash loop without shipping a patch. Rejected because of what is being opted out of: the
+  write does not land either way, so disabling the error does not restore working behaviour,
+  only silent behaviour. A host that wants a failed action handled gently has
+  `ActionMiddleware` and `handle_error`, which act on the failure without resurrecting the
+  write.
 - **Keeping the proxies behind an opt-in.** 183 lines and a second value model retained for
   two test call sites. If a real need appears, a mutable container is a value the author
   owns and replaces, or `opaque=True`.
