@@ -124,11 +124,14 @@ from squid_layouts.planning.planner import plan
 from squid_layouts.routing import Route
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
+from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
 from squid_layouts.runtime.reactivity import (
     ReactiveWriteError,
+    StateDelta,
     UndeclaredStateError,
     batch,
     computed,
+    on_action_commit,
     state,
     strict_state,
     transaction,
@@ -322,6 +325,9 @@ __all__ = [
     "FormValueError",
     "Group",
     "Heading",
+    "History",
+    "HistoryEntry",
+    "HistoryError",
     "Importance",
     "InlineAsset",
     "IntField",
@@ -395,6 +401,7 @@ __all__ = [
     "SourceRankedList",
     "Spilled",
     "Stack",
+    "StateDelta",
     "Status",
     "StoredAsset",
     "SubmitEvent",
@@ -453,6 +460,8 @@ __all__ = [
     "forms",
     "group",
     "heading",
+    "history",
+    "history_actions",
     "html",
     "item",
     "items",
@@ -465,6 +474,7 @@ __all__ = [
     "media_item",
     "navigation",
     "note",
+    "on_action_commit",
     "optional",
     "paged",
     "paragraph",
