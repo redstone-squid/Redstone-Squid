@@ -39,9 +39,9 @@ class _WindowRequest:
 class Browser[ItemT](Component):
     """Browse a remote window, open one item, and act within its detail."""
 
-    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, copy="ref")
-    opened: ItemT | None = state(None, persist=False, copy="ref")
-    _detail_value: object | None = state(None, persist=False, copy="ref")
+    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, opaque=True)
+    opened: ItemT | None = state(None, persist=False, opaque=True)
+    _detail_value: object | None = state(None, persist=False, opaque=True)
 
     def __init__(
         self,

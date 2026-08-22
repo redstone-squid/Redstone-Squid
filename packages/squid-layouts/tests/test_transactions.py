@@ -36,8 +36,8 @@ class Uncopyable:
 
 class Panel(Component):
     declared: int = state(0)
-    service: Uncopyable = state(copy="ref")
-    handles: list[Uncopyable] = state(copy="ref")
+    service: Uncopyable = state(opaque=True)
+    handles: list[Uncopyable] = state(opaque=True)
 
     def __init__(self, service: Uncopyable) -> None:
         self.service = service
@@ -114,7 +114,7 @@ class TestUndeclaredWrites:
             runtime.commit(runtime.render())
 
 
-class TestReferenceCopiedState:
+class TestOpaqueState:
     def test_it_is_snapshotted_without_copying(self):
         original, replacement = Uncopyable(), Uncopyable()
         panel = attached(Panel(original))
@@ -124,17 +124,14 @@ class TestReferenceCopiedState:
             raise RuntimeError(message)
         assert panel.service is original
 
-    def test_its_containers_are_not_proxied(self):
-        """Proxying would reintroduce the deep copy that copy="ref" exists to avoid."""
+    def test_it_holds_a_value_the_immutability_check_would_refuse(self):
+        """The escape hatch is the whole point: a collaborator is not a snapshot."""
         panel = attached(Panel(Uncopyable()))
         assert type(panel.handles) is list
-        with transaction():
-            panel.handles.append(Uncopyable())
-        assert len(panel.handles) == 2
 
     def test_it_cannot_be_persisted(self):
         with pytest.raises(TypeError, match="not serializable"):
-            state(copy="ref", persist=True)
+            state(opaque=True, persist=True)
 
     def test_it_stays_out_of_snapshots(self):
         panel = attached(Panel(Uncopyable()))

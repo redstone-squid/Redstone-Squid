@@ -75,7 +75,7 @@ class _SearchSource:
 
 
 class _SearchDetail(sl.Component):
-    _build_node: sl.LayoutNode | None = sl.state(None, persist=False, copy="ref")
+    _build_node: sl.LayoutNode | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
