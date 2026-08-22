@@ -23,6 +23,11 @@ from squid_layouts.primitives import (
 )
 
 
+def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
+    """The drawn layout of a sessionless V2 document, for tests that only read components."""
+    return render_static(*args, **kwargs).layout
+
+
 def _texts(view: discord.ui.LayoutView) -> list[str]:
     return [c.content for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
 
@@ -45,14 +50,14 @@ def _solved_texts(solved: MeasuredLayout) -> list[str]:
 
 class TestAltsPolicy:
     def test_fitting_content_keeps_preferred_form(self):
-        view = render_static([Text("all the links", overflow=alts("3 links"))])
+        view = _static_view([Text("all the links", overflow=alts("3 links"))])
         assert _texts(view) == ["all the links"]
 
     def test_pressure_picks_the_largest_fitting_alternate(self):
         long_urls = ", ".join(f"https://example.invalid/{index}" for index in range(300))
         node = Text(long_urls, overflow=alts("300 links — first: https://example.invalid/0", "300 links"))
         filler = Text("f" * 3900)
-        view = render_static([filler, node])
+        view = _static_view([filler, node])
         texts = _texts(view)
         assert "300 links" in texts[-1]
         assert "https://exampl" not in texts[-1] or texts[-1].endswith("/0")
@@ -148,7 +153,7 @@ class TestConstrainedShapes:
     def test_field_fallbacks_normalize_instead_of_raising(self):
         # A caller-supplied fallback that came out longer than its primary is skipped, not fatal.
         node = sl.section(sl.fields(sl.field("Creators", "a, b", fallbacks=("a and 3 others",))), heading="T")
-        view = render_static([node])
+        view = _static_view([node])
         assert any("a, b" in text for text in _texts(view))
 
 
@@ -169,7 +174,7 @@ class TestCardFieldLadders:
             ),
             heading="Build",
         )
-        view = render_static([node])
+        view = _static_view([node])
         text = "\n".join(_texts(view))
         assert "**Videos:**" in text
         assert "150 links" in text
@@ -183,6 +188,6 @@ class TestCardFieldLadders:
 )
 def test_alts_documents_always_fit(body: str, ladder: list[str]):
     ladder = sorted(ladder, key=len, reverse=True)
-    view = render_static([Text("pad " * 400), Text(body or "x", overflow=alts(*ladder))])
+    view = _static_view([Text("pad " * 400), Text(body or "x", overflow=alts(*ladder))])
     assert_within_limits(view)
     assert conform(view) == []

@@ -4,7 +4,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import V2_TARGET, Everyone, Mount, Renderer, delivery
+from squid_layouts.discord import V2_TARGET, Everyone, Mount, V2Renderer, delivery
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.scene import Codec
@@ -62,12 +62,12 @@ def test_scene_file_codec_round_trips() -> None:
 
 def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
     inline = sl.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET)
-    inline_view = Renderer().draw(inline.scene, plan=inline)
+    inline_view = V2Renderer().view(inline.scene, plan=inline)
     assert any(isinstance(item, discord.ui.File) for item in inline_view.walk_children())
 
     stored = sl.Asset("report", "report.txt", "text/plain", sl.StoredAsset("https://example.com/report.txt"))
     linked = sl.plan(sl.download("Report", stored, key="report-download"), target=V2_TARGET)
-    linked_view = Renderer().draw(linked.scene, plan=linked)
+    linked_view = V2Renderer().view(linked.scene, plan=linked)
     link = next(item for item in linked_view.walk_children() if isinstance(item, discord.ui.Button))
     assert link.url == "https://example.com/report.txt"
 

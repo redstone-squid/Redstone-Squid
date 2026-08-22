@@ -4,14 +4,14 @@ import logging
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import cast
 
 import discord
 
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.discord.attachments import attachment_assets
 from squid_layouts.discord.presentation import DiscordModeError, DiscordPresentation
-from squid_layouts.discord.renderer import Renderer, Wire
+from squid_layouts.discord.renderer import V2Renderer, Wire
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
@@ -49,16 +49,21 @@ def _span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder
 
 
 @dataclass(slots=True)
-class Composition:
-    """A resolved plan beside the complete Discord message it draws to."""
+class Composition[ViewT: (discord.ui.LayoutView, discord.ui.View | None)]:
+    """A resolved plan beside the complete Discord message it draws to.
+
+    Generic over the view because the two modes differ in what they promise. A Components V2
+    composition always has a `LayoutView` — it *is* the message. A classic composition has a
+    `View` only when the document produced controls, and its embeds carry the rest.
+    """
 
     presentation: DiscordPresentation
     plan: PlanResult
 
     @property
-    def view(self) -> discord.ui.LayoutView:
-        """The drawn view. Composition is Components V2, so there is always one."""
-        return self.presentation.layout
+    def view(self) -> ViewT:
+        """The drawn view, typed by which mode this composition is for."""
+        return cast(ViewT, self.presentation.view)
 
     @property
     def assets(self) -> tuple[Asset, ...]:
@@ -82,7 +87,7 @@ def compose(
     rendered: DocumentLike,
     *,
     wire: Wire | None = None,
-    renderer: Renderer | None = None,
+    renderer: V2Renderer | None = None,
     target: Target = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
@@ -95,8 +100,8 @@ def compose(
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     profile: OperationRecorder | None = None,
-) -> Composition:
-    """Plan a logical document, then draw its resolved Discord scene."""
+) -> Composition[discord.ui.LayoutView]:
+    """Plan a logical document, then draw its resolved Components V2 scene."""
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
@@ -121,12 +126,12 @@ def compose(
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
             profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else Renderer(limits=_v2_limits(target))
+    drawer = renderer if renderer is not None else V2Renderer(limits=_v2_limits(target))
     with _span(profile, "renderer"):
-        view = drawer.draw(result.scene, plan=result, wire=wire)
+        presentation = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
-    return Composition(DiscordPresentation.components_v2(view, assets=attachment_assets(result)), result)
+    return Composition(presentation, result)
 
 
 def render_static(
@@ -138,8 +143,8 @@ def render_static(
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
-) -> discord.ui.LayoutView:
-    """Plan and draw a sessionless Discord document."""
+) -> DiscordPresentation:
+    """Plan and draw a sessionless Components V2 document as a complete message."""
     return compose(
         nodes,
         target=target,
@@ -148,4 +153,4 @@ def render_static(
         palette=palette,
         strict=strict,
         reservation=reservation,
-    ).view
+    ).presentation

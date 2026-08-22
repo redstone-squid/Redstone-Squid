@@ -269,7 +269,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         from squid_layouts.discord.compose import render_static
 
         await ctx.send(
-            view=render_static(nodes),
+            view=render_static(nodes).layout,
             files=[] if files is None else files,
             ephemeral=ctx.interaction is not None,
             allowed_mentions=delivery.no_mentions(),
