@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 from squid_layouts.planning.navigation import (
     NavNode,
@@ -309,84 +310,15 @@ def split_pages(
     if not chunks:
         return [""]
 
-    prefix_lengths = [0]
-    for separator, content in chunks:
-        prefix_lengths.append(prefix_lengths[-1] + len(separator) + len(content))
-
-    def page_length(start: int, end: int) -> int:
-        return prefix_lengths[end] - prefix_lengths[start] - len(chunks[start][0])
-
     def page_text(start: int, end: int) -> str:
         return chunks[start][1] + "".join(separator + content for separator, content in chunks[start + 1 : end])
-
-    count = len(chunks)
-    earliest = [0] * (count + 1)
-    window_start = 0
-    for end in range(1, count + 1):
-        while page_length(window_start, end) > limit:
-            window_start += 1
-        earliest[end] = window_start
-    pages = 0
-    start = 0
-    while start < count:
-        end = start + 1
-        while end < count and page_length(start, end + 1) <= limit:
-            end += 1
-        pages += 1
-        start = end
-
-    if count > 256:
-        cuts: list[int] = []
-        start = 0
-        for used in range(1, pages):
-            remaining_pages = pages - used
-            target = (prefix_lengths[count] - prefix_lengths[start]) / (remaining_pages + 1)
-            end = start + 1
-            maximum = count - remaining_pages
-            while end < maximum and page_length(start, end + 1) <= limit:
-                if page_length(start, end + 1) > target and page_length(start, end) >= min_fill:
-                    before = abs(page_length(start, end) - target)
-                    after = abs(page_length(start, end + 1) - target)
-                    if after <= before:
-                        end += 1
-                    break
-                end += 1
-            cuts.append(end)
-            start = end
-        cuts.append(count)
-        result: list[str] = []
-        start = 0
-        for end in cuts:
-            result.append(page_text(start, end))
-            start = end
-        return result
-
-    ideal = len(text) / pages
-    type BreakState = tuple[int, float, tuple[int, ...], tuple[int, ...]]
-    states: dict[tuple[int, int], BreakState] = {(0, 0): (0, 0.0, (), ())}
-    for used in range(1, pages + 1):
-        for end in range(1, count + 1):
-            best: BreakState | None = None
-            for start in range(earliest[end], end):
-                previous = states.get((used - 1, start))
-                if previous is None:
-                    continue
-                length = page_length(start, end)
-                if length > limit:
-                    continue
-                violation = int(used < pages and length < min_fill)
-                violation += int(used == pages and end - start < widows)
-                candidate = (
-                    previous[0] + violation,
-                    previous[1] + (length - ideal) ** 2,
-                    (*previous[2], -end),
-                    (*previous[3], end),
-                )
-                if best is None or candidate < best:
-                    best = candidate
-            if best is not None:
-                states[(used, end)] = best
-    cuts = states[(pages, count)][3]
+    cuts = balanced_breaks(
+        [BreakItem(len(content), leading_chars=len(separator)) for separator, content in chunks],
+        max_chars=limit,
+        min_fill=min_fill,
+        widows=widows,
+        ideal_total=len(text),
+    )
     result: list[str] = []
     start = 0
     for end in cuts:

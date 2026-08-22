@@ -193,3 +193,15 @@ class TestRegionPagination:
         last = sl.plan(document, target=DEFAULT_TARGET, positions={"widows": sl.Position(offset=1)})
 
         assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]
+
+    def test_a_large_region_is_broken_without_a_size_dependent_heuristic(self) -> None:
+        document = sl.paged(
+            sl.section(*(sl.paragraph("x" * 10) for _ in range(100))),
+            key="large-region",
+            chars=100,
+        )
+
+        first = sl.plan(document, target=DEFAULT_TARGET)
+
+        assert first.scene.pagers[0].pages == 10
+        assert self._texts(first) == ["x" * 10] * 10
