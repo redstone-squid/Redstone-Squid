@@ -42,12 +42,13 @@ from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import Renderer
+from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.guards import GuardLedger
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import LIMITS, DiscordLimits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -450,10 +451,10 @@ class Mount:
         component: Component,
         *,
         access: AccessPolicy,
+        target: Target = V2_TARGET,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         palette: Palette = DEFAULT_PALETTE,
-        limits: V2Limits = LIMITS,
         strict: bool = False,
         timeout: float | None = 900,
         on_error: ErrorHook | None = None,
@@ -492,7 +493,13 @@ class Mount:
         """How long an action carrying `Feedback` may run before its interim paint appears."""
         self.guards = GuardLedger(now=clock)
         """Where stateful guards keep their counts; it lives and dies with this mount."""
-        self.limits = limits
+        self.target = target
+        """The message mode this mount owns for its whole life.
+
+        A mount has one target: changing it means opening a replacement mount, not swapping
+        a live mount's renderer out from under its action bindings.
+        """
+        self.limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
         self.strict = strict
         self.timeout = timeout
         self.access = access
@@ -704,7 +711,7 @@ class Mount:
                     limits=self.limits,
                     view_factory=lambda: MountedView(self, self._remaining_timeout()),
                 ),
-                limits=self.limits,
+                target=self.target,
                 chrome=self._chrome,
                 localization=self.localization,
                 palette=self.palette,

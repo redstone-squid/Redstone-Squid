@@ -7,12 +7,12 @@ from hypothesis import strategies as st
 
 from squid_layouts import LayoutInvariantError
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
-)
-from squid_layouts.discord import (
     ELLIPSIS,
     conform,
     render_static,
+)
+from squid_layouts.discord import (
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord.testing import assert_within_limits
 from squid_layouts.planning import (

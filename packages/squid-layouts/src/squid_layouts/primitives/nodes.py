@@ -13,7 +13,7 @@ from enum import StrEnum
 from squid_layouts.actions import ActionBinding, ActionPolicy, Feedback, PressHandler, SelectionHandler
 from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
-from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
+from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
@@ -219,6 +219,101 @@ class Boundary:
             raise ValueError(message)
 
 
+# --- Classic message structure --------------------------------------------------------------
+#
+# These are as exact as `Row` and `Section` are, and gated the same way: a target that lacks
+# `message.content` or `layout.embed` rejects them during validation. They live in the shared
+# node union rather than a parallel IR so that one `Variants` ladder can offer a V2 rung and a
+# classic rung for the same region, and so `resolve_variants` and measurement stay single
+# implementations.
+
+
+@dataclass(frozen=True, slots=True)
+class Content:
+    """The classic message's `content` field: the text a reply preview or push shows.
+
+    A Components V2 message has no `content` at all, which is the whole reason the classic
+    target is a permanent capability rather than a migration ramp. At most one may appear in
+    a document, because a message has exactly one such field.
+
+    Defaults to `Never` because content is usually the part that must survive: it is what a
+    notification quotes, and silently shortening it defeats the reason it was written.
+    """
+
+    content: TextLike
+    overflow: Overflow = field(default_factory=Never)
+    priority: int = 0
+
+
+type CardText = TextLike | Text
+"""A card slot's text: a bare string, or a `Text` carrying an overflow policy.
+
+A bare string means `Never` — a title or a field name is written to be read whole, and
+quietly clipping one is worse than telling the author it does not fit. An author who would
+rather it shrank says so by writing `Text(value, overflow=Truncate())`.
+"""
+
+
+def card_text(value: CardText) -> Text:
+    """Normalize a card slot to a `Text` node, defaulting a bare string to `Never`."""
+    return value if isinstance(value, Text) else Text(value, overflow=Never())
+
+
+@dataclass(frozen=True, slots=True)
+class CardField:
+    """One embed field. A nested value, never a legal root node."""
+
+    name: CardText
+    value: CardText
+    inline: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CardAuthor:
+    name: CardText
+    url: str | None = None
+    icon_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CardFooter:
+    text: CardText
+    icon_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CardMedia:
+    """An embed image or thumbnail. The description is kept even where Discord drops it."""
+
+    url: str
+    description: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Card:
+    """One embed: a titled, coloured, field-structured block beside the message text.
+
+    ``children`` are description blocks, joined with blank lines in document order — one
+    deterministic joining rule, so the same card always produces the same description and the
+    same fingerprint.
+
+    Every text-bearing slot takes the ordinary overflow policies through :data:`CardText`.
+    Server-generated embed properties — provider, video, and anything Discord fills in from a
+    URL it unfurls — are not offered, because Squid cannot own what it did not write.
+    """
+
+    children: tuple[Node, ...] = ()
+    title: CardText | None = None
+    url: str | None = None
+    fields: tuple[CardField, ...] = ()
+    footer: CardFooter | None = None
+    author: CardAuthor | None = None
+    accent: Color | None = None
+    image: CardMedia | None = None
+    thumbnail: CardMedia | None = None
+    timestamp: ZonedDateTime | datetime | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class Extension:
     """Target extension with a mandatory portable fallback."""
@@ -404,6 +499,8 @@ type Node = (
     | Break
     | RawItem
     | Boundary
+    | Card
+    | Content
     | Extension
     | Variants
 )

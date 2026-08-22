@@ -4,7 +4,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import DEFAULT_TARGET, Everyone, Mount, Renderer, delivery
+from squid_layouts.discord import V2_TARGET, Everyone, Mount, Renderer, delivery
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.scene import Codec
@@ -19,7 +19,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
     asset = _inline()
     node = sl.download("Report", asset, key="report-download", description="Generated now")
 
-    result = sl.plan(node, target=DEFAULT_TARGET)
+    result = sl.plan(node, target=V2_TARGET)
 
     assert isinstance(node, sl.Download)
     assert result.scene.components_v2.children == (
@@ -31,7 +31,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
 
 
 def test_download_uses_localized_chrome_when_the_explicit_label_is_none() -> None:
-    result = sl.plan(sl.download(None, _inline(), key="report-download"), target=DEFAULT_TARGET)
+    result = sl.plan(sl.download(None, _inline(), key="report-download"), target=V2_TARGET)
 
     assert result.scene.components_v2.children[0] == SceneText("Download")
 
@@ -40,16 +40,16 @@ def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:
     asset = _inline()
     node = sl.download("Report", asset, key="report-download")
 
-    result = sl.plan(sl.Document((node,), (asset,)), target=DEFAULT_TARGET)
+    result = sl.plan(sl.Document((node,), (asset,)), target=V2_TARGET)
     assert result.scene.assets == (sl.scene.SceneAsset("report", "report.txt", "text/plain"),)
 
     conflicting = sl.Asset("report", "other.txt", "text/plain", sl.InlineAsset(b"other"))
     with pytest.raises(sl.LayoutInvariantError, match="identifies two different assets"):
-        sl.plan(sl.Document((node,), (conflicting,)), target=DEFAULT_TARGET)
+        sl.plan(sl.Document((node,), (conflicting,)), target=V2_TARGET)
 
 
 def test_scene_file_codec_round_trips() -> None:
-    scene = sl.plan(sl.download("Report", _inline(), key="report-download"), target=DEFAULT_TARGET).scene
+    scene = sl.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET).scene
 
     assert Codec.loads(Codec.dumps(scene)) == scene
     assert Codec.to_dict(scene)["body"]["children"][1] == {
@@ -61,12 +61,12 @@ def test_scene_file_codec_round_trips() -> None:
 
 
 def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
-    inline = sl.plan(sl.download("Report", _inline(), key="report-download"), target=DEFAULT_TARGET)
+    inline = sl.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET)
     inline_view = Renderer().draw(inline.scene, plan=inline)
     assert any(isinstance(item, discord.ui.File) for item in inline_view.walk_children())
 
     stored = sl.Asset("report", "report.txt", "text/plain", sl.StoredAsset("https://example.com/report.txt"))
-    linked = sl.plan(sl.download("Report", stored, key="report-download"), target=DEFAULT_TARGET)
+    linked = sl.plan(sl.download("Report", stored, key="report-download"), target=V2_TARGET)
     linked_view = Renderer().draw(linked.scene, plan=linked)
     link = next(item for item in linked_view.walk_children() if isinstance(item, discord.ui.Button))
     assert link.url == "https://example.com/report.txt"
@@ -113,7 +113,7 @@ async def test_mount_keeps_raising_for_non_url_stored_references() -> None:
 
 
 def test_html_renderer_emits_data_links_resolver_links_and_visible_placeholders() -> None:
-    result = sl.plan(sl.download("Report", _inline(), key="report-download"), target=DEFAULT_TARGET)
+    result = sl.plan(sl.download("Report", _inline(), key="report-download"), target=V2_TARGET)
 
     rendered = HtmlRenderer().draw(result.scene, plan=result)
     assert 'href="data:text/plain;base64,ZnVsbCByZXBvcnQ="' in rendered

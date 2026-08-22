@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.discord import V2_TARGET
 from squid_layouts.semantic import SemanticNode
 
 
@@ -55,7 +55,7 @@ class TestNormalization:
     def test_empty_containers_are_pruned_by_the_planner(self) -> None:
         shown = False
 
-        result = sl.plan(sl.section(None, shown and sl.paragraph("x")), target=DEFAULT_TARGET)
+        result = sl.plan(sl.section(None, shown and sl.paragraph("x")), target=V2_TARGET)
 
         assert result.scene.components_v2.children == ()
 

@@ -99,10 +99,10 @@ from squid_layouts.discord.sessions import (
     UserScope,
     open_personal,
 )
-from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
+from squid_layouts.discord.target import CLASSIC_TARGET, V2_TARGET, NativeItem, Target
 from squid_layouts.errors import ExistingLayoutError, LimitViolationError
-from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
-from squid_layouts.planning.limits import V2Limits as Limits
+from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits, DiscordLimits, V2Limits
+from squid_layouts.planning.limits import LIMITS as V2_LIMITS
 from squid_layouts.planning.navigation import (
     NavFactory,
     NavigationContext,
@@ -116,10 +116,12 @@ from squid_layouts.planning.planner import EMPTY_RESERVATION
 from squid_layouts.planning.target import ResourceCost
 
 __all__ = [
-    "DEFAULT_LIMITS",
-    "DEFAULT_TARGET",
+    "CLASSIC_LIMITS",
+    "CLASSIC_TARGET",
     "ELLIPSIS",
     "EMPTY_RESERVATION",
+    "V2_LIMITS",
+    "V2_TARGET",
     "Abandoned",
     "AccessDecision",
     "AccessPolicy",
@@ -128,6 +130,7 @@ __all__ = [
     "AttachedFragment",
     "AuditReport",
     "Check",
+    "ClassicLimits",
     "CollisionDecision",
     "CollisionPolicy",
     "Composition",
@@ -138,6 +141,7 @@ __all__ = [
     "DeliveryReceipt",
     "Denied",
     "Destination",
+    "DiscordLimits",
     "DiscordMode",
     "DiscordModeError",
     "DiscordPresentation",
@@ -156,7 +160,6 @@ __all__ = [
     "GuildScope",
     "LabelSpec",
     "LimitViolationError",
-    "Limits",
     "Middleware",
     "ModalSpec",
     "Mount",
@@ -209,6 +212,7 @@ __all__ = [
     "UserGuildScope",
     "UserScope",
     "Users",
+    "V2Limits",
     "Violation",
     "ViolationCode",
     "Wire",

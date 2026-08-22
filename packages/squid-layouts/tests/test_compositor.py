@@ -7,7 +7,7 @@ from hypothesis import strategies as st
 
 from squid_layouts import PressEvent
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
     ResourceCost,

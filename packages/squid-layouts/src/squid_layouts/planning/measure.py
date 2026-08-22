@@ -11,7 +11,8 @@ Nothing here chooses between alternatives. `Variants` and semantic fallbacks are
 planner's search decisions, and a layout reaching this module has already made them.
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum, StrEnum
@@ -23,11 +24,16 @@ from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_layouts.planning.limits import (
     COMPONENTS,
+    CONTENT_TEXT,
+    CONTROLS,
     DISPLAY_TEXT,
     ELLIPSIS,
+    EMBED_TEXT,
+    EMBEDS,
     LIMITS,
+    ROWS,
     TEXT_AXES,
-    V2Limits,
+    DiscordLimits,
 )
 from squid_layouts.planning.navigation import (
     NavNode,
@@ -42,7 +48,11 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    Card,
+    CardMedia,
+    CardText,
     Code,
+    Content,
     File,
     Footer,
     Gallery,
@@ -65,6 +75,7 @@ from squid_layouts.primitives.nodes import (
     Time,
     Variants,
     ZonedTime,
+    card_text,
 )
 from squid_layouts.primitives.styles import Color
 from squid_layouts.sources import Position
@@ -83,6 +94,8 @@ class SolveNoteCode(StrEnum):
     CLAMP_SELECT_PLACEHOLDER = "clamp.select_placeholder"
     CLAMP_SECTION_TEXTS = "clamp.section_texts"
     CLAMP_GALLERY_ITEMS = "clamp.gallery_items"
+    CLAMP_EMBED_TEXT = "clamp.embed_text"
+    CLAMP_EMBED_FIELDS = "clamp.embed_fields"
     NODE_DROPPED = "degradation.node_dropped"
     ALTERNATE = "degradation.alternate"
     ALTERNATE_EXHAUSTED = "degradation.alternate_exhausted"
@@ -196,6 +209,40 @@ class RGroup:
     children: list[Realized]
 
 
+@dataclass(frozen=True, slots=True)
+class RContent:
+    """The realized `content` field, whose text was allocated from its own pool."""
+
+    slot: RText
+
+
+@dataclass(frozen=True, slots=True)
+class RCardField:
+    name: RText
+    value: RText
+    inline: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RCard:
+    """One realized embed. Every slot already holds its final, allocated string."""
+
+    title: RText | None
+    url: str | None
+    blocks: list[Realized]
+    """Description blocks, joined by the dialect once their text is allocated."""
+    fields: list[RCardField]
+    footer: RText | None
+    footer_icon: str | None
+    author: RText | None
+    author_url: str | None
+    author_icon: str | None
+    accent: Color | None
+    image: CardMedia | None
+    thumbnail: CardMedia | None
+    timestamp: ZonedDateTime | datetime | None
+
+
 type Realized = (
     RText
     | RTime
@@ -203,6 +250,8 @@ type Realized = (
     | RSection
     | RPanel
     | RGroup
+    | RCard
+    | RContent
     | File
     | Sep
     | Row
@@ -275,7 +324,7 @@ class MeasuredLayout:
     """
     nav: PlannedNav | None = None
     chrome: Chrome = DEFAULT_CHROME
-    limits: V2Limits = LIMITS
+    limits: DiscordLimits = LIMITS
     degradation: DegradationProfile = field(default_factory=DegradationProfile)
 
     def fits(self, capacities: Mapping[str, int]) -> bool:
@@ -509,7 +558,7 @@ def text_total(cost: ResourceCost) -> int:
     return sum(value for axis, value in cost.values.items() if axis in TEXT_AXES)
 
 
-def measure_nodes(nodes: Sequence[Node], *, limits: V2Limits = LIMITS) -> ResourceCost:
+def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> ResourceCost:
     """Measure preferred cost per named axis, without applying any budget pressure."""
 
     def lower_shape(node: Node) -> list[Node]:
@@ -538,7 +587,7 @@ def measure_nodes(nodes: Sequence[Node], *, limits: V2Limits = LIMITS) -> Resour
     text = dict(builder.raw_text_cost)
     for unit in builder.units:
         text[unit.axis] = text.get(unit.axis, 0) + unit.need
-    return ResourceCost({**text, COMPONENTS: _component_count(children)})
+    return ResourceCost({**text, **_structural_cost(children)})
 
 
 def split_text_node(
@@ -572,7 +621,7 @@ def split_text_node(
 
 @dataclass(slots=True)
 class _Builder:
-    limits: V2Limits = LIMITS
+    limits: DiscordLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: dict[str, int] = field(default_factory=dict)
@@ -588,6 +637,84 @@ class _Builder:
         made = _make_unit(node, slot, len(self.units), self.axis)
         if made is not None:
             self.units.append(made)
+
+    @contextmanager
+    def pool(self, axis: str) -> Iterator[None]:
+        """Realize everything inside this block against another text pool."""
+        previous = self.axis
+        self.axis = axis
+        try:
+            yield
+        finally:
+            self.axis = previous
+
+    def slot(self, value: CardText | None, cap: int, what: str) -> RText | None:
+        """Realize one card text slot, clamping it to its own local cap first.
+
+        Local caps are the target's shape, not its remaining room: an embed title is 256
+        characters whatever else the message holds. A slot that cannot shrink and does not
+        fit is rejected by the dialect's validation before this ever runs, so anything
+        trimmed here asked to be.
+        """
+        if value is None:
+            return None
+        node = card_text(value)
+        content = node.content.strip()
+        if not content:
+            return None
+        if len(content) > cap:
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_EMBED_TEXT,
+                    f"{what} clamped from {len(content)} to {cap}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
+            content = _trim_keep(content, cap, "head")
+        slot = RText()
+        self.unit(replace(node, content=content), slot)
+        return slot
+
+    def card(self, node: Card) -> RCard:
+        limits = self.limits
+        fields = node.fields[: getattr(limits, "embed_fields", len(node.fields))]
+        if len(fields) != len(node.fields):
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_EMBED_FIELDS,
+                    f"card holds {len(node.fields)} fields; keeping {len(fields)}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
+        realized_fields: list[RCardField] = []
+        for field_node in fields:
+            name = self.slot(field_node.name, getattr(limits, "field_name", 256), "field name")
+            value = self.slot(field_node.value, getattr(limits, "field_value", 1024), "field value")
+            if name is None or value is None:
+                # Discord rejects an empty field name or value outright, and a field with
+                # neither is not a smaller field, it is a different document.
+                message = "a CardField needs a non-empty name and value after trimming"
+                raise LayoutInvariantError(message)
+            realized_fields.append(RCardField(name, value, field_node.inline))
+        return RCard(
+            title=self.slot(node.title, getattr(limits, "embed_title", 256), "embed title"),
+            url=node.url,
+            blocks=self.realize_children(node.children),
+            fields=realized_fields,
+            footer=None
+            if node.footer is None
+            else self.slot(node.footer.text, getattr(limits, "embed_footer", 2048), "embed footer"),
+            footer_icon=None if node.footer is None else node.footer.icon_url,
+            author=None
+            if node.author is None
+            else self.slot(node.author.name, getattr(limits, "embed_author", 256), "embed author"),
+            author_url=None if node.author is None else node.author.url,
+            author_icon=None if node.author is None else node.author.icon_url,
+            accent=node.accent,
+            image=node.image,
+            thumbnail=node.thumbnail,
+            timestamp=node.timestamp,
+        )
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
@@ -678,6 +805,16 @@ class _Builder:
                 if isinstance(accessory, RawItem):
                     self.charge(accessory.text_cost)
                 return RSection(texts=slots, accessory=accessory)
+            case Content(content=text, overflow=overflow, priority=priority):
+                slot = RText()
+                # Message content is its own pool. Nothing in an embed can borrow from it and
+                # nothing here can borrow from them, which is the whole point of the split.
+                with self.pool(CONTENT_TEXT):
+                    self.unit(Text(text, overflow=overflow, priority=priority), slot)
+                return RContent(slot)
+            case Card():
+                with self.pool(EMBED_TEXT):
+                    return self.card(node)
             case Panel(children=children, accent=accent):
                 return RPanel(children=self.realize_children(children), accent=accent)
             case Budget(
@@ -1158,6 +1295,10 @@ def _prune(children: list[Realized]) -> list[Realized]:
         match child:
             case RText(dropped=True):
                 continue
+            case RCard(blocks=blocks):
+                pruned.append(replace(child, blocks=_prune(blocks)))
+            case RContent(slot=slot) if slot.dropped:
+                continue
             case RPanel(children=inner, accent=accent):
                 kept = _prune(inner)
                 if kept:
@@ -1218,25 +1359,53 @@ def _item_component_cost(item: object) -> int:
     return item.component_cost if isinstance(item, RawItem) else 1
 
 
-def _component_count(children: list[Realized]) -> int:
-    count = 0
-    for child in children:
-        match child:
-            case RPanel(children=inner):
-                count += 1 + _component_count(inner)
-            case RGroup(children=inner):
-                count += _component_count(inner)
-            case RSection(texts=texts, accessory=accessory):
-                count += 1 + len(texts) + _item_component_cost(accessory)
-            case Row(items=items):
-                count += 1 + sum(_item_component_cost(item) for item in items)
-            case SelectMenu() | RoutedSelect():
-                count += 2  # the implicit ActionRow plus the select itself
-            case RawItem(component_cost=component_cost):
-                count += component_cost
-            case _:
-                count += 1
-    return count
+def _structural_cost(children: Sequence[Realized]) -> dict[str, int]:
+    """Count every structural axis at once, whichever target ends up budgeting them.
+
+    A Components V2 target budgets components; a classic target budgets embeds, rows, and
+    view children. Counting all four always is cheaper than asking the dialect, and costs
+    nothing: a target simply does not budget the axes it has no field for, and an axis no
+    target budgets is unconstrained rather than zero.
+    """
+    totals = {COMPONENTS: 0, EMBEDS: 0, ROWS: 0, CONTROLS: 0}
+
+    def walk(nodes: Sequence[Realized]) -> None:
+        for child in nodes:
+            match child:
+                case RPanel(children=inner):
+                    totals[COMPONENTS] += 1
+                    walk(inner)
+                case RGroup(children=inner):
+                    walk(inner)
+                case RCard(blocks=blocks):
+                    totals[EMBEDS] += 1
+                    totals[COMPONENTS] += 1
+                    walk(blocks)
+                case RContent():
+                    # Content is a message field, not a component. It costs no structure.
+                    continue
+                case RSection(texts=texts, accessory=accessory):
+                    totals[COMPONENTS] += 1 + len(texts) + _item_component_cost(accessory)
+                case Row(items=items):
+                    totals[COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
+                    totals[ROWS] += 1
+                    totals[CONTROLS] += len(items)
+                case SelectMenu() | RoutedSelect():
+                    totals[COMPONENTS] += 2  # the implicit ActionRow plus the select itself
+                    totals[ROWS] += 1  # a select always occupies a whole row
+                    totals[CONTROLS] += 1
+                case RawItem(component_cost=component_cost):
+                    totals[COMPONENTS] += component_cost
+                case _:
+                    totals[COMPONENTS] += 1
+
+    walk(children)
+    return totals
+
+
+def _component_count(children: Sequence[Realized]) -> int:
+    """Components alone, for callers comparing one V2 subtree against another."""
+    return _structural_cost(children)[COMPONENTS]
 
 
 type PositionState = Mapping[str, Position] | Position | None
@@ -1245,7 +1414,7 @@ type PositionState = Mapping[str, Position] | Position | None
 def measure(
     nodes: Sequence[Node],
     *,
-    limits: V2Limits = LIMITS,
+    limits: DiscordLimits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     strict: bool = False,
@@ -1348,7 +1517,7 @@ class _Pass:
 def _measure_once(
     nodes: Sequence[Node],
     *,
-    limits: V2Limits,
+    limits: DiscordLimits,
     chrome: Chrome,
     reserved: ResourceCost,
     position: PositionState,
@@ -1447,8 +1616,9 @@ def _measure_once(
         pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 
-    cost = ResourceCost({**text_used, COMPONENTS: _component_count(children)})
-    for axis, spent, capacity in cost.over({**limits.text_axes, COMPONENTS: limits.total_components}):
+    cost = ResourceCost({**text_used, **_structural_cost(children)})
+    capacities = {name: getattr(limits, attribute) for name, attribute in limits.budgets.items()}
+    for axis, spent, capacity in cost.over({**limits.text_axes, **capacities}):
         builder.notes.append(
             _note(
                 SolveNoteCode.COMPONENT_BUDGET if axis == COMPONENTS else SolveNoteCode.TEXT_BUDGET,
