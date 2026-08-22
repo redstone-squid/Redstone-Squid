@@ -428,7 +428,7 @@ def _search_strategies(
         phase_one.append(attempted)
         if first is None:
             first = attempted
-        fits = attempted.solved.components <= limits.total_components and not _has_hard_failure(attempted.solved)
+        fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
         if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
             degraded = attempted
 
@@ -468,7 +468,7 @@ def _search_strategies(
                 search_budget=remaining,
             )
             states_explored += attempted.solved.states_explored
-            fits = attempted.solved.components <= limits.total_components and not _has_hard_failure(attempted.solved)
+            fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
             if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
                 degraded = attempted
             if attempted.solved.search_fallback:
@@ -497,10 +497,6 @@ def _search_strategies(
         search_fallback=fallback,
     )
     return replace(selected, semantic=semantic)
-
-
-def _has_hard_failure(solved: SolvedLayout) -> bool:
-    return any(note.startswith("Never nodes need") or note.startswith("Budget floors need") for note in solved.notes)
 
 
 def _degraded_key(attempt: _StrategyAttempt) -> tuple[DegradationProfile, CostVector]:
@@ -632,12 +628,10 @@ def plan(
         )
     _reconcile_pagers(solved, broker)
     if strict and solved.notes:
-        raise LayoutDegradedError("; ".join(solved.notes))
-    hard_failures = tuple(
-        note for note in solved.notes if note.startswith("Never nodes need") or note.startswith("Budget floors need")
-    )
+        raise LayoutDegradedError("; ".join(note.message for note in solved.notes))
+    hard_failures = solved.failures
     if hard_failures:
-        message = "; ".join(hard_failures)
+        message = "; ".join(note.message for note in hard_failures)
         raise UnsolvableLayoutError(message)
     converter = _Converter()
     scene = SceneDocument(
@@ -654,9 +648,9 @@ def plan(
         + root_events
         + tuple(
             PlanEvent(
-                code="layout.degraded",
+                code=f"layout.{note.code}",
                 path="$",
-                message=note,
+                message=note.message,
                 severity=PlanSeverity.DEGRADATION,
             )
             for note in solved.notes

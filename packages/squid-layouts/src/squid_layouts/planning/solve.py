@@ -9,6 +9,7 @@ dropped footnote genuinely returns its characters to the body.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from enum import Enum, StrEnum
 from heapq import heappop, heappush
 from itertools import count
 
@@ -58,11 +59,67 @@ from squid_layouts.text import NEUTRAL, Localization
 type TextBearing = Text | Heading | Footer | Code | Lines
 
 
+class SolveNoteCode(StrEnum):
+    """Stable identities for diagnostics emitted by the measured solver."""
+
+    CLAMP_BUTTON_LABEL = "clamp.button_label"
+    CLAMP_SELECT_OPTIONS = "clamp.select_options"
+    CLAMP_SELECT_OPTION_TEXT = "clamp.select_option_text"
+    CLAMP_SELECT_PLACEHOLDER = "clamp.select_placeholder"
+    CLAMP_SECTION_TEXTS = "clamp.section_texts"
+    CLAMP_GALLERY_ITEMS = "clamp.gallery_items"
+    NODE_DROPPED = "degradation.node_dropped"
+    ALTERNATE = "degradation.alternate"
+    ALTERNATE_EXHAUSTED = "degradation.alternate_exhausted"
+    TRUNCATED = "degradation.truncated"
+    NEVER_CLAMPED = "degradation.never_clamped"
+    CHROME_DROP = "degradation.chrome_drop"
+    CONDENSED = "degradation.condensed"
+    CONDENSE_TRUNCATED = "degradation.condense_truncated"
+    SPILL_ALTERNATES = "degradation.spill_alternates"
+    SPILLED = "degradation.spilled"
+    SPILL_DROPPED = "degradation.spill_dropped"
+    NEVER_BUDGET = "failure.never_budget"
+    BUDGET_FLOOR = "failure.budget_floor"
+    BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
+    VARIANT_STEP = "degradation.variant_step"
+    PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
+    COMPONENT_BUDGET = "degradation.component_budget"
+
+
+class SolveNoteSeverity(Enum):
+    """How a solver note affects feasibility and reporting."""
+
+    CLAMP = "clamp"
+    DEGRADATION = "degradation"
+    FAILURE = "failure"
+
+
+@dataclass(frozen=True, slots=True)
+class SolveNote:
+    """A stable solver diagnostic whose meaning does not depend on message wording."""
+
+    code: SolveNoteCode
+    message: str
+    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION
+
+    def __str__(self) -> str:
+        return self.message
+
+
+def _note(
+    code: SolveNoteCode,
+    message: str,
+    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION,
+) -> SolveNote:
+    return SolveNote(code, message, severity)
+
+
 class LayoutOverflowError(Exception):
     """The document cannot fit its hard constraints into Discord's budgets."""
 
-    def __init__(self, notes: list[str]) -> None:
-        super().__init__("; ".join(notes))
+    def __init__(self, notes: list[SolveNote]) -> None:
+        super().__init__("; ".join(note.message for note in notes))
         self.notes = notes
 
 
@@ -137,7 +194,7 @@ class Pager:
 @dataclass(frozen=True, slots=True)
 class SolvedLayout:
     children: list[Realized]
-    notes: list[str]
+    notes: list[SolveNote]
     pagers: tuple[Pager, ...] = ()
     components: int = 0
     """Components the built view will hold, including every pager's controls."""
@@ -156,6 +213,11 @@ class SolvedLayout:
     states_explored: int = 1
     search_fallback: bool = False
     variant_positions: tuple[tuple[_VariantPath, int], ...] = ()
+
+    @property
+    def failures(self) -> tuple[SolveNote, ...]:
+        """Constraint failures that make this solution unusable without another rung."""
+        return tuple(note for note in self.notes if note.severity is SolveNoteSeverity.FAILURE)
 
     def reposition(self, positions: Mapping[str, Position]) -> None:
         """Show a different position in each named pager without re-fitting.
@@ -414,7 +476,7 @@ def split_text_node(
 @dataclass(slots=True)
 class _Builder:
     limits: V2Limits = LIMITS
-    notes: list[str] = field(default_factory=list)
+    notes: list[SolveNote] = field(default_factory=list)
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: int = 0
     budgets: list[_BudgetRegion] = field(default_factory=list)
@@ -422,7 +484,13 @@ class _Builder:
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
             return button
-        self.notes.append(f"button label clamped from {len(button.label)}")
+        self.notes.append(
+            _note(
+                SolveNoteCode.CLAMP_BUTTON_LABEL,
+                f"button label clamped from {len(button.label)}",
+                SolveNoteSeverity.CLAMP,
+            )
+        )
         trimmed = _trim_keep(button.label, self.limits.button_label, "head")
         return replace(button, label=trimmed)
 
@@ -430,7 +498,13 @@ class _Builder:
         limits = self.limits
         options = select.options
         if len(options) > limits.select_options:
-            self.notes.append(f"{len(options)} select options clamped to {limits.select_options}")
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_SELECT_OPTIONS,
+                    f"{len(options)} select options clamped to {limits.select_options}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
             options = options[: limits.select_options]
         clamped_options = []
         for option in options:
@@ -440,12 +514,20 @@ class _Builder:
             if description is not None and len(description) > limits.option_description:
                 description = _trim_keep(description, limits.option_description, "head")
             if (label, value, description) != (option.label, option.value, option.description):
-                self.notes.append("select option text clamped")
+                self.notes.append(
+                    _note(SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP)
+                )
                 option = Option(label=label, value=value, description=description, default=option.default)
             clamped_options.append(option)
         placeholder = select.placeholder
         if placeholder is not None and len(placeholder) > limits.select_placeholder:
-            self.notes.append(f"select placeholder clamped from {len(placeholder)}")
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
+                    f"select placeholder clamped from {len(placeholder)}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
             placeholder = _trim_keep(placeholder, limits.select_placeholder, "head")
         return replace(
             select,
@@ -467,7 +549,13 @@ class _Builder:
                 return slot
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
-                    self.notes.append(f"section holds {len(texts)} texts; keeping 3")
+                    self.notes.append(
+                        _note(
+                            SolveNoteCode.CLAMP_SECTION_TEXTS,
+                            f"section holds {len(texts)} texts; keeping 3",
+                            SolveNoteSeverity.CLAMP,
+                        )
+                    )
                     texts = texts[:3]
                 slots: list[RText] = []
                 for text_node in texts:
@@ -496,7 +584,13 @@ class _Builder:
                 return RGroup(self.realize_children(children))
             case Gallery(urls=urls):
                 if len(urls) > 10:
-                    self.notes.append(f"gallery holds {len(urls)} items; keeping 10")
+                    self.notes.append(
+                        _note(
+                            SolveNoteCode.CLAMP_GALLERY_ITEMS,
+                            f"gallery holds {len(urls)} items; keeping 10",
+                            SolveNoteSeverity.CLAMP,
+                        )
+                    )
                     node = Gallery(urls=urls[:10])
                 return node
             case Row(items=items):
@@ -521,7 +615,7 @@ class _Builder:
                 return node
 
 
-def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: DegradationRecorder) -> bool:
+def _apply(unit: _Unit, chrome: Chrome, notes: list[SolveNote], degradation: DegradationRecorder) -> bool:
     """Render the unit into its slot within its grant. Returns False when the node drops."""
     if unit.count_pages is not None:
         return _apply_count_pages(unit)
@@ -535,7 +629,9 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: Degradati
     usable = unit.grant - unit.chrome_len
     match unit.overflow:
         case Drop():
-            notes.append(f"dropped node {unit.index} ({unit.need} chars over budget)")
+            notes.append(
+                _note(SolveNoteCode.NODE_DROPPED, f"dropped node {unit.index} ({unit.need} chars over budget)")
+            )
             degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
         case Spill() if unit.ladders is not None:
@@ -545,7 +641,12 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: Degradati
         case Alts(ladder=ladder) if usable >= 1:
             for step, alternate in enumerate(ladder, 1):
                 if alternate and len(alternate) <= usable:
-                    notes.append(f"node {unit.index} degraded to a {len(alternate)}-char alternate")
+                    notes.append(
+                        _note(
+                            SolveNoteCode.ALTERNATE,
+                            f"node {unit.index} degraded to a {len(alternate)}-char alternate",
+                        )
+                    )
                     degradation.record(
                         priority=unit.priority,
                         path=f"$.text.{unit.index}",
@@ -554,7 +655,12 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: Degradati
                     unit.slot.content = unit.prefix + alternate + unit.suffix
                     return True
             fallback = ladder[-1] if ladder else unit.content
-            notes.append(f"node {unit.index} exhausted its ladder; trimming the last alternate")
+            notes.append(
+                _note(
+                    SolveNoteCode.ALTERNATE_EXHAUSTED,
+                    f"node {unit.index} exhausted its ladder; trimming the last alternate",
+                )
+            )
             degradation.record(
                 priority=unit.priority,
                 path=f"$.text.{unit.index}",
@@ -569,7 +675,12 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: Degradati
             unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
             return True
         case Truncate(keep=keep) if usable >= 1:
-            notes.append(f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
+            notes.append(
+                _note(
+                    SolveNoteCode.TRUNCATED,
+                    f"trimmed node {unit.index} from {len(unit.content)} to {usable}",
+                )
+            )
             degradation.record(
                 priority=unit.priority,
                 path=f"$.text.{unit.index}",
@@ -578,11 +689,21 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: Degradati
             unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, keep) + unit.suffix
             return True
         case Never() if usable >= 1:
-            notes.append(f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}")
+            notes.append(
+                _note(
+                    SolveNoteCode.NEVER_CLAMPED,
+                    f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}",
+                )
+            )
             unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, "head") + unit.suffix
             return True
         case _:
-            notes.append(f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}")
+            notes.append(
+                _note(
+                    SolveNoteCode.CHROME_DROP,
+                    f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}",
+                )
+            )
             degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
 
@@ -638,7 +759,7 @@ def _step_ladders(ladders: tuple[tuple[str, ...], ...], join: str, usable: int) 
 def _apply_condense(
     unit: _Unit,
     usable: int,
-    notes: list[str],
+    notes: list[SolveNote],
     degradation: DegradationRecorder,
 ) -> bool:
     """Shorten entries as far as their ladders go, then trim; never lose a whole entry."""
@@ -647,14 +768,24 @@ def _apply_condense(
     body = unit.join.join(ladder[level] for ladder, level in zip(ladders, levels, strict=True))
     stepped = sum(1 for level in levels if level)
     if stepped:
-        notes.append(f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders")
+        notes.append(
+            _note(
+                SolveNoteCode.CONDENSED,
+                f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders",
+            )
+        )
         degradation.record(
             priority=unit.priority,
             path=f"$.text.{unit.index}",
             semantic_steps=sum(levels),
         )
     if len(body) > usable:
-        notes.append(f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}")
+        notes.append(
+            _note(
+                SolveNoteCode.CONDENSE_TRUNCATED,
+                f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}",
+            )
+        )
         degradation.record(
             priority=unit.priority,
             path=f"$.text.{unit.index}",
@@ -669,7 +800,7 @@ def _apply_spill(
     unit: _Unit,
     usable: int,
     chrome: Chrome,
-    notes: list[str],
+    notes: list[SolveNote],
     degradation: DegradationRecorder,
 ) -> bool:
     ladders = unit.ladders or ()
@@ -700,14 +831,24 @@ def _apply_spill(
                 shown.append(marker)
             body = unit.join.join(shown)
             if degraded:
-                notes.append(f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders")
+                notes.append(
+                    _note(
+                        SolveNoteCode.SPILL_ALTERNATES,
+                        f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders",
+                    )
+                )
                 degradation.record(
                     priority=unit.priority,
                     path=f"$.text.{unit.index}",
                     semantic_steps=sum(levels),
                 )
             if dropped:
-                notes.append(f"spilled node {unit.index}: showing {total - dropped} of {total} lines")
+                notes.append(
+                    _note(
+                        SolveNoteCode.SPILLED,
+                        f"spilled node {unit.index}: showing {total - dropped} of {total} lines",
+                    )
+                )
                 degradation.record(
                     priority=unit.priority,
                     path=f"$.text.{unit.index}",
@@ -717,7 +858,7 @@ def _apply_spill(
             return True
         if dropped < total:
             remaining_chars -= entry_lengths[drop_order[dropped]]
-    notes.append(f"dropped node {unit.index}: no line fits in {usable}")
+    notes.append(_note(SolveNoteCode.SPILL_DROPPED, f"dropped node {unit.index}: no line fits in {usable}"))
     degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
     return False
 
@@ -725,7 +866,7 @@ def _apply_spill(
 def _allocate(
     units: list[_Unit],
     budget: int,
-    notes: list[str],
+    notes: list[SolveNote],
     chrome: Chrome,
     degradation: DegradationRecorder,
 ) -> None:
@@ -743,7 +884,13 @@ def _allocate(
                 overdraw += unit.need - unit.grant
                 remaining -= unit.grant
         if overdraw:
-            notes.append(f"Never nodes need {budget + overdraw} of {budget} available characters")
+            notes.append(
+                _note(
+                    SolveNoteCode.NEVER_BUDGET,
+                    f"Never nodes need {budget + overdraw} of {budget} available characters",
+                    SolveNoteSeverity.FAILURE,
+                )
+            )
         for unit in active:
             if isinstance(unit.overflow, Condense):
                 unit.grant = min(unit.need, max(0, remaining))
@@ -795,7 +942,7 @@ class _GrantGroup:
 def _allocate_budgeted(
     builder: _Builder,
     budget: int,
-    notes: list[str],
+    notes: list[SolveNote],
     chrome: Chrome,
     degradation: DegradationRecorder,
 ) -> None:
@@ -844,7 +991,13 @@ def _allocate_budgeted(
     remaining = max(0, budget)
     hard_floor = sum(group.floor for group in groups if not group.best_effort)
     if hard_floor > remaining:
-        notes.append(f"Budget floors need {hard_floor} of {remaining} available characters")
+        notes.append(
+            _note(
+                SolveNoteCode.BUDGET_FLOOR,
+                f"Budget floors need {hard_floor} of {remaining} available characters",
+                SolveNoteSeverity.FAILURE,
+            )
+        )
 
     for group in groups:
         if group.best_effort:
@@ -857,7 +1010,12 @@ def _allocate_budgeted(
         group.grant = min(group.floor, remaining)
         remaining -= group.grant
         if group.grant < group.floor:
-            notes.append(f"breached best-effort budget floor {group.floor} with a {group.grant}-character grant")
+            notes.append(
+                _note(
+                    SolveNoteCode.BEST_EFFORT_FLOOR,
+                    f"breached best-effort budget floor {group.floor} with a {group.grant}-character grant",
+                )
+            )
 
     for priority in sorted({group.priority for group in groups}, reverse=True):
         peers = [group for group in groups if group.priority == priority and group.grant < group.demand]
@@ -1048,13 +1206,16 @@ def _variant_profile(nodes: Sequence[Node], positions: _Positions) -> Degradatio
     return profile
 
 
-def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[str]:
-    notes: list[str] = []
+def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[SolveNote]:
+    notes: list[SolveNote] = []
 
     def visit(path: _VariantPath, node: Variants, rung: int) -> None:
         notes.extend(
-            f"{_format_path(path)} stepped to variant {step + 2} of {len(node.variants)} "
-            f"(priority {node.priority}) under component pressure"
+            _note(
+                SolveNoteCode.VARIANT_STEP,
+                f"{_format_path(path)} stepped to variant {step + 2} of {len(node.variants)} "
+                f"(priority {node.priority}) under layout pressure",
+            )
             for step in range(rung)
         )
 
@@ -1129,7 +1290,7 @@ def _guided_variant_solve(
             search_fallback=bool(positions) or solved.components > limits.total_components,
             variant_positions=tuple(positions.items()),
         )
-        if solved.components <= limits.total_components and not _hard_failure(solved):
+        if solved.components <= limits.total_components and not solved.failures:
             break
         remaining = _steppable(tree, positions)
         if not remaining:
@@ -1160,10 +1321,6 @@ def _guided_variant_solve(
         )
     assert solved is not None
     return solved
-
-
-def _hard_failure(solved: SolvedLayout) -> bool:
-    return any(note.startswith("Never nodes need") or note.startswith("Budget floors need") for note in solved.notes)
 
 
 def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node]:
@@ -1269,7 +1426,7 @@ def solve(
             states_explored=states_explored,
             variant_positions=tuple(positions.items()),
         )
-        valid = solved.components <= limits.total_components and not _hard_failure(solved)
+        valid = solved.components <= limits.total_components and not solved.failures
         if valid and (best is None or solved.degradation < best.degradation):
             best = solved
             if solved.degradation.lossless:
@@ -1280,7 +1437,7 @@ def solve(
         ):
             best_overflow = solved
 
-        if solved.components <= limits.total_components and not _hard_failure(solved):
+        if solved.components <= limits.total_components and not solved.failures:
             continue
 
         for path, _ladder, rung in _steppable(tree, positions):
@@ -1327,7 +1484,12 @@ def _configure_paginators(
             if isinstance(unit.node, Lines):
                 unit.count_pages = _count_pages(unit, policy.per)
             else:
-                builder.notes.append(f"node {unit.index} is not a Lines node; paging on overflow instead of per entry")
+                builder.notes.append(
+                    _note(
+                        SolveNoteCode.PAGINATE_PER_FALLBACK,
+                        f"node {unit.index} is not a Lines node; paging on overflow instead of per entry",
+                    )
+                )
                 unit.overflow = replace(policy, per=None)
     return units, keys, footers
 
@@ -1365,7 +1527,7 @@ def _solve_once(
     reserved_text: int,
     position: PositionState,
     nav: PlannedNav | None,
-    notes: list[str],
+    notes: list[SolveNote],
 ) -> SolvedLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
     resolved = _resolve_variants(nodes, positions)
@@ -1449,7 +1611,12 @@ def _solve_once(
 
     count = _component_count(children)
     if count > limits.total_components:
-        builder.notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
+        builder.notes.append(
+            _note(
+                SolveNoteCode.COMPONENT_BUDGET,
+                f"{count} components exceed {limits.total_components}; the document needs restructuring",
+            )
+        )
     return SolvedLayout(
         children=children,
         notes=builder.notes,
