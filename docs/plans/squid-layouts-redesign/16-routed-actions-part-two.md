@@ -28,12 +28,12 @@ does not so the rejected half is not re-derived.
 | Typed request/app context | **Taken** — stage 3 |
 | Redirects / aliases (301) | **Taken** — stage 4 |
 | 404 handler | **Taken** — stage 4, scoped; see below |
-| Middleware / `before_request` | **Planned** — stage 5, as class-based root/group middleware |
-| "A view must return a response" | **Reframed** — stage 5 guarantees the observable initial acknowledgement |
+| Middleware / `before_request` | **Taken** — stage 5, as a class-based router/group onion |
+| "A view must return a response" | **Reframed and shipped** — stage 5 guarantees the observable initial acknowledgement |
 | Method verbs (GET/POST) | **Taken** — stage 6; the analogue is *component type* |
 | Form body vs path params | **Taken** — stage 6; selected values are a second parameter source |
 | `flask routes` / `show_urls` | **Taken** — stage 7 |
-| Blueprints / `include_router(prefix=)` | **Planned** — stable feature groups, without late-bound route identity |
+| Blueprints / `include_router(prefix=)` | **Taken** — stable feature groups, without late-bound route identity |
 | `Depends` dependency injection | **Rejected.** The duplication (`resolve_locale`, `_authorize`) is bot-domain, not framework. Stage 5's middleware is the seam to build it host-side |
 | `url_for("endpoint")` string keys | **Rejected.** A `Route` object is the typed, refactor-safe version of the same thing |
 | Werkzeug specificity-ordered matching | **Rejected.** Registration order is loud; specificity sorting makes an overlap silent. First-match plus the probe check stays |
@@ -321,9 +321,9 @@ rejected at registration. Covered by `TestClientRegistration` and `TestHandlerKi
   parameters to be positionally bindable, and reject `POSITIONAL_ONLY` parameters
   beyond them rather than ignoring them.
 
-## Planned
+## Final stages shipped (2026-08-22)
 
-### Stage 5 — Middleware and the acknowledgement guarantee
+### Stage 5 — Middleware and the acknowledgement guarantee (`54156c3a`, `c2e478b5`)
 
 Agreed 2026-08-22: take the part Discord can state honestly. `Router` owns a 2.5-second
 watchdog and sends a silent deferred message update when a handler, middleware, gone hook,
@@ -338,13 +338,20 @@ interaction-response API.
 
 Middleware is class-based and instance-attached. A generic `Middleware[BotT]` abstract base
 receives an immutable `RouteRequest[BotT]` and one-shot `RouteNext`. `Router.add_middleware`
-installs global policies; `RouteGroup.add_middleware` installs feature policies. Root
-middleware runs outside group middleware, and returning without calling next short-circuits
-while the outer acknowledgement guarantee still applies. The host's first consumers are
-routed-action tracing/correlation and the redstoner owner-guild gate. Dependency injection
-remains rejected: middleware controls flow but does not grow a mutable request-state bag.
+installs global policies; `RouteGroup.add_middleware` installs feature policies. The effective
+chain is one conventional onion: router attachments, then root-to-leaf group attachments, then
+the handler. First attached is outermost, completion unwinds in reverse, and returning without
+calling next short-circuits every inner layer while the acknowledgement guarantee remains
+outside the onion. `call_next` is valid exactly once and only while that middleware invocation
+is active. One error boundary outside the complete user chain lets middleware observe or handle
+inner failures before an unhandled exception reaches `on_error`.
 
-### Stage 8 — Stable feature route groups
+The host's first consumers are routed-action tracing/correlation and the redstoner owner-guild
+gate. Dependency injection remains rejected: middleware controls flow but does not grow a
+mutable request-state bag. `Router.describe()` reports the effective middleware class chain so
+the private route diagnostic shows policy as well as handler ownership.
+
+### Stage 8 — Stable feature route groups (`b84f9fb6`, `bc58e07f`)
 
 The namespace is an ordinary root `RouteGroup("r")`; `root.group("polls")` creates a child
 whose prefix composes immediately. `polls.define("close")` therefore returns the final
@@ -359,11 +366,18 @@ and global middleware. Inclusion is idempotent, cross-group overlap is exact, an
 graph freezes at client registration while same-identity handler replacement remains legal
 for extension reloads.
 
+The bot catalogue is now `squid.bot.routes`, with sibling modules for polls, builds,
+build-log consent, and Redstoner roles. Renderers import identities from those stable modules;
+reloadable handler modules decorate their owning group. All five canonical ids and every legacy
+alias are pinned together, and extension-loading tests prove the graph accepts replacement
+handlers without admitting a sixth registration.
+
 ## Verification
 
-Stages 0-4, 6-7, C1-C4 and registration hardening have automated coverage in the package and
-bot unit suites. Stages 5 and 8 add acknowledgement timing, middleware ordering, route-group
-composition and extension-reload coverage. The remaining operational check is to click a
+Stages 0-8, C1-C4 and registration hardening have automated coverage in the package and bot
+unit suites, including acknowledgement timing, onion ordering and short-circuiting, one-shot
+continuations, immutable request facts, route-group composition, middleware provenance, and
+extension loading. The remaining operational check is to click a
 vote-card button and a build-card Edit button posted before the namespace migration,
 confirming legacy aliases on real Discord messages in addition to the pinned synthetic
 identities.
