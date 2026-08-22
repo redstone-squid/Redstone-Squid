@@ -16,7 +16,7 @@ HTML, serialized to JSON, and handed to another process.
     target adapters -- finite lossless strategies plus sticky presentation state
         |
         v
-    exact primitives -- measured solve, declared degradation, pagination
+    exact primitives -- one measured candidate per searched state
         |
         +-- PlanReport (notes and fingerprints)
         +-- PlanMetrics (search/cache/latency instrumentation)
@@ -89,12 +89,33 @@ honestly express that domain operation without an explicit grouping or commit mo
 Strategy ranking is lexicographic rather than scalar: representation stability by
 `Flexibility`, author display preference, pager count, transition distance, then stable path
 and strategy identifiers. Per-adapter versions invalidate only that adapter's sticky state.
-The solver first gives every semantic assignment its preferred structural rungs, then searches
-reachable `Variants` assignments best-first. If no wholly lossless candidate exists, author
-priority is compared before loss kind: semantic substitutions beat truncation, truncation beats
-spilling entries, and spilling beats dropping a whole node. Semantic strategy cost breaks the
-remaining tie. The default search budget is 512 measured whole-layout candidates. Exhaustion
-selects the best valid incumbent and records `planner.search_fallback`.
+Choosing between alternatives is one search, not several. Semantic strategies, semantic
+fallback branches, and primitive `Variants` rungs are all decisions in a single conditional
+state graph the planner explores best-first; `measure()` evaluates exactly one concrete
+primitive layout and never chooses anything. The graph is conditional because a decision only
+exists once the branch containing it is selected, so nine axes behind an unopened fallback
+cost nothing.
+
+States are canonical: a decision the selected branches no longer expose is dropped, a newly
+reachable axis opens at its cheapest candidate, and changing a semantic representation
+discards the ladder positions that were measured against the old tree. Frontier entries are
+ranked by the structural loss they already commit to, then by semantic strategy cost;
+completed candidates are ranked by their measured loss merged with that structural loss. So a
+lossless representation change is always tried before a fallback the author priced as loss.
+If no wholly lossless candidate exists, author priority is compared before loss kind: semantic
+substitutions beat truncation, truncation beats spilling entries, and spilling beats dropping
+a whole node.
+
+Search stops as soon as the frontier's lower bound cannot beat the best feasible incumbent.
+The default budget is 512 `measure()` evaluations; root-pagination probes are packing rather
+than optimization and are not counted. A ladder product too large for the remaining budget is
+walked one deterministic component-saving step at a time instead. Exhaustion, and any use of
+that guidance, returns the best incumbent and records `planner.search_fallback`.
+
+Every candidate gets its own `CursorCoordinator` and lowering, so a rejected state leaves no
+pagers, assets, events, bindings, or staged session writes behind. `PlanCache` stores the
+winning fallback branches, strategy assignment, and ladder positions; a hit re-lowers only
+those and recollects current callbacks without measuring again.
 
 Target-shaped nodes live under `squid_layouts.primitives`. Their policies are explicit:
 
@@ -103,8 +124,8 @@ Target-shaped nodes live under `squid_layouts.primitives`. Their policies are ex
 - `Paginate` has an explicit key, measured footer/navigation chrome, and optional `min_fill`
   and `widows` break preferences.
 - `Variants` supplies an ordered ladder of complete structural alternates for component
-  pressure; rungs may be capability-gated, and the planner filters them before a bounded
-  global search considers the survivors.
+  pressure; rungs may be capability-gated, and the planner filters them after target lowering
+  so the survivors number from zero for the rest of the search.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
@@ -293,7 +314,7 @@ metadata.
 Each runtime keeps a small callback-free plan LRU. Cache keys include semantic structure,
 assets, target/version/limits, chrome, reservation, presentation/position state, nav factory
 version, strictness, and search budget. Cache hits always recollect current callbacks,
-including solver-generated pager controls.
+including planner-generated pager controls.
 
 ## Actions and frontend adapters
 
@@ -351,7 +372,7 @@ to the same key in two different tables: `bindings` opens the form, `form_bindin
 ## Pagination
 
 Every paginator has an explicit unique string key. `sl.discord.Mount` stores a cursor per key; embedded
-components prefix it automatically. The solver measures active footers and navigation IR to
+components prefix it automatically. `measure()` costs active footers and navigation IR to
 a fixed point, so controls spend real text and component budgets.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
@@ -455,7 +476,7 @@ is the single framework boundary outside the whole user onion.
 ## Library binding: discord.py, not Discord alone
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
-solver, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
+`measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
 row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
 `renderer`, `mount`, `delivery`, `routing` — is a **discord.py adapter**, not a
 Discord-protocol adapter, and its dependencies sort into three strata:

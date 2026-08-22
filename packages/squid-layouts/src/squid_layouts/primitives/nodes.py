@@ -321,8 +321,6 @@ class Variants:
 
     variants: tuple[Variant, ...]
     priority: int = 0
-    semantic_path: str | None = field(default=None, repr=False, compare=False)
-    """Semantic fallback occurrence represented by this ladder, when there is one."""
 
     def __post_init__(self) -> None:
         if not self.variants:

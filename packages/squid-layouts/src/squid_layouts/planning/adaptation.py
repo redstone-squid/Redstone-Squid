@@ -38,8 +38,6 @@ from squid_layouts.primitives.nodes import (
     Text,
     Thumbnail,
     Time,
-    Variant,
-    Variants,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
@@ -161,21 +159,45 @@ class _Context:
     events: list[PlanEvent]
     updates: list[SessionUpdate]
     strategies: Mapping[str, str]
+    fallbacks: Mapping[str, int]
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
 
 
-def nominate_strategies(
+@dataclass(frozen=True, slots=True)
+class FallbackAxis:
+    """One `FallbackContent` occurrence and how many branches it can offer."""
+
+    path: str
+    branches: int
+    branch_paths: tuple[str, ...]
+    """One stable path per branch; decisions inside a branch are named under it."""
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticDecisions:
+    """Every semantic choice reachable under one set of selected fallback branches."""
+
+    strategies: tuple[StrategyAxis, ...] = ()
+    fallbacks: tuple[FallbackAxis, ...] = ()
+
+
+def nominate_decisions(
     nodes: Sequence[LayoutNode],
     *,
     limits: V2Limits,
     session: PresentationSession,
-    topology: Mapping[str, int] | None = None,
-) -> tuple[StrategyAxis, ...]:
-    """Collect strategy axes reachable through one semantic fallback topology."""
+    fallbacks: Mapping[str, int] | None = None,
+) -> SemanticDecisions:
+    """Collect the semantic decisions reachable through the selected fallback branches.
+
+    Decisions hidden behind an unselected branch are not returned, so a planner state cannot
+    spend search on axes the reader will never see.
+    """
     axes: list[StrategyAxis] = []
-    selected_rungs = {} if topology is None else topology
+    occurrences: list[FallbackAxis] = []
+    selected_rungs = {} if fallbacks is None else fallbacks
 
     def walk_children(children: Sequence[LayoutNode], path: str) -> None:
         for index, child in enumerate(children):
@@ -195,13 +217,10 @@ def nominate_strategies(
             ):
                 walk(child, path)
             case FallbackContent(primary=primary, alternates=alternates):
-                rung = selected_rungs.get(path, 0)
                 branches = (primary, *alternates)
-                if not 0 <= rung < len(branches):
-                    message = f"{path}: fallback topology selected unavailable rung {rung}"
-                    raise ValueError(message)
-                branch_path = f"{path}.primary" if rung == 0 else f"{path}.alternate.{rung - 1}"
-                walk(branches[rung], branch_path)
+                rung = _fallback_rung(path, len(branches), selected_rungs)
+                occurrences.append(FallbackAxis(path, len(branches), _branch_paths(path, len(branches))))
+                walk(branches[rung], _branch_paths(path, len(branches))[rung])
             case Actions():
                 axes.append(_action_axis(node, path, limits, session))
             case Table():
@@ -246,7 +265,20 @@ def nominate_strategies(
     if len(set(paths)) != len(paths):
         message = "semantic strategy paths must be unique"
         raise LayoutInvariantError(message)
-    return tuple(axes)
+    return SemanticDecisions(tuple(axes), tuple(occurrences))
+
+
+def _branch_paths(path: str, branches: int) -> tuple[str, ...]:
+    """Stable per-branch paths, so a decision inside a branch keeps its identity."""
+    return (f"{path}.primary", *(f"{path}.alternate.{index}" for index in range(branches - 1)))
+
+
+def _fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
+    rung = selected.get(path, 0)
+    if not 0 <= rung < branches:
+        message = f"{path}: planner selected unavailable fallback branch {rung}"
+        raise ValueError(message)
+    return rung
 
 
 def lower_semantics(
@@ -261,8 +293,9 @@ def lower_semantics(
     capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
     strategies: Mapping[str, str] | None = None,
+    fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticLowering:
-    """Lower semantic nodes before the existing exact solver measures the result."""
+    """Lower one semantic decision set into the primitives `measure()` will price."""
     broker = pages if pages is not None else CursorCoordinator(session, chrome)
     context = _Context(
         limits,
@@ -276,6 +309,7 @@ def lower_semantics(
         [],
         [],
         {} if strategies is None else strategies,
+        {} if fallbacks is None else fallbacks,
         search_budget,
     )
     lowered: list[Node] = []
@@ -329,12 +363,11 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case KeepWithNext(node=child):
             return [Break(tuple(_node(child, path, context)), keep_with_next=True)]
         case FallbackContent(primary=primary, alternates=alternates):
-            rungs = [Variant(tuple(_node(primary, f"{path}.primary", context)))]
-            rungs.extend(
-                Variant(tuple(_node(alternate, f"{path}.alternate.{index}", context)))
-                for index, alternate in enumerate(alternates)
-            )
-            return [Variants(tuple(rungs), semantic_path=path)]
+            # Only the selected branch is lowered. An unselected one must leave no trace:
+            # no pagers, assets, events, bindings, or staged session writes.
+            branches = (primary, *alternates)
+            rung = _fallback_rung(path, len(branches), context.fallbacks)
+            return _node(branches[rung], _branch_paths(path, len(branches))[rung], context)
         case Actions():
             return _actions(node, path, context)
         case Themed(children=children, palette=palette):

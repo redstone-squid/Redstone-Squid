@@ -1,10 +1,12 @@
 """Structural degradation: entry drop priorities and Variants, the component-budget policy."""
 
+from collections.abc import Sequence
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import plan
+from squid_layouts import LayoutDegradedError, plan
 from squid_layouts.discord import (
     DEFAULT_LIMITS as LIMITS,
 )
@@ -15,12 +17,10 @@ from squid_layouts.discord import (
     render_static,
 )
 from squid_layouts.planning import (
-    LayoutOverflowError,
     SolveNoteCode,
     measure,
 )
 from squid_layouts.planning.measure import RPanel, RText
-from squid_layouts.planning.solve import solve
 from squid_layouts.primitives import (
     ActionGroup,
     Alt,
@@ -36,11 +36,19 @@ from squid_layouts.primitives import (
     Text,
     Variants,
 )
-from squid_layouts.scene.model import SceneRow
+from squid_layouts.scene.model import (
+    PlanResult,
+    SceneNode,
+    ScenePanel,
+    SceneRow,
+    SceneSection,
+    SceneSelect,
+    SceneText,
+)
 
 
 def _rendered(solved) -> str:
-    """Every string the solved document would display, panels included."""
+    """Every string the measured document would display, panels included."""
     parts: list[str] = []
 
     def walk(children) -> None:
@@ -52,6 +60,53 @@ def _rendered(solved) -> str:
 
     walk(solved.children)
     return "\n".join(parts)
+
+
+def _planned(nodes: Sequence[Node], **options) -> PlanResult:
+    """Ladders are planner decisions, so structural behaviour is observed through plan()."""
+    return plan(nodes, target=DEFAULT_TARGET, **options)
+
+
+def _text(result: PlanResult) -> str:
+    parts: list[str] = []
+
+    def walk(children: Sequence[SceneNode]) -> None:
+        for child in children:
+            if isinstance(child, SceneText):
+                parts.append(child.content)
+            elif isinstance(child, ScenePanel):
+                walk(child.children)
+            elif isinstance(child, SceneSection):
+                walk(child.texts)
+
+    walk(result.scene.children)
+    return "\n".join(parts)
+
+
+def _components(result: PlanResult) -> int:
+    """What the drawn view will hold, counted the same way the planner budgets it."""
+
+    def count(children: Sequence[SceneNode]) -> int:
+        total = 0
+        for child in children:
+            match child:
+                case ScenePanel(children=inner):
+                    total += 1 + count(inner)
+                case SceneSection(texts=texts):
+                    total += 2 + len(texts)
+                case SceneRow(items=items):
+                    total += 1 + len(items)
+                case SceneSelect():
+                    total += 2
+                case _:
+                    total += 1
+        return total
+
+    return count(result.scene.children)
+
+
+def _step_events(result: PlanResult) -> list[str]:
+    return [event.message for event in result.report.events if event.code == f"layout.{SolveNoteCode.VARIANT_STEP}"]
 
 
 def _under_pressure(entries: tuple[Alt | str, ...], *, spare: int) -> str:
@@ -112,57 +167,54 @@ def _steps(solved) -> int:
 
 class TestVariants:
     def test_a_document_that_fits_keeps_every_first_rung(self):
-        solved = solve(_ladder_document(3))
-        assert solved.notes == []
-        assert solved.components == 3 * 4
-        assert "panel 0" in _rendered(solved)
+        result = _planned(_ladder_document(3))
+        assert result.report.events == ()
+        assert _components(result) == 3 * 4
+        assert "panel 0" in _text(result)
 
     def test_stepping_brings_an_oversized_document_under_the_limit(self):
-        solved = solve(_ladder_document(12))
-        assert solved.components <= LIMITS.total_components
-        assert _steps(solved)
+        result = _planned(_ladder_document(12))
+        assert _components(result) <= LIMITS.total_components
+        assert _step_events(result)
 
     def test_it_steps_the_lowest_priority_ladders_first(self):
-        solved = solve(_ladder_document(12, priorities=list(range(12))))
-        rendered = _rendered(solved)
+        rendered = _text(_planned(_ladder_document(12, priorities=list(range(12)))))
         assert "line 0" in rendered  # lowest priority: stepped
         assert "panel 11" in rendered  # highest priority: kept whole
 
     def test_stepping_stops_as_soon_as_the_document_fits(self):
         # 11 panels is 44 components; one step frees three, which is not enough for 40.
-        solved = solve(_ladder_document(11))
-        assert _steps(solved) == 2
+        assert len(_step_events(_planned(_ladder_document(11)))) == 2
 
     def test_a_document_with_nothing_left_to_step_still_reports_the_overflow(self):
         panels = [
             Panel(children=(Text(f"panel {index}"), Row((LinkButton("open", "https://e.invalid"),))))
             for index in range(12)
         ]
-        solved = solve(panels)
-        assert any(note.code is SolveNoteCode.COMPONENT_BUDGET for note in solved.notes)
+        measured = measure(panels)
+        assert any(note.code is SolveNoteCode.COMPONENT_BUDGET for note in measured.notes)
 
     def test_a_later_rung_can_resolve_a_hard_failure_without_component_pressure(self):
-        solved = solve([Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))])
+        # plan() raises on an unresolved failure, so reaching a scene at all is the assertion.
+        result = _planned([Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))])
 
-        assert _rendered(solved) == "plain"
-        assert not solved.failures
+        assert _text(result) == "plain"
 
     def test_the_bounded_fallback_can_resolve_a_hard_failure(self):
         hard = Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))
         unrelated = Variants.of(Text("preferred"), Text("alternate"))
 
-        solved = solve([hard, unrelated], search_budget=2)
+        result = _planned([hard, unrelated], search_budget=2)
 
-        assert "plain" in _rendered(solved)
-        assert solved.search_fallback
-        assert not solved.failures
+        assert "plain" in _text(result)
+        assert result.metrics.search_fallback
 
     def test_reused_ladder_values_still_step_one_occurrence_at_a_time(self):
         shared = _ladder_document(1)[0]
-        solved = solve([shared] * 11)
-        assert _steps(solved) == 2
-        assert _rendered(solved).count("line 0") == 2
-        assert _rendered(solved).count("panel 0") == 9
+        result = _planned([shared] * 11)
+        assert len(_step_events(result)) == 2
+        assert _text(result).count("line 0") == 2
+        assert _text(result).count("panel 0") == 9
 
     def test_a_later_rung_can_expose_another_ladder(self):
         regular = _ladder_document(9, priorities=[10] * 9)
@@ -175,10 +227,10 @@ class TestVariants:
             Panel(children=(inner,)),
             priority=-1,
         )
-        solved = solve([*regular, outer])
-        assert solved.components <= LIMITS.total_components
-        assert "inner line" in _rendered(solved)
-        assert _steps(solved) == 2
+        result = _planned([*regular, outer])
+        assert _components(result) <= LIMITS.total_components
+        assert "inner line" in _text(result)
+        assert len(_step_events(result)) == 2
 
     def test_pagination_controls_participate_in_the_ladder_budget(self):
         async def move(interaction) -> None: ...
@@ -187,14 +239,14 @@ class TestVariants:
             return default_nav(NavigationContext(state, move, move))
 
         entries = tuple(f"entry {index}" for index in range(20))
-        solved = solve([*_ladder_document(9), Lines(entries, overflow=Paginate(per=10))], nav=nav)
-        assert solved.pages == 2
-        assert solved.components <= LIMITS.total_components
-        assert _steps(solved)
+        result = _planned([*_ladder_document(9), Lines(entries, overflow=Paginate(key="entries", per=10))], nav=nav)
+        assert [pager.pages for pager in result.scene.pagers] == [2]
+        assert _components(result) <= LIMITS.total_components
+        assert _step_events(result)
 
     def test_strict_mode_rejects_a_required_step(self):
-        with pytest.raises(LayoutOverflowError, match="stepped"):
-            solve(_ladder_document(11), strict=True)
+        with pytest.raises(LayoutDegradedError, match="stepped"):
+            _planned(_ladder_document(11), strict=True)
 
 
 class TestVariantLadders:
@@ -212,15 +264,14 @@ class TestVariantLadders:
     def test_a_ladder_steps_one_rung_per_iteration(self):
         # Nine ladders at 5 components each is 45; the limit is 40, and the first step of
         # each ladder frees two, so exactly three ladders reach their middle rung.
-        solved = solve([self._rungs(index) for index in range(9)])
-        rendered = _rendered(solved)
-        assert solved.components <= LIMITS.total_components
+        result = _planned([self._rungs(index) for index in range(9)])
+        rendered = _text(result)
+        assert _components(result) <= LIMITS.total_components
         assert "h0.0" in rendered  # stepped once, not straight to the last rung
         assert "line 0" not in rendered
 
     def test_equal_priority_ladders_step_breadth_first(self):
-        solved = solve([self._rungs(index) for index in range(9)])
-        rendered = _rendered(solved)
+        rendered = _text(_planned([self._rungs(index) for index in range(9)]))
         # Three ladders take rung 1; none takes rung 2 while a sibling is still at rung 0.
         assert sum(f"h{index}.0" in rendered for index in range(9)) == 3
         assert not any(f"line {index}" in rendered for index in range(9))
@@ -232,49 +283,46 @@ class TestVariantLadders:
         ladders = [self._rungs(index) for index in range(8)]
         ladders[0] = Variants.of(*ladders[0].variants, priority=-10)
         filler = [Text(f"filler {index}") for index in range(4)]
-        solved = solve([*ladders, *filler])
-        rendered = _rendered(solved)
+        rendered = _text(_planned([*ladders, *filler]))
         assert "line 0" in rendered  # the low-priority ladder is exhausted first
         assert all(f"p{index}.0" in rendered for index in range(1, 8))
 
     def test_the_note_names_the_stepped_ladder_and_its_rung(self):
-        solved = solve([self._rungs(index) for index in range(9)])
-        steps = [note for note in solved.notes if note.code is SolveNoteCode.VARIANT_STEP]
-        assert steps[0].message == "$.0 stepped to variant 2 of 3 (priority 0) under layout pressure"
-        assert [note.message.split()[0] for note in steps] == ["$.0", "$.1", "$.2"]
+        steps = _step_events(_planned([self._rungs(index) for index in range(9)]))
+        assert steps[0] == "$.0 stepped to variant 2 of 3 (priority 0) under layout pressure"
+        assert [message.split()[0] for message in steps] == ["$.0", "$.1", "$.2"]
 
     def test_global_search_skips_an_equal_priority_step_that_saves_nothing(self) -> None:
         filler = [Text(f"filler {index}") for index in range(37)]
         ineffective = Variants.of(Text("a preferred"), Text("a alternate"))
         effective = Variants.of(Panel((Text("b preferred"), Text("b detail"))), Text("b alternate"))
 
-        solved = solve([*filler, ineffective, effective])
-        rendered = _rendered(solved)
+        result = _planned([*filler, ineffective, effective])
+        rendered = _text(result)
 
-        assert solved.components <= LIMITS.total_components
+        assert _components(result) <= LIMITS.total_components
         assert "a preferred" in rendered
         assert "a alternate" not in rendered
         assert "b alternate" in rendered
-        assert solved.states_explored == 3
+        assert result.metrics.states_explored == 3
 
     def test_variant_search_budget_returns_the_best_incumbent_and_reports_fallback(self) -> None:
         filler = [Text(f"filler {index}") for index in range(37)]
         ineffective = Variants.of(Text("a preferred"), Text("a alternate"))
         effective = Variants.of(Panel((Text("b preferred"), Text("b detail"))), Text("b alternate"))
 
-        solved = solve([*filler, ineffective, effective], search_budget=2)
+        result = _planned([*filler, ineffective, effective], search_budget=2)
 
-        assert solved.components <= LIMITS.total_components
-        assert solved.states_explored == 2
-        assert solved.search_fallback
+        assert _components(result) <= LIMITS.total_components
+        assert result.metrics.states_explored == 2
+        assert result.metrics.search_fallback
 
 
-def test_a_bare_ladder_solves_to_its_first_rung() -> None:
-    """`solve()` resolves ladders itself; it must never leak one into the realized tree."""
-    solved = solve([Variants.of(Text("rich"), Text("plain"))])
-    assert _rendered(solved) == "rich"
-    assert solved.components == 1
-    assert all(not isinstance(child, Variants) for child in solved.children)
+def test_a_bare_ladder_plans_to_its_first_rung() -> None:
+    """The planner resolves ladders; a scene must never carry one."""
+    result = _planned([Variants.of(Text("rich"), Text("plain"))])
+    assert _text(result) == "rich"
+    assert _components(result) == 1
 
 
 def test_a_rung_may_lower_to_several_nodes() -> None:
@@ -296,6 +344,5 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
 
 @given(st.integers(min_value=1, max_value=20))
 def test_enough_steps_always_bring_the_document_within_limits(count):
-    solved = solve(_ladder_document(count))
-    assert solved.components <= LIMITS.total_components
+    assert _components(_planned(_ladder_document(count))) <= LIMITS.total_components
     render_static(_ladder_document(count))

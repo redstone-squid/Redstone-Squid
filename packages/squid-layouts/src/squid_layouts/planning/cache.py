@@ -17,6 +17,8 @@ class CachedPlan:
     states_explored: int = 0
     search_fallback: bool = False
     variant_positions: tuple[tuple[tuple[int | str, ...], int], ...] = ()
+    fallbacks: tuple[tuple[str, int], ...] = ()
+    """All three decision classes, so a hit re-lowers the winner instead of searching again."""
 
 
 class PlanCache:
