@@ -1277,6 +1277,7 @@ class BuildEditComponent(sl.Component):
                 self,
                 reload,
             )
+            await reload(self)
         await interaction.client.mounts.open(
             mount,
             sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True),
