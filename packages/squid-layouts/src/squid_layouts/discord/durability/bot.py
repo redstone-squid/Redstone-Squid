@@ -36,15 +36,19 @@ class DurableBot(commands.Bot):
     async def on_sessions_recovered(self, report: RecoveryReport) -> None:
         """Run after recovery is ready and before gateway interaction dispatch."""
 
-    async def start(self, token: str, *, reconnect: bool = True) -> None:
-        """Login, recover durable sessions, and then connect to the gateway."""
+    async def login(self, token: str) -> None:
+        """Authenticate after making the runtime available to ``setup_hook()``."""
+        _ = self.durable_sessions
+        await super().login(token)
+
+    async def connect(self, *, reconnect: bool = True) -> None:
+        """Recover under supervision before connecting to the gateway."""
         runtime = self.durable_sessions
         async with anyio.create_task_group() as tasks:
-            await self.login(token)
             report = await tasks.start(runtime.run)
             self.recovery_report = report
             await self.on_sessions_recovered(report)
             try:
-                await self.connect(reconnect=reconnect)
+                await super().connect(reconnect=reconnect)
             finally:
                 tasks.cancel_scope.cancel()
