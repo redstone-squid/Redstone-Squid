@@ -204,6 +204,7 @@ from squid_layouts.runtime.reactivity import (
     state,
     strict_state,
     transaction,
+    untracked,
 )
 from squid_layouts.runtime.resources import (
     Failed,
@@ -684,5 +685,6 @@ __all__ = [
     "transaction",
     "truncate",
     "unbreakable",
+    "untracked",
     "zoned_timestamp",
 ]
