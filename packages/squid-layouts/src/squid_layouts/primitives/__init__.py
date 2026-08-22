@@ -47,6 +47,7 @@ from squid_layouts.primitives.nodes import (
     Time,
     Variant,
     Variants,
+    ZonedTime,
     as_nodes,
 )
 from squid_layouts.primitives.styles import ActionStyle, Color
@@ -92,6 +93,7 @@ __all__ = [
     "Truncate",
     "Variant",
     "Variants",
+    "ZonedTime",
     "alts",
     "as_nodes",
 ]

@@ -42,6 +42,7 @@ from squid_layouts.planning.measure import (
     RSection,
     RText,
     RTime,
+    RZonedTime,
     SolveNote,
     SolveNoteCode,
     measure,
@@ -110,6 +111,7 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
     SceneTime,
+    SceneZonedTime,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
@@ -194,6 +196,8 @@ class _Converter:
                 return SceneText(content)
             case RTime(instant=instant, style=style, prefix=prefix):
                 return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
+            case RZonedTime(value=value, prefix=prefix):
+                return SceneZonedTime(value.instant.isoformat(), value.timezone, prefix)
             case File(asset_key=asset_key, name=name, media_type=media_type):
                 return SceneFile(asset_key, name, media_type)
             case RPanel(children=children, accent=accent):

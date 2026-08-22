@@ -3,6 +3,7 @@
 import base64
 import json
 from collections.abc import Callable
+from datetime import datetime
 from html import escape
 from urllib.parse import urlsplit
 
@@ -29,7 +30,9 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
     SceneTime,
+    SceneZonedTime,
 )
+from squid_layouts.temporal import ZonedDateTime
 
 PREVIEW_CSS = """
 .squid-view{box-sizing:border-box;max-width:720px;padding:16px;border-radius:8px;background:#313338;color:#dbdee1;
@@ -127,6 +130,13 @@ class Renderer:
                     f'<div class="squid-text">{escape(prefix or "")}'
                     f'<time datetime="{_attribute(instant)}" data-squid-style="{_attribute(style)}">'
                     f"{escape(instant)}</time></div>"
+                )
+            case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
+                value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
+                return (
+                    f'<div class="squid-text">{escape(prefix or "")}'
+                    f'<time datetime="{_attribute(instant)}" data-squid-timezone="{_attribute(timezone)}">'
+                    f"{escape(value.isoformat())}</time></div>"
                 )
             case SceneFile(name=name):
                 resolved = resolve_file(node)

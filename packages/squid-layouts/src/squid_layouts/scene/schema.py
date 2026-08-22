@@ -59,6 +59,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                 for kind in (
                     "text",
                     "time",
+                    "zoned_time",
                     "file",
                     "separator",
                     "link",
@@ -90,6 +91,17 @@ SCENE_SCHEMA: dict[str, Any] = {
             },
             "instant",
             "style",
+            "prefix",
+        ),
+        "zoned_time": _node(
+            "zoned_time",
+            {
+                "instant": {"type": "string", "format": "date-time"},
+                "timezone": {"type": "string", "minLength": 1},
+                "prefix": {"type": ["string", "null"]},
+            },
+            "instant",
+            "timezone",
             "prefix",
         ),
         "file": _node(

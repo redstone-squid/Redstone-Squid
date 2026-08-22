@@ -30,6 +30,7 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
     SceneTime,
+    SceneZonedTime,
 )
 from squid_layouts.scene.schema import SCENE_SCHEMA
 from squid_layouts.text import TextDialect
@@ -140,6 +141,8 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton)
             return {"kind": "text", "content": content, "dialect": dialect.value}
         case SceneTime(instant=instant, style=style, prefix=prefix):
             return {"kind": "time", "instant": instant, "style": style, "prefix": prefix}
+        case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
+            return {"kind": "zoned_time", "instant": instant, "timezone": timezone, "prefix": prefix}
         case SceneFile(asset_key=asset_key, name=name, media_type=media_type):
             return {"kind": "file", "asset_key": asset_key, "name": name, "media_type": media_type}
         case SceneSeparator(large=large, visible=visible):
@@ -253,6 +256,12 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
             return SceneTime(
                 _string(raw, "instant"),
                 _string(raw, "style"),
+                _optional_string(raw, "prefix"),
+            )
+        case "zoned_time":
+            return SceneZonedTime(
+                _string(raw, "instant"),
+                _string(raw, "timezone"),
                 _optional_string(raw, "prefix"),
             )
         case "file":

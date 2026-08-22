@@ -32,7 +32,9 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
     SceneTime,
+    SceneZonedTime,
 )
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import discord_text
 
 type Control = SceneButton | SceneSelect
@@ -162,6 +164,9 @@ class Renderer:
                 case SceneTime(instant=instant, style=style, prefix=prefix):
                     unix = int(datetime.fromisoformat(instant).timestamp())
                     return discord.ui.TextDisplay(f"{prefix or ''}<t:{unix}:{style}>")
+                case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
+                    value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
+                    return discord.ui.TextDisplay(f"{prefix or ''}{value.isoformat()}")
                 case SceneFile(asset_key=asset_key, name=name):
                     resource = plan.resources.get(f"asset:{asset_key}") if plan is not None else None
                     if isinstance(resource, Asset) and isinstance(resource.source, StoredAsset):

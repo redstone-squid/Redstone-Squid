@@ -89,6 +89,7 @@ from squid_layouts.factories import (
     themed,
     timestamp,
     toggle,
+    zoned_timestamp,
 )
 from squid_layouts.forms import (
     AmbiguousTimePolicy,
@@ -299,6 +300,7 @@ from squid_layouts.semantic import (
     Tone,
     Truncated,
     Unbreakable,
+    ZonedTimestamp,
     best_effort,
     budget,
     fallback,
@@ -594,6 +596,7 @@ __all__ = [
     "WizardStep",
     "ZonedDateTime",
     "ZonedDateTimeField",
+    "ZonedTimestamp",
     "action",
     "action_group",
     "actions",
@@ -677,4 +680,5 @@ __all__ = [
     "transaction",
     "truncate",
     "unbreakable",
+    "zoned_timestamp",
 ]

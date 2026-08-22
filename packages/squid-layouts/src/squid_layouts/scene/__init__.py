@@ -29,6 +29,7 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
     SceneTime,
+    SceneZonedTime,
 )
 
 __all__ = [
@@ -60,4 +61,5 @@ __all__ = [
     "SceneText",
     "SceneThumbnail",
     "SceneTime",
+    "SceneZonedTime",
 ]
