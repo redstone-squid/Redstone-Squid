@@ -33,6 +33,7 @@ from squid_layouts.forms import (
     TextField,
     TimeField,
     UploadedFile,
+    ZonedDateTimeField,
 )
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
@@ -166,6 +167,8 @@ class _FormModal(discord.ui.Modal):
             component, reader = _form_component(field, spec.prefill_for(field), localization)
             label = _resolve(field.label, localization) if field.label is not None else field.key
             description = _resolve(field.description, localization) if field.description is not None else None
+            if description is None and isinstance(field, ZonedDateTimeField):
+                description = field.timezone
             self._readers[field.key] = reader
             self.add_item(discord.ui.Label(text=label, description=description, component=component))
 
@@ -178,7 +181,14 @@ def _resolve(value: TextLike, localization: Localization) -> str:
 
 
 def _text_input(
-    field: TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField,
+    field: TextField
+    | IntField
+    | FloatField
+    | DurationField
+    | DateField
+    | TimeField
+    | DateTimeField
+    | ZonedDateTimeField,
     prefill: object,
     localization: Localization,
 ) -> discord.ui.TextInput:
@@ -200,7 +210,10 @@ def _form_component(
     prefill: object,
     localization: Localization,
 ) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
-    if isinstance(field, TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField):
+    if isinstance(
+        field,
+        TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField | ZonedDateTimeField,
+    ):
         component = _text_input(field, prefill, localization)
         return component, lambda: component.value
     if isinstance(field, ScaleField):

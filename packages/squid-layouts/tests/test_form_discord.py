@@ -31,6 +31,7 @@ def _component(modal: discord.ui.Modal) -> discord.ui.Item:
         (sl.DateField(key="value", label="Value"), discord.ui.TextInput),
         (sl.TimeField(key="value", label="Value"), discord.ui.TextInput),
         (sl.DateTimeField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.ZonedDateTimeField(key="value", label="Value"), discord.ui.TextInput),
         (
             sl.ChoiceField(
                 key="value",
@@ -56,6 +57,16 @@ def test_portable_and_discord_fields_build_native_modal_components(field, compon
     modal = build_form_modal(sl.FormSpec("Fields", (field,)), on_submit=_ignore_raw)
 
     assert isinstance(_component(modal), component_type)
+
+
+def test_zoned_datetime_field_exposes_configured_timezone_as_description_fallback() -> None:
+    field = sl.ZonedDateTimeField(key="value", label="Value", timezone="America/New_York")
+
+    modal = build_form_modal(sl.FormSpec("Zoned", (field,)), on_submit=_ignore_raw)
+
+    label = modal.children[0]
+    assert isinstance(label, discord.ui.Label)
+    assert label.description == "America/New_York"
 
 
 @pytest.mark.parametrize(
