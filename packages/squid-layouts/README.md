@@ -166,6 +166,45 @@ short-circuits; calling it twice or after `dispatch` returns is an error. The ro
 initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
 short-circuit cannot produce Discord's generic interaction failure.
 
+### Reactive async resources
+
+`sl.resource` keeps async data in a synchronous, renderable state machine. Dependencies are the
+actual `sl.state` descriptors declared earlier in the same class:
+
+```python
+class VotingPanel(sl.Component):
+    kind: VoteKind = sl.state(VoteKind.BUILD)
+
+    @sl.resource(depends=(kind,))
+    async def configuration(self) -> VoteConfiguration:
+        return await votes.configuration(self.kind)
+
+    def render(self):
+        match self.configuration.state:
+            case sl.Pending(previous=None):
+                return sl.note("Loading…")
+            case sl.Pending(previous=sl.Ready(value=config)):
+                return refreshing_panel(config)
+            case sl.Failed(error=error, previous=previous):
+                return failed_panel(error, previous)
+            case sl.Ready(value=config):
+                return voting_panel(config)
+```
+
+A committed dependency change synchronously invalidates the resource. Hidden branches remain lazy:
+only resources observed during rendering are loaded. `Pending` and `Failed` retain the last `Ready`
+value when available, while request tokens prevent stale completions from publishing.
+
+Visible delivery is the default: Discord commits the pending render, settles observed sibling
+resources concurrently, then edits to the settled render. Use
+`@sl.resource(delivery=sl.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
+the first delivery must already be settled. Both policies use the same state machine and neither
+starts detached background work.
+
+`await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
+new value without immediately loading it, and `replace(value)` publishes an authoritative local
+result. Resource state is runtime-only and is not included in durable component snapshots.
+
 ### Async cursor sources
 
 A ranking too large to materialize uses the distinct `SourceRankedList` component. A source declares
@@ -191,8 +230,9 @@ ranking = sl.SourceRankedList(
 
 `position.direction` is `Direction.AROUND` for an anchor-preserving refresh, `FORWARD` for rows after
 the anchor, and `BACKWARD` for rows before it. Every `Window` returns the source's resolved
-`Direction.AROUND` position, including its fallback when an anchor disappeared. The component
-fingerprints only visible identities and drops a fetch that completes after a newer request.
+`Direction.AROUND` position, including its fallback when an anchor disappeared. The component exposes
+loading and failure as visible resource states, retaining the previous window during navigation.
+`WindowLoader` fingerprints visible identities, while the resource rejects superseded completions.
 
 `SourceCapabilities` separately declares backward traversal, known offsets, arbitrary jumps, and
 `CountPrecision`. Exact jumpable sources get page counts and an `on_seek` on their
