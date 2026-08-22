@@ -366,8 +366,15 @@ def reply_to(
     *,
     ephemeral: bool = False,
     files: Sequence[discord.File] = (),
+    allowed_mentions: discord.AllowedMentions | None = None,
 ) -> Destination:
-    """Answer the command that asked, in whatever channel it asked from."""
+    """Answer the command that asked, in whatever channel it asked from.
+
+    Mentions stay off unless asked for. The classic target exists partly so a message can
+    ping someone *and* be readable in the notification, so this has to be reachable — but a
+    UI library that pings by default would eventually ping a whole server by accident.
+    """
+    mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
         interaction = getattr(ctx, "interaction", None)
@@ -376,7 +383,7 @@ def reply_to(
         message = await ctx.send(
             files=_merged_files(files, presentation),
             ephemeral=ephemeral,
-            allowed_mentions=no_mentions(),
+            allowed_mentions=mentions,
             **presentation._send_fields(),
         )
         mode = presentation.mode
@@ -389,12 +396,20 @@ def reply_to(
     return send
 
 
-def respond_to(interaction: discord.Interaction[Any], *, ephemeral: bool = True, wait: bool = False) -> Destination:
+def respond_to(
+    interaction: discord.Interaction[Any],
+    *,
+    ephemeral: bool = True,
+    wait: bool = False,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> Destination:
     """Answer an interaction, whether or not it was already responded to.
 
     `wait` costs a round trip only when the caller needs the message itself. A fresh response
-    remains writable through `@original` without fetching it.
+    remains writable through `@original` without fetching it. Mentions stay off unless asked
+    for; see `reply_to` for why that default is not negotiable.
     """
+    mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
         files = _merged_files((), presentation)
@@ -404,14 +419,14 @@ def respond_to(interaction: discord.Interaction[Any], *, ephemeral: bool = True,
                 files=files,
                 ephemeral=ephemeral,
                 wait=wait,
-                allowed_mentions=no_mentions(),
+                allowed_mentions=mentions,
                 **presentation._send_fields(),
             )
             if message is None:
                 return DeliveryReceipt(None, None)
             return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
         response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
-            files=files, ephemeral=ephemeral, allowed_mentions=no_mentions(), **presentation._send_fields()
+            files=files, ephemeral=ephemeral, allowed_mentions=mentions, **presentation._send_fields()
         )
         callback_message = response.resource if isinstance(response.resource, discord.Message) else None
         message = await interaction.original_response() if wait and callback_message is None else callback_message

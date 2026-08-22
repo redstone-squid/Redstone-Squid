@@ -14,16 +14,15 @@ per-value cap are server-only. A payload that would come back as a 400 naming no
 therefore has to be caught here, by walking what will actually be sent.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlsplit
 
 import discord
-from discord.ui.select import BaseSelect
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.discord.attachments import attachment_assets
+from squid_layouts.discord.inspection import audit_classic_payload
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import RoutedItem, RoutedSelectItem
 from squid_layouts.errors import DrawInvariantError
@@ -47,9 +46,6 @@ from squid_layouts.scene.model import (
 type Control = SceneButton | SceneSelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ClassicViewFactory = Callable[[], discord.ui.View]
-
-ALLOWED_SCHEMES = frozenset({"http", "https", "attachment"})
-"""What Discord accepts in an embed URL. Anything else is rejected before it is sent."""
 
 
 class StaticClassicView(discord.ui.View):
@@ -229,115 +225,3 @@ def _option(option: object) -> discord.SelectOption:
         description=option.description,  # type: ignore[attr-defined]
         default=option.default,  # type: ignore[attr-defined]
     )
-
-
-def audit_classic_payload(
-    *,
-    content: str | None,
-    embeds: Sequence[discord.Embed],
-    view: discord.ui.View | None,
-    attachments: int = 0,
-    limits: ClassicLimits = CLASSIC_LIMITS,
-) -> list[str]:
-    """Every way this payload would be rejected, found before it is sent.
-
-    Walks `Embed.to_dict()` because that is the wire shape, and cross-checks the aggregate
-    against `Embed.__len__`, which already computes exactly Discord's definition — title,
-    description, field names and values, footer text, author name. Re-deriving that sum here
-    would be a second, drifting definition of the same rule.
-    """
-    problems: list[str] = []
-
-    if content is not None and len(content) > limits.content:
-        problems.append(f"content is {len(content)} characters; the limit is {limits.content}")
-    if len(embeds) > limits.embeds:
-        problems.append(f"{len(embeds)} embeds exceed {limits.embeds}")
-
-    seen_urls: set[str] = set()
-    for index, embed in enumerate(embeds):
-        problems.extend(_audit_embed(embed, index, limits))
-        url = embed.url
-        if url is None:
-            continue
-        if url in seen_urls:
-            # Discord renders only the first embed of a repeated URL, so a second one is
-            # silently invisible rather than an error — which is worse than an error.
-            problems.append(f"embed {index} repeats the URL {url!r}; Discord shows only the first")
-        seen_urls.add(url)
-
-    aggregate = sum(len(embed) for embed in embeds)
-    if aggregate > limits.embed_text:
-        problems.append(f"embed text totals {aggregate} characters; the limit is {limits.embed_text}")
-
-    if view is not None:
-        problems.extend(_audit_view(view, limits))
-    if attachments > limits.attachments:
-        problems.append(f"{attachments} attachments exceed {limits.attachments}")
-    return problems
-
-
-def _audit_embed(embed: discord.Embed, index: int, limits: ClassicLimits) -> list[str]:
-    payload = embed.to_dict()
-    problems: list[str] = []
-
-    def check(value: object, cap: int, what: str) -> None:
-        if isinstance(value, str) and len(value) > cap:
-            problems.append(f"embed {index} {what} is {len(value)} characters; the limit is {cap}")
-
-    check(payload.get("title"), limits.embed_title, "title")
-    check(payload.get("description"), limits.embed_description, "description")
-    check((payload.get("footer") or {}).get("text"), limits.embed_footer, "footer")
-    check((payload.get("author") or {}).get("name"), limits.embed_author, "author")
-
-    fields = payload.get("fields") or []
-    if len(fields) > limits.embed_fields:
-        problems.append(f"embed {index} has {len(fields)} fields; the limit is {limits.embed_fields}")
-    for position, field in enumerate(fields):
-        check(field.get("name"), limits.field_name, f"field {position} name")
-        check(field.get("value"), limits.field_value, f"field {position} value")
-        if not (field.get("name") or "").strip():
-            problems.append(f"embed {index} field {position} has an empty name")
-        if not (field.get("value") or "").strip():
-            problems.append(f"embed {index} field {position} has an empty value")
-
-    for key in ("url", "image", "thumbnail", "footer", "author"):
-        raw = payload.get(key)
-        candidate = raw if isinstance(raw, str) else (raw or {}).get("url") or (raw or {}).get("icon_url")
-        if isinstance(candidate, str) and candidate:
-            scheme = urlsplit(candidate).scheme
-            if scheme not in ALLOWED_SCHEMES:
-                problems.append(f"embed {index} {key} uses the unsupported URL scheme {scheme or '(none)'!r}")
-    return problems
-
-
-def _audit_view(view: discord.ui.View, limits: ClassicLimits) -> list[str]:
-    problems: list[str] = []
-    children = list(view.children)
-    if len(children) > limits.controls:
-        problems.append(f"{len(children)} view children exceed {limits.controls}")
-
-    rows: dict[int, list[discord.ui.Item[Any]]] = {}
-    for item in children:
-        rows.setdefault(item.row if item.row is not None else -1, []).append(item)
-    if len(rows) > limits.rows:
-        problems.append(f"{len(rows)} action rows exceed {limits.rows}")
-    for index, items in sorted(rows.items()):
-        selects = sum(isinstance(item, BaseSelect) for item in items)
-        if selects and len(items) > 1:
-            problems.append(f"row {index} mixes a select with {len(items) - 1} other controls")
-        if selects > 1:
-            problems.append(f"row {index} holds {selects} selects; a row holds one")
-        if not selects and len(items) > limits.row_buttons:
-            problems.append(f"row {index} holds {len(items)} buttons; the limit is {limits.row_buttons}")
-
-    seen: set[str] = set()
-    for item in children:
-        custom_id = getattr(item, "custom_id", None)
-        if not isinstance(custom_id, str):
-            continue
-        if len(custom_id) > limits.custom_id:
-            problems.append(f"custom id {custom_id!r} is {len(custom_id)} characters; the limit is {limits.custom_id}")
-        if custom_id in seen:
-            problems.append(f"custom id {custom_id!r} appears twice in one message")
-        seen.add(custom_id)
-    return problems
