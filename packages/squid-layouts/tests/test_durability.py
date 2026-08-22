@@ -21,6 +21,7 @@ from squid_layouts.discord.durability import (
     MemorySnapshotStore,
     MountLocator,
     MountManager,
+    MountReachability,
     SnapshotCodec,
     SnapshotError,
     SQLiteSnapshotStore,
@@ -49,6 +50,16 @@ class DurableRoot(Component):
 
     def render(self):
         return [Text(f"count {self.count}"), self.embed(self.child, key="child")]
+
+
+class LocatorResolver:
+    def __init__(self, result: MountReachability | Exception) -> None:
+        self.result = result
+
+    async def resolve(self, locator: MountLocator) -> MountReachability:
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
 
 
 def _registry(*, version: int = 1) -> ComponentRegistry:
@@ -211,8 +222,9 @@ async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locato
     assert payload is not None
     assert DurableMountCodec.loads(payload).locator == locator
 
-    first = MountManager(_registry(), store, owner="first", lease_seconds=10, clock=clock)
-    second = MountManager(_registry(), store, owner="second", lease_seconds=10, clock=clock)
+    resolver = LocatorResolver(MountReachability.REACHABLE)
+    first = MountManager(_registry(), store, owner="first", lease_seconds=10, clock=clock, locator_resolver=resolver)
+    second = MountManager(_registry(), store, owner="second", lease_seconds=10, clock=clock, locator_resolver=resolver)
     recovered = await first.recover(timeout=None)
 
     assert len(recovered) == 1
@@ -227,7 +239,7 @@ async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locato
     assert first.get("session") is None
 
     await second.finish("session", delete=False)
-    third = MountManager(_registry(), store, owner="third", lease_seconds=10, clock=clock)
+    third = MountManager(_registry(), store, owner="third", lease_seconds=10, clock=clock, locator_resolver=resolver)
     assert len(await third.recover(timeout=None)) == 1
 
 
@@ -248,6 +260,50 @@ async def test_startup_recovery_deletes_expired_records() -> None:
     await writer.checkpoint("expired")
     now[0] = 102.0
 
-    reader = MountManager(_registry(), store, clock=clock)
+    reader = MountManager(
+        _registry(), store, clock=clock, locator_resolver=LocatorResolver(MountReachability.REACHABLE)
+    )
     assert await reader.recover(timeout=None) == ()
     assert await store.load("expired") is None
+
+
+@pytest.mark.parametrize(
+    ("result", "is_deleted"),
+    [
+        (MountReachability.MISSING, True),
+        (MountReachability.UNREACHABLE, False),
+        (RuntimeError("frontend outage"), False),
+    ],
+)
+async def test_startup_recovery_sweeps_locator_reachability(
+    result: MountReachability | Exception, is_deleted: bool
+) -> None:
+    store = MemorySnapshotStore()
+    mount = Mount(DurableRoot(), timeout=None)
+    commit_render(mount)
+    writer = MountManager(_registry(), store)
+    writer.attach(
+        "session",
+        "counter",
+        mount,
+        locator=MountLocator("discord", {"channel_id": 123, "message_id": 456}),
+    )
+    await writer.checkpoint("session")
+
+    reader = MountManager(_registry(), store, locator_resolver=LocatorResolver(result))
+
+    assert await reader.recover(timeout=None) == ()
+    assert (await store.load("session") is None) is is_deleted
+    assert await store.claim("session", "next-owner", time.time() + 30) is not is_deleted
+
+
+async def test_startup_recovery_without_a_locator_resolver_keeps_the_snapshot() -> None:
+    store = MemorySnapshotStore()
+    mount = Mount(DurableRoot(), timeout=None)
+    commit_render(mount)
+    writer = MountManager(_registry(), store)
+    writer.attach("session", "counter", mount, locator=MountLocator("discord", {"message_id": 456}))
+    await writer.checkpoint("session")
+
+    assert await MountManager(_registry(), store).recover(timeout=None) == ()
+    assert await store.load("session") is not None

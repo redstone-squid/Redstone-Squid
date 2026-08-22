@@ -5,6 +5,7 @@ import secrets
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
 from squid_layouts.discord.mount import Mount
@@ -30,7 +31,9 @@ __all__ = [
     "LeaseSnapshotStore",
     "MemorySnapshotStore",
     "MountLocator",
+    "MountLocatorResolver",
     "MountManager",
+    "MountReachability",
     "MountSnapshot",
     "PostgresSnapshotStore",
     "PresentationSnapshot",
@@ -76,6 +79,20 @@ class MountLocator:
 
     frontend: str
     values: Mapping[str, str | int]
+
+
+class MountReachability(StrEnum):
+    """Result of resolving a persisted frontend locator during recovery."""
+
+    REACHABLE = "reachable"
+    MISSING = "missing"
+    UNREACHABLE = "unreachable"
+
+
+class MountLocatorResolver(Protocol):
+    """Host boundary for checking whether a persisted frontend still exists."""
+
+    async def resolve(self, locator: MountLocator) -> MountReachability: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,6 +462,7 @@ class MountManager:
         owner: str | None = None,
         lease_seconds: float = 30.0,
         clock: Callable[[], float] = time.time,
+        locator_resolver: MountLocatorResolver | None = None,
     ) -> None:
         if lease_seconds <= 0:
             message = "mount recovery lease must be positive"
@@ -454,6 +472,7 @@ class MountManager:
         self.owner = owner if owner is not None else secrets.token_urlsafe(12)
         self.lease_seconds = lease_seconds
         self.clock = clock
+        self.locator_resolver = locator_resolver
         self._active: dict[str, _ActiveMount] = {}
         self._claimed: set[str] = set()
 
@@ -522,6 +541,26 @@ class MountManager:
                 continue
             self._claimed.add(key)
             try:
+                payload = await self.store.load(key)
+                if payload is None:
+                    self._claimed.discard(key)
+                    await self.store.release(key, self.owner)
+                    continue
+                _, locator, expires_at = _decode_stored_mount(payload)
+                if expires_at is not None and expires_at <= self.clock():
+                    await self.store.delete(key)
+                    self._claimed.discard(key)
+                    continue
+                if locator is not None:
+                    reachability = await self._resolve(locator)
+                    if reachability is MountReachability.MISSING:
+                        await self.store.delete(key)
+                        self._claimed.discard(key)
+                        continue
+                    if reachability is MountReachability.UNREACHABLE:
+                        self._claimed.discard(key)
+                        await self.store.release(key, self.owner)
+                        continue
                 mount = await self.restore(key, **mount_options)
             except Exception:
                 self._claimed.discard(key)
@@ -533,6 +572,14 @@ class MountManager:
                 continue
             recovered.append(RecoveredMount(key, mount, self.get_locator(key)))
         return tuple(recovered)
+
+    async def _resolve(self, locator: MountLocator) -> MountReachability:
+        if self.locator_resolver is None:
+            return MountReachability.UNREACHABLE
+        try:
+            return await self.locator_resolver.resolve(locator)
+        except Exception:
+            return MountReachability.UNREACHABLE
 
     async def renew_claims(self) -> tuple[str, ...]:
         """Renew owned leases and return keys whose ownership was lost."""
