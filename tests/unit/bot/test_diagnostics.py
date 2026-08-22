@@ -57,8 +57,15 @@ def make_context(
 ) -> Any:
     """A context stub exposing only what the cog's delivery path touches."""
     author_send = AsyncMock(side_effect=dm_raises, return_value=AsyncMock(spec=discord.Message))
+    interaction = SimpleNamespace(
+        guild_locale=None,
+        locale="en-US",
+        expires_at=None,
+        is_expired=lambda: False,
+        response=SimpleNamespace(is_done=lambda: False),
+    )
     return SimpleNamespace(
-        interaction=SimpleNamespace(guild_locale=None, locale="en-US") if slash else None,
+        interaction=interaction if slash else None,
         guild=SimpleNamespace(id=5, preferred_locale="en-US") if in_guild else None,
         author=SimpleNamespace(id=1, send=author_send),
         send=AsyncMock(return_value=AsyncMock(spec=discord.Message)),

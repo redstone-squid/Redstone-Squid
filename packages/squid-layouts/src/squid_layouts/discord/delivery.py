@@ -254,7 +254,9 @@ class Replyable(Protocol):
     """Whatever a command arrived on — `discord.ext.commands.Context`, structurally.
 
     Typed by shape so this package keeps out of the commands extension, and so a test double
-    does not have to subclass one.
+    does not have to subclass one. `reply_to` additionally peeks at an `interaction`
+    attribute to name the edit authority the send created; when a double carries one, it
+    must answer `is_expired()`, `expires_at`, and `response.is_done()` like the real thing.
     """
 
     async def send(
