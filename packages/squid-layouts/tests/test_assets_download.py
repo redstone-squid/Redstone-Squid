@@ -22,7 +22,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
     result = sl.plan(node, target=DEFAULT_TARGET)
 
     assert isinstance(node, sl.Download)
-    assert result.scene.children == (
+    assert result.scene.components_v2.children == (
         SceneText("Report\nGenerated now"),
         SceneFile("report", "report.txt", "text/plain"),
     )
@@ -33,7 +33,7 @@ def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None
 def test_download_uses_localized_chrome_when_the_explicit_label_is_none() -> None:
     result = sl.plan(sl.download(None, _inline(), key="report-download"), target=DEFAULT_TARGET)
 
-    assert result.scene.children[0] == SceneText("Download")
+    assert result.scene.components_v2.children[0] == SceneText("Download")
 
 
 def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:
@@ -52,7 +52,7 @@ def test_scene_file_codec_round_trips() -> None:
     scene = sl.plan(sl.download("Report", _inline(), key="report-download"), target=DEFAULT_TARGET).scene
 
     assert Codec.loads(Codec.dumps(scene)) == scene
-    assert Codec.to_dict(scene)["children"][1] == {
+    assert Codec.to_dict(scene)["body"]["children"][1] == {
         "kind": "file",
         "asset_key": "report",
         "name": "report.txt",

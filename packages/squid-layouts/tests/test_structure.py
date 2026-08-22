@@ -81,7 +81,7 @@ def _text(result: PlanResult) -> str:
             elif isinstance(child, SceneSection):
                 walk(child.texts)
 
-    walk(result.scene.children)
+    walk(result.scene.components_v2.children)
     return "\n".join(parts)
 
 
@@ -104,7 +104,7 @@ def _components(result: PlanResult) -> int:
                     total += 1
         return total
 
-    return count(result.scene.children)
+    return count(result.scene.components_v2.children)
 
 
 def _step_events(result: PlanResult) -> list[str]:
@@ -359,8 +359,8 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
     scene = plan([ladder], target=DEFAULT_TARGET).scene
     # Two rows of five and three spliced in place, not wrapped in a Panel that would cost
     # the very container component the ladder exists to save.
-    assert [len(child.items) for child in scene.children if isinstance(child, SceneRow)] == [5, 3]
-    assert len(scene.children) == 2
+    assert [len(child.items) for child in scene.components_v2.children if isinstance(child, SceneRow)] == [5, 3]
+    assert len(scene.components_v2.children) == 2
 
 
 @given(st.integers(min_value=1, max_value=20))

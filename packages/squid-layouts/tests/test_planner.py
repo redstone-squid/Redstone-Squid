@@ -71,7 +71,7 @@ def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
 
     result = plan(Text(Message("Hello")), target=DEFAULT_TARGET, localization=localization)
 
-    assert result.scene.children == (SceneText("Bonjour"),)
+    assert result.scene.components_v2.children == (SceneText("Bonjour"),)
 
 
 def test_duplicate_action_keys_fail_before_drawing() -> None:
@@ -109,7 +109,7 @@ def test_assets_are_scene_resources_not_visual_children() -> None:
     asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"full report"))
     result = plan(Document((Text("summary"),), (asset,)), target=DEFAULT_TARGET)
 
-    assert result.scene.children == (SceneText("summary"),)
+    assert result.scene.components_v2.children == (SceneText("summary"),)
     assert result.scene.assets[0].key == "report"
     assert result.resources["asset:report"] is asset
 
@@ -118,7 +118,7 @@ def test_action_group_chunks_controls_without_dropping_any() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
     result = plan(ActionGroup(buttons), target=DEFAULT_TARGET)
 
-    rows = [node for node in result.scene.children if isinstance(node, SceneRow)]
+    rows = [node for node in result.scene.components_v2.children if isinstance(node, SceneRow)]
     assert [len(row.items) for row in rows] == [5, 1]
     assert set(result.bindings) == {f"b{index}" for index in range(6)}
 
@@ -237,8 +237,8 @@ def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
     basic_scene = plan(ladder, target=basic).scene
     rich_scene = plan(ladder, target=rich).scene
 
-    assert basic_scene.children == (SceneText("plain"),)
-    assert rich_scene.children == (SceneText("rich"),)
+    assert basic_scene.components_v2.children == (SceneText("plain"),)
+    assert rich_scene.components_v2.children == (SceneText("rich"),)
 
 
 def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
@@ -260,7 +260,7 @@ def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
         for index in range(9)
     ]
     scene = plan(ladders, target=TargetProfile("test", 1, limits=LIMITS)).scene
-    rendered = repr(scene.children)
+    rendered = repr(scene.components_v2.children)
 
     assert "n0.5" not in rendered  # the gated rung never reaches the solver
     assert "line 0" in rendered  # the ladder still had its last rung to step to
@@ -304,5 +304,5 @@ def test_unsupported_native_extension_uses_its_portable_fallback_without_buildin
     target = TargetProfile("portable.test", 1, limits=LIMITS)
     result = plan(NativeItem(factory, fallback=Text("portable")), target=target)
 
-    assert result.scene.children == (SceneText("portable"),)
+    assert result.scene.components_v2.children == (SceneText("portable"),)
     assert not called

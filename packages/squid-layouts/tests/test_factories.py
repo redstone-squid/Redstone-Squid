@@ -57,7 +57,7 @@ class TestNormalization:
 
         result = sl.plan(sl.section(None, shown and sl.paragraph("x")), target=DEFAULT_TARGET)
 
-        assert result.scene.children == ()
+        assert result.scene.components_v2.children == ()
 
 
 class TestRefusals:

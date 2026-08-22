@@ -105,7 +105,7 @@ class TestPaginateBreakPreferences:
 class TestRegionPagination:
     @staticmethod
     def _texts(result: sl.PlanResult) -> list[str]:
-        panel = result.scene.children[0]
+        panel = result.scene.components_v2.children[0]
         assert isinstance(panel, ScenePanel)
         return [child.content for child in panel.children if isinstance(child, SceneText)]
 
@@ -123,7 +123,7 @@ class TestRegionPagination:
             target=DEFAULT_TARGET,
         )
 
-        assert [child.content for child in result.scene.children if isinstance(child, SceneText)] == [
+        assert [child.content for child in result.scene.components_v2.children if isinstance(child, SceneText)] == [
             "first",
             "second",
         ]
