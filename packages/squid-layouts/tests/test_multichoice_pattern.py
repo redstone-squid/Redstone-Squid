@@ -115,7 +115,20 @@ def test_small_panel_offers_a_modal_alternate_with_staged_prefill() -> None:
     )
     rendered = pattern.component(initial=sl.MultiChoiceState(("role-1",))).render()
     alternate = next(node for node in _walk(rendered) if isinstance(node, FormTrigger))
-    assert alternate.spec.prefill == {"role-0": False, "role-1": True, "role-2": False}
+    assert alternate.spec.prefill == {"selection": ("role-1",)}
+    field = alternate.spec.fields[0]
+    assert isinstance(field, sl.MultiChoiceField)
+
+
+def test_panel_modal_alternate_scales_to_twenty_five_options() -> None:
+    pattern = sl.MultiChoicePanel(
+        "Roles",
+        (sl.MultiChoiceGroup("roles", "Roles", _options("role", 25)),),
+    )
+
+    rendered = pattern.component().render()
+
+    assert any(isinstance(node, FormTrigger) for node in _walk(rendered))
 
 
 def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection() -> None:

@@ -87,9 +87,11 @@ from squid_layouts.forms import (
     FormValidationPolicy,
     FormValueError,
     IntField,
+    MultiChoiceField,
     SubmitHandler,
     TextAreaField,
     TextField,
+    UploadedFile,
 )
 from squid_layouts.patterns import (
     ComponentShell,
@@ -363,6 +365,7 @@ __all__ = [
     "MenuState",
     "Message",
     "MultiChoiceCommitHandler",
+    "MultiChoiceField",
     "MultiChoiceGroup",
     "MultiChoicePanel",
     "MultiChoiceState",
@@ -437,6 +440,7 @@ __all__ = [
     "Unbreakable",
     "UndeclaredStateError",
     "UnsolvableLayoutError",
+    "UploadedFile",
     "Visibility",
     "Window",
     "WindowLoader",
