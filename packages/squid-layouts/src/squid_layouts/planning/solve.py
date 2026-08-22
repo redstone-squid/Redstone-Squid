@@ -33,6 +33,7 @@ from squid_layouts.primitives.nodes import (
     Button,
     Code,
     Embed,
+    File,
     Footer,
     Gallery,
     Heading,
@@ -161,7 +162,19 @@ class RGroup:
 
 
 type Realized = (
-    RText | RTime | RSection | RPanel | RGroup | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
+    RText
+    | RTime
+    | RSection
+    | RPanel
+    | RGroup
+    | File
+    | Sep
+    | Row
+    | SelectMenu
+    | RoutedSelect
+    | Thumbnail
+    | Gallery
+    | RawItem
 )
 
 

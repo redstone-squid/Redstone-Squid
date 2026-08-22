@@ -22,6 +22,7 @@ from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.assets import Asset
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
@@ -46,6 +47,7 @@ from squid_layouts.semantic import (
     Destination,
     Details,
     DisclosureOwnership,
+    Download,
     Emphasis,
     Field,
     Fields,
@@ -465,6 +467,18 @@ def toggle(
 ) -> Toggle:
     """A boolean control; ``on`` declares whether the author or session owns its state."""
     return Toggle(key, _text(label), on, _opt_text(on_label), _opt_text(off_label), tone, available)
+
+
+def download(
+    label: TextValue | None,
+    asset: Asset,
+    *,
+    key: str,
+    description: TextValue | None = None,
+    emphasis: Emphasis = Emphasis.NORMAL,
+) -> Download:
+    """Offer an inline-declared asset through a visible download control."""
+    return Download(key, _opt_text(label), asset, _opt_text(description), emphasis)
 
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:

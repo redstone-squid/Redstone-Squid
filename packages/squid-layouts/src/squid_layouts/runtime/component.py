@@ -66,6 +66,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Details as SemanticDetails,
 )
+from squid_layouts.semantic import Download as SemanticDownload
 from squid_layouts.semantic import (
     FallbackContent as SemanticFallbackContent,
 )
@@ -532,6 +533,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticMedia(key=key)
                 | SemanticFormTrigger(key=key)
                 | SemanticToggle(key=key)
+                | SemanticDownload(key=key)
             ):
                 return replace(node, key=f"{prefix}.{key}")
             case (

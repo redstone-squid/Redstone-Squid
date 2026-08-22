@@ -60,6 +60,7 @@ class Chrome:
     redo: TextLike = "Redo"
     on: TextLike = "On"
     off: TextLike = "Off"
+    download: TextLike = "Download"
     confirm: TextLike = "Confirm"
     cancel: TextLike = "Cancel"
     decided: Callable[[TextLike], TextLike] = _default_decided
@@ -105,6 +106,7 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         redo=resolve_text(chrome.redo, localization).content,
         on=resolve_text(chrome.on, localization).content,
         off=resolve_text(chrome.off, localization).content,
+        download=resolve_text(chrome.download, localization).content,
         confirm=resolve_text(chrome.confirm, localization).content,
         cancel=resolve_text(chrome.cancel, localization).content,
         decided=lambda label: resolve_text(chrome.decided(label), localization).content,

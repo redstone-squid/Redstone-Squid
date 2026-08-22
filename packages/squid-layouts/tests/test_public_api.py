@@ -19,6 +19,7 @@ def test_root_is_semantic_first() -> None:
     assert {"Timestamp", "TimeStyle", "timestamp", "TimeField", "DateTimeField"} <= set(sl.__all__)
     assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
     assert {"CollectionEditor", "CollectionEntry", "CollectionState", "CollectionChangeHandler"} <= set(sl.__all__)
+    assert {"Download", "download"} <= set(sl.__all__)
     assert {
         "CountPrecision",
         "Direction",
@@ -46,9 +47,11 @@ def test_root_is_semantic_first() -> None:
 
 def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.primitives.Button
+    assert sl.primitives.File
     assert sl.planning.solve
     assert sl.runtime.ComponentRuntime
     assert sl.scene.Codec
+    assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
     assert sl.discord.MountRegistry

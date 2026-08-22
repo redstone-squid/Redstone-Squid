@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
+from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
@@ -43,6 +44,9 @@ from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
 )
 from squid_layouts.primitives.nodes import (
+    File as PrimitiveFile,
+)
+from squid_layouts.primitives.nodes import (
     Heading as PrimitiveHeading,
 )
 from squid_layouts.primitives.nodes import (
@@ -71,6 +75,7 @@ from squid_layouts.semantic import (
     Code,
     Controlled,
     Details,
+    Download,
     Emphasis,
     FallbackContent,
     Field,
@@ -133,6 +138,7 @@ TABLE_ADAPTER_VERSION = 1
 @dataclass(frozen=True, slots=True)
 class SemanticLowering:
     nodes: tuple[Node, ...]
+    assets: tuple[Asset, ...] = ()
     events: tuple[PlanEvent, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
     updates: tuple[SessionUpdate, ...] = ()
@@ -148,6 +154,7 @@ class _Context:
     session: PresentationSession
     pages: CursorCoordinator
     capabilities: frozenset[str]
+    assets: list[Asset]
     events: list[PlanEvent]
     updates: list[SessionUpdate]
     strategies: Mapping[str, str]
@@ -255,6 +262,7 @@ def lower_semantics(
         capabilities,
         [],
         [],
+        [],
         {} if strategies is None else strategies,
         search_budget,
     )
@@ -263,6 +271,7 @@ def lower_semantics(
         lowered.extend(_node(node, f"$.{index}", context))
     return SemanticLowering(
         tuple(lowered),
+        tuple(context.assets),
         tuple(context.events),
         context.pages.pagers,
         tuple(context.updates),
@@ -366,6 +375,17 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _details(node, path, context)
         case Toggle():
             return _toggle(node, context)
+        case Download(label=label, asset=asset, description=description, emphasis=emphasis):
+            context.assets.append(asset)
+            resolved_label = _resolve(context.chrome.download if label is None else label, context)
+            if emphasis is Emphasis.STRONG:
+                resolved_label = f"**{resolved_label}**"
+            elif emphasis is Emphasis.SUBTLE:
+                resolved_label = f"-# {resolved_label}"
+            text = resolved_label
+            if description is not None:
+                text += f"\n{_resolve(description, context)}"
+            return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type)]
         case Status(content=content, tone=tone):
             prefix = {
                 Tone.INFO: "\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16} ",

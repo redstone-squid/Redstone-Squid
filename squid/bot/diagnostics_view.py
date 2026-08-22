@@ -62,8 +62,7 @@ class ErrorReportBrowser(sl.Component):
 
     def render(self) -> sl.Document:
         nodes = self._render_detail() if self.detail is not None else self._render_list()
-        assets = (report_asset(self.detail),) if self.detail is not None else ()
-        return sl.Document(tuple(nodes), assets)
+        return sl.Document(tuple(nodes))
 
     def _render_list(self) -> Sequence[sl.LayoutNode]:
         entries = tuple(_list_line(report) for report in self._reports)
@@ -108,6 +107,9 @@ class ErrorReportBrowser(sl.Component):
                 )
             )
         children.append(sl.fields(*_summary_fields(report, self.matches)))
+        children.append(
+            sl.download(L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.Emphasis.STRONG)
+        )
         controls: list[sl.primitives.Button] = []
         if self._reports:
             controls.append(sl.primitives.Button(label=L(t"Back"), on_click=self._back, key="back"))

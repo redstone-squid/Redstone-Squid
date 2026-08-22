@@ -142,7 +142,7 @@ implements upload. Native uploads support 0–10 files; larger maxima raise
 @dataclass(frozen=True, slots=True)
 class Download:
     key: str
-    label: TextLike
+    label: TextLike | None
     asset: Asset
     description: TextLike | None = None
     emphasis: Emphasis = Emphasis.NORMAL
