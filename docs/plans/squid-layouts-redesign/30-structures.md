@@ -175,7 +175,7 @@ class Browser[ItemT](Component):
         entry_actions: Callable[[ItemT], Sequence[Action | Link]] | None = None,
         overview: Callable[[LoadedWindow[ItemT]], ContentLike] | None = None,
         page_size: int = 10,
-        on_open: Callable[[SelectionEvent], Awaitable[None]] | None = None,
+        on_open: Callable[[ActionEvent, ItemT], Awaitable[None]] | None = None,
     ) -> None: ...
 
     async def refresh(self) -> None: ...   # window.invalidate() around the visible anchor
@@ -276,7 +276,7 @@ Browser's resource/window idioms).
 ## Verification
 
 - `test_multichoice_pattern.py`: an `IMMEDIATE` valid select change commits in one
-  transition and fires `on_apply` exactly once; an invalid change stays staged with errors
+  transition and fires `on_commit` exactly once; an invalid change stays staged with errors
   shown and commits on the next valid change; the Apply row is absent; `EXPLICIT` behavior
   is unchanged.
 - `test_editor_pattern.py`: form submits store values; the commit row is gated on dirty
