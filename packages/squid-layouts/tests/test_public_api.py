@@ -53,6 +53,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.WhenOpen
     assert sl.discord.durability.MountManager
     assert sl.TopicBus
+    assert sl.discord.Reactor.follow
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:
