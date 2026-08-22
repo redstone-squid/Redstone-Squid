@@ -3,7 +3,7 @@
 import discord
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount
+from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.semantic import Actions, Stack, Status
 
@@ -55,7 +55,7 @@ async def test_component_handler_receives_the_option_and_finish_action_ends_moun
         seen.append((key, event.state))
 
     component = _decision().component(on_decide=decided, finish_on={"delete"})
-    mount = Mount(component, timeout=None)
+    mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await mount.dispatch("delete-build.delete", fake_interaction())
@@ -75,7 +75,7 @@ async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
         seen.append(event.action)
 
     component = sl.confirm("Proceed?", on_confirm=confirmed, on_cancel=cancelled, tone=sl.Tone.DANGER)
-    mount = Mount(component, timeout=None)
+    mount = Mount(component, access=Everyone(), timeout=None)
     view = commit_render(mount)
     buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 

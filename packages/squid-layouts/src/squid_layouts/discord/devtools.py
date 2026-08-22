@@ -10,7 +10,7 @@ from discord.ext.commands import Context
 from squid_layouts.discord import delivery
 from squid_layouts.discord.devtools_view import MountInspector, metrics_text, plan_text, scene_attachment
 from squid_layouts.discord.live import mounts
-from squid_layouts.discord.mount import Mount, MountSnapshot
+from squid_layouts.discord.mount import MountSnapshot, owned_mount
 from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import MountRegistry
 from squid_layouts.document import InlineAsset
@@ -116,7 +116,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     async def _open(self, ctx: Context[BotT], *, focus: str | None) -> None:
         inspector = MountInspector(focus=focus, registry=self._registry)
-        mount = Mount(inspector, timeout=SESSION_SECONDS, lock_to=ctx.author.id)
+        mount = owned_mount(inspector, ctx.author.id, timeout=SESSION_SECONDS)
         inspector.own_id = mount.id
         await mount.send(delivery.reply_to(ctx, ephemeral=ctx.interaction is not None))
 

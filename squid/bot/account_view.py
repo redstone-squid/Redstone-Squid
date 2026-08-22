@@ -330,9 +330,9 @@ class AccountPanel(sl.Component):
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            access=sl.discord.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self._author_id,
         )
         return self._mount
 

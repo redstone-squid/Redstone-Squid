@@ -23,6 +23,7 @@ from squid_layouts.discord import (
     DEFAULT_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
+    Everyone,
     LabelSpec,
     ModalSpec,
     Mount,
@@ -215,7 +216,7 @@ class TestMountPagination:
         return [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
     def test_nav_row_is_synthesized(self):
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         view = commit_render(mount)
         prev_button, next_button = self._nav_buttons(view)
         assert prev_button.disabled  # first page
@@ -224,7 +225,7 @@ class TestMountPagination:
         assert conform(view) == []
 
     async def test_next_advances_and_edges_disable(self):
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         commit_render(mount)
         interaction = fake_interaction()
 
@@ -249,14 +250,14 @@ class TestMountPagination:
             return original(*args, **kwargs)
 
         monkeypatch.setattr(mount_module, "compose", counted)
-        mount = Mount(TwoBrowsers(), timeout=None)
+        mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
         commit_render(mount)
         assert calls == 1
 
     async def test_a_paged_picker_follows_its_anchor_through_the_mount(self):
         """The production path, which used to launder every cursor through `page=`."""
         catalog = Catalog()
-        mount = Mount(catalog, timeout=None)
+        mount = Mount(catalog, access=Everyone(), timeout=None)
         commit_render(mount)
         await mount.dispatch("__cursor_next.catalog.items", fake_interaction())
         assert mount.presentation.cursor("catalog.items").position.offset == 1
@@ -275,7 +276,7 @@ class TestMountPagination:
 
     def test_stopping_replaced_view_keeps_new_paginator_registered(self):
         """discord.py must retain the new generation after Mount stops the old one."""
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         first = commit_render(mount)
         second = commit_render(mount)
         message_id = 42
@@ -293,7 +294,7 @@ class TestMountPagination:
             label = f"{context.position.offset + 1}/{context.state.extent}"
             return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
 
-        mount = Mount(Browser(), timeout=None, nav=nav)
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=nav)
         view = commit_render(mount)
         assert [button.label for button in self._nav_buttons(view)] == [
             f"1/{mount.presentation.cursor('entries').extent}"
@@ -304,7 +305,7 @@ class TestMountPagination:
         assert mount.presentation.cursor("entries").position.offset == 1
 
     async def test_a_materialized_cursor_seeks_to_a_page(self):
-        mount = Mount(Browser(), timeout=None, nav=page_select_nav)
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
         view = commit_render(mount)
         jump = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
         assert jump.custom_id is not None and jump.custom_id.endswith("__cursor_seek.entries")
@@ -314,7 +315,7 @@ class TestMountPagination:
         assert mount.presentation.cursor("entries").position.offset == 3
 
     async def test_seeking_past_the_end_clamps_to_the_last_page(self):
-        mount = Mount(Browser(), timeout=None, nav=page_select_nav)
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
         commit_render(mount)
         extent = mount.presentation.cursor("entries").extent
 
@@ -323,7 +324,7 @@ class TestMountPagination:
         assert mount.presentation.cursor("entries").position.offset == extent - 1
 
     async def test_seeking_to_the_visible_page_is_a_clean_noop(self):
-        mount = Mount(Browser(), timeout=None, nav=page_select_nav)
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
         commit_render(mount)
         interaction = fake_interaction()
 
@@ -333,12 +334,12 @@ class TestMountPagination:
 
     def test_the_stock_factory_still_draws_no_jump_control(self):
         """`page_select_nav` is opt-in: a select costs a whole component row."""
-        view = commit_render(Mount(Browser(), timeout=None))
+        view = commit_render(Mount(Browser(), access=Everyone(), timeout=None))
 
         assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
 
     async def test_prev_at_first_page_is_a_clean_noop(self):
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         commit_render(mount)
         interaction = fake_interaction()
 
@@ -347,7 +348,7 @@ class TestMountPagination:
         interaction.response.defer.assert_awaited_once()
 
     async def test_two_pagers_advance_independently(self):
-        mount = Mount(TwoBrowsers(), timeout=None)
+        mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
         commit_render(mount)
 
         await mount.dispatch("__cursor_next.left", fake_interaction())
@@ -359,7 +360,7 @@ class TestMountPagination:
 
     async def test_changed_content_resets_only_its_pager(self):
         component = TwoBrowsers()
-        mount = Mount(component, timeout=None)
+        mount = Mount(component, access=Everyone(), timeout=None)
         commit_render(mount)
         await mount.dispatch("__cursor_next.left", fake_interaction())
         await mount.dispatch("__cursor_next.right", fake_interaction())
@@ -565,6 +566,6 @@ def test_the_solver_counts_the_nav_it_realized():
     def nav(state):
         return default_nav(NavigationContext(state, move, move))
 
-    view = commit_render(Mount(Browser(), timeout=None))
+    view = commit_render(Mount(Browser(), access=Everyone(), timeout=None))
     solved = solve(Browser().render(), nav=nav)
     assert _component_count(solved.children) == len(list(view.walk_children()))

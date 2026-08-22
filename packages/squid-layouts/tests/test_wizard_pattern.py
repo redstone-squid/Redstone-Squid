@@ -3,7 +3,7 @@
 import discord
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount
+from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.semantic import FormTrigger, Stack
 
@@ -61,7 +61,7 @@ def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> No
 
 async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
     wizard = sl.Wizard("Build", _steps).component()
-    mount = Mount(wizard, timeout=None)
+    mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await _submit_form(mount, "wizard.kind", "advanced")
@@ -83,7 +83,7 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
             sl.WizardStep("done", "Done", "Review"),
         ),
     ).component()
-    mount = Mount(wizard, timeout=None)
+    mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
     opened = fake_interaction()
@@ -100,7 +100,7 @@ async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
         completed.append(answers)
 
     wizard = sl.Wizard("One", (sl.WizardStep("name", "Name", _form("Name", "name")),)).component(on_finish=finish)
-    mount = Mount(wizard, timeout=None)
+    mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await _submit_form(mount, "wizard.name", "Ada")

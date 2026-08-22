@@ -132,6 +132,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 t(locale, _("Download schematic")),
                 sl.Asset("schematic", name, "application/octet-stream", sl.InlineAsset(data)),
             ),
+            access=sl.discord.Everyone(),
             locale=locale,
         )
 
@@ -215,6 +216,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 ),
                 description=f"{t(locale, _('Conversion report:'))} {summarise_losses(losses)}",
             ),
+            access=sl.discord.Everyone(),
             locale=locale,
         )
 

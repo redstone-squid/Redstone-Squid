@@ -148,9 +148,9 @@ class ConsentPrompt(sl.Component):
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            access=sl.discord.Owner(self.user_id),
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self.user_id,
         )
         return self._mount
 

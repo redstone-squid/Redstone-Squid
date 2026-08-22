@@ -5,7 +5,7 @@ from collections.abc import Iterable, Mapping
 import discord
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount
+from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.semantic import Actions, RoutedAction, Stack
 
@@ -58,7 +58,7 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
         changes.append(values)
 
     component = _editor().component(on_change=changed)
-    mount = Mount(component, timeout=None)
+    mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await _submit(mount, "collection.add", "OpenAI")
@@ -71,7 +71,7 @@ async def test_edit_prefills_and_retains_the_entry_identity() -> None:
     editor = _editor()
     component = editor.component(initial=editor.initial_from(({"name": "Old"},)))
     component.pattern_state = editor.transition(component.pattern_state, "select", values=("1",))
-    mount = Mount(component, timeout=None)
+    mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
 
     modal = await _submit(mount, "collection.edit", "New")

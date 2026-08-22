@@ -420,6 +420,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await send_component(
             ctx,
             LayoutShowcase(section=section, entries=entries, locale=locale),
+            access=sl.discord.Everyone(),
             locale=locale,
         )
 
