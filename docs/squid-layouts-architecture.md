@@ -42,7 +42,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Portable planning | plan(document, target=...) | PlanResult |
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
-| Resume an opted-in session | sl.discord.durability registry and `MountManager` | restored Mount |
+| Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
 
 sl.discord.compose is the Discord convenience path: plan for sl.discord.Target, draw with
 sl.discord.Renderer, then strictly audit the result. Detached composition can pass
@@ -419,28 +419,28 @@ sl.html.Renderer emits escaped semantic markup, action identifiers, policies, an
 Standalone mode includes Discord-like CSS. It preserves planned structure; pixel-level
 fidelity also needs the website's chosen Discord-markdown and emoji renderer.
 
-## Durable mounts
+## Durable sessions
 
 Durability is opt-in:
 
-1. Register a stable root key, positive version, and host factory in ComponentRegistry.
-2. Build and attach the mount to MountManager.
-3. Checkpoint at a host-chosen durability boundary.
-4. Restore through the registry and a SnapshotStore implementation.
+1. Register a stable recipe key, positive version, and complete mount constructor in `ComponentRegistry`.
+2. Construct `DurableSessionRuntime` with the live `SessionRegistry`, a fenced store, and a frontend adapter.
+3. Start the runtime after Discord login and await recovery before gateway connection.
+4. Open and attach durable mounts through the runtime so the first complete record and later checkpoints remain
+   coordinated with visible Discord commits.
 
 Snapshots contain JSON-safe declared state by keyed component path plus the closed
-presentation vocabulary. They never contain callbacks, native items, service objects, or
-dynamic import instructions. The factory injects dependencies. Component and adapter versions
-are independent: an adapter update resets only its sticky strategy. Version or tree-shape
-mismatches fail with `SnapshotError` and require an explicit host migration.
+presentation vocabulary. One durable record owns the root and every attached child, including portable
+frontend locators, parent links, and actor attribution. Records never contain callbacks, native items, service
+objects, or dynamic import instructions. Restore recipes inject dependencies and explicit access policy.
+Component and adapter versions are independent; missing sequential component migrations retain the record as
+incompatible for operator action.
 
-MountManager starts no tasks. Database or Redis storage, checkpoint cadence, expiry, and
-reconnection remain host policy. A `DurableMountRecord` may pair the snapshot with a portable
-`MountLocator`, for example Discord channel/message IDs, plus an expiry. Stores that implement
-`LeaseSnapshotStore` add atomic claim, renew, and release operations. `MountManager.recover()`
-claims live records and returns each restored mount beside its locator; the host reconnects the
-frontend and periodically calls `renew_claims()` under its own task supervisor. This prevents
-two workers from dispatching the same visible controls after a restart.
+`DurableSessionRuntime.run()` owns recovery, claim renewal, visible-commit checkpointing, bounded retries, expiry,
+and shutdown release under a host-owned anyio task group. `DiscordFrontend` promotes public interaction delivery
+to permanent bot-token authority and reconnects a complete graph before registering it for dispatch. Fenced
+admission publishes the newcomer and retires selected durable victims atomically, while stale claim tokens cannot
+renew, save, or delete after takeover. SQLite assumes coordinated host clocks; Postgres uses database time.
 
 ## Durable route graph and dispatch onion
 
