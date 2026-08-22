@@ -4,9 +4,10 @@ from collections.abc import Callable
 
 import discord
 
+from squid_layouts.discord.inspection import cost
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
+from squid_layouts.planning.target import PreparedExtension, TargetProfile
 from squid_layouts.primitives.nodes import Extension, Node
 
 
@@ -23,11 +24,9 @@ class _DiscordItemExtension:
         if not isinstance(item, discord.ui.Item):
             message = "discord.item factory did not return a discord.ui.Item"
             raise LayoutInvariantError(message)
-        descendants = list(item.walk_children()) if hasattr(item, "walk_children") else []
-        all_items = (item, *descendants)
-        text = sum(len(child.content) for child in all_items if isinstance(child, discord.ui.TextDisplay))
         return PreparedExtension(
-            cost=ResourceCost({"components": len(all_items), "display_text": text}),
+            # One definition of what a component costs, shared with `sl.discord.cost`.
+            cost=cost(item),
             scene_payload={"native_kind": type(item).__name__},
             resource=item,
         )

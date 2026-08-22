@@ -24,6 +24,8 @@ from typing import Any, Protocol
 
 import discord
 
+from squid_layouts.errors import LayoutError
+
 # Discord's way of saying the credentials behind a handle are gone.
 _STALE_CODES = frozenset({10015, 10062, 50027})
 
@@ -36,7 +38,7 @@ _UPDATE_RESPONSES = frozenset(
 )
 
 
-class StaleHandleError(Exception):
+class StaleHandleError(LayoutError):
     """This handle no longer addresses its message.
 
     Discord expires the credentials behind an interaction, and a response spent on a new
