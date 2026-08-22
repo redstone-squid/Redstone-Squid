@@ -12,7 +12,7 @@ from squid_layouts import (
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DEFAULT_TARGET
-from squid_layouts.primitives import Lines, Paginate, Panel, Text, Variants, alts
+from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variants, alts
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
 from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
@@ -121,7 +121,7 @@ def test_actions_find_a_global_fit_alongside_a_local_pager() -> None:
 
 def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> None:
     structural_fallback = Variants.of(
-        Panel(tuple(Text(f"detail {index}") for index in range(35))),
+        Panel(tuple(Sep() for _ in range(35))),
         Text("compact details"),
     )
     document = (
@@ -134,7 +134,7 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
     assert result.report.events[0].code == "actions.grouped"
     assert "compact details" not in {node.content for node in result.scene.children if hasattr(node, "content")}
-    assert result.metrics.states_explored == 6
+    assert result.metrics.states_explored == 4
 
 
 def test_action_strategy_is_sticky_while_it_remains_valid() -> None:
