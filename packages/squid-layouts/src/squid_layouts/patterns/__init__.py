@@ -1,5 +1,12 @@
 """Reusable, frontend-neutral state-machine patterns."""
 
+from squid_layouts.patterns.collection import (
+    CollectionChangeHandler,
+    CollectionEditor,
+    CollectionEntry,
+    CollectionState,
+)
+from squid_layouts.patterns.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
 from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
 from squid_layouts.patterns.multichoice import (
     MultiChoiceCommitHandler,
@@ -30,7 +37,15 @@ from squid_layouts.patterns.wizard import (
 )
 
 __all__ = [
+    "CollectionChangeHandler",
+    "CollectionEditor",
+    "CollectionEntry",
+    "CollectionState",
     "ComponentShell",
+    "Decision",
+    "DecisionHandler",
+    "DecisionOption",
+    "DecisionState",
     "Menu",
     "MenuEntry",
     "MenuState",
@@ -58,4 +73,5 @@ __all__ = [
     "WizardFinishHandler",
     "WizardState",
     "WizardStep",
+    "confirm",
 ]
