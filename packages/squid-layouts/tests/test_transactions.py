@@ -1,6 +1,7 @@
 """What a transaction actually covers, and what it says about what it does not."""
 
 import logging
+from dataclasses import dataclass
 
 import pytest
 
@@ -8,6 +9,7 @@ from squid_layouts import (
     Component,
     ReactiveWriteError,
     UndeclaredStateError,
+    join_action,
     state,
     strict_state,
     transaction,
@@ -373,3 +375,181 @@ class TestActionCommitHooks:
             # The block is scoped, not terminal: the transaction is still writable after it.
             panel.declared = 9
         assert panel.declared == 9
+
+
+class Watched(Panel):
+    """A panel that records the notifications a commit sends it."""
+
+    def __init__(self, service: Uncopyable) -> None:
+        # Before the base constructor: assigning declared state notifies straight away.
+        self.notified: list[frozenset[str]] = []
+        super().__init__(service)
+
+    def _state_changed(self, names: frozenset[str]) -> None:
+        self.notified.append(names)
+        super()._state_changed(names)
+
+
+def watched() -> Watched:
+    """An attached panel whose notification log starts after construction."""
+    panel = attached(Watched(Uncopyable()))
+    panel.notified.clear()
+    return panel
+
+
+@dataclass
+class Recorder:
+    """A participant that logs the protocol calls it receives."""
+
+    log: list[str]
+    name: str
+    fail: str = ""
+    """Which call raises, if any."""
+
+    def _step(self, step: str) -> None:
+        self.log.append(f"{self.name}.{step}")
+        if self.fail == step:
+            message = f"{self.name} rejected the action"
+            raise RuntimeError(message)
+
+    def prepare(self) -> None:
+        self._step("prepare")
+
+    def apply(self) -> None:
+        self._step("apply")
+
+    def abort(self) -> None:
+        self._step("abort")
+
+    def finalize(self) -> None:
+        self._step("finalize")
+
+
+class TestActionParticipants:
+    """The seam a subsystem with its own writes commits through (see plan 40)."""
+
+    def test_there_is_nothing_to_join_outside_an_action(self):
+        """The caller's signal that its write has nothing to wait for."""
+        assert join_action(object(), lambda: Recorder([], "store")) is None
+
+    def test_one_key_enlists_once(self):
+        log: list[str] = []
+        key = object()
+        with transaction():
+            first = join_action(key, lambda: Recorder(log, "a"))
+            second = join_action(key, lambda: Recorder(log, "b"))
+        assert first is second
+        assert log == ["a.prepare", "a.apply", "a.finalize"]
+
+    def test_every_participant_prepares_before_any_applies(self):
+        log: list[str] = []
+        with transaction():
+            join_action(object(), lambda: Recorder(log, "a"))
+            join_action(object(), lambda: Recorder(log, "b"))
+        assert log == [
+            "a.prepare",
+            "b.prepare",
+            "a.apply",
+            "b.apply",
+            "a.finalize",
+            "b.finalize",
+        ]
+
+    def test_a_rejected_prepare_applies_nothing_and_rolls_state_back(self):
+        log: list[str] = []
+        panel = watched()
+        with pytest.raises(RuntimeError, match="a rejected the action"), transaction():
+            panel.declared = 7
+            join_action(object(), lambda: Recorder(log, "a", fail="prepare"))
+            join_action(object(), lambda: Recorder(log, "b"))
+        assert "a.apply" not in log and "b.apply" not in log
+        assert log.count("a.abort") == 1 and log.count("b.abort") == 1
+        assert panel.declared == 0
+        assert panel.notified == []
+
+    def test_a_later_rejection_aborts_the_participant_that_already_prepared(self):
+        log: list[str] = []
+        with pytest.raises(RuntimeError, match="b rejected"), transaction():
+            join_action(object(), lambda: Recorder(log, "a"))
+            join_action(object(), lambda: Recorder(log, "b", fail="prepare"))
+        assert log == ["a.prepare", "b.prepare", "a.abort", "b.abort"]
+
+    def test_a_failed_action_aborts_without_preparing(self):
+        log: list[str] = []
+        with pytest.raises(RuntimeError, match="the action failed"), transaction():
+            join_action(object(), lambda: Recorder(log, "a"))
+            message = "the action failed"
+            raise RuntimeError(message)
+        assert log == ["a.abort"]
+
+    def test_an_abort_that_fails_does_not_replace_the_action_s_error(self, caplog: pytest.LogCaptureFixture):
+        log: list[str] = []
+        with (
+            caplog.at_level(logging.ERROR),
+            pytest.raises(RuntimeError, match="the action failed"),
+            transaction(),
+        ):
+            join_action(object(), lambda: Recorder(log, "a", fail="abort"))
+            join_action(object(), lambda: Recorder(log, "b"))
+            message = "the action failed"
+            raise RuntimeError(message)
+        # The siblings still get their abort, and the swallowed failure is still visible.
+        assert log == ["a.abort", "b.abort"]
+        assert "failed to abort" in caplog.text
+
+    def test_finalizing_sees_a_fully_published_action(self):
+        """Everything a finalize might wake must read the whole action, not half of it."""
+        log: list[str] = []
+        panel = watched()
+
+        def check() -> None:
+            log.append(f"declared={panel.declared}")
+
+        with transaction():
+            panel.declared = 7
+            recorder = join_action(object(), lambda: Recorder(log, "a"))
+            assert recorder is not None
+            recorder.finalize = check  # type: ignore[bad-assignment]
+        assert log == ["a.prepare", "a.apply", "declared=7"]
+        assert panel.notified == [frozenset({"__state_declared"})]
+
+    def test_parallel_read_actions_cannot_stage_writes(self):
+        with pytest.raises(ReactiveWriteError, match="parallel-read"), readonly_transaction():
+            join_action(object(), lambda: Recorder([], "a"))
+
+    def test_a_blocked_write_reaches_a_participant_already_enlisted(self):
+        """An undo inverse may not stage shared writes either; the restore would clobber them."""
+        log: list[str] = []
+        key = object()
+        with transaction():
+            join_action(key, lambda: Recorder(log, "a"))
+            with pytest.raises(ReactiveWriteError, match="busy reversing"), block_writes("busy reversing"):
+                join_action(key, lambda: Recorder(log, "a"))
+
+
+class TestCommitFailures:
+    """A commit is two halves, and only the first one can be taken back."""
+
+    def test_a_raising_hook_leaves_the_action_committed_and_reported(self):
+        """The recorder is what failed, not the action; silently un-rendering it is worse."""
+        panel = watched()
+
+        def explode(delta: StateDelta) -> None:
+            message = "the recorder failed"
+            raise RuntimeError(message)
+
+        with pytest.raises(RuntimeError, match="the recorder failed"), transaction():
+            on_action_commit(explode)
+            panel.declared = 7
+        assert panel.declared == 7
+        assert panel.notified == [frozenset({"__state_declared"})]
+
+    def test_hooks_run_after_the_action_is_visible(self):
+        """A recorder's effect outlives the transaction, so nothing may fail after it."""
+        log: list[str] = []
+        panel = watched()
+        with transaction():
+            on_action_commit(lambda delta: log.append("hook"))
+            join_action(object(), lambda: Recorder(log, "a"))
+            panel.declared = 7
+        assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]

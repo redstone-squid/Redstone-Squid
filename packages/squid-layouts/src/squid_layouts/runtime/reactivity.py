@@ -21,6 +21,35 @@ class ReactiveOwner(Protocol):
     def _state_rolled_back(self) -> None: ...
 
 
+class ActionParticipant(Protocol):
+    """A subsystem that publishes its own writes when the action in flight commits.
+
+    The split is the whole point. Everything that can fail happens in `prepare`, before
+    any participant has made anything visible, so the transaction can still roll the
+    action back as though it never ran. Register with :func:`join_action`.
+    """
+
+    def prepare(self) -> None:
+        """Validate the staged writes without publishing any of them.
+
+        Raise to abort the action: every participant is aborted, component state is
+        restored, and the error reaches whoever called the handler.
+        """
+
+    def apply(self) -> None:
+        """Publish the prepared writes. Synchronous, and past the point of failure."""
+
+    def abort(self) -> None:
+        """Discard the staged writes. Called once, on rollback or a failed prepare."""
+
+    def finalize(self) -> None:
+        """React to a commit that has fully landed -- notify watchers, publish addresses.
+
+        Every participant has applied by now, so a subscriber this wakes cannot observe a
+        half-published action. Raising here does not undo the commit; it already happened.
+        """
+
+
 class ReactiveWriteError(RuntimeError):
     """A state mutation was attempted inside a read-only action."""
 
@@ -112,6 +141,9 @@ class _Transaction:
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
     hooks: list[tuple[object | None, Callable[[StateDelta], None]]] = field(default_factory=list)
+    participants: dict[object, ActionParticipant] = field(default_factory=dict)
+    published: bool = False
+    """Whether the commit reached the point where this action's writes became visible."""
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
 
@@ -153,6 +185,24 @@ class _Transaction:
         self.changed[id(owner)] = owner
         self.changed_names.setdefault(id(owner), set()).add(name)
 
+    def enlist[ParticipantT: ActionParticipant](self, key: object, factory: Callable[[], ParticipantT]) -> ParticipantT:
+        """Return this action's participant for `key`, creating it on first use.
+
+        The guards run on every call, not just the first: a participant enlisted before a
+        `block_writes` region may not keep staging writes inside one.
+        """
+        if self.write_block is not None:
+            raise ReactiveWriteError(self.write_block)
+        if self.readonly:
+            message = "parallel-read actions cannot stage writes"
+            raise ReactiveWriteError(message)
+        existing = self.participants.get(key)
+        if existing is not None:
+            return existing  # type: ignore[bad-return]
+        created = factory()
+        self.participants[key] = created
+        return created
+
     def delta(self) -> StateDelta:
         """What this action changed, both directions, from the snapshots it already took."""
         changes: list[StateChange] = []
@@ -176,14 +226,39 @@ class _Transaction:
         return StateDelta(tuple(changes))
 
     def commit(self) -> None:
-        if self.hooks:
-            delta = self.delta()
-            for _, callback in self.hooks:
-                callback(delta)
+        """Publish the action, fallible half first.
+
+        Everything that can fail runs while nothing is visible yet, so a caller that
+        catches this can still roll the whole action back. `published` marks the crossing:
+        past it the action has happened, and a later error is a failure to *report* it, not
+        a reason to undo it.
+
+        Commit hooks run last for that reason. A recorder's effect reaches outside the
+        transaction -- `sl.history` pushes an entry -- and an entry describing an action
+        that a later failure rolled back would be worse than a missing one.
+        """
+        for participant in self.participants.values():
+            participant.prepare()
+        delta = self.delta() if self.hooks else None
+        self.published = True
+        for participant in self.participants.values():
+            participant.apply()
         for owner in self.changed.values():
             owner._state_changed(frozenset(self.changed_names[id(owner)]))
+        for participant in self.participants.values():
+            participant.finalize()
+        if delta is not None:
+            for _, callback in self.hooks:
+                callback(delta)
 
     def rollback(self) -> None:
+        for participant in self.participants.values():
+            try:
+                participant.abort()
+            except Exception:
+                # Whatever failed the action is the error worth propagating; a cleanup
+                # failure raised over it would hide why the action failed at all.
+                _log.exception("a transaction participant failed to abort")
         for snapshot in reversed(tuple(self.snapshots.values())):
             _restore(snapshot.owner, snapshot.name, snapshot.existed, snapshot.value, snapshot.copy)
             snapshot.owner._state_rolled_back()
@@ -255,9 +330,16 @@ def transaction() -> Iterator[None]:
         _CURRENT.reset(token)
         current.rollback()
         raise
-    else:
-        _CURRENT.reset(token)
+    # Reset before committing, not after: the commit notifies owners, and a notification
+    # that writes state must not be recorded by the transaction reporting on it.
+    _CURRENT.reset(token)
+    try:
         current.commit()
+    except BaseException:
+        # A commit that failed before publication is an action that did not happen.
+        if not current.published:
+            current.rollback()
+        raise
 
 
 @contextmanager
@@ -281,9 +363,16 @@ def readonly_transaction() -> Iterator[None]:
         _CURRENT.reset(token)
         current.rollback()
         raise
-    else:
-        _CURRENT.reset(token)
+    # Reset before committing, not after: the commit notifies owners, and a notification
+    # that writes state must not be recorded by the transaction reporting on it.
+    _CURRENT.reset(token)
+    try:
         current.commit()
+    except BaseException:
+        # A commit that failed before publication is an action that did not happen.
+        if not current.published:
+            current.rollback()
+        raise
 
 
 def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | None = None) -> None:
@@ -305,6 +394,22 @@ def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | No
         message = f"{key!r} already registered a commit hook for this action"
         raise RuntimeError(message)
     current.hooks.append((key, callback))
+
+
+def join_action[ParticipantT: ActionParticipant](
+    key: object, factory: Callable[[], ParticipantT]
+) -> ParticipantT | None:
+    """Take part in the action in flight, staging writes instead of publishing them.
+
+    Returns the participant registered for `key`, built by `factory` on first use, or
+    `None` when no transaction is open -- the caller's signal that its write has nothing
+    to wait for and should land now. `key` identifies the subsystem, is usually the
+    subsystem itself, and must be hashable.
+    """
+    current = _CURRENT.get()
+    if current is None:
+        return None
+    return current.enlist(key, factory)
 
 
 def has_action_hook(key: object) -> bool:

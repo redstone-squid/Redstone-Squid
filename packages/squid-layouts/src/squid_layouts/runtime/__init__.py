@@ -18,6 +18,7 @@ from squid_layouts.runtime.presentation import (
     apply_updates,
 )
 from squid_layouts.runtime.reactivity import (
+    ActionParticipant,
     ReactiveWriteError,
     StateChange,
     StateDelta,
@@ -26,6 +27,7 @@ from squid_layouts.runtime.reactivity import (
     block_writes,
     computed,
     export_state,
+    join_action,
     on_action_commit,
     restore_state,
     state,
@@ -53,6 +55,7 @@ def __getattr__(name: str):
 
 
 __all__ = [
+    "ActionParticipant",
     "ActivePagers",
     "Component",
     "ComponentRuntime",
@@ -88,6 +91,7 @@ __all__ = [
     "export_state",
     "history",
     "history_actions",
+    "join_action",
     "on_action_commit",
     "resource",
     "restore_state",
