@@ -32,6 +32,8 @@ def test_root_is_semantic_first() -> None:
     assert {"Browser", "BrowserDetail", "BrowserOpenHandler", "BrowserOverview", "list_source"} <= set(sl.__all__)
     assert {"Lookup", "LookupPickHandler", "LookupSearch"} <= set(sl.__all__)
     assert {"Download", "download"} <= set(sl.__all__)
+    assert {"Guard", "GuardVerdict", "GuardLedger", "GuardScope", "ADMIT", "guards"} <= set(sl.__all__)
+    assert "Feedback" in sl.__all__
     assert {"Resource", "ResourceDelivery", "ResourceState", "Pending", "Ready", "Failed", "resource"} <= set(
         sl.__all__
     )
@@ -77,6 +79,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.SessionPolicy
     assert not hasattr(sl.discord, "MountRegistry")
     assert not hasattr(sl.discord, "WhenOpen")
+    assert sl.discord.guards.requires_role
     assert sl.discord.durability.DurableSessionRuntime
     assert sl.discord.durability.DurableBot
     assert sl.discord.durability.DiscordFrontend

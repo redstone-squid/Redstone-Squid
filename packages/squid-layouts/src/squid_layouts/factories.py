@@ -21,9 +21,10 @@ from string.templatelib import Template
 from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
-from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
+from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.semantic import (
     CLOSED,
@@ -270,10 +271,15 @@ def form(
     policy: ActionPolicy | None = None,
     tone: Tone = Tone.NEUTRAL,
     emphasis: Emphasis = Emphasis.NORMAL,
+    guard: Guard | None = None,
 ) -> FormTrigger:
-    """A content control that presents a portable form."""
+    """A content control that presents a portable form.
+
+    ``guard`` gates the press that opens the form; the submission that follows completes an
+    already-admitted press and is not checked again.
+    """
     resolved, handler, default_policy = bind_form(spec, on_submit)
-    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis)
+    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis, guard)
 
 
 def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | None = None) -> Item:
@@ -456,9 +462,15 @@ def action(
     available: bool = True,
     allow_grouping: bool | None = None,
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+    guard: Guard | None = None,
+    feedback: Feedback | None = None,
 ) -> Action:
-    """A control that runs ``on_trigger``; ``key`` namespaces its custom id."""
-    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy)
+    """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
+
+    ``guard`` decides whether a press may execute now; ``available`` decides whether the
+    control is offered at all. A cooldown wants both.
+    """
+    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback)
 
 
 def toggle(

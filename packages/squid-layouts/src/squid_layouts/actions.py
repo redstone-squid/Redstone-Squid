@@ -10,6 +10,7 @@ from squid_layouts.text import TextLike
 
 if TYPE_CHECKING:
     from squid_layouts.forms import FormIssue, FormLike, SubmitHandler
+    from squid_layouts.guards import Guard
 
 
 class ActionPolicy(StrEnum):
@@ -19,6 +20,23 @@ class ActionPolicy(StrEnum):
     REBASE = "rebase"
     PARALLEL_READ = "parallel_read"
     IMMEDIATE = "immediate"
+
+
+@dataclass(frozen=True, slots=True)
+class Feedback:
+    """Ask the framework to show that a slow action is running.
+
+    The interim paint is a patch of the scene already on screen — the pressed control
+    relabelled, every interactive control disabled — rather than a re-render, because the
+    handler is mid-transaction and a re-render would observe half-written state. It appears
+    only once the action outlives the mount's `pending_after` threshold, so fast handlers
+    never flicker.
+    """
+
+    pending: TextLike | None = None
+    """What the pressed control says while the handler runs; `None` uses chrome."""
+    restore_on_error: bool = True
+    """Put the previous scene back before the error hook runs."""
 
 
 class ActionKind(StrEnum):
@@ -176,6 +194,10 @@ class ActionBinding:
     handler: Callable[[Any], Awaitable[None]]
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
+    guard: Guard | None = None
+    """Admission checked by the frontend after the concurrency gate, before the handler."""
+    feedback: Feedback | None = None
+    """Busy feedback policy for a handler slow enough to need it."""
 
     def routed(self, values: tuple[str, ...]) -> ActionBinding | None:
         """Resolve a grouped control to its logical action binding."""

@@ -33,6 +33,8 @@ class DispatchDisposition(StrEnum):
     MOUNT_FINISHED = "mount_finished"
     ACCESS_DENIED = "access_denied"
     ACCESS_FAILED = "access_failed"
+    GUARD_DENIED = "guard_denied"
+    GUARD_FAILED = "guard_failed"
     MISSING = "missing"
     INVALID_SELECTION = "invalid_selection"
     STALE = "stale"

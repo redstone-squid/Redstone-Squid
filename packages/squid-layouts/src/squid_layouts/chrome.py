@@ -6,6 +6,7 @@ tree), so every user-visible string the framework produces enters through this t
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from math import ceil
 
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.text import Localization, TextLike, resolve_text
@@ -39,6 +40,11 @@ def _default_decided(label: TextLike) -> TextLike:
     return f"You chose {label}."
 
 
+def _default_try_again_in(seconds: float) -> TextLike:
+    whole = max(1, ceil(seconds))
+    return f"Try again in {whole} second{'' if whole == 1 else 's'}."
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
@@ -47,6 +53,12 @@ class Chrome:
     """Ephemeral rejection shown when an author-locked control is used by another user."""
     session_ended: TextLike = "This session has ended."
     """Ephemeral rejection shown when a control on a finished mount is clicked anyway."""
+    not_now: TextLike = "You can't do that right now."
+    """Ephemeral rejection shown when an action's guard denies a press with no wording."""
+    try_again_in: Callable[[float], TextLike] = _default_try_again_in
+    """Denial wording when the guard said how long to wait; called with seconds."""
+    working: TextLike = "Working\N{HORIZONTAL ELLIPSIS}"
+    """What a control with `Feedback` says while its handler runs."""
     updates_paused: TextLike = "Live updates paused — press any control to resume."
     """Status shown before an interaction edit token expires and unattended refreshes pause."""
     previous: TextLike = "Previous"
@@ -99,6 +111,9 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         and_n_more=lambda count: resolve_text(chrome.and_n_more(count), localization).content,
         not_yours=resolve_text(chrome.not_yours, localization).content,
         session_ended=resolve_text(chrome.session_ended, localization).content,
+        not_now=resolve_text(chrome.not_now, localization).content,
+        try_again_in=lambda seconds: resolve_text(chrome.try_again_in(seconds), localization).content,
+        working=resolve_text(chrome.working, localization).content,
         updates_paused=resolve_text(chrome.updates_paused, localization).content,
         previous=resolve_text(chrome.previous, localization).content,
         next=resolve_text(chrome.next, localization).content,
