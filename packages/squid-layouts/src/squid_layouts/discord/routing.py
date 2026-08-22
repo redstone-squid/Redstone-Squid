@@ -78,6 +78,7 @@ class RouteDescription:
     aliases: tuple[str, ...]
     handler_module: str
     handler_qualname: str
+    group_prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +88,7 @@ class _Registration:
     component: RouteComponent
     accepts: frozenset[str] | None
     """Parameter names to pass, or None for a handler taking `**kwargs`."""
+    group_prefix: str | None = None
 
 
 def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) -> frozenset[str] | None:
@@ -137,32 +139,166 @@ def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) ->
     return frozenset(named)
 
 
+class RouteGroup[BotT: discord.Client]:
+    """A stable route prefix with feature-owned identities and handlers."""
+
+    def __init__(self, *prefix: str, _parent: RouteGroup[BotT] | None = None) -> None:
+        if not prefix:
+            message = "a route group needs at least one prefix segment"
+            raise ValueError(message)
+        for segment in prefix:
+            parsed = Route(segment)
+            if len(parsed.segments) != 1 or parsed.params:
+                message = f"route group prefix {segment!r} must be one literal segment"
+                raise ValueError(message)
+        self._segments = (*(_parent._segments if _parent is not None else ()), *prefix)
+        self.prefix = ":".join(self._segments)
+        self._parent = _parent
+        self._children: list[RouteGroup[BotT]] = []
+        self._definitions: list[Route] = []
+        self._routes: list[_Registration] = []
+        self._routers: weakref.WeakSet[Router[Any]] = weakref.WeakSet()
+        self._frozen = False
+
+    def group(self, *prefix: str) -> RouteGroup[BotT]:
+        """Create a child whose final prefix is composed immediately."""
+        if self._frozen:
+            message = f"child groups of {self.prefix!r} must be created before registration"
+            raise RuntimeError(message)
+        child = RouteGroup(*prefix, _parent=self)
+        for router in self._routers:
+            router._validate_group(child)
+            child._attach(router)
+        self._children.append(child)
+        return child
+
+    def define(self, format: str, *, aliases: tuple[str, ...] = ()) -> Route:
+        """Define and return one final, context-free route identity."""
+        if self._frozen:
+            message = f"new route {format!r} must be defined before the route group is registered"
+            raise RuntimeError(message)
+        route = Route(f"{self.prefix}:{format}", aliases=aliases)
+        for existing in self._definitions:
+            if route.overlaps(existing):
+                message = f"route {route.format!r} overlaps the group route {existing.format!r}"
+                raise ValueError(message)
+        for router in self._routers:
+            router._validate_group_route(self, route)
+        self._definitions.append(route)
+        return route
+
+    def route[**P](
+        self, route: Route
+    ) -> Callable[
+        [Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]]],
+        Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]],
+    ]:
+        """Register a button handler for one identity defined by this group."""
+
+        def decorate(
+            handler: Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]],
+        ) -> Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]]:
+            self.add(route, handler)
+            return handler
+
+        return decorate
+
+    def select[**P](
+        self, route: Route
+    ) -> Callable[
+        [Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]]],
+        Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
+    ]:
+        """Register a select handler for one identity defined by this group."""
+
+        def decorate(
+            handler: Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
+        ) -> Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]]:
+            self.add(route, handler, component=RouteComponent.SELECT)
+            return handler
+
+        return decorate
+
+    def add(
+        self,
+        route: Route,
+        handler: RouteHandler,
+        *,
+        component: RouteComponent = RouteComponent.BUTTON,
+    ) -> None:
+        """Bind a handler to a route this group defined, replacing it on reload."""
+        if route not in self._definitions:
+            message = f"route {route.format!r} was not defined by group {self.prefix!r}"
+            raise ValueError(message)
+        registration = _Registration(route, handler, component, _accepted(route, handler, component), self.prefix)
+        for index, existing in enumerate(self._routes):
+            if existing.component is component and existing.route == route:
+                self._routes[index] = registration
+                return
+        if self._frozen:
+            message = f"new {component.value} handler for {route.format!r} must be added before registration"
+            raise RuntimeError(message)
+        self._routes.append(registration)
+
+    def _freeze(self) -> None:
+        missing = [
+            route.format
+            for route in self._definitions
+            if not any(registration.route == route for registration in self._routes)
+        ]
+        if missing:
+            message = f"route group {self.prefix!r} has identities without handlers: {missing}"
+            raise RuntimeError(message)
+        self._frozen = True
+        for child in self._children:
+            child._freeze()
+
+    def _walk(self) -> tuple[RouteGroup[BotT], ...]:
+        """This group and every descendant in definition order."""
+        return (self, *(group for child in self._children for group in child._walk()))
+
+    def _attach(self, router: Router[Any]) -> None:
+        self._routers.add(router)
+        for child in self._children:
+            child._attach(router)
+
+
 class Router[BotT: discord.Client]:
     """A table of routes and their handlers, registered once with the client."""
 
     def __init__(
         self,
         *,
-        namespace: str | None = None,
+        namespace: str | RouteGroup[BotT] | None = None,
         on_gone: GoneHook[BotT] | None = None,
         on_error: ErrorHook | None = None,
         acknowledgement_timeout: float = 2.5,
     ) -> None:
-        if namespace is not None and (not namespace or ":" in namespace):
+        namespace_group = namespace if isinstance(namespace, RouteGroup) else None
+        namespace_value = namespace if isinstance(namespace, str) else None
+        if namespace_group is not None:
+            if len(namespace_group._segments) != 1:
+                message = "a router namespace group must have exactly one prefix segment"
+                raise ValueError(message)
+            namespace_value = namespace_group.prefix
+        if namespace_value is not None and (not namespace_value or ":" in namespace_value):
             message = "a router namespace must be one non-empty route segment"
             raise ValueError(message)
-        if namespace is not None and on_gone is None:
+        if namespace_value is not None and on_gone is None:
             message = "a namespaced router needs an on_gone hook for retired controls"
             raise ValueError(message)
         if not 0 < acknowledgement_timeout < 3:
             message = "a router acknowledgement timeout must be greater than zero and below Discord's 3-second limit"
             raise ValueError(message)
         self._routes: list[_Registration] = []
+        self._groups: list[RouteGroup[BotT]] = []
         self._registered = False
-        self.namespace = namespace
+        self.namespace = namespace_value
         self.on_gone = on_gone
         self.on_error = on_error
         self.acknowledgement_timeout = acknowledgement_timeout
+        if namespace_group is not None:
+            self.include(namespace_group)
 
     def describe(self) -> tuple[RouteDescription, ...]:
         """Describe the current route table without exposing mutable registrations."""
@@ -177,9 +313,71 @@ class Router[BotT: discord.Client]:
                 aliases=registration.route.aliases,
                 handler_module=registration.handler.__module__,
                 handler_qualname=registration.handler.__qualname__,
+                group_prefix=registration.group_prefix,
             )
-            for registration in self._routes
+            for registration in self._registrations()
         )
+
+    def include(self, group: RouteGroup[BotT]) -> None:
+        """Include one stable feature group in this router."""
+        if group in self._all_groups():
+            return
+        if self._registered:
+            message = f"route group {group.prefix!r} must be included before Router.register(client)"
+            raise RuntimeError(message)
+        if self.namespace is not None and group._segments[0] != self.namespace:
+            message = f"route group {group.prefix!r} does not belong to router namespace {self.namespace!r}"
+            raise ValueError(message)
+        pending: list[Route] = []
+        existing = self._defined_routes()
+        for candidate_group in group._walk():
+            for route in candidate_group._definitions:
+                collision = next((other for other in (*existing, *pending) if route.overlaps(other)), None)
+                if collision is not None:
+                    message = f"route {route.format!r} overlaps the included route {collision.format!r}"
+                    raise ValueError(message)
+                pending.append(route)
+        self._groups.append(group)
+        group._attach(self)
+
+    def _validate_group(self, group: RouteGroup[Any]) -> None:
+        """Validate a child added below an already-included group."""
+        if self._registered:
+            message = f"route group {group.prefix!r} must be created before Router.register(client)"
+            raise RuntimeError(message)
+        for route in group._definitions:
+            self._validate_group_route(group, route)
+
+    def _validate_group_route(self, group: RouteGroup[Any], route: Route) -> None:
+        """Reject a group identity that intersects anything this router already owns."""
+        if self._registered:
+            message = f"new route {route.format!r} must be defined before Router.register(client)"
+            raise RuntimeError(message)
+        for existing in self._defined_routes(excluding=group):
+            if route.overlaps(existing):
+                message = f"route {route.format!r} overlaps the included route {existing.format!r}"
+                raise ValueError(message)
+
+    def _defined_routes(self, *, excluding: RouteGroup[Any] | None = None) -> tuple[Route, ...]:
+        routes: list[Route] = []
+        for registration in self._routes:
+            if registration.route not in routes:
+                routes.append(registration.route)
+        for group in self._all_groups():
+            if group is not excluding:
+                routes.extend(group._definitions)
+        return tuple(routes)
+
+    def _registrations(self) -> tuple[_Registration, ...]:
+        return (*self._routes, *(registration for group in self._all_groups() for registration in group._routes))
+
+    def _all_groups(self) -> tuple[RouteGroup[BotT], ...]:
+        seen: list[RouteGroup[BotT]] = []
+        for root in self._groups:
+            for group in root._walk():
+                if group not in seen:
+                    seen.append(group)
+        return tuple(seen)
 
     def route[**P](
         self, route: RouteLike
@@ -247,6 +445,11 @@ class Router[BotT: discord.Client]:
             message = f"route {route.format!r} must live under the reserved namespace {self.namespace!r}"
             raise ValueError(message)
         registration = _Registration(route, handler, component, _accepted(route, handler, component))
+        for group in self._all_groups():
+            for defined in group._definitions:
+                if route.overlaps(defined):
+                    message = f"route {route.format!r} overlaps the included route {defined.format!r}"
+                    raise ValueError(message)
         replaced: int | None = None
         for index, existing in enumerate(self._routes):
             if existing.component is component and existing.route.format == route.format:
@@ -279,7 +482,7 @@ class Router[BotT: discord.Client]:
         component: RouteComponent = RouteComponent.BUTTON,
     ) -> tuple[_Registration, Mapping[str, Any]] | None:
         """The registration owning ``custom_id`` and the parameters it carries, if any."""
-        for registration in self._routes:
+        for registration in self._registrations():
             if registration.component is not component:
                 continue
             params = registration.route.match(custom_id)
@@ -297,11 +500,12 @@ class Router[BotT: discord.Client]:
         individual route in `resolve`, which also keeps two routes from colliding over a
         shared group name.
         """
-        if not self._routes:
+        registrations = self._registrations()
+        if not registrations:
             # An alternation of nothing matches everything; match nothing instead.
             patterns: list[str] = []
         else:
-            patterns = [f"(?:{registration.route.anonymous})" for registration in self._routes]
+            patterns = [f"(?:{registration.route.anonymous})" for registration in registrations]
         if self.namespace is not None:
             patterns.append(rf"(?:{re.escape(self.namespace)}(?::[^:]+)+)")
         return re.compile("|".join(patterns) if patterns else r"(?!)")
@@ -317,6 +521,8 @@ class Router[BotT: discord.Client]:
         both, with the same exact-intersection check `add()` uses, because the losing
         router would answer ids it does not own with a warning or its gone hook.
         """
+        for group in self._groups:
+            group._freeze()
         installed = _INSTALLED.setdefault(client, [])
         if self in installed:
             return
@@ -338,14 +544,14 @@ class Router[BotT: discord.Client]:
         """
         if self.namespace is not None and self.namespace == other.namespace:
             return f"both reserve the namespace {self.namespace!r}"
-        for registration in self._routes:
+        for registration in self._registrations():
             if other.namespace is not None and registration.route.accepts_first_segment(other.namespace):
                 return f"route {registration.route.format!r} enters the reserved namespace {other.namespace!r}"
-        for registration in other._routes:
+        for registration in other._registrations():
             if self.namespace is not None and registration.route.accepts_first_segment(self.namespace):
                 return f"route {registration.route.format!r} enters the reserved namespace {self.namespace!r}"
-        for mine in self._routes:
-            for theirs in other._routes:
+        for mine in self._registrations():
+            for theirs in other._registrations():
                 if mine.route.overlaps(theirs.route):
                     return f"route {mine.route.format!r} overlaps {theirs.route.format!r}"
         return None
