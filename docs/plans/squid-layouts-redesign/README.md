@@ -66,6 +66,7 @@ modules; the layout core stays presentational.
 | 34 | [Safe session runtime](34-safe-session-runtime.md) | Required async mount access policies, typed session scopes and structured cardinality outcomes, then one durable runtime that owns fenced checkpoints, Discord reconnection, recovery reports, leases, expiry, and teardown. Intentionally breaking: `lock_to`, `MountRegistry`, and public `MountManager` are replaced rather than shimmed. |
 | 35 | [Discord V2 fragments](35-discord-v2-fragments.md) | Measured sessionless Squid islands inside an existing host-owned `LayoutView`: full resource reservations, detached multi-item fragments, atomic preflight/attachment, assets, custom-ID auditing, and routed controls. Arbitrary live-view adoption remains rejected. |
 | 36 | [Classic Discord target](36-classic-discord-target.md) | A real `discord.components-v1` target producing complete content/embed/`View` presentations, with exact classic limits, static and mounted rendering, host-owned fragments, and a classic-to-V2 migration path. Existing live views remain unadopted. |
+| 37 | [Runtime profiling](37-runtime-profiling.md) | Bounded immutable traces, counters, and histograms for dispatch, acknowledgement, rendering, delivery, Reactor, TopicBus, and routed actions; rebase is generation metadata rather than a terminal outcome, with owner-only inspection and raw export staged last. Planned. |
 
 ## Relation to existing plans
 
