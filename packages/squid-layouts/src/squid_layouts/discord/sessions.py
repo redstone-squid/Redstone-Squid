@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Hashable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Hashable, Iterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -13,11 +13,12 @@ from uuid import uuid4
 import discord
 
 from squid_layouts.discord.access import Owner
-from squid_layouts.discord.delivery import Abandoned, Destination
+from squid_layouts.discord.delivery import Abandoned, Delivered, Destination
 from squid_layouts.discord.mount import Mount
 from squid_layouts.runtime.component import Component
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass(frozen=True, slots=True)
 class UserScope:
@@ -90,6 +91,7 @@ class RejectionReason(Enum):
     COLLISION = "collision"
     PROTECTED = "protected"
     SESSION_FINISHED = "session_finished"
+    ADMISSION_BUSY = "admission_busy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +139,7 @@ class Rejected:
 
 
 type OpenResult = Opened | Rejected | Abandoned
+type BeforeRegistration = Callable[[Session, Delivered, tuple[SessionSummary, ...]], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,9 +172,7 @@ type CollisionDecision = Replace | Refuse
 class CollisionPolicy(Protocol):
     """Asynchronously select exact replacement victims from immutable summaries."""
 
-    async def select(
-        self, request: OpeningRequest, occupants: tuple[SessionSummary, ...]
-    ) -> CollisionDecision: ...
+    async def select(self, request: OpeningRequest, occupants: tuple[SessionSummary, ...]) -> CollisionDecision: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -285,6 +286,14 @@ class Session:
         """Actors attributed to non-root mounts, for replacement protection."""
         return frozenset(actor for mount, actor in self._actor.items() if mount is not self.root and actor is not None)
 
+    def parent_of(self, mount: Mount) -> Mount | None:
+        """Return the mount's parent, or `None` for the root or an unknown mount."""
+        return self._parent.get(mount)
+
+    def actor_for(self, mount: Mount) -> int | None:
+        """Return the actor attributed to one mount in this session."""
+        return self._actor.get(mount)
+
     @property
     def summary(self) -> SessionSummary:
         """Return immutable current facts for admission and inspection."""
@@ -360,6 +369,17 @@ class Session:
     def _activate(self) -> None:
         self._registry._index_mount(self, self.root)
         self.root.on_finish(self._mount_finished)
+
+    def _attach_existing(self, mount: Mount, *, parent: Mount, actor_id: int | None) -> None:
+        """Attach an already presented mount while reconstructing a session."""
+        if parent not in self._parent:
+            message = "recovered attachment parent is not in the session"
+            raise ValueError(message)
+        self._mounts.append(mount)
+        self._parent[mount] = parent
+        self._actor[mount] = actor_id
+        self._registry._index_mount(self, mount)
+        mount.on_finish(self._mount_finished)
 
     async def _mount_finished(self, mount: Mount) -> None:
         if self._finishing or self._closed:
@@ -455,6 +475,9 @@ class SessionRegistry:
                 durable=durable,
                 local=local,
                 summary=summary,
+                remote_occupants=(),
+                before_registration=None,
+                session_type=Session,
             )
         async with self._lock_for(key):
             return await self._open_locked(
@@ -466,7 +489,70 @@ class SessionRegistry:
                 durable=durable,
                 local=local,
                 summary=summary,
+                remote_occupants=(),
+                before_registration=None,
+                session_type=Session,
             )
+
+    async def _open_coordinated[SessionT: Session](
+        self,
+        mount: Mount,
+        destination: Destination,
+        *,
+        key: SessionKey,
+        policy: SessionPolicy,
+        actor_id: int | None,
+        summary: SessionSummary,
+        remote_occupants: tuple[SessionSummary, ...],
+        before_registration: BeforeRegistration,
+        session_type: type[SessionT],
+    ) -> Opened[SessionT] | Rejected | Abandoned:
+        """Open under the registry lock with a caller-owned external commit boundary.
+
+        Durability uses this to keep the incumbent until promotion and fenced persistence
+        both succeed. It is deliberately package-private: ordinary hosts should call `open`.
+        """
+        async with self._lock_for(key):
+            return await self._open_locked(
+                mount,
+                destination,
+                key=key,
+                policy=policy,
+                actor_id=actor_id,
+                durable=True,
+                local=True,
+                summary=summary,
+                remote_occupants=remote_occupants,
+                before_registration=before_registration,
+                session_type=session_type,
+            )
+
+    def _register_recovered[SessionT: Session](
+        self,
+        root: Mount,
+        *,
+        key: SessionKey,
+        actor_id: int | None,
+        summary: SessionSummary,
+        attachments: tuple[tuple[Mount, Mount, int | None], ...],
+        session_type: type[SessionT],
+    ) -> SessionT:
+        """Register a frontend-reconnected session without delivering its mounts again."""
+        session = session_type(
+            self,
+            root,
+            key=key,
+            actor_id=actor_id,
+            durable=True,
+            local=True,
+            summary=summary,
+        )
+        self._sessions.append(session)
+        self._by_key.setdefault(key, []).append(session)
+        session._activate()
+        for mount, parent, mount_actor_id in attachments:
+            session._attach_existing(mount, parent=parent, actor_id=mount_actor_id)
+        return session
 
     def get(self, key: Hashable) -> tuple[Session, ...]:
         """Return every session currently occupying `key`, oldest first."""
@@ -504,9 +590,16 @@ class SessionRegistry:
         durable: bool,
         local: bool,
         summary: SessionSummary | None,
+        remote_occupants: tuple[SessionSummary, ...],
+        before_registration: BeforeRegistration | None,
+        session_type: type[Session],
     ) -> OpenResult:
         occupants = () if key is None else self._live_occupants(key)
-        newcomer = Session(
+        local_summaries = tuple(session.summary for session in occupants)
+        local_ids = {summary.id for summary in local_summaries}
+        summaries = (*local_summaries, *(summary for summary in remote_occupants if summary.id not in local_ids))
+        summaries = tuple(sorted(summaries, key=lambda occupant: (occupant.opened_at, occupant.id)))
+        newcomer = session_type(
             self,
             mount,
             key=key,
@@ -516,29 +609,37 @@ class SessionRegistry:
             summary=summary,
         )
         victims: tuple[Session, ...] = ()
-        if key is not None and policy.limit is not None and len(occupants) >= policy.limit:
-            required = len(occupants) + 1 - policy.limit
+        selected: tuple[SessionSummary, ...] = ()
+        if key is not None and policy.limit is not None and len(summaries) >= policy.limit:
+            required = len(summaries) + 1 - policy.limit
             request = OpeningRequest(key, newcomer.summary, actor_id, required)
-            summaries = tuple(session.summary for session in occupants)
             decision = await policy.collision.select(request, summaries)
             if isinstance(decision, Refuse):
                 return Rejected(summaries, decision.reason)
-            victims = _resolve_victims(decision.victims, occupants)
+            selected = decision.victims
+            victims = _resolve_victims(selected, occupants)
+            summary_ids = {occupant.id for occupant in summaries}
             if (
-                len(decision.victims) != required
-                or len(set(victims)) != len(victims)
-                or any(victim not in occupants for victim in victims)
+                len(selected) != required
+                or len({victim.id for victim in selected}) != len(selected)
+                or any(victim.id not in summary_ids for victim in selected)
             ):
                 message = "collision policy must select the exact required occupants"
                 raise ValueError(message)
-            summaries_by_id = {occupant.id: occupant.summary for occupant in occupants}
-            for victim in victims:
-                if not await policy.protect.allows(request, summaries_by_id[victim.id]):
+            for victim in selected:
+                if not await policy.protect.allows(request, victim):
                     return Rejected(summaries, RejectionReason.PROTECTED)
 
         result = await mount.send(destination)
         if isinstance(result, Abandoned):
             return result
+
+        if before_registration is not None:
+            try:
+                await before_registration(newcomer, result, selected)
+            except BaseException:
+                await newcomer.finish()
+                raise
 
         self._sessions.append(newcomer)
         if key is not None:

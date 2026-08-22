@@ -122,7 +122,7 @@ class TestOutcomes:
         )
 
         assert isinstance(first, Opened)
-        assert result == Rejected((first.session,), RejectionReason.COLLISION)
+        assert result == Rejected((first.session.summary,), RejectionReason.COLLISION)
         destination.assert_not_awaited()
 
     async def test_abandoned_is_distinct_from_rejection_and_delivery(self) -> None:
@@ -176,7 +176,7 @@ class TestReplacement:
         result = await registry.open(a_mount(), to_message(), key=KEY, actor_id=8)
 
         assert isinstance(first, Opened)
-        assert result == Rejected((first.session,), RejectionReason.PROTECTED)
+        assert result == Rejected((first.session.summary,), RejectionReason.PROTECTED)
 
     async def test_unprotected_policy_explicitly_allows_cross_user_replacement(self) -> None:
         registry = SessionRegistry()
@@ -220,7 +220,7 @@ class TestCardinality:
 
     async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
         class ReplaceNewest:
-            def select(self, request: OpeningRequest, occupants: tuple[sl.discord.Session, ...]):
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
                 return Replace(occupants[-request.required_victims :])
 
         registry = SessionRegistry()
@@ -240,7 +240,7 @@ class TestCardinality:
 
     async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
         class SelectNobody:
-            def select(self, request: OpeningRequest, occupants: tuple[sl.discord.Session, ...]):
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
                 return Replace(())
 
         registry = SessionRegistry()
@@ -325,7 +325,7 @@ class TestAttachments:
             policy=SessionPolicy(protect=ProtectCrossUserAttachments()),
         )
 
-        assert result == Rejected((first.session,), RejectionReason.PROTECTED)
+        assert result == Rejected((first.session.summary,), RejectionReason.PROTECTED)
 
     async def test_one_unreachable_sibling_does_not_strand_the_rest(self) -> None:
         registry = SessionRegistry()
