@@ -16,6 +16,7 @@ else:
 
 
 _SCHEMA_VERSION = 1
+_SCHEMA_KEY = "__squid_layouts_schema_version__"
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
 
 
@@ -42,33 +43,35 @@ class PostgresSnapshotStore:
         self._initialize_lock = asyncio.Lock()
 
     async def load(self, key: str) -> str | None:
+        _validate_key(key)
         await self._initialize()
         value = await self.pool.fetchval(f"SELECT payload FROM {self.table_name} WHERE key = $1", key)
         return None if value is None else str(value)
 
     async def save(self, key: str, payload: str) -> None:
+        _validate_key(key)
         await self._initialize()
         await self.pool.execute(
             f"""
-            INSERT INTO {self.table_name} (key, payload, schema_version) VALUES ($1, $2, $3)
-            ON CONFLICT(key) DO UPDATE SET payload = excluded.payload,
-                schema_version = excluded.schema_version
+            INSERT INTO {self.table_name} (key, payload) VALUES ($1, $2)
+            ON CONFLICT(key) DO UPDATE SET payload = excluded.payload
             """,
             key,
             payload,
-            _SCHEMA_VERSION,
         )
 
     async def delete(self, key: str) -> None:
+        _validate_key(key)
         await self._initialize()
         await self.pool.execute(f"DELETE FROM {self.table_name} WHERE key = $1", key)
 
     async def list_keys(self) -> tuple[str, ...]:
         await self._initialize()
-        rows = await self.pool.fetch(f"SELECT key FROM {self.table_name} ORDER BY key")
+        rows = await self.pool.fetch(f"SELECT key FROM {self.table_name} WHERE key <> $1 ORDER BY key", _SCHEMA_KEY)
         return tuple(str(row["key"]) for row in rows)
 
     async def claim(self, key: str, owner: str, lease_until: float) -> bool:
+        _validate_key(key)
         await self._initialize()
         claimed = await self.pool.fetchval(
             f"""
@@ -84,6 +87,7 @@ class PostgresSnapshotStore:
         return claimed is True
 
     async def renew(self, key: str, owner: str, lease_until: float) -> bool:
+        _validate_key(key)
         await self._initialize()
         renewed = await self.pool.fetchval(
             f"UPDATE {self.table_name} SET lease_until = $3 WHERE key = $1 AND owner = $2 RETURNING TRUE",
@@ -94,6 +98,7 @@ class PostgresSnapshotStore:
         return renewed is True
 
     async def release(self, key: str, owner: str) -> None:
+        _validate_key(key)
         await self._initialize()
         await self.pool.execute(
             f"UPDATE {self.table_name} SET owner = NULL, lease_until = NULL WHERE key = $1 AND owner = $2",
@@ -113,15 +118,21 @@ class PostgresSnapshotStore:
                     key TEXT PRIMARY KEY,
                     payload TEXT NOT NULL,
                     owner TEXT,
-                    lease_until DOUBLE PRECISION,
-                    schema_version INTEGER NOT NULL DEFAULT {_SCHEMA_VERSION}
+                    lease_until DOUBLE PRECISION
                 )
                 """
             )
-            version = await self.pool.fetchval(f"SELECT MAX(schema_version) FROM {self.table_name}")
-            if version is not None and version > _SCHEMA_VERSION:
-                message = f"snapshot store schema {version} is newer than supported version {_SCHEMA_VERSION}"
-                raise RuntimeError(message)
+            raw_version = await self.pool.fetchval(f"SELECT payload FROM {self.table_name} WHERE key = $1", _SCHEMA_KEY)
+            if raw_version is None:
+                await self.pool.execute(
+                    f"INSERT INTO {self.table_name} (key, payload) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                    _SCHEMA_KEY,
+                    str(_SCHEMA_VERSION),
+                )
+                raw_version = await self.pool.fetchval(
+                    f"SELECT payload FROM {self.table_name} WHERE key = $1", _SCHEMA_KEY
+                )
+            _check_schema_version(str(raw_version))
             self._initialized = True
 
 
@@ -130,3 +141,20 @@ def _validate_table_name(table_name: str) -> str:
         message = "snapshot table name must be an unqualified SQL identifier"
         raise ValueError(message)
     return table_name
+
+
+def _validate_key(key: str) -> None:
+    if key == _SCHEMA_KEY:
+        message = f"snapshot key {_SCHEMA_KEY!r} is reserved for store metadata"
+        raise ValueError(message)
+
+
+def _check_schema_version(raw: str) -> None:
+    try:
+        version = int(raw)
+    except ValueError as error:
+        message = "snapshot store schema version is malformed"
+        raise RuntimeError(message) from error
+    if version != _SCHEMA_VERSION:
+        message = f"snapshot store schema {version} does not match supported version {_SCHEMA_VERSION}"
+        raise RuntimeError(message)

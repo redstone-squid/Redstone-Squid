@@ -10,6 +10,7 @@ from os import PathLike
 from pathlib import Path
 
 _SCHEMA_VERSION = 1
+_SCHEMA_KEY = "__squid_layouts_schema_version__"
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
 
 
@@ -36,14 +37,17 @@ class SQLiteSnapshotStore:
         self._initialize_lock = asyncio.Lock()
 
     async def load(self, key: str) -> str | None:
+        _validate_key(key)
         await self._initialize()
         return await asyncio.to_thread(self._load, key)
 
     async def save(self, key: str, payload: str) -> None:
+        _validate_key(key)
         await self._initialize()
         await asyncio.to_thread(self._save, key, payload)
 
     async def delete(self, key: str) -> None:
+        _validate_key(key)
         await self._initialize()
         await asyncio.to_thread(self._delete, key)
 
@@ -52,14 +56,17 @@ class SQLiteSnapshotStore:
         return await asyncio.to_thread(self._list_keys)
 
     async def claim(self, key: str, owner: str, lease_until: float) -> bool:
+        _validate_key(key)
         await self._initialize()
         return await asyncio.to_thread(self._claim, key, owner, lease_until)
 
     async def renew(self, key: str, owner: str, lease_until: float) -> bool:
+        _validate_key(key)
         await self._initialize()
         return await asyncio.to_thread(self._renew, key, owner, lease_until)
 
     async def release(self, key: str, owner: str) -> None:
+        _validate_key(key)
         await self._initialize()
         await asyncio.to_thread(self._release, key, owner)
 
@@ -84,15 +91,20 @@ class SQLiteSnapshotStore:
                     key TEXT PRIMARY KEY,
                     payload TEXT NOT NULL,
                     owner TEXT,
-                    lease_until REAL,
-                    schema_version INTEGER NOT NULL DEFAULT {_SCHEMA_VERSION}
+                    lease_until REAL
                 )
                 """
             )
-            version = connection.execute(f"SELECT MAX(schema_version) FROM {self.table_name}").fetchone()[0]
-            if version is not None and version > _SCHEMA_VERSION:
-                message = f"snapshot store schema {version} is newer than supported version {_SCHEMA_VERSION}"
-                raise RuntimeError(message)
+            row = connection.execute(f"SELECT payload FROM {self.table_name} WHERE key = ?", (_SCHEMA_KEY,)).fetchone()
+            if row is None:
+                connection.execute(
+                    f"INSERT OR IGNORE INTO {self.table_name} (key, payload) VALUES (?, ?)",
+                    (_SCHEMA_KEY, str(_SCHEMA_VERSION)),
+                )
+                row = connection.execute(
+                    f"SELECT payload FROM {self.table_name} WHERE key = ?", (_SCHEMA_KEY,)
+                ).fetchone()
+            _check_schema_version(str(row[0]))
 
     def _load(self, key: str) -> str | None:
         with closing(self._connect()) as connection, connection:
@@ -103,11 +115,10 @@ class SQLiteSnapshotStore:
         with closing(self._connect()) as connection, connection:
             connection.execute(
                 f"""
-                INSERT INTO {self.table_name} (key, payload, schema_version) VALUES (?, ?, ?)
-                ON CONFLICT(key) DO UPDATE SET payload = excluded.payload,
-                    schema_version = excluded.schema_version
+                INSERT INTO {self.table_name} (key, payload) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET payload = excluded.payload
                 """,
-                (key, payload, _SCHEMA_VERSION),
+                (key, payload),
             )
 
     def _delete(self, key: str) -> None:
@@ -116,7 +127,9 @@ class SQLiteSnapshotStore:
 
     def _list_keys(self) -> tuple[str, ...]:
         with closing(self._connect()) as connection, connection:
-            rows = connection.execute(f"SELECT key FROM {self.table_name} ORDER BY key").fetchall()
+            rows = connection.execute(
+                f"SELECT key FROM {self.table_name} WHERE key <> ? ORDER BY key", (_SCHEMA_KEY,)
+            ).fetchall()
         return tuple(str(row[0]) for row in rows)
 
     def _claim(self, key: str, owner: str, lease_until: float) -> bool:
@@ -151,3 +164,20 @@ def _validate_table_name(table_name: str) -> str:
         message = "snapshot table name must be an unqualified SQL identifier"
         raise ValueError(message)
     return table_name
+
+
+def _validate_key(key: str) -> None:
+    if key == _SCHEMA_KEY:
+        message = f"snapshot key {_SCHEMA_KEY!r} is reserved for store metadata"
+        raise ValueError(message)
+
+
+def _check_schema_version(raw: str) -> None:
+    try:
+        version = int(raw)
+    except ValueError as error:
+        message = "snapshot store schema version is malformed"
+        raise RuntimeError(message) from error
+    if version != _SCHEMA_VERSION:
+        message = f"snapshot store schema {version} does not match supported version {_SCHEMA_VERSION}"
+        raise RuntimeError(message)
