@@ -185,6 +185,24 @@ def test_detached_span_measures_work_overlapping_lexical_spans() -> None:
     assert acknowledgement_span.outcome is TraceOutcome.COMPLETED
 
 
+def test_operation_may_include_elapsed_queue_time_and_record_its_span() -> None:
+    clock = Clock()
+    subject = profiler(clock)
+    queued_at = clock.monotonic()
+    clock.advance(2.0)
+
+    with subject.operation(OperationKind.TOPIC_DELIVERY, name="topic", started=queued_at) as operation:
+        operation.record_span("queue_wait", 2.0, attributes={"triggers": 3})
+        clock.advance(0.5)
+
+    trace = trace_by_name(subject, "topic")
+    queue_wait = next(span for span in trace.spans if span.name == "queue_wait")
+    assert trace.duration == pytest.approx(2.5)
+    assert queue_wait.started == pytest.approx(0.0)
+    assert queue_wait.duration == pytest.approx(2.0)
+    assert queue_wait.attributes[0].value == 3
+
+
 def test_task_local_parentage_carries_into_child_tasks() -> None:
     clock = Clock()
     subject = profiler(clock)

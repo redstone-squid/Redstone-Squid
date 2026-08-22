@@ -89,6 +89,16 @@ class OperationRecorder(Protocol):
         links: Sequence[TraceLink] = (),
     ) -> DetachedSpanRecorder: ...
 
+    def record_span(
+        self,
+        name: str,
+        duration: float,
+        *,
+        outcome: TraceOutcome = TraceOutcome.COMPLETED,
+        attributes: Mapping[str, AttributeValue] | None = None,
+        links: Sequence[TraceLink] = (),
+    ) -> None: ...
+
 
 class Profiler(Protocol):
     """Runtime tracing seam accepted by framework owners."""
@@ -100,6 +110,7 @@ class Profiler(Protocol):
         name: str = "",
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
+        started: float | None = None,
     ) -> AbstractContextManager[OperationRecorder]: ...
 
     def capture_link(self) -> TraceLink | None: ...
@@ -241,6 +252,17 @@ class _NoOpOperation(_NoOpSpan, OperationRecorder):
     ) -> DetachedSpanRecorder:
         return _NOOP_DETACHED
 
+    def record_span(
+        self,
+        name: str,
+        duration: float,
+        *,
+        outcome: TraceOutcome = TraceOutcome.COMPLETED,
+        attributes: Mapping[str, AttributeValue] | None = None,
+        links: Sequence[TraceLink] = (),
+    ) -> None:
+        pass
+
 
 class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
     def finish(self, outcome: TraceOutcome = TraceOutcome.COMPLETED) -> None:
@@ -261,6 +283,7 @@ class NoOpProfiler:
         name: str = "",
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
+        started: float | None = None,
     ) -> AbstractContextManager[OperationRecorder]:
         return _NOOP
 
@@ -360,12 +383,14 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         name: str,
         attributes: Mapping[str, AttributeValue] | None,
         links: Sequence[TraceLink],
+        started: float | None,
     ) -> None:
         self._profiler = profiler
         self._operation = operation
         self._name = name
         self._attributes = attributes
         self._links = links
+        self._started = started
         self._trace: _MutableTrace | None = None
         self._token: Token[_Current | None] | None = None
         self._fallback = False
@@ -377,6 +402,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
                 self._name,
                 self._attributes,
                 self._links,
+                self._started,
             )
             self._token = _current.set(_Current(self._profiler, self._trace, self._trace.root_span_id))
         except BaseException:
@@ -452,6 +478,25 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
             self._profiler._note_internal_failure()
             return _NOOP_DETACHED
         return _DetachedSpan(self._profiler, self._trace, span)
+
+    def record_span(
+        self,
+        name: str,
+        duration: float,
+        *,
+        outcome: TraceOutcome = TraceOutcome.COMPLETED,
+        attributes: Mapping[str, AttributeValue] | None = None,
+        links: Sequence[TraceLink] = (),
+    ) -> None:
+        if self._trace is None or self._fallback or self._trace.closed:
+            return
+        current = _current.get()
+        parent = (
+            current.span_id
+            if current is not None and current.profiler is self._profiler and current.trace is self._trace
+            else self._trace.root_span_id
+        )
+        self._profiler._record_span(self._trace, parent, name, duration, outcome, attributes, links)
 
     def _reset_context(self) -> None:
         if self._token is None:
@@ -599,8 +644,9 @@ class MemoryProfiler:
         name: str = "",
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
+        started: float | None = None,
     ) -> AbstractContextManager[OperationRecorder]:
-        return _OperationScope(self, operation, name, attributes, links)
+        return _OperationScope(self, operation, name, attributes, links, started)
 
     def capture_link(self) -> TraceLink | None:
         current = _current.get()
@@ -681,8 +727,13 @@ class MemoryProfiler:
         name: str,
         attributes: Mapping[str, AttributeValue] | None,
         links: Sequence[TraceLink],
+        requested_start: float | None,
     ) -> _MutableTrace:
-        started = self._clock()
+        now = self._clock()
+        started = now if requested_start is None else min(now, requested_start)
+        if not math.isfinite(started):
+            message = "operation start must be finite"
+            raise ValueError(message)
         with self._lock:
             active_ids = set(self._active)
         trace_id = self._new_id(16, TraceId, active_ids)
@@ -746,6 +797,29 @@ class MemoryProfiler:
             with self._lock:
                 if trace.closed or span.ended is not None:
                     return
+                span.ended = ended
+                span.outcome = outcome
+        except BaseException:
+            self._note_internal_failure()
+
+    def _record_span(
+        self,
+        trace: _MutableTrace,
+        parent_span_id: SpanId,
+        name: str,
+        duration: float,
+        outcome: TraceOutcome,
+        attributes: Mapping[str, AttributeValue] | None,
+        links: Sequence[TraceLink],
+    ) -> None:
+        if not math.isfinite(duration) or duration < 0:
+            self._note_internal_failure()
+            return
+        try:
+            span = self._start_span(trace, parent_span_id, name, attributes, links)
+            ended = self._clock()
+            with self._lock:
+                span.started = max(trace.started, ended - duration)
                 span.ended = ended
                 span.outcome = outcome
         except BaseException:
