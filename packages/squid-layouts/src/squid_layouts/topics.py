@@ -8,9 +8,12 @@ topic address and re-read the source of truth; the bus never carries application
 import asyncio
 import contextvars
 import logging
+import time
 from collections.abc import Awaitable, Callable, Hashable
 from contextlib import suppress
 from dataclasses import dataclass, field
+
+from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink, TraceOutcome, TraceResult
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,7 @@ type Subscriber = Callable[[Topic], Awaitable[None]]
 _SELF_PUBLISH_WARNING_THRESHOLD = 100
 _NO_TOPIC = object()
 _current_topic: contextvars.ContextVar[Topic | object] = contextvars.ContextVar("topic_bus_topic", default=_NO_TOPIC)
+_NOOP_PROFILER = NoOpProfiler()
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +54,29 @@ class BusSnapshot:
 class _Subscription:
     callback: Subscriber
     label: str
+    profile_label: str
     active: bool = True
+
+
+@dataclass(slots=True)
+class _Causes:
+    first_triggered: float | None = None
+    last_triggered: float | None = None
+    triggers: int = 0
+    links: list[TraceLink] = field(default_factory=list)
+    omitted_links: int = 0
+
+    def add(self, triggered: float, link: TraceLink | None, *, max_links: int) -> None:
+        if self.first_triggered is None:
+            self.first_triggered = triggered
+        self.last_triggered = triggered
+        self.triggers += 1
+        if link is None or link in self.links:
+            return
+        if len(self.links) < max_links:
+            self.links.append(link)
+        else:
+            self.omitted_links += 1
 
 
 @dataclass(slots=True)
@@ -64,6 +90,8 @@ class _TopicState:
     self_publishes: int = 0
     self_published_during_drain: bool = False
     self_publish_warned: bool = False
+    queued_causes: _Causes = field(default_factory=_Causes)
+    redelivery_causes: _Causes = field(default_factory=_Causes)
 
 
 class TopicBus:
@@ -82,21 +110,50 @@ class TopicBus:
 
     Args:
         concurrency: Maximum number of different topics delivered concurrently.
+        profiler: Optional runtime profiler. The disabled default has negligible overhead.
+        max_causal_links: Maximum distinct producer links retained for one coalesced delivery.
+        clock: Monotonic clock used to measure queue latency.
     """
 
-    def __init__(self, *, concurrency: int = 4) -> None:
+    def __init__(
+        self,
+        *,
+        concurrency: int = 4,
+        profiler: Profiler = _NOOP_PROFILER,
+        max_causal_links: int = 8,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         if concurrency < 1:
             message = "topic bus concurrency must be at least one"
             raise ValueError(message)
+        if max_causal_links < 0:
+            message = "topic bus causal link limit cannot be negative"
+            raise ValueError(message)
         self.concurrency = concurrency
+        self.profiler = profiler
+        self.max_causal_links = max_causal_links
+        self._clock = clock
         self._queue: asyncio.Queue[Topic] = asyncio.Queue()
         self._topics: dict[Topic, _TopicState] = {}
         self._running = False
 
-    def subscribe(self, topic: Topic, callback: Subscriber, *, label: str = "") -> Callable[[], None]:
-        """Subscribe to an exact topic and return an idempotent unsubscribe callback."""
+    def subscribe(
+        self,
+        topic: Topic,
+        callback: Subscriber,
+        *,
+        label: str = "",
+        profile_label: str | None = None,
+    ) -> Callable[[], None]:
+        """Subscribe to an exact topic and return an idempotent unsubscribe callback.
+
+        ``label`` remains available for instance-specific diagnostics. ``profile_label`` must
+        describe a stable class of subscriber because it contributes to aggregate identities;
+        it defaults to the callback's module-qualified name.
+        """
         state = self._topics.setdefault(topic, _TopicState())
-        subscription = _Subscription(callback, label)
+        stable_label = profile_label or _callback_name(callback)
+        subscription = _Subscription(callback, label, stable_label)
         state.subscriptions.append(subscription)
 
         def unsubscribe() -> None:
@@ -112,6 +169,8 @@ class TopicBus:
     def publish(self, *topics: Topic) -> None:
         """Synchronously enqueue change notifications for all currently subscribed topics."""
         current = _current_topic.get()
+        triggered = self._clock()
+        link = self.profiler.capture_link()
         for topic in topics:
             state = self._topics.get(topic)
             if state is None or not state.subscriptions:
@@ -123,10 +182,13 @@ class TopicBus:
                     logger.warning("topic %r keeps publishing itself; delivery may never quiesce", topic)
                     state.self_publish_warned = True
             if state.in_flight:
+                state.redelivery_causes.add(triggered, link, max_links=self.max_causal_links)
                 state.redeliver = True
-            elif not state.queued:
-                state.queued = True
-                self._queue.put_nowait(topic)
+            else:
+                state.queued_causes.add(triggered, link, max_links=self.max_causal_links)
+                if not state.queued:
+                    state.queued = True
+                    self._queue.put_nowait(topic)
 
     async def run(self) -> None:
         """Serve notifications until cancelled, under the host's task supervisor.
@@ -197,34 +259,60 @@ class TopicBus:
             return
         state.queued = False
         state.in_flight = True
+        causes = state.queued_causes
+        state.queued_causes = _Causes()
         state.self_published_during_drain = False
-        token = _current_topic.set(topic)
         cancelled = False
         try:
-            for subscription in tuple(state.subscriptions):
-                if not subscription.active or subscription not in state.subscriptions:
-                    continue
+            delivery_started = self._clock()
+            trace_started = causes.first_triggered if causes.first_triggered is not None else delivery_started
+            with self.profiler.operation(
+                OperationKind.TOPIC_DELIVERY,
+                name="topic",
+                links=causes.links,
+                started=trace_started,
+            ) as operation:
+                operation.record_span(
+                    "queue_wait",
+                    max(0.0, delivery_started - trace_started),
+                    attributes={"triggers": causes.triggers, "cause_links_omitted": causes.omitted_links},
+                )
+                token = _current_topic.set(topic)
+                delivery_failed = False
                 try:
-                    await subscription.callback(topic)
-                except Exception:
-                    state.failed += 1
-                    logger.exception("topic subscriber failed for %r (label=%r)", topic, subscription.label)
-                else:
-                    state.delivered += 1
+                    for subscription in tuple(state.subscriptions):
+                        if not subscription.active or subscription not in state.subscriptions:
+                            continue
+                        try:
+                            with operation.span(f"subscriber:{subscription.profile_label}"):
+                                await subscription.callback(topic)
+                        except Exception:
+                            delivery_failed = True
+                            state.failed += 1
+                            logger.exception("topic subscriber failed for %r (label=%r)", topic, subscription.label)
+                        else:
+                            state.delivered += 1
+                finally:
+                    _current_topic.reset(token)
+                if delivery_failed:
+                    operation.set_result(TraceResult(TraceOutcome.FAILED, detail="subscriber_failed"))
         except asyncio.CancelledError:
             cancelled = True
             raise
         finally:
-            _current_topic.reset(token)
             state.in_flight = False
             if cancelled:
                 state.redeliver = False
+                state.redelivery_causes = _Causes()
             elif state.redeliver and state.subscriptions:
                 state.redeliver = False
+                state.queued_causes = state.redelivery_causes
+                state.redelivery_causes = _Causes()
                 state.queued = True
                 self._queue.put_nowait(topic)
             else:
                 state.redeliver = False
+                state.redelivery_causes = _Causes()
             if not state.self_published_during_drain:
                 state.self_publishes = 0
                 state.self_publish_warned = False
@@ -234,3 +322,9 @@ class TopicBus:
     def _forget_if_idle(self, topic: Topic, state: _TopicState) -> None:
         if not state.subscriptions and not state.queued and not state.in_flight:
             self._topics.pop(topic, None)
+
+
+def _callback_name(callback: Subscriber) -> str:
+    module = getattr(callback, "__module__", type(callback).__module__)
+    qualified = getattr(callback, "__qualname__", type(callback).__qualname__)
+    return f"{module}.{qualified}"

@@ -5,7 +5,19 @@ import logging
 
 import pytest
 
+from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.topics import Topic, TopicBus
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.value = 100.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
 
 
 async def test_burst_coalesces_to_one_queued_topic() -> None:
@@ -147,6 +159,71 @@ async def test_subscriber_failure_is_logged_and_does_not_stop_siblings(caplog: p
     assert seen == ["sibling"]
     assert bus.snapshot().failed == 1
     assert "broken panel" in caplog.text
+
+
+async def test_delivery_profile_includes_queue_wait_and_stable_subscriber_spans() -> None:
+    clock = Clock()
+    profiler = MemoryProfiler(clock=clock)
+    bus = TopicBus(profiler=profiler, clock=clock)
+
+    async def refresh(topic: Topic) -> None:
+        clock.advance(0.5)
+
+    bus.subscribe(("build", 42), refresh, label="mount:instance-42", profile_label="build_projection")
+    bus.publish(("build", 42))
+    clock.advance(2.0)
+
+    await bus.drain()
+
+    trace = profiler.snapshot().slow[0]
+    assert trace.operation is OperationKind.TOPIC_DELIVERY
+    assert trace.name == "topic"
+    assert trace.duration == pytest.approx(2.5)
+    spans = {span.name: span for span in trace.spans}
+    assert spans["queue_wait"].duration == pytest.approx(2.0)
+    assert spans["subscriber:build_projection"].duration == pytest.approx(0.5)
+    assert all("instance-42" not in span.name for span in trace.spans)
+
+
+async def test_coalesced_delivery_retains_producer_link_and_trigger_count() -> None:
+    profiler = MemoryProfiler()
+    bus = TopicBus(profiler=profiler)
+
+    async def refresh(topic: Topic) -> None:
+        pass
+
+    bus.subscribe("build", refresh, profile_label="build_projection")
+    with profiler.operation(OperationKind.DISPATCH, name="save"):
+        bus.publish("build")
+        bus.publish("build")
+
+    await bus.drain()
+
+    traces = profiler.snapshot().recent
+    producer = next(trace for trace in traces if trace.name == "save")
+    delivery = next(trace for trace in traces if trace.operation is OperationKind.TOPIC_DELIVERY)
+    queue_wait = next(span for span in delivery.spans if span.name == "queue_wait")
+    assert delivery.links[0].trace_id == producer.trace_id
+    assert dict((attribute.key, attribute.value) for attribute in queue_wait.attributes)["triggers"] == 2
+
+
+async def test_caught_subscriber_failure_marks_delivery_trace_failed() -> None:
+    profiler = MemoryProfiler()
+    bus = TopicBus(profiler=profiler)
+
+    async def fail(topic: Topic) -> None:
+        raise RuntimeError("broken view")
+
+    bus.subscribe("build", fail, profile_label="broken_projection")
+    bus.publish("build")
+
+    await bus.drain()
+
+    trace = profiler.snapshot().failed[0]
+    subscriber = next(span for span in trace.spans if span.name == "subscriber:broken_projection")
+    assert trace.result.outcome is TraceOutcome.FAILED
+    assert trace.result.detail == "subscriber_failed"
+    assert subscriber.outcome is TraceOutcome.FAILED
 
 
 async def test_run_cancellation_waits_for_callback_cancellation() -> None:
