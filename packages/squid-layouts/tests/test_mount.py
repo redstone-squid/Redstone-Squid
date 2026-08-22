@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import anyio
 import discord
 import pytest
-from discord.webhook.async_ import async_context
+from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 from squid_layouts import (
     ActionPolicy,
@@ -1155,7 +1155,7 @@ class TestEditHandles:
                 _create_message=lambda data, *, thread: expected,
             ),
         )
-        token = async_context.set(adapter)
+        token = async_context.set(cast(AsyncWebhookAdapter, adapter))
         try:
             sent = await discord.Webhook.send(subject, wait=False)
         finally:
