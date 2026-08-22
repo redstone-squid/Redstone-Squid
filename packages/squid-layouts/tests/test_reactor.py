@@ -109,29 +109,32 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
     bus = TopicBus()
-    reactor = Reactor(bus, expiry_margin=60)
+    reactor = Reactor(bus, expiry_margin=60, clock=lambda: now)
     mount = Mount(Empty(), scheduler=reactor)
     reactor.follow(mount, "build")
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
 
-    reactor._sweep_once(now)
+    reactor._sweep_once()
     await _drain_reactor(reactor)
 
     written = interaction.response.edit_message.await_args.kwargs["view"]
     assert "Live updates paused" in str(written.to_components())
     assert reactor._queue.empty()
 
-    reactor._sweep_once(now + timedelta(seconds=1))
+    now += timedelta(seconds=1)
+    reactor._sweep_once()
     assert reactor._queue.empty()
 
     assert mount.handle is not None
     mount.handle.expires_at = now + timedelta(minutes=10)  # pyrefly: ignore[bad-assignment]
     mount.status = None
-    reactor._sweep_once(now + timedelta(seconds=2))
+    now += timedelta(seconds=1)
+    reactor._sweep_once()
     assert reactor._queue.empty()
 
     mount.handle.expires_at = now + timedelta(seconds=20)  # pyrefly: ignore[bad-assignment]
-    reactor._sweep_once(now + timedelta(seconds=3))
+    now += timedelta(seconds=1)
+    reactor._sweep_once()
     assert reactor._queue.qsize() == 1
 
 

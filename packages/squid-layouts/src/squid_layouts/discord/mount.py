@@ -69,6 +69,10 @@ than a deep tree.
 """
 
 
+def _monotonic() -> float:
+    return time.monotonic()
+
+
 def _needs_load(component: Component) -> bool:
     """Whether this instance still owes an `on_load` before it may render.
 
@@ -296,12 +300,14 @@ class Mount:
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
         acknowledgement_timeout: float = 2.5,
+        clock: Callable[[], float] = _monotonic,
     ) -> None:
         self.id = secrets.token_urlsafe(6)
         self.component = component
+        self.clock = clock
         # Diagnostics only. `_active` is what the idle timeout counts from: the initial send
         # and each accepted click move it, while unattended refreshes deliberately do not.
-        self._born = self._active = time.monotonic()
+        self._born = self._active = self.clock()
         self.address: MountAddress | None = None
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
         self._chrome = chrome
@@ -380,7 +386,8 @@ class Mount:
 
     def snapshot(self) -> MountSnapshot:
         """Describe this mount for a diagnostics surface. See :class:`MountSnapshot`."""
-        idle = time.monotonic() - self._active
+        now = self.clock()
+        idle = now - self._active
         component = type(self.component)
         return MountSnapshot(
             id=self.id,
@@ -389,7 +396,7 @@ class Mount:
             generation=self._generation,
             pending=self._dirty,
             finished=self._finished,
-            age=time.monotonic() - self._born,
+            age=now - self._born,
             idle=idle,
             expires_in=None if self.timeout is None else max(0.0, self.timeout - idle),
             lock_to=self.lock_to,
@@ -402,7 +409,7 @@ class Mount:
     def _remaining_timeout(self) -> float | None:
         if self.timeout is None:
             return None
-        return max(0.0, self.timeout - (time.monotonic() - self._active))
+        return max(0.0, self.timeout - (self.clock() - self._active))
 
     def _note_address(self, message: discord.Message | None) -> None:
         """Remember where this mount's message is, the first time Discord says.
@@ -674,7 +681,7 @@ class Mount:
         self._handle = receipt.handle
         if receipt.message is not None:
             self._note_address(receipt.message)
-        self._active = time.monotonic()
+        self._active = self.clock()
         self._commit(candidate)
         return receipt.message
 
@@ -789,7 +796,7 @@ class Mount:
         await self._dispatch_binding(binding, key, interaction, generation, invoke, rebase=rebase)
 
     async def _begin_dispatch(self, interaction: discord.Interaction) -> bool:
-        self._active = time.monotonic()
+        self._active = self.clock()
         # A mount sent through an unwaited interaction response never saw its own message; the
         # click is where it finally learns where it lives.
         self._note_address(interaction.message)
