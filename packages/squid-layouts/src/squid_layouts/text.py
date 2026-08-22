@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from string.templatelib import Interpolation, Template
 from typing import Any
@@ -65,7 +66,8 @@ def raw_md(value: object) -> RawMarkdown:
 
 def plain(value: object) -> ResolvedText:
     """Create literal text which renderers must not interpret as Markdown."""
-    return ResolvedText(str(value), TextDialect.PLAIN)
+    temporal = _temporal_value(value, TextDialect.PLAIN)
+    return ResolvedText(str(value) if temporal is None else temporal, TextDialect.PLAIN)
 
 
 def md(value: str | Template, /, **values: object) -> ResolvedText:
@@ -78,10 +80,10 @@ def md(value: str | Template, /, **values: object) -> ResolvedText:
         if values:
             message = "template strings already contain their interpolation values"
             raise TypeError(message)
-        return ResolvedText(_resolve_template(value))
+        return ResolvedText(_resolve_template(value, TextDialect.DISCORD_MARKDOWN))
     if not values:
         return ResolvedText(value)
-    return ResolvedText(_resolve_named(value, values))
+    return ResolvedText(_resolve_named(value, values, TextDialect.DISCORD_MARKDOWN))
 
 
 def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
@@ -104,7 +106,7 @@ def resolve_text(value: TextLike, localization: Localization) -> ResolvedText:
         key: raw_md(resolve_text(param, localization).content) if isinstance(param, Message | ResolvedText) else param
         for key, param in value.params.items()
     }
-    content = _resolve_named(template, params) if params else template
+    content = _resolve_named(template, params, value.dialect) if params else template
     return ResolvedText(content, value.dialect)
 
 
@@ -115,17 +117,17 @@ def discord_text(value: ResolvedText) -> str:
     return _escape_markdown(value.content)
 
 
-def _resolve_template(template: Template) -> str:
+def _resolve_template(template: Template, dialect: TextDialect) -> str:
     parts: list[str] = []
     for string, interpolation in zip(template.strings, template.interpolations, strict=False):
         parts.append(string)
-        parts.append(_interpolation(interpolation))
+        parts.append(_interpolation(interpolation, dialect))
     parts.append(template.strings[-1])
     return "".join(parts)
 
 
-def _resolve_named(template: str, values: Mapping[str, object]) -> str:
-    escaped = {key: _safe_value(value) for key, value in values.items()}
+def _resolve_named(template: str, values: Mapping[str, object], dialect: TextDialect) -> str:
+    escaped = {key: _safe_value(value, dialect) for key, value in values.items()}
     try:
         return template.format_map(escaped)
     except (KeyError, ValueError) as error:
@@ -133,7 +135,7 @@ def _resolve_named(template: str, values: Mapping[str, object]) -> str:
         raise ValueError(message) from error
 
 
-def _interpolation(interpolation: Interpolation) -> str:
+def _interpolation(interpolation: Interpolation, dialect: TextDialect) -> str:
     value: Any = interpolation.value
     if interpolation.conversion == "r":
         value = repr(value)
@@ -143,13 +145,35 @@ def _interpolation(interpolation: Interpolation) -> str:
         value = ascii(value)
     if interpolation.format_spec:
         value = format(value, interpolation.format_spec)
-    return _safe_value(value)
+    return _safe_value(value, dialect)
 
 
-def _safe_value(value: object) -> str:
+def _safe_value(value: object, dialect: TextDialect) -> str:
     if isinstance(value, RawMarkdown):
         return value.content
+    temporal = _temporal_value(value, dialect)
+    if temporal is not None:
+        return temporal
     return _neutralize_mentions(_escape_markdown(str(value)))
+
+
+def _temporal_value(value: object, dialect: TextDialect) -> str | None:
+    from squid_layouts.semantic import Timestamp
+
+    if isinstance(value, Timestamp):
+        instant = value.instant
+        style = value.style.value
+    elif isinstance(value, datetime):
+        instant = value
+        style = "f"
+    else:
+        return None
+    if instant.tzinfo is None or instant.utcoffset() is None:
+        message = "timestamp interpolation requires an aware datetime"
+        raise ValueError(message)
+    if dialect is TextDialect.PLAIN:
+        return instant.isoformat()
+    return f"<t:{int(instant.timestamp())}:{style}>"
 
 
 def _escape_markdown(value: str) -> str:

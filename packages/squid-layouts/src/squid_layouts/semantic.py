@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Literal
 
@@ -72,6 +73,16 @@ class Tone(StrEnum):
     SUCCESS = "success"
     WARNING = "warning"
     DANGER = "danger"
+
+
+class TimeStyle(StrEnum):
+    SHORT_TIME = "t"
+    LONG_TIME = "T"
+    SHORT_DATE = "d"
+    LONG_DATE = "D"
+    SHORT_DATETIME = "f"
+    FULL = "F"
+    RELATIVE = "R"
 
 
 # --- Who owns a node's value -----------------------------------------------------------
@@ -328,6 +339,15 @@ class Measure:
     value: int | float | str
     label: TextLike
     unit: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Timestamp:
+    """An aware instant plus a portable display preference."""
+
+    instant: datetime
+    style: TimeStyle = TimeStyle.SHORT_DATETIME
+    label: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -606,6 +626,7 @@ type SemanticNode = (
     | Status
     | Progress
     | Measure
+    | Timestamp
     | FormTrigger
     | Actions
     | Choices

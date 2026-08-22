@@ -466,7 +466,7 @@ def _claim_entry(claim: AliasClaim, locale: str | None) -> str:
         locale,
         _("{claimant} · opened {age}"),
         claimant=present_claimant(claim, locale),
-        age=discord.utils.format_dt(claim.created_at.to_stdlib(), style="R"),
+        age=sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.TimeStyle.RELATIVE)}").content,
     )
     return f"**{heading}**\n{detail}"
 

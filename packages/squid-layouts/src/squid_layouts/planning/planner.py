@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import UTC
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
@@ -21,6 +22,7 @@ from squid_layouts.planning.solve import (
     RPanel,
     RSection,
     RText,
+    RTime,
     SolvedLayout,
     _resolve_variants,
     solve,
@@ -78,6 +80,7 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
@@ -143,6 +146,8 @@ class _Converter:
         match node:
             case RText(content=content):
                 return SceneText(content)
+            case RTime(instant=instant, style=style, prefix=prefix):
+                return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
             case RPanel(children=children, accent=accent):
                 return ScenePanel(
                     tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent

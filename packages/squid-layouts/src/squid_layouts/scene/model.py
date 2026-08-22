@@ -18,6 +18,13 @@ class SceneText:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneTime:
+    instant: str
+    style: str
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SceneSeparator:
     large: bool = False
     visible: bool = True
@@ -129,6 +136,7 @@ class SceneExtension:
 
 type SceneNode = (
     SceneText
+    | SceneTime
     | SceneSeparator
     | SceneRow
     | SceneSelect
