@@ -24,7 +24,7 @@ from typing import Literal, NoReturn, TypeAliasType, get_args
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.assets import Asset
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
-from squid_layouts.primitives.styles import Color
+from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.semantic import (
     CLOSED,
     FIRST_DESTINATION,
@@ -85,6 +85,7 @@ from squid_layouts.semantic import (
     Table,
     TableDisplay,
     TableRow,
+    Themed,
     Timestamp,
     TimeStyle,
     Toggle,
@@ -207,10 +208,15 @@ def cluster(*children: ChildLike) -> Cluster:
     return Cluster(_children(children, "sl.cluster()"))
 
 
+def themed(palette: Palette, *children: ChildLike) -> Themed:
+    """Apply a presentation palette to one semantic subtree."""
+    return Themed(_children(children, "sl.themed()"), palette)
+
+
 def section(
     *children: ChildLike,
     heading: TextValue | None = None,
-    accent: Color | None = None,
+    accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Section:
     """A titled block of related content; ``accent`` is a house-colour override."""
@@ -220,7 +226,7 @@ def section(
 def article(
     *children: ChildLike,
     heading: TextValue | None = None,
-    accent: Color | None = None,
+    accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Article:
     """A self-contained block that stands on its own."""

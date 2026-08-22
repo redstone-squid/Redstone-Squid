@@ -10,6 +10,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.renderer import Renderer, Wire
 from squid_layouts.discord.target import Target
 from squid_layouts.document import DocumentLike
+from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.navigation import PlannedNav
@@ -48,6 +49,7 @@ def compose(
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
+    palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
     reserved_text: int = 0,
     positions: Mapping[str, Position] | None = None,
@@ -62,6 +64,7 @@ def compose(
         target=Target(limits),
         chrome=chrome,
         localization=localization,
+        palette=palette,
         strict=strict,
         reservation=ResourceCost({"display_text": reserved_text}),
         positions=positions,
@@ -83,6 +86,7 @@ def render_static(
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
+    palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
     reserved_text: int = 0,
 ) -> discord.ui.LayoutView:
@@ -92,6 +96,7 @@ def render_static(
         limits=limits,
         chrome=chrome,
         localization=localization,
+        palette=palette,
         strict=strict,
         reserved_text=reserved_text,
     ).view

@@ -112,6 +112,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Table as SemanticTable,
 )
+from squid_layouts.semantic import Themed as SemanticThemed
 from squid_layouts.semantic import Toggle as SemanticToggle
 from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
@@ -410,6 +411,7 @@ def render_component_tree(
                     SemanticGroup(children=children)
                     | SemanticStack(children=children)
                     | SemanticCluster(children=children)
+                    | SemanticThemed(children=children)
                     | SemanticSection(children=children)
                     | SemanticArticle(children=children)
                     | SemanticAside(children=children)
@@ -534,7 +536,10 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                     items=tuple(rewrite_semantic_action(item) for item in items),
                 )
             case (
-                SemanticGroup(children=children) | SemanticStack(children=children) | SemanticCluster(children=children)
+                SemanticGroup(children=children)
+                | SemanticStack(children=children)
+                | SemanticCluster(children=children)
+                | SemanticThemed(children=children)
             ):
                 return replace(node, children=tuple(rewrite(child) for child in children))
             case (
