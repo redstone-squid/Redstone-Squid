@@ -34,6 +34,8 @@ def test_root_is_semantic_first() -> None:
     assert {"Download", "download"} <= set(sl.__all__)
     assert {"Guard", "GuardVerdict", "GuardLedger", "GuardScope", "ADMIT", "guards"} <= set(sl.__all__)
     assert "Feedback" in sl.__all__
+    assert "WizardReview" in sl.__all__
+    assert {"Scale", "ScaleField", "ScaleEvent", "ScaleOwnership", "UNRATED", "rating"} <= set(sl.__all__)
     assert {"Resource", "ResourceDelivery", "ResourceState", "Pending", "Ready", "Failed", "resource"} <= set(
         sl.__all__
     )

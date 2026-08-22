@@ -31,6 +31,7 @@ from squid_layouts.semantic import (
     FIRST_DESTINATION,
     OFF,
     UNOPENED,
+    UNRATED,
     UNSELECTED,
     Action,
     ActionDisplay,
@@ -39,6 +40,7 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     Choice,
+    ChoiceEvent,
     ChoiceOwnership,
     Choices,
     Cluster,
@@ -80,6 +82,8 @@ from squid_layouts.semantic import (
     Quote,
     RoutedAction,
     RoutedChoices,
+    ScaleEvent,
+    ScaleOwnership,
     Section,
     Stack,
     Status,
@@ -562,6 +566,60 @@ def choices(
         maximum,
         flexibility,
     )
+
+
+def rating(
+    *,
+    key: str,
+    maximum: int = 5,
+    value: ScaleOwnership = UNRATED,
+    labels: Mapping[int, TextValue] | None = None,
+) -> Choices:
+    """An ordinal 1-to-``maximum`` picker; five or fewer points render as a star row.
+
+    No new semantic node: `choices` with ``maximum=1`` already lowers to the row a rating
+    wants. This owns the two things that would otherwise be hand-rolled every time — the
+    star labels and the string-to-`int` round trip — and hands the handler a typed
+    `ScaleEvent` rather than the option key it was submitted as.
+    """
+    if maximum < 2:
+        message = "sl.rating() needs a maximum of at least 2"
+        raise ValueError(message)
+    points = range(1, maximum + 1)
+    named = {} if labels is None else labels
+    entries = tuple(
+        Choice(str(point), _text(named[point]) if point in named else _text(_stars(point, maximum))) for point in points
+    )
+    if isinstance(value, Managed):
+        selection: ChoiceOwnership = Managed(() if value.initial is None else (str(value.initial),))
+    else:
+        chosen = value.value
+        on_change = value.on_change
+
+        async def rate(event: ChoiceEvent) -> None:
+            if not event.selected:
+                return
+            await on_change(
+                ScaleEvent(
+                    event.actor,
+                    event.responder,
+                    event.locale,
+                    event.context,
+                    int(event.selected[0]),
+                )
+            )
+
+        selection = Controlled((), rate) if chosen is None else Controlled((str(chosen),), rate)
+    return Choices(key, entries, selection, minimum=1, maximum=1)
+
+
+def _stars(point: int, maximum: int) -> str:
+    """The default label for one scale point.
+
+    Cumulative stars while the control is still a button row; above that a select of ten
+    star strings is unreadable, so the number speaks for itself.
+    """
+    return "\N{BLACK STAR}" * point if maximum <= 5 else str(point)
 
 
 def routed_choices(

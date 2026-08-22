@@ -277,3 +277,25 @@ async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
 
     assert len(panel.events) == 1
     assert panel.events[0].errors == (sl.FieldError("duration", "Enter a duration such as 30m, 12h, or 7d."),)
+
+
+def test_scale_field_renders_a_radio_group_within_the_radio_span() -> None:
+    field = sl.ScaleField(key="score", label="Score", labels={1: "Poor", 5: "Excellent"})
+    modal = build_form_modal(sl.FormSpec("Rate", (field,), prefill={"score": 4}), on_submit=_ignore_raw)
+
+    component = _component(modal)
+    assert isinstance(component, discord.ui.RadioGroup)
+    assert [option.value for option in component.options] == ["1", "2", "3", "4", "5"]
+    assert [option.label for option in component.options] == ["Poor", "2", "3", "4", "Excellent"]
+    assert [option.value for option in component.options if option.default] == ["4"]
+
+
+def test_a_wide_scale_falls_back_to_a_parsed_text_input() -> None:
+    field = sl.ScaleField(key="score", label="Score", minimum=0, maximum=100)
+    modal = build_form_modal(sl.FormSpec("Rate", (field,), prefill={"score": 42}), on_submit=_ignore_raw)
+
+    component = _component(modal)
+    assert isinstance(component, discord.ui.TextInput)
+    assert component.default == "42"
+    assert component.placeholder == "0\N{EN DASH}100"
+    assert field.parse("42") == 42
