@@ -113,3 +113,10 @@ Implemented 2026-08-21. The planner now enumerates path-keyed assignments in agg
 undegraded whole-document fit, and caches the winning assignment. The audit construction
 and its stronger local-pager form both select grouped actions in two attempts; a roomy
 document still selects individual actions in one.
+
+Algorithmic follow-up implemented 2026-08-22: the same bounded search budget now accounts for
+measured structural variant states as well as semantic assignments. Degraded candidates carry
+a priority-aware structured loss profile, letting the planner choose semantic fallback before
+truncation, spill, or whole-node drop and use semantic strategy cost only as the tie. Winning
+variant positions are cached alongside strategy assignments. Validation is intentionally
+pending while concurrent changes elsewhere in the repository settle.

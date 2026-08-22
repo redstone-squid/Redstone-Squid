@@ -127,3 +127,8 @@ Verification at completion: all 527 `packages/squid-layouts` tests pass; `just t
 reports zero errors. Dedicated coverage pins stretch-band hysteresis and snapping, hard and
 best-effort floors, balanced text and region breaks, heading keeps, unbreakable rejection,
 widows, lossless nested text splitting, and stable region fingerprints.
+
+Algorithmic follow-up implemented 2026-08-22: text and region pagination now share one exact,
+prefix-summed breaker. The 256-chunk text heuristic and the region breaker's repeated
+page-count dynamic programs are gone. Validation is intentionally pending while concurrent
+changes elsewhere in the repository settle.

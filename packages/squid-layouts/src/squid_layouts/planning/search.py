@@ -110,15 +110,22 @@ def choose_strategy(
 def iter_assignments(axes: tuple[StrategyAxis, ...]) -> Iterator[StrategyAssignment]:
     """Enumerate a strategy product best-first without materializing the product."""
     ranked = tuple(
-        tuple(sorted(axis.candidates, key=lambda candidate: candidate_cost(candidate, axis=axis))) for axis in axes
+        tuple(
+            sorted(
+                ((candidate_cost(candidate, axis=axis), candidate) for candidate in axis.candidates),
+                key=lambda item: item[0],
+            )
+        )
+        for axis in axes
     )
     initial = (0,) * len(axes)
-    frontier: list[tuple[CostVector, tuple[int, ...]]] = []
+    frontier: list[tuple[CostVector, tuple[int, ...], StrategyAssignment]] = []
     seen = {initial}
 
     def assignment(indices: tuple[int, ...]) -> StrategyAssignment:
-        choices = tuple(candidates[index] for candidates, index in zip(ranked, indices, strict=True))
-        costs = tuple(candidate_cost(candidate, axis=axis) for axis, candidate in zip(axes, choices, strict=True))
+        ranked_choices = tuple(candidates[index] for candidates, index in zip(ranked, indices, strict=True))
+        costs = tuple(cost for cost, _candidate in ranked_choices)
+        choices = tuple(candidate for _cost, candidate in ranked_choices)
         cost = CostVector(
             stable_changes=sum(item.stable_changes for item in costs),
             normal_changes=sum(item.normal_changes for item in costs),
@@ -134,10 +141,10 @@ def iter_assignments(axes: tuple[StrategyAxis, ...]) -> Iterator[StrategyAssignm
             cost,
         )
 
-    heappush(frontier, (assignment(initial).cost, initial))
+    first = assignment(initial)
+    heappush(frontier, (first.cost, initial, first))
     while frontier:
-        _cost, indices = heappop(frontier)
-        selected = assignment(indices)
+        _cost, indices, selected = heappop(frontier)
         yield selected
         for axis_index, candidates in enumerate(ranked):
             next_index = indices[axis_index] + 1
@@ -147,4 +154,5 @@ def iter_assignments(axes: tuple[StrategyAxis, ...]) -> Iterator[StrategyAssignm
             if neighbor in seen:
                 continue
             seen.add(neighbor)
-            heappush(frontier, (assignment(neighbor).cost, neighbor))
+            candidate = assignment(neighbor)
+            heappush(frontier, (candidate.cost, neighbor, candidate))
