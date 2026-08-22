@@ -1,6 +1,6 @@
 """Discord Components V2 target, renderer, and runtime adapter."""
 
-from squid_layouts.discord import delivery, durability, live
+from squid_layouts.discord import delivery, devtools, durability, live
 from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
@@ -114,6 +114,7 @@ __all__ = [
     "conform_modal",
     "default_nav",
     "delivery",
+    "devtools",
     "durability",
     "live",
     "mounts",

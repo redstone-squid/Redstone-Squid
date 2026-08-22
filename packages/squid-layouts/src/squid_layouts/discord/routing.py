@@ -39,7 +39,7 @@ from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Concatenate, Self, override
+from typing import Any, Concatenate, Self, cast, override
 
 import anyio
 import discord
@@ -66,9 +66,10 @@ _INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakr
 """Routers installed per client, so `register` can refuse the second router a click would wake."""
 
 
-def routers(client: discord.Client) -> tuple[Router[Any], ...]:
+def routers[ClientT: discord.Client](client: ClientT) -> tuple[Router[ClientT], ...]:
     """Return a read-only snapshot of the routers installed on ``client``."""
-    return tuple(_INSTALLED.get(client, ()))
+    installed = cast(list[Router[ClientT]], _INSTALLED.get(client, ()))
+    return tuple(installed)
 
 
 class RouteComponent(StrEnum):
