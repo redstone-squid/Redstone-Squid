@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Concatenate, Self, override
 
+import anyio
 import discord
 
 from squid_layouts.discord.mount import ErrorHook
@@ -145,6 +146,7 @@ class Router[BotT: discord.Client]:
         namespace: str | None = None,
         on_gone: GoneHook[BotT] | None = None,
         on_error: ErrorHook | None = None,
+        acknowledgement_timeout: float = 2.5,
     ) -> None:
         if namespace is not None and (not namespace or ":" in namespace):
             message = "a router namespace must be one non-empty route segment"
@@ -152,11 +154,15 @@ class Router[BotT: discord.Client]:
         if namespace is not None and on_gone is None:
             message = "a namespaced router needs an on_gone hook for retired controls"
             raise ValueError(message)
+        if not 0 < acknowledgement_timeout < 3:
+            message = "a router acknowledgement timeout must be greater than zero and below Discord's 3-second limit"
+            raise ValueError(message)
         self._routes: list[_Registration] = []
         self._registered = False
         self.namespace = namespace
         self.on_gone = on_gone
         self.on_error = on_error
+        self.acknowledgement_timeout = acknowledgement_timeout
 
     def describe(self) -> tuple[RouteDescription, ...]:
         """Describe the current route table without exposing mutable registrations."""
@@ -352,29 +358,77 @@ class Router[BotT: discord.Client]:
         component: RouteComponent = RouteComponent.BUTTON,
         values: tuple[str, ...] = (),
     ) -> None:
-        """Run the handler owning ``custom_id``; a retired route is logged, never raised."""
+        """Run the handler owning ``custom_id`` under the acknowledgement deadline."""
         found = self.resolve(custom_id, component=component)
         if found is None:
             if self._in_namespace(custom_id):
-                assert self.on_gone is not None
-                await self.on_gone(interaction)
-                return
-            # Reachable when a route is deregistered while its buttons are still posted.
-            logger.warning("no route owns custom id %r", custom_id)
+                gone = self.on_gone
+                assert gone is not None
+
+                async def operation() -> None:
+                    await gone(interaction)
+
+                source = f"route-gone:{self.namespace}"
+            else:
+                # Reachable only through direct dispatch after a route was deregistered;
+                # the installed DynamicItem template cannot admit an unrelated id.
+                async def unknown() -> None:
+                    logger.warning("no route owns custom id %r", custom_id)
+
+                operation = unknown
+                source = "route:unknown"
+        else:
+            registration, params = found
+            accepts = registration.accepts
+            wanted = params if accepts is None else {name: params[name] for name in accepts}
+
+            async def operation() -> None:
+                if component is RouteComponent.SELECT:
+                    await registration.handler(interaction, values, **wanted)
+                else:
+                    await registration.handler(interaction, **wanted)
+
+            source = f"route:{registration.route.format}"
+
+        async def watchdog() -> None:
+            await anyio.sleep(self.acknowledgement_timeout)
+            await self._acknowledge_safely(interaction, source)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(watchdog)
+            try:
+                await operation()
+            except Exception as error:
+                await self._handle_error(interaction, error, source)
+            finally:
+                tasks.cancel_scope.cancel()
+        await self._acknowledge_safely(interaction, source)
+
+    async def _handle_error(
+        self,
+        interaction: discord.Interaction[Any],
+        error: Exception,
+        source: str,
+    ) -> None:
+        """Present one dispatch failure without allowing the error hook to escape."""
+        if self.on_error is None:
+            logger.error("routed handler failed in %s", source, exc_info=error)
             return
-        registration, params = found
-        accepts = registration.accepts
-        wanted = params if accepts is None else {name: params[name] for name in accepts}
         try:
-            if component is RouteComponent.SELECT:
-                await registration.handler(interaction, values, **wanted)
-            else:
-                await registration.handler(interaction, **wanted)
-        except Exception as error:
-            if self.on_error is None:
-                logger.exception("routed handler for %r failed", custom_id)
-            else:
-                await self.on_error(interaction, error, f"route:{custom_id}")
+            await self.on_error(interaction, error, source)
+        except Exception:
+            logger.exception("routed error hook failed in %s", source)
+
+    async def _acknowledge_safely(self, interaction: discord.Interaction[Any], source: str) -> None:
+        """Acknowledge an unused response slot, tolerating a concurrent handler response."""
+        if interaction.response.is_done():
+            return
+        try:
+            await interaction.response.defer()
+        except discord.InteractionResponded:
+            return
+        except Exception:
+            logger.exception("could not acknowledge %s", source)
 
     def _in_namespace(self, custom_id: str) -> bool:
         """Whether ``custom_id`` belongs to this router's reserved namespace."""
