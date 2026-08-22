@@ -431,4 +431,11 @@ and session opening return structured outcomes; typed scopes, logical sessions, 
 cascade, limits, collision policies, and cross-user replacement protection ship under the
 new names. Participant join/leave indexes remain deferred to implementation step 7: no
 lobby/game consumer and race suite exists yet, so `SessionPolicy` deliberately does not
-expose `participant_limit`. Phase C remains proposed.
+expose `participant_limit`.
+
+Phase C implemented 2026-08-22. `DurableSessionRuntime` now owns fenced distributed admission,
+Discord promotion and graph reconnection, whole-session records, recovery reporting, lease and
+checkpoint supervision, expiry, and finish/delete integration. `DurableBot` wires both ordinary
+`start()` and explicit `login(); connect()` startup through the same recovery-before-gateway
+boundary. The old `MountManager`, advisory lease API, and reachability-only resolver are removed;
+the durability guide and architecture reference describe the shipped coordinator.

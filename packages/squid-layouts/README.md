@@ -68,7 +68,7 @@ text and option pagination.
 `sl.discord.render_static` is the sessionless
 path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_modal` do the same for modals,
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
-other processes; `sl.discord.durability.MountManager` provides opt-in versioned state checkpoints.
+other processes; `sl.discord.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
 
 Presentation colours are an immutable `sl.Palette`, supplied to `sl.plan`, `sl.discord.compose`,
 `sl.discord.render_static`, or `sl.discord.Mount`. An omitted section or article accent inherits
@@ -137,6 +137,10 @@ Typed `SessionKey.user`, `guild`, `user_guild`, `global_`, and `custom` construc
 cardinality, while `SessionPolicy` composes a limit, collision selection, and replacement
 protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
 explain a collision.
+
+Stateful drafts that must survive restarts open through `DurableSessionRuntime`, which coordinates
+fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
+See [Durable sessions](docs/durable-mounts.md) for the imperative and `DurableBot` startup paths.
 
 `PatternRoute.phase` is `next` for deterministic buttons: its state is already the state the next
 document should render. Selects and forms use `input`, because their values arrive in the
