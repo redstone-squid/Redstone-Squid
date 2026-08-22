@@ -191,6 +191,18 @@ class ScoreSource:
         )
 
 
+class FlakyScoreSource(ScoreSource):
+    def __init__(self, entries: tuple[tuple[str, int], ...], *, capabilities: sl.SourceCapabilities) -> None:
+        super().__init__(entries, capabilities=capabilities)
+        self.fail_next = False
+
+    async def fetch(self, position: Position, extent: int) -> Window[tuple[str, int]]:
+        if self.fail_next:
+            self.fail_next = False
+            raise RuntimeError("source unavailable")
+        return await super().fetch(position, extent)
+
+
 def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
     ranked = sl.RankedList(
         [Score("Ada", 30), Score("Grace", 20), Score("Edsger", 10)],
@@ -209,6 +221,7 @@ def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
 
     view = commit_render(Mount(ranked, timeout=None))
     assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(view)
+
     assert "Showing 3 entries" in _texts(view)
     assert "-# Page 1 of 2" in _texts(view)
 
@@ -259,10 +272,46 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
     interaction = fake_interaction()
     await mount.dispatch("stream.next", interaction)
 
-    edited = interaction.response.edit_message.await_args.kwargs["view"]
+    pending = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(pending)
+    assert "-# Loading…" in _texts(pending)
+
+    edited = interaction.followup.edit_message.await_args.kwargs["view"]
     assert source.requests[-1] == Position("Grace", 2, sl.Direction.FORWARD)
     assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(edited)
     assert "-# Page 2 of 3" in _texts(edited)
+
+
+async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_request() -> None:
+    source = FlakyScoreSource(
+        (("Ada", 30), ("Grace", 20), ("Edsger", 10), ("Barbara", 5)),
+        capabilities=sl.SourceCapabilities(
+            backward=True,
+            offsets=True,
+            jumpable=True,
+            count=sl.CountPrecision.EXACT,
+        ),
+    )
+    mount = Mount(sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2), timeout=None)
+    await mount.send(delivered_to(fake_message()))
+
+    source.fail_next = True
+    failed_interaction = fake_interaction()
+    await mount.dispatch("stream.next", failed_interaction)
+
+    failed = failed_interaction.followup.edit_message.await_args.kwargs["view"]
+    assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(failed)
+    assert "-# Could not load entries." in _texts(failed)
+    assert "Retry" in _labels(failed)
+
+    retry_interaction = fake_interaction()
+    await mount.dispatch("stream.retry", retry_interaction)
+
+    pending = retry_interaction.response.edit_message.await_args.kwargs["view"]
+    assert "-# Loading…" in _texts(pending)
+    settled = retry_interaction.followup.edit_message.await_args.kwargs["view"]
+    assert source.requests[-1] == Position("Grace", 2, sl.Direction.FORWARD)
+    assert "3. **Edsger** — 10\n4. **Barbara** — 5" in _texts(settled)
 
 
 async def test_a_jumpable_source_seeks_by_page() -> None:
@@ -282,7 +331,10 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
 
     # Page 2 of a page_size=2 source is item offset 4, not item offset 2.
     assert source.requests[-1] == Position(offset=4)
-    edited = interaction.response.edit_message.await_args.kwargs["view"]
+    pending = interaction.response.edit_message.await_args.kwargs["view"]
+    assert "-# Loading…" in _texts(pending)
+
+    edited = interaction.followup.edit_message.await_args.kwargs["view"]
     assert "-# Page 3 of 3" in _texts(edited)
 
 
