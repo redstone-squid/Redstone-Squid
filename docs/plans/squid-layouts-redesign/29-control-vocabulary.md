@@ -280,6 +280,13 @@ Actions are visible-window selection, form-backed add/edit, remove, move up/down
 provides routed-shell parity. Identity comes from the callback or stable minted ordinal keys.
 Every mutation invokes `on_change` with the complete ordered tuple of mappings.
 
+The editor's finite verbs are a private `StrEnum`, so its implementation does not scatter raw
+strings. The shared `Pattern.transition(..., action: str)` channel remains open deliberately:
+patterns define their own protocols, and parameterized routes such as `choose:<option-key>`,
+`submit:<step-key>`, and `page:<group-key>:next` contain author data that no closed enum can
+enumerate. Replacing that channel with a tagged route value would be a framework-wide routing
+protocol change, not an enum cleanup local to this pattern.
+
 Arbitrary `ItemT` payloads are rejected because they break router serializability. Staged
 Apply is considered but not implemented: granular changes are the contract, and plan 30's
 Editor owns commit policy so it can compose this pattern unchanged. Reordering is selected
