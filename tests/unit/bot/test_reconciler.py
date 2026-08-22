@@ -31,6 +31,7 @@ def _job(
 def _cog() -> tuple[ReconciliationCog, AsyncMock]:
     cog = ReconciliationCog.__new__(ReconciliationCog)
     bot = AsyncMock()
+    bot.topic_bus.publish = Mock()
     cog.bot = bot
     return cog, bot
 
@@ -61,6 +62,7 @@ async def test_a_claimed_job_is_rendered_then_acknowledged() -> None:
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("build", "42", 7)
     bot.services.discord_reconciliation.complete.assert_awaited_once()
+    bot.topic_bus.publish.assert_called_once_with(("build", "42"))
 
 
 async def test_deletion_needs_no_branch_of_its_own() -> None:
@@ -77,6 +79,7 @@ async def test_deletion_needs_no_branch_of_its_own() -> None:
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("vote_session", "42", 7)
     bot.services.discord_reconciliation.complete.assert_awaited_once()
+    bot.topic_bus.publish.assert_called_once_with(("vote_session", "42"))
 
 
 async def test_a_failed_render_is_retried_rather_than_acknowledged() -> None:
@@ -88,3 +91,4 @@ async def test_a_failed_render_is_retried_rather_than_acknowledged() -> None:
 
     bot.services.discord_reconciliation.fail.assert_awaited_once()
     bot.services.discord_reconciliation.complete.assert_not_awaited()
+    bot.topic_bus.publish.assert_not_called()
