@@ -6,6 +6,7 @@ from squid_layouts.patterns.collection import (
     CollectionEntry,
     CollectionState,
 )
+from squid_layouts.patterns.commit import CommitPolicy
 from squid_layouts.patterns.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
 from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
 from squid_layouts.patterns.multichoice import (
@@ -41,6 +42,7 @@ __all__ = [
     "CollectionEditor",
     "CollectionEntry",
     "CollectionState",
+    "CommitPolicy",
     "ComponentShell",
     "Decision",
     "DecisionHandler",

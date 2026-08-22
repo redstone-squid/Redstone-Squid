@@ -7,6 +7,7 @@ from squid_layouts.factories import actions, heading, paragraph, stack, status
 from squid_layouts.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_layouts.patterns._content import display_text, require_key
 from squid_layouts.patterns._paging import window
+from squid_layouts.patterns.commit import CommitPolicy
 from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import ActionDisplay, Choice, Tone, fallback
@@ -71,6 +72,7 @@ class MultiChoicePanel:
         minimum: int = 0,
         maximum: int | None = None,
         window_size: int = 25,
+        commit: CommitPolicy = CommitPolicy.EXPLICIT,
     ) -> None:
         self.key = require_key(key, name="MultiChoicePanel.key")
         self.title = title
@@ -104,6 +106,7 @@ class MultiChoicePanel:
         self.minimum = minimum
         self.maximum = len(option_keys) if maximum is None else maximum
         self.window_size = window_size
+        self.commit = commit
         self._choice_order = tuple(option_keys)
         self._choices = {entry.key: entry for group in self.groups for entry in group.choices}
         self._group_for = {entry.key: group.key for group in self.groups for entry in group.choices}
@@ -122,13 +125,13 @@ class MultiChoicePanel:
         self,
         *,
         initial: MultiChoiceState | None = None,
-        on_apply: MultiChoiceCommitHandler | None = None,
+        on_commit: MultiChoiceCommitHandler | None = None,
     ) -> ComponentShell[MultiChoiceState]:
         """Build an in-memory panel shell and dispatch each new commit once."""
 
         async def changed(event: PatternEvent[MultiChoiceState]) -> None:
-            if on_apply is not None and event.state.committed != event.previous.committed:
-                await on_apply(event, event.state.committed)
+            if on_commit is not None and event.state.committed != event.previous.committed:
+                await on_commit(event, event.state.committed)
 
         return ComponentShell(self, initial=initial, on_change=changed)
 
@@ -186,13 +189,13 @@ class MultiChoicePanel:
         values: tuple[str, ...] = (),
         submitted: Mapping[str, object] | None = None,
     ) -> MultiChoiceState:
-        if action == "apply":
+        if action == "apply" and self.commit is CommitPolicy.EXPLICIT:
             return state if self.errors(state) else MultiChoiceState(state.staged, state.staged, state.pages)
         if action == "modal" and submitted is not None:
             raw = submitted.get("selection", ())
             values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
             selected = tuple(key for key in self._choice_order if key in values)
-            return MultiChoiceState(selected, state.committed, state.pages)
+            return self._commit_valid(MultiChoiceState(selected, state.committed, state.pages))
         if action.startswith("page:"):
             _prefix, group_key, direction = action.split(":", 2)
             pages = self._pages(state)
@@ -216,11 +219,17 @@ class MultiChoicePanel:
         if replacement:
             rivals = self._rivals(group.key)
             staged = {key for key in staged if self._group_for.get(key) not in rivals}
-        return MultiChoiceState(self._ordered(staged), state.committed, state.pages)
+        return self._commit_valid(MultiChoiceState(self._ordered(staged), state.committed, state.pages))
+
+    def _commit_valid(self, state: MultiChoiceState) -> MultiChoiceState:
+        if self.commit is CommitPolicy.EXPLICIT or self.errors(state):
+            return state
+        return MultiChoiceState(state.staged, state.staged, state.pages)
 
     def _summary(self, state: MultiChoiceState) -> str:
-        labels = [display_text(self._choices[key].label) for key in state.staged if key in self._choices]
-        return f"{len(state.staged)} selected" + (f": {', '.join(labels)}" if labels else "")
+        selected = state.committed if self.commit is CommitPolicy.IMMEDIATE else state.staged
+        labels = [display_text(self._choices[key].label) for key in selected if key in self._choices]
+        return f"{len(selected)} selected" + (f": {', '.join(labels)}" if labels else "")
 
     def form_for(self, state: MultiChoiceState, action: str) -> FormSpec | None:
         """Resolve the routed modal action to its small-panel form schema."""
@@ -319,14 +328,18 @@ class MultiChoicePanel:
             paragraph(self._summary(state)),
             *(status(message, tone=Tone.DANGER) for message in errors),
             selection,
-            actions(
-                controls.action(
-                    "Apply",
-                    "apply",
-                    key=f"{self.key}.apply",
-                    available=not errors and state.staged != state.committed,
-                ),
-                key=f"{self.key}.commit",
-                display=ActionDisplay.INDIVIDUAL,
+            (
+                actions(
+                    controls.action(
+                        controls.chrome.apply,
+                        "apply",
+                        key=f"{self.key}.apply",
+                        available=not errors and state.staged != state.committed,
+                    ),
+                    key=f"{self.key}.commit",
+                    display=ActionDisplay.INDIVIDUAL,
+                )
+                if self.commit is CommitPolicy.EXPLICIT
+                else None
             ),
         )
