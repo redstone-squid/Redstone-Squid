@@ -43,6 +43,11 @@ class BuildInfoComponent(sl.Component):
             )
         return (self._node, edit)
 
+    def replace(self, build: Build, node: sl.LayoutNode) -> None:
+        """Replace the cached projection before an out-of-band redraw."""
+        self.build = build
+        self._node = node
+
     async def _edit(self, event: sl.PressEvent) -> None:
         interaction = sl.discord.native(event)
         from squid.bot.submission.ui.views import BuildEditComponent
@@ -53,10 +58,11 @@ class BuildInfoComponent(sl.Component):
             locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sl.discord.responder(event).mount)
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
         return create_mount(
             self,
             locale=self.locale,
             timeout=self._timeout,
             lock_to=self._lock_to,
+            reactor=reactor,
         )
