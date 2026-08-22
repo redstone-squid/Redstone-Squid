@@ -1,6 +1,7 @@
 """Mounted squid-layouts component for interactive search results."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from discord.utils import escape_markdown
@@ -10,8 +11,8 @@ from squid.bot.i18n import t
 from squid.bot.ui import DISCORD_GREEN, create_mount
 from squid.builds.domain import Build
 from squid.core.i18n import _
-from squid.core.pagination import PageAnchor
-from squid.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
+from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
+from squid_layouts.sources import window_fingerprint
 
 if TYPE_CHECKING:
     from squid.search.application import SearchService
@@ -21,15 +22,110 @@ BuildLoader = Callable[[int], Awaitable[Build | None]]
 BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode]]
 
 
+def _hit_identity(hit: SearchHit) -> str:
+    return f"{hit.resource_kind}:{hit.source_id}"
+
+
+class _SearchSource:
+    capabilities = sl.SourceCapabilities(
+        backward=True,
+        offsets=True,
+        jumpable=True,
+        count=sl.CountPrecision.EXACT,
+    )
+
+    def __init__(self, service: SearchService, request: SearchRequest, initial: SearchPage) -> None:
+        self._service = service
+        self.base_request = request
+        self._initial: SearchPage | None = initial
+        self._metadata: dict[tuple[int, str], SearchPage] = {}
+
+    def request_at(self, offset: int) -> SearchRequest:
+        return replace(self.base_request, offset=offset)
+
+    def _loaded(self, page: SearchPage, offset: int) -> sl.LoadedWindow[SearchHit]:
+        window = sl.Window(
+            sl.Position(_hit_identity(page.hits[0]) if page.hits else None, offset),
+            page.hits,
+            has_previous=page.prev is not None,
+            has_next=page.next is not None,
+            total=page.total,
+        )
+        fingerprint = window_fingerprint(page.hits, _hit_identity)
+        self._metadata[(offset, fingerprint)] = page
+        return sl.LoadedWindow(window, fingerprint)
+
+    def initial_loaded(self) -> sl.LoadedWindow[SearchHit]:
+        assert self._initial is not None
+        page = self._initial
+        self._initial = None
+        return self._loaded(page, self.base_request.offset)
+
+    async def fetch(self, position: sl.Position, extent: int) -> sl.Window[SearchHit]:
+        request = replace(self.base_request, offset=position.offset, page_size=extent)
+        page = await self._service.search(request)
+        return self._loaded(page, position.offset).window
+
+    def page_for(self, loaded: sl.LoadedWindow[SearchHit]) -> SearchPage:
+        page = self._metadata.get((loaded.position.offset, loaded.fingerprint))
+        if page is None:
+            message = "search source has no metadata for the loaded window"
+            raise sl.LayoutInvariantError(message)
+        return page
+
+
+class _SearchDetail(sl.Component):
+    _build_node: sl.LayoutNode | None = sl.state(None, persist=False, copy="ref")
+
+    def __init__(
+        self,
+        hit: SearchHit,
+        *,
+        locale: str | None,
+        load_build: BuildLoader | None,
+        render_build: BuildRenderer | None,
+    ) -> None:
+        self.hit = hit
+        self.locale = locale
+        self._load_build = load_build
+        self._render_build = render_build
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        detail = self._build_node or sl.section(
+            sl.truncate(sl.paragraph(_detail_text(self.hit, self.locale))),
+            heading=_detail_title(self.hit),
+            accent=DISCORD_GREEN,
+        )
+        build_id = _build_id(self.hit)
+        return (
+            detail,
+            *(
+                (
+                    sl.actions(
+                        sl.action(t(self.locale, _("View build")), self._open_build, key="open-build"),
+                        key="build-actions",
+                    ),
+                )
+                if build_id is not None
+                else ()
+            ),
+        )
+
+    async def _open_build(self, event: sl.PressEvent) -> None:
+        build_id = _build_id(self.hit)
+        if build_id is None or self._load_build is None or self._render_build is None:
+            await event.notice(t(self.locale, _("That build is no longer available.")))
+            return
+        build = await self._load_build(build_id)
+        if build is None:
+            await event.notice(t(self.locale, _("That build is no longer available.")))
+            return
+        self._build_node = await self._render_build(build)
+
+
 class SearchResultsView(sl.Component):
-    """A cursor-driven search surface rendered and owned by a squid-layouts mount.
+    """Compatibility wrapper around the shared resource-backed Browser pattern."""
 
-    The historical class name is retained because commands and extensions import it, but the
-    object is now a portable component rather than a discord.py LayoutView; the command path
-    drives it through :meth:`mount`.
-    """
-
-    detail_index: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
 
     def __init__(
@@ -43,175 +139,106 @@ class SearchResultsView(sl.Component):
         load_build: BuildLoader | None = None,
         render_build: BuildRenderer | None = None,
     ) -> None:
-        self._service = service
-        self._request = request
-        self._page = page
+        self._source = _SearchSource(service, request, page)
         self._author_id = author_id
         self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
-        self._build_node: sl.LayoutNode | None = None
+        self._browser = sl.Browser(
+            self._source,
+            key="search",
+            identity=_hit_identity,
+            label=lambda hit: hit.title,
+            summary=lambda hit: _result_description(hit, self.locale),
+            detail=self._detail,
+            overview=self._overview,
+            page_size=request.page_size,
+            title=t(self.locale, _("Search results")),
+            empty=t(self.locale, _("No results match this query.")),
+            loading=t(self.locale, _("Loading search results…")),
+            load_failed=t(self.locale, _("Could not load search results.")),
+            retry=t(self.locale, _("Retry")),
+        )
+        self._browser.window.replace(self._source.initial_loaded())
 
     @property
     def request(self) -> SearchRequest:
         """Return the request currently displayed by the component."""
-        return self._request
+        return self._source.request_at(self._loaded().position.offset)
 
     @property
     def page(self) -> SearchPage:
         """Return the current result page."""
-        return self._page
+        return self._source.page_for(self._loaded())
 
     @property
     def hits(self) -> tuple[SearchHit, ...]:
         """Return the results currently displayed."""
-        return self._page.hits
+        return self._loaded().window.items
 
     @property
     def can_go_back(self) -> bool:
         """Return whether an earlier page exists."""
-        return self._page.prev is not None
+        return self._loaded().window.has_previous
 
     @property
     def can_go_forward(self) -> bool:
         """Return whether a later page exists."""
-        return self._page.next is not None
+        return self._loaded().window.has_next
 
-    def render(self) -> Sequence[sl.LayoutNode]:
-        """Describe the current search page or selected result."""
+    @property
+    def detail_index(self) -> int | None:
+        """Return the opened page index for compatibility with the historical view."""
+        if self._browser.opened is None:
+            return None
+        identity = _hit_identity(self._browser.opened)
+        return next((index for index, hit in enumerate(self.hits) if _hit_identity(hit) == identity), None)
+
+    @detail_index.setter
+    def detail_index(self, index: int | None) -> None:
+        if index is None:
+            self._browser.opened = None
+            self._browser._detail_value = None
+            return
+        hit = self.hits[index]
+        self._browser.opened = hit
+        self._browser._detail_value = self._detail(hit)
+
+    def _loaded(self) -> sl.LoadedWindow[SearchHit]:
+        state = self._browser.window.state
+        if isinstance(state, sl.Ready):
+            return state.value
+        if isinstance(state, sl.Pending | sl.Failed) and state.previous is not None:
+            return state.previous.value
+        message = "search browser has no visible window"
+        raise sl.LayoutInvariantError(message)
+
+    def _detail(self, hit: SearchHit) -> _SearchDetail:
+        return _SearchDetail(
+            hit,
+            locale=self.locale,
+            load_build=self._load_build,
+            render_build=self._render_build,
+        )
+
+    def _overview(self, loaded: sl.LoadedWindow[SearchHit]) -> sl.LayoutNode | tuple[()]:
+        warnings = self._source.page_for(loaded).warnings
+        if not warnings:
+            return ()
+        return sl.note("\n".join(f"⚠ {escape_markdown(item)}" for item in warnings))
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            return [
+            return (
                 sl.section(
                     sl.truncate(sl.paragraph(t(self.locale, _("This search is closed.")))),
                     heading=t(self.locale, _("Search closed")),
-                )
-            ]
-        if self.detail_index is not None:
-            return self._render_detail(self.hits[self.detail_index])
-        return self._render_results()
-
-    def _render_results(self) -> Sequence[sl.LayoutNode]:
-        lines = [_result_line(index, hit, self.locale) for index, hit in enumerate(self.hits, start=1)]
-        if not lines:
-            lines.append(t(self.locale, _("No results match this query.")))
-        page_count = max(1, -(-self._page.total // self._request.page_size))
-        body = t(
-            self.locale,
-            _("{lines}\n-# Page {page} of {pages}"),
-            lines=" ".join(lines),
-            page=self._request.offset // self._request.page_size + 1,
-            pages=page_count,
-        )
-        if self._page.warnings:
-            body += "\n" + "\n".join(f"-# ⚠ {escape_markdown(item)}" for item in self._page.warnings)
-        nodes: list[sl.LayoutNode] = [
-            sl.section(
-                sl.truncate(sl.paragraph(body)), heading=t(self.locale, _("Search results")), accent=DISCORD_GREEN
+                ),
             )
-        ]
-        if self.hits:
-            nodes.append(
-                sl.primitives.SelectMenu(
-                    tuple(
-                        sl.primitives.Option(
-                            hit.title[:100],
-                            str(index),
-                            _result_description(hit, self.locale)[:100],
-                        )
-                        for index, hit in enumerate(self.hits)
-                    ),
-                    self._select_result,
-                    "select-result",
-                    placeholder=t(self.locale, _("Choose a result to inspect")),
-                )
-            )
-        nodes.append(sl.primitives.Row(self._navigation_buttons()))
-        return nodes
-
-    def _render_detail(self, hit: SearchHit) -> Sequence[sl.LayoutNode]:
-        detail: sl.LayoutNode = self._build_node or sl.section(
-            sl.truncate(sl.paragraph(_detail_text(hit, self.locale))), heading=_detail_title(hit), accent=DISCORD_GREEN
-        )
-        buttons: list[sl.primitives.Button] = []
-        if _build_id(hit) is not None:
-            buttons.append(
-                sl.primitives.Button(
-                    t(self.locale, _("View build")),
-                    self._open_build,
-                    "open-build",
-                    style=sl.primitives.ActionStyle.PRIMARY,
-                )
-            )
-        buttons.extend(
-            (
-                sl.primitives.Button(t(self.locale, _("Back")), self._back, "back"),
-                sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),
-            )
-        )
-        return [detail, sl.primitives.Row(tuple(buttons))]
-
-    def _navigation_buttons(self) -> tuple[sl.primitives.Button, ...]:
         return (
-            sl.primitives.Button(
-                t(self.locale, _("Previous")),
-                self._previous,
-                "previous",
-                disabled=not self.can_go_back,
-            ),
-            sl.primitives.Button(
-                t(self.locale, _("Next")),
-                self._next,
-                "next",
-                disabled=not self.can_go_forward,
-            ),
-            sl.primitives.Button(
-                t(self.locale, _("Close")),
-                self._close,
-                "close",
-                style=sl.primitives.ActionStyle.SECONDARY,
-            ),
+            self.embed(self._browser, key="results"),
+            sl.primitives.Row((sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),)),
         )
-
-    async def _select_result(self, event: sl.SelectionEvent) -> None:
-        self.detail_index = int(event.values[0])
-        self._build_node = None
-
-    async def _open_build(self, event: sl.PressEvent) -> None:
-        hit = self.hits[self.detail_index or 0]
-        build_id = _build_id(hit)
-        if build_id is None or self._load_build is None or self._render_build is None:
-            await event.notice(t(self.locale, _("That build is no longer available.")))
-            return
-        build = await self._load_build(build_id)
-        if build is None:
-            await event.notice(t(self.locale, _("That build is no longer available.")))
-            return
-        self._build_node = await self._render_build(build)
-
-    async def _previous(self, event: sl.PressEvent) -> None:
-        await self._go_to(self._page.prev)
-
-    async def _next(self, event: sl.PressEvent) -> None:
-        await self._go_to(self._page.next)
-
-    async def _go_to(self, anchor: PageAnchor | None) -> None:
-        if anchor is None or anchor.offset is None:
-            return
-        self._request = self._request.__class__(
-            self._request.query,
-            scope=self._request.scope,
-            mode=self._request.mode,
-            sort=self._request.sort,
-            offset=anchor.offset,
-            page_size=self._request.page_size,
-        )
-        self._page = await self._service.search(self._request)
-        self.detail_index = None
-        self._build_node = None
-
-    async def _back(self, event: sl.PressEvent) -> None:
-        self.detail_index = None
-        self._build_node = None
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
@@ -255,17 +282,6 @@ def _result_description(hit: SearchHit, locale: str | None) -> str:
     if isinstance(hit, BuildSearchHit):
         return f"Build · {hit.status}"
     return _metadata_label(hit.metadata_kind, locale)
-
-
-def _result_line(index: int, hit: SearchHit, locale: str | None) -> str:
-    subtitle = ""
-    if isinstance(hit, RecordSearchHit):
-        subtitle = f" — {hit.build_title}"
-    elif isinstance(hit, BuildSearchHit) and hit.description:
-        subtitle = f" — {hit.description}"
-    elif isinstance(hit, MetadataSearchHit):
-        subtitle = f" — {_metadata_label(hit.metadata_kind, locale)}"
-    return f"\n**{index}. {escape_markdown(hit.title)}**{escape_markdown(subtitle)}"
 
 
 def _detail_text(hit: SearchHit, locale: str | None) -> str:
