@@ -102,6 +102,41 @@ input action should present. The route builder owns compact state encoding and r
 Routed patterns accept frontend-neutral content only. A mounted shell may embed child `Component`
 instances, but a process-independent route cannot carry an in-memory component identity.
 
+### Durable routed controls
+
+Controls on long-lived posts use a stable route tree rather than an in-memory mount. The namespace
+is an ordinary root group; every `define` returns its final, context-free identity immediately:
+
+```python
+routes = sl.discord.RouteGroup[Bot]("r")
+polls = routes.group("polls")
+close_poll = polls.define("close", aliases=("poll:close",))
+
+router = sl.discord.Router(namespace=routes, on_gone=control_gone)
+
+@polls.route(close_poll)
+async def close(interaction: discord.Interaction[Bot]) -> None:
+    ...
+```
+
+Reusable policy is a `Middleware[BotT]` instance attached before `Router.register(client)`:
+
+```python
+class TraceRoutes(sl.discord.Middleware[Bot]):
+    async def dispatch(self, request, call_next) -> None:
+        with route_span(request):
+            await call_next()
+
+router.add_middleware(TraceRoutes())
+polls.add_middleware(PollAuthorization())
+```
+
+Middleware forms one onion in first-attached, outermost order: router middleware, inherited
+root-to-leaf group middleware, then the handler, unwinding in reverse. Omitting `call_next()`
+short-circuits; calling it twice or after `dispatch` returns is an error. The router keeps the
+initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
+short-circuit cannot produce Discord's generic interaction failure.
+
 ### Async cursor sources
 
 A ranking too large to materialize uses the distinct `SourceRankedList` component. A source declares

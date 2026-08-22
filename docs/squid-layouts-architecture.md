@@ -353,6 +353,37 @@ claims live records and returns each restored mount beside its locator; the host
 frontend and periodically calls `renew_claims()` under its own task supervisor. This prevents
 two workers from dispatching the same visible controls after a restart.
 
+## Durable route graph and dispatch onion
+
+`RouteGroup` is both the namespace root and the feature-composition unit; there is no special
+namespace subtype. A root such as `RouteGroup("r")` reserves the gone-response prefix when passed
+to `Router`, while its children compose stable final identities immediately. Group structure,
+identities, and middleware freeze when the router registers; an existing identity may replace its
+handler afterward so a discord.py extension reload remains safe.
+
+Dispatch builds one middleware onion in deterministic order:
+
+```text
+acknowledgement watchdog and unhandled-error boundary
+└─ router middleware (first attached outermost)
+   ├─ matched: root group middleware
+   │  └─ descendant group middleware, root to leaf
+   │     └─ routed handler
+   └─ unmatched reserved id: gone hook
+```
+
+Only router middleware applies to an unmatched id admitted by the reserved namespace. A matched
+route additionally inherits every group attachment in its lineage. Each layer may perform work
+before and after its one `call_next`, catch an inner failure, or short-circuit. The immutable
+`RouteRequest` exposes the component kind, canonical `Route`, read-only converted parameters,
+selected values, matched group, and whether an alias matched. It deliberately has no mutable
+dependency bag.
+
+The watchdog acknowledges an unused interaction response before Discord's three-second deadline
+and immediately after an operation returns without responding. It does not claim that later
+followups completed, and it never invents private thinking or modal semantics. Error presentation
+is the single framework boundary outside the whole user onion.
+
 ## Library binding: discord.py, not Discord alone
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
@@ -377,7 +408,7 @@ CLAUDE.md mandates for Nucleation, applied to discord.py:
 
 | Behaviour relied on | Where | Pin |
 |---|---|---|
-| ViewStore schedules one call per matching dynamic-item class | Router's one-class design, exact-overlap rejection, register idempotence (plan 16) | overlap tests in `test_routing.py`; idempotence pin lands with 16's remaining work |
+| ViewStore schedules one call per matching dynamic-item class | Router's one-class design, exact-overlap rejection, register idempotence (plan 16) | overlap and registration pins in `test_routing.py` |
 | `is_dispatchable() == False` keeps mounted routed controls out of ViewStore | single dispatch path for mounted controls | `test_routing.py` mounted double-dispatch assertions |
 | `InteractionMessage.edit`/`WebhookMessage.edit` route through interaction endpoints; application followups force wait | edit-authority semantics; plan 23's defect and fix | real-library pins in `test_mount.py` |
 | current modal controls serialize inside `Label` through `Modal.to_dict` | plan 18's Discord field ceiling and the host clamp gate | inventory pin in `test_form_discord.py`; host modal tests |
