@@ -62,7 +62,7 @@ class TestGate:
         check = AsyncMock(return_value=True)
         ctx = make_context()
 
-        assert await DevTools(check=check).cog_check(ctx)
+        assert await DevTools(check).cog_check(ctx)
         check.assert_awaited_once_with(ctx)
 
 
