@@ -95,6 +95,9 @@ path end to end. Then `PollModal` (create/edit prefill), `SubmissionModal`,
   respects EXCLUSIVE; extension field without fallback errors on the HTML renderer.
 - Host: `CustomDurationModal` migration lands with the framework change; the poll
   wizard's unit module covers the funnel path.
+- A real discord.py serialization pin covers `Label`, string/user/role/mentionable/channel
+  selects, `FileUpload`, `RadioGroup`, and `CheckboxGroup` so a library upgrade cannot
+  silently lower the verified field ceiling.
 - `just typecheck`.
 
 ## Implemented API
@@ -146,7 +149,8 @@ an ephemeral error panel and a reader-locked Try again button whose modal is pre
 
 ## Status
 
-Implemented 2026-08-21 in `426f8a01` (framework) and `92d21876` (first host migration).
+Implemented 2026-08-21 in `426f8a01` (framework), `92d21876` (first host migration), and
+`d29da18a` (discord.py 2.7.1 modal-inventory pin).
 
 `PollConfirmationComponent` now uses a portable `DurationField`; its raw-interaction
 `set_duration`/manual `mount.flush` path is deleted. The legacy `PollConfirmation` still owns
