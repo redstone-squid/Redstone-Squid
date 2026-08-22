@@ -573,7 +573,12 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
                     Gallery(tuple(urls[start : start + limits.gallery_items]))
                     for start in range(0, len(urls), limits.gallery_items)
                 ]
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
+            case (
+                Panel(children=children)
+                | Budget(children=children)
+                | Break(children=children)
+                | Card(children=children)
+            ):
                 return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
             case Variants(variants=variants):
                 # Preferred cost, so every ladder is priced on the rung it opens at.
