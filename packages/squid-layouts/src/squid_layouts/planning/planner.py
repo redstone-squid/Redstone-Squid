@@ -2,16 +2,14 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC
 from heapq import heappop, heappush
 from itertools import count
+from typing import cast
 
-from squid_layouts.actions import ActionBinding
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.forms import FormBinding
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.adaptation import (
     FallbackAxis,
@@ -23,6 +21,7 @@ from squid_layouts.planning.adaptation import (
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
+from squid_layouts.planning.dialect import SceneBindings, TargetDialect
 from squid_layouts.planning.frontier import (
     VariantPath,
     canonical_positions,
@@ -37,12 +36,6 @@ from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.measure import (
     MeasuredLayout,
-    Realized,
-    RPanel,
-    RSection,
-    RText,
-    RTime,
-    RZonedTime,
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
@@ -58,31 +51,18 @@ from squid_layouts.planning.search import (
     ranked_candidates,
 )
 from squid_layouts.planning.target import ResourceCost, TargetProfile
-from squid_layouts.primitives.constraints import Never, Paginate
+from squid_layouts.planning.v2 import V2_DIALECT
 from squid_layouts.primitives.nodes import (
-    ActionGroup,
-    Boundary,
     Break,
     Budget,
     Button,
     Extension,
-    File,
-    Footer,
-    FormButton,
-    Gallery,
-    LinkButton,
-    MediaCollection,
     Node,
     Panel,
     RawItem,
-    RoutedButton,
-    RoutedSelect,
     Row,
     Section,
     SelectMenu,
-    Sep,
-    Thumbnail,
-    Variant,
     Variants,
 )
 from squid_layouts.runtime.presentation import PresentationSession
@@ -94,31 +74,20 @@ from squid_layouts.scene.model import (
     PlanResult,
     PlanSeverity,
     SceneAsset,
-    SceneButton,
     SceneDocument,
-    SceneExtension,
-    SceneFile,
-    SceneGallery,
-    SceneGalleryItem,
-    SceneLink,
-    SceneNode,
-    SceneOption,
-    ScenePanel,
-    SceneRoutedButton,
-    SceneRoutedSelect,
-    SceneRow,
-    SceneSection,
-    SceneSelect,
-    SceneSeparator,
-    SceneText,
-    SceneThumbnail,
-    SceneTime,
-    SceneZonedTime,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
+
+
+def _dialect_for(target: TargetProfile) -> TargetDialect:
+    """A target's shape, defaulting to Components V2 for a profile that names none."""
+    dialect = target.dialect
+    if dialect is None:
+        return V2_DIALECT
+    return cast(TargetDialect, dialect)
 
 
 def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
@@ -130,280 +99,6 @@ def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
             raise LayoutInvariantError(message)
         merged.setdefault(asset.key, asset)
     return tuple(merged.values())
-
-
-@dataclass(slots=True)
-class _Converter:
-    bindings: dict[str, ActionBinding] = field(default_factory=dict)
-    form_bindings: dict[str, FormBinding] = field(default_factory=dict)
-    resources: dict[str, object] = field(default_factory=dict)
-
-    def action(self, node: Button | SelectMenu) -> str:
-        key = node.key
-        if isinstance(node, FormButton) and node.form is not None:
-            # Recorded beside the binding, not in place of it: the button presents the form
-            # and the binding submits it, and both answer to the same key.
-            self.form_bindings[key] = node.form
-        if key in self.bindings:
-            message = f"duplicate action key {key!r}"
-            raise LayoutInvariantError(message)
-        handler = node.on_click if isinstance(node, Button) else node.on_select
-        routes = node.routes if isinstance(node, SelectMenu) else {}
-        # Only buttons carry admission and busy feedback; a select's guards, if any, live on
-        # the route bindings its grouped actions were lowered into.
-        guard = node.guard if isinstance(node, Button) else None
-        feedback = node.feedback if isinstance(node, Button) else None
-        for route_key, binding in routes.items():
-            if route_key in self.bindings:
-                message = f"duplicate action key {route_key!r}"
-                raise LayoutInvariantError(message)
-            self.bindings[route_key] = binding
-        self.bindings[key] = ActionBinding(
-            key=key, handler=handler, policy=node.policy, routes=routes, guard=guard, feedback=feedback
-        )
-        return key
-
-    def accessory(self, node: Thumbnail | LinkButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
-        match node:
-            case Thumbnail(url=url, description=description):
-                return SceneThumbnail(url, description)
-            case LinkButton(label=label, url=url):
-                return SceneLink(label, url)
-            case RoutedButton(label=label, route_id=route_id):
-                # No binding: the router owns dispatch, so the scene is complete without one.
-                return SceneRoutedButton(
-                    label=label,
-                    route_id=route_id,
-                    style=node.style,
-                    emoji=node.emoji,
-                    disabled=node.disabled,
-                )
-            case Button():
-                return SceneButton(
-                    label=node.label,
-                    action=self.action(node),
-                    style=node.style,
-                    emoji=node.emoji,
-                    disabled=node.disabled,
-                    policy=node.policy,
-                )
-            case RawItem(factory=factory, kind=kind, version=version, payload=payload):
-                resource = f"native:{path}"
-                self.resources[resource] = factory()
-                return SceneExtension(kind, version, {**payload, "resource": resource})
-
-    def node(self, node: Realized, path: str) -> SceneNode:
-        match node:
-            case RText(content=content):
-                return SceneText(content)
-            case RTime(instant=instant, style=style, prefix=prefix):
-                return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
-            case RZonedTime(value=value, prefix=prefix):
-                return SceneZonedTime(value.instant.isoformat(), value.timezone, prefix)
-            case File(asset_key=asset_key, name=name, media_type=media_type):
-                return SceneFile(asset_key, name, media_type)
-            case RPanel(children=children, accent=accent):
-                return ScenePanel(
-                    tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent
-                )
-            case RSection(texts=texts, accessory=accessory):
-                return SceneSection(
-                    tuple(SceneText(text.content) for text in texts),
-                    self.accessory(accessory, f"{path}.accessory"),
-                )
-            case Sep(large=large, visible=visible):
-                return SceneSeparator(large, visible)
-            case Row(items=items):
-                converted = tuple(self.accessory(item, f"{path}.{index}") for index, item in enumerate(items))
-                if not all(
-                    isinstance(item, SceneLink | SceneButton | SceneRoutedButton | SceneExtension) for item in converted
-                ):
-                    message = f"row {path} contains an unsupported item"
-                    raise LayoutInvariantError(message)
-                return SceneRow(converted)
-            case SelectMenu(options=options):
-                return SceneSelect(
-                    options=tuple(
-                        SceneOption(option.label, option.value, option.description, option.default)
-                        for option in options
-                    ),
-                    action=self.action(node),
-                    placeholder=node.placeholder,
-                    min_values=node.min_values,
-                    max_values=node.max_values,
-                    disabled=node.disabled,
-                    policy=node.policy,
-                )
-            case RoutedSelect(options=options):
-                return SceneRoutedSelect(
-                    options=tuple(
-                        SceneOption(option.label, option.value, option.description, option.default)
-                        for option in options
-                    ),
-                    route_id=node.route_id,
-                    placeholder=node.placeholder,
-                    min_values=node.min_values,
-                    max_values=node.max_values,
-                    disabled=node.disabled,
-                )
-            case Thumbnail(url=url, description=description):
-                return SceneThumbnail(url, description)
-            case Gallery(urls=urls):
-                return SceneGallery(tuple(SceneGalleryItem(url) for url in urls))
-            case RawItem():
-                return self.accessory(node, path)
-            case LinkButton() | RoutedButton():
-                return self.accessory(node, path)
-
-    def children(self, children: Sequence[Realized]) -> tuple[SceneNode, ...]:
-        return tuple(self.node(child, str(index)) for index, child in enumerate(children))
-
-
-def _lower_children(
-    nodes: Sequence[Node],
-    target: TargetProfile,
-    limits: V2Limits,
-) -> tuple[Node, ...]:
-    lowered: list[Node] = []
-    for node in nodes:
-        match node:
-            case ActionGroup(items=items):
-                lowered.extend(
-                    Row(tuple(items[start : start + limits.row_buttons]))
-                    for start in range(0, len(items), limits.row_buttons)
-                )
-            case MediaCollection(urls=urls):
-                lowered.extend(
-                    Gallery(tuple(urls[start : start + limits.gallery_items]))
-                    for start in range(0, len(urls), limits.gallery_items)
-                )
-            case Panel(children=children, accent=accent):
-                lowered.append(Panel(_lower_children(children, target, limits), accent))
-            case Budget(children=children) | Break(children=children):
-                lowered.append(replace(node, children=_lower_children(children, target, limits)))
-            case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
-                adapter = target.extensions.get(kind)
-                if adapter is None:
-                    lowered.extend(_lower_children((fallback,), target, limits))
-                    continue
-                prepared = adapter.prepare(payload)
-                component_cost = prepared.cost.get("components")
-                text_cost = prepared.cost.get("display_text")
-                if component_cost < 1 or text_cost < 0:
-                    message = f"extension adapter {kind!r} returned an invalid resource cost"
-                    raise LayoutInvariantError(message)
-                resource = prepared.resource
-                lowered.append(
-                    RawItem(
-                        factory=lambda resource=resource: resource,
-                        text_cost=text_cost,
-                        component_cost=component_cost,
-                        kind=kind,
-                        version=version,
-                        payload=prepared.scene_payload,
-                    )
-                )
-            case Variants(variants=variants, priority=priority):
-                supported = [variant for variant in variants if variant.requires <= target.capabilities]
-                if not supported:
-                    message = "Variants has no variant supported by the selected target"
-                    raise LayoutInvariantError(message)
-                # `requires` is cleared rather than carried: capability selection happens here
-                # and exactly once, leaving the search a pure budget ladder whose rung
-                # numbering is stable for the rest of the plan.
-                lowered.append(
-                    Variants(
-                        tuple(
-                            Variant(_lower_children(variant.nodes, target, limits), fidelity=variant.fidelity)
-                            for variant in supported
-                        ),
-                        priority,
-                    )
-                )
-            case _:
-                lowered.append(node)
-    return tuple(lowered)
-
-
-def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
-    pager_keys: set[str] = set()
-
-    def fail(path: str, detail: str) -> None:
-        message = f"{path}: {detail}"
-        raise LayoutInvariantError(message)
-
-    def walk(node: Node, path: str) -> None:
-        if isinstance(node, Boundary):
-            fail(path, "Boundary must be expanded by a component mount before planning")
-        overflow = getattr(node, "overflow", None)
-        if isinstance(overflow, Paginate):
-            if overflow.key is None:
-                fail(path, "Paginate requires an explicit key")
-            if overflow.key in pager_keys:
-                fail(path, f"duplicate pager key {overflow.key!r}")
-            pager_keys.add(overflow.key)
-        match node:
-            case Button(label=label):
-                if len(label) > limits.button_label:
-                    fail(path, f"button label exceeds {limits.button_label}")
-            case Row(items=items):
-                if len(items) > limits.row_buttons:
-                    fail(path, f"row has {len(items)} controls; maximum is {limits.row_buttons}")
-                for index, item in enumerate(items):
-                    if isinstance(item, Button):
-                        walk(item, f"{path}.{index}")
-            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
-                RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
-            ):
-                if not options:
-                    fail(path, "select needs at least one option")
-                if len(options) > limits.select_options:
-                    remedy = (
-                        "split the routed picker into separate routes"
-                        if isinstance(node, RoutedSelect)
-                        else "use an option-paging semantic node"
-                    )
-                    fail(path, f"select has {len(options)} options; {remedy}")
-                if placeholder is not None and len(placeholder) > limits.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
-                    fail(path, "select value bounds are invalid")
-                for index, option in enumerate(options):
-                    if len(option.label) > limits.option_label:
-                        fail(f"{path}.option.{index}", f"label exceeds {limits.option_label}")
-                    if len(option.value) > limits.option_value:
-                        fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
-                    if option.description is not None and len(option.description) > limits.option_description:
-                        fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
-            case Gallery(urls=urls):
-                if len(urls) > limits.gallery_items:
-                    fail(path, f"gallery has {len(urls)} items; use MediaCollection")
-            case Section(texts=texts):
-                if len(texts) > limits.section_texts:
-                    fail(path, f"section has {len(texts)} text slots; maximum is {limits.section_texts}")
-                for index, text in enumerate(texts):
-                    if isinstance(text.overflow, Paginate):
-                        fail(
-                            f"{path}.text.{index}",
-                            "Paginate cannot be nested in a Section; place it beside the Section",
-                        )
-                    walk(text, f"{path}.text.{index}")
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
-                for index, child in enumerate(children):
-                    walk(child, f"{path}.{index}")
-            case Variants(variants=variants):
-                # Every rung is checked, not just the one the search will open on, so a
-                # document is rejected for a bad rung it might never reach. That also means
-                # two rungs cannot share a Paginate key — as under the previous Fold, whose
-                # primary and fallback were both walked.
-                for index, variant in enumerate(variants):
-                    for child_index, child in enumerate(variant.nodes):
-                        walk(child, f"{path}.variant.{index}.{child_index}")
-            case _:
-                return
-
-    for index, node in enumerate(nodes):
-        walk(node, f"$.{index}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +167,7 @@ class _Search:
 
     document: Document
     target: TargetProfile
+    dialect: TargetDialect
     limits: V2Limits
     chrome: Chrome
     localization: Localization
@@ -512,8 +208,8 @@ class _Search:
             strategies=strategies,
             fallbacks=fallbacks,
         )
-        lowered = _lower_children(semantic.nodes, self.target, self.limits)
-        _validate(lowered, self.limits)
+        lowered = self.dialect.normalize(semantic.nodes, self.target, self.limits)
+        self.dialect.validate(lowered, self.limits)
         variants = canonical_positions(lowered, dict(state.variants))
         steps = [*_fallback_notes(decisions.fallbacks, fallbacks), *variant_notes(lowered, variants)]
         layout = measure(
@@ -787,6 +483,7 @@ def plan(
     document = as_document(rendered)
     # Every axis is withheld the same way: by planning against a smaller target.
     target = target.reserve(reservation)
+    dialect = _dialect_for(target)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
@@ -819,16 +516,16 @@ def plan(
             strategies=dict(cached.strategies),
             fallbacks=dict(cached.fallbacks),
         )
-        lowered = _lower_children(semantic.nodes, target, limits)
+        lowered = dialect.normalize(semantic.nodes, target, limits)
         assets = _merge_assets(document.assets, semantic.assets)
-        _validate(lowered, limits)
+        dialect.validate(lowered, limits)
         selected_nodes = resolve_variants(lowered, dict(cached.variant_positions))
-        converter = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
+        collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
         return PlanResult(
             scene=cached.scene,
-            bindings=converter.bindings,
-            form_bindings=converter.form_bindings,
+            bindings=collected.bindings,
+            form_bindings=collected.form_bindings,
             report=cached.report,
             resources=resources,
             metrics=PlanMetrics(
@@ -843,6 +540,7 @@ def plan(
         _Search(
             document=document,
             target=target,
+            dialect=dialect,
             limits=limits,
             chrome=chrome,
             localization=localization,
@@ -882,11 +580,11 @@ def plan(
             )
             message = f"{blown}; {remedy}"
             raise UnsolvableLayoutError(message)
-        measured, root_pages = _root_paginate(
+        measured, root_pages = dialect.paginate(
             lowered,
             key=document.key,
             capacities=capacities,
-            target_limits=limits,
+            limits=limits,
             chrome=chrome,
             nav=nav,
             broker=broker,
@@ -907,12 +605,12 @@ def plan(
     if hard_failures:
         message = "; ".join(note.message for note in hard_failures)
         raise UnsolvableLayoutError(message)
-    converter = _Converter()
+    bindings = SceneBindings()
     scene = SceneDocument(
         protocol=SceneCodec.protocol,
         target=target.id,
         target_version=target.version,
-        children=converter.children(measured.children),
+        children=dialect.body(measured.children, bindings),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )
@@ -936,13 +634,13 @@ def plan(
         logical_fingerprint=stable_fingerprint((document,)),
         scene_fingerprint=fingerprint,
     )
-    resources = dict(converter.resources)
+    resources = dict(bindings.resources)
     resources.update({f"asset:{asset.key}": asset for asset in assets})
     updates = semantic.updates + broker.updates
     result = PlanResult(
         scene=scene,
-        bindings=converter.bindings,
-        form_bindings=converter.form_bindings,
+        bindings=bindings.bindings,
+        form_bindings=bindings.form_bindings,
         report=report,
         resources=resources,
         metrics=PlanMetrics(
@@ -989,63 +687,6 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
         broker.record(request, grant.position)
         positions[pager.key] = grant.position
     measured.reposition(positions)
-
-
-def _root_paginate(
-    nodes: Sequence[Node],
-    *,
-    key: str,
-    capacities: Mapping[str, int],
-    target_limits: V2Limits,
-    chrome: Chrome,
-    nav: PlannedNav,
-    broker: CursorCoordinator,
-) -> tuple[MeasuredLayout, int]:
-    maximum_pages = max(1, len(nodes))
-
-    def measure_page(children: Sequence[Node], index: int, pages: int) -> MeasuredLayout:
-        chrome_nodes: tuple[Node, ...] = (
-            Footer(chrome.page_footer(index + 1, pages), overflow=Never()),
-            *nav(materialized_navigation_state(key, Position(offset=index), pages, chrome)),
-        )
-        return measure(
-            (*children, *chrome_nodes),
-            limits=target_limits,
-            chrome=chrome,
-            strict=False,
-            nav=nav,
-        )
-
-    # Greedy: grow a page until it stops fitting, then cut. Every probe measures a
-    # different prefix, so there is nothing to memoize — the cost is one measurement per
-    # node, paid only by a document that already blew the component budget. These probes
-    # are packing, not optimization, so they stay out of the search's evaluation count.
-    pages: list[tuple[Node, ...]] = []
-    current: tuple[Node, ...] = ()
-    for node in nodes:
-        candidate = (*current, node)
-        probe = measure_page(candidate, 0, maximum_pages)
-        if current and (not probe.fits(capacities) or probe.overflowed):
-            pages.append(current)
-            current = (node,)
-            probe = measure_page(current, 0, maximum_pages)
-        else:
-            current = candidate
-        if not probe.fits(capacities):
-            blown = ", ".join(f"{axis} {spent}/{capacity}" for axis, spent, capacity in probe.cost.over(capacities))
-            message = (
-                f"root page {len(pages) + 1} cannot fit node {type(node).__name__} ({blown}); "
-                "give that node a structural fallback or move it to another screen"
-            )
-            raise UnsolvableLayoutError(message)
-    if current:
-        pages.append(current)
-
-    request = MaterializedCursorRequest(key=key, extent=len(pages), fingerprint=stable_fingerprint(nodes))
-    grant = broker.grant(request)
-    broker.record(request, grant.position)
-    index = grant.position.offset
-    return measure_page(pages[index], index, grant.extent), grant.extent
 
 
 def _plan_cache_key(
@@ -1109,20 +750,20 @@ def _cacheable(nodes: Sequence[Node]) -> bool:
     return all(check(node) for node in nodes)
 
 
-def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
-    converter = _Converter()
+def _collect_bindings(nodes: Sequence[Node]) -> SceneBindings:
+    collected = SceneBindings()
 
     def collect(node: Node) -> None:
         match node:
             case Button() | SelectMenu():
-                converter.action(node)
+                collected.action(node)
             case Row(items=items):
                 for item in items:
                     if isinstance(item, Button):
-                        converter.action(item)
+                        collected.action(item)
             case Section(accessory=accessory):
                 if isinstance(accessory, Button):
-                    converter.action(accessory)
+                    collected.action(accessory)
             case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for child in children:
                     collect(child)
@@ -1131,7 +772,7 @@ def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
 
     for node in nodes:
         collect(node)
-    return converter
+    return collected
 
 
 def _collect_cached_bindings(
@@ -1139,14 +780,14 @@ def _collect_cached_bindings(
     scene: SceneDocument,
     nav: PlannedNav | None,
     chrome: Chrome,
-) -> _Converter:
-    converter = _collect_bindings(nodes)
+) -> SceneBindings:
+    collected = _collect_bindings(nodes)
     if nav is None:
-        return converter
+        return collected
     for pager in scene.pagers:
         generated = _collect_bindings(
             nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
         )
         for key, binding in generated.bindings.items():
-            converter.bindings.setdefault(key, binding)
-    return converter
+            collected.bindings.setdefault(key, binding)
+    return collected
