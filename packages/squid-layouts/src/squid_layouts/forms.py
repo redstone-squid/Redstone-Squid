@@ -324,6 +324,50 @@ class DateTimeField(FormField[DateTimeValue]):
 
 
 @dataclass(frozen=True, slots=True)
+class ScaleField(FormField[int]):
+    """One point on an inclusive ordinal scale, such as a 1-5 rating.
+
+    Portable by construction: a target with a radio-group shape draws the whole span, and one
+    without draws a number the reader types. `labels` names individual points — the endpoints
+    are the usual case — and unnamed points show their number.
+    """
+
+    minimum: int = 1
+    maximum: int = 5
+    labels: Mapping[int, TextLike] | None = None
+
+    def __post_init__(self) -> None:
+        if self.maximum <= self.minimum:
+            message = f"ScaleField {self.key!r} needs maximum greater than minimum"
+            raise ValueError(message)
+
+    @property
+    def points(self) -> tuple[int, ...]:
+        """Every value on the scale, low to high."""
+        return tuple(range(self.minimum, self.maximum + 1))
+
+    def label_for(self, value: int) -> TextLike:
+        """The reader-facing text for one point."""
+        named = None if self.labels is None else self.labels.get(value)
+        return str(value) if named is None else named
+
+    def parse(self, raw: object) -> int | None:
+        if self._optional(raw):
+            return None
+        try:
+            value = int(str(raw).strip())
+        except ValueError:
+            _invalid(f"Choose a whole number from {self.minimum} to {self.maximum}.")
+        if not self.minimum <= value <= self.maximum:
+            _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        # A string either way: it is the radio option's value and the text input's default.
+        return None if value is None else str(value)
+
+
+@dataclass(frozen=True, slots=True)
 class ChoiceOption[ValueT]:
     """One submitted key, reader-facing label, and typed value."""
 
@@ -608,6 +652,10 @@ class Form:
 
     async def on_submit(self, event: SubmitEvent) -> None:
         """Handle a successfully parsed submission, or an accepted invalid one."""
+
+
+Scale = ScaleField
+"""Short alias for `ScaleField`, for authors writing a form class."""
 
 
 @dataclass(frozen=True, slots=True)

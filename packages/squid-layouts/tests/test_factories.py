@@ -1,6 +1,7 @@
 """The factory layer: what it normalizes, and what it refuses to guess."""
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
@@ -10,6 +11,11 @@ from squid_layouts.semantic import SemanticNode
 
 
 async def _noop(_event) -> None: ...
+
+
+def _responder() -> sl.ActionResponder:
+    """A responder no factory test reaches; rating only reads the event's fields."""
+    return cast(sl.ActionResponder, object())
 
 
 class TestNormalization:
@@ -189,3 +195,60 @@ class TestParityWithCards:
 
     def test_note_is_small_print(self) -> None:
         assert sl.note("Submission ID: 5") == sl.Note("Submission ID: 5", sl.Importance.LOW)
+
+
+class TestRating:
+    def test_points_are_stars_while_the_control_is_a_button_row(self) -> None:
+        node = sl.rating(key="stars")
+
+        assert [choice.key for choice in node.choices] == ["1", "2", "3", "4", "5"]
+        assert [choice.label for choice in node.choices] == ["★", "★★", "★★★", "★★★★", "★★★★★"]
+        assert (node.minimum, node.maximum) == (1, 1)
+
+    def test_a_wider_scale_numbers_its_points(self) -> None:
+        node = sl.rating(key="score", maximum=10)
+
+        assert [choice.label for choice in node.choices] == [str(point) for point in range(1, 11)]
+
+    def test_named_points_replace_their_stars(self) -> None:
+        node = sl.rating(key="stars", labels={1: "Poor", 5: t"Excellent"})
+
+        assert node.choices[0].label == "Poor"
+        assert node.choices[1].label == "★★"
+        assert node.choices[4].label == sl.md(t"Excellent")
+
+    def test_a_managed_value_seeds_the_selection_as_its_option_key(self) -> None:
+        assert sl.rating(key="stars").selection == sl.Managed(())
+        assert sl.rating(key="stars", value=sl.managed(3)).selection == sl.Managed(("3",))
+
+    async def test_a_controlled_value_round_trips_through_a_typed_event(self) -> None:
+        seen: list[int] = []
+
+        async def rate(event: sl.ScaleEvent) -> None:
+            seen.append(event.value)
+
+        node = sl.rating(key="stars", value=sl.controlled(2, rate))
+        assert isinstance(node.selection, sl.Controlled)
+        assert node.selection.value == ("2",)
+
+        actor = sl.Actor("7")
+        await node.selection.on_change(sl.ChoiceEvent(actor, _responder(), None, {}, ("4",)))
+        assert seen == [4]
+
+    async def test_a_cleared_selection_reaches_no_handler(self) -> None:
+        rated = False
+
+        async def rate(event: sl.ScaleEvent) -> None:
+            nonlocal rated
+            rated = True
+
+        node = sl.rating(key="stars", value=sl.controlled(None, rate))
+        assert isinstance(node.selection, sl.Controlled)
+        assert node.selection.value == ()
+
+        await node.selection.on_change(sl.ChoiceEvent(sl.Actor("7"), _responder(), None, {}, ()))
+        assert not rated
+
+    def test_a_scale_needs_at_least_two_points(self) -> None:
+        with pytest.raises(ValueError, match="at least 2"):
+            sl.rating(key="stars", maximum=1)
