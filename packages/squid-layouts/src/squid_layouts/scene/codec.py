@@ -28,6 +28,7 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
 from squid_layouts.scene.schema import SCENE_SCHEMA
 from squid_layouts.text import TextDialect
@@ -136,6 +137,8 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton)
     match node:
         case SceneText(content=content, dialect=dialect):
             return {"kind": "text", "content": content, "dialect": dialect.value}
+        case SceneTime(instant=instant, style=style, prefix=prefix):
+            return {"kind": "time", "instant": instant, "style": style, "prefix": prefix}
         case SceneSeparator(large=large, visible=visible):
             return {"kind": "separator", "large": large, "visible": visible}
         case SceneLink(label=label, url=url):
@@ -243,6 +246,12 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
     match kind:
         case "text":
             return SceneText(_string(raw, "content"), TextDialect(_string(raw, "dialect")))
+        case "time":
+            return SceneTime(
+                _string(raw, "instant"),
+                _string(raw, "style"),
+                _optional_string(raw, "prefix"),
+            )
         case "separator":
             return SceneSeparator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))
         case "link":

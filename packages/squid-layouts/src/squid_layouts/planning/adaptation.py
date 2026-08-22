@@ -35,6 +35,7 @@ from squid_layouts.primitives.nodes import (
     SelectMenu,
     Text,
     Thumbnail,
+    Time,
     Variant,
     Variants,
 )
@@ -106,6 +107,7 @@ from squid_layouts.semantic import (
     Status,
     Table,
     TableDisplay,
+    Timestamp,
     Toggle,
     ToggleEvent,
     Tone,
@@ -380,6 +382,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Measure(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
             return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
+        case Timestamp(instant=instant, style=style, label=label):
+            prefix = f"**{_resolve(label, context)}:** " if label is not None else None
+            return [Time(instant, style.value, prefix)]
         case FormTrigger():
             return _form(node, context)
         case Choices():

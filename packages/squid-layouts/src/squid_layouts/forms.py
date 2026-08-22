@@ -6,7 +6,9 @@ import re
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
-from datetime import date
+from datetime import UTC, date, tzinfo
+from datetime import datetime as DateTimeValue
+from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
@@ -260,6 +262,65 @@ class DateField(FormField[date]):
 
     def format_prefill(self, value: object) -> object:
         return value.isoformat() if isinstance(value, date) else value
+
+
+@dataclass(frozen=True, slots=True)
+class TimeField(FormField[TimeValue]):
+    """An ISO-8601 wall-clock time with optional inclusive bounds."""
+
+    minimum: TimeValue | None = None
+    maximum: TimeValue | None = None
+    placeholder: TextLike | None = "HH:MM"
+
+    def parse(self, raw: object) -> TimeValue | None:
+        if self._optional(raw):
+            return None
+        try:
+            value = TimeValue.fromisoformat(str(raw).strip())
+        except ValueError:
+            _invalid("Enter a time as HH:MM.")
+        if self.minimum is not None and value < self.minimum:
+            _invalid(f"Enter a time at or after {self.minimum.isoformat()}.")
+        if self.maximum is not None and value > self.maximum:
+            _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        return value.isoformat() if isinstance(value, TimeValue) else value
+
+
+@dataclass(frozen=True, slots=True)
+class DateTimeField(FormField[DateTimeValue]):
+    """An ISO-8601 instant; naive input is interpreted in ``timezone``."""
+
+    timezone: tzinfo = UTC
+    minimum: DateTimeValue | None = None
+    maximum: DateTimeValue | None = None
+    placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+
+    def __post_init__(self) -> None:
+        for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
+            if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
+                message = f"DateTimeField {name} must be aware"
+                raise ValueError(message)
+
+    def parse(self, raw: object) -> DateTimeValue | None:
+        if self._optional(raw):
+            return None
+        try:
+            value = DateTimeValue.fromisoformat(str(raw).strip())
+        except ValueError:
+            _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
+        if value.tzinfo is None or value.utcoffset() is None:
+            value = value.replace(tzinfo=self.timezone)
+        if self.minimum is not None and value < self.minimum:
+            _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
+        if self.maximum is not None and value > self.maximum:
+            _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
+        return value
+
+    def format_prefill(self, value: object) -> object:
+        return value.isoformat() if isinstance(value, DateTimeValue) else value
 
 
 @dataclass(frozen=True, slots=True)
@@ -587,6 +648,8 @@ Int = IntField
 Float = FloatField
 Duration = DurationField
 Date = DateField
+Time = TimeField
+DateTime = DateTimeField
 Choice = ChoiceField
 MultiChoice = MultiChoiceField
 Bool = BoolField

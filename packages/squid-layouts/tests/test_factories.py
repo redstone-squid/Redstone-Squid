@@ -1,5 +1,7 @@
 """The factory layer: what it normalizes, and what it refuses to guess."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 import squid_layouts as sl
@@ -115,6 +117,10 @@ class TestParity:
         assert sl.quote("q", attribution="me") == sl.Quote("q", "me")
         assert sl.progress(0.5, label="L") == sl.Progress(0.5, "L")
         assert sl.measure(3, "Blocks", unit="s") == sl.Measure(3, "Blocks", "s")
+        instant = datetime(2026, 8, 22, tzinfo=UTC)
+        assert sl.timestamp(instant, style=sl.TimeStyle.RELATIVE, label="Updated") == sl.Timestamp(
+            instant, sl.TimeStyle.RELATIVE, "Updated"
+        )
         assert sl.figure("https://example.invalid/a.png") == sl.Figure(
             sl.MediaItem("", "https://example.invalid/a.png")
         )
@@ -162,6 +168,11 @@ class TestDrift:
             name = self._ALIASES.get(member.__name__, member.__name__.lower())
             assert name in sl.__all__, f"{member.__name__} has no exported factory"
             assert callable(getattr(sl, name))
+
+
+def test_timestamp_factory_rejects_naive_datetimes() -> None:
+    with pytest.raises(ValueError, match="aware"):
+        sl.timestamp(datetime(2026, 8, 22))  # noqa: DTZ001 - deliberately exercises naive rejection
 
 
 class TestParityWithCards:

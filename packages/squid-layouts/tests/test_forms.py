@@ -1,7 +1,7 @@
 """Portable form schemas and descriptor compilation."""
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime, time, timedelta, timezone
 from typing import ClassVar
 
 import pytest
@@ -93,6 +93,61 @@ async def test_typed_fields_parse_portable_values(field, raw, expected) -> None:
 
     assert result.errors == ()
     assert result.values["value"] == expected
+
+
+@pytest.mark.parametrize(
+    ("field", "raw", "expected"),
+    [
+        (sl.TimeField(key="value", label="Value"), "14:30", time(14, 30)),
+        (
+            sl.DateTimeField(key="value", label="Value"),
+            "2026-08-22 14:30",
+            datetime(2026, 8, 22, 14, 30, tzinfo=UTC),
+        ),
+        (
+            sl.DateTimeField(key="value", label="Value", timezone=timezone(timedelta(hours=2))),
+            "2026-08-22T14:30",
+            datetime(2026, 8, 22, 14, 30, tzinfo=timezone(timedelta(hours=2))),
+        ),
+    ],
+)
+async def test_temporal_fields_parse_portable_values(field, raw, expected) -> None:
+    result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": raw})
+
+    assert result.errors == ()
+    assert result.values["value"] == expected
+
+
+@pytest.mark.parametrize(
+    ("field", "raw", "message"),
+    [
+        (sl.TimeField(key="value", label="Value"), "later", "HH:MM"),
+        (sl.TimeField(key="value", label="Value", minimum=time(9)), "08:59", "at or after"),
+        (sl.TimeField(key="value", label="Value", maximum=time(17)), "17:01", "at or before"),
+        (sl.DateTimeField(key="value", label="Value"), "tomorrow", "YYYY-MM-DD HH:MM"),
+        (
+            sl.DateTimeField(key="value", label="Value", minimum=datetime(2026, 8, 22, tzinfo=UTC)),
+            "2026-08-21 23:59Z",
+            "on or after",
+        ),
+        (
+            sl.DateTimeField(key="value", label="Value", maximum=datetime(2026, 8, 22, tzinfo=UTC)),
+            "2026-08-22 00:01Z",
+            "on or before",
+        ),
+    ],
+)
+async def test_temporal_fields_report_parse_and_bound_errors(field, raw, message) -> None:
+    result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": raw})
+
+    assert message in str(result.errors[0].message)
+
+
+def test_temporal_field_prefill_uses_isoformat() -> None:
+    instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
+
+    assert sl.TimeField().format_prefill(time(14, 30)) == "14:30:00"
+    assert sl.DateTimeField().format_prefill(instant) == "2026-08-22T14:30:00+00:00"
 
 
 async def test_multi_choice_orders_values_by_declaration_and_accepts_one_key() -> None:

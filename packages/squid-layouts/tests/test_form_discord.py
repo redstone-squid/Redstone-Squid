@@ -29,6 +29,8 @@ def _component(modal: discord.ui.Modal) -> discord.ui.Item:
         (sl.FloatField(key="value", label="Value"), discord.ui.TextInput),
         (sl.DurationField(key="value", label="Value"), discord.ui.TextInput),
         (sl.DateField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.TimeField(key="value", label="Value"), discord.ui.TextInput),
+        (sl.DateTimeField(key="value", label="Value"), discord.ui.TextInput),
         (
             sl.ChoiceField(
                 key="value",

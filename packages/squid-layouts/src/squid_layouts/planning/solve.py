@@ -9,6 +9,7 @@ dropped footnote genuinely returns its characters to the body.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from enum import Enum, StrEnum
 from heapq import heappop, heappush
 from itertools import count
@@ -50,6 +51,7 @@ from squid_layouts.primitives.nodes import (
     Sep,
     Text,
     Thumbnail,
+    Time,
     Variants,
 )
 from squid_layouts.primitives.styles import Color
@@ -133,6 +135,13 @@ class RText:
 
 
 @dataclass(frozen=True, slots=True)
+class RTime:
+    instant: datetime
+    style: str
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RSection:
     texts: list[RText]
     accessory: Thumbnail | LinkButton | RawItem
@@ -152,7 +161,7 @@ class RGroup:
 
 
 type Realized = (
-    RText | RSection | RPanel | RGroup | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
+    RText | RTime | RSection | RPanel | RGroup | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
 )
 
 
@@ -547,6 +556,10 @@ class _Builder:
                 if unit is not None:
                     self.units.append(unit)
                 return slot
+            case Time(instant=instant, style=style, prefix=prefix):
+                unix = int(instant.timestamp())
+                self.raw_text_cost += len(prefix or "") + len(f"<t:{unix}:{style}>")
+                return RTime(instant, style, prefix)
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
                     self.notes.append(
