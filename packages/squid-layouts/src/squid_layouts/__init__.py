@@ -100,6 +100,10 @@ from squid_layouts.forms import (
 )
 from squid_layouts.palette import DEFAULT_PALETTE, INHERIT, Accent, AccentDefault, Palette
 from squid_layouts.patterns import (
+    Browser,
+    BrowserDetail,
+    BrowserOpenHandler,
+    BrowserOverview,
     CollectionChangeHandler,
     CollectionEditor,
     CollectionEntry,
@@ -276,6 +280,7 @@ from squid_layouts.sources import (
     Window,
     WindowLoader,
     WindowSource,
+    list_source,
 )
 from squid_layouts.text import (
     NEUTRAL,
@@ -325,6 +330,10 @@ __all__ = [
     "Asset",
     "BestEffort",
     "BoolField",
+    "Browser",
+    "BrowserDetail",
+    "BrowserOpenHandler",
+    "BrowserOverview",
     "Budgeted",
     "BusSnapshot",
     "ChildLike",
@@ -557,6 +566,7 @@ __all__ = [
     "items",
     "keep_with_next",
     "link",
+    "list_source",
     "managed",
     "md",
     "measure",
