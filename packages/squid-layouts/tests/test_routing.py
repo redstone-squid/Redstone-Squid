@@ -1,5 +1,7 @@
 """Stateless routed controls: ids, dispatch, and drawing without a session."""
 
+from typing import Any, cast
+
 import anyio
 import discord
 import pytest
@@ -521,6 +523,240 @@ class TestRouteGroups:
         assert seen == ["replacement"]
 
 
+class TestMiddleware:
+    def test_the_base_class_requires_dispatch(self) -> None:
+        with pytest.raises(TypeError, match="abstract"):
+            cast(Any, sl.discord.Middleware)()
+
+    async def test_router_and_group_middleware_compose_outermost_first(self) -> None:
+        seen: list[str] = []
+
+        class Record(sl.discord.Middleware[discord.Client]):
+            def __init__(self, name: str) -> None:
+                self.name = name
+
+            async def dispatch(self, request, call_next) -> None:
+                seen.append(f"{self.name}:before")
+                await call_next()
+                seen.append(f"{self.name}:after")
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        polls = root.group("polls")
+        close = polls.define("close")
+        router = Router(namespace=root, on_gone=_noop)
+        router.add_middleware(Record("router"))
+        root.add_middleware(Record("root"))
+        polls.add_middleware(Record("polls"))
+
+        @polls.route(close)
+        async def handle(_interaction) -> None:
+            seen.append("handler")
+
+        await router.dispatch(fake_interaction(), close.id())
+
+        assert seen == [
+            "router:before",
+            "root:before",
+            "polls:before",
+            "handler",
+            "polls:after",
+            "root:after",
+            "router:after",
+        ]
+
+    async def test_returning_without_calling_next_short_circuits_and_still_acknowledges(self) -> None:
+        seen: list[str] = []
+
+        class Stop(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                seen.append("stopped")
+
+        interaction = fake_interaction()
+        router = Router()
+        router.add_middleware(Stop())
+
+        @router.route(POLL_CLOSE)
+        async def handle(_interaction) -> None:
+            seen.append("handler")
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        assert seen == ["stopped"]
+        interaction.response.defer.assert_awaited_once_with()
+
+    async def test_middleware_may_handle_an_inner_exception(self) -> None:
+        seen: list[str] = []
+
+        async def on_error(interaction, error: Exception, source: str) -> None:
+            seen.append("router-error")
+
+        class Catch(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                try:
+                    await call_next()
+                except RuntimeError:
+                    seen.append("caught")
+
+        router = Router(on_error=on_error)
+        router.add_middleware(Catch())
+
+        @router.route(POLL_CLOSE)
+        async def fail(_interaction) -> None:
+            raise RuntimeError("boom")
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert seen == ["caught"]
+
+    async def test_unhandled_errors_cross_the_whole_onion_before_the_error_hook(self) -> None:
+        seen: list[str] = []
+
+        async def on_error(interaction, error: Exception, source: str) -> None:
+            seen.append("router-error")
+
+        class Observe(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                seen.append("before")
+                try:
+                    await call_next()
+                finally:
+                    seen.append("after")
+
+        router = Router(on_error=on_error)
+        router.add_middleware(Observe())
+
+        @router.route(POLL_CLOSE)
+        async def fail(_interaction) -> None:
+            raise RuntimeError("boom")
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert seen == ["before", "after", "router-error"]
+
+    async def test_call_next_is_one_shot(self) -> None:
+        errors: list[Exception] = []
+
+        async def on_error(interaction, error: Exception, source: str) -> None:
+            errors.append(error)
+
+        class Twice(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                await call_next()
+                await call_next()
+
+        router = Router(on_error=on_error)
+        router.add_middleware(Twice())
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert len(errors) == 1
+        assert "only be called once" in str(errors[0])
+
+    async def test_call_next_expires_when_middleware_returns(self) -> None:
+        saved: list[sl.discord.RouteNext] = []
+
+        class Save(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                saved.append(call_next)
+
+        router = Router()
+        router.add_middleware(Save())
+        router.add(POLL_CLOSE, _noop)
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        with pytest.raises(RuntimeError, match="only valid during"):
+            await saved[0]()
+
+    async def test_instances_are_idempotent_only_by_identity(self) -> None:
+        seen: list[str] = []
+
+        class Record(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                seen.append("middleware")
+                await call_next()
+
+        first = Record()
+        router = Router()
+        router.add_middleware(first)
+        router.add_middleware(first)
+        router.add_middleware(Record())
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        assert seen == ["middleware", "middleware"]
+
+    async def test_request_facts_are_immutable_and_distinguish_aliases(self) -> None:
+        requests: list[sl.discord.RouteRequest[discord.Client]] = []
+
+        class Capture(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                requests.append(request)
+                await call_next()
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        builds = root.group("builds")
+        edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+        builds.add(edit, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.add_middleware(Capture())
+
+        await router.dispatch(fake_interaction(), "edit:build:7")
+        await router.dispatch(fake_interaction(), "r:retired")
+
+        matched, gone = requests
+        assert matched.route is edit
+        assert matched.params == {"build_id": 7}
+        assert matched.group_prefix == "r:builds"
+        assert matched.matched_alias
+        with pytest.raises(TypeError):
+            cast(dict[str, Any], matched.params)["build_id"] = 8
+        assert gone.route is None
+        assert gone.params == {}
+        assert gone.group_prefix is None
+        assert not gone.matched_alias
+
+    def test_descriptions_include_effective_middleware_provenance(self) -> None:
+        class RouterPolicy(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                await call_next()
+
+        class GroupPolicy(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                await call_next()
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        polls = root.group("polls")
+        close = polls.define("close")
+        polls.add(close, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.add_middleware(RouterPolicy())
+        polls.add_middleware(GroupPolicy())
+
+        assert router.describe()[0].middleware == (
+            f"{__name__}.TestMiddleware.test_descriptions_include_effective_middleware_provenance.<locals>.RouterPolicy",
+            f"{__name__}.TestMiddleware.test_descriptions_include_effective_middleware_provenance.<locals>.GroupPolicy",
+        )
+
+    def test_middleware_freezes_at_registration(self) -> None:
+        class Policy(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, call_next) -> None:
+                await call_next()
+
+        root = sl.discord.RouteGroup[discord.Client]("r")
+        polls = root.group("polls")
+        close = polls.define("close")
+        polls.add(close, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+
+        with pytest.raises(RuntimeError, match=r"before Router\.register"):
+            router.add_middleware(Policy())
+        with pytest.raises(RuntimeError, match="before registration"):
+            polls.add_middleware(Policy())
+
+
 class TestAcknowledgement:
     async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
         interaction = fake_interaction()
@@ -577,8 +813,8 @@ class TestAcknowledgement:
     async def test_an_error_hook_may_spend_the_response_slot(self) -> None:
         interaction = fake_interaction()
 
-        async def hook(current, _error, _source: str) -> None:
-            await current.response.send_message()
+        async def hook(interaction, error, source: str) -> None:
+            await interaction.response.send_message()
 
         router = Router(on_error=hook)
 

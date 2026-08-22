@@ -34,9 +34,11 @@ import inspect
 import logging
 import re
 import weakref
+from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any, Concatenate, Self, override
 
 import anyio
@@ -56,6 +58,9 @@ something outside the handler's module has to build ids from it."""
 
 type GoneHook[BotT: discord.Client] = Callable[[discord.Interaction[BotT]], Awaitable[None]]
 """A friendly response for a control retired from a reserved router namespace."""
+
+type RouteNext = Callable[[], Awaitable[None]]
+"""Continue through the remaining middleware to the routed handler."""
 
 _INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakref.WeakKeyDictionary()
 """Routers installed per client, so `register` can refuse the second router a click would wake."""
@@ -79,6 +84,29 @@ class RouteDescription:
     handler_module: str
     handler_qualname: str
     group_prefix: str | None = None
+    middleware: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RouteRequest[BotT: discord.Client]:
+    """Immutable dispatch facts supplied to routed-control middleware."""
+
+    interaction: discord.Interaction[BotT]
+    component: RouteComponent
+    route_id: str
+    route: Route | None
+    params: Mapping[str, Any]
+    values: tuple[str, ...]
+    group_prefix: str | None
+    matched_alias: bool
+
+
+class Middleware[BotT: discord.Client](ABC):
+    """A reusable routed-control policy attached to a router or route group."""
+
+    @abstractmethod
+    async def dispatch(self, request: RouteRequest[BotT], call_next: RouteNext) -> None:
+        """Continue once through ``call_next``, or return to short-circuit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,6 +185,7 @@ class RouteGroup[BotT: discord.Client]:
         self._children: list[RouteGroup[BotT]] = []
         self._definitions: list[Route] = []
         self._routes: list[_Registration] = []
+        self._middleware: list[Middleware[BotT]] = []
         self._routers: weakref.WeakSet[Router[Any]] = weakref.WeakSet()
         self._frozen = False
 
@@ -240,6 +269,15 @@ class RouteGroup[BotT: discord.Client]:
             raise RuntimeError(message)
         self._routes.append(registration)
 
+    def add_middleware(self, middleware: Middleware[BotT]) -> None:
+        """Append one middleware instance, idempotently by object identity."""
+        if any(existing is middleware for existing in self._middleware):
+            return
+        if self._frozen:
+            message = f"middleware for route group {self.prefix!r} must be added before registration"
+            raise RuntimeError(message)
+        self._middleware.append(middleware)
+
     def _freeze(self) -> None:
         missing = [
             route.format
@@ -261,6 +299,16 @@ class RouteGroup[BotT: discord.Client]:
         self._routers.add(router)
         for child in self._children:
             child._attach(router)
+
+    def _lineage(self) -> tuple[RouteGroup[BotT], ...]:
+        """Ancestors followed by this group, for outer-to-inner middleware order."""
+        lineage: list[RouteGroup[BotT]] = []
+        current: RouteGroup[BotT] | None = self
+        while current is not None:
+            lineage.append(current)
+            current = current._parent
+        lineage.reverse()
+        return tuple(lineage)
 
 
 class Router[BotT: discord.Client]:
@@ -292,6 +340,7 @@ class Router[BotT: discord.Client]:
             raise ValueError(message)
         self._routes: list[_Registration] = []
         self._groups: list[RouteGroup[BotT]] = []
+        self._middleware: list[Middleware[BotT]] = []
         self._registered = False
         self.namespace = namespace_value
         self.on_gone = on_gone
@@ -314,6 +363,10 @@ class Router[BotT: discord.Client]:
                 handler_module=registration.handler.__module__,
                 handler_qualname=registration.handler.__qualname__,
                 group_prefix=registration.group_prefix,
+                middleware=tuple(
+                    f"{type(middleware).__module__}.{type(middleware).__qualname__}"
+                    for middleware in self._middleware_for(registration.group_prefix)
+                ),
             )
             for registration in self._registrations()
         )
@@ -339,6 +392,15 @@ class Router[BotT: discord.Client]:
                 pending.append(route)
         self._groups.append(group)
         group._attach(self)
+
+    def add_middleware(self, middleware: Middleware[BotT]) -> None:
+        """Append one router-wide middleware instance, idempotently by identity."""
+        if any(existing is middleware for existing in self._middleware):
+            return
+        if self._registered:
+            message = "router middleware must be added before Router.register(client)"
+            raise RuntimeError(message)
+        self._middleware.append(middleware)
 
     def _validate_group(self, group: RouteGroup[Any]) -> None:
         """Validate a child added below an already-included group."""
@@ -378,6 +440,13 @@ class Router[BotT: discord.Client]:
                 if group not in seen:
                     seen.append(group)
         return tuple(seen)
+
+    def _middleware_for(self, group_prefix: str | None) -> tuple[Middleware[BotT], ...]:
+        """Router middleware followed by the matched group's inherited middleware."""
+        if group_prefix is None:
+            return tuple(self._middleware)
+        group = next(group for group in self._all_groups() if group.prefix == group_prefix)
+        return (*self._middleware, *(middleware for member in group._lineage() for middleware in member._middleware))
 
     def route[**P](
         self, route: RouteLike
@@ -566,6 +635,8 @@ class Router[BotT: discord.Client]:
     ) -> None:
         """Run the handler owning ``custom_id`` under the acknowledgement deadline."""
         found = self.resolve(custom_id, component=component)
+        registration: _Registration | None = None
+        params: Mapping[str, Any] = MappingProxyType({})
         if found is None:
             if self._in_namespace(custom_id):
                 gone = self.on_gone
@@ -596,6 +667,23 @@ class Router[BotT: discord.Client]:
 
             source = f"route:{registration.route.format}"
 
+        request = RouteRequest(
+            interaction=interaction,
+            component=component,
+            route_id=custom_id,
+            route=None if registration is None else registration.route,
+            params=MappingProxyType(dict(params)),
+            values=values,
+            group_prefix=None if registration is None else registration.group_prefix,
+            matched_alias=(registration is not None and registration.route.pattern.fullmatch(custom_id) is None),
+        )
+
+        async def dispatch_operation() -> None:
+            try:
+                await self._run_middleware(self._middleware_for(request.group_prefix), request, operation)
+            except Exception as error:
+                await self._handle_error(interaction, error, source)
+
         async def watchdog() -> None:
             await anyio.sleep(self.acknowledgement_timeout)
             await self._acknowledge_safely(interaction, source)
@@ -603,12 +691,44 @@ class Router[BotT: discord.Client]:
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(watchdog)
             try:
-                await operation()
-            except Exception as error:
-                await self._handle_error(interaction, error, source)
+                await dispatch_operation()
             finally:
                 tasks.cancel_scope.cancel()
         await self._acknowledge_safely(interaction, source)
+
+    async def _run_middleware(
+        self,
+        middleware: tuple[Middleware[BotT], ...],
+        request: RouteRequest[BotT],
+        endpoint: RouteNext,
+    ) -> None:
+        """Compose a one-shot middleware chain in first-added, outermost order."""
+
+        async def invoke(index: int) -> None:
+            if index == len(middleware):
+                await endpoint()
+                return
+
+            active = True
+            called = False
+
+            async def call_next() -> None:
+                nonlocal called
+                if not active:
+                    message = "route middleware call_next() is only valid during dispatch()"
+                    raise RuntimeError(message)
+                if called:
+                    message = "route middleware call_next() may only be called once"
+                    raise RuntimeError(message)
+                called = True
+                await invoke(index + 1)
+
+            try:
+                await middleware[index].dispatch(request, call_next)
+            finally:
+                active = False
+
+        await invoke(0)
 
     async def _handle_error(
         self,
