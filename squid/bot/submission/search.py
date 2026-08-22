@@ -303,6 +303,7 @@ class SearchCog[
                 component,
                 reload,
             )
+            await reload(component)
             await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
             return None
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:

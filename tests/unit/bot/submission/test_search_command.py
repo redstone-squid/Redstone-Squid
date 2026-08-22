@@ -149,7 +149,8 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     )
     cog = SearchCog.__new__(SearchCog)
     cog.bot = cast(Any, bot)
-    cog.queries = cast(Any, SimpleNamespace(get=AsyncMock(return_value=build)))
+    queries = SimpleNamespace(get=AsyncMock(return_value=build))
+    cog.queries = cast(Any, queries)
     mounts: list[sl.discord.Mount] = []
 
     def capture_mount(component: sl.Component, **kwargs: Any) -> sl.discord.Mount:
@@ -167,6 +168,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     await SearchCog.view_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
 
     mount = mounts[0]
+    assert queries.get.await_count == 2
     assert mount.handle is not None
     assert not mount.handle.permanent
     interaction.followup.edit_message.side_effect = _unknown_webhook()
