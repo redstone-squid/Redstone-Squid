@@ -9,8 +9,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
+from squid_layouts.actions import ActionBinding, ActionPolicy, Feedback, PressHandler, SelectionHandler
 from squid_layouts.forms import FormBinding
+from squid_layouts.guards import Guard
 from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.text import TextLike
@@ -108,6 +109,8 @@ class Button:
     emoji: str | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    guard: Guard | None = None
+    feedback: Feedback | None = None
 
 
 @dataclass(frozen=True, slots=True)

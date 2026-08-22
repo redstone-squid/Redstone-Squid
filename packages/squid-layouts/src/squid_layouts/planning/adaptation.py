@@ -800,6 +800,9 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
                     node.key,
                     style=_button_style(node.tone, node.emphasis),
                     policy=node.policy,
+                    # Guarding the press that opens the modal, not the submission: a stateful
+                    # guard checked twice would deny the reader's own filled-in form.
+                    guard=node.guard,
                     # The adapted spec, not `node.spec`: it is what the reader will actually
                     # be shown, and so what a late submission must be parsed against.
                     form=FormBinding(node.key, spec, node.on_submit, node.policy),
@@ -1422,7 +1425,10 @@ def _page_items[T](
 
 
 def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
-    routes = {action.key: ActionBinding(action.key, action.on_trigger, action.policy) for action in actions}
+    routes = {
+        action.key: ActionBinding(action.key, action.on_trigger, action.policy, guard=action.guard)
+        for action in actions
+    }
 
     async def route(event: SelectionEvent) -> None:
         binding = routes.get(event.values[0]) if len(event.values) == 1 else None
@@ -1464,4 +1470,6 @@ def _button(action: Action, context: _Context) -> Button:
         style=_button_style(action.tone, action.emphasis),
         disabled=not action.available,
         policy=action.policy,
+        guard=action.guard,
+        feedback=action.feedback,
     )
