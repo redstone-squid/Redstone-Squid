@@ -9,6 +9,7 @@ import discord
 from squid_layouts.discord.delivery import Abandoned, DeliveryReceipt, EditHandle, StaleHandleError, handle_for
 from squid_layouts.discord.durability import MountLocator
 from squid_layouts.discord.mount import Mount
+from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,6 +108,9 @@ class DiscordFrontend:
         values: dict[str, str | int] = {
             "channel_id": durable_message.channel.id,
             "message_id": durable_message.id,
+            # Recorded, not re-derived on recovery: which mode the message is in decides
+            # whether the first edit after a restart has legacy fields to clear.
+            "mode": handle.mode.value,
         }
         if durable_message.guild is not None:
             values["guild_id"] = durable_message.guild.id
@@ -137,17 +141,16 @@ class DiscordFrontend:
             return Unreachable(tuple(item[0] for item in unreachable), tuple(item[1] for item in unreachable))
 
         for item in resolved:
-            handle = handle_for(item.message)
+            handle = handle_for(item.message, mode=self._mode(item.binding.locator))
 
             async def edit(
-                view: discord.ui.LayoutView,
-                files: list[discord.File],
+                presentation: DiscordPresentation,
                 /,
                 *,
                 message: discord.Message = item.message,
                 authority: EditHandle = handle,
             ) -> DeliveryReceipt:
-                await authority.write(view, attachments=files)
+                await authority.write(presentation)
                 return DeliveryReceipt(message, authority, message_id=message.id, ephemeral=False)
 
             try:
@@ -201,3 +204,13 @@ class DiscordFrontend:
             message = "Discord locator message_id must be an integer"
             raise TypeError(message)
         return channel_id, message_id
+
+    def _mode(self, locator: MountLocator) -> DiscordMode | None:
+        """The message mode this locator recorded, or `None` for one written before it did."""
+        mode = locator.values.get("mode")
+        if mode is None:
+            return None
+        if not isinstance(mode, str) or mode not in set(DiscordMode):
+            message = f"Discord locator mode {mode!r} is not a message mode"
+            raise TypeError(message)
+        return DiscordMode(mode)
