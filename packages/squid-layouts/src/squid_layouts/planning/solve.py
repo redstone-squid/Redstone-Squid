@@ -9,10 +9,12 @@ dropped footnote genuinely returns its characters to the body.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from heapq import heappop, heappush
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
+from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
 from squid_layouts.planning.navigation import (
     NavNode,
@@ -148,6 +150,7 @@ class SolvedLayout:
     nav: PlannedNav | None = None
     chrome: Chrome = DEFAULT_CHROME
     limits: V2Limits = LIMITS
+    degradation: DegradationProfile = field(default_factory=DegradationProfile)
 
     def reposition(self, positions: Mapping[str, Position]) -> None:
         """Show a different position in each named pager without re-fitting.
@@ -512,7 +515,7 @@ class _Builder:
                 return node
 
 
-def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
+def _apply(unit: _Unit, chrome: Chrome, notes: list[str], degradation: DegradationRecorder) -> bool:
     """Render the unit into its slot within its grant. Returns False when the node drops."""
     if unit.count_pages is not None:
         return _apply_count_pages(unit)
@@ -527,19 +530,31 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
     match unit.overflow:
         case Drop():
             notes.append(f"dropped node {unit.index} ({unit.need} chars over budget)")
+            degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
         case Spill() if unit.ladders is not None:
-            return _apply_spill(unit, usable, chrome, notes)
+            return _apply_spill(unit, usable, chrome, notes, degradation)
         case Condense() if usable >= 1:
-            return _apply_condense(unit, usable, notes)
+            return _apply_condense(unit, usable, notes, degradation)
         case Alts(ladder=ladder) if usable >= 1:
-            for alternate in ladder:
+            for step, alternate in enumerate(ladder, 1):
                 if alternate and len(alternate) <= usable:
                     notes.append(f"node {unit.index} degraded to a {len(alternate)}-char alternate")
+                    degradation.record(
+                        priority=unit.priority,
+                        path=f"$.text.{unit.index}",
+                        semantic_steps=step,
+                    )
                     unit.slot.content = unit.prefix + alternate + unit.suffix
                     return True
             fallback = ladder[-1] if ladder else unit.content
             notes.append(f"node {unit.index} exhausted its ladder; trimming the last alternate")
+            degradation.record(
+                priority=unit.priority,
+                path=f"$.text.{unit.index}",
+                semantic_steps=len(ladder),
+                truncated_chars=max(0, len(fallback) - usable),
+            )
             unit.slot.content = unit.prefix + _trim_keep(fallback, usable, "head") + unit.suffix
             return True
         case Paginate(boundary=boundary, min_fill=min_fill, widows=widows) if usable >= 1:
@@ -549,6 +564,11 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
             return True
         case Truncate(keep=keep) if usable >= 1:
             notes.append(f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
+            degradation.record(
+                priority=unit.priority,
+                path=f"$.text.{unit.index}",
+                truncated_chars=max(0, len(unit.content) - usable),
+            )
             unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, keep) + unit.suffix
             return True
         case Never() if usable >= 1:
@@ -557,6 +577,7 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
             return True
         case _:
             notes.append(f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}")
+            degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
 
 
@@ -590,20 +611,30 @@ def _step_ladders(ladders: tuple[tuple[str, ...], ...], join: str, usable: int) 
     0 for an entry that never had to move.
     """
     levels = [0] * len(ladders)
-
-    def entry(index: int) -> str:
-        return ladders[index][levels[index]]
-
-    while sum(len(entry(i)) for i in range(len(ladders))) + (len(ladders) - 1) * len(join) > usable:
-        candidates = [i for i in range(len(ladders)) if levels[i] + 1 < len(ladders[i])]
-        if not candidates:
-            break
-        largest = max(candidates, key=lambda i: len(entry(i)))
-        levels[largest] += 1
+    total = sum(len(ladder[0]) for ladder in ladders) + max(0, len(ladders) - 1) * len(join)
+    candidates: list[tuple[int, int]] = []
+    for index, ladder in enumerate(ladders):
+        if len(ladder) > 1:
+            heappush(candidates, (-len(ladder[0]), index))
+    while total > usable and candidates:
+        _negative_length, largest = heappop(candidates)
+        level = levels[largest]
+        before = len(ladders[largest][level])
+        level += 1
+        levels[largest] = level
+        after = len(ladders[largest][level])
+        total -= before - after
+        if level + 1 < len(ladders[largest]):
+            heappush(candidates, (-after, largest))
     return levels
 
 
-def _apply_condense(unit: _Unit, usable: int, notes: list[str]) -> bool:
+def _apply_condense(
+    unit: _Unit,
+    usable: int,
+    notes: list[str],
+    degradation: DegradationRecorder,
+) -> bool:
     """Shorten entries as far as their ladders go, then trim; never lose a whole entry."""
     ladders = unit.ladders or ((unit.content,),)
     levels = _step_ladders(ladders, unit.join, usable)
@@ -611,14 +642,30 @@ def _apply_condense(unit: _Unit, usable: int, notes: list[str]) -> bool:
     stepped = sum(1 for level in levels if level)
     if stepped:
         notes.append(f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders")
+        degradation.record(
+            priority=unit.priority,
+            path=f"$.text.{unit.index}",
+            semantic_steps=sum(levels),
+        )
     if len(body) > usable:
         notes.append(f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}")
+        degradation.record(
+            priority=unit.priority,
+            path=f"$.text.{unit.index}",
+            truncated_chars=len(body) - usable,
+        )
         body = _trim_keep(body, usable, "head")
     unit.slot.content = unit.prefix + body + unit.suffix
     return True
 
 
-def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> bool:
+def _apply_spill(
+    unit: _Unit,
+    usable: int,
+    chrome: Chrome,
+    notes: list[str],
+    degradation: DegradationRecorder,
+) -> bool:
     ladders = unit.ladders or ()
     total = len(ladders)
     # First degrade the largest entries down their ladders; spill whole entries only after
@@ -633,24 +680,49 @@ def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> 
     # what the reader can afford to lose, so it takes the lowest priority first (ties from
     # the tail, which is where a list's least important entries conventionally sit).
     drop_order = sorted(range(total), key=lambda i: (unit.ranks[i] if unit.ranks else 0, -i))
+    entry_lengths = [len(entry(index)) for index in range(total)]
+    remaining_chars = sum(entry_lengths)
     for dropped in range(total + 1):
-        omitted = set(drop_order[:dropped])
-        shown = [entry(i) for i in range(total) if i not in omitted]
-        if dropped:
-            shown.append(chrome.and_n_more(dropped))
-        body = unit.join.join(shown)
-        if body and len(body) <= usable:
+        marker = chrome.and_n_more(dropped) if dropped else ""
+        shown_entries = total - dropped
+        output_items = shown_entries + int(bool(marker))
+        body_length = remaining_chars + len(marker) + max(0, output_items - 1) * len(unit.join)
+        if body_length and body_length <= usable:
+            omitted = set(drop_order[:dropped])
+            shown = [entry(index) for index in range(total) if index not in omitted]
+            if marker:
+                shown.append(marker)
+            body = unit.join.join(shown)
             if degraded:
                 notes.append(f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders")
+                degradation.record(
+                    priority=unit.priority,
+                    path=f"$.text.{unit.index}",
+                    semantic_steps=sum(levels),
+                )
             if dropped:
                 notes.append(f"spilled node {unit.index}: showing {total - dropped} of {total} lines")
+                degradation.record(
+                    priority=unit.priority,
+                    path=f"$.text.{unit.index}",
+                    spilled_items=dropped,
+                )
             unit.slot.content = unit.prefix + body + unit.suffix
             return True
+        if dropped < total:
+            remaining_chars -= entry_lengths[drop_order[dropped]]
     notes.append(f"dropped node {unit.index}: no line fits in {usable}")
+    degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
     return False
 
 
-def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome) -> None:
+def _allocate(
+    units: list[_Unit],
+    budget: int,
+    notes: list[str],
+    chrome: Chrome,
+    degradation: DegradationRecorder,
+) -> None:
     active = list(units)
     for _ in range(len(units) + 1):
         remaining = budget
@@ -691,9 +763,13 @@ def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome)
                     unit.grant += top_up
                     leftover -= top_up
             remaining -= sum(unit.grant for unit in group)
-        dropped = [unit for unit in active if not _apply(unit, chrome, notes)]
+        iteration = DegradationRecorder.create()
+        dropped = [unit for unit in active if not _apply(unit, chrome, notes, iteration)]
         if not dropped:
+            degradation.effects.extend(iteration.effects)
             return
+        dropped_paths = {f"$.text.{unit.index}" for unit in dropped}
+        degradation.effects.extend(effect for effect in iteration.effects if effect.path in dropped_paths)
         for unit in dropped:
             unit.slot.dropped = True
             active.remove(unit)
@@ -710,7 +786,13 @@ class _GrantGroup:
     grant: int = 0
 
 
-def _allocate_budgeted(builder: _Builder, budget: int, notes: list[str], chrome: Chrome) -> None:
+def _allocate_budgeted(
+    builder: _Builder,
+    budget: int,
+    notes: list[str],
+    chrome: Chrome,
+    degradation: DegradationRecorder,
+) -> None:
     """Allocate transparent budget regions as siblings, then solve inside each grant."""
     claimed: set[int] = set()
     groups: list[_GrantGroup] = []
@@ -791,7 +873,7 @@ def _allocate_budgeted(builder: _Builder, budget: int, notes: list[str], chrome:
             remaining = max(0, budget - sum(group.grant for group in groups))
 
     for group in groups:
-        _allocate(list(group.units), group.grant, notes, chrome)
+        _allocate(list(group.units), group.grant, notes, chrome, degradation)
 
 
 def _prune(children: list[Realized]) -> list[Realized]:
@@ -1102,6 +1184,7 @@ def _solve_once(
             dict[int, str],
             dict[int, Callable[[int, int], str]],
             int,
+            DegradationProfile,
         ]
         | None
     ) = None
@@ -1110,6 +1193,7 @@ def _solve_once(
     # The component ceiling is a safe bound even when many paginators are nested in one Panel.
     for _ in range(limits.total_components + 1):
         pass_notes = list(notes)
+        degradation = DegradationRecorder.create()
         builder = _Builder(limits=limits, notes=pass_notes)
         children = builder.realize_children(resolved)
         paginate_units, keys, footers = _configure_paginators(builder, chrome)
@@ -1120,19 +1204,19 @@ def _solve_once(
         )
         budget = limits.total_text - builder.raw_text_cost - reserved_text - footer_reservation
         if builder.budgets:
-            _allocate_budgeted(builder, budget, pass_notes, chrome)
+            _allocate_budgeted(builder, budget, pass_notes, chrome, degradation)
         else:
-            _allocate(builder.units, budget, pass_notes, chrome)
+            _allocate(builder.units, budget, pass_notes, chrome, degradation)
         children = _prune(children)
         detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
-        final = (builder, children, paginate_units, keys, footers, clamps)
+        final = (builder, children, paginate_units, keys, footers, clamps, degradation.freeze())
         expanded = active | detected
         if expanded == active:
             break
         active = expanded
 
     assert final is not None
-    builder, children, paginate_units, keys, footers, clamps = final
+    builder, children, paginate_units, keys, footers, clamps, degradation = final
     pagers: list[Pager] = []
     for unit in paginate_units:
         if unit.fragments is None or len(unit.fragments) <= 1:
@@ -1183,4 +1267,5 @@ def _solve_once(
         nav=nav,
         chrome=chrome,
         limits=limits,
+        degradation=degradation,
     )
