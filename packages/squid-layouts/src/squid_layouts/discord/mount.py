@@ -14,7 +14,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Protocol, override
+from typing import Any, Protocol, cast, override
 
 import anyio
 import discord
@@ -392,7 +392,7 @@ class Mount:
         timeout: float | None = 900,
         on_error: ErrorHook | None = None,
         middleware: Sequence[ActionMiddleware] = (),
-        profiler: Profiler = _NOOP_PROFILER,
+        profiler: Profiler | None = None,
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
         acknowledgement_timeout: float = 2.5,
@@ -427,7 +427,14 @@ class Mount:
         self.access = access
         self.on_error = on_error
         self._middleware = _unique_by_identity(middleware)
-        self.profiler = profiler
+        inherited_profiler = None if scheduler is None else getattr(scheduler, "profiler", None)
+        self.profiler = (
+            profiler
+            if profiler is not None
+            else cast(Profiler, inherited_profiler)
+            if inherited_profiler is not None
+            else _NOOP_PROFILER
+        )
         self.scheduler = scheduler
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
