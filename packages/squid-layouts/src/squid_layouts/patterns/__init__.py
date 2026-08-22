@@ -39,15 +39,18 @@ from squid_layouts.patterns.shells import (
 from squid_layouts.patterns.source_ranked import SourceRankedList
 from squid_layouts.patterns.tabs import Tab, Tabs, TabsState
 from squid_layouts.patterns.wizard import (
+    REVIEW_STEP,
     Wizard,
     WizardAnswer,
     WizardAnswers,
     WizardFinishHandler,
+    WizardReview,
     WizardState,
     WizardStep,
 )
 
 __all__ = [
+    "REVIEW_STEP",
     "Browser",
     "BrowserDetail",
     "BrowserOpenHandler",
@@ -96,6 +99,7 @@ __all__ = [
     "WizardAnswer",
     "WizardAnswers",
     "WizardFinishHandler",
+    "WizardReview",
     "WizardState",
     "WizardStep",
     "confirm",
