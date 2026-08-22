@@ -35,7 +35,8 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Stateful Discord interaction | sl.discord.Mount(component) | lifecycle, events, paging, edits |
+| Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
+| Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
 | Static Discord message | sl.discord.render_static(document) | discord.ui.LayoutView |
 | Discord view plus diagnostics | sl.discord.compose(document) | Composition |
 | Portable planning | plan(document, target=...) | PlanResult |
