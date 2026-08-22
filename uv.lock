@@ -2654,13 +2654,17 @@ discord = [
     { name = "anyio" },
     { name = "discord-py" },
 ]
+postgres = [
+    { name = "asyncpg" },
+]
 
 [package.metadata]
 requires-dist = [
     { name = "anyio", marker = "extra == 'discord'", specifier = ">=4.14,<5" },
+    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
     { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.7,<3" },
 ]
-provides-extras = ["discord"]
+provides-extras = ["discord", "postgres"]
 
 [[package]]
 name = "starlette"

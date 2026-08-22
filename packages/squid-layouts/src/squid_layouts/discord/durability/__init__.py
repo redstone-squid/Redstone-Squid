@@ -19,6 +19,28 @@ from squid_layouts.runtime.presentation import (
 from squid_layouts.runtime.reactivity import export_state, restore_state
 from squid_layouts.sources import Direction, Position
 
+from .postgres import PostgresSnapshotStore
+from .stores import SQLiteSnapshotStore
+
+__all__ = [
+    "ComponentRegistry",
+    "ComponentSnapshot",
+    "DurableMountCodec",
+    "DurableMountRecord",
+    "LeaseSnapshotStore",
+    "MemorySnapshotStore",
+    "MountLocator",
+    "MountManager",
+    "MountSnapshot",
+    "PostgresSnapshotStore",
+    "PresentationSnapshot",
+    "RecoveredMount",
+    "SQLiteSnapshotStore",
+    "SnapshotCodec",
+    "SnapshotError",
+    "SnapshotStore",
+]
+
 
 class SnapshotError(ValueError):
     """A snapshot is malformed, incompatible, or unsafe to restore."""
@@ -378,7 +400,7 @@ class MemorySnapshotStore:
         if key not in self._payloads:
             return False
         current = self._leases.get(key)
-        if current is not None and current[0] != owner and current[1] > self._clock():
+        if current is not None and current[0] != owner and current[1] >= self._clock():
             return False
         self._leases[key] = (owner, lease_until)
         return True
