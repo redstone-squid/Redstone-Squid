@@ -64,10 +64,18 @@ class ClassicRenderer:
         limits: ClassicLimits = CLASSIC_LIMITS,
         audit: bool = True,
         view_factory: ClassicViewFactory = StaticClassicView,
+        always_view: bool = False,
     ) -> None:
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
+        self.always_view = always_view
+        """Build a view even for a document with no controls.
+
+        A static render of pure prose needs no view and should send none. A *mounted* one
+        does: the view is what owns the mount's timeout and what discord.py stores, so a
+        screen that currently shows no buttons would otherwise never time out.
+        """
 
     def draw(
         self,
@@ -140,7 +148,7 @@ class ClassicRenderer:
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> discord.ui.View | None:
-        if not body.rows:
+        if not body.rows and not self.always_view:
             return None
         view = self.view_factory()
         for index, row in enumerate(body.rows):

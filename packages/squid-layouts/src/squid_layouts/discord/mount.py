@@ -781,6 +781,7 @@ class Mount:
             return ClassicRenderer(
                 limits=cast(ClassicLimits, self.limits),
                 view_factory=lambda: ClassicMountedView(self, timeout),
+                always_view=True,
             )
         return V2Renderer(
             limits=cast(V2Limits, self.limits),

@@ -363,11 +363,12 @@ class TestDurableMode:
         record = sl.discord.durability.DurableMountRecord(
             protocol=1,
             snapshot=sl.discord.durability.MountSnapshot(
-                protocol=1,
+                protocol=sl.discord.durability.SnapshotCodec.protocol,
                 component_key="panel",
                 component_version=1,
                 components=(),
                 presentation=sl.discord.durability.PresentationSnapshot({}, {}, {}, {}),
+                target_fingerprint=sl.discord.V2_TARGET.fingerprint,
             ),
             locator=locator,
         )
