@@ -277,16 +277,15 @@ class Variants:
     something to give up: a button panel stepping to one select, a gallery to a link row.
 
     Rungs unsupported by the target are dropped at planning time; the survivors form a budget
-    ladder. The solver opens every ladder at rung 0 and, under component pressure, steps the
-    lowest-priority one down a single rung, re-solving after each step — the decision is made
-    before anything is measured, so it stays out of the text-policy matrix.
+    ladder. The solver opens every ladder at rung 0 and searches reachable rung assignments
+    best-first under component pressure. Every candidate is measured together with text loss,
+    so an ineffective early ladder cannot force a later sibling to degrade as well.
 
     Two rules follow from stepping being a whole-tree decision. ``priority`` compares
-    **globally**, not among siblings: the lowest-priority ladder anywhere in the document
-    steps first, and equal priorities step breadth-first, each reaching rung 1 before any
-    reaches rung 2. And a nested ladder only becomes steppable once its ancestor's *selected*
-    rung exposes it; stepping the ancestor abandons it and opens whatever the new rung holds
-    at rung 0.
+    **globally**, not among siblings: lower-priority loss is cheaper, and equal priorities
+    compare breadth-first, each reaching rung 1 before any reaches rung 2. A nested ladder only
+    becomes searchable once its ancestor's *selected* rung exposes it; stepping the ancestor
+    abandons it and opens whatever the new rung holds at rung 0.
     """
 
     variants: tuple[Variant, ...]

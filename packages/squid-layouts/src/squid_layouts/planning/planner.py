@@ -10,16 +10,18 @@ from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, Unso
 from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
+from squid_layouts.planning.degradation import DegradationProfile
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAssignment, iter_assignments
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, CostVector, StrategyAssignment, iter_assignments
 from squid_layouts.planning.solve import (
     Realized,
     RPanel,
     RSection,
     RText,
     SolvedLayout,
+    _resolve_variants,
     solve,
 )
 from squid_layouts.planning.target import ResourceCost, TargetProfile
@@ -355,6 +357,7 @@ def _attempt_strategy(
     reservation: ResourceCost,
     positions: Mapping[str, Position] | None,
     nav: PlannedNav | None,
+    search_budget: int,
 ) -> _StrategyAttempt:
     broker = CursorCoordinator(presentation, chrome, nav, positions)
     semantic = lower_semantics(
@@ -376,6 +379,7 @@ def _attempt_strategy(
         strict=False,
         reserved_text=reservation.get("display_text"),
         nav=nav,
+        search_budget=search_budget,
     )
     return _StrategyAttempt(assignment, semantic, lowered, solved, broker)
 
@@ -398,10 +402,14 @@ def _search_strategies(
     current = next(assignments)
     first: _StrategyAttempt | None = None
     degraded: _StrategyAttempt | None = None
+    phase_one: list[_StrategyAttempt] = []
     selected: _StrategyAttempt | None = None
     fallback = False
     states_explored = 0
 
+    # Lossless semantic representations always outrank author-granted degradation. Give
+    # every semantic assignment its preferred structural rungs before spending another
+    # state inside any one assignment's variant product.
     while True:
         attempted = _attempt_strategy(
             current,
@@ -414,26 +422,59 @@ def _search_strategies(
             reservation=reservation,
             positions=positions,
             nav=nav,
+            search_budget=1,
         )
-        states_explored += 1
+        states_explored += attempted.solved.states_explored
+        phase_one.append(attempted)
         if first is None:
             first = attempted
-        fits = attempted.solved.components <= limits.total_components
-        if fits and attempted.solved.overflowed and degraded is None:
+        fits = attempted.solved.components <= limits.total_components and not _has_hard_failure(attempted.solved)
+        if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
             degraded = attempted
 
         following = next(assignments, None)
         if following is not None and states_explored >= search_budget:
-            selected = first
+            selected = degraded or first
             fallback = True
             break
-        if fits and not attempted.solved.overflowed:
+        if fits and attempted.solved.degradation.lossless:
             selected = attempted
             break
         if following is None:
-            selected = degraded or first
             break
         current = following
+
+    # No preferred-rung assignment was lossless. Resume only assignments that actually
+    # had unexplored variant states, retaining the best incumbent across the full product.
+    if selected is None:
+        for initial in phase_one:
+            if not initial.solved.search_fallback:
+                continue
+            remaining = search_budget - states_explored
+            if remaining < 1:
+                fallback = True
+                break
+            attempted = _attempt_strategy(
+                initial.assignment,
+                document=document,
+                target=target,
+                limits=limits,
+                chrome=chrome,
+                localization=localization,
+                presentation=presentation,
+                reservation=reservation,
+                positions=positions,
+                nav=nav,
+                search_budget=remaining,
+            )
+            states_explored += attempted.solved.states_explored
+            fits = attempted.solved.components <= limits.total_components and not _has_hard_failure(attempted.solved)
+            if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
+                degraded = attempted
+            if attempted.solved.search_fallback:
+                fallback = True
+                break
+        selected = degraded or first
 
     assert selected is not None
     fallback_events: tuple[PlanEvent, ...] = ()
@@ -443,7 +484,7 @@ def _search_strategies(
                 code="planner.search_fallback",
                 path="$",
                 message=(
-                    f"Strategy search reached its {search_budget}-attempt budget; selected the local-minimum fallback"
+                    f"Strategy search reached its {search_budget}-attempt budget; selected the best incumbent"
                 ),
                 severity=PlanSeverity.WARNING,
             ),
@@ -455,6 +496,14 @@ def _search_strategies(
         search_fallback=fallback,
     )
     return replace(selected, semantic=semantic)
+
+
+def _has_hard_failure(solved: SolvedLayout) -> bool:
+    return any(note.startswith("Never nodes need") or note.startswith("Budget floors need") for note in solved.notes)
+
+
+def _degraded_key(attempt: _StrategyAttempt) -> tuple[DegradationProfile, CostVector]:
+    return attempt.solved.degradation, attempt.assignment.cost
 
 
 def plan(
@@ -511,7 +560,8 @@ def plan(
         )
         lowered = _lower_children(semantic.nodes, target, limits)
         _validate(lowered, limits)
-        converter = _collect_cached_bindings(lowered, cached.scene, nav, chrome)
+        selected_nodes = _resolve_variants(lowered, dict(cached.variant_positions))
+        converter = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in document.assets}
         return PlanResult(
             scene=cached.scene,
@@ -637,6 +687,7 @@ def plan(
                 attempt.assignment.strategies,
                 semantic.states_explored,
                 semantic.search_fallback,
+                attempt.solved.variant_positions,
             ),
         )
     return result
@@ -769,8 +820,10 @@ def _plan_cache_key(
 
 def _cacheable(nodes: Sequence[Node]) -> bool:
     def check(node: Node) -> bool:
-        if isinstance(node, Extension | RawItem | Variants):
+        if isinstance(node, Extension | RawItem):
             return False
+        if isinstance(node, Variants):
+            return all(check(child) for variant in node.variants for child in variant.nodes)
         if isinstance(node, Panel | Budget | Break):
             return all(check(child) for child in node.children)
         return True
