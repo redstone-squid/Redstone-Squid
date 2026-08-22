@@ -324,8 +324,19 @@ portable actor facts and response intents: notice, present_form, download, redir
 finish. Each frontend implements ActionResponder; Discord details live in
 sl.discord.ActionResponder.
 
+What a delivery moves is a `DiscordPresentation`: mode, content, embeds, view and assets as
+one value, so the payload Squid owns can be staged, logged and asserted on rather than
+assembled kwarg by kwarg. `DiscordMode` is `CLASSIC` or `COMPONENTS_V2`; construction rejects
+the combinations Discord answers with an unhelpful 400, including a classic view that reports
+`has_components_v2()` and would therefore set the flag implicitly. `Destination` and
+`EditHandle.write` both take one. Only `COMPONENTS_V2` is constructed today; `CLASSIC` exists
+so the transition matrix is written once, and a `LayoutView` message can never go back to it —
+that raises `DiscordModeError` before the request.
+
 A mount writes back through an `EditHandle` rather than a stored message: a way to reach one
-already-sent message, and how long it is good for. The bot's own credentials never expire;
+already-sent message, and how long it is good for. A handle also records which mode the
+message is in, so the legacy fields a pre-Components-V2 message must clear are stated rather
+than guessed, and durable records carry the mode beside the locator. The bot's own credentials never expire;
 an interaction's do, and every click carries a fresh one, so `Mount` keeps the longest-lived
 handle it has seen. A handle that no longer addresses its message raises `StaleHandleError`,
 which is the one place webhook tokens and response shapes are understood. When no handle is

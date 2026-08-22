@@ -129,3 +129,30 @@ The result is that a sessionless `compose()` can carry a file, which today it ca
 
 Proposed 2026-08-22, split out of [36](36-classic-discord-target.md) so it can land on its own
 merits. 36 depends on this plan; this plan depends on nothing in 36.
+
+Shipped 2026-08-22, with three amendments the tree forced:
+
+- **§D was already done.** Plan 35 §E.4 landed first, so `attachment_assets`, `files_for` and
+  `Composition.assets` were already out of `mount.py` in `discord/attachments.py`. Step 3 of
+  the sequence reduced to hanging the assets off the presentation instead of off the
+  candidate. The bullet is struck, as §D said it would be.
+- **A classic view that reports `has_components_v2()` is defence in depth, not a live
+  hazard.** discord.py 2.7 refuses an `ActionRow` in a `discord.ui.View` from both directions —
+  `add_item` raises, and so does the class body. Only a subclass that overrides
+  `has_components_v2` can reach the state today, which is what the test uses. The check stays:
+  the flag is set from a view's own answer rather than from anything discord.py derives.
+- **`Replyable.send` types `view` as `Any`.** No single signature covers both modes, because
+  discord.py's `send` is overloaded precisely so that a `LayoutView` and a `content` cannot be
+  named together; a protocol naming `LayoutView | View | None` stops matching
+  `commands.Context.send`. `DiscordPresentation` is what enforces the combination, at
+  construction, for both of them.
+
+Two consequences worth knowing:
+
+- **Materializing files is now the destination's job.** `Mount.send` used to call
+  `files_for` before handing the destination a list, so an unresolved `StoredAsset` raised at
+  send time whatever the destination did. It now raises inside `presentation.files()`, which
+  every destination in the package calls through `_merged_files`.
+- **`tests/architecture/test_discord_components_v2.py` gained a narrow exemption.**
+  `presentation.py` and `delivery.py` may *name* `discord.Embed` and `discord.ui.View`;
+  constructing one is still a violation, and the guard now tells the two apart.
