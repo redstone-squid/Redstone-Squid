@@ -89,13 +89,24 @@ class SolveNoteCode(StrEnum):
     NEVER_BUDGET = "failure.never_budget"
     BUDGET_FLOOR = "failure.budget_floor"
     BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
-    VARIANT_STEP = "degradation.variant_step"
+    VARIANT_STEP = "adaptation.variant_step"
+    SEMANTIC_FALLBACK = "degradation.semantic_fallback"
+    VARIANT_REFORMATTED = "degradation.variant_reformatted"
+    VARIANT_LOSSY = "degradation.variant_lossy"
     PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
     COMPONENT_BUDGET = "degradation.component_budget"
 
 
 class SolveNoteSeverity(Enum):
     """How a solver note affects feasibility and reporting."""
+
+    ADAPTATION = "adaptation"
+    """The layout took another shape and lost nothing; `strict=True` accepts this.
+
+    Stepping a ladder to an exact rung is the case that matters: paginating a long region
+    or splitting it across cards shows every word the author wrote, so a caller who asked
+    for no degradation has not been given any.
+    """
 
     CLAMP = "clamp"
     DEGRADATION = "degradation"
@@ -112,6 +123,11 @@ class SolveNote:
 
     def __str__(self) -> str:
         return self.message
+
+
+def lossy_notes(notes: Sequence[SolveNote]) -> list[SolveNote]:
+    """The notes `strict=True` refuses: everything that is not lossless adaptation."""
+    return [note for note in notes if note.severity is not SolveNoteSeverity.ADAPTATION]
 
 
 def _note(
@@ -1198,8 +1214,8 @@ def measure(
         nav=nav,
         notes=[],
     )
-    if strict and measured.notes:
-        raise LayoutOverflowError(measured.notes)
+    if strict and (lossy := lossy_notes(measured.notes)):
+        raise LayoutOverflowError(lossy)
     return measured
 
 

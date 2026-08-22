@@ -24,6 +24,7 @@ from squid_layouts.planning.measure import RPanel, RText
 from squid_layouts.primitives import (
     ActionGroup,
     Alt,
+    Fidelity,
     Lines,
     LinkButton,
     Never,
@@ -34,6 +35,7 @@ from squid_layouts.primitives import (
     Row,
     SelectMenu,
     Text,
+    Variant,
     Variants,
 )
 from squid_layouts.scene.model import (
@@ -244,9 +246,28 @@ class TestVariants:
         assert _components(result) <= LIMITS.total_components
         assert _step_events(result)
 
-    def test_strict_mode_rejects_a_required_step(self):
-        with pytest.raises(LayoutDegradedError, match="stepped"):
-            _planned(_ladder_document(11), strict=True)
+    def test_strict_mode_accepts_a_required_step_to_an_exact_rung(self):
+        """Stepping is not loss; a smaller faithful shape is exactly what strict asked for."""
+        result = _planned(_ladder_document(11), strict=True)
+
+        assert _components(result) <= LIMITS.total_components
+        assert len(_step_events(result)) == 2
+
+    def test_strict_mode_rejects_a_required_step_to_a_lossy_rung(self):
+        lossy = [
+            Variants(
+                (
+                    Variant(
+                        (Panel(children=(Text(f"panel {index}"), Row((LinkButton("open", "https://e.invalid"),)))),)
+                    ),
+                    Variant((Text(f"line {index}"),), fidelity=Fidelity.LOSSY),
+                )
+            )
+            for index in range(11)
+        ]
+
+        with pytest.raises(LayoutDegradedError, match="stepped to lossy variant"):
+            _planned(lossy, strict=True)
 
 
 class TestVariantLadders:

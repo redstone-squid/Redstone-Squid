@@ -523,7 +523,7 @@ def render_component_tree(
                         expanded_rung: list[Node] = []
                         for child_index, child in enumerate(variant.nodes):
                             expanded_rung.extend(expand_item(child, f"{item_path}.variant.{index}.{child_index}"))  # pyrefly: ignore
-                        rungs.append(Variant(tuple(expanded_rung), variant.requires))
+                        rungs.append(Variant(tuple(expanded_rung), variant.requires, variant.fidelity))
                     return [Variants(tuple(rungs), priority)]
                 case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                     expanded = expand_item(fallback, f"{item_path}.fallback")
@@ -662,7 +662,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
             case Variants(variants=variants, priority=priority):
                 return Variants(
                     variants=tuple(
-                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires)
+                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires, variant.fidelity)
                         for variant in variants
                     ),
                     priority=priority,

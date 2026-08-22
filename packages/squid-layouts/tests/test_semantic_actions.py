@@ -154,7 +154,7 @@ def test_fallback_axes_are_discovered_when_their_rung_becomes_reachable() -> Non
     result = plan(document, target=DEFAULT_TARGET)
 
     assert any(event.code == "actions.grouped" and event.path == "$.35.alternate.0" for event in result.report.events)
-    assert any(event.code == "layout.degradation.variant_step" for event in result.report.events)
+    assert any(event.code == "layout.degradation.semantic_fallback" for event in result.report.events)
     assert sum(isinstance(node, SceneSelect) for node in result.scene.children) == 1
     assert not result.metrics.search_fallback
 
@@ -350,7 +350,7 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
     )
     assert "outer 0" not in rendered
     assert "inner primary 0" not in rendered
-    assert len([event for event in result.report.events if event.code.endswith("variant_step")]) == 2
+    assert len([event for event in result.report.events if event.code.endswith("semantic_fallback")]) == 2
 
 
 def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
