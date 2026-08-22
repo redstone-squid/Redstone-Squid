@@ -906,7 +906,7 @@ class Mount:
         """
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
-        with self.profiler.operation(OperationKind.SEND, name=name) as profile:
+        with self.profiler.operation(OperationKind.SEND, name=name, attributes={"mount_id": self.id}) as profile:
             with profile.span("render_lock"):
                 await self._render_lock.acquire()
             try:
@@ -1015,7 +1015,7 @@ class Mount:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": kind.value},
+            attributes={"kind": kind.value, "mount_id": self.id},
         ) as operation:
             profile = _DispatchProfile(
                 operation,
@@ -1096,7 +1096,7 @@ class Mount:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": ActionKind.SUBMIT.value},
+            attributes={"kind": ActionKind.SUBMIT.value, "mount_id": self.id},
         ) as operation:
             profile = _DispatchProfile(
                 operation,
@@ -1498,7 +1498,9 @@ class Mount:
         if profile is not None:
             with profile.operation.span("flush"):
                 return await self._flush(interaction, profile.operation, dispatch=profile)
-        with self.profiler.operation(OperationKind.DELIVERY, name="flush") as operation:
+        with self.profiler.operation(
+            OperationKind.DELIVERY, name="flush", attributes={"mount_id": self.id}
+        ) as operation:
             try:
                 presentation = await self._flush(interaction, operation)
             except Exception:
@@ -1611,7 +1613,9 @@ class Mount:
     async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> None:
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
-        with self.profiler.operation(OperationKind.REFRESH, name=name, links=links) as profile:
+        with self.profiler.operation(
+            OperationKind.REFRESH, name=name, attributes={"mount_id": self.id}, links=links
+        ) as profile:
             with profile.span("render_lock"):
                 await self._render_lock.acquire()
             try:
