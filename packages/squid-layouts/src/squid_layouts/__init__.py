@@ -186,11 +186,13 @@ from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
 from squid_layouts.runtime.reactivity import (
+    ActionParticipant,
     ReactiveWriteError,
     StateDelta,
     UndeclaredStateError,
     batch,
     computed,
+    join_action,
     on_action_commit,
     state,
     strict_state,
@@ -358,6 +360,7 @@ __all__ = [
     "ActionGroup",
     "ActionKind",
     "ActionMiddleware",
+    "ActionParticipant",
     "ActionPolicy",
     "ActionProceed",
     "ActionRequest",
@@ -618,6 +621,7 @@ __all__ = [
     "html",
     "item",
     "items",
+    "join_action",
     "keep_with_next",
     "link",
     "list_source",
