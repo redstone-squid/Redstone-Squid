@@ -30,7 +30,7 @@ from squid.bot.submission.ui.components import (
     get_text_input,
 )
 from squid.bot.topics import follow_resource, resource_topic
-from squid.bot.ui import create_mount, display_text_length, render_static
+from squid.bot.ui import create_mount, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
@@ -906,8 +906,8 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         )
         # The header card is already in the view, so the build card gets what is left of the
         # display budget; conform is the gate this hand-assembled view would otherwise skip.
-        reserved = display_text_length(self)
-        self.add_item(await self.get_handler(interaction).render_container(reserved_text=reserved))
+        reservation = sl.discord.measure(self).cost
+        self.add_item(await self.get_handler(interaction).render_container(reservation=reservation))
         self.add_item(controls)
         sl.discord.conform(self)
 
@@ -976,7 +976,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         if render_node is not None:
             build_node = await render_node()
         else:
-            build_container = await handler.render_container(reserved_text=len(heading))
+            build_container = await handler.render_container(
+                reservation=sl.discord.ResourceCost({"display_text": len(heading)})
+            )
             build_node = sl.primitives.RawItem(lambda: build_container, kind="discord.item", version=1)
         success = render_static([sl.primitives.Text(heading), build_node], locale=self.locale)
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:

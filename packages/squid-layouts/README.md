@@ -48,8 +48,9 @@ for component composition, planning, renderers, action policies, and durable mou
 6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
    `sl.discord.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
 
-`sl.discord.compose()` is the Discord convenience pipeline, with `reserved_text` for callers whose
-message carries content the engine cannot see. It always creates a renderer-owned view;
+`sl.discord.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
+message carries content the engine cannot see — `sl.discord.measure(view)` and `sl.discord.cost(item)`
+produce one without hand-counting. It always creates a renderer-owned view;
 adopting an arbitrary existing `discord.py` view is intentionally unsupported. Components nest through explicit
 `self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sl.discord.Mount`
 binds a component tree to a message: every
