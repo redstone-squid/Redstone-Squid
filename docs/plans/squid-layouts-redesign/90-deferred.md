@@ -39,6 +39,9 @@ are not re-derived or accidentally adopted later.
 - **Portable permission facts on `ActionEvent`** — plan 02 gives the typed Discord
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
+  **Revisited 2026-08-22**: partially superseded by [31](31-action-ergonomics.md) — the
+  portable admission surface is `Guard`/`GuardVerdict`; frontend facts still enter through
+  plan 02's native access (`requires_role` lives in `sl.discord.guards`).
 - **Ephemeral session handoff** (Cascade-style: arm a refresh control before token
   expiry, rebuild the session from the fresh interaction). Mostly retired: plan 07's
   `EditHandle` renews on every click, so an ephemeral panel in use stays writable
@@ -55,18 +58,28 @@ are not re-derived or accidentally adopted later.
   state) waits for a feature that needs it. No consumer needs even the set form today: the
   one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
   its own wording, which a static set cannot express.
+  **Revisited 2026-08-22**: [31](31-action-ergonomics.md)'s `guards.permission` serves the
+  `_may_event` case named here; per-actor state arrives as [32](32-demand-driven.md)'s
+  `Agreement` component state. The participant *lifecycle* model is now
+  [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
+  entry's remaining removal condition.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
   plans [18](18-forms.md)/[19](19-patterns.md) now cover Form, Wizard and
   MultiChoicePanel; Tabs/Menu/RankedList were also migrated under 19's two-shell rule.
+  **Revisited 2026-08-22**: continued by the survey batches
+  [29](29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
+  table/list browser this entry originally named (30's `Browser`).
 - **Grid / matrix interaction** (added 2026-08-21) — content grids are a `Table`
   display strategy (`MATRIX`), not a new node; interactive grids start as an
   `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
   non-degradability free. The degradation ladder (button grid → text grid +
   coordinate select → paged select) is the semantic-node promotion, and it waits for
   a real consumer.
+  **Revisited 2026-08-22**: promoted by [32](32-demand-driven.md); the recorded three-tier
+  shape is adopted unchanged.
 - **`sl.resource` descriptor** — resolved 2026-08-22 by [33](33-resources.md). Explicit
   `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
   resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
@@ -99,6 +112,8 @@ are not re-derived or accidentally adopted later.
   [19](19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
   per-window merge, gated Apply). The rejection of engine-side `Managed` merging
   stands.
+  **Revisited 2026-08-22**: [30](30-structures.md)'s immediate commit changes when the
+  pattern commits, not who merges; the `Managed`-merging rejection stands.
 - **Statically checking a route handler's parameters against its route** (plan 16 stage 2)
   — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
   `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
