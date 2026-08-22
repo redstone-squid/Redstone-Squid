@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, overload
 
+from squid_layouts.runtime.reactivity import _CONSUMER, declared_cells
+
 
 class ResourceOwner(Protocol):
     """The component behavior a bound resource needs."""
@@ -82,11 +84,28 @@ class Resource[ValueT]:
         self._state: ResourceState[ValueT] = Pending()
         self._loading: tuple[int, asyncio.Event] | None = None
         self._request_token = 0
+        self.sources: dict[Any, int] = declared_cells(owner)
+        """State the last load read, and the version each held. Filled by tracking, not declared.
+
+        Seeded with everything the component declares, because a resource whose loader has not
+        run yet cannot say what it reads and may still be handed a value by `replace`.
+        """
 
     @property
     def state(self) -> ResourceState[ValueT]:
-        """Return the current synchronous state."""
+        """Return the current synchronous state, re-pending it if what it read has moved."""
+        self._recheck()
         return self._state
+
+    def _recheck(self) -> None:
+        """Give up a value whose inputs moved since the load that produced it.
+
+        Pulled here rather than pushed at commit: the write that moved the input already
+        invalidated the owner, so the only thing left is for the next reader to notice.
+        """
+        if self.sources and any(source.settle() != seen for source, seen in self.sources.items()):
+            self.sources = {}
+            self._invalidate(notify=False)
 
     @property
     def value(self) -> ValueT:
@@ -115,6 +134,9 @@ class Resource[ValueT]:
         """Install an authoritative value and supersede every in-flight request."""
         self._request_token += 1
         self._state = Ready(value)
+        # Re-baselined rather than dropped: an authoritative value is current for the inputs
+        # as they stand now, and a later change to one of them should still reload.
+        self.sources = {source: source.settle() for source in self.sources}
         self._owner.invalidate()
 
     async def reload(self) -> ResourceState[ValueT]:
@@ -133,6 +155,8 @@ class Resource[ValueT]:
 
         settled = asyncio.Event()
         self._loading = (token, settled)
+        self.sources = {}
+        consumer = _CONSUMER.set(self)
         try:
             try:
                 value = await self._loader()
@@ -145,24 +169,23 @@ class Resource[ValueT]:
                     self._state = Ready(value)
                     self._owner.invalidate()
         finally:
+            _CONSUMER.reset(consumer)
             if self._loading is not None and self._loading[0] == token:
                 self._loading = None
             settled.set()
-        return self.state
+        return self._state
 
 
 class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
-    """Bind one loader and its dependency declaration per component instance."""
+    """Bind one loader per component instance."""
 
     def __init__(
         self,
         loader: Callable[[OwnerT], Awaitable[ValueT]],
         *,
-        depends: tuple[object, ...],
         delivery: ResourceDelivery,
     ) -> None:
         self.loader = loader
-        self.depends = depends
         self.delivery = delivery
         self.public_name = loader.__name__
         self._name = ""
@@ -194,19 +217,12 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
         _observe(bound)
         return bound
 
-    def invalidate_for(self, instance: ResourceOwner) -> None:
-        """Invalidate an already-materialized binding after a dependency commit."""
-        bound = instance.__dict__.get(self._name)
-        if isinstance(bound, Resource):
-            bound._invalidate(notify=False)
-
 
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
-    depends: tuple[object, ...] = (),
     delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
 ) -> _ResourceDescriptor[OwnerT, ValueT]: ...
 
@@ -214,7 +230,6 @@ def resource[OwnerT: ResourceOwner, ValueT](
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     *,
-    depends: tuple[object, ...] = (),
     delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _ResourceDescriptor[OwnerT, ValueT]]: ...
 
@@ -223,15 +238,18 @@ def resource(
     loader: Callable[[ResourceOwner], Awaitable[Any]] | None = None,
     /,
     *,
-    depends: tuple[object, ...] = (),
     delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
 ) -> Any:
-    """Declare a lazy async value whose current state is available during synchronous render."""
+    """Declare a lazy async value whose current state is available during synchronous render.
+
+    The loader's reads are tracked, so the state it consults is its dependency set and a
+    write to any of it re-pends the resource at the next read.
+    """
 
     def decorate(
         function: Callable[[ResourceOwner], Awaitable[Any]],
     ) -> _ResourceDescriptor[ResourceOwner, Any]:
-        return _ResourceDescriptor(function, depends=depends, delivery=delivery)
+        return _ResourceDescriptor(function, delivery=delivery)
 
     return decorate if loader is None else decorate(loader)
 
