@@ -2,6 +2,7 @@
 
 import pytest
 
+import squid_layouts as sl
 from squid_layouts import (
     LayoutInvariantError,
     Position,
@@ -186,6 +187,40 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     assert lead.texts[0].content == "## Title"
     assert lead.accessory == SceneThumbnail("https://example.invalid/lead.png")
     assert panel.children[-1] == SceneText("-# Submission ID: 5")
+
+
+def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> None:
+    document = (
+        sl.section("inherited"),
+        sl.section("absent", accent=None),
+        sl.section("exact", accent=0x123456),
+        sl.aside("semantic", tone=sl.Tone.WARNING),
+    )
+
+    panels = plan(
+        document,
+        target=DEFAULT_TARGET,
+        palette=sl.Palette(brand=0xABCDEF, warning=0x654321),
+    ).scene.children
+
+    assert [panel.accent for panel in panels if isinstance(panel, ScenePanel)] == [
+        0xABCDEF,
+        None,
+        0x123456,
+        0x654321,
+    ]
+
+
+def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
+    document = (
+        sl.section("outer before"),
+        sl.themed(sl.Palette(brand=0x222222), sl.section("inner")),
+        sl.section("outer after"),
+    )
+
+    panels = plan(document, target=DEFAULT_TARGET, palette=sl.Palette(brand=0x111111)).scene.children
+
+    assert [panel.accent for panel in panels if isinstance(panel, ScenePanel)] == [0x111111, 0x222222, 0x111111]
 
 
 def test_a_lead_image_with_no_heading_has_nothing_to_sit_beside() -> None:

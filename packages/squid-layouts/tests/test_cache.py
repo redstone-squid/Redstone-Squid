@@ -10,7 +10,9 @@ from squid_layouts import (
     ListItem,
     Localization,
     Message,
+    Palette,
     Paragraph,
+    Section,
     plan,
 )
 from squid_layouts.discord import DEFAULT_TARGET, compose
@@ -27,7 +29,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import PlanReport, SceneDocument
+from squid_layouts.scene.model import PlanReport, SceneDocument, ScenePanel
 
 
 async def _first(_event) -> None: ...
@@ -40,6 +42,19 @@ async def _previous(_event) -> None: ...
 
 
 async def _next(_event) -> None: ...
+
+
+def test_palette_is_part_of_plan_cache_identity() -> None:
+    cache = PlanCache()
+    document = Section((Paragraph("brand"),))
+
+    first = plan(document, target=DEFAULT_TARGET, palette=Palette(brand=0x111111), cache=cache)
+    second = plan(document, target=DEFAULT_TARGET, palette=Palette(brand=0x222222), cache=cache)
+
+    assert not second.metrics.cache_hit
+    assert isinstance(first.scene.children[0], ScenePanel)
+    assert isinstance(second.scene.children[0], ScenePanel)
+    assert (first.scene.children[0].accent, second.scene.children[0].accent) == (0x111111, 0x222222)
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:

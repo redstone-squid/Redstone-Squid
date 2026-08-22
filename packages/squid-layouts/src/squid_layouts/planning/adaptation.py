@@ -8,6 +8,7 @@ from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
+from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
@@ -112,6 +113,7 @@ from squid_layouts.semantic import (
     Status,
     Table,
     TableDisplay,
+    Themed,
     Timestamp,
     Toggle,
     ToggleEvent,
@@ -151,6 +153,7 @@ class _Context:
     limits: V2Limits
     chrome: Chrome
     localization: Localization
+    palette: Palette
     session: PresentationSession
     pages: CursorCoordinator
     capabilities: frozenset[str]
@@ -222,6 +225,7 @@ def nominate_strategies(
                 Section(children=children)
                 | Article(children=children)
                 | Aside(children=children)
+                | Themed(children=children)
                 | Panel(children=children)
             ):
                 walk_children(children, path)
@@ -252,6 +256,7 @@ def lower_semantics(
     chrome: Chrome,
     localization: Localization,
     session: PresentationSession,
+    palette: Palette = DEFAULT_PALETTE,
     pages: CursorCoordinator | None = None,
     capabilities: frozenset[str] = frozenset(),
     search_budget: int = DEFAULT_SEARCH_BUDGET,
@@ -263,6 +268,7 @@ def lower_semantics(
         limits,
         chrome,
         localization,
+        palette,
         session,
         broker,
         capabilities,
@@ -331,6 +337,13 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return [Variants(tuple(rungs), semantic_path=path)]
         case Actions():
             return _actions(node, path, context)
+        case Themed(children=children, palette=palette):
+            previous = context.palette
+            context.palette = palette
+            try:
+                return _children(children, path, context)
+            finally:
+                context.palette = previous
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
             return _children(children, path, context)
         case (
@@ -348,9 +361,10 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             elif thumbnail:
                 contents.append(Gallery((thumbnail,)))
             contents.extend(_children(children, path, context))
-            return [Panel(tuple(contents), accent=accent)]
+            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            return [Panel(tuple(contents), accent=resolved_accent)]
         case Aside(children=children, tone=tone):
-            return [Panel(tuple(_children(children, path, context)), accent=_tone_color(tone))]
+            return [Panel(tuple(_children(children, path, context)), accent=context.palette.tone(tone))]
         case Heading(content=content, level=level):
             return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never())]
         case Paragraph(content=content):
@@ -1418,12 +1432,3 @@ def _button(action: Action, context: _Context) -> Button:
         disabled=not action.available,
         policy=action.policy,
     )
-
-
-def _tone_color(tone: Tone) -> int | None:
-    return {
-        Tone.INFO: 0x5865F2,
-        Tone.SUCCESS: 0x248046,
-        Tone.WARNING: 0xF0B232,
-        Tone.DANGER: 0xDA373C,
-    }.get(tone)
