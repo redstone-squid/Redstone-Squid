@@ -28,12 +28,12 @@ does not so the rejected half is not re-derived.
 | Typed request/app context | **Taken** — stage 3 |
 | Redirects / aliases (301) | **Taken** — stage 4 |
 | 404 handler | **Taken** — stage 4, scoped; see below |
-| Middleware / `before_request` | **Deferred** — stage 5 did not survive Discord semantics |
-| "A view must return a response" | **Deferred** — the raw interaction exposes no reliable completion signal |
+| Middleware / `before_request` | **Planned** — stage 5, as class-based root/group middleware |
+| "A view must return a response" | **Reframed** — stage 5 guarantees the observable initial acknowledgement |
 | Method verbs (GET/POST) | **Taken** — stage 6; the analogue is *component type* |
 | Form body vs path params | **Taken** — stage 6; selected values are a second parameter source |
 | `flask routes` / `show_urls` | **Taken** — stage 7 |
-| Blueprints / `include_router(prefix=)` | **Deferred.** Real at 30 routes; at 5 it adds indirection over one module-level `router` |
+| Blueprints / `include_router(prefix=)` | **Planned** — stable feature groups, without late-bound route identity |
 | `Depends` dependency injection | **Rejected.** The duplication (`resolve_locale`, `_authorize`) is bot-domain, not framework. Stage 5's middleware is the seam to build it host-side |
 | `url_for("endpoint")` string keys | **Rejected.** A `Route` object is the typed, refactor-safe version of the same thing |
 | Werkzeug specificity-ordered matching | **Rejected.** Registration order is loud; specificity sorting makes an overlap silent. First-match plus the probe check stays |
@@ -321,26 +321,48 @@ rejected at registration. Covered by `TestClientRegistration` and `TestHandlerKi
   parameters to be positionally bindable, and reject `POSITIONAL_ONLY` parameters
   beyond them rather than ignoring them.
 
-## Deferred
+## Planned
 
-### Stage 5 — Middleware, declarative defer, and the response guarantee
+### Stage 5 — Middleware and the acknowledgement guarantee
 
-The proposed `defer="ephemeral"` abstraction is not an honest button default. For a
-component interaction, `defer(ephemeral=True)` defaults to a deferred message update;
-`ephemeral` only affects a new deferred response when `thinking=True`. A generic router
-policy would therefore need to choose between editing the clicked message and showing a
-private loading state without knowing the handler's intent.
+Agreed 2026-08-22: take the part Discord can state honestly. `Router` owns a 2.5-second
+watchdog and sends a silent deferred message update when a handler, middleware, gone hook,
+or error hook has not yet acknowledged the component. A handler that returns without using
+the response slot is acknowledged immediately. This guarantees the one completion fact the
+raw interaction exposes without claiming that arbitrary followups are observable.
 
-The proposed response guarantee is also not observable from a raw interaction. The router
-can see whether the initial response was acknowledged, but followups and edits are not a
-single completion bit it can reliably inspect. Middleware would either misdiagnose valid
-handlers or require wrapping every response path, turning a small dispatch layer into a
-second interaction API. Keep defer, authorization, and response ownership explicit in the
-handler until a concrete repeated policy justifies a narrower abstraction.
+Private thinking and modals stay explicit. `defer(ephemeral=True)` is not a private button
+defer unless `thinking=True`; a thinking response also creates visible pending UI that the
+handler must finish. There will be no declarative `defer="ephemeral"` option and no second
+interaction-response API.
+
+Middleware is class-based and instance-attached. A generic `Middleware[BotT]` abstract base
+receives an immutable `RouteRequest[BotT]` and one-shot `RouteNext`. `Router.add_middleware`
+installs global policies; `RouteGroup.add_middleware` installs feature policies. Root
+middleware runs outside group middleware, and returning without calling next short-circuits
+while the outer acknowledgement guarantee still applies. The host's first consumers are
+routed-action tracing/correlation and the redstoner owner-guild gate. Dependency injection
+remains rejected: middleware controls flow but does not grow a mutable request-state bag.
+
+### Stage 8 — Stable feature route groups
+
+`RouteNamespace("r")` creates feature groups whose prefixes compose when identities are
+defined, not when a router includes them. `polls.define("close")` therefore returns the
+final `r:polls:close` `Route`, and `Route.id()` remains context-free and unambiguous.
+Aliases stay absolute because they name already-emitted ids.
+
+The bot's stable route catalogue becomes a package outside reloadable extension subtrees,
+with poll, build, consent and redstoner groups included by one root router. Groups own route
+definitions, handlers and feature middleware; the root owns installation, gone/error hooks
+and global middleware. Inclusion is idempotent, cross-group overlap is exact, and the whole
+graph freezes at client registration while same-identity handler replacement remains legal
+for extension reloads.
 
 ## Verification
 
-Stages 0-4, 6-7 and C1-C4 have automated coverage in the package and bot unit suites. The
-remaining operational check is to click a vote-card button and a build-card Edit button
-posted before the namespace migration, confirming legacy aliases on real Discord messages
-in addition to the pinned synthetic identities.
+Stages 0-4, 6-7, C1-C4 and registration hardening have automated coverage in the package and
+bot unit suites. Stages 5 and 8 add acknowledgement timing, middleware ordering, route-group
+composition and extension-reload coverage. The remaining operational check is to click a
+vote-card button and a build-card Edit button posted before the namespace migration,
+confirming legacy aliases on real Discord messages in addition to the pinned synthetic
+identities.
