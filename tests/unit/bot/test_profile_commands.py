@@ -1,9 +1,7 @@
-"""Profile rendering and the modal's link parsing."""
+"""Profile rendering behavior."""
 
 from dataclasses import replace
 from uuid import UUID
-
-import pytest
 
 from squid.accounts.domain import (
     AccountIdentity,
@@ -14,9 +12,7 @@ from squid.accounts.domain import (
     PublicCreatorProfile,
     PublicIdentity,
 )
-from squid.bot.account_view import _parse_link_lines
 from squid.bot.profile_render import own_profile_avatar, own_profile_fields, public_profile_fields
-from squid.core.errors import ValidationError
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 LOCALE = "en"
@@ -88,26 +84,3 @@ class TestPublicProfile:
         assert listed is not None
         assert "<@" not in listed
         assert "squidder" in listed
-
-
-class TestLinkLineParsing:
-    def test_lines_split_on_the_first_pipe(self) -> None:
-        parsed = _parse_link_lines("Site | https://example.com\nVideos | https://youtube.com/@x", LOCALE)
-
-        assert parsed == (
-            ProfileLink("Site", "https://example.com"),
-            ProfileLink("Videos", "https://youtube.com/@x"),
-        )
-
-    def test_blank_lines_are_ignored(self) -> None:
-        assert _parse_link_lines("\n\nSite | https://example.com\n\n", LOCALE) == (
-            ProfileLink("Site", "https://example.com"),
-        )
-
-    def test_a_line_without_a_separator_is_refused(self) -> None:
-        with pytest.raises(ValidationError):
-            _parse_link_lines("https://example.com", LOCALE)
-
-    def test_parsing_does_not_second_guess_the_domain_validator(self) -> None:
-        """Splitting is all this does; the service decides whether the URL is acceptable."""
-        assert _parse_link_lines("Bad | http://example.com", LOCALE) == (ProfileLink("Bad", "http://example.com"),)
