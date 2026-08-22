@@ -11,11 +11,17 @@ are not re-derived or accidentally adopted later.
   model is simpler and fits the frontend-neutral tree. Cross-view updates already have a
   path: shared services + `Reactor.schedule`/`Mount.refresh`. If a real many-views-one-
   domain need appears, add a host-side event bus, not a store in the package.
+  **Revisited 2026-08-22**: the bus is [26](26-topic-bus.md), moved package-side by the
+  productization decision; the store half of this rejection stands in full — the bus is
+  payload-free precisely so it can never become one.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
   inventory. Revisit only when a view actually needs to survive restarts; the
   `LeaseSnapshotStore` boundary is ready when that day comes.
+  **Revisited 2026-08-22**: superseded by the productization standard — the consumer is
+  the library user. [27](27-snapshot-stores.md) fills the boundary without moving it;
+  the bot itself still, correctly, has no consumer.
 - **`compose(into=view)` / adopting existing discord.py views** — re-confirmed: renderer
   ownership is what keeps budget measurement sound. Incremental interop is CascadeUI's
   advantage by design choice, not an oversight here.
@@ -23,6 +29,10 @@ are not re-derived or accidentally adopted later.
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
   Publishing squid-layouts is a product decision to make explicitly, not design debt.
+  **2026-08-22**: the productization decision was made — plans [24](24-session-registry-move.md)
+  through [28](28-history.md) build for the library user rather than waiting on bot
+  consumers. Actual PyPI publication remains a separate, still-unmade call; the 3.10
+  backport stays rejected.
 
 ## Deferred until a real consumer exists
 
@@ -36,6 +46,10 @@ are not re-derived or accidentally adopted later.
   more than 15 minutes with nobody touching it — the render simply waits in `Mount.pending`
   until someone does. Only worth building for a view that must update itself unattended,
   which none does.
+  **Resolved 2026-08-22**: [26](26-topic-bus.md)'s bus creates exactly those views, so
+  this entry's condition is met — and the answer is the paused-chrome banner plus
+  click-to-resume, not a handoff control: every control already renews on click, so
+  arming a special one adds nothing. The handoff *mechanism* stays rejected.
 - **Participant tracking / shared sessions** — plan 12 shipped instance policies and
   widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
   state) waits for a feature that needs it. No consumer needs even the set form today: the
