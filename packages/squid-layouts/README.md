@@ -198,13 +198,15 @@ class SearchResults(sl.Component):
         return apply_filters(search(self.query), self.filters)
 ```
 
-Dependencies must be `sl.state` descriptors declared on the same component. The explicit
-declaration is required; there is no component-wide invalidation mode.
+Dependencies may be `sl.state` or earlier `@sl.computed` descriptors declared on the same
+component. Computed dependencies form selector boundaries: downstream computed values and
+resources invalidate only when the refreshed value compares unequal. The explicit declaration is
+required; there is no component-wide invalidation mode.
 
 ### Reactive async resources
 
 `sl.resource` keeps async data in a synchronous, renderable state machine. Dependencies are the
-actual `sl.state` descriptors declared earlier in the same class:
+actual `sl.state` or `@sl.computed` descriptors declared earlier in the same class:
 
 ```python
 class VotingPanel(sl.Component):
