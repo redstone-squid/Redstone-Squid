@@ -1,4 +1,4 @@
-# 30 — Reactive async resources
+# 33 — Reactive async resources
 
 ## Problem
 
