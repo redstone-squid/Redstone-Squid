@@ -20,7 +20,10 @@ from squid_layouts.primitives import (
     Button,
     Code,
     Paginate,
+    Panel,
     Row,
+    Text,
+    Variants,
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
@@ -82,6 +85,27 @@ def test_cache_hit_reuses_the_global_assignment_without_solving(monkeypatch) -> 
     assert attempts == miss.metrics.states_explored == 2
     assert hit.metrics == replace(miss.metrics, cache_hit=True)
     assert hit.scene is miss.scene
+
+
+def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> None:
+    cache = PlanCache()
+
+    def document(handler):
+        return (
+            *(Text(f"filler {index}") for index in range(35)),
+            Variants.of(
+                Panel(tuple(Text(f"detail {index}") for index in range(5))),
+                Row((Button("Run", handler, "run"),)),
+            ),
+        )
+
+    miss = plan(document(_first), target=DEFAULT_TARGET, cache=cache)
+    hit = plan(document(_second), target=DEFAULT_TARGET, cache=cache)
+
+    assert not miss.metrics.cache_hit
+    assert hit.metrics.cache_hit
+    assert hit.scene is miss.scene
+    assert hit.bindings["run"].handler is _second
 
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:

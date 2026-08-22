@@ -88,8 +88,12 @@ honestly express that domain operation without an explicit grouping or commit mo
 Strategy ranking is lexicographic rather than scalar: representation stability by
 `Flexibility`, author display preference, pager count, transition distance, then stable path
 and strategy identifiers. Per-adapter versions invalidate only that adapter's sticky state.
-The default search budget is 512 states. Budget exhaustion selects a deterministic lossless
-fallback and records `planner.search_fallback`; it never spends an author degradation grant.
+The solver first gives every semantic assignment its preferred structural rungs, then searches
+reachable `Variants` assignments best-first. If no wholly lossless candidate exists, author
+priority is compared before loss kind: semantic substitutions beat truncation, truncation beats
+spilling entries, and spilling beats dropping a whole node. Semantic strategy cost breaks the
+remaining tie. The default search budget is 512 measured whole-layout candidates. Exhaustion
+selects the best valid incumbent and records `planner.search_fallback`.
 
 Target-shaped nodes live under `squid_layouts.primitives`. Their policies are explicit:
 
@@ -98,8 +102,8 @@ Target-shaped nodes live under `squid_layouts.primitives`. Their policies are ex
 - `Paginate` has an explicit key, measured footer/navigation chrome, and optional `min_fill`
   and `widows` break preferences.
 - `Variants` supplies an ordered ladder of complete structural alternates for component
-  pressure; rungs may be capability-gated, and the planner filters them before the solver
-  steps the survivors.
+  pressure; rungs may be capability-gated, and the planner filters them before a bounded
+  global search considers the survivors.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
@@ -308,9 +312,11 @@ All use the same `NavFactory`.
 container's heterogeneous children. Children are atomic unless a text child must split;
 `sl.unbreakable` groups several lowered primitives into one atomic item and
 `sl.keep_with_next` forbids the following break. Region breaks minimize preference violations,
-then page count and squared fill badness. A section heading is kept with its first body child
-automatically. Region fingerprints hash every child's stable logical identity, so callbacks do
-not make an otherwise unchanged page stale across processes.
+then page count and squared fill badness. Text and heterogeneous regions share this exact
+prefix-summed fragmentation engine at every input size; there is no size-dependent heuristic.
+A section heading is kept with its first body child automatically. Region fingerprints hash
+every child's stable logical identity, so callbacks do not make an otherwise unchanged page
+stale across processes.
 
 Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
 component. If top-level structure still exceeds the component limit after lossless adaptation,

@@ -196,6 +196,7 @@ class PlanMetrics:
     """Planner instrumentation kept outside deterministic reports and scene payloads."""
 
     states_explored: int = 0
+    """Measured whole-layout candidates, across semantic strategies and structural variants."""
     cache_hit: bool = False
     search_fallback: bool = False
 

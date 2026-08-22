@@ -16,6 +16,7 @@ class CachedPlan:
     strategies: tuple[tuple[str, str], ...] = ()
     states_explored: int = 0
     search_fallback: bool = False
+    variant_positions: tuple[tuple[tuple[int | str, ...], int], ...] = ()
 
 
 class PlanCache:
