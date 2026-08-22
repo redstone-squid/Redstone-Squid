@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
+from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.text import TextLike
@@ -88,6 +89,17 @@ class Button:
     emoji: str | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+
+@dataclass(frozen=True, slots=True)
+class FormButton(Button):
+    """A button that presents a form, carrying the binding its handler closes over.
+
+    The handler alone is opaque: a frontend holding it cannot tell which form it presents,
+    so it cannot resolve the newest one for a submission that arrived late. This states it.
+    """
+
+    form: FormBinding | None = None
 
 
 @dataclass(frozen=True, slots=True)

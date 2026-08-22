@@ -296,6 +296,15 @@ Use EXCLUSIVE for ordinary mutations, REBASE when the same logical action should
 newest state after waiting, PARALLEL_READ for side-effect-free reads, and IMMEDIATE only when
 concurrency is deliberately handled elsewhere.
 
+Form submissions run the same funnel, so REBASE resolves the newest binding there too: a
+`FormTrigger` declares one per render, planning carries it in `PlanResult.form_bindings`, and
+a late submission is rebased onto the newest one for its key. It is rebased only when that
+binding parses the same field keys -- a schema that changed shape cannot read what the reader
+typed. A form presented ad hoc from a handler has no render-declared binding, and a trigger the
+newest render dropped has no newer one; both run what the reader submitted, since discarding a
+filled-in form is the worse surprise. Note that the presenting button and the submission answer
+to the same key in two different tables: `bindings` opens the form, `form_bindings` submits it.
+
 ## Pagination
 
 Every paginator has an explicit unique string key. `sl.discord.Mount` stores a cursor per key; embedded

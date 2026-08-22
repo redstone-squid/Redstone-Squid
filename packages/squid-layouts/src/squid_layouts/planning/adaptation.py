@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.forms import FormBinding
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
@@ -21,6 +22,7 @@ from squid_layouts.primitives.nodes import (
     Budget,
     Button,
     Footer,
+    FormButton,
     Gallery,
     Lines,
     LinkButton,
@@ -710,12 +712,15 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
     return [
         PrimitiveActionGroup(
             (
-                Button(
+                FormButton(
                     _resolve(node.label, context),
                     present,
                     node.key,
                     style=_button_style(node.tone, node.emphasis),
                     policy=node.policy,
+                    # The adapted spec, not `node.spec`: it is what the reader will actually
+                    # be shown, and so what a late submission must be parsed against.
+                    form=FormBinding(node.key, spec, node.on_submit, node.policy),
                 ),
             )
         )
