@@ -1,5 +1,6 @@
 """The generic, injected devtools cog over public runtime contracts."""
 
+import json
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -12,6 +13,7 @@ from squid_layouts.discord import Everyone, Mount, Owner, Router, live
 from squid_layouts.discord.devtools import DevTools
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Heading
+from squid_layouts.profiling import MemoryProfiler, OperationKind
 
 
 class Subject(sl.Component):
@@ -126,3 +128,77 @@ class TestRoutes:
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert "panel:close" in rendered
         assert "close" in rendered
+
+
+class TestProfiles:
+    async def test_empty_action_profiles_are_explicit(self) -> None:
+        ctx = make_context()
+        cog = DevTools(profiler=MemoryProfiler())
+
+        await run(cog.profile_actions, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "No action profiles have been observed" in rendered
+
+    async def test_action_aggregates_suppress_percentiles_below_sample_floor(self) -> None:
+        profiler = MemoryProfiler()
+        with profiler.operation(OperationKind.DISPATCH, name="save"):
+            pass
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.profile_actions, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "save" in rendered
+        assert "n=1" in rendered
+        assert "p50" not in rendered
+
+    async def test_mount_profile_filters_bounded_traces_by_non_aggregate_attribute(self) -> None:
+        profiler = MemoryProfiler()
+        subject = Mount(Subject(), access=Everyone(), profiler=profiler)
+        await subject.send(delivered_to(fake_message()))
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.profile_mount, cog, ctx, subject.id)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert f"Profile for mount {subject.id}" in rendered
+        assert "send" in rendered
+        assert "planner" in rendered
+
+    async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
+        profiler = MemoryProfiler()
+        bus = sl.TopicBus(profiler=profiler)
+        reactor = sl.discord.Reactor(bus)
+
+        async def refresh(topic) -> None:
+            pass
+
+        bus.subscribe("build", refresh)
+        bus.publish("build")
+        ctx = make_context()
+        cog = DevTools(reactor=reactor)
+
+        await run(cog.profile_queues, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "reactor" in rendered
+        assert "topics" in rendered
+        assert "queued=1" in rendered
+
+    async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
+        profiler = MemoryProfiler()
+        with profiler.operation(OperationKind.SEND, name="panel"):
+            pass
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.profile_export, cog, ctx)
+
+        file = ctx.send.await_args.kwargs["files"][0]
+        payload = json.loads(file.fp.read().decode())
+        assert file.filename.startswith("runtime-profile-")
+        assert payload["schema_version"] == 1
+        assert payload["aggregates"][0]["key"]["name"] == "panel"
