@@ -173,6 +173,7 @@ class RuntimeTrace:
     links: tuple[TraceLink, ...] = ()
     omitted_links: int = 0
     deadline_missed: bool = False
+    counters: tuple[TraceCounter, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +268,32 @@ class SpanAggregate:
 
 
 @dataclass(frozen=True, slots=True)
+class TraceCounter:
+    """One bounded counter contribution retained with a completed trace."""
+
+    name: str
+    value: int
+
+
+@dataclass(frozen=True, slots=True)
+class CounterAggregateKey:
+    """Bounded low-cardinality identity for an operation counter."""
+
+    operation: OperationKind | None
+    operation_name: str
+    counter_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class CounterAggregate:
+    """Lifetime and rolling-window sums for one operation counter."""
+
+    key: CounterAggregateKey
+    lifetime: int
+    window: int
+
+
+@dataclass(frozen=True, slots=True)
 class ProfilerHealth:
     """Bounds and loss counters that make the profiler's own behavior visible."""
 
@@ -299,4 +326,5 @@ class RuntimeSnapshot:
     deadline_misses: tuple[RuntimeTrace, ...]
     aggregates: tuple[OperationAggregate, ...]
     span_aggregates: tuple[SpanAggregate, ...]
+    counter_aggregates: tuple[CounterAggregate, ...]
     health: ProfilerHealth
