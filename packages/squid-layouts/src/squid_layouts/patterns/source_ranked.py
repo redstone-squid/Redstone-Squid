@@ -121,7 +121,7 @@ class SourceRankedList[EntryT](Component):
         value = hook(total) if callable(hook) else hook
         content = normalize_content(value, name=name)
         return tuple(
-            self.embed(item, key=f"{name}-{index}") if isinstance(item, Component) else item
+            self.boundary(item, key=f"{name}-{index}") if isinstance(item, Component) else item
             for index, item in enumerate(content)
         )
 

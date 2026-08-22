@@ -236,7 +236,7 @@ class SearchResultsView(sl.Component):
                 ),
             )
         return (
-            self.embed(self._browser, key="results"),
+            self.boundary(self._browser, key="results"),
             sl.primitives.Row((sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"),)),
         )
 

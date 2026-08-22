@@ -36,7 +36,7 @@ class DurableRoot(Component):
         self.child = DurableChild()
 
     def render(self):
-        return [Text(f"count {self.count}"), self.embed(self.child, key="child")]
+        return [Text(f"count {self.count}"), self.boundary(self.child, key="child")]
 
 
 def _registry(*, version: int = 1, migrations=None) -> ComponentRegistry:

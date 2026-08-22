@@ -79,12 +79,12 @@ class TestRefusals:
         with pytest.raises(TypeError, match=r"unpack what you meant.*mapping\.values\(\)"):
             sl.section({"a": sl.paragraph("a")})  # type: ignore[arg-type]
 
-    def test_a_component_is_pointed_at_embed(self) -> None:
+    def test_a_component_is_pointed_at_a_boundary(self) -> None:
         class Child(sl.Component):
             def render(self):
                 return sl.paragraph("child")
 
-        with pytest.raises(TypeError, match=r"self\.embed\(child, key=\.\.\.\)"):
+        with pytest.raises(TypeError, match=r"self\.boundary\(child, key=\.\.\.\)"):
             sl.section(Child())  # type: ignore[arg-type]
 
     def test_a_foreign_value_names_its_position(self) -> None:

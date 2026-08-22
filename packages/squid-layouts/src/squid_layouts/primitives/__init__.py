@@ -19,11 +19,11 @@ from squid_layouts.primitives.constraints import (
 )
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Boundary,
     Break,
     Budget,
     Button,
     Code,
-    Embed,
     Extension,
     File,
     Footer,
@@ -57,6 +57,7 @@ __all__ = [
     "ActionStyle",
     "Alt",
     "Alts",
+    "Boundary",
     "Break",
     "Budget",
     "Button",
@@ -64,7 +65,6 @@ __all__ = [
     "Color",
     "Condense",
     "Drop",
-    "Embed",
     "Extension",
     "File",
     "Footer",

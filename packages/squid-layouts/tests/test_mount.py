@@ -141,7 +141,7 @@ class Panel(Component):
             Row((Button("add", self.add, "add"),)),
         ]
         if self.show_child:
-            nodes.append(self.embed(self.child, key="child"))
+            nodes.append(self.boundary(self.child, key="child"))
         return nodes
 
     async def add(self, event: PressEvent) -> None:
@@ -2520,7 +2520,7 @@ class TestResourceLoading:
                     case Failed(error=error):
                         return Text(f"parent:Failed:{error}")
                     case Ready():
-                        return [Text("parent:Ready"), self.embed(self.child, key="child")]
+                        return [Text("parent:Ready"), self.boundary(self.child, key="child")]
 
         message: Any = fake_message()
         mount = Mount(Parent(), access=Everyone(), timeout=None)
@@ -2651,7 +2651,7 @@ class Host(Component):
         self.log.append("render:host")
         nodes: list[LayoutNode] = [Text("host")]
         if self.ready:
-            nodes.append(self.embed(self.child, key="child"))
+            nodes.append(self.boundary(self.child, key="child"))
         return nodes
 
 
@@ -2726,7 +2726,7 @@ class Nested(Component):
         self.log.append("render:parent")
         nodes: list[LayoutNode] = [Text("parent")]
         if self.ready:
-            nodes.append(self.embed(self.child, key="child"))
+            nodes.append(self.boundary(self.child, key="child"))
         return nodes
 
 
@@ -2739,7 +2739,7 @@ class Siblings(Component):
         self.second = second
 
     def render(self):
-        return [self.embed(self.first, key="first"), self.embed(self.second, key="second")]
+        return [self.boundary(self.first, key="first"), self.boundary(self.second, key="second")]
 
 
 class TestLoading:
@@ -2808,7 +2808,7 @@ class TestLoading:
             def render(self):
                 nodes: list[LayoutNode] = [Row((Button("open", self.reveal, "open"),))]
                 if self.open:
-                    nodes.append(self.embed(self.child, key="child"))
+                    nodes.append(self.boundary(self.child, key="child"))
                 return nodes
 
             async def reveal(self, event: PressEvent) -> None:
@@ -2972,7 +2972,7 @@ class TestLoading:
             def render(self):
                 nodes: list[LayoutNode] = [Text(f"depth {self.depth}")]
                 if self.child is not None:
-                    nodes.append(self.embed(self.child, key="child"))
+                    nodes.append(self.boundary(self.child, key="child"))
                 return nodes
 
         mount = Mount(Endless(), access=Everyone(), timeout=None)

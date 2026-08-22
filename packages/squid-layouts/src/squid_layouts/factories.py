@@ -155,7 +155,7 @@ def _reject(value: object, origin: str, index: int) -> NoReturn:
     elif isinstance(value, Iterable):
         detail = f"a {type(value).__name__} is not content; unpack it, e.g. {origin[:-1]}*entries)"
     elif _is_component(value):
-        detail = "components are placed with self.embed(child, key=...)"
+        detail = "components are placed with self.boundary(child, key=...)"
     else:
         detail = f"{type(value).__name__} is not content"
     message = f"{origin} argument {index}: {detail}"

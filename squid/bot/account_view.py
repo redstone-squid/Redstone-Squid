@@ -111,7 +111,7 @@ class AccountPanel(sl.Component):
             return (sl.section(sl.paragraph(t(self.locale, _("Account controls closed"))), accent=DISCORD_BLUE),)
         if self._profile_editor is not None:
             return (
-                self.embed(self._profile_editor, key="profile-editor"),
+                self.boundary(self._profile_editor, key="profile-editor"),
                 sl.primitives.Row(
                     (
                         sl.primitives.Button(
