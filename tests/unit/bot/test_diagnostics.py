@@ -21,6 +21,7 @@ from squid_layouts.discord import (
 from squid_layouts.discord import (
     Mount,
     MountedView,
+    Owner,
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.sources import Position
@@ -84,7 +85,7 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
 
 
 def mount_browser(browser: ErrorReportBrowser) -> tuple[Mount, discord.ui.LayoutView]:
-    mount = create_mount(browser, chrome=browser.chrome(), lock_to=1)
+    mount = create_mount(browser, access=Owner(1), chrome=browser.chrome())
     return mount, commit_render(mount)
 
 

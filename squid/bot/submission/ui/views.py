@@ -681,9 +681,9 @@ class SubmissionFormComponent(sl.Component):
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            access=(sl.discord.Owner(self.author_id) if self.author_id is not None else sl.discord.Everyone()),
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self.author_id,
         )
         return self._mount
 
@@ -1255,7 +1255,7 @@ class BuildEditComponent(sl.Component):
             )
         # Keyed per user per build: a second editor for the same build replaces the first
         # rather than leaving two of them staging edits to one row.
-        mount = self.mount(reactor=interaction.client.layout_reactor)
+        mount = self.mount(interaction.user.id, reactor=interaction.client.layout_reactor)
 
         async def reload(current: BuildEditComponent) -> None:
             if current.build.id is None:
@@ -1285,8 +1285,14 @@ class BuildEditComponent(sl.Component):
             parent=parent,
         )
 
-    def mount(self, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
-        self._mount = create_mount(self, locale=self.locale, timeout=self._timeout, reactor=reactor)
+    def mount(self, user_id: int, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            access=sl.discord.Owner(user_id),
+            locale=self.locale,
+            timeout=self._timeout,
+            reactor=reactor,
+        )
         return self._mount
 
 

@@ -13,7 +13,7 @@ from squid_layouts import (
     Position,
     state,
 )
-from squid_layouts.discord import Mount
+from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,
     DurableMountCodec,
@@ -131,7 +131,7 @@ def test_snapshot_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:
     root = DurableRoot()
-    mount = Mount(root, timeout=None)
+    mount = Mount(root, access=Everyone(), timeout=None)
     commit_render(mount)
     root.count = 7
     root.child.entries.append("entry 6")
@@ -140,7 +140,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
 
     snapshot = _registry().capture(mount, "counter")
     encoded = SnapshotCodec.dumps(snapshot)
-    restored = _registry().restore(SnapshotCodec.loads(encoded), timeout=None)
+    restored = _registry().restore(SnapshotCodec.loads(encoded), access=Everyone(), timeout=None)
     commit_render(restored)
     restored_root = restored.component
 
@@ -161,7 +161,7 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
 
     registry = ComponentRegistry()
     registry.register("invalid", version=1, factory=Invalid)
-    mount = Mount(Invalid(), timeout=None)
+    mount = Mount(Invalid(), access=Everyone(), timeout=None)
     commit_render(mount)
 
     with pytest.raises(SnapshotError, match="not JSON serializable"):
@@ -169,19 +169,19 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
 
 
 def test_version_mismatch_requires_an_explicit_host_migration() -> None:
-    mount = Mount(DurableRoot(), timeout=None)
+    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(mount)
     snapshot = _registry().capture(mount, "counter")
 
     with pytest.raises(SnapshotError, match="does not match"):
-        _registry(version=2).restore(replace(snapshot, component_version=1))
+        _registry(version=2).restore(replace(snapshot, component_version=1), access=Everyone())
 
 
 async def test_mount_manager_checkpoints_and_restores_through_a_host_store() -> None:
     registry = _registry()
     store = MemorySnapshotStore()
     root = DurableRoot()
-    mount = Mount(root, timeout=None)
+    mount = Mount(root, access=Everyone(), timeout=None)
     commit_render(mount)
     root.count = 11
 
@@ -190,7 +190,7 @@ async def test_mount_manager_checkpoints_and_restores_through_a_host_store() -> 
     await writer.checkpoint("session")
 
     reader = MountManager(registry, store)
-    restored = await reader.restore("session", timeout=None)
+    restored = await reader.restore("session", access=Everyone(), timeout=None)
 
     assert restored is not None
     assert isinstance(restored.component, DurableRoot)
@@ -211,7 +211,7 @@ async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locato
     clock = lambda: now[0]
     store = MemorySnapshotStore(clock=clock)
     root = DurableRoot()
-    mount = Mount(root, timeout=None)
+    mount = Mount(root, access=Everyone(), timeout=None)
     commit_render(mount)
     writer = MountManager(_registry(), store, owner="writer", clock=clock)
     locator = MountLocator("discord", {"channel_id": 123, "message_id": 456})
@@ -247,7 +247,7 @@ async def test_startup_recovery_deletes_expired_records() -> None:
     now = [100.0]
     clock = lambda: now[0]
     store = MemorySnapshotStore(clock=clock)
-    mount = Mount(DurableRoot(), timeout=None)
+    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(mount)
     writer = MountManager(_registry(), store, clock=clock)
     writer.attach(
@@ -279,7 +279,7 @@ async def test_startup_recovery_sweeps_locator_reachability(
     result: MountReachability | Exception, is_deleted: bool
 ) -> None:
     store = MemorySnapshotStore()
-    mount = Mount(DurableRoot(), timeout=None)
+    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(mount)
     writer = MountManager(_registry(), store)
     writer.attach(
@@ -299,7 +299,7 @@ async def test_startup_recovery_sweeps_locator_reachability(
 
 async def test_startup_recovery_without_a_locator_resolver_keeps_the_snapshot() -> None:
     store = MemorySnapshotStore()
-    mount = Mount(DurableRoot(), timeout=None)
+    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(mount)
     writer = MountManager(_registry(), store)
     writer.attach("session", "counter", mount, locator=MountLocator("discord", {"message_id": 456}))

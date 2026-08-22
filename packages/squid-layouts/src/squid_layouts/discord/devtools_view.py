@@ -224,12 +224,11 @@ def metrics_text(snapshot: sl.discord.MountSnapshot) -> str:
 
 
 def _summary(snapshot: sl.discord.MountSnapshot) -> list[str]:
-    lock = "anyone" if snapshot.lock_to is None else ", ".join(f"<@{user}>" for user in sorted(snapshot.lock_to))
     entries = [
         f"**Component**\n`{snapshot.component}`",
         f"**Generation**\n{snapshot.generation} · {_flags(snapshot)}",
         f"**Timing**\nage {_duration(snapshot.age)} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}",
-        f"**Locked to**\n{lock}",
+        f"**Access**\n{_access_text(snapshot.access)}",
     ]
     address = snapshot.address
     if address is None:
@@ -239,6 +238,20 @@ def _summary(snapshot: sl.discord.MountSnapshot) -> list[str]:
         where = "ephemeral" if address.ephemeral else f"<#{address.channel_id}>"
         entries.append(f"**Message**\n[{address.message_id}]({address.jump_url}) in {where}")
     return entries
+
+
+def _access_text(access: sl.discord.AccessPolicy) -> str:
+    """Describe the mount's admission policy without exposing callback internals."""
+    if isinstance(access, sl.discord.Everyone):
+        return "Everyone"
+    if isinstance(access, sl.discord.Owner):
+        return f"Owner (<@{access.user_id}>)"
+    if isinstance(access, sl.discord.Users):
+        users = ", ".join(f"<@{user_id}>" for user_id in sorted(access.user_ids))
+        return f"Users ({users})"
+    if isinstance(access, sl.discord.Check):
+        return "Check"
+    return type(access).__name__
 
 
 def _option_description(snapshot: sl.discord.MountSnapshot) -> str:

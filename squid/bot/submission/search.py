@@ -288,7 +288,13 @@ class SearchCog[
             node = await self.bot.for_build(build).render_node()
             component = BuildInfoComponent(build, node, locale=locale)
             navigator = sl.discord.Navigator(component)
-            mount = create_mount(navigator, locale=locale, timeout=300, reactor=self.bot.layout_reactor)
+            mount = create_mount(
+                navigator,
+                access=sl.discord.Everyone(),
+                locale=locale,
+                timeout=300,
+                reactor=self.bot.layout_reactor,
+            )
 
             async def reload(current: BuildInfoComponent) -> None:
                 latest = await self.queries.get(build_id)

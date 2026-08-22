@@ -8,7 +8,6 @@ predecessors, so call sites migrate by changing an import line.
 """
 
 from collections.abc import Sequence
-from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from string.templatelib import Template
 from typing import Any, Literal
@@ -257,19 +256,19 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
 def create_mount(
     component: ui.Component,
     *,
+    access: ui.discord.AccessPolicy,
     locale: str | None = None,
     chrome: ui.Chrome | None = None,
     timeout: float = 180,
-    lock_to: int | AbstractSet[int] | None = None,
     reactor: ui.discord.Reactor | None = None,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
     return ui.discord.Mount(
         component,
+        access=access,
         chrome=chrome if chrome is not None else CHROME,
         localization=localization_for(locale),
         timeout=timeout,
-        lock_to=lock_to,
         on_error=_component_error_hook,
         scheduler=reactor,
     )
@@ -279,13 +278,13 @@ async def send_component(
     ctx: Context[Any],
     component: ui.Component,
     *,
+    access: ui.discord.AccessPolicy,
     locale: str | None = None,
     timeout: float = 180,
-    lock_to: int | AbstractSet[int] | None = None,
     visibility: Visibility = "public",
 ) -> ui.discord.Mount:
     """Mount a component and send it as the reply to a command."""
-    mount = create_mount(component, locale=locale, timeout=timeout, lock_to=lock_to)
+    mount = create_mount(component, access=access, locale=locale, timeout=timeout)
     await mount.send(destination(ctx, visibility=visibility, locale=locale))
     return mount
 
@@ -296,7 +295,7 @@ class PagedList(ui.Component):
     The reactive successor to `squid.bot.utils.pagination.ListPaginator`: `page_size` entries
     per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`.
     Passing ``None`` lets the engine fill each page from the target's measured text budget.
-    The mount owns paging, the author lock, and expiry. It does not fetch — every caller
+    The mount owns paging, its access policy, and expiry. It does not fetch — every caller
     holds its whole list before rendering.
     """
 
@@ -338,9 +337,13 @@ class PagedList(ui.Component):
         return L(t"Page {page} of {pages} · {total} in total")
 
     async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> ui.discord.Mount:
-        """Send the first page bound to a mount that owns paging, locking, and expiry."""
+        """Send the first page bound to a mount that owns paging, access, and expiry."""
         return await send_component(
-            ctx, self, locale=self.locale, lock_to=ctx.author.id if ctx.author else None, visibility=visibility
+            ctx,
+            self,
+            access=ui.discord.Owner(ctx.author.id) if ctx.author else ui.discord.Everyone(),
+            locale=self.locale,
+            visibility=visibility,
         )
 
 

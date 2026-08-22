@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
+import squid_layouts as sl
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser, report_attachment
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.ui import Private, create_mount, destination
@@ -81,10 +82,10 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """
         mount = create_mount(
             browser,
+            access=sl.discord.Owner(ctx.author.id),
             locale=locale,
             chrome=browser.chrome(),
             timeout=SESSION_SECONDS,
-            lock_to=ctx.author.id,
         )
         # A closed DM raises DeliveryAbandoned, which discards the render: there is nothing to
         # bind and, deliberately, no channel fallback.
