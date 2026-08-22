@@ -46,7 +46,10 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.Codec
     assert sl.html.Renderer
     assert sl.discord.Mount
+    assert sl.discord.MountRegistry
     assert sl.discord.Renderer
+    assert sl.discord.SessionKey
+    assert sl.discord.WhenOpen
     assert sl.discord.durability.MountManager
 
 

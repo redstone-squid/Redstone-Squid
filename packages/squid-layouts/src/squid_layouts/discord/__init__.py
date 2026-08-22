@@ -46,6 +46,7 @@ from squid_layouts.discord.routing import (
     Router,
     RouteRequest,
 )
+from squid_layouts.discord.sessions import MountRegistry, SessionKey, WhenOpen
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
 from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
 from squid_layouts.planning.limits import V2Limits as Limits
@@ -79,6 +80,7 @@ __all__ = [
     "ModalSpec",
     "Mount",
     "MountAddress",
+    "MountRegistry",
     "MountSnapshot",
     "MountedView",
     "NativeItem",
@@ -97,10 +99,12 @@ __all__ = [
     "RouteRequest",
     "RoutedItem",
     "Router",
+    "SessionKey",
     "StaleHandleError",
     "StaticView",
     "Target",
     "TextInputSpec",
+    "WhenOpen",
     "Wire",
     "build_form_modal",
     "build_modal",
