@@ -97,6 +97,12 @@ class TargetProfile:
     capabilities: frozenset[str] = frozenset()
     limits: object | None = None
     extensions: Mapping[str, ExtensionAdapter] = field(default_factory=dict)
+    dialect: object | None = None
+    """This target's `TargetDialect`: its shape, and nothing else about planning.
+
+    Typed loosely for the same reason `limits` is — the protocol lives downstream of this
+    module, and a target description should not have to import the machinery that reads it.
+    """
     resources: Mapping[str, str] = field(default_factory=dict)
     """Resource name to the message-wide limit attribute a reservation withholds from.
 
@@ -161,5 +167,6 @@ class TargetProfile:
             capabilities=self.capabilities,
             limits=replace(limits, **reductions),
             extensions=self.extensions,
+            dialect=self.dialect,
             resources=self.resources,
         )
