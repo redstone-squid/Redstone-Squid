@@ -125,3 +125,91 @@ async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.
     labels = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
     assert "Paramètres du serveur" in text
     assert "Fermer" in labels
+
+
+async def test_a_channel_change_can_be_undone() -> None:
+    panel, settings = make_component_panel(stored={"Vote": 3})
+    await panel.open_server()
+
+    with sl.transaction():
+        await panel.set_channel("Vote", 12)
+    assert panel.channel_id("Vote") == 12
+
+    with sl.transaction():
+        assert await panel.history.undo() is not None
+
+    assert panel.channel_id("Vote") == 3
+    # The world half went back too: the framework only ever restores the panel's own dict.
+    assert settings.set_channel.await_args_list[-1].args == (GUILD_ID, "Vote", 3)
+
+
+async def test_an_undone_channel_change_can_be_redone() -> None:
+    panel, settings = make_component_panel(stored={"Vote": 3})
+    await panel.open_server()
+
+    with sl.transaction():
+        await panel.set_channel("Vote", None)
+    with sl.transaction():
+        await panel.history.undo()
+    with sl.transaction():
+        await panel.history.redo()
+
+    assert panel.channel_id("Vote") is None
+    assert settings.clear.await_count == 2
+
+
+async def test_a_failed_action_records_no_history() -> None:
+    panel, _ = make_component_panel(stored={"Vote": 3})
+    await panel.open_server()
+
+    async def save_the_channel_then_fail() -> None:
+        await panel.set_channel("Vote", 12)
+        message = "the rest of the action failed"
+        raise RuntimeError(message)
+
+    with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.transaction():
+        await save_the_channel_then_fail()
+
+    assert panel.history.entries == ()
+
+
+async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -> None:
+    panel, _ = make_component_panel()
+    mount = panel._mount
+    assert mount is not None
+
+    assert "Undo" not in _button_labels(commit_render(mount))
+    with sl.transaction():
+        await panel.set_channel("Vote", 12)
+    assert "Undo" in _button_labels(commit_render(mount))
+
+
+async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pytest.MonkeyPatch) -> None:
+    panel, settings = make_component_panel(stored={"Vote": 3})
+    await panel.open_server()
+    with sl.transaction():
+        await panel.set_channel("Vote", 12)
+    writes = settings.set_channel.await_count
+
+    monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=False))
+    notices: list[Any] = []
+    event = cast(
+        Any,
+        SimpleNamespace(
+            responder=SimpleNamespace(),
+            notice=AsyncMock(side_effect=lambda text, **kwargs: notices.append(text)),
+            context={"frontend": "discord"},
+        ),
+    )
+    monkeypatch.setattr(sl.discord, "native", lambda _event: SimpleNamespace())
+
+    with sl.transaction():
+        await panel._undo(event)
+
+    assert settings.set_channel.await_count == writes
+    assert panel.channel_id("Vote") == 12
+    assert notices
+
+
+def _button_labels(view: Any) -> list[str | None]:
+    return [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
