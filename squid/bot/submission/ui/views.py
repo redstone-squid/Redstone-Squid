@@ -30,7 +30,7 @@ from squid.bot.submission.ui.components import (
     get_text_input,
 )
 from squid.bot.topics import follow_resource, resource_topic
-from squid.bot.ui import create_mount, render_static
+from squid.bot.ui import contribute, create_mount, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
@@ -904,11 +904,15 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
                 fields=(CardField(t(self.locale, _("Fields in this section")), self.summary_text()),),
             )
         )
-        # The header card is already in the view, so the build card gets what is left of the
-        # display budget; conform is the gate this hand-assembled view would otherwise skip.
-        reservation = sl.discord.measure(self).cost
-        self.add_item(await self.get_handler(interaction).render_container(reservation=reservation))
-        self.add_item(controls)
+        # The build card is planned against what the header already spent and what the
+        # controls are about to, so the view proven legal here is the one that gets sent.
+        # conform stays as the delivery gate; contribute should leave it nothing to do.
+        contribute(
+            [await self.get_handler(interaction).render_node()],
+            to=self,
+            followed_by=(controls,),
+            locale=self.locale,
+        )
         sl.discord.conform(self)
 
     @actions.button(label="Open", style=discord.ButtonStyle.primary)
@@ -1329,9 +1333,13 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
 
     async def _render(self, interaction: discord.Interaction[BotT]) -> None:
         self.clear_items()
-        self.add_item(await interaction.client.for_build(self.build).render_container())
-        self.add_item(self._edit_row)
-        self.add_item(self._navigation_row)
+        # Both rows are costed before the card is planned; this view used to reserve nothing
+        # for them and relied on conform to trim solved content back out.
+        contribute(
+            [await interaction.client.for_build(self.build).render_node()],
+            to=self,
+            followed_by=(self._edit_row, self._navigation_row),
+        )
         sl.discord.conform(self)
 
     @override
