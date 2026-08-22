@@ -16,7 +16,7 @@ _log = logging.getLogger(__name__)
 class ReactiveOwner(Protocol):
     __dict__: dict[str, Any]
 
-    def _state_changed(self) -> None: ...
+    def _state_changed(self, names: frozenset[str]) -> None: ...
 
     def _state_rolled_back(self) -> None: ...
 
@@ -100,7 +100,7 @@ class StateDelta:
                 value = _plain(value)
             _before(change.owner, change.name, change.copy)
             _restore(change.owner, change.name, existed, value, change.copy)
-            _after(change.owner)
+            _after(change.owner, change.name)
 
 
 @dataclass(slots=True)
@@ -108,6 +108,7 @@ class _Transaction:
     readonly: bool = False
     snapshots: dict[tuple[int, str], _Snapshot] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
+    changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
     hooks: list[tuple[object | None, Callable[[StateDelta], None]]] = field(default_factory=list)
@@ -141,7 +142,7 @@ class _Transaction:
             value = _plain(owner.__dict__[name])
         self.snapshots[key] = _Snapshot(owner, name, existed, value, copy)
 
-    def mark_changed(self, owner: ReactiveOwner) -> None:
+    def mark_changed(self, owner: ReactiveOwner, name: str) -> None:
         if not self.protects(owner):
             return
         if self.write_block is not None:
@@ -150,6 +151,7 @@ class _Transaction:
             message = "parallel-read actions cannot mutate component state"
             raise ReactiveWriteError(message)
         self.changed[id(owner)] = owner
+        self.changed_names.setdefault(id(owner), set()).add(name)
 
     def delta(self) -> StateDelta:
         """What this action changed, both directions, from the snapshots it already took."""
@@ -179,7 +181,7 @@ class _Transaction:
             for _, callback in self.hooks:
                 callback(delta)
         for owner in self.changed.values():
-            owner._state_changed()
+            owner._state_changed(frozenset(self.changed_names[id(owner)]))
 
     def rollback(self) -> None:
         for snapshot in reversed(tuple(self.snapshots.values())):
@@ -232,11 +234,11 @@ def _before(owner: ReactiveOwner, name: str, copy: CopyMode = "deep") -> None:
         current.record(owner, name, copy)
 
 
-def _after(owner: ReactiveOwner) -> None:
+def _after(owner: ReactiveOwner, name: str) -> None:
     if current := _CURRENT.get():
-        current.mark_changed(owner)
+        current.mark_changed(owner, name)
     else:
-        owner._state_changed()
+        owner._state_changed(frozenset((name,)))
 
 
 @contextmanager
@@ -343,7 +345,7 @@ class _ReactiveMixin:
         _before(self._reactive_owner, self._reactive_name)
 
     def _after(self) -> None:
-        _after(self._reactive_owner)
+        _after(self._reactive_owner, self._reactive_name)
 
     def _wrap(self, value: Any) -> Any:
         return _observe(value, self._reactive_owner, self._reactive_name)
@@ -572,7 +574,7 @@ class _State:
             return
         _before(instance, self._name, self.copy)
         instance.__dict__[self._name] = self._wrap(instance, value)
-        _after(instance)
+        _after(instance, self._name)
 
 
 @overload

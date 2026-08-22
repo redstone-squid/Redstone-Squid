@@ -152,6 +152,16 @@ from squid_layouts.runtime.reactivity import (
     strict_state,
     transaction,
 )
+from squid_layouts.runtime.resources import (
+    Failed,
+    Pending,
+    Ready,
+    Resource,
+    ResourceDelivery,
+    ResourceNotReadyError,
+    ResourceState,
+    resource,
+)
 from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, SceneDocument
 from squid_layouts.semantic import (
     CLOSED,
@@ -342,6 +352,7 @@ __all__ = [
     "DurationField",
     "Emphasis",
     "ExtensionField",
+    "Failed",
     "FallbackContent",
     "Field",
     "FieldError",
@@ -410,6 +421,7 @@ __all__ = [
     "PatternEvent",
     "PatternHandler",
     "PatternRoute",
+    "Pending",
     "PlanEvent",
     "PlanMetrics",
     "PlanReport",
@@ -424,7 +436,12 @@ __all__ = [
     "RankedListState",
     "RawMarkdown",
     "ReactiveWriteError",
+    "Ready",
     "ResolvedText",
+    "Resource",
+    "ResourceDelivery",
+    "ResourceNotReadyError",
+    "ResourceState",
     "Route",
     "RouteBuilder",
     "RoutedAction",
@@ -536,6 +553,7 @@ __all__ = [
     "progress",
     "quote",
     "raw_md",
+    "resource",
     "routed_action",
     "routed_choices",
     "runtime",
