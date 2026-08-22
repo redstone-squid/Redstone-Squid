@@ -364,13 +364,15 @@ class Dashboard(sl.Component):
 
 ## Consumers
 
-None on day one, and the plan does not invent one. The library user is the consumer, per
-the productization standard — but phase 5 does not close until one real panel pair uses
-it, because [26](26-topic-bus.md) and [27](27-snapshot-stores.md) both shipped without an
-in-tree consumer and a third would be a pattern rather than a coincidence. The settings
-panel's theme/locale reaching a second live panel is the candidate to try first, and if
-it turns out that a service plus a topic reads better there, that is a finding worth
-having before phases 1–4 generalize.
+The library user, per the productization standard — the same answer
+[26](26-topic-bus.md) and [27](27-snapshot-stores.md) gave, and for the same reason. The
+bot is not the audience and an in-tree consumer is not a gate on any phase.
+
+What the bot does owe is the worked example and the test suite, which is where a design
+error actually surfaces. The candidate is the settings panel's theme and locale reaching
+a second live panel: small, obviously view-owned, and it exercises scopes, `watch` across
+mounts, and one history entry spanning both halves. If writing it turns out awkward, that
+is a finding about the API, not a reason to wait for a consumer.
 
 ## Rejected alternatives
 
