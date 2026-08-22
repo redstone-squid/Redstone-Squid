@@ -24,6 +24,10 @@ def make_guild(*, channels: dict[int, str] | None = None, roles: dict[int, str] 
     roles = roles or {}
     return SimpleNamespace(
         id=GUILD_ID,
+        channels=[
+            SimpleNamespace(id=channel_id, name=name, type=discord.ChannelType.text)
+            for channel_id, name in channels.items()
+        ],
         get_channel_or_thread=lambda channel_id: (
             SimpleNamespace(id=channel_id, name=channels[channel_id]) if channel_id in channels else None
         ),
@@ -34,6 +38,7 @@ def make_guild(*, channels: dict[int, str] | None = None, roles: dict[int, str] 
 def make_component_panel(
     *,
     stored: dict[str, int | None] | None = None,
+    channels: dict[int, str] | None = None,
 ) -> tuple[SettingsPanel, Any]:
     """The mounted panel and the settings service behind it."""
     settings = SimpleNamespace(
@@ -50,7 +55,7 @@ def make_component_panel(
     panel = SettingsPanel(
         settings=cast(Any, settings),
         votes=cast(Any, votes),
-        guild=make_guild(channels={12: "general"}),
+        guild=make_guild(channels=channels if channels is not None else {12: "general"}),
         author_id=1,
         capabilities=EVERYTHING,
     )
@@ -209,6 +214,42 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
     assert settings.set_channel.await_count == writes
     assert panel.channel_id("Vote") == 12
     assert notices
+
+
+async def test_a_large_guild_still_fits_one_message() -> None:
+    """Five paged channel pickers used to cost 30 of the 40 components a message has."""
+    panel, _ = make_component_panel(channels={index: f"channel-{index}" for index in range(1, 200)})
+    await panel.open_server()
+    mount = panel._mount
+    assert mount is not None
+
+    view = commit_render(mount)
+
+    footers = [
+        item.content
+        for item in view.walk_children()
+        if isinstance(item, discord.ui.TextDisplay) and item.content.startswith("-# Page ")
+    ]
+    assert len(list(view.walk_children())) <= 40
+    assert len(footers) == 1  # one paged channel picker, not five
+
+
+async def test_the_channel_picker_follows_the_setting_picker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The one visible picker writes whichever setting the setting picker last named."""
+    monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=True))
+    monkeypatch.setattr(sl.discord, "native", lambda _event: SimpleNamespace())
+    panel, settings = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
+    await panel.open_server()
+
+    with sl.transaction():
+        await panel._editing_changed(cast(Any, SimpleNamespace(selected=("Builds",))))
+    with sl.transaction():
+        await panel._channel_changed(cast(Any, SimpleNamespace(selected=("12",), context={})))
+
+    assert panel.editing == "Builds"
+    assert panel.channel_id("Builds") == 12
+    assert panel.channel_id("Vote") == 3
+    assert settings.set_channel.await_args_list[-1].args == (GUILD_ID, "Builds", 12)
 
 
 def _button_labels(view: Any) -> list[str | None]:
