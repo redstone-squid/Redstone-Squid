@@ -17,6 +17,8 @@ def test_root_is_semantic_first() -> None:
     assert {"Toggle", "ToggleEvent", "ToggleOwnership", "OFF", "toggle"} <= set(sl.__all__)
     assert {"MultiChoiceField", "UploadedFile"} <= set(sl.__all__)
     assert {"Timestamp", "TimeStyle", "timestamp", "TimeField", "DateTimeField"} <= set(sl.__all__)
+    assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
+    assert {"CollectionEditor", "CollectionEntry", "CollectionState", "CollectionChangeHandler"} <= set(sl.__all__)
     assert {
         "CountPrecision",
         "Direction",
