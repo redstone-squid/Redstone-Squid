@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.actions import ActionEvent, SelectionEvent
+from squid_layouts.actions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, bullet, bullets, choice, choices, controlled, heading, note, stack
@@ -13,7 +13,7 @@ from squid_layouts.planning.navigation import NAV_FACTORY_CONTEXT, NavigationCon
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
 from squid_layouts.runtime.resources import Failed, Pending, Ready, resource
-from squid_layouts.semantic import Action, ActionDisplay, LayoutNode, Link
+from squid_layouts.semantic import Action, ActionDisplay, ChoiceEvent, LayoutNode, Link
 from squid_layouts.sources import (
     ORIGIN,
     CountPrecision,
@@ -125,13 +125,13 @@ class Browser[ItemT](Component):
             return current.previous.value
         return None
 
-    async def _selected(self, event: SelectionEvent) -> None:
-        if len(event.values) != 1:
+    async def _selected(self, event: ChoiceEvent) -> None:
+        if len(event.selected) != 1:
             return
         loaded = self._ready()
         if loaded is None:
             return
-        item = next((item for item in loaded.window.items if self.identity(item) == event.values[0]), None)
+        item = next((item for item in loaded.window.items if self.identity(item) == event.selected[0]), None)
         if item is None:
             return
         await self._open(event, item)
