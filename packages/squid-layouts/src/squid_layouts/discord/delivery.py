@@ -55,6 +55,21 @@ class DeliveryAbandoned(Exception):
     """
 
 
+@dataclass(frozen=True, slots=True)
+class Delivered:
+    """A mount render committed through a destination."""
+
+    receipt: DeliveryReceipt
+
+
+@dataclass(frozen=True, slots=True)
+class Abandoned:
+    """A destination deliberately declined to deliver a mount."""
+
+
+type SendResult = Delivered | Abandoned
+
+
 class EditHandle(Protocol):
     """A way to write to one already-sent message, and how long it is good for."""
 

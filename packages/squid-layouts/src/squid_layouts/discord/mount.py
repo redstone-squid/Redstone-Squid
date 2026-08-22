@@ -712,7 +712,7 @@ class Mount:
 
     # --- Lifecycle ---------------------------------------------------------------------
 
-    async def send(self, destination: deliver.Destination) -> discord.Message | None:
+    async def send(self, destination: deliver.Destination) -> deliver.SendResult:
         """Deliver this mount's first render through `destination`.
 
         The commit point for an initial send, and the same stage -> deliver -> commit sequence
@@ -721,13 +721,12 @@ class Mount:
         its previous generation with the render still pending, so a second `send` is a clean
         retry.
 
-        Returns the message when the receipt exposed one. `None` means only that no message
-        object came back, or that the destination abandoned delivery; the receipt may still
-        have committed a standing handle such as an interaction's `@original` authority.
+        The structured result distinguishes a committed delivery, including a handle-less
+        one, from a destination that deliberately abandoned delivery.
         """
         async with self._render_lock:
             if self._finished:
-                return None
+                return deliver.Abandoned()
             # A render staged by `_stage_view` and never delivered is superseded, not delivered.
             if self._pending is not None:
                 self._pending.view.stop()
@@ -740,7 +739,7 @@ class Mount:
             except deliver.DeliveryAbandoned:
                 logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
                 self._rollback(candidate)
-                return None
+                return deliver.Abandoned()
             except Exception:
                 self._rollback(candidate)
                 raise
@@ -750,7 +749,7 @@ class Mount:
             self._active = self.clock()
             self._commit(candidate)
             await self._settle_visible(candidate)
-            return receipt.message
+            return deliver.Delivered(receipt)
 
     def _swap_view(self, view: MountedView) -> None:
         if self._view is not None and self._view is not view:
