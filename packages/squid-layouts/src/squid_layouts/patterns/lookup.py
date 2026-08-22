@@ -87,12 +87,15 @@ class Lookup[ItemT](Component):
         self.load_failed = load_failed
         self.retry = retry
 
-    @resource(depends=(query, _request))
+    @resource
     async def results(self) -> _LookupWindow[ItemT]:
         query = self.query
         if query is None:
             message = "Lookup.results was observed before a query was submitted"
             raise LayoutInvariantError(message)
+        # Read before the branch, not inside it: the request selects the operation on every
+        # run, so a run that happens not to consult it still depends on it.
+        request = self._request
         current = self.results.state
         previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None
         if previous is None or previous.query != query:
@@ -102,7 +105,7 @@ class Lookup[ItemT](Component):
         else:
             source = previous.source
             loader = previous.loader
-            match self._request.operation:
+            match request.operation:
                 case "previous":
                     loaded = await loader.previous(previous.loaded)
                 case "next":

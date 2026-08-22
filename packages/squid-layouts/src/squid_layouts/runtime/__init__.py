@@ -34,6 +34,7 @@ from squid_layouts.runtime.reactivity import (
     state,
     strict_state,
     transaction,
+    untracked,
 )
 from squid_layouts.runtime.resources import (
     Failed,
@@ -100,4 +101,5 @@ __all__ = [
     "state",
     "strict_state",
     "transaction",
+    "untracked",
 ]

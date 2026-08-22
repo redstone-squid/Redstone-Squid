@@ -82,7 +82,7 @@ class Browser[ItemT](Component):
         self.retry = retry
         self.loader = WindowLoader(source, page_size, identity, initial=ORIGIN)
 
-    @resource(depends=(_request,))
+    @resource
     async def window(self) -> LoadedWindow[ItemT]:
         current = self.window.state
         previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None

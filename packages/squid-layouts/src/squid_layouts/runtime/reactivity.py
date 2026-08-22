@@ -3,6 +3,11 @@
 A state field stores an immutable value in a :class:`_Cell`, next to the version that dates
 it. Writing replaces the value; nothing is mutated in place. That is what makes a snapshot a
 reference rather than a deep copy, and rolling an action back putting the old reference back.
+
+Reads are tracked. A computed records the cells it read and the version each held, and asked
+for its value it recomputes only if one of those versions has moved. Nothing is pushed: every
+reference points from reader to source, which is what lets a per-message component be
+collected while the state it read lives on.
 """
 
 import logging
@@ -120,6 +125,74 @@ class _Cell:
         self.value = value
         self.version = version
 
+    def settle(self) -> int:
+        """Return the version a reader should compare against. A cell is always settled."""
+        return self.version
+
+    def read(self) -> Any:
+        """Return the value, recording the read with whatever is consuming it."""
+        consumer = _CONSUMER.get()
+        if consumer is not None:
+            consumer.sources[self] = self.version
+        return self.value
+
+    def write(self, value: Any) -> None:
+        self.value = value
+        self.version += 1
+        _bump_epoch()
+
+    def touch(self) -> None:
+        """Say the held value changed in place: the version moves, the value does not."""
+        self.version += 1
+        _bump_epoch()
+
+    def restore(self, value: Any, version: int) -> None:
+        """Put a cell back exactly as an action found it, version included.
+
+        The version goes back rather than forward: a reader that sampled this cell before the
+        action is still valid, and bumping would make it recompute for a value that never
+        changed. The epoch still moves, because settled readers must re-check.
+        """
+        self.value = value
+        self.version = version
+        _bump_epoch()
+
+
+class _Consumer(Protocol):
+    """Whatever a tracked read reports itself to: a computed, or a resource load."""
+
+    sources: dict[Any, int]
+
+
+_CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_layouts_consumer", default=None)
+
+_EPOCH = 0
+"""Bumped by every write anywhere.
+
+A node settled in the current epoch cannot be stale, so it can skip walking its sources --
+which is the whole of a render, where reads are many and writes are none.
+"""
+
+
+def _bump_epoch() -> None:
+    global _EPOCH
+    _EPOCH += 1
+
+
+@contextmanager
+def untracked() -> Iterator[None]:
+    """Read state without subscribing to it.
+
+    For code that reads to decide what to do rather than to derive a value from it. Action
+    handlers already run outside any consumer, so this is for a computed that deliberately
+    samples something it does not want to recompute for.
+    """
+    token = _CONSUMER.set(None)
+    try:
+        yield
+    finally:
+        _CONSUMER.reset(token)
+
 
 @dataclass(slots=True)
 class _Snapshot:
@@ -178,8 +251,7 @@ def _write_cell(owner: ReactiveOwner, name: str, value: Any) -> None:
     if cell is None:
         owner.__dict__[name] = _Cell(value)
         return
-    cell.value = value
-    cell.version += 1
+    cell.write(value)
 
 
 @dataclass(slots=True)
@@ -303,10 +375,7 @@ class _Transaction:
                 # failure raised over it would hide why the action failed at all.
                 _log.exception("a transaction participant failed to abort")
         for snapshot in reversed(tuple(self.snapshots.values())):
-            # The version goes back too, not forward: a reader that sampled this cell before
-            # the action is still valid, and bumping would make it recompute for nothing.
-            snapshot.cell.value = snapshot.value
-            snapshot.cell.version = snapshot.version
+            snapshot.cell.restore(snapshot.value, snapshot.version)
             snapshot.owner._state_rolled_back()
 
 
@@ -539,7 +608,7 @@ class _State:
 
     def mutated(self, instance: ReactiveOwner) -> None:
         """Note that the held value changed in place: the version moves, the value does not."""
-        self.cell(instance).version += 1
+        self.cell(instance).touch()
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
         if instance is None:
@@ -554,7 +623,7 @@ class _State:
                 cell = instance.__dict__[self._name] = _Cell(self._initial(instance))
             else:
                 cell.value = self._initial(instance)
-        return cell.value
+        return cell.read()
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
         if not self.opaque:
@@ -568,9 +637,7 @@ class _State:
             # one is the author's code, not a cheap settled-value check.
             return
         _before(instance, self._name)
-        cell = self.cell(instance)
-        cell.value = value
-        cell.version += 1
+        self.cell(instance).write(value)
         _after(instance, self._name)
 
 
@@ -613,6 +680,22 @@ def state(
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
 
+def declared_cells(owner: ReactiveOwner) -> dict[Any, int]:
+    """Every declared state cell on `owner`, at the version it holds now.
+
+    The presumed dependency set for something that has not yet said what it reads -- a
+    resource holding a value that was installed rather than loaded. Over-subscribing is the
+    safe direction, and the first real run replaces the presumption with the truth.
+    """
+    presumed: dict[Any, int] = {}
+    for klass in type(owner).__mro__:
+        for descriptor in vars(klass).values():
+            if isinstance(descriptor, _State):
+                cell = descriptor.cell(owner)
+                presumed[cell] = cell.version
+    return presumed
+
+
 def _state_fields(owner: ReactiveOwner) -> dict[str, _State]:
     fields: dict[str, _State] = {}
     for cls in reversed(type(owner).__mro__):
@@ -645,45 +728,96 @@ def restore_state(owner: ReactiveOwner, values: Mapping[str, Any]) -> None:
             setattr(owner, name, _frozen(value))
 
 
-class _Computed:
-    def __init__(self, function: Callable[[Any], Any], *, depends: tuple[object, ...]) -> None:
+class _Derived:
+    """One computed's per-instance node: what it read last, and what it returned.
+
+    Sources are held by the node, never the other way round. A component here is per-message
+    and constantly dropped, and a source holding its readers would keep every one of them
+    alive; a version comparison at read time answers the same question with no back-edge.
+    """
+
+    __slots__ = ("_epoch", "_function", "_label", "_running", "_settled", "owner", "sources", "value", "version")
+
+    def __init__(self, function: Callable[[Any], Any], owner: ReactiveOwner, label: str) -> None:
         self._function = function
-        self.depends = depends
+        self._label = label
+        self.owner = owner
+        self.sources: dict[Any, int] = {}
+        self.value: Any = None
+        self.version = 0
+        self._settled = False
+        self._running = False
+        self._epoch = -1
+
+    def settle(self) -> int:
+        """Return this node's current version, recomputing only if a source moved."""
+        if self._epoch == _EPOCH:
+            return self.version
+        if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
+            self._epoch = _EPOCH
+            return self.version
+        if self._running:
+            message = f"{self._label} reads itself, so it can never settle"
+            raise RuntimeError(message)
+        # Cleared before the run, not after: a body that raises must leave the node asking to
+        # be recomputed rather than holding a value nothing verified.
+        self._settled = False
+        self._epoch = -1
+        self.sources = {}
+        self._running = True
+        token = _CONSUMER.set(self)
+        try:
+            value = self._function(self.owner)
+        finally:
+            _CONSUMER.reset(token)
+            self._running = False
+        self._settled = True
+        # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
+        # from it, and bumping would make every settled node in the process walk its sources.
+        self._epoch = _EPOCH
+        if not _equal(self.value, value):
+            self.value = value
+            self.version += 1
+        return self.version
+
+    def read(self) -> Any:
+        self.settle()
+        consumer = _CONSUMER.get()
+        if consumer is not None:
+            consumer.sources[self] = self.version
+        return self.value
+
+
+class _Computed:
+    def __init__(self, function: Callable[[Any], Any]) -> None:
+        self._function = function
         self.public_name = function.__name__
-        self._name = ""
+        self._name = f"__computed_{function.__name__}"
+        self._label = function.__name__
 
     def __set_name__(self, owner: type, name: str) -> None:
         self.public_name = name
         self._name = f"__computed_{name}"
+        self._label = f"{owner.__name__}.{name}"
+
+    def node(self, instance: ReactiveOwner) -> _Derived:
+        """Return this computed's node on `instance`, unevaluated until something reads it."""
+        node = instance.__dict__.get(self._name)
+        if node is None:
+            node = instance.__dict__[self._name] = _Derived(self._function, instance, self._label)
+        return node
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
         if instance is None:
             return self
-        if self._name not in instance.__dict__:
-            instance.__dict__[self._name] = self._function(instance)
-        return instance.__dict__[self._name]
-
-    def invalidate_for(self, instance: ReactiveOwner) -> None:
-        """Discard an already-materialized value after a dependency commit."""
-        instance.__dict__.pop(self._name, None)
-
-    def refresh_for(self, instance: ReactiveOwner) -> bool:
-        """Refresh a materialized value and report whether downstream inputs changed."""
-        if self._name not in instance.__dict__:
-            return True
-        previous = instance.__dict__.pop(self._name)
-        try:
-            current = self._function(instance)
-        except Exception:
-            return True
-        instance.__dict__[self._name] = current
-        return not _equal(current, previous)
+        return self.node(instance).read()
 
 
-def computed(*, depends: tuple[object, ...]) -> Callable[[Callable[[Any], Any]], _Computed]:
-    """Cache a derived value until one of its declared state dependencies changes."""
+def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
+    """Derive a value from the state its body reads, recomputed when that state moves.
 
-    def decorate(function: Callable[[Any], Any]) -> _Computed:
-        return _Computed(function, depends=depends)
-
-    return decorate
+    The dependency set is what the last run actually read, so a conditional dependency is
+    exact rather than over-declared, and nothing has to be named twice. A computed nobody
+    reads is never evaluated, and one that raises does so where its value is used.
+    """
+    return _Computed(function)  # pyrefly: ignore[bad-return]
