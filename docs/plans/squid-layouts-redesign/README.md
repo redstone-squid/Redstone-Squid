@@ -59,6 +59,7 @@ modules; the layout core stays presentational.
 | 27 | [Snapshot stores](27-snapshot-stores.md) | `SQLiteSnapshotStore` (stdlib, zero deps) and `PostgresSnapshotStore` (asyncpg, optional extra) behind the untouched `LeaseSnapshotStore` boundary, plus the recovery reachability sweep (404 deletes the snapshot; unreachable is not gone). |
 | 28 | [History](28-history.md) | `sl.history()` undo/redo: a new `on_action_commit` seam hands the recorder the action's whole state delta, and the author supplies external inverses per `record()`. Three tiers (framework-only, undoable, redoable); world first, then state; a failed inverse keeps the entry; an inverse may not write component state. In-memory v1; the consumer is `SettingsPanel`'s channel, locale and role-weight writes. |
 | 29 | [Control vocabulary (Batch A)](29-control-vocabulary.md) | Toggle, portable modal multi-choice, upload values and visible downloads, Decision/confirm, CollectionEditor, and typed timestamps/time fields. Extends the semantic pipeline where typed scene data matters and uses pure patterns for lifecycle state. |
+| 30 | [Reactive async resources](30-resources.md) | `sl.resource(depends=(state_field,))` exposes synchronous `Pending | Ready | Failed` state, render-observed lazy loading, stale-result rejection and optimistic replacement. Visible and atomic delivery are two policies over one state machine; `SourceRankedList` is the first migration. |
 
 ## Relation to existing plans
 
