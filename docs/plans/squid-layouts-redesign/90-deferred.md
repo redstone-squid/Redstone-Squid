@@ -14,6 +14,15 @@ are not re-derived or accidentally adopted later.
   **Revisited 2026-08-22**: the bus is [26](26-topic-bus.md), moved package-side by the
   productization decision; the store half of this rejection stands in full — the bus is
   payload-free precisely so it can never become one.
+  **Revisited again 2026-08-22**: [40](40-shared-store.md) overturns the store half for one
+  narrow case the bus provably cannot cover — view state that outlives a mount *and* still
+  rolls back with the action that wrote it, which the bus cannot carry (payload-free) and a
+  shared service cannot either (outside `transaction()`, so `sl.history()` needs a
+  hand-written inverse for state the framework should own). What was rejected here is
+  rejected there too, by construction: no dispatch, reducers, middleware or global
+  singleton; addresses still travel the bus and subscribers still re-read; and
+  `Controlled`/`Managed` still owns domain truth, with 40 §3's lifetime rules making the
+  store an unsuitable home for anything durable.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
