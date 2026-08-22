@@ -38,6 +38,7 @@ from squid_layouts.planning.planner import EMPTY_RESERVATION
 from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
+from squid_layouts.profiling import OperationRecorder
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanReport, PlanResult
 from squid_layouts.sources import Position
@@ -69,26 +70,38 @@ def compose(
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
+    profile: OperationRecorder | None = None,
 ):
     """Plan a logical document, then draw the complete classic message it resolves to."""
-    from squid_layouts.discord.compose import Composition
+    from squid_layouts.discord.compose import Composition, _span
 
-    result = plan_document(
-        rendered,
-        target=target,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        strict=strict,
-        reservation=reservation,
-        positions=positions,
-        nav=nav,
-        session=session,
-        cache=cache,
-        search_budget=search_budget,
-    )
+    with _span(profile, "planner") as planner_span:
+        result = plan_document(
+            rendered,
+            target=target,
+            chrome=chrome,
+            localization=localization,
+            palette=palette,
+            strict=strict,
+            reservation=reservation,
+            positions=positions,
+            nav=nav,
+            session=session,
+            cache=cache,
+            search_budget=search_budget,
+        )
+        if planner_span is not None:
+            planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
+            planner_span.set_attribute("states_explored", result.metrics.states_explored)
+            planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
+        if profile is not None:
+            profile.increment("planner.calls")
+            profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
+            profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
+            profile.increment("planner.states_explored", result.metrics.states_explored)
     drawer = renderer if renderer is not None else ClassicRenderer(limits=_classic_limits(target))
-    presentation = drawer.draw(result.scene, plan=result, wire=wire)
+    with _span(profile, "renderer"):
+        presentation = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
         logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
     return Composition(presentation, result)
