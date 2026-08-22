@@ -8,7 +8,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_layouts as sl
-from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
+from squid_layouts.discord import V2_LIMITS as LIMITS
 from squid_layouts.discord import (
     ExistingLayoutError,
     LimitViolationError,
@@ -218,15 +218,15 @@ class TestReservationAxes:
     """A reservation is a smaller target, so every axis behaves the same way."""
 
     def test_text_reservation_shrinks_the_text_budget(self):
-        target = sl.discord.Target().reserve(sl.discord.ResourceCost({"display_text": 1000}))
+        target = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"display_text": 1000}))
         assert target.limits.total_text == LIMITS.total_text - 1000
 
     def test_component_reservation_shrinks_the_component_budget(self):
-        target = sl.discord.Target().reserve(sl.discord.ResourceCost({"components": 6}))
+        target = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"components": 6}))
         assert target.limits.total_components == LIMITS.total_components - 6
 
     def test_local_caps_are_untouched(self):
-        reserved = sl.discord.Target().reserve(
+        reserved = sl.discord.Target.v2().reserve(
             sl.discord.ResourceCost({"display_text": 500, "components": 5, "attachments": 2})
         )
         assert reserved.limits.row_buttons == LIMITS.row_buttons
@@ -235,16 +235,16 @@ class TestReservationAxes:
 
     def test_unknown_resources_are_rejected(self):
         with pytest.raises(sl.LayoutInvariantError, match="no reservable resource"):
-            sl.discord.Target().reserve(sl.discord.ResourceCost({"pixels": 1}))
+            sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"pixels": 1}))
 
     def test_reservation_never_goes_negative(self):
-        reserved = sl.discord.Target().reserve(sl.discord.ResourceCost({"display_text": LIMITS.total_text * 2}))
+        reserved = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"display_text": LIMITS.total_text * 2}))
         assert reserved.limits.total_text == 0
 
     def test_identity_is_preserved(self):
-        reserved = sl.discord.Target().reserve(sl.discord.ResourceCost({"components": 1}))
+        reserved = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"components": 1}))
         assert reserved.id == "discord.components-v2"
-        assert reserved.capabilities == sl.discord.Target().capabilities
+        assert reserved.capabilities == sl.discord.Target.v2().capabilities
         assert "discord.item" in reserved.extensions
 
 

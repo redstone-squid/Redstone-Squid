@@ -17,7 +17,7 @@ from squid_layouts import (
     fallback,
     plan,
 )
-from squid_layouts.discord import DEFAULT_TARGET, compose
+from squid_layouts.discord import V2_TARGET, compose
 from squid_layouts.planning import PlanCache
 from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.primitives import (
@@ -50,8 +50,8 @@ def test_palette_is_part_of_plan_cache_identity() -> None:
     cache = PlanCache()
     document = Section((Paragraph("brand"),))
 
-    first = plan(document, target=DEFAULT_TARGET, palette=Palette(brand=0x111111), cache=cache)
-    second = plan(document, target=DEFAULT_TARGET, palette=Palette(brand=0x222222), cache=cache)
+    first = plan(document, target=V2_TARGET, palette=Palette(brand=0x111111), cache=cache)
+    second = plan(document, target=V2_TARGET, palette=Palette(brand=0x222222), cache=cache)
 
     assert not second.metrics.cache_hit
     assert isinstance(first.scene.components_v2.children[0], ScenePanel)
@@ -65,11 +65,9 @@ def test_palette_is_part_of_plan_cache_identity() -> None:
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     cache = PlanCache()
     session = PresentationSession()
-    first = plan(
-        Actions((Action("run", "Run", _first),), key="tools"), target=DEFAULT_TARGET, session=session, cache=cache
-    )
+    first = plan(Actions((Action("run", "Run", _first),), key="tools"), target=V2_TARGET, session=session, cache=cache)
     second = plan(
-        Actions((Action("run", "Run", _second),), key="tools"), target=DEFAULT_TARGET, session=session, cache=cache
+        Actions((Action("run", "Run", _second),), key="tools"), target=V2_TARGET, session=session, cache=cache
     )
 
     assert not first.metrics.cache_hit
@@ -99,8 +97,8 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
         ),
     )
 
-    miss = plan(document, target=DEFAULT_TARGET, cache=cache)
-    hit = plan(document, target=DEFAULT_TARGET, cache=cache)
+    miss = plan(document, target=V2_TARGET, cache=cache)
+    hit = plan(document, target=V2_TARGET, cache=cache)
 
     assert attempts == miss.metrics.states_explored == 2
     assert hit.metrics == replace(miss.metrics, cache_hit=True)
@@ -119,8 +117,8 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
             ),
         )
 
-    miss = plan(document(_first), target=DEFAULT_TARGET, cache=cache)
-    hit = plan(document(_second), target=DEFAULT_TARGET, cache=cache)
+    miss = plan(document(_first), target=V2_TARGET, cache=cache)
+    hit = plan(document(_second), target=V2_TARGET, cache=cache)
 
     assert not miss.metrics.cache_hit
     assert hit.metrics.cache_hit
@@ -143,9 +141,9 @@ def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> Non
             ),
         )
 
-    miss = plan(document(_first), target=DEFAULT_TARGET, cache=cache)
+    miss = plan(document(_first), target=V2_TARGET, cache=cache)
     monkeypatch.setattr(planner_module, "measure", _never_measured)
-    hit = plan(document(_second), target=DEFAULT_TARGET, cache=cache)
+    hit = plan(document(_second), target=V2_TARGET, cache=cache)
 
     assert hit.metrics.cache_hit
     assert hit.scene is miss.scene
@@ -185,8 +183,8 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
         )
 
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
-    plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)
-    cached = plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)
+    plan(document, target=V2_TARGET, nav=nav, cache=cache)
+    cached = plan(document, target=V2_TARGET, nav=nav, cache=cache)
 
     assert cached.metrics.cache_hit
     assert cached.bindings["prev.traceback"].handler is _previous
@@ -196,11 +194,11 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
 def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
     """The session is part of the key, so a hit must not silently skip its writes."""
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
-    miss = plan(document, target=DEFAULT_TARGET, session=PresentationSession())
+    miss = plan(document, target=V2_TARGET, session=PresentationSession())
 
     cache = PlanCache()
-    plan(document, target=DEFAULT_TARGET, session=PresentationSession(), cache=cache)
-    hit = plan(document, target=DEFAULT_TARGET, session=PresentationSession(), cache=cache)
+    plan(document, target=V2_TARGET, session=PresentationSession(), cache=cache)
+    hit = plan(document, target=V2_TARGET, session=PresentationSession(), cache=cache)
 
     assert hit.metrics.cache_hit
     assert hit.session_updates == miss.session_updates
@@ -213,8 +211,8 @@ def test_plan_cache_separates_locales() -> None:
     english = Localization("en", gettext=lambda message: message)
     translated = Localization("xx", gettext=lambda _message: "Bonjour")
 
-    first = plan(document, target=DEFAULT_TARGET, localization=english, cache=cache)
-    second = plan(document, target=DEFAULT_TARGET, localization=translated, cache=cache)
+    first = plan(document, target=V2_TARGET, localization=english, cache=cache)
+    second = plan(document, target=V2_TARGET, localization=translated, cache=cache)
 
     assert not second.metrics.cache_hit
     assert first.scene != second.scene

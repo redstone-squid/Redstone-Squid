@@ -5,7 +5,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
     ExistingLayoutError,

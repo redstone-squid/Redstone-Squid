@@ -10,13 +10,13 @@ import discord
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.attachments import attachment_assets
-from squid_layouts.discord.presentation import DiscordPresentation
+from squid_layouts.discord.presentation import DiscordModeError, DiscordPresentation
 from squid_layouts.discord.renderer import Renderer, Wire
-from squid_layouts.discord.target import Target
+from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.cache import PlanCache
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import EMPTY_RESERVATION
 from squid_layouts.planning.planner import plan as plan_document
@@ -29,6 +29,14 @@ from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
+
+
+def _v2_limits(target: Target) -> V2Limits:
+    """A Components V2 target's limits. Anything else does not belong in this module."""
+    if not isinstance(target.limits, V2Limits):
+        message = f"sl.discord.compose plans Components V2; {target.id!r} is not a V2 target"
+        raise DiscordModeError(message)
+    return target.limits
 
 
 @contextmanager
@@ -75,7 +83,7 @@ def compose(
     *,
     wire: Wire | None = None,
     renderer: Renderer | None = None,
-    limits: V2Limits = LIMITS,
+    target: Target = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -92,7 +100,7 @@ def compose(
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
-            target=Target(limits),
+            target=target,
             chrome=chrome,
             localization=localization,
             palette=palette,
@@ -113,7 +121,7 @@ def compose(
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
             profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else Renderer(limits=limits)
+    drawer = renderer if renderer is not None else Renderer(limits=_v2_limits(target))
     with _span(profile, "renderer"):
         view = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
@@ -124,7 +132,7 @@ def compose(
 def render_static(
     nodes: DocumentLike,
     *,
-    limits: V2Limits = LIMITS,
+    target: Target = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -134,7 +142,7 @@ def render_static(
     """Plan and draw a sessionless Discord document."""
     return compose(
         nodes,
-        limits=limits,
+        target=target,
         chrome=chrome,
         localization=localization,
         palette=palette,
