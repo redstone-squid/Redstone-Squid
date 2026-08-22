@@ -1870,7 +1870,47 @@ class TestResourceLoading:
         message.edit.assert_awaited_once()
         assert "Ready:Ready" in str(message.edit.await_args.kwargs["view"].to_components())
 
+    async def test_settlement_loads_a_newly_revealed_nested_resource(self) -> None:
+        loads: list[str] = []
+
+        class Child(Component):
+            @resource
+            async def value(self) -> str:
+                loads.append("child")
+                return "child loaded"
+
+            def render(self):
+                return Text(f"child:{type(self.value.state).__name__}")
+
+        class Parent(Component):
+            def __init__(self) -> None:
+                self.child = Child()
+
+            @resource
+            async def value(self) -> str:
+                loads.append("parent")
+                return "parent loaded"
+
+            def render(self):
+                match self.value.state:
+                    case Pending():
+                        return Text("parent:Pending")
+                    case Failed(error=error):
+                        return Text(f"parent:Failed:{error}")
+                    case Ready():
+                        return [Text("parent:Ready"), self.embed(self.child, key="child")]
+
+        message: Any = fake_message()
+        mount = Mount(Parent(), timeout=None)
+
+        await mount.send(_Destination(message))
+
+        assert loads == ["parent", "child"]
+        assert message.edit.await_count == 2
+        assert "child:Ready" in str(message.edit.await_args.kwargs["view"].to_components())
+
     async def test_hidden_resource_waits_until_its_branch_is_rendered(self) -> None:
+
         loads: list[str] = []
 
         class Conditional(Component):
