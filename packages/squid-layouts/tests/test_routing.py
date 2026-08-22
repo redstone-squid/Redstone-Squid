@@ -1,5 +1,6 @@
 """Stateless routed controls: ids, dispatch, and drawing without a session."""
 
+import anyio
 import discord
 import pytest
 
@@ -102,7 +103,7 @@ class TestRouter:
         async def edit(_interaction, build_id: int) -> None:
             seen.append(build_id)
 
-        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:42")
         assert seen == [42]
 
     async def test_a_handler_may_ignore_parameters_it_does_not_need(self) -> None:
@@ -113,7 +114,7 @@ class TestRouter:
         async def edit(_interaction) -> None:
             seen.append("called")
 
-        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:42")
         assert seen == ["called"]
 
     async def test_a_handler_taking_kwargs_receives_every_parameter(self) -> None:
@@ -124,7 +125,7 @@ class TestRouter:
         async def edit(_interaction, **params) -> None:
             seen.append(params)
 
-        await router.dispatch(None, "edit:build:42")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:42")
         assert seen == [{"build_id": 42}]
 
     async def test_a_select_handler_receives_values_then_route_parameters(self) -> None:
@@ -163,7 +164,7 @@ class TestRouter:
         async def close_select(_interaction, _values: tuple[str, ...]) -> None:
             seen.append("select")
 
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "poll:close")
         await router.dispatch(
             fake_interaction(),
             "poll:close",
@@ -208,7 +209,7 @@ class TestRouter:
         async def edit(_interaction, build_id: int) -> None:
             seen.append(build_id)
 
-        await router.dispatch(None, "edit:build:7")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "edit:build:7")
         assert seen == [7]
 
     def test_a_handler_taking_no_arguments_at_all_is_refused(self) -> None:
@@ -217,7 +218,7 @@ class TestRouter:
 
     async def test_a_retired_route_is_logged_rather_than_raised(self) -> None:
         # Buttons outlive the code that answered them; an unknown id must not crash dispatch.
-        await Router().dispatch(None, "gone:forever")  # type: ignore[arg-type]
+        await Router().dispatch(fake_interaction(), "gone:forever")
 
     async def test_a_retired_namespaced_route_gets_a_friendly_response(self) -> None:
         seen: list[object] = []
@@ -226,10 +227,11 @@ class TestRouter:
             seen.append(interaction)
 
         router = Router(namespace="r", on_gone=gone)
-        await router.dispatch("interaction", "r:retired:control")  # type: ignore[arg-type]
-        await router.dispatch("interaction", "other:control")  # type: ignore[arg-type]
+        interaction = fake_interaction()
+        await router.dispatch(interaction, "r:retired:control")
+        await router.dispatch(fake_interaction(), "other:control")
 
-        assert seen == ["interaction"]
+        assert seen == [interaction]
 
     def test_a_namespace_requires_a_gone_handler(self) -> None:
         with pytest.raises(ValueError, match="on_gone"):
@@ -267,7 +269,7 @@ class TestRouter:
         async def close(_interaction) -> None:
             raise RuntimeError("boom")
 
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "poll:close")
         assert seen == ["route:poll:close"]
 
     def test_one_template_covers_every_route_so_a_click_dispatches_once(self) -> None:
@@ -296,6 +298,11 @@ class TestRouter:
 
     def test_an_empty_router_matches_nothing(self) -> None:
         assert not Router().template().fullmatch("anything")
+
+    @pytest.mark.parametrize("timeout", [0, 3, -1])
+    def test_the_acknowledgement_timeout_stays_inside_discords_deadline(self, timeout: float) -> None:
+        with pytest.raises(ValueError, match="below Discord's 3-second limit"):
+            Router(acknowledgement_timeout=timeout)
 
     @pytest.mark.parametrize(
         ("first", "second"),
@@ -364,7 +371,7 @@ class TestRouter:
             seen.append("replacement")
 
         router.add(sl.Route("poll:close"), replacement)
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
+        await router.dispatch(fake_interaction(), "poll:close")
 
         assert seen == ["replacement"]
         assert router.template().pattern == "(?:poll:close)"
@@ -411,9 +418,80 @@ class TestRouter:
         )
         select._values = ["now"]
         item = _dispatch_item(router)(select)
-        await item.callback(None)  # type: ignore[arg-type]
+        await item.callback(fake_interaction())
 
         assert seen == [("now",)]
+
+
+class TestAcknowledgement:
+    async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
+        interaction = fake_interaction()
+        router = Router()
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.defer.assert_awaited_once_with()
+        assert interaction.response.is_done()
+
+    async def test_a_slow_handler_is_acknowledged_while_it_keeps_running(self) -> None:
+        interaction = fake_interaction()
+        finished = False
+        router = Router(acknowledgement_timeout=0.01)
+
+        @router.route(POLL_CLOSE)
+        async def slow(_interaction) -> None:
+            nonlocal finished
+            await anyio.sleep(0.03)
+            finished = True
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        assert finished
+        interaction.response.defer.assert_awaited_once_with()
+
+    async def test_an_initial_handler_response_is_not_overwritten(self) -> None:
+        interaction = fake_interaction()
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def respond(current) -> None:
+            await current.response.send_message()
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_message.assert_awaited_once_with()
+        interaction.response.defer.assert_not_awaited()
+
+    async def test_a_modal_response_is_not_overwritten(self) -> None:
+        interaction = fake_interaction()
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def respond(current) -> None:
+            await current.response.send_modal(object())
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_modal.assert_awaited_once()
+        interaction.response.defer.assert_not_awaited()
+
+    async def test_an_error_hook_may_spend_the_response_slot(self) -> None:
+        interaction = fake_interaction()
+
+        async def hook(current, _error, _source: str) -> None:
+            await current.response.send_message()
+
+        router = Router(on_error=hook)
+
+        @router.route(POLL_CLOSE)
+        async def fail(_interaction) -> None:
+            raise RuntimeError("boom")
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        interaction.response.send_message.assert_awaited_once_with()
+        interaction.response.defer.assert_not_awaited()
 
 
 class TestDrawing:
@@ -585,8 +663,9 @@ class TestHandlerKinds:
 
         router = Router()
         router.add(POLL_CLOSE, catch_all)
-        await router.dispatch(None, "poll:close")  # type: ignore[arg-type]
-        assert seen == [(None,)]
+        interaction = fake_interaction()
+        await router.dispatch(interaction, "poll:close")
+        assert seen == [(interaction,)]
 
 
 class TestClientRegistration:
