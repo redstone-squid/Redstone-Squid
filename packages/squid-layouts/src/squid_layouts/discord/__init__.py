@@ -4,7 +4,7 @@ from squid_layouts.discord import delivery, devtools, durability, live
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.compose import Composition, compose, render_static
-from squid_layouts.discord.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
+from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
 from squid_layouts.discord.delivery import (
     Abandoned,
     Delivered,
@@ -16,6 +16,16 @@ from squid_layouts.discord.delivery import (
     StaleHandleError,
     reply_to,
     respond_to,
+)
+from squid_layouts.discord.inspection import (
+    AuditReport,
+    CustomIdSite,
+    DiscordReservation,
+    Violation,
+    ViolationCode,
+    audit,
+    cost,
+    measure,
 )
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.modal import (
@@ -81,6 +91,7 @@ from squid_layouts.discord.sessions import (
     open_personal,
 )
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
+from squid_layouts.errors import ExistingLayoutError, LimitViolationError
 from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
 from squid_layouts.planning.limits import V2Limits as Limits
 from squid_layouts.planning.navigation import (
@@ -102,21 +113,25 @@ __all__ = [
     "AccessPolicy",
     "ActionResponder",
     "Allowed",
+    "AuditReport",
     "Check",
     "CollisionDecision",
     "CollisionPolicy",
     "Composition",
+    "CustomIdSite",
     "CustomScope",
     "Delivered",
     "DeliveryAbandoned",
     "DeliveryReceipt",
     "Denied",
     "Destination",
+    "DiscordReservation",
     "EditHandle",
     "EntityField",
     "EntityType",
     "ErrorHook",
     "Everyone",
+    "ExistingLayoutError",
     "FileField",
     "FinishHook",
     "GlobalScope",
@@ -173,17 +188,22 @@ __all__ = [
     "UserGuildScope",
     "UserScope",
     "Users",
+    "Violation",
+    "ViolationCode",
     "Wire",
+    "audit",
     "build_form_modal",
     "build_modal",
     "compose",
     "conform",
     "conform_modal",
+    "cost",
     "default_nav",
     "delivery",
     "devtools",
     "durability",
     "live",
+    "measure",
     "mounts",
     "native",
     "navigation_controls",
