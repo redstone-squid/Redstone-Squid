@@ -38,6 +38,7 @@ __all__ = [
     "Private",
     "Visibility",
     "card_layout",
+    "contribute",
     "create_mount",
     "destination",
     "error_layout",
@@ -201,6 +202,29 @@ def destination(
     return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
 
 
+def contribute(
+    nodes: ui.DocumentLike,
+    *,
+    to: discord.ui.LayoutView,
+    followed_by: Sequence[discord.ui.Item[Any]] = (),
+    locale: str | None = None,
+    strict: bool = False,
+) -> ui.discord.AttachedFragment:
+    """Contribute a Squid region to a hand-assembled view, through the bot's chrome.
+
+    `followed_by` carries the rows the host adds after the Squid region: they are costed
+    into the plan and placed here, so the view proven legal is the view that gets sent.
+    """
+    return ui.discord.contribute(
+        nodes,
+        to=to,
+        followed_by=followed_by,
+        chrome=CHROME,
+        localization=localization_for(locale),
+        strict=strict,
+    )
+
+
 def render_item(
     node: ui.LayoutNode,
     *,
@@ -209,10 +233,8 @@ def render_item(
 ) -> discord.ui.Item[Any]:
     """Render one node to a detached item, for composition into a larger layout.
 
-    The build card uses this: it renders as an engine-solved Container that callers (vote
-    cards, search detail) then embed or extend. A detached item escapes the engine's view of
-    the message, so callers pass what the rest of the message will spend;
-    composing the whole document with `ui.discord.render_static` is better still where possible.
+    Prefer `contribute`, which measures the host and places the result atomically. This
+    stays for callers that build the surrounding view themselves and know their own budget.
     """
     view = render_static([node], locale=locale, reservation=reservation)
     item = view.children[0]
