@@ -57,9 +57,9 @@ class Reactor:
         self.expiry_margin = timedelta(seconds=expiry_margin)
         self.clock = clock
         self._queue: asyncio.Queue[Mount] = asyncio.Queue()
-        self._queued: set[str] = set()
-        self._in_flight: set[str] = set()
-        self._redeliver: set[str] = set()
+        self._queued: set[Mount] = set()
+        self._in_flight: set[Mount] = set()
+        self._redeliver: set[Mount] = set()
         self._followed: weakref.WeakKeyDictionary[Mount, int] = weakref.WeakKeyDictionary()
         self._warned_handles: weakref.WeakKeyDictionary[Mount, object] = weakref.WeakKeyDictionary()
         self._running = False
@@ -68,12 +68,12 @@ class Reactor:
         """Enqueue a refresh while coalescing requests for the same mount."""
         if mount.finished:
             return
-        if mount.id in self._in_flight:
-            self._redeliver.add(mount.id)
+        if mount in self._in_flight:
+            self._redeliver.add(mount)
             return
-        if mount.id in self._queued:
+        if mount in self._queued:
             return
-        self._queued.add(mount.id)
+        self._queued.add(mount)
         self._queue.put_nowait(mount)
 
     def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]:
@@ -87,6 +87,9 @@ class Reactor:
         if self.bus is None:
             message = "cannot follow topics without a topic bus"
             raise RuntimeError(message)
+        if mount.finished:
+            message = "cannot follow a finished mount"
+            raise ValueError(message)
         if mount.scheduler is not self:
             message = "a followed mount must use this reactor as its scheduler"
             raise ValueError(message)
@@ -146,8 +149,8 @@ class Reactor:
     async def _worker(self) -> None:
         while True:
             mount = await self._queue.get()
-            self._queued.discard(mount.id)
-            self._in_flight.add(mount.id)
+            self._queued.discard(mount)
+            self._in_flight.add(mount)
             cancelled = False
             try:
                 await mount.refresh_now()
@@ -157,11 +160,11 @@ class Reactor:
                 cancelled = True
                 raise
             finally:
-                self._in_flight.discard(mount.id)
+                self._in_flight.discard(mount)
                 if cancelled:
-                    self._redeliver.discard(mount.id)
-                elif mount.id in self._redeliver:
-                    self._redeliver.discard(mount.id)
+                    self._redeliver.discard(mount)
+                elif mount in self._redeliver:
+                    self._redeliver.discard(mount)
                     self.schedule(mount)
                 self._queue.task_done()
 
