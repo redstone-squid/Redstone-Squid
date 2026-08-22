@@ -126,4 +126,10 @@ candidate atomicity rules.
 
 ## Status
 
-Approved for implementation 2026-08-22.
+Implemented 2026-08-22.
+
+The portable runtime owns descriptor validation, dependency invalidation, render observation,
+request generations, and the public state machine. Discord Mount settlement runs inside its
+visible-render lock and reconciles through the runtime revision clock. Visible and atomic delivery,
+failure repair, cancellation, sibling concurrency, hidden and nested discovery, and
+`SourceRankedList` stale-window navigation are covered by focused tests.

@@ -70,7 +70,9 @@ nothing to show. And without a dependency model it makes the motivating file wor
 `settings_view.py:171` fetches `_preset`/`_weights` as a function of `self._kind`, and
 `set_emojis` writes then re-fetches — a resource without declared deps and an
 optimistic set turns that into `open_voting` renamed plus three render branches.
-Revisit only with a dependency design.
+Revisit only with a dependency design. **Resolved 2026-08-22 by
+[plan 33](33-resources.md):** exact state-descriptor dependencies and visible/atomic delivery
+make the pending state observable without creating a second rendering model.
 
 Sequencing: after plan 15 — the pre-delivery await lives inside `Mount.send`. No other
 dependencies.

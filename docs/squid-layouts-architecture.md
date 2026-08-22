@@ -154,11 +154,12 @@ stored cursors and are clamped by the same policy as planner-owned lists. The cu
   a form alternate to the planner.
 
 `SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
-declared state owns one immutable `LoadedWindow`; `WindowLoader` owns only request ordering. Its
+visible resource owns one immutable `LoadedWindow`; `WindowLoader` owns source-position ordering. Its
 `SourceCapabilities` determine whether navigation is backward, whether numeric ranges are meaningful,
 and whether totals are absent, approximate, or exact. A source always returns its resolved `Position`,
 so anchor fallback is explicit. The mount's one `NavigationContext` factory renders controls for both
-these windows and materialized planner cursors.
+these windows and materialized planner cursors. Pending navigation retains the previous window, and a
+failed request renders that stale window with retry chrome.
 
 Route state still has to fit the target's custom-id budget. Large domain drafts should be represented
 by a compact stored identifier; the shell deliberately does not hide a database or persistence
@@ -192,6 +193,28 @@ That guarantee reaches declared state, and only declared state:
 | `sl.state(copy="ref")` | on assignment | to the previous reference |
 | a plain attribute | no | no |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
+
+`sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
+
+    class Search(sl.Component):
+        query: str = sl.state("")
+
+        @sl.resource(depends=(query,))
+        async def results(self) -> tuple[Result, ...]:
+            return await index.search(self.query)
+
+        def render(self):
+            match self.results.state:
+                case sl.Pending(previous=previous): ...
+                case sl.Failed(error=error, previous=previous): ...
+                case sl.Ready(value=results): ...
+
+Dependencies are exact `sl.state` fields and invalidate the resource only when their transaction
+commits. Render observation keeps hidden resources lazy. The default visible delivery commits the
+`Pending` branch before settling it; `ResourceDelivery.ATOMIC` settles the same state machine before
+delivery. Siblings settle concurrently under the frontend's task group, and newly revealed resources
+are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
+`.replace(value)` publishes an authoritative local result.
 
 A plain attribute assigned during a transaction is therefore uncovered, so the framework says
 so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
@@ -255,15 +278,16 @@ still owes a load, so the tier is loaded and then re-rendered rather than render
 delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
 for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
 leaves the load eligible to retry. `Mount.send`, `flush` and `refresh_now` load; `finish`,
-`finish_via` and `_stage_view` deliberately do not. Data the component can degrade without
-belongs in declared state with a render branch, refreshed by a handler.
+`finish_via` and `_stage_view` deliberately do not. Use `sl.resource` for reactive async data whose
+pending, stale, or failed states the component can render. `on_load` remains the imperative, atomic
+hook for initialization that must finish before the component can render at all.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
 `DisclosureState`, and `StrategyState`. It is per mounted message/viewer session and separate
 from domain state. Materialized cursors therefore do not leak into component fields, while apps
-cannot store arbitrary operational objects in presentation snapshots. An async source component
-owns its loaded window explicitly because that data is an input to synchronous rendering, not
-generic presentation metadata.
+cannot store arbitrary operational objects in presentation snapshots. Resource state is likewise
+runtime-only: it is an input to synchronous rendering, not durable domain or generic presentation
+metadata.
 
 Each runtime keeps a small callback-free plan LRU. Cache keys include semantic structure,
 assets, target/version/limits, chrome, reservation, presentation/position state, nav factory
