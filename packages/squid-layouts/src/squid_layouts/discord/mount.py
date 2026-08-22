@@ -8,7 +8,6 @@ stopped after a successful edit so dispatch tables do not accumulate.
 
 import asyncio
 import hashlib
-import io
 import logging
 import secrets
 import time
@@ -16,7 +15,6 @@ from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol, override
-from urllib.parse import urlsplit
 
 import anyio
 import discord
@@ -38,9 +36,10 @@ from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
 from squid_layouts.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_layouts.discord.actions import ActionResponder
+from squid_layouts.discord.attachments import attachment_assets, files_for
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
-from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset
+from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
@@ -66,9 +65,6 @@ from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
     SceneDocument,
-    SceneFile,
-    SceneNode,
-    ScenePanel,
     SceneSelect,
 )
 from squid_layouts.semantic import Status
@@ -574,13 +570,7 @@ class Mount:
             return composition.view, composition
 
         view, composition = draw()
-        linked_assets = _linked_file_assets(composition.plan.scene.children, composition.plan.resources)
-        assets = tuple(
-            asset
-            for scene_asset in composition.plan.scene.assets
-            if isinstance(asset := composition.plan.resources.get(f"asset:{scene_asset.key}"), Asset)
-            and scene_asset.key not in linked_assets
-        )
+        assets = attachment_assets(composition.plan)
         if disabled:
             _disable_all(view)
         return _Candidate(
@@ -689,7 +679,7 @@ class Mount:
         A staged render's assets win, so files fetched alongside a `_stage_view()` belong to
         that render rather than to the generation it will replace.
         """
-        return _attachment_files(self._pending.assets if self._pending is not None else self._assets)
+        return files_for(self._pending.assets if self._pending is not None else self._assets)
 
     # --- Loading -----------------------------------------------------------------------
 
@@ -809,7 +799,7 @@ class Mount:
             # deliberately make this the pending paint and settle after it commits.
             candidate = await self._stage_loaded()
             try:
-                receipt = await destination(candidate.view, _attachment_files(candidate.assets))
+                receipt = await destination(candidate.view, files_for(candidate.assets))
             except deliver.DeliveryAbandoned:
                 logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
                 self._rollback(candidate)
@@ -843,7 +833,7 @@ class Mount:
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
         """
-        attachments = _attachment_files(candidate.assets) if files else None
+        attachments = files_for(candidate.assets) if files else None
         for handle in (through, self._handle):
             if handle is None or handle.expired():
                 continue
@@ -1373,33 +1363,6 @@ class Mount:
             await self.on_error(interaction, error, source)
             return
         logger.error("unhandled component error in %s", source, exc_info=error)
-
-
-def _attachment_files(assets: Sequence[Asset]) -> list[discord.File]:
-    files: list[discord.File] = []
-    for asset in assets:
-        if not isinstance(asset.source, InlineAsset):
-            message = f"Discord mount needs a host resolver for stored asset {asset.key!r}"
-            raise TypeError(message)
-        files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
-    return files
-
-
-def _linked_file_assets(nodes: Sequence[SceneNode], resources: Mapping[str, object]) -> frozenset[str]:
-    linked: set[str] = set()
-    for node in nodes:
-        if isinstance(node, ScenePanel):
-            linked.update(_linked_file_assets(node.children, resources))
-            continue
-        if not isinstance(node, SceneFile):
-            continue
-        resource = resources.get(f"asset:{node.asset_key}")
-        if not isinstance(resource, Asset) or not isinstance(resource.source, StoredAsset):
-            continue
-        parsed = urlsplit(resource.source.reference)
-        if parsed.scheme in {"http", "https"} and parsed.netloc:
-            linked.add(node.asset_key)
-    return frozenset(linked)
 
 
 def _disable_all(view: discord.ui.LayoutView) -> None:
