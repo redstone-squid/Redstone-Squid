@@ -111,7 +111,7 @@ class _SearchDetail(sl.Component):
             ),
         )
 
-    async def _open_build(self, event: sl.PressEvent) -> None:
+    async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
         if build_id is None or self._load_build is None or self._render_build is None:
             await event.notice(t(self.locale, _("That build is no longer available.")))
@@ -164,27 +164,27 @@ class SearchResultsView(sl.Component):
     @property
     def request(self) -> SearchRequest:
         """Return the request currently displayed by the component."""
-        return self._source.request_at(self._loaded().position.offset)
+        return self._source.request_at(self._visible_window().position.offset)
 
     @property
     def page(self) -> SearchPage:
         """Return the current result page."""
-        return self._source.page_for(self._loaded())
+        return self._source.page_for(self._visible_window())
 
     @property
     def hits(self) -> tuple[SearchHit, ...]:
         """Return the results currently displayed."""
-        return self._loaded().window.items
+        return self._visible_window().window.items
 
     @property
     def can_go_back(self) -> bool:
         """Return whether an earlier page exists."""
-        return self._loaded().window.has_previous
+        return self._visible_window().window.has_previous
 
     @property
     def can_go_forward(self) -> bool:
         """Return whether a later page exists."""
-        return self._loaded().window.has_next
+        return self._visible_window().window.has_next
 
     @property
     def detail_index(self) -> int | None:
@@ -204,7 +204,7 @@ class SearchResultsView(sl.Component):
         self._browser.opened = hit
         self._browser._detail_value = self._detail(hit)
 
-    def _loaded(self) -> sl.LoadedWindow[SearchHit]:
+    def _visible_window(self) -> sl.LoadedWindow[SearchHit]:
         state = self._browser.window.state
         if isinstance(state, sl.Ready):
             return state.value

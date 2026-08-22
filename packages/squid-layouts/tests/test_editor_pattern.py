@@ -35,7 +35,9 @@ def test_form_section_prefills_stages_and_explicitly_commits() -> None:
     editor = sl.Editor("Account", (section,))
     initial = editor.initial_from({"profile": {"name": "Old", "bio": None}})
 
-    assert editor.form_for(initial, "submit:profile").prefill == {"name": "Old", "bio": None}
+    form = editor.form_for(initial, "submit:profile")
+    assert form is not None
+    assert form.prefill == {"name": "Old", "bio": None}
 
     staged = editor.transition(initial, "submit:profile", submitted={"name": "New", "bio": "Hello"})
     committed = editor.transition(staged, "save")
@@ -66,6 +68,7 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
     )
     previous = component.pattern_state
     component.pattern_state = state
+    assert component.on_change is not None
     await component.on_change(sl.PatternEvent(cast(Any, object()), "submit:profile", previous, state))
 
     assert commits[-1][0]["profile"] == {"name": "New", "bio": None}
@@ -92,7 +95,10 @@ def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> 
     assert editor.dirty_sections(valid) == frozenset()
 
 
-def _collection_section() -> tuple[sl.CollectionEditor, sl.EditorSection[sl.CollectionState, object]]:
+def _collection_section() -> tuple[
+    sl.CollectionEditor,
+    sl.EditorSection[sl.CollectionState, tuple[Mapping[str, object], ...]],
+]:
     collection = sl.CollectionEditor(
         "Links",
         create=sl.FormSpec("Link", (sl.TextField(key="name", label="Name"),)),
