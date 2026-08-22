@@ -1,6 +1,7 @@
 """Reactive core tests: state, dispatch funnel, flush, lifecycle."""
 
 import asyncio
+import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -42,6 +43,9 @@ from squid_layouts import (
 from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_layouts.discord import (
+    Allowed,
+    Check,
+    Denied,
     Everyone,
     Mount,
     Owner,
@@ -341,6 +345,18 @@ class TestRenderAndWire:
 
 
 class TestAccessPolicy:
+    def test_access_is_a_required_keyword(self) -> None:
+        assert inspect.signature(Mount).parameters["access"].default is inspect.Parameter.empty
+
+    async def test_everyone_admits_any_user(self) -> None:
+        component = Counter()
+        mount = Mount(component, access=Everyone(), timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction(user_id=99))
+
+        assert component.count == 1
+
     async def test_wrong_user_is_rejected_ephemerally(self):
         now = 0.0
         component = Counter()
@@ -387,6 +403,57 @@ class TestAccessPolicy:
     async def test_access_policies_are_visible_in_snapshots(self):
         assert isinstance(Mount(Counter(), access=Owner(42), timeout=None).snapshot().access, Owner)
         assert Mount(Counter(), access=Users({42, 43}), timeout=None).snapshot().access == Users({42, 43})
+
+    async def test_async_check_can_admit_an_interaction(self) -> None:
+        check = AsyncMock(return_value=Allowed())
+        component = Counter()
+        mount = Mount(component, access=Check(check), timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction(user_id=42)
+
+        await mount.dispatch("inc", interaction)
+
+        assert component.count == 1
+        check.assert_awaited_once_with(interaction)
+
+    async def test_explicit_denial_reason_is_localized(self) -> None:
+        async def deny(interaction: discord.Interaction):
+            return Denied(Message("Policy denied"))
+
+        localization = Localization("fr", gettext=lambda text: "Refusé" if text == "Policy denied" else text)
+        mount = Mount(Counter(), access=Check(deny), localization=localization, timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction)
+
+        view = interaction.response.send_message.await_args.kwargs["view"]
+        assert [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)] == ["Refusé"]
+
+    async def test_policy_errors_use_the_mount_error_funnel_without_admitting(self) -> None:
+        error = RuntimeError("authorization service unavailable")
+        check = AsyncMock(side_effect=error)
+        hook = AsyncMock()
+        component = Counter()
+        mount = Mount(component, access=Check(check), timeout=None, on_error=hook)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("inc", interaction)
+
+        assert component.count == 0
+        hook.assert_awaited_once_with(interaction, error, "access")
+
+    async def test_modal_submissions_pass_through_the_same_policy(self) -> None:
+        submitted = AsyncMock()
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+        mount = Mount(Counter(), access=Owner(42), timeout=None)
+        interaction = fake_interaction(user_id=99)
+
+        await mount.dispatch_submit("rename", interaction, spec, {"name": "Ada"}, submitted)
+
+        submitted.assert_not_awaited()
+        assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
 class TestFinishHooks:
