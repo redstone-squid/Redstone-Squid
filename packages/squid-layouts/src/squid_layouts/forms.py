@@ -495,6 +495,21 @@ class Form:
         """Handle a successfully parsed submission, or an accepted invalid one."""
 
 
+@dataclass(frozen=True, slots=True)
+class FormBinding:
+    """One render's answer for a form key: what to present, and what to do with it.
+
+    Declared by a `FormTrigger` and carried through planning so a frontend can resolve the
+    newest one. A form presented ad hoc from a handler has no render-time binding, and so
+    nothing newer to be rebased onto.
+    """
+
+    key: str
+    spec: FormSpec
+    on_submit: SubmitHandler
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+
 type FormLike = FormSpec | Form
 
 
