@@ -71,6 +71,15 @@ class TestSplitPages:
         assert "\n".join(pages) == text
         assert all(len(page) <= 300 for page in pages)
 
+    def test_large_inputs_use_the_same_exact_balancing_objective(self):
+        text = "\n".join("x" for _ in range(300))
+
+        pages = split_pages(text, 39)
+
+        assert len(pages) == 15
+        assert {len(page) for page in pages} == {39}
+        assert "\n".join(pages) == text
+
 
 class TestPositionPolicy:
     @pytest.mark.parametrize(
