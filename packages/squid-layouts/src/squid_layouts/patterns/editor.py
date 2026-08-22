@@ -367,7 +367,15 @@ class Editor:
             section = self._sections.get(state.editing)
             slot = self._slot(state, state.editing)
             if section is not None and section.pattern is not None and slot is not None:
-                nested = section.pattern.render(slot.state, _NestedControls(controls, self.key, section.key))
+                nested = section.pattern.render(
+                    slot.state,
+                    _NestedControls(
+                        controls,
+                        self.key,
+                        section.key,
+                        getattr(section.pattern, "key", None),
+                    ),
+                )
                 return stack(
                     heading(self.title),
                     heading(section.label, level=3),
@@ -448,16 +456,20 @@ class _NestedControls[ParentStateT, ChildStateT]:
         parent: PatternControls[ParentStateT],
         editor_key: str,
         section_key: str,
+        pattern_key: str | None,
     ) -> None:
         self.parent = parent
         self.editor_key = editor_key
         self.section_key = section_key
+        self.pattern_key = pattern_key
         self.chrome = parent.chrome
 
     def _action(self, action: str) -> str:
         return f"section:{self.section_key}:{action}"
 
     def _key(self, key: str) -> str:
+        if self.pattern_key is not None:
+            key = key.removeprefix(f"{self.pattern_key}.")
         return f"{self.editor_key}.{self.section_key}.{key}"
 
     def content(self, content: Sequence[Any], *, prefix: str) -> tuple[LayoutNode, ...]:
