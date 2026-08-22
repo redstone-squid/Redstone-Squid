@@ -606,9 +606,9 @@ class Mount:
         its previous generation with the render still pending, so a second `send` is a clean
         retry.
 
-        Returns the message when the destination produced one. `None` means the mount has no
-        standing handle -- either the destination could not hand one back, in which case the
-        first click mints one, or it abandoned the delivery and nothing was sent at all.
+        Returns the message when the receipt exposed one. `None` means only that no message
+        object came back, or that the destination abandoned delivery; the receipt may still
+        have committed a standing handle such as an interaction's `@original` authority.
         """
         if self._finished:
             return None

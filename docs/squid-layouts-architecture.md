@@ -379,9 +379,9 @@ CLAUDE.md mandates for Nucleation, applied to discord.py:
 |---|---|---|
 | ViewStore schedules one call per matching dynamic-item class | Router's one-class design, exact-overlap rejection, register idempotence (plan 16) | overlap tests in `test_routing.py`; idempotence pin lands with 16's remaining work |
 | `is_dispatchable() == False` keeps mounted routed controls out of ViewStore | single dispatch path for mounted controls | `test_routing.py` mounted double-dispatch assertions |
-| `InteractionMessage.edit`/`WebhookMessage.edit` route through the interaction token | edit-authority semantics; plan 23's defect and fix | lands with plan 23 |
-| every modal send serializes through `Modal.to_dict` | the host `ErrorHandledModal` clamp gate | host modal tests |
-| `interaction.response.is_done()` switches response vs followup writes | `_InteractionHandle.write`, `respond_to` | mount handle tests |
+| `InteractionMessage.edit`/`WebhookMessage.edit` route through interaction endpoints; application followups force wait | edit-authority semantics; plan 23's defect and fix | real-library pins in `test_mount.py` |
+| current modal controls serialize inside `Label` through `Modal.to_dict` | plan 18's Discord field ceiling and the host clamp gate | inventory pin in `test_form_discord.py`; host modal tests |
+| `interaction.response.is_done()` switches response vs followup writes | `_WebhookMessageHandle.write`, `respond_to` | mount handle tests |
 
 Policy:
 
@@ -403,8 +403,8 @@ Policy:
 
 ## Deliberate boundaries and current gaps
 
-- Modal submission still uses the Discord modal adapter. A portable form protocol is future
-  work.
+- Form schemas, parsing, validation, and submission events are portable. Discord presentation
+  remains a modal adapter, including its native entity and file extension fields.
 - Exact `primitives.SelectMenu` overflow is intentionally a planning error; semantic
   interactions own legal paging. Cross-page multi-select needs an explicit grouping or commit
   model and is rejected rather than approximated.
