@@ -8,7 +8,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount, Router, live
+from squid_layouts.discord import Everyone, Mount, Owner, Router, live
 from squid_layouts.discord.devtools import DevTools
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Heading
@@ -67,18 +67,18 @@ class TestGate:
 
 
 class TestMountCommands:
-    async def test_list_opens_an_inspector_locked_to_the_caller(self) -> None:
+    async def test_list_opens_an_inspector_owned_by_the_caller(self) -> None:
         ctx = make_context()
         cog = DevTools()
 
         await run(cog.list_mounts, cog, ctx)
 
         assert len(live.mounts()) == 1
-        assert live.mounts()[0].lock_to == frozenset({1})
+        assert live.mounts()[0].snapshot().access == Owner(1)
 
     @pytest.mark.parametrize(("command", "expected"), (("dump_plan", "logical"), ("dump_metrics", "cache:")))
     async def test_snapshot_reports_render_with_squid_layouts(self, command: str, expected: str) -> None:
-        subject = Mount(Subject())
+        subject = Mount(Subject(), access=Everyone())
         await subject.send(delivered_to(fake_message()))
         ctx = make_context()
         cog = DevTools()
@@ -89,7 +89,7 @@ class TestMountCommands:
         assert expected in rendered
 
     async def test_scene_is_attached_as_protocol_json(self) -> None:
-        subject = Mount(Subject())
+        subject = Mount(Subject(), access=Everyone())
         await subject.send(delivered_to(fake_message()))
         ctx = make_context()
         cog = DevTools()

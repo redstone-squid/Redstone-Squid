@@ -6,7 +6,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import DEFAULT_TARGET, Mount, Renderer, delivery
+from squid_layouts.discord import DEFAULT_TARGET, Everyone, Mount, Renderer, delivery
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.scene import Codec
@@ -94,13 +94,13 @@ async def _send(mount: Mount) -> tuple[discord.ui.LayoutView, list[discord.File]
 
 
 async def test_mount_attaches_inline_bytes_and_does_not_attach_url_assets() -> None:
-    _view, files = await _send(Mount(_DownloadComponent(_inline()), timeout=None))
+    _view, files = await _send(Mount(_DownloadComponent(_inline()), access=Everyone(), timeout=None))
     assert len(files) == 1
     assert files[0].filename == "report.txt"
     assert files[0].fp.read() == b"full report"
 
     stored = sl.Asset("report", "report.txt", "text/plain", sl.StoredAsset("https://example.com/report.txt"))
-    view, linked_files = await _send(Mount(_DownloadComponent(stored), timeout=None))
+    view, linked_files = await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
     assert linked_files == []
     assert any(isinstance(item, discord.ui.Button) and item.url for item in view.walk_children())
 
@@ -109,7 +109,7 @@ async def test_mount_keeps_raising_for_non_url_stored_references() -> None:
     stored = sl.Asset("report", "report.txt", "text/plain", sl.StoredAsset("reports/current"))
 
     with pytest.raises(TypeError, match="needs a host resolver"):
-        await _send(Mount(_DownloadComponent(stored), timeout=None))
+        await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
 
 
 def test_html_renderer_emits_data_links_resolver_links_and_visible_placeholders() -> None:

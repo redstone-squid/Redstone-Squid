@@ -6,7 +6,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount, NavigationContext, page_select_nav
+from squid_layouts.discord import Everyone, Mount, NavigationContext, page_select_nav
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.planning.navigation import SEEK_OPTION_LIMIT, _seek_pages
 from squid_layouts.primitives import Button, Lines, Row
@@ -41,7 +41,7 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
         heading="Settings",
     )
     tabs = pattern.component()
-    mount = Mount(tabs, timeout=None)
+    mount = Mount(tabs, access=Everyone(), timeout=None)
 
     view = commit_render(mount)
     assert "general body" in _texts(view)
@@ -58,7 +58,7 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
         key="many-tabs",
     )
     many = many_pattern.component()
-    many_mount = Mount(many, timeout=None)
+    many_mount = Mount(many, access=Everyone(), timeout=None)
     many_view = commit_render(many_mount)
     select = next(item for item in many_view.walk_children() if isinstance(item, discord.ui.Select))
     assert select.custom_id is not None and select.custom_id.endswith(":many-tabs")
@@ -73,7 +73,7 @@ async def test_tabs_component_shell_embeds_only_selected_content() -> None:
         [sl.Tab("one", "One", Screen("one")), sl.Tab("two", "Two", Screen("two"))],
         key="screens",
     ).component()
-    mount = Mount(tabs, timeout=None)
+    mount = Mount(tabs, access=Everyone(), timeout=None)
 
     view = commit_render(mount)
     assert "screen: one" in _texts(view)
@@ -118,7 +118,7 @@ async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
         ],
         key="settings",
     ).component()
-    mount = Mount(menu, timeout=None)
+    mount = Mount(menu, access=Everyone(), timeout=None)
 
     view = commit_render(mount)
     assert _texts(view) == ["## Settings"]
@@ -219,7 +219,7 @@ def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
     listing = next(node for node in rendered.children if isinstance(node, Lines))
     assert listing.lines == ("1. **Ada** — 30", "2. **Grace** — 20")
 
-    view = commit_render(Mount(ranked, timeout=None))
+    view = commit_render(Mount(ranked, access=Everyone(), timeout=None))
     assert "1. **Ada** — 30\n2. **Grace** — 20" in _texts(view)
 
     assert "Showing 3 entries" in _texts(view)
@@ -244,7 +244,7 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
         capabilities=capabilities,
     )
     ranked = sl.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
-    mount = Mount(ranked, timeout=None)
+    mount = Mount(ranked, access=Everyone(), timeout=None)
 
     await mount.send(delivered_to(fake_message()))
 
@@ -264,7 +264,7 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
         ),
     )
     ranked = sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
-    mount = Mount(ranked, timeout=None)
+    mount = Mount(ranked, access=Everyone(), timeout=None)
     await mount.send(delivered_to(fake_message()))
 
     assert mount._view is not None
@@ -292,7 +292,11 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
             count=sl.CountPrecision.EXACT,
         ),
     )
-    mount = Mount(sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2), timeout=None)
+    mount = Mount(
+        sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        access=Everyone(),
+        timeout=None,
+    )
     await mount.send(delivered_to(fake_message()))
 
     source.fail_next = True
@@ -321,6 +325,7 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
     )
     mount = Mount(
         sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        access=Everyone(),
         timeout=None,
         nav=page_select_nav,
     )
@@ -351,6 +356,7 @@ async def test_a_sequential_source_offers_no_jump_control() -> None:
 
     mount = Mount(
         sl.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        access=Everyone(),
         timeout=None,
         nav=nav,
     )
@@ -388,6 +394,7 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
 
     mount = Mount(
         sl.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2),
+        access=Everyone(),
         timeout=None,
         nav=nav,
     )
@@ -401,7 +408,7 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
 
 async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
     ranked = sl.RankedList([("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2).component()
-    mount = Mount(ranked, timeout=None)
+    mount = Mount(ranked, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await mount.dispatch("leaderboard.next", fake_interaction())

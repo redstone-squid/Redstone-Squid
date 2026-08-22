@@ -5,7 +5,7 @@ from collections.abc import Iterable
 import discord
 
 import squid_layouts as sl
-from squid_layouts.discord import Mount
+from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.semantic import Actions, Choices, FallbackContent, FormTrigger, RoutedAction, RoutedChoices, Stack
 
@@ -34,7 +34,7 @@ async def test_window_merge_preserves_staging_from_other_pages() -> None:
         key="roles",
         maximum=10,
     ).component()
-    mount = Mount(panel, timeout=None)
+    mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await mount.dispatch("roles.members.select", fake_interaction(), ["member-0", "member-1"])
@@ -94,7 +94,7 @@ async def test_apply_commits_and_dispatches_exactly_once() -> None:
         (sl.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
     ).component(on_apply=applied)
-    mount = Mount(panel, timeout=None)
+    mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     await mount.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
     commit_render(mount)

@@ -478,7 +478,9 @@ class SettingsPanel(sl.Component):
 
     def mount(self) -> sl.discord.Mount:
         """Create the production mount with author lock and shared error handling."""
-        self._mount = create_mount(self, locale=self.locale, timeout=SESSION_SECONDS, lock_to=self._author_id)
+        self._mount = create_mount(
+            self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=SESSION_SECONDS
+        )
         return self._mount
 
 

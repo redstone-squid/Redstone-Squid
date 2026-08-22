@@ -7,7 +7,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import EntityField, EntityType, FileField, Mount, build_form_modal
+from squid_layouts.discord import EntityField, EntityType, Everyone, FileField, Mount, build_form_modal
 from squid_layouts.discord.testing import commit_render, fake_interaction
 
 
@@ -212,7 +212,7 @@ async def _open_form(panel: DurationPanel, mount: Mount) -> discord.ui.Modal:
 
 async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     panel = DurationPanel()
-    mount = Mount(panel, timeout=None)
+    mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     modal = await _open_form(panel, mount)
     _text_input(modal)._value = "eventually"  # pyrefly: ignore[missing-attribute]
@@ -234,7 +234,7 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
 
 async def test_valid_submission_dispatches_typed_event_and_commits_a_new_generation() -> None:
     panel = DurationPanel()
-    mount = Mount(panel, timeout=None)
+    mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     generation = mount.generation
     modal = await _open_form(panel, mount)
@@ -251,7 +251,7 @@ async def test_valid_submission_dispatches_typed_event_and_commits_a_new_generat
 
 async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None:
     panel = DurationPanel()
-    mount = Mount(panel, timeout=None)
+    mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     modal = await _open_form(panel, mount)
     _text_input(modal)._value = "2h"  # pyrefly: ignore[missing-attribute]
@@ -268,7 +268,7 @@ async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None
 
 async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     panel = DurationPanel(validation_policy=sl.FormValidationPolicy.ACCEPT_AND_MARK)
-    mount = Mount(panel, timeout=None)
+    mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     modal = await _open_form(panel, mount)
     _text_input(modal)._value = "bad"  # pyrefly: ignore[missing-attribute]

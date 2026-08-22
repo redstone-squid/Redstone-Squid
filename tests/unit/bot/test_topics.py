@@ -10,6 +10,7 @@ import anyio
 import squid_layouts as sl
 from squid.bot.app import RedstoneSquid
 from squid.bot.topics import follow_resource, resource_topic
+from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import delivered_to, fake_message
 
 
@@ -36,7 +37,7 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     source = "before"
 
     for panel, message in zip(panels, messages, strict=True):
-        mount = sl.discord.Mount(panel, scheduler=reactor, timeout=None)
+        mount = sl.discord.Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
 
         async def reload(current: Projection) -> None:
             current.value = source

@@ -219,7 +219,7 @@ class SearchResultsView(sl.Component):
 
     def mount(self) -> sl.discord.Mount:
         """Create the mount used by the command transport."""
-        return create_mount(self, locale=self.locale, timeout=180, lock_to=self._author_id)
+        return create_mount(self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=180)
 
 
 def _build_id(hit: SearchHit) -> int | None:
