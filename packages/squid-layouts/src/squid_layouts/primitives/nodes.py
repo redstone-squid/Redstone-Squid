@@ -198,18 +198,23 @@ class RawItem:
 
 
 @dataclass(frozen=True, slots=True)
-class Embed:
-    """A keyed component boundary expanded before portable planning."""
+class Boundary:
+    """A keyed component boundary expanded before portable planning.
+
+    Named for what it is rather than what it draws to. It has never had anything to do with
+    a Discord embed, and a node called ``Embed`` in the same union as real embed rendering
+    is a trap for every future reader.
+    """
 
     component: object
     key: str
 
     def __post_init__(self) -> None:
         if not self.key:
-            message = "Embed key must not be empty"
+            message = "Boundary key must not be empty"
             raise ValueError(message)
         if "." in self.key:
-            message = "Embed key must not contain '.'"
+            message = "Boundary key must not contain '.'"
             raise ValueError(message)
 
 
@@ -368,7 +373,7 @@ type Node = (
     | Budget
     | Break
     | RawItem
-    | Embed
+    | Boundary
     | Extension
     | Variants
 )
