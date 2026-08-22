@@ -423,6 +423,104 @@ class TestRouter:
         assert seen == [("now",)]
 
 
+class TestRouteGroups:
+    async def test_child_groups_build_stable_routes_and_dispatch_them(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        close = polls.define("close", aliases=("poll:close",))
+        seen: list[str] = []
+
+        @polls.route(close)
+        async def handle(_interaction) -> None:
+            seen.append("close")
+
+        router = Router(namespace=root, on_gone=_noop)
+        await router.dispatch(fake_interaction(), close.id())
+        await router.dispatch(fake_interaction(), "poll:close")
+
+        assert close.id() == "r:polls:close"
+        assert seen == ["close", "close"]
+        assert router.template().fullmatch("r:polls:close")
+
+    def test_a_namespace_group_is_an_ordinary_one_segment_group(self) -> None:
+        nested = sl.discord.RouteGroup("r", "polls")
+
+        with pytest.raises(ValueError, match="exactly one prefix segment"):
+            Router(namespace=nested, on_gone=_noop)
+
+    @pytest.mark.parametrize("prefix", [(), ("{kind}",), ("bad:prefix",)])
+    def test_group_prefixes_are_nonempty_literal_segments(self, prefix: tuple[str, ...]) -> None:
+        with pytest.raises(ValueError, match=r"route group|literal segment"):
+            sl.discord.RouteGroup(*prefix)
+
+    def test_sibling_groups_are_checked_for_identity_overlap(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        first = root.group("polls")
+        second = root.group("polls")
+        first.define("{action}")
+        second.define("close")
+
+        with pytest.raises(ValueError, match="overlaps the included route"):
+            Router(namespace=root, on_gone=_noop)
+
+    def test_a_group_from_another_namespace_is_rejected(self) -> None:
+        router = Router(namespace="r", on_gone=_noop)
+        foreign = sl.discord.RouteGroup("other")
+
+        with pytest.raises(ValueError, match="does not belong"):
+            router.include(foreign)
+
+    def test_including_an_existing_descendant_is_a_no_op(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        route = polls.define("close")
+        polls.add(route, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+
+        router.include(polls)
+
+        assert len(router._groups) == 1
+        assert router.describe()[0].group_prefix == "r:polls"
+
+    def test_every_defined_identity_needs_a_handler_before_registration(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        root.group("polls").define("close")
+        router = Router(namespace=root, on_gone=_noop)
+
+        with pytest.raises(RuntimeError, match="identities without handlers"):
+            router.register(_FakeClient())  # type: ignore[arg-type]
+
+    def test_identity_and_group_structure_freeze_at_registration(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        route = polls.define("close")
+        polls.add(route, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+
+        with pytest.raises(RuntimeError, match="before the route group is registered"):
+            polls.define("refresh")
+        with pytest.raises(RuntimeError, match="before registration"):
+            root.group("builds")
+
+    async def test_a_frozen_group_accepts_same_identity_handler_replacement(self) -> None:
+        root = sl.discord.RouteGroup("r")
+        polls = root.group("polls")
+        route = polls.define("close")
+        polls.add(route, _noop)
+        router = Router(namespace=root, on_gone=_noop)
+        router.register(_FakeClient())  # type: ignore[arg-type]
+        seen: list[str] = []
+
+        async def replacement(_interaction) -> None:
+            seen.append("replacement")
+
+        polls.add(route, replacement)
+        await router.dispatch(fake_interaction(), route.id())
+
+        assert seen == ["replacement"]
+
+
 class TestAcknowledgement:
     async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
         interaction = fake_interaction()
