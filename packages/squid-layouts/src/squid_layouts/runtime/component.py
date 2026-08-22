@@ -4,7 +4,7 @@ A component describes *what the message should say now*. Interaction callbacks j
 declared state; assignments and in-place list, dict, or set mutations schedule the mount to
 re-render. Components never touch discord.py objects directly.
 
-Components compose through explicit keyed Embed boundaries, so two instances of the same
+Components compose through explicit keyed Boundary nodes, so two instances of the same
 child class can appear in one message without their controls or pagers cross-wiring. Only the
 root component is attached to a Mount; children reach it through their parent.
 """
@@ -20,9 +20,9 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives.constraints import Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Boundary,
     Button,
     Code,
-    Embed,
     Extension,
     Footer,
     Heading,
@@ -319,9 +319,9 @@ class Component:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
-    def embed(self, child: Component, *, key: str) -> Embed:
+    def boundary(self, child: Component, *, key: str) -> Boundary:
         """Place child in this render tree under a stable key and namespace."""
-        return Embed(child, key)
+        return Boundary(child, key)
 
     async def on_load(self) -> None:
         """Fetch what this component cannot render without, before its first render.
@@ -444,13 +444,13 @@ def render_component_tree(
         token = _CURRENT_CONTEXT.set(context)
 
         def expand_item(item: RenderNode, item_path: str) -> list[LayoutNode]:
-            if isinstance(item, Embed):
+            if isinstance(item, Boundary):
                 if item.key in embed_keys:
-                    message = f"{item_path}: duplicate Embed key {item.key!r}"
+                    message = f"{item_path}: duplicate Boundary key {item.key!r}"
                     raise LayoutInvariantError(message)
                 embed_keys.add(item.key)
                 if not isinstance(item.component, Component):
-                    message = f"{item_path}: Embed does not contain a Component"
+                    message = f"{item_path}: Boundary does not contain a Component"
                     raise LayoutInvariantError(message)
                 # Before the defer check: a deferred child still reaches the mount through
                 # its parent when its on_load writes state.

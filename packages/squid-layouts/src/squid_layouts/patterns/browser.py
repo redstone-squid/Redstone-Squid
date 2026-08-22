@@ -305,7 +305,7 @@ class Browser[ItemT](Component):
         items = loaded.window.items
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))
         detail = (
-            (self.embed(self._detail_value, key=f"detail-{self.identity(item)}"),)
+            (self.boundary(self._detail_value, key=f"detail-{self.identity(item)}"),)
             if isinstance(self._detail_value, Component)
             else render_content(
                 self,

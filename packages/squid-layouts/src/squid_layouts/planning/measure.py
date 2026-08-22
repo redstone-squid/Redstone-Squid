@@ -30,11 +30,11 @@ from squid_layouts.planning.navigation import (
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Boundary,
     Break,
     Budget,
     Button,
     Code,
-    Embed,
     File,
     Footer,
     Gallery,
@@ -645,8 +645,8 @@ class _Builder:
             case RawItem(text_cost=text_cost):
                 self.raw_text_cost += text_cost
                 return node
-            case Embed():
-                message = "Embed must be expanded before solving"
+            case Boundary():
+                message = "Boundary must be expanded before solving"
                 raise ValueError(message)
             case Variants():
                 message = "Variants must be resolved before measuring; plan() owns that choice"

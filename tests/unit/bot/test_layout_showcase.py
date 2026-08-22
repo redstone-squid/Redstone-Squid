@@ -54,7 +54,7 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         ("pagination", "sl.primitives.Paginate("),
         ("adaptation", 'return sl.actions(*actions, key="showcase-actions")'),
         ("degradation", "overflow=sl.primitives.Spill()"),
-        ("composition", 'self.embed(self.left, key="left")'),
+        ("composition", 'self.boundary(self.left, key="left")'),
         ("localization", 'mount.localize(localization_for("zh-CN"))'),
     ],
 )
