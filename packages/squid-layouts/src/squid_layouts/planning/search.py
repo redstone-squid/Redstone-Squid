@@ -1,6 +1,6 @@
 """Deterministic lexicographic strategy selection without scalar weights."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from heapq import heappop, heappush
 
@@ -80,6 +80,30 @@ def candidate_cost(candidate: StrategyCandidate, *, axis: StrategyAxis) -> CostV
         transitions=candidate.transition_distance,
         path=axis.path,
         strategy_id=candidate.strategy_id,
+    )
+
+
+def ranked_candidates(axis: StrategyAxis) -> tuple[tuple[CostVector, StrategyCandidate], ...]:
+    """One axis's candidates, cheapest first, under the shared coarse tiers."""
+    priced = [(candidate_cost(candidate, axis=axis), candidate) for candidate in axis.candidates]
+    return tuple(sorted(priced, key=lambda item: item[0]))
+
+
+def assignment_cost(axes: Sequence[StrategyAxis], strategies: Mapping[str, str]) -> CostVector:
+    """Price one complete assignment the same way `iter_assignments` prices its own."""
+    costs = [
+        candidate_cost(next(item for item in axis.candidates if item.strategy_id == strategies[axis.path]), axis=axis)
+        for axis in axes
+    ]
+    return CostVector(
+        stable_changes=sum(item.stable_changes for item in costs),
+        normal_changes=sum(item.normal_changes for item in costs),
+        flexible_changes=sum(item.flexible_changes for item in costs),
+        preference_mismatches=sum(item.preference_mismatches for item in costs),
+        active_pagers=sum(item.active_pagers for item in costs),
+        transitions=sum(item.transitions for item in costs),
+        path="\0".join(axis.path for axis in axes),
+        strategy_id="\0".join(strategies[axis.path] for axis in axes),
     )
 
 

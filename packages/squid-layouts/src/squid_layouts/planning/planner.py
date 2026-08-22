@@ -3,6 +3,8 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC
+from heapq import heappop, heappush
+from itertools import count
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.assets import Asset
@@ -11,17 +13,47 @@ from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
+from squid_layouts.planning.adaptation import (
+    FallbackAxis,
+    SemanticDecisions,
+    SemanticLowering,
+    lower_semantics,
+    nominate_decisions,
+)
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
-from squid_layouts.planning.degradation import DegradationProfile
-from squid_layouts.planning.frontier import VariantTopology, resolve_variants
+from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
+from squid_layouts.planning.frontier import (
+    VariantPath,
+    canonical_positions,
+    guided_step,
+    resolve_variants,
+    steppable,
+    variant_notes,
+    variant_profile,
+    variant_state_bound,
+)
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.measure import Realized, RPanel, RSection, RText, RTime
+from squid_layouts.planning.measure import (
+    MeasuredLayout,
+    Realized,
+    RPanel,
+    RSection,
+    RText,
+    RTime,
+    SolveNote,
+    SolveNoteCode,
+    measure,
+)
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, CostVector, StrategyAssignment, iter_assignments
-from squid_layouts.planning.solve import SolvedLayout, solve
+from squid_layouts.planning.search import (
+    DEFAULT_SEARCH_BUDGET,
+    CostVector,
+    StrategyAxis,
+    assignment_cost,
+    ranked_candidates,
+)
 from squid_layouts.planning.target import ResourceCost, TargetProfile
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
@@ -259,18 +291,18 @@ def _lower_children(
                         payload=prepared.scene_payload,
                     )
                 )
-            case Variants(variants=variants, priority=priority, semantic_path=semantic_path):
+            case Variants(variants=variants, priority=priority):
                 supported = [variant for variant in variants if variant.requires <= target.capabilities]
                 if not supported:
                     message = "Variants has no variant supported by the selected target"
                     raise LayoutInvariantError(message)
                 # `requires` is cleared rather than carried: capability selection happens here
-                # and exactly once, leaving the solver a pure budget ladder.
+                # and exactly once, leaving the search a pure budget ladder whose rung
+                # numbering is stable for the rest of the plan.
                 lowered.append(
                     Variants(
                         tuple(Variant(_lower_children(variant.nodes, target, limits)) for variant in supported),
                         priority,
-                        semantic_path,
                     )
                 )
             case _:
@@ -345,7 +377,7 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
             case Variants(variants=variants):
-                # Every rung is checked, not just the one the solver will open on, so a
+                # Every rung is checked, not just the one the search will open on, so a
                 # document is rejected for a bad rung it might never reach. That also means
                 # two rungs cannot share a Paginate key — as under the previous Fold, whose
                 # primary and fallback were both walked.
@@ -360,267 +392,313 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
 
 
 @dataclass(frozen=True, slots=True)
-class _StrategyAttempt:
-    assignment: StrategyAssignment
+class _State:
+    """One point in the planner's decision space, canonical by construction.
+
+    Fallback branches and strategies are named by semantic path, so they survive a change
+    anywhere else in the document. Primitive ladder positions are named by their path through
+    the *selected* rungs, which is only meaningful against one lowering — so any semantic
+    change discards them rather than reinterpreting them against a different tree.
+    """
+
+    fallbacks: tuple[tuple[str, int], ...] = ()
+    strategies: tuple[tuple[str, str], ...] = ()
+    variants: tuple[tuple[VariantPath, int], ...] = ()
+
+
+def _ordered(positions: Mapping[VariantPath, int]) -> tuple[tuple[VariantPath, int], ...]:
+    """Give a position set exactly one spelling, so equal states compare equal.
+
+    Paths mix rung indices with container markers, so they are ordered as text rather than
+    compared element by element.
+    """
+    return tuple(sorted(positions.items(), key=lambda item: [str(part) for part in item[0]]))
+
+
+@dataclass(frozen=True, slots=True)
+class _Candidate:
+    """One fully evaluated state: what it decided, what it costs, and what it measured."""
+
+    state: _State
+    decisions: SemanticDecisions
     semantic: SemanticLowering
     lowered: tuple[Node, ...]
-    solved: SolvedLayout
+    """Target-lowered and validated, with primitive ladders still unresolved."""
+    layout: MeasuredLayout
     broker: CursorCoordinator
+    structural: DegradationProfile
+    cost: CostVector
+
+    @property
+    def degradation(self) -> DegradationProfile:
+        return self.layout.degradation
+
+    @property
+    def feasible(self) -> bool:
+        return self.layout.components <= self.layout.limits.total_components and not self.layout.failures
+
+    @property
+    def rank(self) -> tuple[DegradationProfile, CostVector]:
+        return self.degradation, self.cost
 
 
-def _attempt_strategy(
-    assignment: StrategyAssignment,
-    *,
-    document: Document,
-    target: TargetProfile,
-    limits: V2Limits,
-    chrome: Chrome,
-    localization: Localization,
-    palette: Palette,
-    presentation: PresentationSession,
-    reservation: ResourceCost,
-    positions: Mapping[str, Position] | None,
-    nav: PlannedNav | None,
-    search_budget: int,
-    semantic_topology: Mapping[str, int] | None = None,
-) -> _StrategyAttempt:
-    broker = CursorCoordinator(presentation, chrome, nav, positions)
-    semantic = lower_semantics(
-        document.children,
-        limits=limits,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        session=presentation,
-        pages=broker,
-        capabilities=target.capabilities,
-        strategies=dict(assignment.strategies),
-    )
-    lowered = _lower_children(semantic.nodes, target, limits)
-    _validate(lowered, limits)
-    solved = solve(
-        lowered,
-        limits=limits,
-        chrome=chrome,
-        strict=False,
-        reserved_text=reservation.get("display_text"),
-        nav=nav,
-        search_budget=search_budget,
-        semantic_topology=semantic_topology,
-    )
-    return _StrategyAttempt(assignment, semantic, lowered, solved, broker)
+@dataclass(frozen=True, slots=True)
+class _Expansion:
+    """The decisions one step away, and whether reaching them cost the search its guarantee."""
+
+    successors: tuple[tuple[DegradationProfile, CostVector, _State], ...]
+    guided: bool
 
 
-def _search_strategies(
-    *,
-    document: Document,
-    target: TargetProfile,
-    limits: V2Limits,
-    chrome: Chrome,
-    localization: Localization,
-    palette: Palette,
-    presentation: PresentationSession,
-    reservation: ResourceCost,
-    positions: Mapping[str, Position] | None,
-    nav: PlannedNav | None,
-    search_budget: int,
-) -> _StrategyAttempt:
-    axes = nominate_strategies(document.children, limits=limits, session=presentation)
-    assignments = iter(iter_assignments(axes))
-    current = next(assignments)
-    first: _StrategyAttempt | None = None
-    degraded: _StrategyAttempt | None = None
-    phase_one: list[_StrategyAttempt] = []
-    selected: _StrategyAttempt | None = None
-    fallback = False
-    states_explored = 0
-    conditional_topologies: list[VariantTopology] = []
+@dataclass(frozen=True, slots=True)
+class _Search:
+    """Everything one document's search needs that does not change between candidates."""
 
-    def discover_topologies(attempt: _StrategyAttempt) -> None:
-        for topology in attempt.solved.explored_variant_topologies:
-            if any(rung for _path, rung in topology) and topology not in conditional_topologies:
-                conditional_topologies.append(topology)
+    document: Document
+    target: TargetProfile
+    limits: V2Limits
+    chrome: Chrome
+    localization: Localization
+    palette: Palette
+    presentation: PresentationSession
+    reservation: ResourceCost
+    positions: Mapping[str, Position] | None
+    nav: PlannedNav | None
 
-    # Lossless semantic representations always outrank author-granted degradation. Give
-    # every semantic assignment its preferred structural rungs before spending another
-    # state inside any one assignment's variant product.
-    while True:
-        attempted = _attempt_strategy(
-            current,
-            document=document,
-            target=target,
-            limits=limits,
-            chrome=chrome,
-            localization=localization,
-            palette=palette,
-            presentation=presentation,
-            reservation=reservation,
-            positions=positions,
-            nav=nav,
-            search_budget=1,
+    def evaluate(self, state: _State) -> _Candidate:
+        """Lower, validate, and measure exactly one candidate in its own coordinator.
+
+        The coordinator is per candidate rather than per plan: a rejected state must not
+        leave its pagers, assets, events, bindings, or staged session writes behind.
+        """
+        broker = CursorCoordinator(self.presentation, self.chrome, self.nav, self.positions)
+        fallbacks = dict(state.fallbacks)
+        decisions = nominate_decisions(
+            self.document.children,
+            limits=self.limits,
+            session=self.presentation,
+            fallbacks=fallbacks,
         )
-        states_explored += attempted.solved.states_explored
-        phase_one.append(attempted)
-        discover_topologies(attempted)
-        if first is None:
-            first = attempted
-        fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
-        if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
-            degraded = attempted
+        strategies = _canonical_strategies(decisions.strategies, dict(state.strategies))
+        # Decisions the selected branches no longer expose are dropped rather than carried:
+        # a state is identified by what it actually decided, so the frontier cannot hold two
+        # spellings of the same candidate.
+        reachable = {occurrence.path for occurrence in decisions.fallbacks}
+        fallbacks = {path: rung for path, rung in fallbacks.items() if rung and path in reachable}
+        semantic = lower_semantics(
+            self.document.children,
+            limits=self.limits,
+            chrome=self.chrome,
+            localization=self.localization,
+            palette=self.palette,
+            session=self.presentation,
+            pages=broker,
+            capabilities=self.target.capabilities,
+            strategies=strategies,
+            fallbacks=fallbacks,
+        )
+        lowered = _lower_children(semantic.nodes, self.target, self.limits)
+        _validate(lowered, self.limits)
+        variants = canonical_positions(lowered, dict(state.variants))
+        steps = [*_fallback_notes(decisions.fallbacks, fallbacks), *variant_notes(lowered, variants)]
+        layout = measure(
+            resolve_variants(lowered, variants),
+            limits=self.limits,
+            chrome=self.chrome,
+            reserved_text=self.reservation.get("display_text"),
+            nav=self.nav,
+        )
+        structural = _fallback_profile(decisions.fallbacks, fallbacks).merged(variant_profile(lowered, variants))
+        if steps:
+            layout = replace(layout, notes=[*steps, *layout.notes], overflowed=True)
+        layout = replace(layout, degradation=layout.degradation.merged(structural))
+        return _Candidate(
+            _State(
+                tuple(sorted(fallbacks.items())),
+                tuple(sorted(strategies.items())),
+                _ordered(variants),
+            ),
+            decisions,
+            semantic,
+            lowered,
+            layout,
+            broker,
+            structural,
+            assignment_cost(decisions.strategies, strategies),
+        )
 
-        following = next(assignments, None)
-        if following is not None and states_explored >= search_budget:
-            selected = degraded or first
-            fallback = True
-            break
-        if fits and attempted.solved.degradation.lossless:
-            selected = attempted
-            break
-        if following is None:
-            break
-        current = following
+    def successors(self, candidate: _Candidate, remaining: int) -> _Expansion:
+        """Every decision one step away, priced by the loss it already commits to.
 
-    # No preferred-rung assignment was lossless. Resume only assignments that actually
-    # had unexplored variant states, retaining the best incumbent across the full product.
-    if selected is None:
-        for initial in phase_one:
-            if not initial.solved.search_fallback:
+        The bound is exact for strategy and ladder steps. Opening a different fallback branch
+        rebuilds the axis set, so its semantic cost is only known once it is evaluated; the
+        zero vector is used until then, which delays a stop but never prunes a better answer.
+        """
+        state = candidate.state
+        found: list[tuple[DegradationProfile, CostVector, _State]] = []
+        strategies = dict(state.strategies)
+        for axis in candidate.decisions.strategies:
+            ranked = [item.strategy_id for _cost, item in ranked_candidates(axis)]
+            following = ranked.index(strategies[axis.path]) + 1
+            if following >= len(ranked):
                 continue
-            remaining = search_budget - states_explored
-            if remaining < 1:
-                fallback = True
-                break
-            attempted = _attempt_strategy(
-                initial.assignment,
-                document=document,
-                target=target,
-                limits=limits,
-                chrome=chrome,
-                localization=localization,
-                palette=palette,
-                presentation=presentation,
-                reservation=reservation,
-                positions=positions,
-                nav=nav,
-                search_budget=remaining,
-            )
-            states_explored += attempted.solved.states_explored
-            discover_topologies(attempted)
-            fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
-            if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
-                degraded = attempted
-            if attempted.solved.search_fallback:
-                fallback = True
-                break
-
-        # A semantic fallback's axes do not exist until structural search reaches that
-        # topology. Search each reached topology independently so choices hidden behind
-        # mutually exclusive rungs never multiply one another.
-        for topology in conditional_topologies:
-            topology_map = dict(topology)
-            topology_axes = nominate_strategies(
-                document.children,
-                limits=limits,
-                session=presentation,
-                topology=topology_map,
-            )
-            topology_phase_one: list[_StrategyAttempt] = []
-            topology_assignments = iter(iter_assignments(topology_axes))
-            assignment = next(topology_assignments)
-            while True:
-                remaining = search_budget - states_explored
-                if remaining < 1:
-                    fallback = True
-                    break
-                attempted = _attempt_strategy(
-                    assignment,
-                    document=document,
-                    target=target,
-                    limits=limits,
-                    chrome=chrome,
-                    localization=localization,
-                    palette=palette,
-                    presentation=presentation,
-                    reservation=reservation,
-                    positions=positions,
-                    nav=nav,
-                    search_budget=1,
-                    semantic_topology=topology_map,
+            advanced = {**strategies, axis.path: ranked[following]}
+            found.append(
+                (
+                    candidate.structural,
+                    assignment_cost(candidate.decisions.strategies, advanced),
+                    # A different representation renumbers the tree, so ladder positions
+                    # measured against the old one mean nothing against the new one.
+                    _State(state.fallbacks, tuple(sorted(advanced.items())), ()),
                 )
-                states_explored += attempted.solved.states_explored
-                topology_phase_one.append(attempted)
-                discover_topologies(attempted)
-                fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
-                if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
-                    degraded = attempted
-                following = next(topology_assignments, None)
-                if states_explored >= search_budget and following is not None:
-                    fallback = True
-                    break
-                if following is None:
-                    break
-                assignment = following
-            if fallback:
-                break
-            for initial in topology_phase_one:
-                if not initial.solved.search_fallback:
-                    continue
-                remaining = search_budget - states_explored
-                if remaining < 1:
-                    fallback = True
-                    break
-                attempted = _attempt_strategy(
-                    initial.assignment,
-                    document=document,
-                    target=target,
-                    limits=limits,
-                    chrome=chrome,
-                    localization=localization,
-                    palette=palette,
-                    presentation=presentation,
-                    reservation=reservation,
-                    positions=positions,
-                    nav=nav,
-                    search_budget=remaining,
-                    semantic_topology=topology_map,
+            )
+        fallbacks = dict(state.fallbacks)
+        for occurrence in candidate.decisions.fallbacks:
+            rung = fallbacks.get(occurrence.path, 0)
+            if rung + 1 >= occurrence.branches:
+                continue
+            opened = {**fallbacks, occurrence.path: rung + 1}
+            surviving = {
+                path: strategy for path, strategy in strategies.items() if not path.startswith(f"{occurrence.path}.")
+            }
+            found.append(
+                (
+                    _fallback_profile(candidate.decisions.fallbacks, opened),
+                    CostVector(),
+                    _State(tuple(sorted(opened.items())), tuple(sorted(surviving.items())), ()),
                 )
-                states_explored += attempted.solved.states_explored
-                discover_topologies(attempted)
-                fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
-                if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
-                    degraded = attempted
-                if attempted.solved.search_fallback:
-                    fallback = True
-                    break
-            if fallback:
-                break
-        selected = degraded or first
+            )
+        variants = dict(state.variants)
+        fallback_loss = _fallback_profile(candidate.decisions.fallbacks, fallbacks)
+        neighbours, guided = self._ladder_steps(candidate, variants, remaining)
+        found.extend(
+            (
+                fallback_loss.merged(variant_profile(candidate.lowered, neighbour)),
+                candidate.cost,
+                _State(state.fallbacks, state.strategies, _ordered(neighbour)),
+            )
+            for neighbour in neighbours
+        )
+        return _Expansion(tuple(found), guided)
 
+    def _ladder_steps(
+        self, candidate: _Candidate, variants: dict[VariantPath, int], remaining: int
+    ) -> tuple[list[dict[VariantPath, int]], bool]:
+        """Which ladder assignments to consider next, exhaustively or under guidance.
+
+        A product the remaining budget cannot exhaust is walked one deterministic step at a
+        time instead: breadth and priority still choose the eligible ladders, and among them
+        the step that frees the most components wins.
+        """
+        eligible = steppable(candidate.lowered, variants)
+        if variant_state_bound(candidate.lowered, remaining) > remaining:
+            step = guided_step(candidate.lowered, variants, self.limits)
+            # Guidance discards the siblings it did not take, so the incumbent it reaches is
+            # the best one *found*, not the best one that exists. That is a bounded fallback.
+            return ([] if step is None else [step], len(eligible) > 1)
+        return (
+            [canonical_positions(candidate.lowered, {**variants, path: rung + 1}) for path, _ladder, rung in eligible],
+            False,
+        )
+
+
+def _canonical_strategies(axes: Sequence[StrategyAxis], selected: Mapping[str, str]) -> dict[str, str]:
+    """Keep a valid choice per reachable axis; a newly reachable one opens at its cheapest."""
+    resolved: dict[str, str] = {}
+    for axis in axes:
+        chosen = selected.get(axis.path)
+        if chosen is None or chosen not in {candidate.strategy_id for candidate in axis.candidates}:
+            chosen = ranked_candidates(axis)[0][1].strategy_id
+        resolved[axis.path] = chosen
+    return resolved
+
+
+def _fallback_profile(occurrences: Sequence[FallbackAxis], selected: Mapping[str, int]) -> DegradationProfile:
+    """Price opened fallback branches as the author-granted loss they are."""
+    profile = DegradationProfile()
+    for occurrence in occurrences:
+        rung = selected.get(occurrence.path, 0)
+        if rung:
+            profile = profile.with_effect(DegradationEffect(priority=0, path=occurrence.path, semantic_steps=rung))
+    return profile
+
+
+def _fallback_notes(occurrences: Sequence[FallbackAxis], selected: Mapping[str, int]) -> list[SolveNote]:
+    return [
+        SolveNote(
+            SolveNoteCode.VARIANT_STEP,
+            f"{occurrence.path} stepped to variant {step + 2} of {occurrence.branches} "
+            "(priority 0) under layout pressure",
+        )
+        for occurrence in occurrences
+        for step in range(selected.get(occurrence.path, 0))
+    ]
+
+
+def _search(search: _Search, *, search_budget: int) -> _Candidate:
+    """Explore one conditional decision graph best-first and return the least degraded fit.
+
+    Strategies, semantic fallbacks, and primitive ladders are all decisions in the same
+    frontier, so a lossless representation is never traded for a structural fallback the
+    author priced higher, and an alternative hidden behind an unopened branch costs nothing.
+    """
+    frontier: list[tuple[DegradationProfile, CostVector, int, _State]] = []
+    serial = count()
+    heappush(frontier, (DegradationProfile(), CostVector(), next(serial), _State()))
+    seen: set[_State] = {_State()}
+    best: _Candidate | None = None
+    nearest: _Candidate | None = None
+    states_explored = 0
+    guided = False
+
+    while frontier and states_explored < search_budget:
+        structural, cost, _order, state = heappop(frontier)
+        if best is not None and best.rank <= (structural, cost):
+            break
+        candidate = search.evaluate(state)
+        states_explored += 1
+        if candidate.feasible and (best is None or candidate.rank < best.rank):
+            best = candidate
+        if nearest is None or (candidate.layout.components, *candidate.rank) < (
+            nearest.layout.components,
+            *nearest.rank,
+        ):
+            nearest = candidate
+        expansion = search.successors(candidate, search_budget - states_explored)
+        guided = guided or expansion.guided
+        for bound, bound_cost, successor in expansion.successors:
+            if successor in seen:
+                continue
+            seen.add(successor)
+            if best is not None and best.rank < (bound, bound_cost):
+                continue
+            heappush(frontier, (bound, bound_cost, next(serial), successor))
+
+    selected = best or nearest
     assert selected is not None
-    fallback_events: tuple[PlanEvent, ...] = ()
-    if fallback:
-        fallback_events = (
+    exhausted = guided or (bool(frontier) and states_explored >= search_budget)
+    events: tuple[PlanEvent, ...] = ()
+    if exhausted:
+        events = (
             PlanEvent(
                 code="planner.search_fallback",
                 path="$",
                 message=(
-                    f"Strategy search used its bounded fallback within {search_budget} attempts; "
+                    f"Layout search used its bounded fallback within {search_budget} evaluations; "
                     "selected the best incumbent"
                 ),
                 severity=PlanSeverity.WARNING,
             ),
         )
-    semantic = replace(
-        selected.semantic,
-        events=fallback_events + selected.semantic.events,
-        states_explored=states_explored,
-        search_fallback=fallback,
+    return replace(
+        selected,
+        semantic=replace(
+            selected.semantic,
+            events=events + selected.semantic.events,
+            states_explored=states_explored,
+            search_fallback=exhausted,
+        ),
     )
-    return replace(selected, semantic=semantic)
-
-
-def _degraded_key(attempt: _StrategyAttempt) -> tuple[DegradationProfile, CostVector]:
-    return attempt.solved.degradation, attempt.assignment.cost
 
 
 def plan(
@@ -677,6 +755,7 @@ def plan(
             pages=broker,
             capabilities=target.capabilities,
             strategies=dict(cached.strategies),
+            fallbacks=dict(cached.fallbacks),
         )
         lowered = _lower_children(semantic.nodes, target, limits)
         assets = _merge_assets(document.assets, semantic.assets)
@@ -698,31 +777,34 @@ def plan(
             session_updates=cached.session_updates,
         )
 
-    attempt = _search_strategies(
-        document=document,
-        target=target,
-        limits=limits,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        presentation=presentation,
-        reservation=reservation,
-        positions=positions,
-        nav=nav,
+    selected = _search(
+        _Search(
+            document=document,
+            target=target,
+            limits=limits,
+            chrome=chrome,
+            localization=localization,
+            palette=palette,
+            presentation=presentation,
+            reservation=reservation,
+            positions=positions,
+            nav=nav,
+        ),
         search_budget=search_budget,
     )
-    broker = attempt.broker
-    semantic = attempt.semantic
+    broker = selected.broker
+    semantic = selected.semantic
     assets = _merge_assets(document.assets, semantic.assets)
-    lowered = attempt.lowered
-    solved = attempt.solved
+    # Ladders are decided; everything downstream, root pagination included, sees one tree.
+    lowered = resolve_variants(selected.lowered, dict(selected.state.variants))
+    measured = selected.layout
     root_events: tuple[PlanEvent, ...] = ()
-    if solved.components > limits.total_components:
-        local_pagers = [*broker.pagers, *solved.pagers]
+    if measured.components > limits.total_components:
+        local_pagers = [*broker.pagers, *measured.pagers]
         if local_pagers:
             keys = ", ".join(repr(pager.key) for pager in local_pagers)
             message = (
-                f"{solved.components} components exceed target maximum {limits.total_components} after local "
+                f"{measured.components} components exceed target maximum {limits.total_components} after local "
                 f"pagination ({keys}). Local and root pagination are never simultaneous; fold component groups, "
                 "split the document, or move the long local collection onto its own screen."
             )
@@ -733,9 +815,9 @@ def plan(
                 if document.key is None
                 else "plan with navigation controls or split the static document"
             )
-            message = f"{solved.components} components exceed target maximum {limits.total_components}; {remedy}"
+            message = f"{measured.components} components exceed target maximum {limits.total_components}; {remedy}"
             raise UnsolvableLayoutError(message)
-        solved, root_pages = _root_paginate(
+        measured, root_pages = _root_paginate(
             lowered,
             key=document.key,
             target_limits=limits,
@@ -753,10 +835,10 @@ def plan(
                 after={"pages": root_pages},
             ),
         )
-    _reconcile_pagers(solved, broker)
-    if strict and solved.notes:
-        raise LayoutDegradedError("; ".join(note.message for note in solved.notes))
-    hard_failures = solved.failures
+    _reconcile_pagers(measured, broker)
+    if strict and measured.notes:
+        raise LayoutDegradedError("; ".join(note.message for note in measured.notes))
+    hard_failures = measured.failures
     if hard_failures:
         message = "; ".join(note.message for note in hard_failures)
         raise UnsolvableLayoutError(message)
@@ -765,7 +847,7 @@ def plan(
         protocol=SceneCodec.protocol,
         target=target.id,
         target_version=target.version,
-        children=converter.children(solved.children),
+        children=converter.children(measured.children),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )
@@ -780,7 +862,7 @@ def plan(
                 message=note.message,
                 severity=PlanSeverity.DEGRADATION,
             )
-            for note in solved.notes
+            for note in measured.notes
         ),
         logical_fingerprint=stable_fingerprint((document,)),
         scene_fingerprint=fingerprint,
@@ -807,26 +889,27 @@ def plan(
                 scene,
                 report,
                 updates,
-                attempt.assignment.strategies,
+                selected.state.strategies,
                 semantic.states_explored,
                 semantic.search_fallback,
-                attempt.solved.variant_positions,
+                selected.state.variants,
+                selected.state.fallbacks,
             ),
         )
     return result
 
 
-def _reconcile_pagers(solved: SolvedLayout, broker: CursorCoordinator) -> None:
-    """Move each solved pager to the page its reader belongs on.
+def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> None:
+    """Move each measured pager to the page its reader belongs on.
 
-    The solver has to render *some* page to measure one, and it picks before anyone knows
+    Measuring a page means rendering *some* page, and the choice is made before anyone knows
     how many there are — the count is an output of fitting. This is the first moment a
     stored cursor can be reconciled against it, and because the page is a projection it
-    costs a slot rewrite rather than a second solve. The mount used to do this by drawing
-    twice.
+    costs a slot rewrite rather than a second measurement. The mount used to do this by
+    drawing twice.
     """
     positions: dict[str, Position] = {}
-    for pager in solved.pagers:
+    for pager in measured.pagers:
         request = MaterializedCursorRequest(
             key=pager.key,
             extent=pager.pages,
@@ -836,7 +919,7 @@ def _reconcile_pagers(solved: SolvedLayout, broker: CursorCoordinator) -> None:
         grant = broker.grant(request)
         broker.record(request, grant.position)
         positions[pager.key] = grant.position
-    solved.reposition(positions)
+    measured.reposition(positions)
 
 
 def _root_paginate(
@@ -848,15 +931,15 @@ def _root_paginate(
     reserved_text: int,
     nav: PlannedNav,
     broker: CursorCoordinator,
-) -> tuple[SolvedLayout, int]:
+) -> tuple[MeasuredLayout, int]:
     maximum_pages = max(1, len(nodes))
 
-    def solve_page(children: Sequence[Node], index: int, pages: int) -> SolvedLayout:
+    def measure_page(children: Sequence[Node], index: int, pages: int) -> MeasuredLayout:
         chrome_nodes: tuple[Node, ...] = (
             Footer(chrome.page_footer(index + 1, pages), overflow=Never()),
             *nav(materialized_navigation_state(key, Position(offset=index), pages, chrome)),
         )
-        return solve(
+        return measure(
             (*children, *chrome_nodes),
             limits=target_limits,
             chrome=chrome,
@@ -866,17 +949,18 @@ def _root_paginate(
         )
 
     # Greedy: grow a page until it stops fitting, then cut. Every probe measures a
-    # different prefix, so there is nothing to memoize — the cost is one solve per node,
-    # paid only by a document that already blew the component budget.
+    # different prefix, so there is nothing to memoize — the cost is one measurement per
+    # node, paid only by a document that already blew the component budget. These probes
+    # are packing, not optimization, so they stay out of the search's evaluation count.
     pages: list[tuple[Node, ...]] = []
     current: tuple[Node, ...] = ()
     for node in nodes:
         candidate = (*current, node)
-        probe = solve_page(candidate, 0, maximum_pages)
+        probe = measure_page(candidate, 0, maximum_pages)
         if current and (probe.components > target_limits.total_components or probe.overflowed):
             pages.append(current)
             current = (node,)
-            probe = solve_page(current, 0, maximum_pages)
+            probe = measure_page(current, 0, maximum_pages)
         else:
             current = candidate
         if probe.components > target_limits.total_components:
@@ -892,7 +976,7 @@ def _root_paginate(
     grant = broker.grant(request)
     broker.record(request, grant.position)
     index = grant.position.offset
-    return solve_page(pages[index], index, grant.extent), grant.extent
+    return measure_page(pages[index], index, grant.extent), grant.extent
 
 
 def _plan_cache_key(
