@@ -70,6 +70,13 @@ path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
 other processes; `sl.discord.durability.MountManager` provides opt-in versioned state checkpoints.
 
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.plan`, `sl.discord.compose`,
+`sl.discord.render_static`, or `sl.discord.Mount`. An omitted section or article accent inherits
+`Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
+Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
+subtree, so a component may select a palette from reactive state while the final scene still contains
+only exact colours. Discord buttons retain Discord's platform-owned style colours.
+
 ### Live updates across mounts
 
 `TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
