@@ -12,7 +12,6 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.ui import create_mount
 from squid.bot.utils.components import edit_interaction_layout, no_mentions, text_layout
-from squid.bot.utils.mount_registry import SessionKey
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -22,6 +21,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
+from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     from squid.bot.voting.publisher import PollPublisher

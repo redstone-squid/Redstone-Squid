@@ -20,9 +20,9 @@ from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
 from squid.bot.ui import create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
-from squid.bot.utils.mount_registry import MountRegistry, SessionKey, WhenOpen
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
+from squid_layouts.discord import MountRegistry, SessionKey, WhenOpen
 
 
 class NotAskedType(Enum):
