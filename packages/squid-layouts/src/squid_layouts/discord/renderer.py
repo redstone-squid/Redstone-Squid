@@ -9,7 +9,9 @@ import discord
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.assets import Asset, StoredAsset
+from squid_layouts.discord.attachments import attachment_assets
 from squid_layouts.discord.conform import LimitViolationError, conform
+from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.scene.codec import SceneCodec
@@ -79,8 +81,8 @@ class StaticView(discord.ui.LayoutView):
         super().__init__(timeout=None)
 
 
-class Renderer:
-    """Draw a Discord-targeted scene without making layout decisions."""
+class V2Renderer:
+    """Draw a resolved Components V2 scene without making layout decisions."""
 
     def __init__(
         self,
@@ -99,15 +101,33 @@ class Renderer:
         *,
         plan: PlanResult | None = None,
         wire: Wire | None = None,
+    ) -> DiscordPresentation:
+        """Draw the complete message this scene resolves to.
+
+        A presentation rather than a view, because a message is both halves. For Components
+        V2 the layout happens to be the whole message, so this looks like ceremony — it stops
+        looking like it the moment the other renderer has content and embeds to return.
+        """
+        return DiscordPresentation.components_v2(
+            self.view(scene, plan=plan, wire=wire),
+            assets=() if plan is None else attachment_assets(plan),
+        )
+
+    def view(
+        self,
+        scene: SceneDocument,
+        *,
+        plan: PlanResult | None = None,
+        wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
         if scene.protocol != SceneCodec.protocol:
-            message = f"Renderer cannot draw scene protocol {scene.protocol}"
+            message = f"V2Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
         if scene.target != "discord.components-v2":
-            message = f"Renderer cannot draw target {scene.target!r}"
+            message = f"V2Renderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
         if scene.target_version != 1:
-            message = f"Renderer cannot draw Discord target version {scene.target_version}"
+            message = f"V2Renderer cannot draw Discord target version {scene.target_version}"
             raise DrawInvariantError(message)
 
         view = self.view_factory()

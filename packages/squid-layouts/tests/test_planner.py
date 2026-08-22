@@ -19,7 +19,7 @@ from squid_layouts import (
     zoned_timestamp,
 )
 from squid_layouts.discord import V2_LIMITS as LIMITS
-from squid_layouts.discord import V2_TARGET, NativeItem, Renderer
+from squid_layouts.discord import V2_TARGET, NativeItem, V2Renderer
 from squid_layouts.planning import TargetProfile
 from squid_layouts.primitives import (
     ActionGroup,
@@ -89,7 +89,7 @@ def test_duplicate_action_keys_fail_before_drawing() -> None:
 
 def test_static_discord_renderer_matches_scene_structure() -> None:
     result = plan(Panel((Text("hello"),)), target=V2_TARGET)
-    view = Renderer().draw(result.scene, plan=result)
+    view = V2Renderer().view(result.scene, plan=result)
 
     assert isinstance(view, discord.ui.LayoutView)
     assert view.to_components()[0]["type"] == 17
@@ -99,7 +99,7 @@ def test_discord_renderer_draws_zoned_timestamp_in_its_named_zone() -> None:
     value = ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
     result = plan(zoned_timestamp(value, label="Starts"), target=V2_TARGET)
 
-    view = Renderer().draw(result.scene, plan=result)
+    view = V2Renderer().view(result.scene, plan=result)
 
     displays = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
     assert displays == ["**Starts:** 2026-08-22 10:30:00-04:00[America/New_York]"]
@@ -277,7 +277,7 @@ def test_native_item_is_built_once_measured_recursively_and_reused() -> None:
         return native
 
     result = plan(NativeItem(factory, fallback=Text("fallback")), target=V2_TARGET)
-    view = Renderer().draw(result.scene, plan=result)
+    view = V2Renderer().view(result.scene, plan=result)
 
     assert calls == 1
     assert view.children[0] is native

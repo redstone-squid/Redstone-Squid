@@ -81,7 +81,7 @@ def test_reserved_text_is_held_back_from_the_budget(nodes, reserved):
 
 @given(documents())
 def test_render_static_matches_compose(nodes):
-    assert render_static(nodes).to_components() == compose(nodes).view.to_components()
+    assert render_static(nodes).layout.to_components() == compose(nodes).view.to_components()
 
 
 def test_a_reserved_budget_survives_nesting():

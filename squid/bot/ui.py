@@ -268,13 +268,15 @@ def render_static(
     reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
 ) -> discord.ui.LayoutView:
     """Render a sessionless document through the bot's chrome and catalogue."""
+    # `.layout` rather than the whole presentation: the bot is entirely on Components V2,
+    # where the layout *is* the message, and every caller here wants a view to send.
     return ui.discord.render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
         strict=strict,
         reservation=reservation,
-    )
+    ).layout
 
 
 def truncate_display_text(content: str, limit: int) -> str:

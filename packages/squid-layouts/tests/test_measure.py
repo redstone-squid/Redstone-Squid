@@ -42,6 +42,11 @@ from squid_layouts.primitives import (
 )
 
 
+def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
+    """The drawn layout of a sessionless V2 document, for tests that only read components."""
+    return render_static(*args, **kwargs).layout
+
+
 def _text_of(view: discord.ui.LayoutView) -> str:
     return "\n".join(c["content"] for c in _flat(view.to_components()) if c.get("type") == 10)
 
@@ -56,7 +61,7 @@ def _flat(components):
 
 class TestFitting:
     def test_small_document_renders_verbatim(self):
-        view = render_static(
+        view = _static_view(
             [
                 Heading("Build 123"),
                 Text("A very nice piston door."),
@@ -75,7 +80,7 @@ class TestFitting:
         lang = "py"
         fence_cost = len(f"```{lang}\n") + len("\n```")
         content = "x" * (LIMITS.total_text - fence_cost)
-        view = render_static([Code(content, lang=lang)])
+        view = _static_view([Code(content, lang=lang)])
         assert ELLIPSIS not in _text_of(view)
         assert conform(view) == []
 
@@ -83,7 +88,7 @@ class TestFitting:
         lang = "py"
         fence_cost = len(f"```{lang}\n") + len("\n```")
         content = "x" * (LIMITS.total_text - fence_cost + 1)
-        view = render_static([Code(content, lang=lang)])
+        view = _static_view([Code(content, lang=lang)])
         assert ELLIPSIS in _text_of(view)
         assert conform(view) == []
 
@@ -141,29 +146,29 @@ class TestFitting:
         assert isinstance(solved.failures[0].code, str)
 
     def test_truncate_tail_keeps_the_end(self):
-        view = render_static([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])
+        view = _static_view([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])
         text = _text_of(view)
         assert text.startswith(ELLIPSIS)
         assert text.endswith(" end")
 
     def test_spill_line_appears_with_count(self):
         lines = tuple(f"entry {index:03d} " + "x" * 90 for index in range(60))
-        view = render_static([Lines(lines)])
+        view = _static_view([Lines(lines)])
         text = _text_of(view)
         assert "entry 000" in text
         assert "more" in text
         assert conform(view) == []
 
     def test_spill_fits_everything_when_it_can(self):
-        view = render_static([Lines(("a", "b", "c"))])
+        view = _static_view([Lines(("a", "b", "c"))])
         assert _text_of(view) == "a\nb\nc"
 
     def test_code_fences_cannot_be_broken_out_of(self):
-        view = render_static([Code("evil\n```\n@everyone")])
+        view = _static_view([Code("evil\n```\n@everyone")])
         assert "\n```\n@everyone" not in _text_of(view)
 
     def test_empty_nodes_vanish(self):
-        view = render_static([Text(""), Lines(()), Text("real")])
+        view = _static_view([Text(""), Lines(()), Text("real")])
         assert _text_of(view) == "real"
 
     def test_raw_item_text_cost_reserves_budget(self):
@@ -174,7 +179,7 @@ class TestFitting:
 
 class TestStructure:
     def test_full_card_shape(self):
-        view = render_static(
+        view = _static_view(
             [
                 Panel(
                     children=(
@@ -253,7 +258,7 @@ def _draw_node(draw, kind: str):
 
 @given(documents())
 def test_rendered_documents_always_fit(nodes):
-    view = render_static(nodes)
+    view = _static_view(nodes)
     assert_within_limits(view)
 
 
@@ -261,5 +266,5 @@ def test_rendered_documents_always_fit(nodes):
 def test_measurement_needs_no_conform_interventions(nodes):
     # The engine must measure exactly: the boundary gate should never have to intervene.
     measure(nodes)
-    view = render_static(nodes)
+    view = _static_view(nodes)
     assert conform(view) == []
