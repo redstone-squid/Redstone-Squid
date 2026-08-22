@@ -11,8 +11,8 @@ from squid_layouts.discord import (
     render_static,
 )
 from squid_layouts.discord.testing import assert_within_limits
-from squid_layouts.planning import SolveNoteCode, solve
-from squid_layouts.planning.solve import RPanel, RSection, RText, SolvedLayout
+from squid_layouts.planning import SolveNoteCode, measure
+from squid_layouts.planning.measure import MeasuredLayout, RPanel, RSection, RText
 from squid_layouts.primitives import (
     Alt,
     Condense,
@@ -27,7 +27,7 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
     return [c.content for c in view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
 
 
-def _solved_texts(solved: SolvedLayout) -> list[str]:
+def _solved_texts(solved: MeasuredLayout) -> list[str]:
     texts: list[str] = []
 
     def walk(children) -> None:
@@ -61,7 +61,7 @@ class TestAltsPolicy:
     def test_exhausted_ladder_trims_the_last_alternate(self):
         node = Text("x" * 5000, overflow=alts("y" * 4500))
         filler = Text("f" * 3990, priority=10)
-        solved = solve([filler, node])
+        solved = measure([filler, node])
         assert any(note.code is SolveNoteCode.ALTERNATE_EXHAUSTED for note in solved.notes)
         assert sum(map(len, _solved_texts(solved))) <= 4000
 
@@ -74,7 +74,7 @@ class TestLinesLadders:
             "another short entry",
         )
         filler = Text("f" * 3000, priority=10)
-        solved = solve([filler, Lines(entries)])
+        solved = measure([filler, Lines(entries)])
         text = "\n".join(_solved_texts(solved))
         assert "long entry degraded" in text
         assert "short entry" in text and "another short entry" in text
@@ -82,7 +82,7 @@ class TestLinesLadders:
 
     def test_spill_still_happens_after_ladders_exhaust(self):
         entries = tuple(Alt(f"entry {index} " + "x" * 500, (f"entry {index} " + "y" * 200,)) for index in range(60))
-        solved = solve([Lines(entries)])
+        solved = measure([Lines(entries)])
         texts = _solved_texts(solved)
         assert any("more" in text for text in texts)
         assert sum(map(len, texts)) <= 4000
@@ -97,7 +97,7 @@ class TestCondensePolicy:
             Alt("L" * 5000, ("long entry condensed",)),
             "another short entry",
         )
-        solved = solve([Lines(entries, overflow=Condense())])
+        solved = measure([Lines(entries, overflow=Condense())])
         text = "\n".join(_solved_texts(solved))
         assert "long entry condensed" in text
         assert "short entry" in text and "another short entry" in text
@@ -105,13 +105,13 @@ class TestCondensePolicy:
 
     def test_exhausted_ladders_trim_the_joined_block(self):
         entries = tuple(Alt("entry " + "x" * 500, ("entry " + "y" * 400,)) for _ in range(20))
-        solved = solve([Lines(entries, overflow=Condense())])
+        solved = measure([Lines(entries, overflow=Condense())])
         assert any(note.code is SolveNoteCode.CONDENSE_TRUNCATED for note in solved.notes)
         assert sum(map(len, _solved_texts(solved))) <= 4000
 
     def test_plain_entries_behave_like_never(self):
         # Nothing to step, so the block trims as a whole rather than losing an entry.
-        solved = solve([Lines(tuple("line " + "x" * 500 for _ in range(20)), overflow=Condense())])
+        solved = measure([Lines(tuple("line " + "x" * 500 for _ in range(20)), overflow=Condense())])
         assert not any("more" in text for text in _solved_texts(solved))
         assert sum(map(len, _solved_texts(solved))) <= 4000
 
@@ -119,7 +119,7 @@ class TestCondensePolicy:
         # The card's shock absorber is the prose, not the field list: the body trims first.
         body = Text("b" * 3000, priority=-5)
         block = Lines(tuple(f"**F{index}:** value" for index in range(10)), overflow=Condense())
-        solved = solve([body, block, Text("f" * 2000, priority=-5)])
+        solved = measure([body, block, Text("f" * 2000, priority=-5)])
         texts = _solved_texts(solved)
         assert all(f"**F{index}:** value" in texts[1] for index in range(10))
 
@@ -127,7 +127,7 @@ class TestCondensePolicy:
         # A heading may not shrink at all, so it is charged ahead of a block that can.
         heading = Text("H" * 200, overflow=Never())
         block = Lines(tuple(Alt("e" * 900, ("e" * 100,)) for _ in range(6)), overflow=Condense())
-        solved = solve([heading, block])
+        solved = measure([heading, block])
         assert "H" * 200 in _solved_texts(solved)
         assert sum(map(len, _solved_texts(solved))) <= 4000
 

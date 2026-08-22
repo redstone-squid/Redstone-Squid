@@ -15,21 +15,13 @@ from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics,
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.degradation import DegradationProfile
+from squid_layouts.planning.frontier import VariantTopology, resolve_variants
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.measure import Realized, RPanel, RSection, RText, RTime
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, CostVector, StrategyAssignment, iter_assignments
-from squid_layouts.planning.solve import (
-    Realized,
-    RPanel,
-    RSection,
-    RText,
-    RTime,
-    SolvedLayout,
-    VariantTopology,
-    _resolve_variants,
-    solve,
-)
+from squid_layouts.planning.solve import SolvedLayout, solve
 from squid_layouts.planning.target import ResourceCost, TargetProfile
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
@@ -689,7 +681,7 @@ def plan(
         lowered = _lower_children(semantic.nodes, target, limits)
         assets = _merge_assets(document.assets, semantic.assets)
         _validate(lowered, limits)
-        selected_nodes = _resolve_variants(lowered, dict(cached.variant_positions))
+        selected_nodes = resolve_variants(lowered, dict(cached.variant_positions))
         converter = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
         return PlanResult(

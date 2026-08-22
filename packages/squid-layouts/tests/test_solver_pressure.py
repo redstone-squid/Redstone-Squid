@@ -4,7 +4,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import DEFAULT_TARGET
-from squid_layouts.planning import solve
+from squid_layouts.planning import measure
 from squid_layouts.planning.limits import V2Limits
 from squid_layouts.primitives import Paginate, Text
 from squid_layouts.scene.model import ScenePanel, SceneText
@@ -24,7 +24,7 @@ class TestBudgetContract:
     def test_content_inside_the_stretch_band_stays_whole(self) -> None:
         body = "a" * 519 + "\n" + "b" * 520
 
-        solved = solve(
+        solved = measure(
             [
                 sl.primitives.Budget(
                     (Text(body, overflow=Paginate(key="body")),),
@@ -41,7 +41,7 @@ class TestBudgetContract:
     def test_over_band_pagination_balances_at_boundaries(self) -> None:
         body = "a" * 519 + "\n" + "b" * 520
 
-        solved = solve(
+        solved = measure(
             [
                 sl.primitives.Budget(
                     (Text(body, overflow=Paginate(key="body")),),
@@ -58,7 +58,7 @@ class TestBudgetContract:
     def test_over_band_pagination_can_snap_into_the_stretch_band(self) -> None:
         body = "a" * 1040 + "\n" + "b" * 160
 
-        solved = solve(
+        solved = measure(
             [
                 sl.primitives.Budget(
                     (Text(body, overflow=Paginate(key="body")),),
