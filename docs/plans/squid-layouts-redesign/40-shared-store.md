@@ -182,21 +182,38 @@ The sequence, with participants:
 ```text
 ACTION
   local sl.state writes           -> the transaction's snapshots, unchanged
-  shared writes                   -> a per-store overlay, registered as a participant
+  shared writes                   -> a per-store overlay, enlisted with join_action()
 
-COMMIT
+COMMIT  -- fallible half, nothing visible yet
   1. PREPARE each participant      validate revision guards and reservations; freeze
                                    the prepared writes
-  2. any failure                   rollback local state, discard every overlay,
-                                   raise SharedConflict
-  3. APPLY each participant        synchronous, no awaits, no failure paths left;
-                                   bump revisions
-  4. FINALIZE                      build the delta, run commit hooks, notify owners,
-                                   publish cell topics
+  2. BUILD the state delta         the deep copy a recorder will need
+     any failure above             abort every participant, restore local state,
+                                   raise (SharedConflict, for a store)
+COMMIT  -- published; the action has happened
+  3. APPLY each participant        synchronous, no awaits, no failure paths left
+  4. NOTIFY owners                 _state_changed, as today
+  5. FINALIZE each participant     publish cell topics, wake watchers
+  6. RUN commit hooks              recorders, i.e. sl.history
 ```
 
-Step 3 is the whole reason prepare exists: everything that can fail happens before
-anything is visible.
+Two orderings in there are load-bearing.
+
+**Everything fallible happens before step 3.** That is the whole reason prepare exists,
+and it is what lets `transaction()` roll an action back after its handler returned
+cleanly.
+
+**Commit hooks run last, after publication.** A recorder's effect leaves the transaction
+— `sl.history` pushes an entry onto a stack that outlives it — so a hook must not run
+anywhere a later failure could still roll the action back, or the stack ends up holding
+an entry for an action that never happened. Putting them last also fixes the real damage
+in today's bug: a raising hook now leaves the action committed *and its owners notified*,
+so the panel re-renders correctly and only the recording is missing. Before, the writes
+landed and nothing was told, which is a silently stale screen.
+
+The participant seam itself is public: `sl.ActionParticipant` and
+`sl.join_action(key, factory)`, alongside the `sl.on_action_commit` it sits next to. A
+library user with their own transactional subsystem gets the same commit as the store.
 
 #### 5b. Conflict rules
 
@@ -333,7 +350,7 @@ class Dashboard(sl.Component):
 
 | # | Deliverable | Exit criteria |
 |---|---|---|
-| 0 | Restructure `transaction()` so a raising commit rolls back; add the participant protocol. | A hook that raises rolls the action back and notifies no owner (a bug fix, testable with no store). Two fake participants commit together; one failing prepare applies neither. |
+| 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. Testable with no store. **Shipped.** |
 | 1 | `Atom`, `Scope`, `SharedStore`, `SharedState`; `get`/`set`/`reset`/`update`/`expect`/`topic`; immediate-outside-an-action behaviour; immutable reads; scope lifetime. | Identity, defaults, per-scope independence, equal-value no-op, frozen reads, `discard` and drop-on-last-handle. |
 | 2 | Overlays, read-your-writes, revision guards, prepare/apply. | A raising handler leaks no staged value; `update` and `expect` conflicts raise `SharedConflict`; ABA is caught. |
 | 3 | `watch()` observation, stage-time follow reconciliation, publication on commit. | Two mounts react to one commit, once each; a dropped conditional `watch` stops refreshing; no follow outlives its mount. |
