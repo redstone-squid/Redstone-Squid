@@ -14,6 +14,7 @@ class OperationKind(StrEnum):
     REFRESH = "refresh"
     SEND = "send"
     TOPIC_DELIVERY = "topic_delivery"
+    REACTOR_DELIVERY = "reactor_delivery"
     ROUTE_DISPATCH = "route_dispatch"
 
 

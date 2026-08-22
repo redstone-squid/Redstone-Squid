@@ -2,23 +2,61 @@
 
 import asyncio
 import logging
+import time
 import weakref
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import anyio
 
+from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink
 from squid_layouts.topics import Topic, TopicBus
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
 
 logger = logging.getLogger(__name__)
+_NOOP_PROFILER = NoOpProfiler()
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+@dataclass(frozen=True, slots=True)
+class ReactorSnapshot:
+    """One immutable diagnostic view of refresh scheduling pressure."""
+
+    queued: int
+    in_flight: int
+    redeliver: int
+    scheduled: int
+    coalesced: int
+    delivered: int
+    failed: int
+
+
+@dataclass(slots=True)
+class _Causes:
+    first_triggered: float | None = None
+    last_triggered: float | None = None
+    triggers: int = 0
+    links: list[TraceLink] = field(default_factory=list)
+    omitted_links: int = 0
+
+    def add(self, triggered: float, link: TraceLink | None, *, max_links: int) -> None:
+        if self.first_triggered is None:
+            self.first_triggered = triggered
+        self.last_triggered = triggered
+        self.triggers += 1
+        if link is None or link in self.links:
+            return
+        if len(self.links) < max_links:
+            self.links.append(link)
+        else:
+            self.omitted_links += 1
 
 
 class Reactor:
@@ -31,6 +69,9 @@ class Reactor:
         sweep_interval: Seconds between interaction-token expiry checks.
         expiry_margin: How far ahead of token expiry to show paused-update chrome.
         clock: UTC wall clock used to compare interaction-token deadlines.
+        profiler: Runtime profiler. Defaults to the bus profiler when a bus is supplied.
+        max_causal_links: Maximum distinct trigger links retained per coalesced refresh.
+        monotonic: Monotonic clock used to measure queue latency.
     """
 
     def __init__(
@@ -41,6 +82,9 @@ class Reactor:
         sweep_interval: float = 10.0,
         expiry_margin: float = 60.0,
         clock: Callable[[], datetime] = _utc_now,
+        profiler: Profiler | None = None,
+        max_causal_links: int = 8,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         if concurrency < 1:
             message = "reactor concurrency must be at least one"
@@ -51,30 +95,62 @@ class Reactor:
         if expiry_margin < 0:
             message = "reactor expiry margin cannot be negative"
             raise ValueError(message)
+        if max_causal_links < 0:
+            message = "reactor causal link limit cannot be negative"
+            raise ValueError(message)
         self.bus = bus
+        self.profiler = profiler if profiler is not None else bus.profiler if bus is not None else _NOOP_PROFILER
         self.concurrency = concurrency
         self.sweep_interval = sweep_interval
         self.expiry_margin = timedelta(seconds=expiry_margin)
         self.clock = clock
+        self.max_causal_links = max_causal_links
+        self._monotonic = monotonic
         self._queue: asyncio.Queue[Mount] = asyncio.Queue()
         self._queued: set[Mount] = set()
         self._in_flight: set[Mount] = set()
         self._redeliver: set[Mount] = set()
+        self._queued_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
+        self._redelivery_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
         self._followed: weakref.WeakKeyDictionary[Mount, int] = weakref.WeakKeyDictionary()
         self._warned_handles: weakref.WeakKeyDictionary[Mount, object] = weakref.WeakKeyDictionary()
         self._running = False
+        self._scheduled = 0
+        self._coalesced = 0
+        self._delivered = 0
+        self._failed = 0
 
     def schedule(self, mount: Mount) -> None:
         """Enqueue a refresh while coalescing requests for the same mount."""
         if mount.finished:
             return
+        self._scheduled += 1
+        triggered = self._monotonic()
+        link = self.profiler.capture_link()
         if mount in self._in_flight:
+            self._coalesced += 1
+            self._redelivery_causes.setdefault(mount, _Causes()).add(triggered, link, max_links=self.max_causal_links)
             self._redeliver.add(mount)
             return
         if mount in self._queued:
+            self._coalesced += 1
+            self._queued_causes.setdefault(mount, _Causes()).add(triggered, link, max_links=self.max_causal_links)
             return
+        self._queued_causes.setdefault(mount, _Causes()).add(triggered, link, max_links=self.max_causal_links)
         self._queued.add(mount)
         self._queue.put_nowait(mount)
+
+    def snapshot(self) -> ReactorSnapshot:
+        """Return queue depth, coalescing, and refresh outcome diagnostics."""
+        return ReactorSnapshot(
+            queued=len(self._queued),
+            in_flight=len(self._in_flight),
+            redeliver=len(self._redeliver),
+            scheduled=self._scheduled,
+            coalesced=self._coalesced,
+            delivered=self._delivered,
+            failed=self._failed,
+        )
 
     def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]:
         """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
@@ -123,7 +199,10 @@ class Reactor:
                 return
             await current.refresh()
 
-        unsubscribers.extend(self.bus.subscribe(topic, refresh, label=f"mount:{mount.id}") for topic in topics)
+        unsubscribers.extend(
+            self.bus.subscribe(topic, refresh, label=f"mount:{mount.id}", profile_label="reactor.refresh")
+            for topic in topics
+        )
         self._followed[mount] = self._followed.get(mount, 0) + 1
 
         async def finish(finished: Mount) -> None:
@@ -151,10 +230,27 @@ class Reactor:
             mount = await self._queue.get()
             self._queued.discard(mount)
             self._in_flight.add(mount)
+            causes = self._queued_causes.pop(mount, _Causes())
             cancelled = False
             try:
-                await mount.refresh_now()
+                delivery_started = self._monotonic()
+                trace_started = causes.first_triggered if causes.first_triggered is not None else delivery_started
+                with self.profiler.operation(
+                    OperationKind.REACTOR_DELIVERY,
+                    name="refresh",
+                    links=causes.links,
+                    started=trace_started,
+                ) as operation:
+                    operation.record_span(
+                        "queue_wait",
+                        max(0.0, delivery_started - trace_started),
+                        attributes={"triggers": causes.triggers, "cause_links_omitted": causes.omitted_links},
+                    )
+                    link = self.profiler.capture_link()
+                    await mount.refresh_now(links=() if link is None else (link,))
+                    self._delivered += 1
             except Exception:
+                self._failed += 1
                 logger.exception("mount refresh failed for %s", mount.id)
             except anyio.get_cancelled_exc_class():
                 cancelled = True
@@ -163,9 +259,14 @@ class Reactor:
                 self._in_flight.discard(mount)
                 if cancelled:
                     self._redeliver.discard(mount)
+                    self._redelivery_causes.pop(mount, None)
                 elif mount in self._redeliver:
                     self._redeliver.discard(mount)
-                    self.schedule(mount)
+                    causes = self._redelivery_causes.pop(mount, _Causes())
+                    if not mount.finished:
+                        self._queued_causes[mount] = causes
+                        self._queued.add(mount)
+                        self._queue.put_nowait(mount)
                 self._queue.task_done()
 
     async def _sweep(self) -> None:

@@ -56,7 +56,7 @@ from squid_layouts.discord.mount import (
     owned_mount,
 )
 from squid_layouts.discord.navigation import Navigator
-from squid_layouts.discord.reactor import Reactor
+from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
 from squid_layouts.discord.renderer import Renderer, RoutedItem, StaticView, Wire
 from squid_layouts.discord.routing import (
     Middleware,
@@ -170,6 +170,7 @@ __all__ = [
     "Owner",
     "ProtectCrossUserAttachments",
     "Reactor",
+    "ReactorSnapshot",
     "Refuse",
     "Reject",
     "Rejected",
