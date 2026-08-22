@@ -11,10 +11,13 @@ catalogue would improve.
 """
 
 import pprint
-from collections.abc import Iterable, Sequence
+from collections.abc import Hashable, Iterable, Sequence
 
 import squid_layouts as sl
-from squid.bot.ui import DISCORD_BLUE, DISCORD_GREY, DISCORD_YELLOW
+
+DISCORD_BLUE = 0x5865F2
+DISCORD_GREY = 0x95A5A6
+DISCORD_YELLOW = 0xFEE75C
 
 SESSION_SECONDS = 300
 """Short-lived on purpose: an inspector left open is one more mount in its own list."""
@@ -40,8 +43,9 @@ class MountInspector(sl.Component):
     """This panel's own mount id, set by the cog once the mount exists — it is in the list
     like everything else, and unlabelled it reads as a mystery session."""
 
-    def __init__(self, *, focus: str | None = None) -> None:
+    def __init__(self, *, focus: str | None = None, registry: sl.discord.MountRegistry | None = None) -> None:
         self.focus = focus
+        self._registry = registry
 
     def render(self) -> Sequence[sl.primitives.Node]:
         mounts = sl.discord.mounts()
@@ -97,12 +101,19 @@ class MountInspector(sl.Component):
 
     def _row(self, snapshot: sl.discord.MountSnapshot) -> str:
         mine = " *(this panel)*" if snapshot.id == self.own_id else ""
+        key = self._session_key(snapshot.id)
+        session = "" if key is None else f" · session `{key!r}`"
         location = f" · [jump]({snapshot.address.jump_url})" if snapshot.address is not None else ""
         return (
             f"`{snapshot.id}` **{snapshot.component.rsplit('.', 1)[-1]}**{mine}\n"
             f"gen {snapshot.generation} · {_flags(snapshot)} · age {_duration(snapshot.age)}"
-            f" · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}{location}"
+            f" · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}{session}{location}"
         )
+
+    def _session_key(self, mount_id: str) -> Hashable | None:
+        if self._registry is None:
+            return None
+        return next((key for key, mount in self._registry.active() if mount.id == mount_id), None)
 
     # --- Detail -------------------------------------------------------------------------
 
@@ -152,16 +163,7 @@ class MountInspector(sl.Component):
             f"cache {'hit' if metrics.cache_hit else 'miss'}"
             f"{' · search fell back' if metrics.search_fallback else ''}",
         )
-        events = snapshot.report.events
-        summary = [
-            f"logical  {snapshot.report.logical_fingerprint or '—'}",
-            f"scene    {snapshot.report.scene_fingerprint or '—'}",
-            "",
-            *(f"[{event.severity.value}] {event.code} at {event.path}\n    {event.message}" for event in events),
-        ]
-        if not events:
-            summary.append("no adaptations — the layout fit as authored")
-        yield sl.primitives.Code("\n".join(summary), overflow=sl.primitives.Truncate(keep="head"), priority=-2)
+        yield sl.primitives.Code(plan_text(snapshot), overflow=sl.primitives.Truncate(keep="head"), priority=-2)
 
     # --- Controls -----------------------------------------------------------------------
 
@@ -197,6 +199,42 @@ def scene_attachment(snapshot: sl.discord.MountSnapshot) -> sl.Asset | None:
         name=f"scene-{snapshot.id}-gen{snapshot.generation}.json",
         media_type="application/json",
         source=sl.InlineAsset(sl.scene.Codec.dumps(snapshot.scene).encode()),
+    )
+
+
+def plan_text(snapshot: sl.discord.MountSnapshot) -> str:
+    """Render the retained plan report, grouping adaptations by severity."""
+    report = snapshot.report
+    if report is None:
+        return "Nothing has been committed yet, so this mount has no plan report."
+    lines = [
+        f"logical  {report.logical_fingerprint or '—'}",
+        f"scene    {report.scene_fingerprint or '—'}",
+    ]
+    if not report.events:
+        return "\n".join((*lines, "", "no adaptations — the layout fit as authored"))
+    severities = dict.fromkeys(event.severity for event in report.events)
+    for severity in severities:
+        lines.extend(("", severity.value.upper()))
+        lines.extend(
+            f"{event.code} at {event.path}\n    {event.message}"
+            for event in report.events
+            if event.severity is severity
+        )
+    return "\n".join(lines)
+
+
+def metrics_text(snapshot: sl.discord.MountSnapshot) -> str:
+    """Render the planner work and cache disposition retained by a mount."""
+    metrics = snapshot.metrics
+    if metrics is None:
+        return "Nothing has been committed yet, so this mount has no planner metrics."
+    return "\n".join(
+        (
+            f"states_explored: {metrics.states_explored}",
+            f"search_fallback: {metrics.search_fallback}",
+            f"cache: {'hit' if metrics.cache_hit else 'miss'}",
+        )
     )
 
 
