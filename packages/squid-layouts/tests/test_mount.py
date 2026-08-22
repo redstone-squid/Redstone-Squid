@@ -168,6 +168,7 @@ class _RefusingHandle:
 
     permanent = False
     expires_at = None
+    mode = sl.discord.DiscordMode.COMPONENTS_V2
 
     def expired(self) -> bool:
         return False
@@ -1693,8 +1694,8 @@ class _Destination:
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def __call__(self, view: discord.ui.LayoutView, files: list[discord.File]) -> Any:
-        self.calls.append((view, files))
+    async def __call__(self, presentation: sl.discord.DiscordPresentation) -> Any:
+        self.calls.append((presentation.layout, presentation.files()))
         if self.raises is not None:
             raise self.raises
         return delivery.DeliveryReceipt(self.message, self.handle)
@@ -2229,6 +2230,7 @@ class TestEditHandles:
         class _Stale:
             permanent = False
             expires_at = None
+            mode = sl.discord.DiscordMode.COMPONENTS_V2
             writes = 0
 
             def expired(self) -> bool:

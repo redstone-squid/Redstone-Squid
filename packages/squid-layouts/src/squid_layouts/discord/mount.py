@@ -38,8 +38,9 @@ from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
 from squid_layouts.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_layouts.discord.actions import ActionResponder
-from squid_layouts.discord.attachments import attachment_assets, files_for
+from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.compose import Composition, compose
+from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import Renderer
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
@@ -282,6 +283,11 @@ class _Candidate:
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
+
+    @property
+    def presentation(self) -> DiscordPresentation:
+        """The complete message this render delivers to."""
+        return DiscordPresentation.components_v2(self.view, assets=self.assets)
 
 
 @dataclass(frozen=True, slots=True)
@@ -714,7 +720,7 @@ class Mount:
             return composition.view, composition
 
         view, composition = draw()
-        assets = attachment_assets(composition.plan)
+        assets = composition.assets
         if disabled:
             _disable_all(view)
         return _Candidate(
@@ -775,7 +781,7 @@ class Mount:
             view = renderer.draw(plan.scene, plan=plan, wire=wire)
             if busy:
                 _disable_all(view)
-            return await self._write_view(view, attachments=None, through=through)
+            return await self._write(DiscordPresentation.components_v2(view), keep_attachments=True, through=through)
 
     def _commit(self, candidate: _Candidate) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
@@ -1044,7 +1050,7 @@ class Mount:
                 try:
                     destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
                     with profile.span("discord_write", attributes={"destination": destination_type}):
-                        receipt = await destination(candidate.view, files_for(candidate.assets))
+                        receipt = await destination(candidate.presentation)
                 except deliver.DeliveryAbandoned:
                     logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
                     with profile.span("rollback"):
@@ -1090,20 +1096,19 @@ class Mount:
         `files=False` leaves the message's attachments alone; a terminal disable-edit changes
         only the controls, and an empty asset set would otherwise strip them.
         """
-        attachments = files_for(candidate.assets) if files else None
-        return await self._write_view(candidate.view, attachments=attachments, through=through, profile=profile)
+        return await self._write(candidate.presentation, keep_attachments=not files, through=through, profile=profile)
 
-    async def _write_view(
+    async def _write(
         self,
-        view: discord.ui.LayoutView,
+        presentation: DiscordPresentation,
         *,
-        attachments: list[discord.File] | None,
+        keep_attachments: bool,
         through: deliver.EditHandle | None,
         profile: OperationRecorder | None = None,
     ) -> deliver.EditHandle | None:
-        """Write one view through the first usable handle, and say which one that was.
+        """Write one presentation through the first usable handle, and say which one that was.
 
-        `attachments=None` leaves the message's files alone, which is what every edit that
+        `keep_attachments` leaves the message's files alone, which is what every edit that
         changes only controls wants.
         """
         for handle in (through, self._handle):
@@ -1111,12 +1116,12 @@ class Mount:
                 continue
             try:
                 if profile is None:
-                    await handle.write(view, attachments=attachments)
+                    await handle.write(presentation, keep_attachments=keep_attachments)
                 else:
                     source = "interaction" if handle is through else "standing"
                     handle_type = f"{type(handle).__module__}.{type(handle).__qualname__}"
                     with profile.span("discord_write", attributes={"source": source, "handle": handle_type}):
-                        await handle.write(view, attachments=attachments)
+                        await handle.write(presentation, keep_attachments=keep_attachments)
             except deliver.StaleHandleError:
                 logger.debug("mount %s discarded a stale edit handle", self.id, exc_info=True)
                 if handle is self._handle:

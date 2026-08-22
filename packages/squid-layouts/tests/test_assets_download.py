@@ -1,7 +1,5 @@
 """Visible downloads hoist assets without losing portable scene identity."""
 
-from collections.abc import Sequence
-
 import discord
 import pytest
 
@@ -85,8 +83,10 @@ class _DownloadComponent(Component):
 async def _send(mount: Mount) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     delivered: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def destination(view: discord.ui.LayoutView, files: Sequence[discord.File]) -> delivery.DeliveryReceipt:
-        delivered.append((view, list(files)))
+    async def destination(presentation: sl.discord.DiscordPresentation) -> delivery.DeliveryReceipt:
+        # Materializing the files is the destination's job, so this is where an asset the
+        # host never resolved is refused.
+        delivered.append((presentation.layout, presentation.files()))
         return delivery.DeliveryReceipt(None, None)
 
     await mount.send(destination)

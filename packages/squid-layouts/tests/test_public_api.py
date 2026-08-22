@@ -79,6 +79,11 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.Renderer
     assert sl.discord.SessionKey
     assert sl.discord.SessionPolicy
+    assert sl.discord.DiscordPresentation
+    assert sl.discord.DiscordMode.COMPONENTS_V2
+    assert sl.discord.DiscordModeError
+    assert sl.discord.mode_of
+    assert sl.discord.presentation.DiscordPresentation
     assert not hasattr(sl.discord, "MountRegistry")
     assert not hasattr(sl.discord, "WhenOpen")
     assert sl.discord.guards.requires_role
