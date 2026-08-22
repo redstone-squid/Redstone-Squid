@@ -36,12 +36,15 @@ from squid_layouts.discord.navigation import Navigator
 from squid_layouts.discord.reactor import Reactor
 from squid_layouts.discord.renderer import Renderer, RoutedItem, StaticView, Wire
 from squid_layouts.discord.routing import (
+    Middleware,
     RouteComponent,
     RouteDescription,
     RouteGroup,
     RouteHandler,
     RouteLike,
+    RouteNext,
     Router,
+    RouteRequest,
 )
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
 from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
@@ -72,6 +75,7 @@ __all__ = [
     "LabelSpec",
     "LimitViolationError",
     "Limits",
+    "Middleware",
     "ModalSpec",
     "Mount",
     "MountAddress",
@@ -89,6 +93,8 @@ __all__ = [
     "RouteGroup",
     "RouteHandler",
     "RouteLike",
+    "RouteNext",
+    "RouteRequest",
     "RoutedItem",
     "Router",
     "StaleHandleError",
