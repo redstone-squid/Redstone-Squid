@@ -12,6 +12,7 @@ from squid_layouts.discord.routing import _dispatch_item
 from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
+from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
 
 EDIT_BUILD = sl.Route("edit:build:{build_id:int}")
@@ -826,6 +827,70 @@ class TestAcknowledgement:
 
         interaction.response.send_message.assert_awaited_once_with()
         interaction.response.defer.assert_not_awaited()
+
+
+class TestProfiling:
+    async def test_route_trace_profiles_middleware_handler_and_acknowledgement(self) -> None:
+        class Continue(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+
+        profiler = MemoryProfiler()
+        interaction = fake_interaction()
+        router = Router(profiler=profiler)
+        router.add_middleware(Continue())
+
+        @router.route(POLL_CLOSE)
+        async def close(current) -> None:
+            await current.response.send_message()
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        trace = profiler.snapshot().recent[0]
+        assert trace.operation is OperationKind.ROUTE_DISPATCH
+        assert trace.name == POLL_CLOSE.format
+        assert trace.result.outcome is TraceOutcome.COMPLETED
+        spans = {span.name: span for span in trace.spans}
+        middleware_name = f"middleware:{__name__}.TestProfiling.test_route_trace_profiles_middleware_handler_and_acknowledgement.<locals>.Continue"
+        assert {"acknowledgement", middleware_name, "handler"} <= spans.keys()
+        assert (
+            dict((attribute.key, attribute.value) for attribute in spans["acknowledgement"].attributes)["source"]
+            == "handler"
+        )
+
+    async def test_short_circuit_and_caught_failure_remain_distinct(self) -> None:
+        class Stop(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                pass
+
+        profiler = MemoryProfiler()
+        router = Router(profiler=profiler)
+        router.add_middleware(Stop())
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        trace = profiler.snapshot().recent[0]
+        assert trace.result.outcome is TraceOutcome.COMPLETED
+        assert trace.result.detail == "short_circuited"
+        assert all(span.name != "handler" for span in trace.spans)
+
+    async def test_watchdog_defer_marks_the_route_deadline_miss(self) -> None:
+        profiler = MemoryProfiler()
+        router = Router(acknowledgement_timeout=0.01, profiler=profiler)
+
+        @router.route(POLL_CLOSE)
+        async def slow(_interaction) -> None:
+            await anyio.sleep(0.03)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        trace = profiler.snapshot().deadline_misses[0]
+        acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
+        assert trace.deadline_missed
+        assert (
+            dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes)["source"] == "watchdog"
+        )
 
 
 class TestDrawing:
