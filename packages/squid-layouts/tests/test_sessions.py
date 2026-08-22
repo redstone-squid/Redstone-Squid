@@ -27,7 +27,7 @@ class Panel(sl.Component):
 
 
 def a_mount() -> sl.discord.Mount:
-    return sl.discord.Mount(Panel(), timeout=None)
+    return sl.discord.Mount(Panel(), access=sl.discord.Everyone(), timeout=None)
 
 
 _DEFAULT_MESSAGE = object()

@@ -14,6 +14,7 @@ from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
+from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import fake_interaction, fake_message
 
 
@@ -154,7 +155,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     mounts: list[sl.discord.Mount] = []
 
     def capture_mount(component: sl.Component, **kwargs: Any) -> sl.discord.Mount:
-        mount = sl.discord.Mount(component, timeout=None, scheduler=kwargs.get("reactor"))
+        mount = sl.discord.Mount(component, access=Everyone(), timeout=None, scheduler=kwargs.get("reactor"))
         mounts.append(mount)
         return mount
 

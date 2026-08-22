@@ -1,6 +1,6 @@
 """The mount: one component bound to one Discord message.
 
-Every interaction funnels through :meth:`Mount.dispatch` — author lock, handler, error hook,
+Every interaction funnels through :meth:`Mount.dispatch` — access policy, handler, error hook,
 and the re-render/edit cycle live here once instead of per view. The mount outlives its
 discord.py views: each render produces a fresh :class:`MountedView`, and the previous one is
 stopped after a successful edit so dispatch tables do not accumulate.
@@ -13,7 +13,6 @@ import logging
 import secrets
 import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol, override
@@ -26,6 +25,7 @@ from squid_layouts.actions import ActionBinding, ActionPolicy, Actor, PressEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, LOCALIZATION_CONTEXT, Chrome, localize_chrome
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
+from squid_layouts.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
@@ -282,7 +282,7 @@ class MountSnapshot:
     """Seconds since the initial send or last accepted click — what the timeout counts."""
     expires_in: float | None
     """Seconds of idle timeout left, or `None` for a mount that never times out."""
-    lock_to: frozenset[int] | None
+    access: AccessPolicy
     handler_keys: tuple[str, ...]
     """Action keys the live generation answers to."""
     scene: SceneDocument | None
@@ -297,12 +297,12 @@ class Mount:
         self,
         component: Component,
         *,
+        access: AccessPolicy,
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         limits: V2Limits = LIMITS,
         strict: bool = False,
         timeout: float | None = 900,
-        lock_to: int | AbstractSet[int] | None = None,
         on_error: ErrorHook | None = None,
         scheduler: Scheduler | None = None,
         nav: NavFactory | None = None,
@@ -334,11 +334,7 @@ class Mount:
         self.limits = limits
         self.strict = strict
         self.timeout = timeout
-        # Normalized so dispatch has one shape to check. The single-owner call sites pass a
-        # bare id and never see the difference.
-        self.lock_to: frozenset[int] | None = (
-            None if lock_to is None else frozenset((lock_to,) if isinstance(lock_to, int) else lock_to)
-        )
+        self.access = access
         self.on_error = on_error
         self.scheduler = scheduler
         self.status: TextLike | None = None
@@ -409,7 +405,7 @@ class Mount:
             age=now - self._born,
             idle=idle,
             expires_in=None if self.timeout is None else max(0.0, self.timeout - idle),
-            lock_to=self.lock_to,
+            access=self.access,
             handler_keys=tuple(sorted(self._handlers)),
             scene=None if self._plan is None else self._plan.scene,
             report=None if self._plan is None else self._plan.report,
@@ -808,7 +804,7 @@ class Mount:
         *,
         generation: int | None = None,
     ) -> None:
-        """The funnel: finished check -> author lock -> handler -> flush."""
+        """The funnel: finished check -> access policy -> handler -> flush."""
         if not await self._begin_dispatch(interaction):
             return
         binding = self._handlers.get(key)
@@ -841,7 +837,7 @@ class Mount:
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         generation: int | None = None,
     ) -> None:
-        """Route a modal submission through the same stale, lock, policy, and flush funnel.
+        """Route a modal submission through the same stale, action-policy, access, and flush funnel.
 
         Under `REBASE` this resolves the newest render-declared binding for `key`, the way a
         stale click does -- but only when that binding parses the same field keys, since a
@@ -878,9 +874,19 @@ class Mount:
             text = resolve_text(self.chrome.session_ended, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
             return False
-        if self.lock_to is not None and interaction.user.id not in self.lock_to:
-            text = resolve_text(self.chrome.not_yours, self.localization).content
+        try:
+            decision = await self.access.check(interaction)
+        except Exception as error:
+            await self.handle_error(interaction, error, "access")
+            return False
+        if isinstance(decision, Denied):
+            reason = self.chrome.not_yours if decision.reason is None else decision.reason
+            text = resolve_text(reason, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
+            return False
+        if not isinstance(decision, Allowed):
+            error = TypeError(f"access policy returned unsupported decision {type(decision).__name__}")
+            await self.handle_error(interaction, error, "access")
             return False
         self._active = self.clock()
         if self.status is not None:
@@ -1231,3 +1237,8 @@ def _disable_all(view: discord.ui.LayoutView) -> None:
         target = item.item if isinstance(item, discord.ui.DynamicItem) else item
         if isinstance(target, discord.ui.Button | discord.ui.Select) or hasattr(target, "disabled"):
             target.disabled = True  # pyrefly: ignore  # guarded by hasattr
+
+
+def owned_mount(component: Component, user_id: int, **options: Any) -> Mount:
+    """Construct a mount whose controls belong to one Discord user."""
+    return Mount(component, access=Owner(user_id), **options)

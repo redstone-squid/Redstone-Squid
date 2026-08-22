@@ -399,9 +399,9 @@ class ClaimReviewComponent(sl.Component):
     def mount(self) -> sl.discord.Mount:
         return create_mount(
             self,
+            access=sl.discord.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,
-            lock_to=self._author_id,
         )
 
 

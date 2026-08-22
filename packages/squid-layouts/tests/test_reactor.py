@@ -11,7 +11,7 @@ import anyio
 import pytest
 
 from squid_layouts import Component, TopicBus
-from squid_layouts.discord import Mount, Reactor, delivery
+from squid_layouts.discord import Everyone, Mount, Reactor, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 
 
@@ -32,7 +32,10 @@ async def test_reactor_refreshes_different_mounts_concurrently() -> None:
     both_started = asyncio.Event()
     release = asyncio.Event()
     started: set[str] = set()
-    mounts = [Mount(Empty(), scheduler=reactor), Mount(Empty(), scheduler=reactor)]
+    mounts = [
+        Mount(Empty(), access=Everyone(), scheduler=reactor),
+        Mount(Empty(), access=Everyone(), scheduler=reactor),
+    ]
 
     def refresh_for(mount: Mount):
         async def refresh() -> None:
@@ -58,7 +61,7 @@ async def test_reactor_refreshes_different_mounts_concurrently() -> None:
 
 async def test_publish_during_refresh_redelivers_without_overlap() -> None:
     reactor = Reactor()
-    mount = Mount(Empty(), scheduler=reactor)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     first_started = asyncio.Event()
     release = asyncio.Event()
     calls = 0
@@ -91,7 +94,7 @@ async def test_publish_during_refresh_redelivers_without_overlap() -> None:
 async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     bus = TopicBus()
     reactor = Reactor(bus)
-    mount = Mount(Empty(), scheduler=reactor)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     mount.refresh_now = AsyncMock()  # pyrefly: ignore
     reactor.follow(mount, ("build", "42"), ("group", "7"), ("index", "recent"))
 
@@ -107,7 +110,7 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
 async def test_follow_rejects_a_mount_that_already_finished() -> None:
     bus = TopicBus()
     reactor = Reactor(bus)
-    mount = Mount(Empty(), scheduler=reactor)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     await mount.finish(disable=False)
 
     with pytest.raises(ValueError, match="finished"):
@@ -120,7 +123,7 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     interaction.expires_at = now + timedelta(seconds=30)
     bus = TopicBus()
     reactor = Reactor(bus, expiry_margin=60, clock=lambda: now)
-    mount = Mount(Empty(), scheduler=reactor)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     reactor.follow(mount, "build")
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
 
@@ -151,7 +154,7 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
 def test_collected_mount_unsubscribes() -> None:
     bus = TopicBus()
     reactor = Reactor(bus)
-    mount = Mount(Empty(), scheduler=reactor)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     reactor.follow(mount, "build")
     reference = weakref.ref(mount)
 
@@ -163,7 +166,7 @@ def test_collected_mount_unsubscribes() -> None:
 
 
 def test_follow_requires_its_bus_and_scheduler() -> None:
-    mount = Mount(Empty())
+    mount = Mount(Empty(), access=Everyone())
 
     with pytest.raises(RuntimeError, match="topic bus"):
         Reactor().follow(mount, "build")

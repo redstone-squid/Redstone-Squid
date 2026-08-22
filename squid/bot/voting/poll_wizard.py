@@ -615,5 +615,5 @@ class PollConfirmationComponent(sl.Component):
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
 
     def mount(self) -> sl.discord.Mount:
-        self._mount = create_mount(self, timeout=self._timeout, lock_to=self.owner_id)
+        self._mount = create_mount(self, access=sl.discord.Owner(self.owner_id), timeout=self._timeout)
         return self._mount
