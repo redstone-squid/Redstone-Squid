@@ -38,6 +38,21 @@ def test_descriptor_form_compiles_keys_labels_and_prefill() -> None:
     assert spec.prefill == {"name": "Ada", "age": 36, "public": False}
 
 
+def _multi_choice(*, required: bool = True, minimum: int = 0, maximum: int | None = None) -> sl.MultiChoiceField[int]:
+    return sl.MultiChoiceField(
+        key="values",
+        label="Values",
+        options=(
+            sl.ChoiceOption("one", "One", 1),
+            sl.ChoiceOption("two", "Two", 2),
+            sl.ChoiceOption("three", "Three", 3),
+        ),
+        required=required,
+        minimum=minimum,
+        maximum=maximum,
+    )
+
+
 async def test_parse_errors_are_field_errors_and_gate_cross_field_validation() -> None:
     form = ProfileForm()
     spec = form.spec()
@@ -78,6 +93,44 @@ async def test_typed_fields_parse_portable_values(field, raw, expected) -> None:
 
     assert result.errors == ()
     assert result.values["value"] == expected
+
+
+async def test_multi_choice_orders_values_by_declaration_and_accepts_one_key() -> None:
+    field = _multi_choice(required=False)
+
+    many = await sl.FormSpec("Many", (field,)).evaluate({"values": ["three", "one"]})
+    one = await sl.FormSpec("One", (field,)).evaluate({"values": "two"})
+
+    assert many.values["values"] == (1, 3)
+    assert one.values["values"] == (2,)
+
+
+@pytest.mark.parametrize(
+    ("field", "raw", "message"),
+    [
+        (_multi_choice(required=False), ["missing"], "available options"),
+        (_multi_choice(required=False, minimum=2), ["one"], "at least 2"),
+        (_multi_choice(required=False, maximum=1), ["one", "two"], "no more than 1"),
+        (_multi_choice(), [], "required"),
+    ],
+)
+async def test_multi_choice_reports_unknown_cardinality_and_required_errors(field, raw, message) -> None:
+    result = await sl.FormSpec("Many", (field,)).evaluate({"values": raw})
+
+    assert len(result.errors) == 1
+    assert message in str(result.errors[0].message)
+
+
+def test_multi_choice_prefill_round_trips_typed_values_and_keys() -> None:
+    field = _multi_choice(required=False)
+
+    assert field.format_prefill((3, 1)) == ("one", "three")
+    assert field.format_prefill(["two", "one"]) == ("one", "two")
+
+
+def test_multi_choice_rejects_duplicate_option_keys() -> None:
+    with pytest.raises(ValueError, match="option keys must be unique"):
+        sl.MultiChoiceField(options=(sl.ChoiceOption("same", "One", 1), sl.ChoiceOption("same", "Two", 2)))
 
 
 async def _submitted(event: sl.SubmitEvent) -> None: ...

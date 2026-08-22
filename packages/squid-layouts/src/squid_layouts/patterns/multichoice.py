@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from squid_layouts.factories import actions, heading, paragraph, stack, status
-from squid_layouts.forms import BoolField, FormSpec
+from squid_layouts.forms import ChoiceOption, FormSpec, MultiChoiceField
 from squid_layouts.patterns._content import display_text, require_key
 from squid_layouts.patterns._paging import window
 from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
@@ -189,7 +189,9 @@ class MultiChoicePanel:
         if action == "apply":
             return state if self.errors(state) else MultiChoiceState(state.staged, state.staged, state.pages)
         if action == "modal" and submitted is not None:
-            selected = tuple(key for key in self._choice_order if bool(submitted.get(key)))
+            raw = submitted.get("selection", ())
+            values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
+            selected = tuple(key for key in self._choice_order if key in values)
             return MultiChoiceState(selected, state.committed, state.pages)
         if action.startswith("page:"):
             _prefix, group_key, direction = action.split(":", 2)
@@ -222,12 +224,29 @@ class MultiChoicePanel:
 
     def form_for(self, state: MultiChoiceState, action: str) -> FormSpec | None:
         """Resolve the routed modal action to its small-panel form schema."""
-        if action != "modal" or len(self._choice_order) > 5:
+        if action != "modal" or len(self._choice_order) > 25:
             return None
         return FormSpec(
             "Select options",
-            tuple(BoolField(key=key, label=self._choices[key].label) for key in self._choice_order),
-            prefill={key: key in state.staged for key in self._choice_order},
+            (
+                MultiChoiceField(
+                    key="selection",
+                    label="Options",
+                    required=self.minimum > 0,
+                    options=tuple(
+                        ChoiceOption(
+                            key,
+                            self._choices[key].label,
+                            key,
+                            self._choices[key].description,
+                        )
+                        for key in self._choice_order
+                    ),
+                    minimum=self.minimum,
+                    maximum=min(self.maximum, len(self._choice_order)),
+                ),
+            ),
+            prefill={"selection": state.staged},
         )
 
     def render(self, state: MultiChoiceState, controls: PatternControls[MultiChoiceState]) -> RenderResult:
@@ -280,7 +299,7 @@ class MultiChoicePanel:
             )
 
         direct = stack(*group_nodes)
-        if len(self._choice_order) <= 5:
+        if len(self._choice_order) <= 25:
             modal = self.form_for(state, "modal")
             assert modal is not None
             selection = fallback(

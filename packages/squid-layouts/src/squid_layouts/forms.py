@@ -299,6 +299,60 @@ class ChoiceField[ValueT](FormField[ValueT]):
 
 
 @dataclass(frozen=True, slots=True)
+class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
+    """Several declared choices returned in declaration order."""
+
+    options: tuple[ChoiceOption[ValueT], ...] = ()
+    minimum: int = 0
+    maximum: int | None = None
+
+    def __post_init__(self) -> None:
+        keys = [option.key for option in self.options]
+        if len(set(keys)) != len(keys):
+            message = f"MultiChoiceField option keys must be unique: {keys!r}"
+            raise ValueError(message)
+        maximum = len(self.options) if self.maximum is None else self.maximum
+        if self.minimum < 0 or maximum < self.minimum or maximum > len(self.options):
+            message = "MultiChoiceField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
+            raise ValueError(message)
+
+    def parse(self, raw: object) -> tuple[ValueT, ...] | None:
+        if self._optional(raw):
+            return None
+        submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
+        by_key = {option.key: option for option in self.options}
+        if any(key not in by_key for key in submitted):
+            _invalid("Choose only from the available options.")
+        selected = set(submitted)
+        values = tuple(option.value for option in self.options if option.key in selected)
+        if len(values) < self.minimum:
+            _invalid(f"Choose at least {self.minimum} options.")
+        maximum = len(self.options) if self.maximum is None else self.maximum
+        if len(values) > maximum:
+            _invalid(f"Choose no more than {maximum} options.")
+        return values
+
+    def format_prefill(self, value: object) -> object:
+        submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
+        return tuple(
+            option.key
+            for option in self.options
+            if any(option.key == selected or option.value == selected for selected in submitted)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class UploadedFile:
+    """Portable metadata and byte access for a frontend upload."""
+
+    name: str
+    media_type: str
+    size: int
+    url: str
+    read: Callable[[], Awaitable[bytes]] = dataclass_field(repr=False, compare=False)
+
+
+@dataclass(frozen=True, slots=True)
 class BoolField(FormField[bool]):
     """A boolean checkbox."""
 
@@ -534,4 +588,5 @@ Float = FloatField
 Duration = DurationField
 Date = DateField
 Choice = ChoiceField
+MultiChoice = MultiChoiceField
 Bool = BoolField
