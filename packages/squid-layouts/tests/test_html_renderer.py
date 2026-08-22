@@ -19,6 +19,7 @@ from squid_layouts.scene.model import (
     SceneSelect,
     SceneText,
     SceneTime,
+    SceneZonedTime,
 )
 
 
@@ -32,6 +33,7 @@ def _scene() -> SceneDocument:
                 (
                     SceneText("<script>alert(1)</script>"),
                     SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
+                    SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
                     SceneRow((SceneButton("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
                     SceneSelect((SceneOption("One", "1"),), "form.choice"),
                     SceneGallery((SceneGalleryItem("https://example.invalid/image.png", "preview"),)),
@@ -51,6 +53,10 @@ def test_html_renderer_preserves_structure_and_action_ids_without_callbacks() ->
     assert "<script>" not in rendered
     assert "&lt;script&gt;" in rendered
     assert '<time datetime="2026-08-22T14:30:00+00:00" data-squid-style="R">' in rendered
+    assert (
+        '<time datetime="2026-08-22T14:30:00+00:00" data-squid-timezone="America/New_York">'
+        "2026-08-22 10:30:00-04:00[America/New_York]</time>"
+    ) in rendered
 
 
 def test_scene_json_can_be_drawn_by_a_separate_frontend_process() -> None:

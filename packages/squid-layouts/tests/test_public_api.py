@@ -26,7 +26,9 @@ def test_root_is_semantic_first() -> None:
         "TimeStyle",
         "ZonedDateTime",
         "ZonedDateTimeField",
+        "ZonedTimestamp",
         "timestamp",
+        "zoned_timestamp",
     } <= set(sl.__all__)
     assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
     assert {"CollectionEditor", "CollectionEntry", "CollectionState", "CollectionChangeHandler"} <= set(sl.__all__)

@@ -96,7 +96,9 @@ from squid_layouts.semantic import (
     Toggle,
     ToggleOwnership,
     Tone,
+    ZonedTimestamp,
 )
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import ResolvedText, TextLike, md
 
 type TextValue = TextLike | Template
@@ -356,6 +358,11 @@ def timestamp(
         message = "sl.timestamp() requires an aware datetime"
         raise ValueError(message)
     return Timestamp(instant, style, _opt_text(label))
+
+
+def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> ZonedTimestamp:
+    """An exact instant displayed with its IANA timezone identity."""
+    return ZonedTimestamp(value, _opt_text(label))
 
 
 def figure(media: MediaItem | str, *, caption: TextValue | None = None) -> Figure:

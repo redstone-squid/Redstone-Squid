@@ -1,5 +1,7 @@
 """Logical planning and mechanical Discord drawing."""
 
+from datetime import UTC, datetime
+
 import discord
 import pytest
 
@@ -12,7 +14,9 @@ from squid_layouts import (
     Message,
     Position,
     UnsolvableLayoutError,
+    ZonedDateTime,
     plan,
+    zoned_timestamp,
 )
 from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
 from squid_layouts.discord import DEFAULT_TARGET, NativeItem, Renderer
@@ -89,6 +93,16 @@ def test_static_discord_renderer_matches_scene_structure() -> None:
 
     assert isinstance(view, discord.ui.LayoutView)
     assert view.to_components()[0]["type"] == 17
+
+
+def test_discord_renderer_draws_zoned_timestamp_in_its_named_zone() -> None:
+    value = ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
+    result = plan(zoned_timestamp(value, label="Starts"), target=DEFAULT_TARGET)
+
+    view = Renderer().draw(result.scene, plan=result)
+
+    displays = [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+    assert displays == ["**Starts:** 2026-08-22 10:30:00-04:00[America/New_York]"]
 
 
 def test_assets_are_scene_resources_not_visual_children() -> None:

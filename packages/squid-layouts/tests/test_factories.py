@@ -127,6 +127,8 @@ class TestParity:
         assert sl.timestamp(instant, style=sl.TimeStyle.RELATIVE, label="Updated") == sl.Timestamp(
             instant, sl.TimeStyle.RELATIVE, "Updated"
         )
+        zoned = sl.ZonedDateTime(instant, "America/New_York")
+        assert sl.zoned_timestamp(zoned, label="Starts") == sl.ZonedTimestamp(zoned, "Starts")
         assert sl.figure("https://example.invalid/a.png") == sl.Figure(
             sl.MediaItem("", "https://example.invalid/a.png")
         )
@@ -167,7 +169,12 @@ class TestParity:
 
 
 class TestDrift:
-    _ALIASES = {"FormTrigger": "form", "List": "bullets", "RoutedChoices": "routed_choices"}
+    _ALIASES = {
+        "FormTrigger": "form",
+        "List": "bullets",
+        "RoutedChoices": "routed_choices",
+        "ZonedTimestamp": "zoned_timestamp",
+    }
 
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:

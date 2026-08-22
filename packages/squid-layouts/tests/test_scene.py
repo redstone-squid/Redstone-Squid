@@ -1,7 +1,7 @@
 """Portable document and resolved-scene contracts."""
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
@@ -21,6 +21,7 @@ from squid_layouts.scene.model import (
     SceneSelect,
     SceneText,
     SceneTime,
+    SceneZonedTime,
 )
 
 
@@ -34,6 +35,7 @@ def _scene() -> SceneDocument:
                 (
                     SceneText("hello"),
                     SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
+                    SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
                     SceneRow(
                         (
                             SceneButton("Save", "form.save", ActionStyle.SUCCESS, policy=ActionPolicy.EXCLUSIVE),
@@ -83,6 +85,7 @@ def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
     assert schema["properties"]["protocol"] == {"const": SceneCodec.protocol}
     assert "button" in schema["$defs"]
     assert "time" in schema["$defs"]
+    assert "zoned_time" in schema["$defs"]
     assert "data" not in SceneCodec.schema_json()
     schema["title"] = "mutated by caller"
     assert SceneCodec.schema()["title"] != "mutated by caller"
@@ -96,3 +99,14 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
     result = sl.plan(sl.timestamp(instant, style=sl.TimeStyle.RELATIVE, label="Updated"), target=DEFAULT_TARGET)
 
     assert result.scene.children == (SceneTime("2026-08-22T14:30:00+00:00", "R", "**Updated:** "),)
+
+
+def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
+    import squid_layouts as sl
+    from squid_layouts.discord import DEFAULT_TARGET
+
+    value = sl.ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
+
+    result = sl.plan(sl.zoned_timestamp(value, label="Starts"), target=DEFAULT_TARGET)
+
+    assert result.scene.children == (SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "**Starts:** "),)
