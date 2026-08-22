@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, timezone
 from typing import ClassVar
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -141,6 +142,88 @@ async def test_temporal_fields_report_parse_and_bound_errors(field, raw, message
     result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": raw})
 
     assert message in str(result.errors[0].message)
+
+
+async def test_datetime_field_rejects_ambiguous_local_time_by_default() -> None:
+    field = sl.DateTimeField(key="value", label="Value", timezone=ZoneInfo("America/New_York"))
+
+    result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": "2026-11-01 01:30"})
+
+    assert "occurs twice" in str(result.errors[0].message)
+
+
+def test_datetime_field_interprets_ordinary_local_time_in_iana_zone() -> None:
+    zone = ZoneInfo("America/New_York")
+
+    value = sl.DateTimeField(timezone=zone).parse("2026-08-22 14:30")
+
+    assert value == datetime(2026, 8, 22, 14, 30, tzinfo=zone)
+
+
+@pytest.mark.parametrize(
+    ("policy", "expected"),
+    [
+        (sl.AmbiguousTimePolicy.EARLIER, datetime(2026, 11, 1, 5, 30, tzinfo=UTC)),
+        (sl.AmbiguousTimePolicy.LATER, datetime(2026, 11, 1, 6, 30, tzinfo=UTC)),
+    ],
+)
+def test_datetime_field_resolves_ambiguous_local_time_by_instant(policy, expected) -> None:
+    field = sl.DateTimeField(timezone=ZoneInfo("America/New_York"), ambiguous=policy)
+
+    value = field.parse("2026-11-01 01:30")
+
+    assert value is not None
+    assert value.astimezone(UTC) == expected
+
+
+async def test_datetime_field_rejects_nonexistent_local_time_by_default() -> None:
+    field = sl.DateTimeField(key="value", label="Value", timezone=ZoneInfo("America/New_York"))
+
+    result = await sl.FormSpec("Temporal", (field,)).evaluate({"value": "2026-03-08 02:30"})
+
+    assert "does not exist" in str(result.errors[0].message)
+
+
+@pytest.mark.parametrize(
+    ("zone", "raw", "expected"),
+    [
+        ("America/New_York", "2026-03-08 02:30", "2026-03-08T03:30:00-04:00"),
+        ("Australia/Lord_Howe", "2026-10-04 02:15", "2026-10-04T02:45:00+11:00"),
+    ],
+)
+def test_datetime_field_shifts_nonexistent_local_time_by_the_gap(zone, raw, expected) -> None:
+    field = sl.DateTimeField(
+        timezone=ZoneInfo(zone),
+        nonexistent=sl.NonexistentTimePolicy.SHIFT_FORWARD,
+    )
+
+    value = field.parse(raw)
+
+    assert value is not None
+    assert value.isoformat() == expected
+
+
+def test_datetime_field_keeps_explicit_offset_input_exact() -> None:
+    field = sl.DateTimeField(timezone=ZoneInfo("America/New_York"))
+
+    value = field.parse("2026-11-01 01:30-05:00")
+
+    assert value is not None
+    assert value.isoformat() == "2026-11-01T01:30:00-05:00"
+    assert value.astimezone(UTC) == datetime(2026, 11, 1, 6, 30, tzinfo=UTC)
+
+
+def test_datetime_field_applies_bounds_to_ambiguous_instants() -> None:
+    zone = ZoneInfo("America/New_York")
+    minimum = datetime(2026, 11, 1, 1, 30, tzinfo=zone, fold=1)
+    field = sl.DateTimeField(
+        timezone=zone,
+        minimum=minimum,
+        ambiguous=sl.AmbiguousTimePolicy.EARLIER,
+    )
+
+    with pytest.raises(sl.FormValueError, match="on or after"):
+        field.parse("2026-11-01 01:30")
 
 
 def test_temporal_field_prefill_uses_isoformat() -> None:
