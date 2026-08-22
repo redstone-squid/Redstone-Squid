@@ -8,7 +8,7 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: https://github.com/redstone-squid/Redstone-"
 "Squid/issues\n"
-"POT-Creation-Date: 2026-08-22 02:55+0000\n"
+"POT-Creation-Date: 2026-08-22 03:07+0000\n"
 "PO-Revision-Date: 2026-07-31 15:05+0800\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -748,7 +748,7 @@ msgstr ""
 msgid "Build not found."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:1251
+#: squid/bot/submission/ui/views.py:1254
 msgid "Build preview unavailable."
 msgstr ""
 
@@ -874,8 +874,8 @@ msgstr ""
 msgid "Candidate {build_id} has no typed category facts."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:802 squid/bot/submission/ui/views.py:1234
-#: squid/bot/submission/ui/views.py:1240
+#: squid/bot/submission/ui/views.py:802 squid/bot/submission/ui/views.py:1237
+#: squid/bot/submission/ui/views.py:1243
 msgid "Cannot edit this build"
 msgstr ""
 
@@ -1453,8 +1453,8 @@ msgstr ""
 #: squid/bot/settings.py:117 squid/bot/settings.py:148
 #: squid/bot/settings.py:191 squid/bot/settings.py:200
 #: squid/bot/settings.py:223 squid/bot/submission/edit.py:84
-#: squid/bot/submission/search.py:282 squid/bot/submission/search.py:314
-#: squid/bot/submission/search.py:377
+#: squid/bot/submission/search.py:282 squid/bot/submission/search.py:315
+#: squid/bot/submission/search.py:378
 msgid "Error"
 msgstr ""
 
@@ -1838,7 +1838,7 @@ msgstr ""
 msgid "Internal server error"
 msgstr ""
 
-#: squid/bot/submission/search.py:386
+#: squid/bot/submission/search.py:387
 #, python-brace-format
 msgid "Internal state for build #{id} is attached."
 msgstr ""
@@ -2248,7 +2248,7 @@ msgid "No build credits a creator by that name."
 msgstr ""
 
 #: squid/bot/submission/edit.py:84 squid/bot/submission/search.py:282
-#: squid/bot/submission/search.py:314 squid/bot/submission/search.py:377
+#: squid/bot/submission/search.py:315 squid/bot/submission/search.py:378
 msgid "No build with that ID."
 msgstr ""
 
@@ -2459,7 +2459,7 @@ msgid "Only the door type and opening size are required."
 msgstr ""
 
 #: squid/bot/submission/ui/views.py:819 squid/bot/submission/ui/views.py:850
-#: squid/bot/submission/ui/views.py:1189 squid/bot/submission/ui/views.py:1230
+#: squid/bot/submission/ui/views.py:1192 squid/bot/submission/ui/views.py:1233
 msgid "Only the pending build's submitter or a trusted staff member can edit it."
 msgstr ""
 
@@ -3426,11 +3426,11 @@ msgstr ""
 msgid "Submission form"
 msgstr ""
 
-#: squid/bot/submission/search.py:338
+#: squid/bot/submission/search.py:339
 msgid "Submission has been confirmed."
 msgstr ""
 
-#: squid/bot/submission/search.py:359
+#: squid/bot/submission/search.py:360
 msgid "Submission has been denied."
 msgstr ""
 
@@ -3460,8 +3460,8 @@ msgid ""
 " again."
 msgstr ""
 
-#: squid/bot/submission/search.py:250 squid/bot/submission/search.py:338
-#: squid/bot/submission/search.py:359
+#: squid/bot/submission/search.py:250 squid/bot/submission/search.py:339
+#: squid/bot/submission/search.py:360
 msgid "Success"
 msgstr ""
 
@@ -3664,15 +3664,15 @@ msgstr ""
 msgid "The ID of the build to edit."
 msgstr ""
 
-#: squid/bot/submission/search.py:368
+#: squid/bot/submission/search.py:369
 msgid "The ID of the build whose debug details you want to see."
 msgstr ""
 
-#: squid/bot/submission/search.py:329
+#: squid/bot/submission/search.py:330
 msgid "The ID of the build you want to confirm."
 msgstr ""
 
-#: squid/bot/submission/search.py:346
+#: squid/bot/submission/search.py:347
 msgid "The ID of the build you want to deny."
 msgstr ""
 
@@ -4049,7 +4049,7 @@ msgstr ""
 msgid "This does not look like a build."
 msgstr ""
 
-#: squid/bot/submission/ui/views.py:813 squid/bot/submission/ui/views.py:1183
+#: squid/bot/submission/ui/views.py:813 squid/bot/submission/ui/views.py:1186
 msgid "This edit session expired. Reopen the build to start again."
 msgstr ""
 
