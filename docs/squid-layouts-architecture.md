@@ -37,15 +37,20 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 |---|---|---|
 | Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
 | Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
-| Static Discord message | sl.discord.render_static(document) | discord.ui.LayoutView |
-| Discord view plus diagnostics | sl.discord.compose(document) | Composition |
+| Static Components V2 message | sl.discord.render_static(document) | DiscordPresentation |
+| Static classic message | sl.discord.classic.render_static(document) | DiscordPresentation |
+| Region in a host-owned classic message | sl.discord.classic.contribute(document, to=...) | AttachedClassicContribution |
+| Discord message plus diagnostics | sl.discord.compose(document) | Composition |
 | Portable planning | plan(document, target=...) | PlanResult |
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
 | Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
 
-sl.discord.compose is the Discord convenience path: plan for sl.discord.Target, draw with
-sl.discord.Renderer, then strictly audit the result. Detached composition passes a
+sl.discord.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
+`V2Renderer`, then strictly audit the result. `sl.discord.classic.compose` is its counterpart
+for `CLASSIC_TARGET` and `ClassicRenderer`; both return a `DiscordPresentation`, which is the
+whole outgoing message rather than half of it. There is no default — the author picks the
+target, because the two modes differ in what a message can carry. Detached composition passes a
 reservation, measured from the host view rather than counted by hand; composing the complete
 document is preferable because the planner can see every cost. A reservation is applied by
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
