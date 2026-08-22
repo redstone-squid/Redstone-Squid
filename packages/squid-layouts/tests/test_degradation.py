@@ -1,6 +1,6 @@
-"""Structured degradation ranking and measured solver accounting."""
+"""Structured degradation ranking and measured-layout accounting."""
 
-from squid_layouts.planning import solve
+from squid_layouts.planning import measure
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
 from squid_layouts.primitives import Drop, Text, Truncate, alts
 
@@ -25,9 +25,9 @@ def test_semantic_steps_beat_truncation_spill_and_whole_node_drop() -> None:
     assert semantic < truncated < spilled < dropped
 
 
-def test_solver_accounts_for_the_selected_overflow_policy() -> None:
-    semantic = solve([Text("x" * 5000, overflow=alts("summary"))])
-    truncated = solve([Text("x" * 5000, overflow=Truncate())])
-    dropped = solve([Text("x" * 5000, overflow=Drop())])
+def test_measurement_accounts_for_the_selected_overflow_policy() -> None:
+    semantic = measure([Text("x" * 5000, overflow=alts("summary"))])
+    truncated = measure([Text("x" * 5000, overflow=Truncate())])
+    dropped = measure([Text("x" * 5000, overflow=Drop())])
 
     assert semantic.degradation < truncated.degradation < dropped.degradation
