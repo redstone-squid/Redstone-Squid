@@ -108,21 +108,21 @@ def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
 
 def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
     import squid_layouts as sl
-    from squid_layouts.discord import DEFAULT_TARGET
+    from squid_layouts.discord import V2_TARGET
 
     instant = datetime(2026, 8, 22, 16, 30, tzinfo=timezone(timedelta(hours=2)))
-    result = sl.plan(sl.timestamp(instant, style=sl.TimeStyle.RELATIVE, label="Updated"), target=DEFAULT_TARGET)
+    result = sl.plan(sl.timestamp(instant, style=sl.TimeStyle.RELATIVE, label="Updated"), target=V2_TARGET)
 
     assert result.scene.components_v2.children == (SceneTime("2026-08-22T14:30:00+00:00", "R", "**Updated:** "),)
 
 
 def test_zoned_timestamp_plans_as_an_instant_plus_named_timezone() -> None:
     import squid_layouts as sl
-    from squid_layouts.discord import DEFAULT_TARGET
+    from squid_layouts.discord import V2_TARGET
 
     value = sl.ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
 
-    result = sl.plan(sl.zoned_timestamp(value, label="Starts"), target=DEFAULT_TARGET)
+    result = sl.plan(sl.zoned_timestamp(value, label="Starts"), target=V2_TARGET)
 
     assert result.scene.components_v2.children == (
         SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "**Starts:** "),

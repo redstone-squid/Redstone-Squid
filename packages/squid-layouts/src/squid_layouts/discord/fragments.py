@@ -22,6 +22,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.compose import compose
 from squid_layouts.discord.inspection import DiscordReservation, audit, cost, measure
+from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.errors import ExistingLayoutError, LayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
@@ -188,7 +189,7 @@ def fragment(
     reserve: ResourceCost = EMPTY_RESERVATION,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     attachments: int = 0,
-    limits: V2Limits = LIMITS,
+    target: Target = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -209,7 +210,7 @@ def fragment(
     reservation = host.cost + reserve + cost(*trailing)
     composition = compose(
         document,
-        limits=limits,
+        target=target,
         chrome=chrome,
         localization=localization,
         palette=palette,
@@ -238,7 +239,7 @@ def contribute(
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     reserve: ResourceCost = EMPTY_RESERVATION,
     attachments: int = 0,
-    limits: V2Limits = LIMITS,
+    target: Target = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -258,7 +259,7 @@ def contribute(
         reserve=reserve,
         followed_by=followed_by,
         attachments=attachments,
-        limits=limits,
+        target=target,
         chrome=chrome,
         localization=localization,
         palette=palette,

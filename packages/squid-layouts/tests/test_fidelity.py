@@ -3,7 +3,7 @@
 import pytest
 
 from squid_layouts import LayoutDegradedError, plan
-from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
+from squid_layouts.discord import V2_LIMITS as LIMITS
 from squid_layouts.planning import TargetProfile
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
 from squid_layouts.primitives import Fidelity, Panel, Text, Variant, Variants

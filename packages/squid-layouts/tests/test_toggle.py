@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
 from squid_layouts.actions import ActionPolicy, Actor, PressEvent, Visibility
-from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.discord import V2_TARGET
 from squid_layouts.forms import FormLike, SubmitHandler
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime import PresentationSession
@@ -72,7 +72,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     responder = _Responder()
     node = sl.toggle("Notifications", key="notices")
 
-    initial = sl.plan(node, target=DEFAULT_TARGET, session=session)
+    initial = sl.plan(node, target=V2_TARGET, session=session)
     assert _button(initial).label == "Notifications: Off"
 
     await initial.bindings["notices"].handler(_event(responder))
@@ -80,7 +80,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
     assert session.toggle("notices").on
     assert responder.acknowledged
     assert responder.invalidated
-    assert _button(sl.plan(node, target=DEFAULT_TARGET, session=session)).label == "Notifications: On"
+    assert _button(sl.plan(node, target=V2_TARGET, session=session)).label == "Notifications: On"
 
 
 async def test_controlled_toggle_reports_flipped_value_without_writing_session() -> None:
@@ -90,7 +90,7 @@ async def test_controlled_toggle_reports_flipped_value_without_writing_session()
     seen, record = _recorder()
     node = sl.toggle("Notifications", key="notices", on=sl.controlled(value=False, on_change=record))
 
-    result = sl.plan(node, target=DEFAULT_TARGET, session=session)
+    result = sl.plan(node, target=V2_TARGET, session=session)
     await result.bindings["notices"].handler(_event())
 
     assert _button(result).label == "Notifications: Off"
@@ -109,7 +109,7 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
             tone=sl.Tone.DANGER,
             available=False,
         ),
-        target=DEFAULT_TARGET,
+        target=V2_TARGET,
     )
 
     button = _button(result)

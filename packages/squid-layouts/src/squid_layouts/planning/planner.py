@@ -33,7 +33,7 @@ from squid_layouts.planning.frontier import (
     variant_state_bound,
 )
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import LIMITS, DiscordLimits
 from squid_layouts.planning.measure import (
     MeasuredLayout,
     SolveNote,
@@ -168,7 +168,7 @@ class _Search:
     document: Document
     target: TargetProfile
     dialect: TargetDialect
-    limits: V2Limits
+    limits: DiscordLimits
     chrome: Chrome
     localization: Localization
     palette: Palette
@@ -484,7 +484,7 @@ def plan(
     # Every axis is withheld the same way: by planning against a smaller target.
     target = target.reserve(reservation)
     dialect = _dialect_for(target)
-    limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
+    limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
     cache_key = _plan_cache_key(
@@ -693,7 +693,7 @@ def _plan_cache_key(
     nodes: Sequence[object],
     *,
     target: TargetProfile,
-    limits: V2Limits,
+    limits: DiscordLimits,
     chrome: Chrome,
     localization: Localization,
     palette: Palette,

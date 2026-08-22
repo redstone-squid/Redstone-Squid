@@ -8,10 +8,10 @@ from hypothesis import strategies as st
 
 from squid_layouts import LayoutDegradedError, plan
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
-    DEFAULT_TARGET,
+    V2_TARGET,
     NavigationContext,
     default_nav,
     render_static,
@@ -66,7 +66,7 @@ def _rendered(solved) -> str:
 
 def _planned(nodes: Sequence[Node], **options) -> PlanResult:
     """Ladders are planner decisions, so structural behaviour is observed through plan()."""
-    return plan(nodes, target=DEFAULT_TARGET, **options)
+    return plan(nodes, target=V2_TARGET, **options)
 
 
 def _text(result: PlanResult) -> str:
@@ -356,7 +356,7 @@ def test_a_rung_may_lower_to_several_nodes() -> None:
         ActionGroup(buttons),
         SelectMenu(tuple(Option(f"b{index}", str(index)) for index in range(8)), choose, key="k"),
     )
-    scene = plan([ladder], target=DEFAULT_TARGET).scene
+    scene = plan([ladder], target=V2_TARGET).scene
     # Two rows of five and three spliced in place, not wrapped in a Panel that would cost
     # the very container component the ladder exists to save.
     assert [len(child.items) for child in scene.components_v2.children if isinstance(child, SceneRow)] == [5, 3]
