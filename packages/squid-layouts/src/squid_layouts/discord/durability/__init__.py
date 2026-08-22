@@ -33,19 +33,37 @@ __all__ = [
     "ClaimToken",
     "ComponentRegistry",
     "ComponentSnapshot",
+    "DiscordFrontend",
+    "DurabilityHealth",
+    "DurableFrontend",
     "DurableMountCodec",
     "DurableMountRecord",
+    "DurableMountState",
+    "DurableOpenResult",
+    "DurableSession",
+    "DurableSessionCodec",
+    "DurableSessionRecord",
+    "DurableSessionRuntime",
     "DurableSessionStore",
     "MemorySnapshotStore",
+    "Missing",
     "MountLocator",
     "MountSnapshot",
+    "NotDurable",
     "PostgresSnapshotStore",
     "PresentationSnapshot",
+    "Promoted",
+    "Reconnected",
+    "RecoveredBinding",
+    "RecoveryItem",
+    "RecoveryReport",
     "RestoreContext",
     "SQLiteSnapshotStore",
     "SnapshotCodec",
     "SnapshotError",
     "StoredSessionRecord",
+    "Unreachable",
+    "encode_session_scope",
 ]
 
 
@@ -504,3 +522,29 @@ def _strings(raw: Mapping[str, object], key: str) -> tuple[str, ...]:
         message = f"snapshot field {key!r} must be an array of strings"
         raise SnapshotError(message)
     return tuple(value)
+
+
+from .frontend import (
+    DiscordFrontend,
+    DurableFrontend,
+    Missing,
+    NotDurable,
+    Promoted,
+    Reconnected,
+    RecoveredBinding,
+    Unreachable,
+)
+from .runtime import (
+    DurabilityHealth,
+    DurableOpenResult,
+    DurableSession,
+    DurableSessionRuntime,
+    RecoveryItem,
+    RecoveryReport,
+)
+from .session_records import (
+    DurableMountState,
+    DurableSessionCodec,
+    DurableSessionRecord,
+    encode_session_scope,
+)

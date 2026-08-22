@@ -1,6 +1,7 @@
 """Canonical records for durable logical sessions and their mount graphs."""
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -120,7 +121,9 @@ class DurableSessionCodec:
             raise SnapshotError(message)
         opened_at = _number(item, "opened_at")
         expires_at = item.get("expires_at")
-        if expires_at is not None and not isinstance(expires_at, int | float):
+        if expires_at is not None and (
+            not isinstance(expires_at, int | float) or isinstance(expires_at, bool) or not math.isfinite(expires_at)
+        ):
             message = "session expires_at must be a number or null"
             raise SnapshotError(message)
         record = DurableSessionRecord(
@@ -154,6 +157,12 @@ class DurableSessionCodec:
         if any(mount.parent_id is not None and mount.parent_id not in ids for mount in record.mounts):
             message = "durable mount parent does not exist in the same record"
             raise SnapshotError(message)
+        preceding: set[str] = set()
+        for mount in record.mounts:
+            if mount.parent_id is not None and mount.parent_id not in preceding:
+                message = "durable mount parents must precede their children"
+                raise SnapshotError(message)
+            preceding.add(mount.id)
         for mount in record.mounts:
             seen = {mount.id}
             parent_id = mount.parent_id
@@ -261,7 +270,7 @@ def _integer(raw: dict[str, Any], key: str) -> int:
 
 def _number(raw: dict[str, Any], key: str) -> float:
     value = raw.get(key)
-    if not isinstance(value, int | float) or isinstance(value, bool):
+    if not isinstance(value, int | float) or isinstance(value, bool) or not math.isfinite(value):
         message = f"{key} must be a number"
         raise SnapshotError(message)
     return float(value)
