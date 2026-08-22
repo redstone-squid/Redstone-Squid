@@ -31,7 +31,6 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     def __init__(
         self,
-        *,
         check: DevToolsCheck[BotT] = _owner_only,
         registry: MountRegistry | None = None,
     ) -> None:
