@@ -5,12 +5,12 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 from squid.bot.devtools import _authorized, setup
-from squid_layouts.discord import MountRegistry
+from squid_layouts.discord import SessionRegistry
 from squid_layouts.discord.devtools import DevTools
 
 
 async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:
-    registry = MountRegistry()
+    registry = SessionRegistry()
     bot = SimpleNamespace(mounts=registry, add_cog=AsyncMock())
 
     await setup(cast(Any, bot))

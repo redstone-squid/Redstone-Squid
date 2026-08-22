@@ -81,7 +81,7 @@ topic through one vocabulary function rather than mixing values such as `("build
 ```python
 bus = sl.TopicBus()
 reactor = sl.discord.Reactor(bus)
-mount = sl.discord.Mount(panel, scheduler=reactor)
+mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
 reactor.follow(mount, ("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
@@ -112,7 +112,7 @@ tabs = sl.Tabs(
 )
 
 # A mounted message: state lives in sl.state and controls use sl.action closures.
-mount = sl.discord.Mount(tabs.component())
+mount = sl.discord.Mount(tabs.component(), access=sl.discord.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
 shell = sl.RouterShell(
@@ -120,6 +120,16 @@ shell = sl.RouterShell(
 )
 document = shell.render(tabs, sl.TabsState(selected=tab))
 ```
+
+Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
+`Check` accepts an asynchronous application policy. Visibility stays a destination concern,
+so owner access does not by itself make a channel message private.
+
+`SessionRegistry` groups a root mount and its attached children under one operational lifetime.
+Typed `SessionKey.user`, `guild`, `user_guild`, `global_`, and `custom` constructors name scoped
+cardinality, while `SessionPolicy` composes a limit, collision selection, and replacement
+protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
+explain a collision.
 
 `PatternRoute.phase` is `next` for deterministic buttons: its state is already the state the next
 document should render. Selects and forms use `input`, because their values arrive in the

@@ -203,7 +203,7 @@ async def test_mount_manager_checkpoints_and_restores_through_a_host_store() -> 
 
 async def test_restoring_an_absent_session_is_a_clean_miss() -> None:
     manager = MountManager(_registry(), MemorySnapshotStore())
-    assert await manager.restore("missing") is None
+    assert await manager.restore("missing", access=Everyone()) is None
 
 
 async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locator() -> None:
@@ -225,22 +225,22 @@ async def test_startup_recovery_claims_one_owner_and_returns_the_frontend_locato
     resolver = LocatorResolver(MountReachability.REACHABLE)
     first = MountManager(_registry(), store, owner="first", lease_seconds=10, clock=clock, locator_resolver=resolver)
     second = MountManager(_registry(), store, owner="second", lease_seconds=10, clock=clock, locator_resolver=resolver)
-    recovered = await first.recover(timeout=None)
+    recovered = await first.recover(access=Everyone(), timeout=None)
 
     assert len(recovered) == 1
     assert recovered[0].key == "session"
     assert recovered[0].locator == locator
-    assert await second.recover(timeout=None) == ()
+    assert await second.recover(access=Everyone(), timeout=None) == ()
     assert await first.renew_claims() == ()
 
     now[0] = 111.0
-    assert len(await second.recover(timeout=None)) == 1
+    assert len(await second.recover(access=Everyone(), timeout=None)) == 1
     assert await first.renew_claims() == ("session",)
     assert first.get("session") is None
 
     await second.finish("session", delete=False)
     third = MountManager(_registry(), store, owner="third", lease_seconds=10, clock=clock, locator_resolver=resolver)
-    assert len(await third.recover(timeout=None)) == 1
+    assert len(await third.recover(access=Everyone(), timeout=None)) == 1
 
 
 async def test_startup_recovery_deletes_expired_records() -> None:
@@ -263,7 +263,7 @@ async def test_startup_recovery_deletes_expired_records() -> None:
     reader = MountManager(
         _registry(), store, clock=clock, locator_resolver=LocatorResolver(MountReachability.REACHABLE)
     )
-    assert await reader.recover(timeout=None) == ()
+    assert await reader.recover(access=Everyone(), timeout=None) == ()
     assert await store.load("expired") is None
 
 
@@ -292,7 +292,7 @@ async def test_startup_recovery_sweeps_locator_reachability(
 
     reader = MountManager(_registry(), store, locator_resolver=LocatorResolver(result))
 
-    assert await reader.recover(timeout=None) == ()
+    assert await reader.recover(access=Everyone(), timeout=None) == ()
     assert (await store.load("session") is None) is is_deleted
     assert await store.claim("session", "next-owner", time.time() + 30) is not is_deleted
 
@@ -305,5 +305,5 @@ async def test_startup_recovery_without_a_locator_resolver_keeps_the_snapshot() 
     writer.attach("session", "counter", mount, locator=MountLocator("discord", {"message_id": 456}))
     await writer.checkpoint("session")
 
-    assert await MountManager(_registry(), store).recover(timeout=None) == ()
+    assert await MountManager(_registry(), store).recover(access=Everyone(), timeout=None) == ()
     assert await store.load("session") is not None

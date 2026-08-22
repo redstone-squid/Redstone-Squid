@@ -39,7 +39,7 @@ class MountInspector(sl.Component):
     """This panel's own mount id, set by the cog once the mount exists — it is in the list
     like everything else, and unlabelled it reads as a mystery session."""
 
-    def __init__(self, *, focus: str | None = None, registry: sl.discord.MountRegistry | None = None) -> None:
+    def __init__(self, *, focus: str | None = None, registry: sl.discord.SessionRegistry | None = None) -> None:
         self.focus = focus
         self._registry = registry
 
@@ -99,7 +99,14 @@ class MountInspector(sl.Component):
     def _session_key(self, mount_id: str) -> Hashable | None:
         if self._registry is None:
             return None
-        return next((key for key, mount in self._registry.active() if mount.id == mount_id), None)
+        return next(
+            (
+                session.key
+                for session in self._registry.active()
+                if any(mount.id == mount_id for mount in session.mounts)
+            ),
+            None,
+        )
 
     # --- Detail -------------------------------------------------------------------------
 

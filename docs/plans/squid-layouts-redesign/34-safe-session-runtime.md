@@ -411,3 +411,10 @@ Each commit is independently valid and reviewable:
 ## Status
 
 Proposed 2026-08-22.
+
+Phases A and B implemented 2026-08-22. Mount access is explicit and asynchronous; delivery
+and session opening return structured outcomes; typed scopes, logical sessions, attachment
+cascade, limits, collision policies, and cross-user replacement protection ship under the
+new names. Participant join/leave indexes remain deferred to implementation step 7: no
+lobby/game consumer and race suite exists yet, so `SessionPolicy` deliberately does not
+expose `participant_limit`. Phase C remains proposed.

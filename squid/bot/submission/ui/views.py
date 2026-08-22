@@ -1278,12 +1278,17 @@ class BuildEditComponent(sl.Component):
                 reload,
             )
             await reload(self)
-        await interaction.client.mounts.open(
-            mount,
-            sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True),
-            key=SessionKey("build-edit", interaction.user.id, self.build.id),
-            parent=parent,
-        )
+        destination = sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True)
+        parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
+        if parent_session is None:
+            await interaction.client.mounts.open(
+                mount,
+                destination,
+                key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
+                actor_id=interaction.user.id,
+            )
+        else:
+            await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(self, user_id: int, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
         self._mount = create_mount(
