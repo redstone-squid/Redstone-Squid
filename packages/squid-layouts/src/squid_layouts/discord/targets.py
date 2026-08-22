@@ -16,8 +16,13 @@ class TargetRegistry:
 
     The built-in two are registered by default because every consumer has them. A custom
     target — one with tightened limits, or an extra capability — has to be registered
-    explicitly: nothing else can reconstruct it from an id, and silently substituting the
-    built-in of the same id would rebuild the mount against budgets it was never planned for.
+    explicitly: nothing else can reconstruct it from an id.
+
+    Registering replaces, including over a built-in, because `Target.classic(limits=...)`
+    deliberately keeps the built-in id — it is still a classic message, just a smaller one —
+    and refusing the override would make customized limits unusable with durability. Nothing
+    is lost by allowing it: `resolve` compares the recorded *fingerprint*, so a snapshot
+    planned against the profile that was replaced is still refused by name.
     """
 
     def __init__(self, *targets: Target, builtins: bool = True) -> None:
@@ -28,14 +33,7 @@ class TargetRegistry:
             self.register(target)
 
     def register(self, target: Target) -> None:
-        """Make `target` resolvable. Re-registering the same profile is a no-op."""
-        existing = self._targets.get(target.id)
-        if existing is not None and existing.fingerprint != target.fingerprint:
-            message = (
-                f"target id {target.id!r} is already registered with a different profile; "
-                "give the custom target its own id rather than shadowing one"
-            )
-            raise LayoutInvariantError(message)
+        """Make `target` resolvable under its id, replacing any profile already there."""
         self._targets[target.id] = target
 
     def resolve(self, target_id: str, version: int, fingerprint: str) -> Target:
