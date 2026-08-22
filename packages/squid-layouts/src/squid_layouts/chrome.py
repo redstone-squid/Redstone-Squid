@@ -43,6 +43,8 @@ class Chrome:
     """Ephemeral rejection shown when an author-locked control is used by another user."""
     session_ended: TextLike = "This session has ended."
     """Ephemeral rejection shown when a control on a finished mount is clicked anyway."""
+    updates_paused: TextLike = "Live updates paused — press any control to resume."
+    """Status shown before an interaction edit token expires and unattended refreshes pause."""
     previous: TextLike = "Previous"
     next: TextLike = "Next"
     older: TextLike = "Older"
@@ -77,6 +79,7 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         and_n_more=lambda count: resolve_text(chrome.and_n_more(count), localization).content,
         not_yours=resolve_text(chrome.not_yours, localization).content,
         session_ended=resolve_text(chrome.session_ended, localization).content,
+        updates_paused=resolve_text(chrome.updates_paused, localization).content,
         previous=resolve_text(chrome.previous, localization).content,
         next=resolve_text(chrome.next, localization).content,
         older=resolve_text(chrome.older, localization).content,
