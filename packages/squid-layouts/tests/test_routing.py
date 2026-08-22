@@ -20,6 +20,11 @@ POLL_CLOSE = sl.Route("poll:close")
 NAME_BUILD = sl.Route("name:build:{slug}")
 
 
+def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
+    """The drawn layout of a sessionless V2 document, for tests that only read components."""
+    return render_static(*args, **kwargs).layout
+
+
 class TestRouteFormats:
     def test_ids_and_matches_are_derived_from_one_format(self) -> None:
         assert EDIT_BUILD.params == ("build_id",)
@@ -900,7 +905,7 @@ class TestDrawing:
             heading="Poll",
         )
 
-        view = render_static([document])
+        view = _static_view([document])
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [(button.custom_id, button.style) for button in buttons] == [("poll:close", discord.ButtonStyle.danger)]
@@ -908,7 +913,7 @@ class TestDrawing:
     def test_a_routed_button_places_exactly_where_a_primitive_asks(self) -> None:
         document = Panel((Row((RoutedButton("Edit", EDIT_BUILD.id(build_id=3)),)),))
 
-        view = render_static([document])
+        view = _static_view([document])
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [button.custom_id for button in buttons] == ["edit:build:3"]
@@ -917,7 +922,7 @@ class TestDrawing:
         # Its only dispatch path must be the router's. A stored button would take a second,
         # no-op dispatch that resets the surrounding view's timeout expiry.
         document = Panel((Row((RoutedButton("Close", "poll:close"),)),))
-        view = render_static(document)
+        view = _static_view(document)
 
         button = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
         assert button.custom_id == "poll:close"
@@ -988,7 +993,7 @@ class TestDrawing:
         assert '"kind":"routed_select"' in payload
         assert sl.scene.Codec.loads(payload) == scene
 
-        view = render_static(document)
+        view = _static_view(document)
         select = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
         assert select.custom_id == "pick:build:3"
         assert [option.value for option in select.options] == ["one", "two"]
@@ -1000,7 +1005,9 @@ class TestDrawing:
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:
         document = RoutedSelect((Option("One", "one"),), "pick:one")
 
-        select = next(item for item in render_static(document).walk_children() if isinstance(item, discord.ui.Select))
+        select = next(
+            item for item in render_static(document).layout.walk_children() if isinstance(item, discord.ui.Select)
+        )
         assert select.custom_id == "pick:one"
 
     def test_routed_choices_do_not_invent_session_pagination(self) -> None:

@@ -95,6 +95,16 @@ class DiscordLimits:
         """
         raise NotImplementedError
 
+    def fits_controls(self, controls: int, rows: int) -> bool:
+        """Whether a message of this mode could hold that many controls in that many rows.
+
+        The semantic adapters ask this to decide whether laying actions out individually is
+        even offerable. They must not ask it in one mode's units: a V2 message spends its
+        component budget on rows and buttons alike, while a classic message counts view
+        children and action rows against separate caps.
+        """
+        raise NotImplementedError
+
 
 @dataclass(frozen=True, slots=True)
 class V2Limits(DiscordLimits):
@@ -121,6 +131,10 @@ class V2Limits(DiscordLimits):
         # Exactly one pool, which is why this looks like ceremony here and stops looking
         # like it the moment a target has two.
         return {DISPLAY_TEXT: self.total_text}
+
+    def fits_controls(self, controls: int, rows: int) -> bool:
+        # An ActionRow and each of its buttons are all components against one total.
+        return controls + rows <= self.total_components
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +177,9 @@ class ClassicLimits(DiscordLimits):
     @property
     def text_axes(self) -> Mapping[str, int]:
         return {CONTENT_TEXT: self.content, EMBED_TEXT: self.embed_text}
+
+    def fits_controls(self, controls: int, rows: int) -> bool:
+        return controls <= self.controls and rows <= self.rows
 
 
 LIMITS = V2Limits()

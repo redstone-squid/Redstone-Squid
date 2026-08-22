@@ -41,7 +41,7 @@ from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.presentation import DiscordPresentation
-from squid_layouts.discord.renderer import Renderer
+from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
@@ -707,7 +707,7 @@ class Mount:
             composition = compose(
                 rendered,
                 wire=wire,
-                renderer=Renderer(
+                renderer=V2Renderer(
                     limits=self.limits,
                     view_factory=lambda: MountedView(self, self._remaining_timeout()),
                 ),
@@ -784,8 +784,8 @@ class Mount:
             # and a second one would race it. For the same reason the paint is never
             # `stop()`ed -- it shares the committed generation's custom ids, so unregistering
             # it would take the live controls' dispatch entries with it.
-            renderer = Renderer(limits=self.limits, view_factory=lambda: MountedView(self, None))
-            view = renderer.draw(plan.scene, plan=plan, wire=wire)
+            renderer = V2Renderer(limits=self.limits, view_factory=lambda: MountedView(self, None))
+            view = renderer.view(plan.scene, plan=plan, wire=wire)
             if busy:
                 _disable_all(view)
             return await self._write(DiscordPresentation.components_v2(view), keep_attachments=True, through=through)
