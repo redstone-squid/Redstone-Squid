@@ -26,6 +26,11 @@ class DisclosureState:
 
 
 @dataclass(frozen=True, slots=True)
+class ToggleState:
+    on: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class StrategyState:
     node_key: str
     adapter_id: str
@@ -40,6 +45,7 @@ class PresentationSession:
     cursors: dict[str, CursorState] = field(default_factory=dict)
     selections: dict[str, SelectionState] = field(default_factory=dict)
     disclosures: dict[str, DisclosureState] = field(default_factory=dict)
+    toggles: dict[str, ToggleState] = field(default_factory=dict)
     strategies: dict[str, StrategyState] = field(default_factory=dict)
 
     def cursor(self, key: str) -> CursorState:
@@ -78,6 +84,12 @@ class PresentationSession:
     def disclose(self, key: str, open_: bool) -> None:
         self.disclosures[key] = DisclosureState(open_)
 
+    def toggle(self, key: str, *, initial: bool = False) -> ToggleState:
+        return self.toggles.get(key, ToggleState(initial))
+
+    def set_toggle(self, key: str, *, on: bool) -> None:
+        self.toggles[key] = ToggleState(on)
+
     def strategy(self, key: str, adapter_id: str, adapter_version: int) -> str | None:
         """The remembered choice, or None when it was made by a different adapter.
 
@@ -110,13 +122,19 @@ class StrategyUpdate:
 
 
 @dataclass(frozen=True, slots=True)
+class ToggleUpdate:
+    key: str
+    state: ToggleState
+
+
+@dataclass(frozen=True, slots=True)
 class ActivePagers:
     """The keys still backed by a pager; every other cursor is forgotten."""
 
     keys: frozenset[str]
 
 
-type SessionUpdate = CursorUpdate | StrategyUpdate | ActivePagers
+type SessionUpdate = CursorUpdate | StrategyUpdate | ToggleUpdate | ActivePagers
 """One presentation write that planning decided on but did not perform.
 
 Planning only reads the session, and returns what it would have written. A frontend
@@ -133,6 +151,8 @@ def apply_updates(session: PresentationSession, updates: Sequence[SessionUpdate]
                 session.cursors[key] = cursor
             case StrategyUpdate(key=key, state=strategy):
                 session.strategies[key] = strategy
+            case ToggleUpdate(key=key, state=toggle):
+                session.toggles[key] = toggle
             case ActivePagers(keys=keys):
                 for stale in tuple(session.cursors):
                     if stale not in keys:

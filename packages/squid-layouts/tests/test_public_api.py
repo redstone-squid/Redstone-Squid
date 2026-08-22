@@ -14,6 +14,7 @@ def test_root_is_semantic_first() -> None:
     assert {"Section", "Paragraph", "Note", "Actions", "Component", "plan", "PlanReport", "TopicBus"} <= set(sl.__all__)
     assert {"section", "paragraph", "note", "actions", "action", "ChildLike"} <= set(sl.__all__)
     assert {"budget", "paged", "unbreakable", "keep_with_next"} <= set(sl.__all__)
+    assert {"Toggle", "ToggleEvent", "ToggleOwnership", "OFF", "toggle"} <= set(sl.__all__)
     assert {
         "CountPrecision",
         "Direction",

@@ -13,6 +13,8 @@ from squid_layouts.runtime.presentation import (
     SessionUpdate,
     StrategyState,
     StrategyUpdate,
+    ToggleState,
+    ToggleUpdate,
     apply_updates,
 )
 from squid_layouts.runtime.reactivity import (
@@ -59,6 +61,8 @@ __all__ = [
     "StateDelta",
     "StrategyState",
     "StrategyUpdate",
+    "ToggleState",
+    "ToggleUpdate",
     "UndeclaredStateError",
     "apply_updates",
     "batch",
