@@ -1,5 +1,7 @@
 """Resolved text dialect and interpolation safety."""
 
+from datetime import UTC, datetime
+
 import pytest
 
 from squid_layouts.text import Localization, Message, TextDialect, discord_text, md, plain, raw_md, resolve_text
@@ -69,3 +71,13 @@ def test_message_can_interpolate_another_deferred_message() -> None:
     text = resolve_text(Message("{section} page", {"section": Message("Section")}), localization)
 
     assert text.content == "Sektion Seite"
+
+
+def test_timestamp_interpolation_uses_discord_tokens_and_plain_iso() -> None:
+    import squid_layouts as sl
+
+    instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
+
+    assert md(t"Updated {instant}").content == "Updated <t:1787409000:f>"
+    assert md(t"Updated {sl.timestamp(instant, style=sl.TimeStyle.RELATIVE)}").content == ("Updated <t:1787409000:R>")
+    assert plain(instant).content == "2026-08-22T14:30:00+00:00"

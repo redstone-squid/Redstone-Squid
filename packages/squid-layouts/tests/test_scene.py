@@ -1,6 +1,7 @@
 """Portable document and resolved-scene contracts."""
 
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -19,6 +20,7 @@ from squid_layouts.scene.model import (
     SceneRow,
     SceneSelect,
     SceneText,
+    SceneTime,
 )
 
 
@@ -31,6 +33,7 @@ def _scene() -> SceneDocument:
             ScenePanel(
                 (
                     SceneText("hello"),
+                    SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
                     SceneRow(
                         (
                             SceneButton("Save", "form.save", ActionStyle.SUCCESS, policy=ActionPolicy.EXCLUSIVE),
@@ -79,6 +82,17 @@ def test_scene_protocol_exposes_a_deterministic_cross_language_schema() -> None:
 
     assert schema["properties"]["protocol"] == {"const": SceneCodec.protocol}
     assert "button" in schema["$defs"]
+    assert "time" in schema["$defs"]
     assert "data" not in SceneCodec.schema_json()
     schema["title"] = "mutated by caller"
     assert SceneCodec.schema()["title"] != "mutated by caller"
+
+
+def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
+    import squid_layouts as sl
+    from squid_layouts.discord import DEFAULT_TARGET
+
+    instant = datetime(2026, 8, 22, 16, 30, tzinfo=timezone(timedelta(hours=2)))
+    result = sl.plan(sl.timestamp(instant, style=sl.TimeStyle.RELATIVE, label="Updated"), target=DEFAULT_TARGET)
+
+    assert result.scene.children == (SceneTime("2026-08-22T14:30:00+00:00", "R", "**Updated:** "),)

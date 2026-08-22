@@ -18,6 +18,7 @@ from squid_layouts.scene.model import (
     SceneRow,
     SceneSelect,
     SceneText,
+    SceneTime,
 )
 
 
@@ -30,6 +31,7 @@ def _scene() -> SceneDocument:
             ScenePanel(
                 (
                     SceneText("<script>alert(1)</script>"),
+                    SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
                     SceneRow((SceneButton("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
                     SceneSelect((SceneOption("One", "1"),), "form.choice"),
                     SceneGallery((SceneGalleryItem("https://example.invalid/image.png", "preview"),)),
@@ -48,6 +50,7 @@ def test_html_renderer_preserves_structure_and_action_ids_without_callbacks() ->
     assert 'data-squid-action="form.choice"' in rendered
     assert "<script>" not in rendered
     assert "&lt;script&gt;" in rendered
+    assert '<time datetime="2026-08-22T14:30:00+00:00" data-squid-style="R">' in rendered
 
 
 def test_scene_json_can_be_drawn_by_a_separate_frontend_process() -> None:

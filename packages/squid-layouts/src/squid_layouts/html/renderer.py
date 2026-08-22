@@ -23,6 +23,7 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
 
 PREVIEW_CSS = """
@@ -83,6 +84,12 @@ class Renderer:
         match node:
             case SceneText(content=content, dialect=dialect):
                 return f'<div class="squid-text" data-squid-dialect="{dialect.value}">{escape(content)}</div>'
+            case SceneTime(instant=instant, style=style, prefix=prefix):
+                return (
+                    f'<div class="squid-text">{escape(prefix or "")}'
+                    f'<time datetime="{_attribute(instant)}" data-squid-style="{_attribute(style)}">'
+                    f"{escape(instant)}</time></div>"
+                )
             case SceneSeparator(large=large, visible=visible):
                 if not visible:
                     return ""
