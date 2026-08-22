@@ -669,6 +669,21 @@ class _Computed:
         """Discard an already-materialized value after a dependency commit."""
         instance.__dict__.pop(self._name, None)
 
+    def refresh_for(self, instance: ReactiveOwner) -> bool:
+        """Refresh a materialized value and report whether downstream inputs changed."""
+        if self._name not in instance.__dict__:
+            return True
+        previous = instance.__dict__.pop(self._name)
+        try:
+            current = self._function(instance)
+        except Exception:
+            return True
+        instance.__dict__[self._name] = current
+        try:
+            return not bool(current == previous)
+        except Exception:
+            return True
+
 
 def computed(*, depends: tuple[object, ...]) -> Callable[[Callable[[Any], Any]], _Computed]:
     """Cache a derived value until one of its declared state dependencies changes."""
