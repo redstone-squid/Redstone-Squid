@@ -22,6 +22,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
+from squid.bot.topics import follow_resource, resource_topic
 from squid.bot.ui import PagedList, create_mount, destination
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
@@ -285,8 +286,23 @@ class SearchCog[
                 return None
 
             node = await self.bot.for_build(build).render_node()
-            navigator = sl.discord.Navigator(BuildInfoComponent(build, node, locale=locale))
-            mount = create_mount(navigator, locale=locale, timeout=300)
+            component = BuildInfoComponent(build, node, locale=locale)
+            navigator = sl.discord.Navigator(component)
+            mount = create_mount(navigator, locale=locale, timeout=300, reactor=self.bot.layout_reactor)
+
+            async def reload(current: BuildInfoComponent) -> None:
+                latest = await self.queries.get(build_id)
+                if latest is not None:
+                    current.replace(latest, await self.bot.for_build(latest).render_node())
+
+            follow_resource(
+                self.bot.topic_bus,
+                self.bot.layout_reactor,
+                mount,
+                resource_topic("build", str(build_id)),
+                component,
+                reload,
+            )
             await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
             return None
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:

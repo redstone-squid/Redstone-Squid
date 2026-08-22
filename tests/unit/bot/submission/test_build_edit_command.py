@@ -1,11 +1,13 @@
 """Build edit command tests."""
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
 from squid.bot.utils.mount_registry import MountRegistry
@@ -46,6 +48,8 @@ def _interaction(client: Any, *, user_id: int = 7) -> discord.Interaction[Any]:
                 locale="en-US",
                 response=_Response(),
                 followup=_Followup(),
+                expires_at=datetime.now(UTC) + timedelta(minutes=15),
+                is_expired=lambda: False,
             ),
         ),
     )
@@ -74,6 +78,8 @@ class StubBuilds:
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     cog.builds = cast(Any, StubBuilds(build))
+    topic_bus = sl.TopicBus()
+    layout_reactor = sl.discord.Reactor(topic_bus)
     cog.bot = cast(
         Any,
         SimpleNamespace(
@@ -88,6 +94,8 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
                 render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card")))
             ),
             mounts=MountRegistry(),
+            topic_bus=topic_bus,
+            layout_reactor=layout_reactor,
         ),
     )
     return cog

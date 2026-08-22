@@ -139,9 +139,13 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     interaction.followup.send.return_value = public_message
     build = OtherBuild(id=42)
     renderer = SimpleNamespace(render_node=AsyncMock(return_value=sl.paragraph("Build 42")))
+    topic_bus = sl.TopicBus()
+    layout_reactor = sl.discord.Reactor(topic_bus)
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=SimpleNamespace()),
         for_build=lambda current: renderer,
+        topic_bus=topic_bus,
+        layout_reactor=layout_reactor,
     )
     cog = SearchCog.__new__(SearchCog)
     cog.bot = cast(Any, bot)
@@ -149,7 +153,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     mounts: list[sl.discord.Mount] = []
 
     def capture_mount(component: sl.Component, **kwargs: Any) -> sl.discord.Mount:
-        mount = sl.discord.Mount(component, timeout=None)
+        mount = sl.discord.Mount(component, timeout=None, scheduler=kwargs.get("reactor"))
         mounts.append(mount)
         return mount
 
