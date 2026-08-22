@@ -8,6 +8,14 @@ from squid_layouts.patterns.collection import (
 )
 from squid_layouts.patterns.commit import CommitPolicy
 from squid_layouts.patterns.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
+from squid_layouts.patterns.editor import (
+    Editor,
+    EditorCommitHandler,
+    EditorSection,
+    EditorSectionState,
+    EditorState,
+    EditorValues,
+)
 from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
 from squid_layouts.patterns.multichoice import (
     MultiChoiceCommitHandler,
@@ -48,6 +56,12 @@ __all__ = [
     "DecisionHandler",
     "DecisionOption",
     "DecisionState",
+    "Editor",
+    "EditorCommitHandler",
+    "EditorSection",
+    "EditorSectionState",
+    "EditorState",
+    "EditorValues",
     "Menu",
     "MenuEntry",
     "MenuState",
