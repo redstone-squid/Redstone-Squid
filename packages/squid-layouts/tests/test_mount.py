@@ -1458,10 +1458,12 @@ class TestStateDescriptor:
         assert component.doubled == 6
         assert component.calls == 2
 
-    def test_computed_dependencies_must_be_state_on_the_same_component(self):
+    def test_computed_dependencies_must_be_reactive_fields_on_the_same_component(self):
         foreign = state(1)
 
-        with pytest.raises(TypeError, match=r"Derived.doubled dependency must be an sl.state\(\) field"):
+        with pytest.raises(
+            TypeError, match=r"Derived.doubled dependency must be an sl.state\(\) or @sl.computed field"
+        ):
 
             class Derived(Component):
                 count: int = state(1)
