@@ -119,15 +119,19 @@ class TestRecovery:
         assert V2_TARGET.id in DEFAULT_TARGETS
         assert CLASSIC_TARGET.id in DEFAULT_TARGETS
 
-    def test_registering_a_different_profile_under_a_built_in_id_is_refused(self) -> None:
-        """Silently shadowing one would rebuild every mount against the wrong budgets."""
-        targets = TargetRegistry()
+    def test_a_custom_profile_may_replace_a_built_in_under_its_own_id(self) -> None:
+        """`Target.classic(limits=...)` keeps the built-in id — it is still a classic message."""
+        compact = Target.classic(limits=ClassicLimits(embeds=2))
 
-        with pytest.raises(LayoutInvariantError, match="already registered with a different profile"):
-            targets.register(Target.classic(limits=ClassicLimits(embeds=2)))
+        assert TargetRegistry(compact).resolve(compact.id, compact.version, compact.fingerprint) is compact
 
-    def test_registering_the_same_profile_twice_is_fine(self) -> None:
-        TargetRegistry().register(Target.classic())
+    def test_replacing_a_built_in_still_refuses_a_snapshot_planned_against_the_old_one(self) -> None:
+        """Nothing is lost by allowing the override: the fingerprint does the real work."""
+        components, snapshot = captured(CLASSIC_TARGET)
+        targets = TargetRegistry(Target.classic(limits=ClassicLimits(embeds=2)))
+
+        with pytest.raises(LayoutInvariantError, match="no longer matches the profile"):
+            components.restore(snapshot, targets=targets, access=Everyone())
 
     def test_the_target_is_resolved_before_anything_is_built(self) -> None:
         """So a bad record fails while it is still just data, not once a reader can click it."""

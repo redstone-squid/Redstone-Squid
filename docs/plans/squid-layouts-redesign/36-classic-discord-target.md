@@ -366,3 +366,29 @@ no in-tree consumer, the limits work is a solver change rather than a plumbing e
 fields cannot be chosen downstream of semantic lowering, `ActionRow` forces a real
 `discord.ui.View`, and the fragment API was cut in favour of a measured reservation over
 [38](38-discord-presentation.md)'s presentation value.
+
+**Shipped 2026-08-22** in twelve commits, `primitives: rename the component boundary node`
+through `docs: document classic target adoption`. User guide:
+[`packages/squid-layouts/docs/classic-messages.md`](../../../packages/squid-layouts/docs/classic-messages.md).
+
+Six things came out differently from the sketch, each because the tree said so:
+
+- **Rung distance stayed in the degradation profile** rather than moving to the cost vector.
+  `Variants.priority` groups that profile, and priority has to keep steering which ladder gives
+  way first even when every rung on offer is exact. It sits below every real loss axis instead.
+- **Strictness became severity-driven.** A new `SolveNoteSeverity.ADAPTATION` is what makes an
+  exact later rung strict-safe; the note still appears in the report, it just is not loss.
+- **Card folding lives in semantic lowering, not the dialect.** After lowering, an authored
+  region and loose prose are both just cards, and only the semantic layer can tell them apart.
+  Merging two authored `Article`s into one embed would regroup the document rather than express
+  it.
+- **The limits object owns its own axis names.** `TargetProfile.resources` became an override
+  rather than a second declaration of the same facts, because two declarations drift.
+- **A registry override is allowed.** `Target.classic(limits=...)` keeps the built-in id — it is
+  still a classic message — so refusing to replace a built-in would have made customized limits
+  unusable with durability. The recorded fingerprint does the real work at resolve time.
+- **A mounted classic renderer always builds its view**, even with no controls: the view owns
+  the mount's timeout, so a screen of pure prose would otherwise never time out.
+
+The live gate is **not** met. A classic-to-classic edit and a classic-to-V2 replacement against
+a real message have not been run, and remain the only end-to-end evidence this target lacks.
