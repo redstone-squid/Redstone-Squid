@@ -6,17 +6,23 @@ import pytest
 
 from squid_layouts import (
     ActionDisplay,
+    Asset,
+    Download,
+    InlineAsset,
+    List,
+    ListItem,
     Paragraph,
     Position,
     fallback,
     plan,
+    truncate,
 )
 from squid_layouts.actions import ActionEvent, ActionPolicy
 from squid_layouts.discord import DEFAULT_TARGET
-from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variants, alts
+from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.presentation import StrategyState
-from squid_layouts.scene.model import SceneButton, SceneRow, SceneSelect
+from squid_layouts.scene.model import SceneButton, ScenePanel, SceneRow, SceneSelect, SceneText
 from squid_layouts.semantic import Action, ActionGroup, Actions, Emphasis, Flexibility, Link, Stack
 
 
@@ -249,12 +255,135 @@ def test_more_than_seventy_five_actions_use_a_keyed_paged_picker() -> None:
     assert second_select.options[0].value == "action.25"
 
 
-def test_search_budget_exhaustion_uses_a_reported_lossless_fallback() -> None:
-    result = plan(Actions(_actions(5), key="demo"), target=DEFAULT_TARGET, search_budget=1)
+def test_search_budget_exhaustion_reports_the_best_incumbent() -> None:
+    # The incumbent fits but loses text, so a cheaper representation could still have won.
+    # The budget stops the search before it can rule one out, which is what it reports.
+    document = (truncate(Paragraph("x" * 5000)), Actions(_actions(5), key="demo"))
+
+    result = plan(document, target=DEFAULT_TARGET, search_budget=1)
 
     assert result.metrics.search_fallback
     assert result.metrics.states_explored == 1
     assert result.report.events[0].code == "planner.search_fallback"
     assert result.report.events[0].severity.value == "warning"
-    assert not any(event.severity.value == "degradation" for event in result.report.events)
     assert len(result.bindings) == 5
+
+
+def test_a_provably_optimal_first_candidate_reports_no_fallback() -> None:
+    """A budget of one is not a truncated search when nothing left could have beaten it."""
+    result = plan(Actions(_actions(5), key="demo"), target=DEFAULT_TARGET, search_budget=1)
+
+    assert result.metrics.states_explored == 1
+    assert not result.metrics.search_fallback
+    assert [event.code for event in result.report.events] == ["actions.individual"]
+
+
+def _texts(result) -> set[str]:
+    """Every string the scene will display, panels included."""
+    found: set[str] = set()
+
+    def walk(children) -> None:
+        for child in children:
+            if isinstance(child, SceneText):
+                found.add(child.content)
+            elif isinstance(child, ScenePanel):
+                walk(child.children)
+
+    walk(result.scene.children)
+    return found
+
+
+def test_an_unopened_branch_leaves_no_trace_of_itself() -> None:
+    """A hidden branch is not lowered at all, so it cannot stage anything on the way past."""
+    hidden = Stack(
+        (
+            Actions(_actions(3), key="hidden-actions"),
+            List(tuple(ListItem(str(index), f"hidden {index}") for index in range(40)), key="hidden-list"),
+            Download(
+                "hidden-download",
+                "Hidden",
+                Asset("hidden", "hidden.txt", "text/plain", InlineAsset(b"x")),
+            ),
+        )
+    )
+    session = PresentationSession()
+
+    result = plan(fallback(Paragraph("visible"), hidden), target=DEFAULT_TARGET, session=session)
+
+    assert _texts(result) == {"visible"}
+    assert not result.scene.pagers
+    assert not result.scene.assets
+    assert not result.bindings
+    assert not any("hidden" in event.path for event in result.report.events)
+    assert all("hidden" not in getattr(update, "key", "") for update in result.session_updates)
+
+
+def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> None:
+    """Two spellings of one candidate would cost an extra evaluation; there is only one."""
+    inner = fallback(
+        Stack(tuple(Paragraph(f"inner primary {index}") for index in range(8))),
+        Actions(_actions(5), key="inner-actions"),
+    )
+    document = (
+        *(Paragraph(f"component {index}") for index in range(33)),
+        fallback(
+            Stack(
+                (
+                    Actions(_actions(5), key="outer-actions"),
+                    *(Paragraph(f"outer {index}") for index in range(10)),
+                )
+            ),
+            inner,
+        ),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET)
+    rendered = _texts(result)
+
+    # individual, grouped, the opened branch, then the nested branch: four, not five. The
+    # outer picker's strategy does not survive its branch closing to spell a fifth.
+    assert result.metrics.states_explored == 4
+    assert not any(event.path.startswith("$.33.primary") for event in result.report.events)
+    assert any(
+        event.code == "actions.individual" and event.path == "$.33.alternate.0.alternate.0"
+        for event in result.report.events
+    )
+    assert "outer 0" not in rendered
+    assert "inner primary 0" not in rendered
+    assert len([event for event in result.report.events if event.code.endswith("variant_step")]) == 2
+
+
+def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
+    """One frontier: a lossless representation change beats a ladder step that costs loss."""
+    document = (
+        *(Paragraph(f"component {index}") for index in range(34)),
+        Variants.of(Panel((Text("rich"), Text("detail"))), Text("compact")),
+        Actions(_actions(5), key="demo"),
+    )
+
+    result = plan(document, target=DEFAULT_TARGET)
+    rendered = _texts(result)
+
+    assert "compact" not in rendered  # the ladder kept its preferred rung
+    assert any(event.code == "actions.grouped" for event in result.report.events)
+    assert not any(event.code.startswith("layout.degradation") for event in result.report.events)
+
+
+def test_capability_filtering_keeps_rung_selection_stable() -> None:
+    """Unsupported rungs are removed before search, so the survivors number from zero."""
+    ladder = Variants(
+        (
+            Variant((Text("needs an extension"),), requires=frozenset({"target.absent"})),
+            Variant((Panel((Text("rich"), Text("detail"))),)),
+            Variant((Text("compact"),)),
+        )
+    )
+    document = (*(Paragraph(f"component {index}") for index in range(34)), ladder)
+
+    result = plan(document, target=DEFAULT_TARGET)
+    rendered = _texts(result)
+    panels = [node for node in result.scene.children if isinstance(node, ScenePanel)]
+
+    assert {"rich", "detail"} <= rendered
+    assert "compact" not in rendered
+    assert len(panels) == 1

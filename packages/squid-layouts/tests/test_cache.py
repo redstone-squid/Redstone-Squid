@@ -13,6 +13,8 @@ from squid_layouts import (
     Palette,
     Paragraph,
     Section,
+    Stack,
+    fallback,
     plan,
 )
 from squid_layouts.discord import DEFAULT_TARGET, compose
@@ -73,18 +75,18 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     assert second.bindings["run"].handler is _second
 
 
-def test_cache_hit_reuses_the_global_assignment_without_solving(monkeypatch) -> None:
+def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
     import squid_layouts.planning.planner as planner_module
 
     attempts = 0
-    original = planner_module.solve
+    original = planner_module.measure
 
     def counted(*args, **kwargs):
         nonlocal attempts
         attempts += 1
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(planner_module, "solve", counted)
+    monkeypatch.setattr(planner_module, "measure", counted)
     cache = PlanCache()
     document = (
         *(Paragraph(f"component {index}") for index in range(35)),
@@ -121,6 +123,35 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
     assert hit.metrics.cache_hit
     assert hit.scene is miss.scene
     assert hit.bindings["run"].handler is _second
+
+
+def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> None:
+    """All three decision classes travel in the entry, so a hit never re-searches."""
+    import squid_layouts.planning.planner as planner_module
+
+    cache = PlanCache()
+
+    def document(handler):
+        return (
+            *(Paragraph(f"component {index}") for index in range(35)),
+            fallback(
+                Stack(tuple(Paragraph(f"primary {index}") for index in range(10))),
+                Actions((Action("run", "Run", handler),), key="fallback-actions"),
+            ),
+        )
+
+    miss = plan(document(_first), target=DEFAULT_TARGET, cache=cache)
+    monkeypatch.setattr(planner_module, "measure", _never_measured)
+    hit = plan(document(_second), target=DEFAULT_TARGET, cache=cache)
+
+    assert hit.metrics.cache_hit
+    assert hit.scene is miss.scene
+    assert hit.bindings["run"].handler is _second
+
+
+def _never_measured(*_args, **_kwargs):
+    message = "a cache hit must not measure"
+    raise AssertionError(message)
 
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:

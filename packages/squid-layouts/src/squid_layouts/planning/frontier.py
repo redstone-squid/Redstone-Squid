@@ -23,8 +23,6 @@ from squid_layouts.primitives.nodes import Break, Budget, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]
 type Positions = Mapping[VariantPath, int]
-type VariantTopology = tuple[tuple[str, int], ...]
-"""Which rung each semantic fallback occurrence currently sits on; absent means rung 0."""
 
 
 def format_path(path: VariantPath) -> str:
@@ -59,17 +57,12 @@ def walk_ladders(nodes: Sequence[Node], positions: Positions, visit) -> None:
         walk(node, (index,))
 
 
-def steppable(
-    nodes: Sequence[Node],
-    positions: Positions,
-    *,
-    locked_semantics: frozenset[str] = frozenset(),
-) -> list[tuple[VariantPath, Variants, int]]:
+def steppable(nodes: Sequence[Node], positions: Positions) -> list[tuple[VariantPath, Variants, int]]:
     """Every reachable ladder that still has a rung left, in document order."""
     found: list[tuple[VariantPath, Variants, int]] = []
 
     def visit(path: VariantPath, node: Variants, rung: int) -> None:
-        if node.semantic_path not in locked_semantics and rung + 1 < len(node.variants):
+        if rung + 1 < len(node.variants):
             found.append((path, node, rung))
 
     walk_ladders(nodes, positions, visit)
@@ -125,7 +118,7 @@ def variant_notes(nodes: Sequence[Node], positions: Positions) -> list[SolveNote
     return notes
 
 
-def variant_state_bound(nodes: Sequence[Node], cutoff: int, topology: Mapping[str, int]) -> int:
+def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
     """Count reachable rung assignments, stopping once a bounded search cannot exhaust them."""
 
     def multiply(values: Sequence[int]) -> int:
@@ -139,12 +132,6 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int, topology: Mapping[st
     def count_node(node: Node) -> int:
         match node:
             case Variants(variants=variants):
-                if node.semantic_path in topology:
-                    rung = topology[node.semantic_path]
-                    if not 0 <= rung < len(variants):
-                        message = f"{node.semantic_path}: fallback topology selected unavailable rung {rung}"
-                        raise ValueError(message)
-                    return multiply([count_node(child) for child in variants[rung].nodes])
                 total = 0
                 for variant in variants:
                     total += multiply([count_node(child) for child in variant.nodes])
@@ -165,60 +152,14 @@ def static_components(nodes: Sequence[Node], limits: V2Limits) -> int:
     return _component_count(_prune(builder.realize_children(resolve_variants(nodes, {}))))
 
 
-def apply_semantic_topology(
-    nodes: Sequence[Node], positions: Positions, topology: Mapping[str, int]
-) -> dict[VariantPath, int]:
-    """Force every currently reachable semantic ladder to its requested rung."""
-    selected = dict(positions)
-
-    def visit(path: VariantPath, node: Variants, _rung: int) -> None:
-        if node.semantic_path is None:
-            return
-        rung = topology.get(node.semantic_path, 0)
-        if not 0 <= rung < len(node.variants):
-            message = f"{node.semantic_path}: fallback topology selected unavailable rung {rung}"
-            raise ValueError(message)
-        if rung:
-            selected[path] = rung
-        else:
-            selected.pop(path, None)
-
-    # Selecting one semantic rung can reveal another semantic ladder.
-    while True:
-        before = dict(selected)
-        walk_ladders(nodes, selected, visit)
-        selected = canonical_positions(nodes, selected)
-        if selected == before:
-            return selected
-
-
-def semantic_topology(nodes: Sequence[Node], positions: Positions) -> VariantTopology:
-    """Which rung each reachable semantic fallback occurrence currently sits on."""
-    topology: list[tuple[str, int]] = []
-
-    def visit(_path: VariantPath, node: Variants, rung: int) -> None:
-        if node.semantic_path is not None:
-            topology.append((node.semantic_path, rung))
-
-    walk_ladders(nodes, positions, visit)
-    return tuple(topology)
-
-
-def guided_step(
-    nodes: Sequence[Node],
-    positions: Positions,
-    limits: V2Limits,
-    *,
-    locked_semantics: frozenset[str] = frozenset(),
-    topology: Mapping[str, int] | None = None,
-) -> dict[VariantPath, int] | None:
+def guided_step(nodes: Sequence[Node], positions: Positions, limits: V2Limits) -> dict[VariantPath, int] | None:
     """Pick the one step a budget-starved product should take next.
 
     Breadth and priority still decide *which* ladders are eligible; among equals the step
     that frees the most components wins, and document order breaks the remaining tie. This
     keeps an intractable product linear in the budget instead of abandoning it.
     """
-    remaining = steppable(nodes, positions, locked_semantics=locked_semantics)
+    remaining = steppable(nodes, positions)
     if not remaining:
         return None
     priority, rung = min((ladder.priority, current) for _path, ladder, current in remaining)
@@ -232,8 +173,6 @@ def guided_step(
         order: int, path: VariantPath, ladder: Variants, current: int
     ) -> tuple[int, int, dict[VariantPath, int]]:
         neighbor = canonical_positions(nodes, {**positions, path: current + 1})
-        if topology is not None:
-            neighbor = apply_semantic_topology(nodes, neighbor, topology)
         saved = static_components(ladder.variants[current + 1].nodes, limits) - static_components(
             ladder.variants[current].nodes, limits
         )
