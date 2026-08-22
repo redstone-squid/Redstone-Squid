@@ -54,8 +54,9 @@ from squid_layouts.scene.model import (
     SceneDocument,
     SceneSelect,
 )
+from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
-from squid_layouts.text import NEUTRAL, Localization, resolve_text
+from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
 
@@ -298,8 +299,8 @@ class Mount:
     ) -> None:
         self.id = secrets.token_urlsafe(6)
         self.component = component
-        # Diagnostics only. `_active` is what the idle timeout counts from: discord.py restarts
-        # the view's timer on every click, and every commit hands it a brand new view.
+        # Diagnostics only. `_active` is what the idle timeout counts from: the initial send
+        # and each accepted click move it, while unattended refreshes deliberately do not.
         self._born = self._active = time.monotonic()
         self.address: MountAddress | None = None
         """Where this mount's message is, once it has one. Read `handle` to write to it."""
@@ -327,6 +328,8 @@ class Mount:
         )
         self.on_error = on_error
         self.scheduler = scheduler
+        self.status: TextLike | None = None
+        """Framework-drawn status appended to the document until the next accepted interaction."""
         self._handle: deliver.EditHandle | None = None
         self._view: MountedView | None = None
         self._handlers: dict[str, ActionBinding] = {}
@@ -396,6 +399,11 @@ class Mount:
             metrics=None if self._plan is None else self._plan.metrics,
         )
 
+    def _remaining_timeout(self) -> float | None:
+        if self.timeout is None:
+            return None
+        return max(0.0, self.timeout - (time.monotonic() - self._active))
+
     def _note_address(self, message: discord.Message | None) -> None:
         """Remember where this mount's message is, the first time Discord says.
 
@@ -443,7 +451,8 @@ class Mount:
         """Plan and draw one rendered tree into a candidate generation."""
         self._issued += 1
         generation = self._issued
-        rendered = Document(tree.nodes, tree.assets, tree.document_key)
+        nodes = tree.nodes if self.status is None else (*tree.nodes, Status(self.status))
+        rendered = Document(nodes, tree.assets, tree.document_key)
         handlers: dict[str, ActionBinding] = {}
 
         def draw() -> tuple[MountedView, Composition]:
@@ -478,7 +487,7 @@ class Mount:
                 wire=wire,
                 renderer=Renderer(
                     limits=self.limits,
-                    view_factory=lambda: MountedView(self, self.timeout),
+                    view_factory=lambda: MountedView(self, self._remaining_timeout()),
                 ),
                 limits=self.limits,
                 chrome=self._chrome,
@@ -521,7 +530,7 @@ class Mount:
         self.runtime.commit(candidate.tree)
         self._assets = candidate.assets
         self._plan = candidate.composition.plan
-        self._active = time.monotonic()
+        candidate.view.timeout = self._remaining_timeout()
         self._dirty = False
         self._pending = None
         self._swap_view(candidate.view)
@@ -665,6 +674,7 @@ class Mount:
         self._handle = receipt.handle
         if receipt.message is not None:
             self._note_address(receipt.message)
+        self._active = time.monotonic()
         self._commit(candidate)
         return receipt.message
 
@@ -795,6 +805,9 @@ class Mount:
             text = resolve_text(self.chrome.not_yours, self.localization).content
             await deliver.respond_text(interaction, text, ephemeral=True)
             return False
+        if self.status is not None:
+            self.status = None
+            self.invalidate()
         return True
 
     async def _dispatch_binding(
@@ -999,7 +1012,10 @@ class Mount:
         await self.refresh_now()
 
     async def refresh_now(self) -> None:
-        if self._finished or self._handle is None:
+        if self._finished:
+            return
+        if self._handle is None or self._handle.expired():
+            self._dirty = True
             return
         candidate = await self._stage_loaded()
         try:
