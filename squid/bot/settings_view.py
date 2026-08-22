@@ -92,7 +92,9 @@ class SettingsPanel(sl.Component):
     locale: str | None = sl.state(None, persist=False)
     # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
     # them stale.
-    _channels: dict[ScalarChannelSetting, int | None] = sl.state(dict.fromkeys(CHANNEL_SETTINGS), persist=False)
+    _channels: sl.FrozenMapping[ScalarChannelSetting, int | None] = sl.state(
+        sl.FrozenMapping(dict.fromkeys(CHANNEL_SETTINGS)), persist=False
+    )
     _locale_override: str | None = sl.state(None, persist=False)
     _preset: EmojiPreset | None = sl.state(None, persist=False)
     _weights: tuple[RoleWeight, ...] = sl.state((), persist=False)
@@ -155,7 +157,7 @@ class SettingsPanel(sl.Component):
 
     async def open_server(self) -> None:
         stored = cast(Mapping[str, int | None], await self._settings.get_all(self._guild.id))
-        self._channels = {setting: stored.get(setting) for setting in CHANNEL_SETTINGS}
+        self._channels = sl.FrozenMapping({setting: stored.get(setting) for setting in CHANNEL_SETTINGS})
         self._locale_override = await self._settings.get_locale(self._guild.id)
         self.page = "server"
 
@@ -395,7 +397,7 @@ class SettingsPanel(sl.Component):
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
         previous = self._channels[setting]
         await self._write_channel(setting, channel_id)
-        self._channels[setting] = channel_id
+        self._channels = sl.FrozenMapping({**self._channels, setting: channel_id})
         self.history.record(
             L("Changed {setting}", setting=L(SETTING_LABELS[setting])),
             undo=lambda: self._write_channel(setting, previous),

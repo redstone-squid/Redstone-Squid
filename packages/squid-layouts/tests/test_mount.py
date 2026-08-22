@@ -129,7 +129,7 @@ class Child(Component):
 class Panel(Component):
     """A pager, a button and an optional child — one of each thing a commit publishes."""
 
-    entries: list[str] = state(factory=lambda: [f"entry {index}" for index in range(6)])
+    entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
     show_child: bool = state(default=False)
 
     def __init__(self, mounted: list[str]) -> None:
@@ -137,7 +137,7 @@ class Panel(Component):
 
     def render(self):
         nodes: list[LayoutNode] = [
-            Lines(tuple(self.entries), overflow=Paginate(key="entries", per=2)),
+            Lines(self.entries, overflow=Paginate(key="entries", per=2)),
             Row((Button("add", self.add, "add"),)),
         ]
         if self.show_child:
@@ -145,7 +145,7 @@ class Panel(Component):
         return nodes
 
     async def add(self, event: PressEvent) -> None:
-        self.entries.append("added")
+        self.entries = (*self.entries, "added")
         self.show_child = True
 
 
@@ -949,7 +949,7 @@ class TestActionPolicy:
         interaction.response.send_modal.assert_not_awaited()
 
     async def test_rebase_submit_keeps_the_filled_in_form_when_the_schema_changed_shape(self):
-        calls: list[str] = []
+        calls: list[object] = []
         filled = FormSpec("Rename", (TextField(key="name", label="Name"),))
         reshaped = FormSpec("Rename", (TextField(key="title", label="Title"),))
 
@@ -958,7 +958,7 @@ class TestActionPolicy:
                 return sl_form(reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
 
             async def old(self, event) -> None:
-                calls.append(str(event.values))
+                calls.append(dict(event.values))
 
             async def new(self, event) -> None:
                 calls.append("new")
@@ -978,7 +978,7 @@ class TestActionPolicy:
         )
 
         # Parsed against the schema the reader actually saw, not the one that replaced it.
-        assert calls == ["{'name': 'Ada'}"]
+        assert calls == [{"name": "Ada"}]
 
     async def test_exclusive_submit_still_rejects_a_stale_generation(self):
         calls: list[str] = []
@@ -1294,14 +1294,14 @@ class TestErrors:
     async def test_failed_handler_rolls_back_all_state_changes(self):
         class Boom(Component):
             count: int = state(0)
-            entries: list[str] = state(factory=list)
+            entries: tuple[str, ...] = state(())
 
             def render(self):
                 return [Row((Button(label="x", on_click=self.explode, key="x"),))]
 
             async def explode(self, interaction) -> None:
                 self.count = 1
-                self.entries.append("partial")
+                self.entries = ("partial",)
                 message = "boom"
                 raise RuntimeError(message)
 
@@ -1313,7 +1313,7 @@ class TestErrors:
         await mount.dispatch("x", fake_interaction())
 
         assert component.count == 0
-        assert component.entries == []
+        assert component.entries == ()
         assert not mount._dirty
 
 
@@ -1457,7 +1457,7 @@ class TestDeliveryAtomicity:
         live_generation = mount._generation
         live_handlers = mount._handlers
         live_strategies = dict(mount.presentation.strategies)
-        panel.entries.append("entry 6")  # a new fingerprint: the staged render resets the cursor
+        panel.entries = (*panel.entries, "entry 6")  # a new fingerprint: the staged render resets the cursor
         panel.show_child = True  # a component the failed generation must not mount
 
         monkeypatch.setattr(delivery, "handle_from", _refuse_handle)
@@ -1880,9 +1880,9 @@ class TestStateDescriptor:
         component.count = 3
         assert mount._dirty
 
-    def test_mutable_factory_is_per_instance_and_observed(self):
+    def test_a_factory_runs_once_per_instance(self):
         class Collection(Component):
-            entries: list[dict[str, int]] = state(factory=list)
+            entries: tuple[str, ...] = state(factory=tuple)
 
             def render(self):
                 return Text(str(self.entries))
@@ -1891,14 +1891,10 @@ class TestStateDescriptor:
         mount = Mount(first, access=Everyone(), timeout=None)
         commit_render(mount)
 
-        first.entries.append({"count": 1})
+        first.entries = ("one",)
 
         assert mount._dirty
-        assert second.entries == []
-
-        commit_render(mount)
-        first.entries[0]["count"] = 2
-        assert mount._dirty
+        assert second.entries == ()
 
     def test_computed_values_cache_until_state_changes(self):
         class Derived(Component):
@@ -2013,10 +2009,10 @@ class TestStateDescriptor:
 
         assert component.invalidations == 1
 
-    def test_transaction_rolls_back_assignments_and_nested_mutation(self):
+    def test_transaction_rolls_back_every_assignment_it_covered(self):
         class Form(Component):
             name: str = state("before")
-            values: list[int] = state(factory=list)
+            values: tuple[int, ...] = state(())
 
             def render(self):
                 return Text(self.name)
@@ -2024,11 +2020,11 @@ class TestStateDescriptor:
         component = Form()
         with pytest.raises(RuntimeError, match="abort"), transaction():
             component.name = "after"
-            component.values.append(1)
+            component.values = (1,)
             raise RuntimeError("abort")
 
         assert component.name == "before"
-        assert component.values == []
+        assert component.values == ()
 
 
 class Notifier(Component):

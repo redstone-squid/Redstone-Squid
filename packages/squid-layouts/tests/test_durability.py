@@ -22,10 +22,10 @@ from squid_layouts.primitives import Lines, Paginate, Text
 
 
 class DurableChild(Component):
-    entries: list[str] = state(factory=lambda: [f"entry {index}" for index in range(6)])
+    entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
 
     def render(self):
-        return Lines(tuple(self.entries), overflow=Paginate(key="items", per=2))
+        return Lines(self.entries, overflow=Paginate(key="items", per=2))
 
 
 class DurableRoot(Component):
@@ -164,7 +164,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     mount = Mount(root, access=Everyone(), timeout=None)
     commit_render(mount)
     root.count = 7
-    root.child.entries.append("entry 6")
+    root.child.entries = (*root.child.entries, "entry 6")
     commit_render(mount)
     mount.presentation.move_cursor("child.items", Position(offset=2))
 

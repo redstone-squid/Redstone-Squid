@@ -44,7 +44,7 @@ class _WindowRequest:
 class SourceRankedList[EntryT](Component):
     """Render a ranking whose visible async resource is backed by a window source."""
 
-    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, copy="ref")
+    _request: _WindowRequest = state(default=_WindowRequest(), persist=False, opaque=True)
 
     def __init__(
         self,
