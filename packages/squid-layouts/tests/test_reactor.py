@@ -104,6 +104,16 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     assert bus.snapshot().topics == ()
 
 
+async def test_follow_rejects_a_mount_that_already_finished() -> None:
+    bus = TopicBus()
+    reactor = Reactor(bus)
+    mount = Mount(Empty(), scheduler=reactor)
+    await mount.finish(disable=False)
+
+    with pytest.raises(ValueError, match="finished"):
+        reactor.follow(mount, "build")
+
+
 async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() -> None:
     now = datetime.now(UTC)
     interaction = fake_interaction()
