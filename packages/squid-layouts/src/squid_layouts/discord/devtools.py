@@ -14,7 +14,8 @@ from squid_layouts.discord.mount import Mount, MountSnapshot
 from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import MountRegistry
 from squid_layouts.document import InlineAsset
-from squid_layouts.primitives import Code, Heading, Node, Text
+from squid_layouts.factories import code, paragraph, section
+from squid_layouts.semantic import LayoutNode
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
@@ -75,7 +76,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         assert isinstance(asset.source, InlineAsset)
         await self._send(
             ctx,
-            [Text(f"Scene for mount `{mount_id}` — {len(asset.source.data)} bytes.")],
+            [paragraph(f"Scene for mount `{mount_id}` — {len(asset.source.data)} bytes.")],
             files=[discord.File(io.BytesIO(asset.source.data), filename=asset.name)],
         )
 
@@ -84,14 +85,14 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         """Show the retained plan report, grouped by severity."""
         snapshot = await self._snapshot_or_refuse(ctx, mount_id)
         if snapshot is not None:
-            await self._send(ctx, [Heading(f"Plan for mount {mount_id}"), Code(plan_text(snapshot))])
+            await self._send(ctx, [section(code(plan_text(snapshot)), heading=f"Plan for mount {mount_id}")])
 
     @ui_group.command(name="metrics")
     async def dump_metrics(self, ctx: Context[BotT], mount_id: str) -> None:
         """Show planner search and cache metrics for a mount."""
         snapshot = await self._snapshot_or_refuse(ctx, mount_id)
         if snapshot is not None:
-            await self._send(ctx, [Heading(f"Metrics for mount {mount_id}"), Code(metrics_text(snapshot))])
+            await self._send(ctx, [section(code(metrics_text(snapshot)), heading=f"Metrics for mount {mount_id}")])
 
     @dev_group.command(name="routes")
     async def list_routes(self, ctx: Context[BotT]) -> None:
@@ -111,7 +112,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
                 if route.middleware:
                     lines.append(f"         middleware: {' -> '.join(route.middleware)}")
         body = "No routers are installed on this client." if not lines else "\n".join(lines)
-        await self._send(ctx, [Heading("Routed controls"), Code(body)])
+        await self._send(ctx, [section(code(body), heading="Routed controls")])
 
     async def _open(self, ctx: Context[BotT], *, focus: str | None) -> None:
         inspector = MountInspector(focus=focus, registry=self._registry)
@@ -127,12 +128,12 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         return mount.snapshot()
 
     async def _refuse(self, ctx: Context[BotT], message: str) -> None:
-        await self._send(ctx, [Heading("No such mount"), Text(message)])
+        await self._send(ctx, [section(paragraph(message), heading="No such mount")])
 
     async def _send(
         self,
         ctx: Context[BotT],
-        nodes: Sequence[Node],
+        nodes: Sequence[LayoutNode],
         *,
         files: list[discord.File] | None = None,
     ) -> None:

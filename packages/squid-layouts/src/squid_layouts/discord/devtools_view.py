@@ -15,10 +15,6 @@ from collections.abc import Hashable, Iterable, Sequence
 
 import squid_layouts as sl
 
-DISCORD_BLUE = 0x5865F2
-DISCORD_GREY = 0x95A5A6
-DISCORD_YELLOW = 0xFEE75C
-
 SESSION_SECONDS = 300
 """Short-lived on purpose: an inspector left open is one more mount in its own list."""
 
@@ -47,7 +43,7 @@ class MountInspector(sl.Component):
         self.focus = focus
         self._registry = registry
 
-    def render(self) -> Sequence[sl.primitives.Node]:
+    def render(self) -> Sequence[sl.LayoutNode]:
         mounts = sl.discord.mounts()
         if self.focus is not None:
             target = sl.discord.live.find(self.focus)
@@ -57,46 +53,36 @@ class MountInspector(sl.Component):
 
     # --- List ---------------------------------------------------------------------------
 
-    def _list(self, mounts: Sequence[sl.discord.Mount]) -> Sequence[sl.primitives.Node]:
+    def _list(self, mounts: Sequence[sl.discord.Mount]) -> Sequence[sl.LayoutNode]:
         # Newest first: the session someone is asking about is almost always the one they
         # just opened.
         snapshots = sorted((mount.snapshot() for mount in mounts), key=lambda snapshot: snapshot.age)
         missing = self.focus is not None
-        heading = sl.primitives.Heading(f"Live mounts — {len(snapshots)}")
-        body: sl.primitives.Node
+        body: sl.LayoutNode
         if snapshots:
-            body = sl.primitives.Lines(
-                tuple(self._row(snapshot) for snapshot in snapshots),
-                overflow=sl.primitives.Paginate(key="mounts", per=8),
-            )
+            body = sl.bullets(*(self._row(snapshot) for snapshot in snapshots), key="mounts", page_size=8)
         else:
-            body = sl.primitives.Text("Nothing is mounted. Open a panel and run this again.")
+            body = sl.paragraph("Nothing is mounted. Open a panel and run this again.")
 
-        nodes: list[sl.primitives.Node] = [
-            sl.primitives.Panel(
-                children=(heading, body),
-                accent=DISCORD_YELLOW if missing else DISCORD_BLUE,
-            )
-        ]
+        nodes: list[sl.LayoutNode] = [sl.section(body, heading=f"Live mounts — {len(snapshots)}")]
         if missing:
-            nodes.insert(0, sl.primitives.Text(f":warning: Mount `{self.focus}` is no longer live."))
+            nodes.insert(0, sl.status(f"Mount `{self.focus}` is no longer live.", tone=sl.Tone.WARNING))
         if snapshots:
             nodes.append(
-                sl.primitives.SelectMenu(
-                    options=tuple(
-                        sl.primitives.Option(
-                            label=f"{snapshot.id} — {snapshot.component.rsplit('.', 1)[-1]}",
-                            value=snapshot.id,
+                sl.choices(
+                    *(
+                        sl.choice(
+                            f"{snapshot.id} — {snapshot.component.rsplit('.', 1)[-1]}",
+                            key=snapshot.id,
                             description=_option_description(snapshot),
                         )
                         for snapshot in snapshots[:_SELECT_LIMIT]
                     ),
-                    on_select=self._open,
                     key="open",
-                    placeholder="Inspect a mount",
+                    selection=sl.controlled((), self._open),
                 )
             )
-        nodes.append(sl.primitives.Row(tuple(self._controls(back=False))))
+        nodes.append(self._controls(back=False))
         return nodes
 
     def _row(self, snapshot: sl.discord.MountSnapshot) -> str:
@@ -117,76 +103,75 @@ class MountInspector(sl.Component):
 
     # --- Detail -------------------------------------------------------------------------
 
-    def _detail(self, snapshot: sl.discord.MountSnapshot, mount: sl.discord.Mount) -> Sequence[sl.primitives.Node]:
-        children: list[sl.primitives.Node] = [
-            sl.primitives.Heading(f"Mount {snapshot.id}"),
-            sl.primitives.Lines(tuple(_summary(snapshot)), priority=5),
-        ]
+    def _detail(self, snapshot: sl.discord.MountSnapshot, mount: sl.discord.Mount) -> Sequence[sl.LayoutNode]:
+        children: list[sl.LayoutNode] = [sl.bullets(*_summary(snapshot), key="summary")]
         if snapshot.handler_keys:
-            children.append(_labelled("Handlers", f"generation {snapshot.generation}"))
             children.append(
-                sl.primitives.Code(
-                    "\n".join(snapshot.handler_keys),
-                    overflow=sl.primitives.Truncate(keep="head"),
-                    priority=-4,
+                sl.section(
+                    sl.note(f"generation {snapshot.generation}"),
+                    sl.code("\n".join(snapshot.handler_keys)),
+                    heading="Handlers",
                 )
             )
         children.extend(self._plan_section(snapshot))
-        children.append(_labelled("Component state", "persisted fields only"))
         children.append(
-            sl.primitives.Code(
-                _dump(_exported_state(mount)),
-                overflow=sl.primitives.Paginate(key="state"),
+            sl.section(
+                sl.note("persisted fields only"),
+                sl.code(_dump(_exported_state(mount))),
+                heading="Component state",
             )
         )
-        children.append(_labelled("Presentation", "cursors, selections, disclosures, strategies"))
         children.append(
-            sl.primitives.Code(
-                _dump(_presentation(mount.presentation)),
-                overflow=sl.primitives.Truncate(keep="head"),
-                priority=-8,
+            sl.section(
+                sl.note("cursors, selections, disclosures, strategies"),
+                sl.code(_dump(_presentation(mount.presentation))),
+                heading="Presentation",
             )
         )
         return [
-            sl.primitives.Panel(children=tuple(children), accent=DISCORD_GREY),
-            sl.primitives.Row(tuple(self._controls(back=True))),
+            sl.section(*children, heading=f"Mount {snapshot.id}"),
+            self._controls(back=True),
         ]
 
-    def _plan_section(self, snapshot: sl.discord.MountSnapshot) -> Iterable[sl.primitives.Node]:
+    def _plan_section(self, snapshot: sl.discord.MountSnapshot) -> Iterable[sl.LayoutNode]:
         if snapshot.report is None or snapshot.metrics is None:
-            yield _labelled("Plan", "nothing has been committed yet")
+            yield sl.section(sl.note("nothing has been committed yet"), heading="Plan")
             return
         metrics = snapshot.metrics
-        yield _labelled(
-            "Plan",
-            f"{metrics.states_explored} states explored · "
-            f"cache {'hit' if metrics.cache_hit else 'miss'}"
-            f"{' · search fell back' if metrics.search_fallback else ''}",
+        yield sl.section(
+            sl.note(
+                f"{metrics.states_explored} states explored · "
+                f"cache {'hit' if metrics.cache_hit else 'miss'}"
+                f"{' · search fell back' if metrics.search_fallback else ''}"
+            ),
+            sl.code(plan_text(snapshot)),
+            heading="Plan",
         )
-        yield sl.primitives.Code(plan_text(snapshot), overflow=sl.primitives.Truncate(keep="head"), priority=-2)
 
     # --- Controls -----------------------------------------------------------------------
 
-    def _controls(self, *, back: bool) -> Iterable[sl.primitives.Button]:
+    def _controls(self, *, back: bool) -> sl.Actions:
+        controls: list[sl.Action] = []
         if back:
-            yield sl.primitives.Button(label="Back", on_click=self._back, key="back")
-        yield sl.primitives.Button(
-            label="Refresh", on_click=self._refresh, key="refresh", style=sl.primitives.ActionStyle.SECONDARY
+            controls.append(sl.action("Back", self._back, key="back"))
+        controls.extend(
+            (
+                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.Emphasis.SUBTLE),
+                sl.action("Close", self._close, key="close", emphasis=sl.Emphasis.SUBTLE),
+            )
         )
-        yield sl.primitives.Button(
-            label="Close", on_click=self._close, key="close", style=sl.primitives.ActionStyle.SECONDARY
-        )
+        return sl.actions(*controls, key="controls")
 
-    async def _open(self, event: sl.SelectionEvent) -> None:
-        self.focus = event.values[0]
+    async def _open(self, event: sl.ChoiceEvent) -> None:
+        self.focus = event.selected[0]
 
-    async def _back(self, event: sl.PressEvent) -> None:
+    async def _back(self, event: sl.ActionEvent) -> None:
         self.focus = None
 
-    async def _refresh(self, event: sl.PressEvent) -> None:
+    async def _refresh(self, event: sl.ActionEvent) -> None:
         self.revision += 1
 
-    async def _close(self, event: sl.PressEvent) -> None:
+    async def _close(self, event: sl.ActionEvent) -> None:
         await event.finish()
 
 
@@ -236,11 +221,6 @@ def metrics_text(snapshot: sl.discord.MountSnapshot) -> str:
             f"cache: {'hit' if metrics.cache_hit else 'miss'}",
         )
     )
-
-
-def _labelled(title: str, subtitle: str) -> sl.primitives.Node:
-    """A heading for a block inside the detail panel, carrying its own one-line caption."""
-    return sl.primitives.Lines((f"**{title}** — {subtitle}",), priority=3)
 
 
 def _summary(snapshot: sl.discord.MountSnapshot) -> list[str]:
