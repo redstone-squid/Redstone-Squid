@@ -103,7 +103,8 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
 
     profiler = MemoryProfiler(clock=clock)
     reactor = Reactor(profiler=profiler, monotonic=clock)
-    mount = Mount(Empty(), access=Everyone(), scheduler=reactor, profiler=profiler)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+    assert mount.profiler is profiler
     received_links: tuple[TraceLink, ...] = ()
 
     async def refresh(*, links: tuple[TraceLink, ...] = ()) -> None:
