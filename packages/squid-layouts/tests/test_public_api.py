@@ -11,7 +11,7 @@ import squid_layouts as sl
 
 
 def test_root_is_semantic_first() -> None:
-    assert {"Section", "Paragraph", "Note", "Actions", "Component", "plan", "PlanReport"} <= set(sl.__all__)
+    assert {"Section", "Paragraph", "Note", "Actions", "Component", "plan", "PlanReport", "TopicBus"} <= set(sl.__all__)
     assert {"section", "paragraph", "note", "actions", "action", "ChildLike"} <= set(sl.__all__)
     assert {"budget", "paged", "unbreakable", "keep_with_next"} <= set(sl.__all__)
     assert {
@@ -52,6 +52,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.SessionKey
     assert sl.discord.WhenOpen
     assert sl.discord.durability.MountManager
+    assert sl.TopicBus
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:
@@ -70,6 +71,7 @@ import squid_layouts
 import squid_layouts.html
 import squid_layouts.planning
 import squid_layouts.runtime
+import squid_layouts.topics
 assert "discord" not in sys.modules
 assert "anyio" not in sys.modules
 """
