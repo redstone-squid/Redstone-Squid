@@ -333,13 +333,34 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
 
     mount = view.mount()
 
-    payload = commit_render(mount).to_components()
-    select_options = payload[1]["components"][0]["options"]
-    assert [option["label"] for option in select_options] == ["Smallest 2x2 door", "Fast door"]
-    assert "Close" in str(payload)
+    rendered = commit_render(mount)
+    result_buttons = [
+        child
+        for child in rendered.walk_children()
+        if isinstance(child, discord.ui.Button) and child.label in {"Smallest 2x2 door", "Fast door"}
+    ]
+    assert [button.label for button in result_buttons] == ["Smallest 2x2 door", "Fast door"]
+    assert "Close" in str(rendered.to_components())
 
     view.detail_index = view.hits.index(record)
     assert "View build" in str(commit_render(mount).to_components())
+
+
+def test_search_results_preserve_page_warnings_without_refetching_the_initial_page() -> None:
+    service = SimpleNamespace(search=AsyncMock())
+    page = SearchPage(
+        (BuildSearchHit("8", "Fast door", "confirmed"),),
+        total=1,
+        next=None,
+        prev=None,
+        warnings=("Semantic fallback used",),
+    )
+    view = SearchResultsView(cast(SearchService, service), SearchRequest("door"), page, author_id=123)
+
+    payload = commit_render(view.mount()).to_components()
+
+    service.search.assert_not_awaited()
+    assert "Semantic fallback used" in str(payload)
 
 
 @pytest.mark.asyncio
