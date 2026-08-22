@@ -12,8 +12,8 @@ from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.identity import stable_fingerprint
-from squid_layouts.planning.limits import V2Limits
-from squid_layouts.planning.measure import measure_nodes, split_text_node
+from squid_layouts.planning.limits import COMPONENTS, V2Limits
+from squid_layouts.planning.measure import measure_nodes, split_text_node, text_total
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, StrategyCandidate, choose_strategy
 from squid_layouts.primitives.constraints import Alt, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
@@ -663,7 +663,7 @@ def _split_oversized_region_items(
     result: list[_RegionItem] = []
     for item in items:
         cost = measure_nodes(item.nodes, limits=limits)
-        if cost.chars <= chars and cost.components <= limits.total_components:
+        if text_total(cost) <= chars and cost.get(COMPONENTS) <= limits.total_components:
             result.append(item)
             continue
         fragments = (
@@ -674,7 +674,8 @@ def _split_oversized_region_items(
         if fragments is None or len(fragments) <= 1:
             message = (
                 f"{path}: unbreakable region child {type(item.nodes[0]).__name__} needs "
-                f"{cost.chars} characters and {cost.components} components; page limit is {chars} characters"
+                f"{text_total(cost)} characters and {cost.get(COMPONENTS)} components; "
+                f"page limit is {chars} characters"
             )
             raise UnsolvableLayoutError(message)
         result.extend(
@@ -700,8 +701,8 @@ def _break_region(
         cuts = balanced_breaks(
             [
                 BreakItem(
-                    cost.chars,
-                    cost.components,
+                    text_total(cost),
+                    cost.get(COMPONENTS),
                     break_after=not item.keep_with_next,
                 )
                 for item, cost in zip(items, costs, strict=True)
@@ -710,7 +711,7 @@ def _break_region(
             max_components=limits.total_components,
             min_fill=min_fill,
             widows=widows,
-            ideal_total=sum(cost.chars for cost in costs),
+            ideal_total=sum(text_total(cost) for cost in costs),
         )
     except ValueError as error:
         message = f"{path}: region has no feasible break set within its {chars}-character page budget"
