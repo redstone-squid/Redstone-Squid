@@ -216,7 +216,10 @@ def test_a_branch_that_grows_after_an_edit_gates_finish_in_the_state_machine() -
 def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     wizard = sl.Wizard("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
-    state = _answer(wizard, state, "kind", "advanced")
+    state = _answer(wizard, state, "kind", "basic")
+    # Editing the branch answer from review grows a step nobody has answered yet.
+    state = _answer(wizard, wizard.transition(state, "goto:kind"), "kind", "advanced")
+    assert state.current == REVIEW_STEP
 
     rendered = wizard.component(initial=state).render()
     values = [node.value for node in _walk(rendered) if isinstance(node, sl.Field)]
