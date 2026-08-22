@@ -14,12 +14,13 @@ from squid_layouts.planning.limits import V2Limits
 from squid_layouts.planning.measure import (
     SolveNote,
     SolveNoteCode,
+    SolveNoteSeverity,
     _Builder,
     _component_count,
     _note,
     _prune,
 )
-from squid_layouts.primitives.nodes import Break, Budget, Node, Panel, Variants
+from squid_layouts.primitives.nodes import Break, Budget, Fidelity, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]
 type Positions = Mapping[VariantPath, int]
@@ -82,40 +83,74 @@ def canonical_positions(nodes: Sequence[Node], positions: Positions) -> dict[Var
 
 
 def variant_profile(nodes: Sequence[Node], positions: Positions) -> DegradationProfile:
-    """Price the selected rungs as author-granted structural loss."""
+    """Price the selected rungs: fidelity as loss, distance as the tie beneath it.
+
+    Two things are being ordered and they are not the same thing. A rung that says it
+    reformats or discards content costs the reader something, and must lose to any faithful
+    alternative however far down the ladder that alternative sits — that is what makes
+    exact pagination beat a lossy one-pager. A rung's *distance* from rung 0 costs the
+    reader nothing; it is only the author's stated preference, so it ranks below every real
+    loss axis. It stays in the profile rather than moving to the cost vector because
+    `Variants.priority` groups it, and priority has to keep steering which ladder gives way
+    first even when every rung on offer is exact.
+    """
     profile = DegradationProfile()
 
     def visit(path: VariantPath, node: Variants, rung: int) -> None:
         nonlocal profile
-        if rung:
-            profile = profile.with_effect(
-                DegradationEffect(
-                    priority=node.priority,
-                    path=format_path(path),
-                    semantic_steps=rung,
-                )
+        if not rung:
+            return
+        fidelity = node.variants[rung].fidelity
+        profile = profile.with_effect(
+            DegradationEffect(
+                priority=node.priority,
+                path=format_path(path),
+                semantic_steps=rung,
+                reformatted_nodes=int(fidelity is Fidelity.REFORMATTED),
+                lossy_nodes=int(fidelity is Fidelity.LOSSY),
             )
+        )
 
     walk_ladders(nodes, positions, visit)
     return profile
 
 
 def variant_notes(nodes: Sequence[Node], positions: Positions) -> list[SolveNote]:
-    """One diagnostic per rung each reachable ladder has given up."""
+    """One diagnostic per rung each reachable ladder has given up, priced by fidelity.
+
+    An exact rung is reported as adaptation rather than degradation, so `strict=True` accepts
+    a document that merely took a smaller faithful shape and still rejects one that
+    reformatted or dropped anything.
+    """
     notes: list[SolveNote] = []
 
     def visit(path: VariantPath, node: Variants, rung: int) -> None:
-        notes.extend(
-            _note(
-                SolveNoteCode.VARIANT_STEP,
-                f"{format_path(path)} stepped to variant {step + 2} of {len(node.variants)} "
-                f"(priority {node.priority}) under layout pressure",
+        for step in range(rung):
+            fidelity = node.variants[step + 1].fidelity
+            notes.append(
+                _note(
+                    _FIDELITY_NOTES[fidelity],
+                    f"{format_path(path)} stepped to {_FIDELITY_WORDS[fidelity]}variant "
+                    f"{step + 2} of {len(node.variants)} (priority {node.priority}) under layout pressure",
+                    _FIDELITY_SEVERITY[fidelity],
+                )
             )
-            for step in range(rung)
-        )
 
     walk_ladders(nodes, positions, visit)
     return notes
+
+
+_FIDELITY_NOTES = {
+    Fidelity.EXACT: SolveNoteCode.VARIANT_STEP,
+    Fidelity.REFORMATTED: SolveNoteCode.VARIANT_REFORMATTED,
+    Fidelity.LOSSY: SolveNoteCode.VARIANT_LOSSY,
+}
+_FIDELITY_WORDS = {Fidelity.EXACT: "", Fidelity.REFORMATTED: "reformatted ", Fidelity.LOSSY: "lossy "}
+_FIDELITY_SEVERITY = {
+    Fidelity.EXACT: SolveNoteSeverity.ADAPTATION,
+    Fidelity.REFORMATTED: SolveNoteSeverity.DEGRADATION,
+    Fidelity.LOSSY: SolveNoteSeverity.DEGRADATION,
+}
 
 
 def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
