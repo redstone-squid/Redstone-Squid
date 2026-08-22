@@ -251,6 +251,32 @@ class DeliveryReceipt:
 
     message: discord.Message | None
     handle: EditHandle | None
+    message_id: int | None = None
+    ephemeral: bool | None = None
+
+    def __post_init__(self) -> None:
+        """Fill metadata available on ordinary message-returning delivery paths."""
+        if self.message is None:
+            return
+        if self.message_id is None:
+            object.__setattr__(self, "message_id", self.message.id)
+        if self.ephemeral is None:
+            flags = getattr(self.message, "flags", None)
+            ephemeral = getattr(flags, "ephemeral", None)
+            if isinstance(ephemeral, bool):
+                object.__setattr__(self, "ephemeral", ephemeral)
+
+
+def _callback_receipt(
+    response: discord.InteractionCallbackResponse[Any],
+    handle: EditHandle,
+    *,
+    fallback: discord.Message | None = None,
+) -> DeliveryReceipt:
+    """Keep the message metadata Discord returned with an interaction callback."""
+    resource = response.resource
+    message = resource if isinstance(resource, discord.Message) else fallback
+    return DeliveryReceipt(message, handle, response.message_id, response.is_ephemeral())
 
 
 async def respond_text(interaction: discord.Interaction[Any], content: str, *, ephemeral: bool = True) -> None:
@@ -342,10 +368,11 @@ def respond_to(interaction: discord.Interaction[Any], *, ephemeral: bool = True,
             if message is None:
                 return DeliveryReceipt(None, None)
             return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message))
-        await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
+        response = await interaction.response.send_message(  # pyrefly: ignore[no-matching-overload]
             view=view, files=files, ephemeral=ephemeral, allowed_mentions=no_mentions()
         )
-        message = await interaction.original_response() if wait else None
-        return DeliveryReceipt(message, _OriginalResponseHandle(interaction, message))
+        callback_message = response.resource if isinstance(response.resource, discord.Message) else None
+        message = await interaction.original_response() if wait and callback_message is None else callback_message
+        return _callback_receipt(response, _OriginalResponseHandle(interaction, message), fallback=message)
 
     return send

@@ -376,6 +376,31 @@ class Mount:
         """How this mount can write to its message right now, if it still can."""
         return self._handle
 
+    async def adopt_handle(self, handle: deliver.EditHandle) -> None:
+        """Retain newly established edit authority for this mount's existing message.
+
+        Frontends use this after trading temporary delivery credentials for durable ones.
+        Adoption shares the render lock with every Discord write, rejects already-stale
+        authority, and never replaces permanent authority with a temporary handle.
+
+        The caller is responsible for establishing that ``handle`` addresses this mount's
+        message; :class:`EditHandle` deliberately exposes capability, not coordinates.
+
+        Raises:
+            RuntimeError: The mount has already finished.
+            StaleHandleError: The supplied handle is already expired.
+        """
+        async with self._render_lock:
+            if self._finished:
+                message = f"mount {self.id} has already finished"
+                raise RuntimeError(message)
+            if handle.expired():
+                message = "cannot adopt an expired edit handle"
+                raise deliver.StaleHandleError(message)
+            if self._handle is not None and self._handle.permanent and not handle.permanent:
+                return
+            self._handle = handle
+
     @property
     def pending(self) -> bool:
         """Whether a render is staged that Discord has not seen."""
