@@ -1,5 +1,6 @@
 """Unit tests for the build log consent banner and its routed button."""
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
@@ -110,6 +111,14 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
 
 
 def _make_interaction(accounts: Any) -> Any:
+    message = fake_message(message_id=999)
+    response = SimpleNamespace(_done=False)
+
+    async def send_message(**_kwargs: Any) -> None:
+        response._done = True
+
+    response.is_done = lambda: response._done
+    response.send_message = AsyncMock(side_effect=send_message)
     return SimpleNamespace(
         user=SimpleNamespace(id=USER_ID),
         guild=None,
@@ -123,8 +132,11 @@ def _make_interaction(accounts: Any) -> Any:
             ),
             mounts=MountRegistry(),
         ),
-        response=SimpleNamespace(defer=AsyncMock(), is_done=lambda: True),
-        followup=SimpleNamespace(send=AsyncMock(return_value=fake_message(message_id=999))),
+        response=response,
+        followup=SimpleNamespace(send=AsyncMock(return_value=message)),
+        original_response=AsyncMock(return_value=message),
+        edit_original_response=AsyncMock(return_value=message),
+        expires_at=datetime.now(UTC) + timedelta(minutes=15),
     )
 
 
@@ -135,10 +147,9 @@ async def test_routed_consent_button_shows_already_consented() -> None:
 
     await open_consent_prompt(cast(Any, interaction))
 
-    interaction.response.defer.assert_awaited_once_with(ephemeral=True)
     accounts.get_account_by_identity.assert_awaited_once_with(IdentityProvider.DISCORD, str(USER_ID))
-    interaction.followup.send.assert_awaited_once()
-    kwargs = interaction.followup.send.await_args.kwargs
+    interaction.response.send_message.assert_awaited_once()
+    kwargs = interaction.response.send_message.await_args.kwargs
     assert kwargs.get("ephemeral") is True
 
 
@@ -161,7 +172,8 @@ async def test_routed_consent_button_grants_consent_when_user_agrees(
     call = accounts.get_or_create_identity.await_args
     assert call.args == (IdentityProvider.DISCORD, str(USER_ID))
     assert call.kwargs["consent"].version == CURRENT_CONSENT_VERSION
-    assert interaction.followup.send.await_count == 2
+    interaction.response.send_message.assert_awaited_once()
+    assert interaction.followup.send.await_count == 1
 
 
 async def test_routed_consent_button_cancelling_stores_no_account(
@@ -179,4 +191,5 @@ async def test_routed_consent_button_cancelling_stores_no_account(
     await open_consent_prompt(cast(Any, interaction))
 
     accounts.get_or_create_identity.assert_not_awaited()
-    assert interaction.followup.send.await_count == 1
+    interaction.response.send_message.assert_awaited_once()
+    interaction.followup.send.assert_not_awaited()
