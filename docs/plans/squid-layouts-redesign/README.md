@@ -65,6 +65,7 @@ modules; the layout core stays presentational.
 | 33 | [Reactive async resources](33-resources.md) | `sl.resource(depends=(state_field,))` exposes synchronous `Pending | Ready | Failed` state, render-observed lazy loading, stale-result rejection and optimistic replacement. Visible and atomic delivery are two policies over one state machine; `SourceRankedList` is the first migration. Shipped. |
 | 34 | [Safe session runtime](34-safe-session-runtime.md) | Required async mount access policies, typed session scopes and structured cardinality outcomes, then one durable runtime that owns fenced checkpoints, Discord reconnection, recovery reports, leases, expiry, and teardown. Intentionally breaking: `lock_to`, `MountRegistry`, and public `MountManager` are replaced rather than shimmed. |
 | 35 | [Discord V2 fragments](35-discord-v2-fragments.md) | Measured sessionless Squid islands inside an existing host-owned `LayoutView`: full resource reservations, detached multi-item fragments, atomic preflight/attachment, assets, custom-ID auditing, and routed controls. Arbitrary live-view adoption remains rejected. |
+| 36 | [Classic Discord target](36-classic-discord-target.md) | A real `discord.components-v1` target producing complete content/embed/`View` presentations, with exact classic limits, static and mounted rendering, host-owned fragments, and a classic-to-V2 migration path. Existing live views remain unadopted. |
 
 ## Relation to existing plans
 
