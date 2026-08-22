@@ -128,6 +128,29 @@ shell = sl.RouterShell(
 document = shell.render(tabs, sl.TabsState(selected=tab))
 ```
 
+Mounted actions accept application-wide middleware directly on the mount:
+
+```python
+class TraceActions(sl.ActionMiddleware):
+    async def dispatch(self, request, proceed) -> None:
+        with tracer.span("ui.action", action=request.key, rebased=request.rebased):
+            await proceed()
+
+
+mount = sl.discord.Mount(
+    panel,
+    access=sl.discord.Everyone(),
+    middleware=(TraceActions(),),
+)
+```
+
+The first middleware is outermost. Returning without `proceed()` short-circuits the handler but
+still lets the mount acknowledge and flush; `proceed()` is one-shot and expires when that
+middleware call returns. Middleware runs after mount admission and stale-generation handling.
+Its `ActionRequest.rebased` flag is generation metadata, not a completion result. Handler state
+rolls back before an exception reaches outer middleware, and Discord rendering/delivery remains
+outside the onion.
+
 Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
 `Check` accepts an asynchronous application policy. Visibility stays a destination concern,
 so owner access does not by itself make a channel message private.
