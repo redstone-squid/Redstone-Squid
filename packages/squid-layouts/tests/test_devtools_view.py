@@ -51,6 +51,12 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
 
 
 class TestList:
+    def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
+        nodes = MountInspector().render()
+
+        assert isinstance(nodes[0], sl.Section)
+        assert isinstance(nodes[-1], sl.Actions)
+
     async def test_it_lists_a_live_mount_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()
         _, view = mount_inspector(MountInspector())
