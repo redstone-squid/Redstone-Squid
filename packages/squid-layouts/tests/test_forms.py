@@ -226,6 +226,82 @@ def test_datetime_field_applies_bounds_to_ambiguous_instants() -> None:
         field.parse("2026-11-01 01:30")
 
 
+def test_zoned_datetime_field_returns_instant_and_configured_zone() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+
+    value = field.parse("2026-08-22 10:30")
+
+    assert value == sl.ZonedDateTime(datetime(2026, 8, 22, 14, 30, tzinfo=UTC), "America/New_York")
+
+
+async def test_zoned_datetime_field_rejects_ambiguous_and_nonexistent_input_by_default() -> None:
+    field = sl.ZonedDateTimeField(key="value", label="Value", timezone="America/New_York")
+    spec = sl.FormSpec("Zoned", (field,))
+
+    ambiguous = await spec.evaluate({"value": "2026-11-01 01:30"})
+    nonexistent = await spec.evaluate({"value": "2026-03-08 02:30"})
+
+    assert "occurs twice" in str(ambiguous.errors[0].message)
+    assert "does not exist" in str(nonexistent.errors[0].message)
+
+
+def test_zoned_datetime_field_resolves_local_time_with_policies() -> None:
+    overlap = sl.ZonedDateTimeField(
+        timezone="America/New_York",
+        ambiguous=sl.AmbiguousTimePolicy.LATER,
+    ).parse("2026-11-01 01:30")
+    gap = sl.ZonedDateTimeField(
+        timezone="America/New_York",
+        nonexistent=sl.NonexistentTimePolicy.SHIFT_FORWARD,
+    ).parse("2026-03-08 02:30")
+
+    assert overlap is not None
+    assert overlap.isoformat() == "2026-11-01 01:30:00-05:00[America/New_York]"
+    assert gap is not None
+    assert gap.isoformat() == "2026-03-08 03:30:00-04:00[America/New_York]"
+
+
+def test_zoned_datetime_field_uses_valid_offset_to_select_overlap() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+
+    earlier = field.parse("2026-11-01 01:30-04:00")
+    later = field.parse("2026-11-01 01:30-05:00")
+
+    assert earlier is not None
+    assert earlier.instant == datetime(2026, 11, 1, 5, 30, tzinfo=UTC)
+    assert later is not None
+    assert later.instant == datetime(2026, 11, 1, 6, 30, tzinfo=UTC)
+
+
+def test_zoned_datetime_field_rejects_offset_conflicts() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+
+    with pytest.raises(sl.FormValueError, match="offset does not match"):
+        field.parse("2026-08-22 10:30-05:00")
+    with pytest.raises(sl.FormValueError, match="offset does not match"):
+        field.parse("2026-03-08 02:30-05:00")
+
+
+def test_zoned_datetime_field_prefill_round_trips_exact_overlap() -> None:
+    field = sl.ZonedDateTimeField(timezone="America/New_York")
+    value = sl.ZonedDateTime(datetime(2026, 11, 1, 6, 30, tzinfo=UTC), "America/New_York")
+
+    prefill = field.format_prefill(value)
+
+    assert prefill == "2026-11-01T01:30:00-05:00"
+    assert field.parse(prefill) == value
+
+
+def test_zoned_datetime_field_applies_instant_bounds() -> None:
+    field = sl.ZonedDateTimeField(
+        timezone="America/New_York",
+        minimum=datetime(2026, 11, 1, 6, tzinfo=UTC),
+    )
+
+    with pytest.raises(sl.FormValueError, match="on or after"):
+        field.parse("2026-11-01 01:30-04:00")
+
+
 def test_temporal_field_prefill_uses_isoformat() -> None:
     instant = datetime(2026, 8, 22, 14, 30, tzinfo=UTC)
 
