@@ -337,12 +337,12 @@ handler must finish. There will be no declarative `defer="ephemeral"` option and
 interaction-response API.
 
 Middleware is class-based and instance-attached. A generic `Middleware[BotT]` abstract base
-receives an immutable `RouteRequest[BotT]` and one-shot `RouteNext`. `Router.add_middleware`
+receives an immutable `RouteRequest[BotT]` and one-shot `RouteProceed`. `Router.add_middleware`
 installs global policies; `RouteGroup.add_middleware` installs feature policies. The effective
 chain is one conventional onion: router attachments, then root-to-leaf group attachments, then
 the handler. First attached is outermost, completion unwinds in reverse, and returning without
 calling next short-circuits every inner layer while the acknowledgement guarantee remains
-outside the onion. `call_next` is valid exactly once and only while that middleware invocation
+outside the onion. `proceed` is valid exactly once and only while that middleware invocation
 is active. One error boundary outside the complete user chain lets middleware observe or handle
 inner failures before an unhandled exception reaches `on_error`.
 

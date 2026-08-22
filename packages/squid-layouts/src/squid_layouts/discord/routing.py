@@ -59,8 +59,8 @@ something outside the handler's module has to build ids from it."""
 type GoneHook[BotT: discord.Client] = Callable[[discord.Interaction[BotT]], Awaitable[None]]
 """A friendly response for a control retired from a reserved router namespace."""
 
-type RouteNext = Callable[[], Awaitable[None]]
-"""Continue through the remaining middleware to the routed handler."""
+type RouteProceed = Callable[[], Awaitable[None]]
+"""Proceed through the remaining middleware to the already-resolved handler."""
 
 _INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakref.WeakKeyDictionary()
 """Routers installed per client, so `register` can refuse the second router a click would wake."""
@@ -105,8 +105,8 @@ class Middleware[BotT: discord.Client](ABC):
     """A reusable routed-control policy attached to a router or route group."""
 
     @abstractmethod
-    async def dispatch(self, request: RouteRequest[BotT], call_next: RouteNext) -> None:
-        """Continue once through ``call_next``, or return to short-circuit."""
+    async def dispatch(self, request: RouteRequest[BotT], proceed: RouteProceed) -> None:
+        """Continue once through ``proceed``, or return to short-circuit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -700,7 +700,7 @@ class Router[BotT: discord.Client]:
         self,
         middleware: tuple[Middleware[BotT], ...],
         request: RouteRequest[BotT],
-        endpoint: RouteNext,
+        endpoint: RouteProceed,
     ) -> None:
         """Compose a one-shot middleware chain in first-added, outermost order."""
 
@@ -712,19 +712,19 @@ class Router[BotT: discord.Client]:
             active = True
             called = False
 
-            async def call_next() -> None:
+            async def proceed() -> None:
                 nonlocal called
                 if not active:
-                    message = "route middleware call_next() is only valid during dispatch()"
+                    message = "route middleware proceed() is only valid during dispatch()"
                     raise RuntimeError(message)
                 if called:
-                    message = "route middleware call_next() may only be called once"
+                    message = "route middleware proceed() may only be called once"
                     raise RuntimeError(message)
                 called = True
                 await invoke(index + 1)
 
             try:
-                await middleware[index].dispatch(request, call_next)
+                await middleware[index].dispatch(request, proceed)
             finally:
                 active = False
 
