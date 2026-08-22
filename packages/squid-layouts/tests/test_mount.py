@@ -1,5 +1,6 @@
 """Reactive core tests: state, dispatch funnel, flush, lifecycle."""
 
+import asyncio
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, cast
@@ -1002,6 +1003,33 @@ class TestDeliveryAtomicity:
 
         assert mount._generation > live_generation
         assert not mount._dirty
+
+    async def test_refresh_commit_preserves_invalidation_during_delivery(self):
+        component = Counter()
+        mount = Mount(component, timeout=None)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def edit(*args: Any, **kwargs: Any) -> Any:
+            started.set()
+            await release.wait()
+            return message
+
+        message.edit = AsyncMock(side_effect=edit)
+        component.count = 1
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.refresh_now)
+            await started.wait()
+            component.count = 2
+            release.set()
+
+        assert mount.generation == 2
+        assert mount.pending
+        assert mount.runtime.dirty
 
 
 class _Destination:
