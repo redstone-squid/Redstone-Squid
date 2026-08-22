@@ -14,7 +14,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import Any, Protocol, cast, override
+from typing import Any, Protocol, cast
 
 import anyio
 import discord
@@ -39,8 +39,10 @@ from squid_layouts.discord import live
 from squid_layouts.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.attachments import files_for
+from squid_layouts.discord.classic import compose as classic_compose
+from squid_layouts.discord.classic_renderer import ClassicRenderer
 from squid_layouts.discord.compose import Composition, compose
-from squid_layouts.discord.presentation import DiscordPresentation
+from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
 from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import Asset, Document
@@ -48,7 +50,7 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.guards import GuardLedger
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.limits import LIMITS, DiscordLimits
+from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -184,17 +186,24 @@ def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionM
     return tuple(unique)
 
 
-class MountedView(discord.ui.LayoutView):
-    """One render generation of a mounted component."""
+class _MountedBehaviour:
+    """What a mounted view does, independently of which components it holds.
+
+    A mixin over discord.py's `BaseView`, which both `View` and `LayoutView` derive from, so
+    the two mounted views differ in exactly one thing: their component vocabulary. Timeout,
+    dispatchability, the error hook, and the mount back-reference are the same behaviour in
+    both message modes, and a second copy of them would be a second thing to keep in step.
+    """
+
+    _mount: Mount
 
     def __init__(self, mount: Mount, timeout: float | None) -> None:
-        super().__init__(timeout=timeout)
+        super().__init__(timeout=timeout)  # type: ignore[call-arg]
         self._mount = mount
 
     async def on_timeout(self) -> None:
         await self._mount.handle_timeout()
 
-    @override
     def is_dispatchable(self) -> bool:
         # A mount wants storing even when it draws nothing dispatchable, because
         # `store_view` is gated on this and `add_view` is what starts the timeout task.
@@ -203,6 +212,17 @@ class MountedView(discord.ui.LayoutView):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any]) -> None:
         await self._mount.handle_error(interaction, error, f"item:{type(item).__name__}")
+
+
+class MountedView(_MountedBehaviour, discord.ui.LayoutView):
+    """One render generation of a mounted component, as a Components V2 message."""
+
+
+class ClassicMountedView(_MountedBehaviour, discord.ui.View):
+    """One render generation of a mounted component, as a classic message's controls."""
+
+
+type AnyMountedView = MountedView | ClassicMountedView
 
 
 def _custom_id(mount_id: str, generation: int, key: str) -> str:
@@ -223,7 +243,7 @@ def _custom_id(mount_id: str, generation: int, key: str) -> str:
     return f"{prefix}#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
 
 
-class _WiredButton(discord.ui.Button[MountedView]):
+class _WiredButton(discord.ui.Button[AnyMountedView]):
     def __init__(self, node: SceneButton, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
@@ -240,7 +260,7 @@ class _WiredButton(discord.ui.Button[MountedView]):
         await self._mount.dispatch(self._key, interaction, generation=self._generation)
 
 
-class _WiredSelect(discord.ui.Select[MountedView]):
+class _WiredSelect(discord.ui.Select[AnyMountedView]):
     def __init__(self, node: SceneSelect, mount: Mount, key: str, generation: int) -> None:
         super().__init__(
             placeholder=node.placeholder,
@@ -274,8 +294,8 @@ class _SubmitBinding(ActionBinding):
 class _Candidate:
     """One staged render generation, which becomes the mount's state only when committed."""
 
-    view: MountedView
-    composition: Composition
+    view: AnyMountedView
+    composition: Composition[Any]
     tree: ComponentTree
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
@@ -287,8 +307,13 @@ class _Candidate:
 
     @property
     def presentation(self) -> DiscordPresentation:
-        """The complete message this render delivers to."""
-        return DiscordPresentation.components_v2(self.view, assets=self.assets)
+        """The complete message this render delivers to.
+
+        The composition already built it, in whichever mode the target chose. A mount does
+        not reassemble one, because doing so would be a second place that has to know what
+        each mode is allowed to carry.
+        """
+        return self.composition.presentation
 
 
 @dataclass(frozen=True, slots=True)
@@ -500,6 +525,8 @@ class Mount:
         a live mount's renderer out from under its action bindings.
         """
         self.limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
+        self.mode = DiscordMode.CLASSIC if isinstance(self.limits, ClassicLimits) else DiscordMode.COMPONENTS_V2
+        """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = strict
         self.timeout = timeout
         self.access = access
@@ -704,13 +731,10 @@ class Mount:
                 # A materialized cursor always knows its own extent, so it can always seek.
                 return self.nav(NavigationContext(state, previous, next_, seek))
 
-            composition = compose(
+            composition = self._composer()(
                 rendered,
                 wire=wire,
-                renderer=V2Renderer(
-                    limits=self.limits,
-                    view_factory=lambda: MountedView(self, self._remaining_timeout()),
-                ),
+                renderer=self._renderer(self._remaining_timeout()),
                 target=self.target,
                 chrome=self._chrome,
                 localization=self.localization,
@@ -721,10 +745,11 @@ class Mount:
                 cache=self.runtime.plan_cache,
                 profile=profile,
             )
-            if not isinstance(composition.view, MountedView):
+            view = composition.presentation.view
+            if not isinstance(view, MountedView | ClassicMountedView):
                 message = "mounted Discord renderer returned the wrong view type"
                 raise TypeError(message)
-            return composition.view, composition
+            return view, composition
 
         view, composition = draw()
         assets = composition.assets
@@ -740,6 +765,26 @@ class Mount:
             self.runtime.revision,
             assets,
             composition.plan.session_updates,
+        )
+
+    def _composer(self) -> Callable[..., Composition[Any]]:
+        """Which composition this mount's target uses. One of exactly four target-owned choices.
+
+        The target decides the dialect, the renderer, the view factory, and the message mode
+        — and nothing else. Every other branch in this file would be a shared operation that
+        has not been extracted yet.
+        """
+        return classic_compose if self.mode is DiscordMode.CLASSIC else compose
+
+    def _renderer(self, timeout: float | None) -> V2Renderer | ClassicRenderer:
+        if self.mode is DiscordMode.CLASSIC:
+            return ClassicRenderer(
+                limits=cast(ClassicLimits, self.limits),
+                view_factory=lambda: ClassicMountedView(self, timeout),
+            )
+        return V2Renderer(
+            limits=cast(V2Limits, self.limits),
+            view_factory=lambda: MountedView(self, timeout),
         )
 
     def _chrome_text(self, text: TextLike) -> str:
@@ -784,11 +829,10 @@ class Mount:
             # and a second one would race it. For the same reason the paint is never
             # `stop()`ed -- it shares the committed generation's custom ids, so unregistering
             # it would take the live controls' dispatch entries with it.
-            renderer = V2Renderer(limits=self.limits, view_factory=lambda: MountedView(self, None))
-            view = renderer.view(plan.scene, plan=plan, wire=wire)
-            if busy:
-                _disable_all(view)
-            return await self._write(DiscordPresentation.components_v2(view), keep_attachments=True, through=through)
+            presentation = self._renderer(None).draw(plan.scene, plan=plan, wire=wire)
+            if busy and presentation.view is not None:
+                _disable_all(presentation.view)
+            return await self._write(presentation, keep_attachments=True, through=through)
 
     def _commit(self, candidate: _Candidate) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
@@ -1080,7 +1124,7 @@ class Mount:
             finally:
                 self._render_lock.release()
 
-    def _swap_view(self, view: MountedView) -> None:
+    def _swap_view(self, view: AnyMountedView) -> None:
         if self._view is not None and self._view is not view:
             self._view.stop()
         self._view = view
@@ -1952,8 +1996,9 @@ class Mount:
         logger.error("unhandled component error in %s", source, exc_info=error)
 
 
-def _disable_all(view: discord.ui.LayoutView) -> None:
-    for item in view.walk_children():
+def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
+    children = view.walk_children() if isinstance(view, discord.ui.LayoutView) else view.children
+    for item in children:
         target = item.item if isinstance(item, discord.ui.DynamicItem) else item
         if isinstance(target, discord.ui.Button | discord.ui.Select) or hasattr(target, "disabled"):
             target.disabled = True  # pyrefly: ignore  # guarded by hasattr

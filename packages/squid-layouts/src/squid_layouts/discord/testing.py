@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 import discord
 
 from squid_layouts.discord.delivery import DeliveryReceipt, Destination, EditHandle, handle_for
-from squid_layouts.discord.mount import Mount, MountedView
+from squid_layouts.discord.mount import AnyMountedView, ClassicMountedView, Mount, MountedView
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.planning.limits import LIMITS, V2Limits
 
@@ -208,6 +208,23 @@ def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
     `on_load` -- a test that wants a loaded render wants the real seam,
     `await mount.send(delivered_to(fake_message()))`.
     """
+    view = _commit(mount, disabled=disabled)
+    assert isinstance(view, MountedView), "this mount draws a classic message; use commit_classic_render"
+    return view
+
+
+def commit_classic_render(mount: Mount, *, disabled: bool = False) -> ClassicMountedView:
+    """`commit_render` for a mount whose target draws a classic message.
+
+    A separate function rather than a widened return type: a test knows which kind of mount
+    it built, and every V2 caller would otherwise have to narrow a union it can never see.
+    """
+    view = _commit(mount, disabled=disabled)
+    assert isinstance(view, ClassicMountedView), "this mount draws a Components V2 message; use commit_render"
+    return view
+
+
+def _commit(mount: Mount, *, disabled: bool) -> AnyMountedView:
     view = mount._stage_view(disabled=disabled)
     candidate = mount._pending
     assert candidate is not None and candidate.view is view
