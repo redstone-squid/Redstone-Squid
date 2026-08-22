@@ -81,7 +81,7 @@ class SourceRankedList[EntryT](Component):
         self.load_failed = load_failed
         self.retry = retry
 
-    @resource(depends=(_request,))
+    @resource
     async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
         state = self.loaded.state
         previous = state.previous.value if isinstance(state, Pending | Failed) and state.previous is not None else None

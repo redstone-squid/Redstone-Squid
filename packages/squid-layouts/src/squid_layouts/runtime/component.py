@@ -39,7 +39,7 @@ from squid_layouts.primitives.nodes import (
 )
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write
-from squid_layouts.runtime.resources import Resource, _ResourceDescriptor, observe_resources, unique_resources
+from squid_layouts.runtime.resources import Resource, observe_resources, unique_resources
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -197,8 +197,7 @@ class Component:
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
-    _resource_dependencies: ClassVar[dict[object, tuple[_ResourceDescriptor[Any, Any], ...]]] = {}
-    _computed_descriptors: ClassVar[tuple[_Computed, ...]] = ()
+    _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -210,69 +209,12 @@ class Component:
         }
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
-        declared_computed = {
+        cls._computed_descriptors = {
             name: descriptor
             for klass in reversed(cls.__mro__)
             for name, descriptor in vars(klass).items()
             if isinstance(descriptor, _Computed)
         }
-        declared_resources = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _ResourceDescriptor)
-        }
-        valid_dependencies = (*declared.values(), *declared_computed.values())
-        resource_dependency_map: dict[object, list[_ResourceDescriptor[Any, Any]]] = {}
-        for member_name, descriptor in declared_resources.items():
-            for dependency in descriptor.depends:
-                dependency_descriptor = next(
-                    (candidate for candidate in valid_dependencies if candidate is dependency), None
-                )
-                if dependency_descriptor is None:
-                    message = (
-                        f"{cls.__name__}.{member_name} dependency must be an sl.state() or @sl.computed field "
-                        "on the same component"
-                    )
-                    raise TypeError(message)
-                dependents = resource_dependency_map.setdefault(dependency_descriptor, [])
-                if descriptor not in dependents:
-                    dependents.append(descriptor)
-        cls._resource_dependencies = {name: tuple(value) for name, value in resource_dependency_map.items()}
-        computed_dependency_map: dict[object, list[_Computed]] = {}
-        computed_indegrees = dict.fromkeys(declared_computed.values(), 0)
-        for member_name, descriptor in declared_computed.items():
-            for dependency in descriptor.depends:
-                dependency_descriptor = next(
-                    (candidate for candidate in valid_dependencies if candidate is dependency), None
-                )
-                if dependency_descriptor is None:
-                    message = (
-                        f"{cls.__name__}.{member_name} dependency must be an sl.state() or @sl.computed field "
-                        "on the same component"
-                    )
-                    raise TypeError(message)
-                dependents = computed_dependency_map.setdefault(dependency_descriptor, [])
-                if descriptor not in dependents:
-                    dependents.append(descriptor)
-                    if isinstance(dependency_descriptor, _Computed):
-                        computed_indegrees[descriptor] += 1
-        ready = [descriptor for descriptor, degree in computed_indegrees.items() if degree == 0]
-        ordered_computed: list[_Computed] = []
-        while ready:
-            descriptor = ready.pop(0)
-            ordered_computed.append(descriptor)
-            for dependent in computed_dependency_map.get(descriptor, ()):
-                computed_indegrees[dependent] -= 1
-                if computed_indegrees[dependent] == 0:
-                    ready.append(dependent)
-        if len(ordered_computed) != len(declared_computed):
-            cyclic = sorted(
-                name for name, descriptor in declared_computed.items() if computed_indegrees[descriptor] > 0
-            )
-            message = f"{cls.__name__} has a computed dependency cycle: {', '.join(cyclic)}"
-            raise TypeError(message)
-        cls._computed_descriptors = tuple(ordered_computed)
         required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
         if required and not _is_abstract(cls):
             # Wrap even an inherited __init__, so adding a required field to a subclass that
@@ -294,24 +236,16 @@ class Component:
         object.__setattr__(self, name, value)
 
     def _state_changed(self, names: frozenset[str]) -> None:
-        owner = type(self)
-        changed: set[object] = {
-            descriptor for descriptor in owner._state_descriptors.values() if descriptor._name in names
-        }
-        for descriptor in owner._computed_descriptors:
-            if any(dependency in changed for dependency in descriptor.depends) and descriptor.refresh_for(self):
-                changed.add(descriptor)
-        invalidated_resources: set[_ResourceDescriptor[Any, Any]] = set()
-        for dependency in changed:
-            for descriptor in owner._resource_dependencies.get(dependency, ()):
-                if descriptor not in invalidated_resources:
-                    descriptor.invalidate_for(self)
-                    invalidated_resources.add(descriptor)
+        """React to committed writes to these state slots.
+
+        Nothing is refreshed here. A computed and a resource each record what they read and
+        re-check it when something asks for the value, so a commit only has to say the tree
+        needs drawing again. `names` is for a subclass that wants to know which fields moved.
+        """
+        del names
         self.invalidate()
 
     def _state_rolled_back(self) -> None:
-        for descriptor in type(self)._computed_descriptors:
-            descriptor.invalidate_for(self)
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
     def render(self) -> RenderResult:

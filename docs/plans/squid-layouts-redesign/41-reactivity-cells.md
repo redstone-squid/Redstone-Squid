@@ -177,6 +177,26 @@ commit. `refresh_for` (`:777`) currently swallows the exception and reports "cha
 which means a broken computed silently marks everything downstream dirty forever. Failing
 where the value is used is the honest place.
 
+#### 3a. Resources track the same way, with one presumption
+
+`resource(depends=)` goes the same way `computed(depends=)` does: the loader runs with
+tracking on, and reading `resource.state` re-pends it when a version it read has moved.
+Pulled rather than pushed, for the same reason — the write that moved the input already
+invalidated the owner, so the only thing left is for the next reader to notice.
+
+Two things the loader case needs that the computed case does not:
+
+- **A never-run loader presumes it reads everything the component declares.** `replace()`
+  installs an authoritative value without running the loader, so there is no tracked set to
+  compare against and a later write would go unnoticed. A resource therefore starts with
+  every declared cell of its owner in its source set, and the first real run replaces the
+  presumption with the truth. Over-subscribe, never under-subscribe.
+- **A conditional read has to be hoisted where the branch is not the point.**
+  `Lookup.results` consulted `self._request` only in its paging branch, so its first run
+  never recorded it and paging then found nothing stale. The fix is one line and it is the
+  honest one: the request selects the operation on every run, so it is read on every run.
+  This is the cost of exactness, and it is paid once per loader, at migration.
+
 ### 4. Writes stage, and the transaction gets smaller
 
 A cell write inside an action stages into the transaction's overlay; outside one it
@@ -265,6 +285,10 @@ Small, because the counts in *Problem* say it is.
 
 - **4 `depends=` sites** lose the argument: `patterns/source_ranked.py:84`,
   `patterns/browser.py:85`, `patterns/lookup.py:90`, `squid/bot/layout_showcase.py:144`.
+  `lookup.py` also hoists its `self._request` read out of a branch; see §3a.
+- **The two class-creation dependency checks go with it.** A computed may now read another
+  component's state, so "dependencies must be fields on the same component" has nothing to
+  enforce, and a cycle is reported where it runs rather than where it is declared.
 - **In-place mutations become replacement.** `tests/test_mount.py` (148, 1304, 1894),
   `tests/test_durability.py:167`, and -- missed by the original count, which read only the
   package -- `squid/bot/settings_view.py:398`, which becomes a `FrozenMapping` replacement.

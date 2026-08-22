@@ -1904,7 +1904,7 @@ class TestStateDescriptor:
             def __init__(self) -> None:
                 self.calls = 0
 
-            @computed(depends=(count,))
+            @computed
             def doubled(self) -> int:
                 self.calls += 1
                 return self.count * 2
@@ -1925,22 +1925,33 @@ class TestStateDescriptor:
         assert component.doubled == 6
         assert component.calls == 2
 
-    def test_computed_dependencies_must_be_reactive_fields_on_the_same_component(self):
-        foreign = state(1)
+    def test_a_computed_may_read_another_component_s_state(self):
+        """Tracking has no same-component rule to enforce: a read is a read."""
 
-        with pytest.raises(
-            TypeError, match=r"Derived.doubled dependency must be an sl.state\(\) or @sl.computed field"
-        ):
+        class Source(Component):
+            count: int = state(1)
 
-            class Derived(Component):
-                count: int = state(1)
+            def render(self):
+                return Text(str(self.count))
 
-                @computed(depends=(foreign,))
-                def doubled(self) -> int:
-                    return self.count * 2
+        class Reader(Component):
+            def __init__(self, source: Source) -> None:
+                self.source = source
 
-                def render(self):
-                    return Text(str(self.doubled))
+            @computed
+            def doubled(self) -> int:
+                return self.source.count * 2
+
+            def render(self):
+                return Text(str(self.doubled))
+
+        source = Source()
+        reader = Reader(source)
+        assert reader.doubled == 2
+
+        source.count = 5
+
+        assert reader.doubled == 10
 
     def test_computed_values_propagate_only_when_their_value_changes(self):
         class Derived(Component):
@@ -1949,11 +1960,11 @@ class TestStateDescriptor:
             def __init__(self) -> None:
                 self.calls = 0
 
-            @computed(depends=(query,))
+            @computed
             def normalized(self) -> str:
                 return self.query.casefold()
 
-            @computed(depends=(normalized,))
+            @computed
             def label(self) -> str:
                 self.calls += 1
                 return f"query:{self.normalized}"
@@ -1973,19 +1984,23 @@ class TestStateDescriptor:
         assert component.label == "query:second"
         assert component.calls == 2
 
-    def test_computed_dependency_cycles_are_rejected(self):
-        first_descriptor = computed(depends=())(lambda _self: 1)
-        second_descriptor = computed(depends=(first_descriptor,))(lambda _self: 2)
-        first_descriptor.depends = (second_descriptor,)
+    def test_a_computed_that_reads_itself_says_so(self):
+        """A tracked cycle is only visible when it runs, so that is where it is reported."""
 
-        with pytest.raises(TypeError, match="Cyclic has a computed dependency cycle: first, second"):
+        class Cyclic(Component):
+            @computed
+            def first(self) -> int:
+                return self.second
 
-            class Cyclic(Component):
-                first = first_descriptor
-                second = second_descriptor
+            @computed
+            def second(self) -> int:
+                return self.first
 
-                def render(self):
-                    return Text("")
+            def render(self):
+                return Text("")
+
+        with pytest.raises(RuntimeError, match=r"Cyclic\.first reads itself"):
+            _ = Cyclic().first
 
     def test_batch_coalesces_invalidations(self):
         class Pair(Component):
@@ -2374,7 +2389,7 @@ class VisibleResourcePanel(Component):
     def __init__(self, load: Callable[[str], Awaitable[str]]) -> None:
         self._load = load
 
-    @resource(depends=(key,))
+    @resource
     async def value(self) -> str:
         return await self._load(self.key)
 
