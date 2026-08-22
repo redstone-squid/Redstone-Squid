@@ -14,6 +14,7 @@ from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
 from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
 
@@ -74,6 +75,14 @@ class Time:
 
     instant: datetime
     style: str
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ZonedTime:
+    """An exact instant visibly retained with its named timezone."""
+
+    value: ZonedDateTime
     prefix: str | None = None
 
 
@@ -343,6 +352,7 @@ type Node = (
     | Code
     | Lines
     | Time
+    | ZonedTime
     | File
     | Sep
     | Row

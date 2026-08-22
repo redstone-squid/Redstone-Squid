@@ -25,6 +25,13 @@ class SceneTime:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneZonedTime:
+    instant: str
+    timezone: str
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SceneFile:
     asset_key: str
     name: str
@@ -144,6 +151,7 @@ class SceneExtension:
 type SceneNode = (
     SceneText
     | SceneTime
+    | SceneZonedTime
     | SceneFile
     | SceneSeparator
     | SceneRow

@@ -38,6 +38,7 @@ from squid_layouts.primitives.nodes import (
     Text,
     Thumbnail,
     Time,
+    ZonedTime,
 )
 from squid_layouts.primitives.nodes import (
     Code as PrimitiveCode,
@@ -118,6 +119,7 @@ from squid_layouts.semantic import (
     Tone,
     Truncated,
     Unbreakable,
+    ZonedTimestamp,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import Localization, TextLike, resolve_text
@@ -458,6 +460,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Timestamp(instant=instant, style=style, label=label):
             prefix = f"**{_resolve(label, context)}:** " if label is not None else None
             return [Time(instant, style.value, prefix)]
+        case ZonedTimestamp(value=value, label=label):
+            prefix = f"**{_resolve(label, context)}:** " if label is not None else None
+            return [ZonedTime(value, prefix)]
         case FormTrigger():
             return _form(node, context)
         case Choices():
