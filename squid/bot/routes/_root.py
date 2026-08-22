@@ -18,7 +18,7 @@ routes: sl.discord.RouteGroup[RedstoneSquid] = sl.discord.RouteGroup("r")
 class TraceRoutes[BotT: discord.Client](sl.discord.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
-    async def dispatch(self, request: sl.discord.RouteRequest[BotT], call_next: sl.discord.RouteNext) -> None:
+    async def dispatch(self, request: sl.discord.RouteRequest[BotT], proceed: sl.discord.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": "discord_route",
             "squid.route.component": request.component.value,
@@ -29,7 +29,7 @@ class TraceRoutes[BotT: discord.Client](sl.discord.Middleware[BotT]):
         if request.group_prefix is not None:
             attributes["squid.route.group"] = request.group_prefix
         with trace_span("discord.route", attributes), correlation_scope():
-            await call_next()
+            await proceed()
 
 
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:

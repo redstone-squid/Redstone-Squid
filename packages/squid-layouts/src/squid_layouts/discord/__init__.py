@@ -42,7 +42,7 @@ from squid_layouts.discord.routing import (
     RouteGroup,
     RouteHandler,
     RouteLike,
-    RouteNext,
+    RouteProceed,
     Router,
     RouteRequest,
 )
@@ -93,7 +93,7 @@ __all__ = [
     "RouteGroup",
     "RouteHandler",
     "RouteLike",
-    "RouteNext",
+    "RouteProceed",
     "RouteRequest",
     "RoutedItem",
     "Router",
