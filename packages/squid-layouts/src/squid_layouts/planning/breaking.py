@@ -92,7 +92,7 @@ def balanced_breaks(
             previous = ranks[start]
             if previous is None:
                 continue
-            chars, _components = costs(start, end)
+            chars = char_prefix[end] - char_prefix[start] - items[start].leading_chars
             candidate = (previous[0] + int(chars < min_fill), previous[1] + 1)
             if best is None or candidate < best:
                 best = candidate
@@ -114,49 +114,52 @@ def balanced_breaks(
     total = ideal_total if ideal_total is not None else sum(item.chars for item in items)
     ideal = total / page_count
     base = count + 1
-    layers: list[dict[int, _State]] = [{0: _State(0, 0.0, 0, -1)}]
+    initial: list[_State | None] = [None] * (count + 1)
+    initial[0] = _State(0, 0.0, 0, -1)
+    layers: list[list[_State | None]] = [initial]
     for used in range(1, page_count + 1):
         final_page = used == page_count
-        layer: dict[int, _State] = {}
+        previous_layer = layers[used - 1]
+        layer: list[_State | None] = [None] * (count + 1)
         minimum_end = used
         maximum_end = count if final_page else count - (page_count - used)
         for end in range(minimum_end, maximum_end + 1):
             if not final_page and not items[end - 1].break_after:
                 continue
-            best: _State | None = None
+            best_violations = count + 1
+            best_badness = inf
+            best_tie = -1
+            best_start = -1
             for start in predecessors[end]:
-                previous = layers[used - 1].get(start)
+                previous = previous_layer[start]
                 if previous is None:
                     continue
-                chars, _components = costs(start, end)
+                chars = char_prefix[end] - char_prefix[start] - items[start].leading_chars
                 violation = int(end - start < widows) if final_page else int(chars < min_fill)
                 violations = previous.violations + violation
                 if violations > target_violations:
                     continue
-                candidate = _State(
-                    violations,
-                    previous.badness + (chars - ideal) ** 2,
-                    previous.tie * base + end,
-                    start,
-                )
-                if best is None or (candidate.violations, candidate.badness, -candidate.tie) < (
-                    best.violations,
-                    best.badness,
-                    -best.tie,
-                ):
-                    best = candidate
-            if best is not None:
-                layer[end] = best
+                badness = previous.badness + (chars - ideal) ** 2
+                tie = previous.tie * base + end
+                if (violations, badness, -tie) < (best_violations, best_badness, -best_tie):
+                    best_violations = violations
+                    best_badness = badness
+                    best_tie = tie
+                    best_start = start
+            if best_start >= 0:
+                layer[end] = _State(best_violations, best_badness, best_tie, best_start)
         layers.append(layer)
 
-    final = layers[page_count].get(count)
+    final = layers[page_count][count]
     if final is None or final.violations != target_violations or final.badness == inf:
         message = "sequence has no feasible balanced break set"
         raise ValueError(message)
     cuts = [count]
     end = count
     for used in range(page_count, 1, -1):
-        end = layers[used][end].previous
+        state = layers[used][end]
+        assert state is not None
+        end = state.previous
         cuts.append(end)
     cuts.reverse()
     return tuple(cuts)
