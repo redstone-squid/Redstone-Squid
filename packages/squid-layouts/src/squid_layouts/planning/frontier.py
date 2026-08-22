@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
-from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.limits import COMPONENTS, V2Limits
 from squid_layouts.planning.measure import (
     SolveNote,
     SolveNoteCode,
@@ -20,6 +20,7 @@ from squid_layouts.planning.measure import (
     _note,
     _prune,
 )
+from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives.nodes import Break, Budget, Fidelity, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]
@@ -181,18 +182,27 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
     return multiply([count_node(node) for node in nodes])
 
 
-def static_components(nodes: Sequence[Node], limits: V2Limits) -> int:
-    """Component cost of a rung's own subtree, with every nested ladder at rung 0."""
+def static_cost(nodes: Sequence[Node], limits: V2Limits) -> ResourceCost:
+    """A rung's own resource cost, with every nested ladder left at rung 0."""
     builder = _Builder(limits=limits)
-    return _component_count(_prune(builder.realize_children(resolve_variants(nodes, {}))))
+    children = _prune(builder.realize_children(resolve_variants(nodes, {})))
+    text = dict(builder.raw_text_cost)
+    for unit in builder.units:
+        text[unit.axis] = text.get(unit.axis, 0) + unit.need
+    return ResourceCost({**text, COMPONENTS: _component_count(children)})
 
 
 def guided_step(nodes: Sequence[Node], positions: Positions, limits: V2Limits) -> dict[VariantPath, int] | None:
     """Pick the one step a budget-starved product should take next.
 
     Breadth and priority still decide *which* ladders are eligible; among equals the step
-    that frees the most components wins, and document order breaks the remaining tie. This
-    keeps an intractable product linear in the budget instead of abandoning it.
+    that frees the most, summed over every axis it frees anything on, wins, and document
+    order breaks the remaining tie. This keeps an intractable product linear in the budget
+    instead of abandoning it.
+
+    Summing across axes is a heuristic and is only used here, where the search has already
+    given up its guarantee. Everywhere a decision is actually *made*, axes are compared one
+    at a time and never traded against each other.
     """
     remaining = steppable(nodes, positions)
     if not remaining:
@@ -208,9 +218,9 @@ def guided_step(nodes: Sequence[Node], positions: Positions, limits: V2Limits) -
         order: int, path: VariantPath, ladder: Variants, current: int
     ) -> tuple[int, int, dict[VariantPath, int]]:
         neighbor = canonical_positions(nodes, {**positions, path: current + 1})
-        saved = static_components(ladder.variants[current + 1].nodes, limits) - static_components(
-            ladder.variants[current].nodes, limits
-        )
+        before = static_cost(ladder.variants[current].nodes, limits)
+        after = static_cost(ladder.variants[current + 1].nodes, limits)
+        saved = sum(after.get(axis) - before.get(axis) for axis in {*before.axes, *after.axes})
         return saved, order, neighbor
 
     _saved, _order, selected = min(

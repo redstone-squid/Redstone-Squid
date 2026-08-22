@@ -6,9 +6,25 @@ Body"). Values follow the Discord API docs for Components V2 and modals; the one
 2.7 validates locally are cross-checked by tests.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
+
+DISPLAY_TEXT = "display_text"
+"""Components V2 TextDisplay content, budgeted across the whole message."""
+
+CONTENT_TEXT = "content_text"
+"""A classic message's `content` field."""
+
+EMBED_TEXT = "embed_text"
+"""Every embed's titles, descriptions, field names and values, footers, and authors."""
+
+TEXT_AXES = frozenset({DISPLAY_TEXT, CONTENT_TEXT, EMBED_TEXT})
+"""Every axis that holds message text, whichever target is in play."""
+
+COMPONENTS = "components"
+ATTACHMENTS = "attachments"
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +66,26 @@ class V2Limits:
     """Cap on a TextInput's value, default, and max_length."""
 
     custom_id: int = 100
+
+    @property
+    def budgets(self) -> Mapping[str, str]:
+        """Every message-wide axis this target budgets, to the attribute holding its cap.
+
+        The limits own this rather than the target profile, because the caps and the names
+        for them have to agree and there is no way to keep two declarations in step.
+        """
+        return {DISPLAY_TEXT: "total_text", COMPONENTS: "total_components", ATTACHMENTS: "attachments"}
+
+    @property
+    def text_axes(self) -> Mapping[str, int]:
+        """Every independent text pool this target budgets, by axis name.
+
+        Independent is the operative word. Two pools do not lend to each other, so the
+        allocator runs once per pool over the units tagged to it rather than once over a
+        single total. Components V2 has exactly one pool, which is why this looks like
+        ceremony here and stops looking like it the moment a target has two.
+        """
+        return {DISPLAY_TEXT: self.total_text}
 
 
 LIMITS = V2Limits()

@@ -38,6 +38,7 @@ from squid_layouts.discord.testing import assert_within_limits, commit_render, f
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import SolveNoteCode, measure
 from squid_layouts.planning.adaptation import lower_semantics
+from squid_layouts.planning.limits import COMPONENTS
 from squid_layouts.planning.measure import RText, _component_count, split_pages
 from squid_layouts.primitives import (
     Button,
@@ -457,7 +458,7 @@ class TestRepage:
 
     def test_repage_moves_the_page_without_moving_the_fit(self):
         solved = measure(self._paginated(), nav=self._nav)
-        before = solved.components
+        before = solved.cost.get(COMPONENTS)
         pager = solved.pager
         assert pager is not None and solved.pages > 2
         solved.reposition({"lines": Position(offset=2)})
