@@ -24,7 +24,7 @@ from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
 from squid_layouts.planning.cursors import CursorCoordinator
-from squid_layouts.planning.limits import V2Limits
+from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.measure import MeasuredLayout, Realized
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.target import TargetProfile
@@ -120,11 +120,11 @@ class SceneBindings:
 class TargetDialect(Protocol):
     """One target's shape, isolated from everything the targets share."""
 
-    def normalize(self, nodes: Sequence[Node], target: TargetProfile, limits: V2Limits) -> tuple[Node, ...]:
+    def normalize(self, nodes: Sequence[Node], target: TargetProfile, limits: DiscordLimits) -> tuple[Node, ...]:
         """Rewrite semantically lowered nodes into this target's own primitive shape."""
         ...
 
-    def validate(self, nodes: Sequence[Node], limits: V2Limits) -> None:
+    def validate(self, nodes: Sequence[Node], limits: DiscordLimits) -> None:
         """Reject structure this target cannot draw. Raises `LayoutInvariantError`."""
         ...
 
@@ -134,7 +134,7 @@ class TargetDialect(Protocol):
         *,
         key: str,
         capacities: Mapping[str, int],
-        limits: V2Limits,
+        limits: DiscordLimits,
         chrome: Chrome,
         nav: PlannedNav,
         broker: CursorCoordinator,

@@ -3,8 +3,8 @@
 import pytest
 
 from squid_layouts import LayoutInvariantError, UnsolvableLayoutError, plan
-from squid_layouts.discord import DEFAULT_LIMITS as LIMITS
-from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.discord import V2_LIMITS as LIMITS
+from squid_layouts.discord import V2_TARGET
 from squid_layouts.planning import TargetProfile, measure
 from squid_layouts.planning.limits import ATTACHMENTS, COMPONENTS, DISPLAY_TEXT
 from squid_layouts.planning.measure import RText, _BudgetRegion, _make_unit, measure_nodes, text_total
@@ -57,24 +57,24 @@ class TestResourceCost:
 
 class TestTargetCapacities:
     def test_a_target_reads_its_budgets_from_its_limits(self) -> None:
-        assert DEFAULT_TARGET.capacities == {
+        assert V2_TARGET.capacities == {
             DISPLAY_TEXT: LIMITS.total_text,
             COMPONENTS: LIMITS.total_components,
             ATTACHMENTS: LIMITS.attachments,
         }
 
     def test_a_reservation_shows_up_as_a_smaller_capacity(self) -> None:
-        reserved = DEFAULT_TARGET.reserve(ResourceCost({COMPONENTS: 5}))
+        reserved = V2_TARGET.reserve(ResourceCost({COMPONENTS: 5}))
 
         assert reserved.capacity(COMPONENTS) == LIMITS.total_components - 5
         assert reserved.capacity(DISPLAY_TEXT) == LIMITS.total_text
 
     def test_an_axis_the_target_does_not_budget_has_no_capacity(self) -> None:
-        assert DEFAULT_TARGET.capacity("embed_text") is None
+        assert V2_TARGET.capacity("embed_text") is None
 
     def test_reserving_an_unknown_axis_names_the_ones_that_exist(self) -> None:
         with pytest.raises(LayoutInvariantError, match="no reservable resource 'embed_text'"):
-            DEFAULT_TARGET.reserve(ResourceCost({"embed_text": 1}))
+            V2_TARGET.reserve(ResourceCost({"embed_text": 1}))
 
 
 class TestMeasuredCost:
@@ -94,7 +94,7 @@ class TestMeasuredCost:
         oversized = [Text(f"line {index}") for index in range(LIMITS.total_components + 1)]
 
         with pytest.raises(UnsolvableLayoutError, match=rf"41 {COMPONENTS} exceed target maximum 40"):
-            plan(oversized, target=DEFAULT_TARGET)
+            plan(oversized, target=V2_TARGET)
 
 
 class TestBudgetRegions:

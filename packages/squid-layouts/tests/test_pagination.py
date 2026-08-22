@@ -20,7 +20,7 @@ from squid_layouts import (
     truncate,
 )
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
     Everyone,

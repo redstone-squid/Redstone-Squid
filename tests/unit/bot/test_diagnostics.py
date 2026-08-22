@@ -16,7 +16,7 @@ from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
 from squid.bot.ui import create_mount
 from squid.diagnostics.domain import ErrorReport
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
     Mount,
