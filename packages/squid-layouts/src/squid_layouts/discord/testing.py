@@ -127,9 +127,14 @@ def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = 
     def _responds(kind: discord.InteractionResponseType) -> AsyncMock:
         """A response surface that consumes the response the way discord.py's does."""
 
-        async def record(*args: Any, **kwargs: Any) -> None:
+        async def record(*args: Any, **kwargs: Any) -> Any:
             response._done = True
             response.type = kind
+            return SimpleNamespace(
+                resource=None,
+                message_id=message_id if kind is discord.InteractionResponseType.channel_message else None,
+                is_ephemeral=lambda: bool(kwargs.get("ephemeral", False)),
+            )
 
         return AsyncMock(side_effect=record)
 
