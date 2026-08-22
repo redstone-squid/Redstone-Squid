@@ -98,9 +98,19 @@ class TestMeasure:
         view.add_item(discord.ui.TextDisplay("more"))
         assert measure(view).fingerprint != before
 
-    def test_classic_views_are_plan_36(self):
-        with pytest.raises(TypeError, match="plan 36"):
-            measure(discord.ui.View())  # pyrefly: ignore[bad-argument-type]
+    def test_a_bare_classic_view_measures_its_controls_and_nothing_else(self):
+        """It says nothing about the content or embeds the same message may also carry."""
+        view = discord.ui.View(timeout=None)
+        view.add_item(discord.ui.Button(label="a", custom_id="a"))
+
+        reservation = measure(view)
+
+        assert reservation.reserved.values == {"controls": 1, "rows": 1}
+        assert reservation.components_v2 is False
+
+    def test_something_that_is_neither_is_refused_by_name(self):
+        with pytest.raises(TypeError, match="not str"):
+            measure("a message")  # pyrefly: ignore[bad-argument-type]
 
     def test_invalid_host_raises_on_request(self):
         view = _view(discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)))

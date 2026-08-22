@@ -10,15 +10,34 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+from urllib.parse import urlsplit
 
 import discord
 from discord.ui.select import BaseSelect
 
+from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
 from squid_layouts.errors import ExistingLayoutError, LimitViolationError
-from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.limits import (
+    ATTACHMENTS,
+    CLASSIC_LIMITS,
+    COMPONENTS,
+    CONTENT_TEXT,
+    CONTROLS,
+    DISPLAY_TEXT,
+    EMBED_TEXT,
+    EMBEDS,
+    LIMITS,
+    ROWS,
+    ClassicLimits,
+    DiscordLimits,
+    V2Limits,
+)
 from squid_layouts.planning.target import ResourceCost
 
 type Path = tuple[int, ...]
+
+ALLOWED_SCHEMES = frozenset({"http", "https", "attachment"})
+"""What Discord accepts in an embed URL. Anything else is rejected before it is sent."""
 
 
 class ViolationCode(StrEnum):
@@ -39,6 +58,7 @@ class ViolationCode(StrEnum):
     GALLERY_ITEM_DESCRIPTION = "gallery_item_description"
     SECTION_TEXTS = "section_texts"
     ROW_BUTTONS = "row_buttons"
+    CLASSIC_PAYLOAD = "classic_payload"
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,21 +102,39 @@ class AuditReport:
 
 @dataclass(frozen=True, slots=True)
 class DiscordReservation:
-    """What a host-owned view already spends, as an immutable planning input."""
+    """What a host-owned message already spends, as an immutable planning input."""
 
-    cost: ResourceCost
+    usage: ResourceCost
+    """What the host actually spends right now."""
+    reserved: ResourceCost
+    """What must be withheld from planning, which is not always the same thing.
+
+    They differ wherever a field is all-or-nothing. A classic message has one `content`
+    field: if the host set it at all, Squid cannot add to it, so the whole 2,000-character
+    slot is withheld however few characters the host actually wrote. Reporting only the
+    2,000 would misstate the message's size; reporting only the actual length would let
+    planning allocate content Squid has no way to deliver.
+    """
     custom_ids: tuple[CustomIdSite, ...]
     components_v2: bool
     report: AuditReport
+    mode: DiscordMode = DiscordMode.COMPONENTS_V2
+
+    @property
+    def cost(self) -> ResourceCost:
+        """What planning must withhold. The reservation *is* the smaller target."""
+        return self.reserved
 
     @property
     def fingerprint(self) -> str:
         """A digest of the measurement, for detecting a host that changed since planning."""
         canonical = repr(
             (
-                sorted(self.cost.values.items()),
+                sorted(self.usage.values.items()),
+                sorted(self.reserved.values.items()),
                 [(site.custom_id, site.path) for site in self.custom_ids],
                 self.components_v2,
+                self.mode.value,
             )
         )
         return hashlib.sha256(canonical.encode()).hexdigest()[:16]
@@ -145,15 +183,124 @@ def cost(*items: discord.ui.Item[Any], limits: V2Limits = LIMITS) -> ResourceCos
 
 
 def measure(
+    host: DiscordPresentation | discord.ui.LayoutView | discord.ui.View,
+    *,
+    attachments: int = 0,
+    limits: DiscordLimits | None = None,
+) -> DiscordReservation:
+    """Measure what a host message or view already spends, mutating and repairing nothing.
+
+    One function over three shapes because a caller reserving room does not care which one
+    it holds — it cares what is left. What it holds decides the axes, not the API.
+    """
+    if isinstance(host, DiscordPresentation):
+        if host.mode is DiscordMode.CLASSIC:
+            return measure_classic(host, attachments=attachments, limits=_classic(limits))
+        return _measure_v2(host.layout, attachments=attachments + len(host.assets), limits=_v2(limits))
+    if isinstance(host, discord.ui.LayoutView):
+        return _measure_v2(host, attachments=attachments, limits=_v2(limits))
+    if isinstance(host, discord.ui.View):
+        # A bare classic view is controls and nothing else: it says nothing about the
+        # content or embeds the same message may also carry.
+        return measure_classic(DiscordPresentation.classic(view=host), attachments=attachments, limits=_classic(limits))
+    message = f"measure expects a DiscordPresentation, LayoutView, or View, not {type(host).__name__}"
+    raise TypeError(message)
+
+
+def _v2(limits: DiscordLimits | None) -> V2Limits:
+    return limits if isinstance(limits, V2Limits) else LIMITS
+
+
+def _classic(limits: DiscordLimits | None) -> ClassicLimits:
+    return limits if isinstance(limits, ClassicLimits) else CLASSIC_LIMITS
+
+
+def effective_rows(view: discord.ui.View) -> tuple[int, ...]:
+    """The row index discord.py actually assigned each child, in child order.
+
+    No public API exposes this: `Item.row` is what the author *asked* for and is `None`
+    whenever they did not ask, while `_ViewWeights` decides where the item really lands.
+    Contributing after a host's controls needs the real answer, so this reads the private
+    state and immediately cross-checks it against the serialized payload — if the number of
+    distinct assigned rows ever stops matching the number of action rows discord.py emits,
+    that assumption has broken and this raises instead of placing items wrongly.
+    """
+    assigned = tuple(getattr(item, "_rendered_row", None) for item in view.children)
+    if any(row is None for row in assigned):
+        message = "discord.py left a view child without an assigned row; its row weighting has changed"
+        raise LimitViolationError([message])
+    serialized = sum(1 for component in view.to_components() if component.get("type") == 1)
+    if len({*assigned}) != serialized:
+        message = (
+            f"discord.py assigned {len({*assigned})} distinct rows but serialized {serialized} action rows; "
+            "the private row state this reads no longer matches the payload"
+        )
+        raise LimitViolationError([message])
+    return tuple(row for row in assigned if row is not None)
+
+
+def measure_classic(
+    host: DiscordPresentation,
+    *,
+    attachments: int = 0,
+    limits: ClassicLimits = CLASSIC_LIMITS,
+) -> DiscordReservation:
+    """Measure a complete classic host message across the axes a classic target budgets."""
+    if host.mode is not DiscordMode.CLASSIC:
+        message = f"measure_classic expects a classic presentation, not {host.mode.value}"
+        raise TypeError(message)
+    view = host.view if isinstance(host.view, discord.ui.View) else None
+
+    custom_ids: list[CustomIdSite] = []
+    controls = 0
+    rows: tuple[int, ...] = ()
+    if view is not None:
+        rows = effective_rows(view)
+        for index, item in enumerate(view.children):
+            controls += 1
+            custom_id = getattr(item, "custom_id", None)
+            if isinstance(custom_id, str):
+                custom_ids.append(CustomIdSite(custom_id, (index,)))
+
+    embed_text = sum(len(embed) for embed in host.embeds)
+    files = attachments + len(host.assets)
+    common = {
+        EMBED_TEXT: embed_text,
+        EMBEDS: len(host.embeds),
+        ROWS: len({*rows}),
+        CONTROLS: controls,
+        ATTACHMENTS: files,
+    }
+    content = host.content
+    usage = ResourceCost({**common, CONTENT_TEXT: len(content or "")})
+    # All or nothing: a host that set `content` at all owns the whole slot, because a
+    # message has one content field and Squid cannot append to someone else's.
+    reserved = ResourceCost({**common, CONTENT_TEXT: limits.content if content is not None else 0})
+
+    return DiscordReservation(
+        usage=usage,
+        reserved=reserved,
+        custom_ids=tuple(custom_ids),
+        components_v2=False,
+        report=AuditReport(
+            tuple(
+                Violation(ViolationCode.CLASSIC_PAYLOAD, problem, repairable=False)
+                for problem in audit_classic_payload(
+                    content=content, embeds=host.embeds, view=view, attachments=files, limits=limits
+                )
+            )
+        ),
+        mode=DiscordMode.CLASSIC,
+    )
+
+
+def _measure_v2(
     view: discord.ui.LayoutView,
     *,
     attachments: int = 0,
     limits: V2Limits = LIMITS,
 ) -> DiscordReservation:
     """Measure what `view` already spends, without mutating or repairing it."""
-    if not isinstance(view, discord.ui.LayoutView):
-        message = f"measure expects a LayoutView, not {type(view).__name__}; classic views are plan 36"
-        raise TypeError(message)
 
     custom_ids: list[CustomIdSite] = []
     components = 0
@@ -166,11 +313,16 @@ def measure(
         if isinstance(custom_id, str):
             custom_ids.append(CustomIdSite(custom_id, path))
 
+    spent = ResourceCost({COMPONENTS: components, DISPLAY_TEXT: text, ATTACHMENTS: attachments})
     return DiscordReservation(
-        cost=ResourceCost({"components": components, "display_text": text, "attachments": attachments}),
+        # Identical for Components V2: every axis it budgets is additive, so what the host
+        # spends and what it withholds are the same number.
+        usage=spent,
+        reserved=spent,
         custom_ids=tuple(custom_ids),
         components_v2=True,
         report=audit(view, attachments=attachments, limits=limits),
+        mode=DiscordMode.COMPONENTS_V2,
     )
 
 
@@ -401,3 +553,115 @@ def _audit_row(row: discord.ui.ActionRow, path: Path, limits: V2Limits, violatio
                 item=row,
             )
         )
+
+
+def audit_classic_payload(
+    *,
+    content: str | None,
+    embeds: Sequence[discord.Embed],
+    view: discord.ui.View | None,
+    attachments: int = 0,
+    limits: ClassicLimits = CLASSIC_LIMITS,
+) -> list[str]:
+    """Every way this payload would be rejected, found before it is sent.
+
+    Walks `Embed.to_dict()` because that is the wire shape, and cross-checks the aggregate
+    against `Embed.__len__`, which already computes exactly Discord's definition — title,
+    description, field names and values, footer text, author name. Re-deriving that sum here
+    would be a second, drifting definition of the same rule.
+    """
+    problems: list[str] = []
+
+    if content is not None and len(content) > limits.content:
+        problems.append(f"content is {len(content)} characters; the limit is {limits.content}")
+    if len(embeds) > limits.embeds:
+        problems.append(f"{len(embeds)} embeds exceed {limits.embeds}")
+
+    seen_urls: set[str] = set()
+    for index, embed in enumerate(embeds):
+        problems.extend(_audit_embed(embed, index, limits))
+        url = embed.url
+        if url is None:
+            continue
+        if url in seen_urls:
+            # Discord renders only the first embed of a repeated URL, so a second one is
+            # silently invisible rather than an error — which is worse than an error.
+            problems.append(f"embed {index} repeats the URL {url!r}; Discord shows only the first")
+        seen_urls.add(url)
+
+    aggregate = sum(len(embed) for embed in embeds)
+    if aggregate > limits.embed_text:
+        problems.append(f"embed text totals {aggregate} characters; the limit is {limits.embed_text}")
+
+    if view is not None:
+        problems.extend(_audit_view(view, limits))
+    if attachments > limits.attachments:
+        problems.append(f"{attachments} attachments exceed {limits.attachments}")
+    return problems
+
+
+def _audit_embed(embed: discord.Embed, index: int, limits: ClassicLimits) -> list[str]:
+    payload = embed.to_dict()
+    problems: list[str] = []
+
+    def check(value: object, cap: int, what: str) -> None:
+        if isinstance(value, str) and len(value) > cap:
+            problems.append(f"embed {index} {what} is {len(value)} characters; the limit is {cap}")
+
+    check(payload.get("title"), limits.embed_title, "title")
+    check(payload.get("description"), limits.embed_description, "description")
+    check((payload.get("footer") or {}).get("text"), limits.embed_footer, "footer")
+    check((payload.get("author") or {}).get("name"), limits.embed_author, "author")
+
+    fields = payload.get("fields") or []
+    if len(fields) > limits.embed_fields:
+        problems.append(f"embed {index} has {len(fields)} fields; the limit is {limits.embed_fields}")
+    for position, field in enumerate(fields):
+        check(field.get("name"), limits.field_name, f"field {position} name")
+        check(field.get("value"), limits.field_value, f"field {position} value")
+        if not (field.get("name") or "").strip():
+            problems.append(f"embed {index} field {position} has an empty name")
+        if not (field.get("value") or "").strip():
+            problems.append(f"embed {index} field {position} has an empty value")
+
+    for key in ("url", "image", "thumbnail", "footer", "author"):
+        raw = payload.get(key)
+        candidate = raw if isinstance(raw, str) else (raw or {}).get("url") or (raw or {}).get("icon_url")
+        if isinstance(candidate, str) and candidate:
+            scheme = urlsplit(candidate).scheme
+            if scheme not in ALLOWED_SCHEMES:
+                problems.append(f"embed {index} {key} uses the unsupported URL scheme {scheme or '(none)'!r}")
+    return problems
+
+
+def _audit_view(view: discord.ui.View, limits: ClassicLimits) -> list[str]:
+    problems: list[str] = []
+    children = list(view.children)
+    if len(children) > limits.controls:
+        problems.append(f"{len(children)} view children exceed {limits.controls}")
+
+    rows: dict[int, list[discord.ui.Item[Any]]] = {}
+    for item in children:
+        rows.setdefault(item.row if item.row is not None else -1, []).append(item)
+    if len(rows) > limits.rows:
+        problems.append(f"{len(rows)} action rows exceed {limits.rows}")
+    for index, items in sorted(rows.items()):
+        selects = sum(isinstance(item, BaseSelect) for item in items)
+        if selects and len(items) > 1:
+            problems.append(f"row {index} mixes a select with {len(items) - 1} other controls")
+        if selects > 1:
+            problems.append(f"row {index} holds {selects} selects; a row holds one")
+        if not selects and len(items) > limits.row_buttons:
+            problems.append(f"row {index} holds {len(items)} buttons; the limit is {limits.row_buttons}")
+
+    seen: set[str] = set()
+    for item in children:
+        custom_id = getattr(item, "custom_id", None)
+        if not isinstance(custom_id, str):
+            continue
+        if len(custom_id) > limits.custom_id:
+            problems.append(f"custom id {custom_id!r} is {len(custom_id)} characters; the limit is {limits.custom_id}")
+        if custom_id in seen:
+            problems.append(f"custom id {custom_id!r} appears twice in one message")
+        seen.add(custom_id)
+    return problems
