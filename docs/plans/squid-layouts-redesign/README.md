@@ -60,6 +60,7 @@ modules; the layout core stays presentational.
 | 28 | [History](28-history.md) | `sl.history()` undo/redo: a new `on_action_commit` seam hands the recorder the action's whole state delta, and the author supplies external inverses per `record()`. Three tiers (framework-only, undoable, redoable); world first, then state; a failed inverse keeps the entry; an inverse may not write component state. In-memory v1; the consumer is `SettingsPanel`'s channel, locale and role-weight writes. |
 | 29 | [Control vocabulary (Batch A)](29-control-vocabulary.md) | Toggle, portable modal multi-choice, upload values and visible downloads, Decision/confirm, CollectionEditor, and typed timestamps/time fields. Extends the semantic pipeline where typed scene data matters and uses pure patterns for lifecycle state. |
 | 33 | [Reactive async resources](33-resources.md) | `sl.resource(depends=(state_field,))` exposes synchronous `Pending | Ready | Failed` state, render-observed lazy loading, stale-result rejection and optimistic replacement. Visible and atomic delivery are two policies over one state machine; `SourceRankedList` is the first migration. |
+| 34 | [Safe session runtime](34-safe-session-runtime.md) | Required async mount access policies, typed session scopes and structured cardinality outcomes, then one durable runtime that owns fenced checkpoints, Discord reconnection, recovery reports, leases, expiry, and teardown. Intentionally breaking: `lock_to`, `MountRegistry`, and public `MountManager` are replaced rather than shimmed. |
 
 ## Relation to existing plans
 
