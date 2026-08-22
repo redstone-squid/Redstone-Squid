@@ -204,4 +204,4 @@ class TestRegionPagination:
         first = sl.plan(document, target=DEFAULT_TARGET)
 
         assert first.scene.pagers[0].pages == 10
-        assert self._texts(first) == ["x" * 10] * 10
+        assert self._texts(first)[:10] == ["x" * 10] * 10

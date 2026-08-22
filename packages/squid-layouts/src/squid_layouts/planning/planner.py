@@ -484,7 +484,8 @@ def _search_strategies(
                 code="planner.search_fallback",
                 path="$",
                 message=(
-                    f"Strategy search reached its {search_budget}-attempt budget; selected the best incumbent"
+                    f"Strategy search used its bounded fallback within {search_budget} attempts; "
+                    "selected the best incumbent"
                 ),
                 severity=PlanSeverity.WARNING,
             ),
