@@ -115,6 +115,10 @@ class CollectionEditor:
 
         return ComponentShell(self, initial=initial, on_change=changed)
 
+    def values(self, state: CollectionState) -> tuple[Mapping[str, object], ...]:
+        """Project state to its ordered public form-value mappings."""
+        return tuple(self._mapping(entry) for entry in state.entries)
+
     def errors(self, state: CollectionState) -> tuple[str, ...]:
         errors: list[str] = []
         if len(state.entries) < self.minimum:
