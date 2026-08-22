@@ -93,7 +93,7 @@ async def test_apply_commits_and_dispatches_exactly_once() -> None:
         "Roles",
         (sl.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
         minimum=1,
-    ).component(on_apply=applied)
+    ).component(on_commit=applied)
     mount = Mount(panel, access=Everyone(), timeout=None)
     commit_render(mount)
     await mount.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
@@ -156,3 +156,53 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
     assert any(isinstance(node, RoutedAction) and node.key == "choices.apply" for node in _walk(rendered))
     apply = next(request for request in routes if request.action == "apply")
     assert apply == sl.PatternRoute("apply", sl.MultiChoiceState(("role-0",), ("role-0",), ()), "next")
+
+
+async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
+    commits: list[tuple[str, ...]] = []
+
+    async def committed(_event: sl.PatternEvent[sl.MultiChoiceState], values: tuple[str, ...]) -> None:
+        commits.append(values)
+
+    panel = sl.MultiChoicePanel(
+        "Roles",
+        (sl.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
+        minimum=1,
+        commit=sl.CommitPolicy.IMMEDIATE,
+    ).component(on_commit=committed)
+    mount = Mount(panel, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("choices.roles.select", fake_interaction(), ["role-1"])
+
+    assert panel.pattern_state == sl.MultiChoiceState(("role-1",), ("role-1",))
+    assert commits == [("role-1",)]
+    assert not any(isinstance(node, sl.Action) and node.key == "choices.apply" for node in _walk(panel.render()))
+
+
+def test_immediate_policy_retains_invalid_staging_until_next_valid_change() -> None:
+    pattern = sl.MultiChoicePanel(
+        "Roles",
+        (sl.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
+        maximum=1,
+        commit=sl.CommitPolicy.IMMEDIATE,
+    )
+
+    invalid = pattern.transition(pattern.initial_state, "select:roles", values=("role-0", "role-1"))
+    valid = pattern.transition(invalid, "select:roles", values=("role-1",))
+
+    assert invalid.staged == ("role-0", "role-1")
+    assert invalid.committed == ()
+    assert valid.staged == valid.committed == ("role-1",)
+
+
+def test_immediate_modal_submission_commits_in_one_transition() -> None:
+    pattern = sl.MultiChoicePanel(
+        "Roles",
+        (sl.MultiChoiceGroup("roles", "Roles", _options("role", 3)),),
+        commit=sl.CommitPolicy.IMMEDIATE,
+    )
+
+    state = pattern.transition(pattern.initial_state, "modal", submitted={"selection": ("role-2",)})
+
+    assert state.staged == state.committed == ("role-2",)
