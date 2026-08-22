@@ -76,6 +76,26 @@ assert "anyio" not in sys.modules
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
+def test_durability_imports_without_postgres_dependency() -> None:
+    code = """
+import importlib.abc
+import sys
+
+class BlockAsyncpg(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".", 1)[0] == "asyncpg":
+            raise ModuleNotFoundError(fullname)
+        return None
+
+sys.meta_path.insert(0, BlockAsyncpg())
+from squid_layouts.discord.durability import PostgresSnapshotStore, SQLiteSnapshotStore
+assert PostgresSnapshotStore
+assert SQLiteSnapshotStore
+assert "asyncpg" not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", code], check=True)
+
+
 def test_package_metadata_keeps_version_and_adapter_extra() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
