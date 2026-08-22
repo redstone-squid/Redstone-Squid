@@ -60,9 +60,11 @@ class StubBuilds:
 
     def __init__(self, build: Any) -> None:
         self._build = build
+        self.gets = 0
         self.sorted: list[list[str]] = []
 
     async def get(self, build_id: int) -> Any:
+        self.gets += 1
         return self._build
 
     async def sort_restrictions(self, restrictions: list[str]) -> dict[str, list[str]]:
@@ -91,7 +93,8 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
             account_ids=SimpleNamespace(resolve=AsyncMock(return_value=account_id)),
             is_owner=AsyncMock(return_value=False),
             for_build=lambda _build: SimpleNamespace(
-                render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card")))
+                render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card"))),
+                render_node=AsyncMock(return_value=sl.paragraph("card")),
             ),
             mounts=MountRegistry(),
             topic_bus=topic_bus,
@@ -154,6 +157,14 @@ async def test_nothing_typed_still_opens_the_workspace() -> None:
     cog = _cog(_door())
 
     assert _component(_sent_view(await _run(cog))) is not None
+
+
+async def test_stored_editor_rereads_after_its_topic_subscription_is_live() -> None:
+    cog = _cog(_door())
+
+    await _run(cog)
+
+    assert cast(StubBuilds, cog.builds).gets == 2
 
 
 async def test_a_field_the_build_does_not_have_is_refused_not_dropped() -> None:
