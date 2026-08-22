@@ -45,6 +45,7 @@ from squid_layouts.discord.routing import (
     RouteProceed,
     Router,
     RouteRequest,
+    routers,
 )
 from squid_layouts.discord.sessions import MountRegistry, SessionKey, WhenOpen
 from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
@@ -122,5 +123,6 @@ __all__ = [
     "reply_to",
     "respond_to",
     "responder",
+    "routers",
     "trim",
 ]

@@ -1003,6 +1003,17 @@ class TestHandlerKinds:
 
 
 class TestClientRegistration:
+    def test_installed_routers_have_a_public_read_only_snapshot(self) -> None:
+        client = _FakeClient()
+        first, second = Router(), Router()
+        first.add(POLL_CLOSE, _noop)
+        second.add(EDIT_BUILD, _noop)
+
+        first.register(client)  # type: ignore[arg-type]
+        second.register(client)  # type: ignore[arg-type]
+
+        assert sl.discord.routers(client) == (first, second)  # type: ignore[arg-type]
+
     def test_registering_the_same_pair_again_is_a_no_op(self) -> None:
         client = _FakeClient()
         router = Router()

@@ -66,6 +66,11 @@ _INSTALLED: weakref.WeakKeyDictionary[discord.Client, list[Router[Any]]] = weakr
 """Routers installed per client, so `register` can refuse the second router a click would wake."""
 
 
+def routers(client: discord.Client) -> tuple[Router[Any], ...]:
+    """Return a read-only snapshot of the routers installed on ``client``."""
+    return tuple(_INSTALLED.get(client, ()))
+
+
 class RouteComponent(StrEnum):
     """The Discord component type playing the role of an HTTP method."""
 
