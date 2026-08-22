@@ -399,7 +399,8 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
             outcome = _outcome_for_exception(exc)
             detail = None if outcome is not TraceOutcome.FAILED else _exception_name(exc)
             dispatch = None if self._trace.result is None else self._trace.result.dispatch
-            result = TraceResult(outcome, detail, dispatch)
+            presentation = None if self._trace.result is None else self._trace.result.presentation
+            result = TraceResult(outcome, detail, dispatch, presentation)
         else:
             result = self._trace.result or TraceResult(TraceOutcome.COMPLETED)
         self._profiler._finish_trace(self._trace, result)
@@ -762,6 +763,7 @@ class MemoryProfiler:
                     result.outcome,
                     None if result.detail is None else self._bounded_text(result.detail, _MAX_DETAIL_LENGTH),
                     result.dispatch,
+                    result.presentation,
                 )
                 root.ended = ended
                 root.outcome = trace.result.outcome
@@ -860,7 +862,7 @@ class MemoryProfiler:
             trace.result.detail,
             None if dispatch is None else dispatch.disposition,
             None if dispatch is None else dispatch.action,
-            None if dispatch is None else dispatch.presentation,
+            trace.result.presentation if dispatch is None else dispatch.presentation,
         )
         if key in self._lifetime or len(self._lifetime) < self._max_aggregate_keys:
             return key
