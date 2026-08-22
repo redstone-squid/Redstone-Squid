@@ -109,8 +109,12 @@ class TestRoutes:
 
         ctx.author.send.assert_awaited_once()
         rendered = str(ctx.author.send.await_args.kwargs["view"].to_components())
-        assert router.describe()[0].format in rendered
-        assert router.describe()[0].handler_qualname in rendered
+        route = router.describe()[0]
+        assert route.format in rendered
+        assert route.handler_qualname in rendered
+        assert route.group_prefix is not None
+        assert route.group_prefix in rendered
+        assert route.middleware[0] in rendered
 
 
 class TestOpen:

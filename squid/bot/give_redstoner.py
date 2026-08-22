@@ -11,7 +11,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import remove_redstoner_role, router
+from squid.bot.routes.redstoner_roles import redstoner_roles, remove_redstoner_role
 from squid.bot.ui import render_static
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
@@ -23,14 +23,10 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-@router.route(remove_redstoner_role)
+@redstoner_roles.route(remove_redstoner_role)
 async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Let a member drop the redstoner role the bot gave them."""
-    await interaction.response.defer(ephemeral=True)
-
-    if interaction.guild is None or interaction.guild.id != interaction.client.owner_server_id:
-        return
-
+    assert interaction.guild is not None
     member = interaction.user
     community = interaction.client.community_config
     redstoner_role = interaction.guild.get_role(community.redstoner_role_id)

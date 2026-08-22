@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.routes import build_edit
+from squid.bot.routes.builds import build_edit
 from squid.bot.ui import create_mount
 from squid.core.i18n import _
 

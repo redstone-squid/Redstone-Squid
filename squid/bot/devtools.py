@@ -88,9 +88,14 @@ class DevTools[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         descriptions = router.describe()
         lines: list[str] = []
         for route in descriptions:
-            lines.append(f"{route.component.value:6} {route.format} -> {route.handler_module}.{route.handler_qualname}")
+            group = route.group_prefix or "ungrouped"
+            lines.append(
+                f"{route.component.value:6} {route.format} [{group}] -> {route.handler_module}.{route.handler_qualname}"
+            )
             if route.aliases:
                 lines.append(f"       aliases: {', '.join(route.aliases)}")
+            if route.middleware:
+                lines.append(f"       middleware: {' -> '.join(route.middleware)}")
         body = "No routed controls are registered." if not lines else "\n".join(lines)
         await deliver_privately(
             ctx,

@@ -21,7 +21,7 @@ import discord
 
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.routes import poll_close, poll_refresh, router
+from squid.bot.routes.polls import poll_close, poll_refresh, polls
 from squid.bot.utils.components import reply_layout, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
@@ -40,7 +40,7 @@ def poll_controls() -> sl.Actions:
     )
 
 
-@router.route(poll_close)
+@polls.route(poll_close)
 async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """End a poll early, tallying it where it stands."""
     authorized = await _authorize(interaction)
@@ -57,7 +57,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
     await reply_layout(interaction, text_layout(t(locale, _("Poll closed."))))
 
 
-@router.route(poll_refresh)
+@polls.route(poll_refresh)
 async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
     authorized = await _authorize(interaction)
