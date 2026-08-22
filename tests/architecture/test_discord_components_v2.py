@@ -9,6 +9,10 @@ BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-layouts" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
 LEGACY_KEYWORDS = {"content", "embed", "embeds"}
+# The framework has to *name* the classic message vocabulary to model it: a
+# `DiscordPresentation` says which mode a payload is in, and the delivery protocol says what a
+# host `send` must accept. Naming the types is allowed there; building one is not.
+LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py"}
 
 
 class DiscordUiVisitor(ast.NodeVisitor):
@@ -16,6 +20,8 @@ class DiscordUiVisitor(ast.NodeVisitor):
         self.path = path
         self.function_names: list[str] = []
         self.violations: list[str] = []
+        self.names_types_only = path.parts[-3:-1] == ("squid_layouts", "discord") and path.name in LEGACY_TYPE_HOMES
+        self.constructions: set[int] = set()
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -31,6 +37,7 @@ class DiscordUiVisitor(ast.NodeVisitor):
 
     @override
     def visit_Call(self, node: ast.Call) -> None:
+        self.constructions.add(id(node.func))
         method = node.func.attr if isinstance(node.func, ast.Attribute) else None
         if method in MESSAGE_METHODS:
             legacy = {
@@ -49,6 +56,9 @@ class DiscordUiVisitor(ast.NodeVisitor):
 
     @override
     def visit_Attribute(self, node: ast.Attribute) -> None:
+        if self.names_types_only and id(node) not in self.constructions:
+            self.generic_visit(node)
+            return
         if (
             node.attr in {"Embed", "View"}
             and isinstance(node.value, ast.Attribute)

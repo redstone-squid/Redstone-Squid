@@ -201,13 +201,18 @@ def destination(
         if ctx.interaction is not None:
             return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(view: discord.ui.LayoutView, rendered: list[discord.File]) -> ui.discord.DeliveryReceipt:
+        async def privately(presentation: ui.discord.DiscordPresentation) -> ui.discord.DeliveryReceipt:
             message = await deliver_privately(
-                ctx, view, reason=visibility.reason, locale=locale, files=[*files, *rendered]
+                ctx,
+                presentation.layout,
+                reason=visibility.reason,
+                locale=locale,
+                files=[*files, *presentation.files()],
             )
             if message is None:
                 raise ui.discord.DeliveryAbandoned
-            return ui.discord.DeliveryReceipt(message, ui.discord.delivery.handle_for(message))
+            handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
+            return ui.discord.DeliveryReceipt(message, handle)
 
         return privately
 

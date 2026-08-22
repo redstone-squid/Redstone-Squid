@@ -372,7 +372,7 @@ def _destination(target: ConsentTarget) -> sl.discord.Destination:
 
 async def _send(target: ConsentTarget, view: discord.ui.LayoutView) -> None:
     """Send one plain layout where the prompt itself would have gone."""
-    await _destination(target)(view, [])
+    await _destination(target)(sl.discord.DiscordPresentation.components_v2(view))
 
 
 def _default_ephemeral(target: ConsentTarget) -> bool:

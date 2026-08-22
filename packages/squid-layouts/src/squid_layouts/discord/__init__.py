@@ -1,6 +1,6 @@
 """Discord Components V2 target, renderer, and runtime adapter."""
 
-from squid_layouts.discord import delivery, devtools, durability, guards, live
+from squid_layouts.discord import delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.compose import Composition, compose, render_static
@@ -56,6 +56,7 @@ from squid_layouts.discord.mount import (
     owned_mount,
 )
 from squid_layouts.discord.navigation import Navigator
+from squid_layouts.discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
 from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
 from squid_layouts.discord.renderer import Renderer, RoutedItem, StaticView, Wire
 from squid_layouts.discord.routing import (
@@ -137,6 +138,9 @@ __all__ = [
     "DeliveryReceipt",
     "Denied",
     "Destination",
+    "DiscordMode",
+    "DiscordModeError",
+    "DiscordPresentation",
     "DiscordReservation",
     "EditHandle",
     "EntityField",
@@ -224,12 +228,14 @@ __all__ = [
     "guards",
     "live",
     "measure",
+    "mode_of",
     "mounts",
     "native",
     "navigation_controls",
     "open_personal",
     "owned_mount",
     "page_select_nav",
+    "presentation",
     "render_static",
     "reply_to",
     "respond_to",
