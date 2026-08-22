@@ -1,5 +1,6 @@
 """Reusable, frontend-neutral state-machine patterns."""
 
+from squid_layouts.patterns.browser import Browser, BrowserDetail, BrowserOpenHandler, BrowserOverview
 from squid_layouts.patterns.collection import (
     CollectionChangeHandler,
     CollectionEditor,
@@ -46,6 +47,10 @@ from squid_layouts.patterns.wizard import (
 )
 
 __all__ = [
+    "Browser",
+    "BrowserDetail",
+    "BrowserOpenHandler",
+    "BrowserOverview",
     "CollectionChangeHandler",
     "CollectionEditor",
     "CollectionEntry",

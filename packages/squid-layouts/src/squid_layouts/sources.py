@@ -1,6 +1,6 @@
 """Position tokens and asynchronous window loading."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from hashlib import blake2s
@@ -122,6 +122,34 @@ class WindowSource[ItemT](Protocol):
     async def fetch(self, position: Position, extent: int) -> Window[ItemT]:
         """Fetch at most ``extent`` items around or beyond ``position``."""
         ...
+
+
+class _ListSource[ItemT]:
+    capabilities = SourceCapabilities(
+        backward=True,
+        offsets=True,
+        jumpable=True,
+        count=CountPrecision.EXACT,
+    )
+
+    def __init__(self, items: Iterable[ItemT]) -> None:
+        self.items = tuple(items)
+
+    async def fetch(self, position: Position, extent: int) -> Window[ItemT]:
+        offset = min(max(0, position.offset), max(0, len(self.items) - 1))
+        visible = self.items[offset : offset + extent]
+        return Window(
+            Position(offset=offset),
+            visible,
+            has_previous=offset > 0,
+            has_next=offset + len(visible) < len(self.items),
+            total=len(self.items),
+        )
+
+
+def list_source[ItemT](items: Iterable[ItemT]) -> WindowSource[ItemT]:
+    """Wrap an immutable snapshot as an exact offset-addressed source."""
+    return _ListSource(items)
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,4 +303,5 @@ __all__ = [
     "Window",
     "WindowLoader",
     "WindowSource",
+    "list_source",
 ]
