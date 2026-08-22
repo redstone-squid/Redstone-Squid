@@ -1,6 +1,14 @@
-"""Portable planning, adaptation, and measured solving APIs."""
+"""Portable planning, adaptation, and layout measurement APIs."""
 
 from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.measure import (
+    LayoutOverflowError,
+    MeasuredLayout,
+    SolveNote,
+    SolveNoteCode,
+    SolveNoteSeverity,
+    measure,
+)
 from squid_layouts.planning.planner import plan
 from squid_layouts.planning.search import (
     DEFAULT_SEARCH_BUDGET,
@@ -10,14 +18,6 @@ from squid_layouts.planning.search import (
     choose_strategy,
     iter_assignments,
 )
-from squid_layouts.planning.solve import (
-    LayoutOverflowError,
-    SolvedLayout,
-    SolveNote,
-    SolveNoteCode,
-    SolveNoteSeverity,
-    solve,
-)
 from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
 from squid_layouts.sources import POSITION_POLICY, Position, PositionPolicy
 
@@ -25,6 +25,7 @@ __all__ = [
     "DEFAULT_SEARCH_BUDGET",
     "POSITION_POLICY",
     "LayoutOverflowError",
+    "MeasuredLayout",
     "PlanCache",
     "Position",
     "PositionPolicy",
@@ -33,13 +34,12 @@ __all__ = [
     "SolveNote",
     "SolveNoteCode",
     "SolveNoteSeverity",
-    "SolvedLayout",
     "StrategyAssignment",
     "StrategyAxis",
     "StrategyCandidate",
     "TargetProfile",
     "choose_strategy",
     "iter_assignments",
+    "measure",
     "plan",
-    "solve",
 ]

@@ -1,4 +1,4 @@
-"""Unit and property tests for the measured layout solver."""
+"""Unit and property tests for the concrete-layout evaluator."""
 
 import discord
 import pytest
@@ -18,7 +18,7 @@ from squid_layouts.discord.testing import assert_within_limits
 from squid_layouts.planning import (
     LayoutOverflowError,
     SolveNoteCode,
-    solve,
+    measure,
 )
 from squid_layouts.primitives import (
     Code,
@@ -38,6 +38,7 @@ from squid_layouts.primitives import (
     Text,
     Thumbnail,
     Truncate,
+    Variants,
 )
 
 
@@ -90,7 +91,7 @@ class TestFitting:
         # Low-priority footer shrinks before the body loses a character.
         body = Text("b" * 3900)
         footer = Footer("f" * 400)
-        solved = solve([body, footer])
+        solved = measure([body, footer])
         rendered = [child.content for child in solved.children]  # pyrefly: ignore
         assert rendered[0] == "b" * 3900
         assert len(rendered[1]) <= LIMITS.total_text - 3900
@@ -98,7 +99,7 @@ class TestFitting:
     def test_equal_priority_nodes_share_proportionally(self):
         first = Text("a" * 6000)
         second = Text("b" * 2000)
-        solved = solve([first, second])
+        solved = measure([first, second])
         lengths = [len(child.content) for child in solved.children]  # pyrefly: ignore
         assert sum(lengths) <= LIMITS.total_text
         # Need ratio is 3:1, so the later node keeps ~1000 chars instead of starving at 0.
@@ -108,24 +109,33 @@ class TestFitting:
         # The Drop node cannot fit, so the Truncate node should get everything back.
         keeper = Text("k" * 3999)
         dropper = Text("d" * 500, overflow=Drop(), priority=-1)
-        solved = solve([keeper, dropper])
+        solved = measure([keeper, dropper])
         assert [child.content for child in solved.children] == ["k" * 3999]  # pyrefly: ignore
         assert any(note.code is SolveNoteCode.NODE_DROPPED for note in solved.notes)
 
     def test_never_wins_over_higher_priority_flexible_nodes(self):
         pinned = Text("p" * 3500, overflow=Never(), priority=-100)
         flexible = Text("f" * 3500, priority=100)
-        solved = solve([pinned, flexible])
+        solved = measure([pinned, flexible])
         contents = [child.content for child in solved.children]  # pyrefly: ignore
         assert contents[0] == "p" * 3500
         assert len(contents[1]) == LIMITS.total_text - 3500
 
+    def test_an_unresolved_alternative_is_a_planner_bug(self):
+        # measure() evaluates one concrete layout; choosing between rungs is plan()'s job.
+        with pytest.raises(LayoutInvariantError, match="resolved before measuring"):
+            measure([Variants.of(Text("rich"), Text("plain"))])
+
+    def test_an_unresolved_alternative_is_rejected_inside_a_container(self):
+        with pytest.raises(LayoutInvariantError, match="resolved before measuring"):
+            measure([Panel((Variants.of(Text("rich"), Text("plain")),))])
+
     def test_unsatisfiable_never_raises_in_strict_mode(self):
         with pytest.raises(LayoutOverflowError):
-            solve([Text("x" * 5000, overflow=Never())], strict=True)
+            measure([Text("x" * 5000, overflow=Never())], strict=True)
 
     def test_unsatisfiable_never_clamps_outside_strict_mode(self):
-        solved = solve([Text("x" * 5000, overflow=Never())])
+        solved = measure([Text("x" * 5000, overflow=Never())])
         assert len(solved.children[0].content) <= LIMITS.total_text  # pyrefly: ignore
         assert solved.failures[0].code is SolveNoteCode.NEVER_BUDGET
         assert isinstance(solved.failures[0].code, str)
@@ -158,7 +168,7 @@ class TestFitting:
 
     def test_raw_item_text_cost_reserves_budget(self):
         raw = RawItem(factory=lambda: discord.ui.TextDisplay("r" * 100), text_cost=100)
-        solved = solve([Text("x" * 4000), raw])
+        solved = measure([Text("x" * 4000), raw])
         assert len(solved.children[0].content) <= LIMITS.total_text - 100  # pyrefly: ignore
 
 
@@ -197,7 +207,7 @@ class TestStructure:
 
     def test_emptied_section_drops_whole(self):
         section = Section(texts=(Text(""),), accessory=Thumbnail("https://example.invalid/a.png"))
-        solved = solve([section])
+        solved = measure([section])
         assert solved.children == []
 
 
@@ -248,8 +258,8 @@ def test_rendered_documents_always_fit(nodes):
 
 
 @given(documents())
-def test_solver_needs_no_conform_interventions(nodes):
+def test_measurement_needs_no_conform_interventions(nodes):
     # The engine must measure exactly: the boundary gate should never have to intervene.
-    solve(nodes)
+    measure(nodes)
     view = render_static(nodes)
     assert conform(view) == []

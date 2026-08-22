@@ -17,9 +17,10 @@ from squid_layouts.discord import (
 from squid_layouts.planning import (
     LayoutOverflowError,
     SolveNoteCode,
-    solve,
+    measure,
 )
-from squid_layouts.planning.solve import RPanel, RText, SolvedLayout
+from squid_layouts.planning.measure import RPanel, RText
+from squid_layouts.planning.solve import solve
 from squid_layouts.primitives import (
     ActionGroup,
     Alt,
@@ -38,7 +39,7 @@ from squid_layouts.primitives import (
 from squid_layouts.scene.model import SceneRow
 
 
-def _rendered(solved: SolvedLayout) -> str:
+def _rendered(solved) -> str:
     """Every string the solved document would display, panels included."""
     parts: list[str] = []
 
@@ -56,7 +57,7 @@ def _rendered(solved: SolvedLayout) -> str:
 def _under_pressure(entries: tuple[Alt | str, ...], *, spare: int) -> str:
     """Solve a Lines node with only ``spare`` characters left for it."""
     filler = Text("x" * (LIMITS.total_text - spare), priority=10)
-    return _rendered(solve([filler, Lines(entries)]))
+    return _rendered(measure([filler, Lines(entries)]))
 
 
 class TestEntryPriorities:
@@ -105,7 +106,7 @@ def _ladder_document(count: int, *, priorities: list[int] | None = None) -> list
     ]
 
 
-def _steps(solved: SolvedLayout) -> int:
+def _steps(solved) -> int:
     return sum(1 for note in solved.notes if note.code is SolveNoteCode.VARIANT_STEP)
 
 
