@@ -234,6 +234,7 @@ class _Candidate:
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
     generation: int
+    revision: int
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
@@ -320,7 +321,7 @@ class Mount:
         self.nav = nav if nav is not None else default_nav
         self.runtime = ComponentRuntime(
             component,
-            on_invalidate=self.invalidate,
+            on_invalidate=self._mark_dirty,
             context={
                 CHROME_CONTEXT: self.chrome,
                 LOCALIZATION_CONTEXT: localization,
@@ -347,6 +348,7 @@ class Mount:
         # which holds the button that *opens* the form under the very same key.
         self._form_bindings: Mapping[str, FormBinding] = {}
         self._action_lock = asyncio.Lock()
+        self._render_lock = asyncio.Lock()
         self._generation = 0
         # Generations handed to staged renders: a candidate whose delivery failed must not
         # hand its control ids to the next one.
@@ -530,6 +532,7 @@ class Mount:
             handlers,
             composition.plan.form_bindings,
             generation,
+            self.runtime.revision,
             assets,
             composition.plan.session_updates,
         )
@@ -540,11 +543,11 @@ class Mount:
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
         self._generation = candidate.generation
-        self.runtime.commit(candidate.tree)
+        self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._assets = candidate.assets
         self._plan = candidate.composition.plan
         candidate.view.timeout = self._remaining_timeout()
-        self._dirty = False
+        self._dirty = self.runtime.dirty
         self._pending = None
         self._swap_view(candidate.view)
         # The commit point is where a mount becomes something a reader can see and click, and
@@ -570,8 +573,11 @@ class Mount:
     def presentation(self, value: PresentationSession) -> None:
         self.runtime.presentation = value
 
-    def invalidate(self) -> None:
+    def _mark_dirty(self) -> None:
         self._dirty = True
+
+    def invalidate(self) -> None:
+        self.runtime.invalidate()
 
     def localize(self, localization: Localization) -> None:
         """Change the locale used by the next render of this live mount."""
