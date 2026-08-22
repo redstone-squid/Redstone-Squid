@@ -43,6 +43,21 @@ class FormValidationPolicy(StrEnum):
     ACCEPT_AND_MARK = "accept_and_mark"
 
 
+class AmbiguousTimePolicy(StrEnum):
+    """How a repeated local time maps to one of its two instants."""
+
+    REJECT = "reject"
+    EARLIER = "earlier"
+    LATER = "later"
+
+
+class NonexistentTimePolicy(StrEnum):
+    """How a local time skipped by an offset transition is handled."""
+
+    REJECT = "reject"
+    SHIFT_FORWARD = "shift_forward"
+
+
 class FormValueError(ValueError):
     """A user-correctable parse failure, converted to :class:`FieldError`.
 
@@ -291,14 +306,26 @@ class TimeField(FormField[TimeValue]):
 
 @dataclass(frozen=True, slots=True)
 class DateTimeField(FormField[DateTimeValue]):
-    """An ISO-8601 instant; naive input is interpreted in ``timezone``."""
+    """An ISO-8601 instant; naive input is resolved in ``timezone``.
+
+    Ambiguous and nonexistent local times reject by default. Explicitly offset
+    input already identifies an instant and does not use the local-time policies.
+    """
 
     timezone: tzinfo = UTC
     minimum: DateTimeValue | None = None
     maximum: DateTimeValue | None = None
     placeholder: TextLike | None = "YYYY-MM-DD HH:MM"
+    ambiguous: AmbiguousTimePolicy = AmbiguousTimePolicy.REJECT
+    nonexistent: NonexistentTimePolicy = NonexistentTimePolicy.REJECT
 
     def __post_init__(self) -> None:
+        if not isinstance(self.ambiguous, AmbiguousTimePolicy):
+            message = "DateTimeField ambiguous must be an AmbiguousTimePolicy"
+            raise TypeError(message)
+        if not isinstance(self.nonexistent, NonexistentTimePolicy):
+            message = "DateTimeField nonexistent must be a NonexistentTimePolicy"
+            raise TypeError(message)
         for name, bound in (("minimum", self.minimum), ("maximum", self.maximum)):
             if bound is not None and (bound.tzinfo is None or bound.utcoffset() is None):
                 message = f"DateTimeField {name} must be aware"
@@ -312,15 +339,50 @@ class DateTimeField(FormField[DateTimeValue]):
         except ValueError:
             _invalid("Enter a date and time as YYYY-MM-DD HH:MM.")
         if value.tzinfo is None or value.utcoffset() is None:
-            value = value.replace(tzinfo=self.timezone)
-        if self.minimum is not None and value < self.minimum:
+            value = _resolve_local_datetime(value, self.timezone, self.ambiguous, self.nonexistent)
+        instant = value.astimezone(UTC)
+        if self.minimum is not None and instant < self.minimum.astimezone(UTC):
             _invalid(f"Enter a date and time on or after {self.minimum.isoformat()}.")
-        if self.maximum is not None and value > self.maximum:
+        if self.maximum is not None and instant > self.maximum.astimezone(UTC):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
     def format_prefill(self, value: object) -> object:
         return value.isoformat() if isinstance(value, DateTimeValue) else value
+
+
+def _resolve_local_datetime(
+    value: DateTimeValue,
+    timezone: tzinfo,
+    ambiguous: AmbiguousTimePolicy,
+    nonexistent: NonexistentTimePolicy,
+) -> DateTimeValue:
+    candidates = tuple(value.replace(tzinfo=timezone, fold=fold) for fold in (0, 1))
+    instants = tuple(candidate.astimezone(UTC) for candidate in candidates)
+    resolved = tuple(instant.astimezone(timezone) for instant in instants)
+    valid = tuple(
+        (instant, localized)
+        for instant, localized in zip(instants, resolved, strict=True)
+        if localized.replace(tzinfo=None) == value
+    )
+
+    if valid:
+        if len(valid) == 1 or valid[0][0] == valid[1][0]:
+            return valid[0][1]
+        if ambiguous is AmbiguousTimePolicy.REJECT:
+            _invalid(
+                "This local time occurs twice in the selected timezone. "
+                "Enter a date and time with an explicit UTC offset."
+            )
+        selected = min(valid) if ambiguous is AmbiguousTimePolicy.EARLIER else max(valid)
+        return selected[1]
+
+    if nonexistent is NonexistentTimePolicy.REJECT:
+        _invalid("This local time does not exist in the selected timezone.")
+    shifted = tuple(localized for localized in resolved if localized.replace(tzinfo=None) > value)
+    if not shifted:
+        _invalid("This local time does not exist in the selected timezone.")
+    return min(shifted, key=lambda localized: localized.replace(tzinfo=None))
 
 
 @dataclass(frozen=True, slots=True)
