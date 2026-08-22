@@ -18,13 +18,13 @@ class OwnerGuildOnly[BotT: discord.Client](sl.discord.Middleware[BotT]):
     async def dispatch(
         self,
         request: sl.discord.RouteRequest[BotT],
-        call_next: sl.discord.RouteNext,
+        proceed: sl.discord.RouteProceed,
     ) -> None:
         interaction = request.interaction
         client = cast(_OwnerGuildClient, interaction.client)
         if interaction.guild is None or interaction.guild.id != client.owner_server_id:
             return
-        await call_next()
+        await proceed()
 
 
 redstoner_roles = routes.group("redstoner-roles")

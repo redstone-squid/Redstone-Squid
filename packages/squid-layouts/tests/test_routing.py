@@ -535,9 +535,9 @@ class TestMiddleware:
             def __init__(self, name: str) -> None:
                 self.name = name
 
-            async def dispatch(self, request, call_next) -> None:
+            async def dispatch(self, request, proceed) -> None:
                 seen.append(f"{self.name}:before")
-                await call_next()
+                await proceed()
                 seen.append(f"{self.name}:after")
 
         root = sl.discord.RouteGroup[discord.Client]("r")
@@ -568,7 +568,7 @@ class TestMiddleware:
         seen: list[str] = []
 
         class Stop(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
+            async def dispatch(self, request, proceed) -> None:
                 seen.append("stopped")
 
         interaction = fake_interaction()
@@ -591,9 +591,9 @@ class TestMiddleware:
             seen.append("router-error")
 
         class Catch(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
+            async def dispatch(self, request, proceed) -> None:
                 try:
-                    await call_next()
+                    await proceed()
                 except RuntimeError:
                     seen.append("caught")
 
@@ -615,10 +615,10 @@ class TestMiddleware:
             seen.append("router-error")
 
         class Observe(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
+            async def dispatch(self, request, proceed) -> None:
                 seen.append("before")
                 try:
-                    await call_next()
+                    await proceed()
                 finally:
                     seen.append("after")
 
@@ -633,16 +633,16 @@ class TestMiddleware:
 
         assert seen == ["before", "after", "router-error"]
 
-    async def test_call_next_is_one_shot(self) -> None:
+    async def test_proceed_is_one_shot(self) -> None:
         errors: list[Exception] = []
 
         async def on_error(interaction, error: Exception, source: str) -> None:
             errors.append(error)
 
         class Twice(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
-                await call_next()
-                await call_next()
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+                await proceed()
 
         router = Router(on_error=on_error)
         router.add_middleware(Twice())
@@ -653,12 +653,12 @@ class TestMiddleware:
         assert len(errors) == 1
         assert "only be called once" in str(errors[0])
 
-    async def test_call_next_expires_when_middleware_returns(self) -> None:
-        saved: list[sl.discord.RouteNext] = []
+    async def test_proceed_expires_when_middleware_returns(self) -> None:
+        saved: list[sl.discord.RouteProceed] = []
 
         class Save(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
-                saved.append(call_next)
+            async def dispatch(self, request, proceed) -> None:
+                saved.append(proceed)
 
         router = Router()
         router.add_middleware(Save())
@@ -672,9 +672,9 @@ class TestMiddleware:
         seen: list[str] = []
 
         class Record(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
+            async def dispatch(self, request, proceed) -> None:
                 seen.append("middleware")
-                await call_next()
+                await proceed()
 
         first = Record()
         router = Router()
@@ -691,9 +691,9 @@ class TestMiddleware:
         requests: list[sl.discord.RouteRequest[discord.Client]] = []
 
         class Capture(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
+            async def dispatch(self, request, proceed) -> None:
                 requests.append(request)
-                await call_next()
+                await proceed()
 
         root = sl.discord.RouteGroup[discord.Client]("r")
         builds = root.group("builds")
@@ -719,12 +719,12 @@ class TestMiddleware:
 
     def test_descriptions_include_effective_middleware_provenance(self) -> None:
         class RouterPolicy(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
-                await call_next()
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
 
         class GroupPolicy(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
-                await call_next()
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
 
         root = sl.discord.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
@@ -741,8 +741,8 @@ class TestMiddleware:
 
     def test_middleware_freezes_at_registration(self) -> None:
         class Policy(sl.discord.Middleware[discord.Client]):
-            async def dispatch(self, request, call_next) -> None:
-                await call_next()
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
 
         root = sl.discord.RouteGroup[discord.Client]("r")
         polls = root.group("polls")

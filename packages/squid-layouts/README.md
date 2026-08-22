@@ -123,16 +123,16 @@ Reusable policy is a `Middleware[BotT]` instance attached before `Router.registe
 
 ```python
 class TraceRoutes(sl.discord.Middleware[Bot]):
-    async def dispatch(self, request, call_next) -> None:
+    async def dispatch(self, request, proceed) -> None:
         with route_span(request):
-            await call_next()
+            await proceed()
 
 router.add_middleware(TraceRoutes())
 polls.add_middleware(PollAuthorization())
 ```
 
 Middleware forms one onion in first-attached, outermost order: router middleware, inherited
-root-to-leaf group middleware, then the handler, unwinding in reverse. Omitting `call_next()`
+root-to-leaf group middleware, then the handler, unwinding in reverse. Omitting `proceed()`
 short-circuits; calling it twice or after `dispatch` returns is an error. The router keeps the
 initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
 short-circuit cannot produce Discord's generic interaction failure.

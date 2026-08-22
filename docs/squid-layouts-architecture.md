@@ -380,7 +380,7 @@ acknowledgement watchdog and unhandled-error boundary
 
 Only router middleware applies to an unmatched id admitted by the reserved namespace. A matched
 route additionally inherits every group attachment in its lineage. Each layer may perform work
-before and after its one `call_next`, catch an inner failure, or short-circuit. The immutable
+before and after its one `proceed`, catch an inner failure, or short-circuit. The immutable
 `RouteRequest` exposes the component kind, canonical `Route`, read-only converted parameters,
 selected values, matched group, and whether an alias matched. It deliberately has no mutable
 dependency bag.
