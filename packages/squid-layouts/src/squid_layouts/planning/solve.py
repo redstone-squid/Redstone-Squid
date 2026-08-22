@@ -320,6 +320,7 @@ def split_pages(
 
     def page_text(start: int, end: int) -> str:
         return chunks[start][1] + "".join(separator + content for separator, content in chunks[start + 1 : end])
+
     cuts = balanced_breaks(
         [BreakItem(len(content), leading_chars=len(separator)) for separator, content in chunks],
         max_chars=limit,
@@ -1061,6 +1062,106 @@ def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[str]:
     return notes
 
 
+def _variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
+    """Count reachable rung assignments, stopping once the bounded search cannot exhaust them."""
+
+    def multiply(values: Sequence[int]) -> int:
+        product = 1
+        for value in values:
+            product *= value
+            if product > cutoff:
+                return cutoff + 1
+        return product
+
+    def count_node(node: Node) -> int:
+        match node:
+            case Variants(variants=variants):
+                total = 0
+                for variant in variants:
+                    total += multiply([count_node(child) for child in variant.nodes])
+                    if total > cutoff:
+                        return cutoff + 1
+                return total
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
+                return multiply([count_node(child) for child in children])
+            case _:
+                return 1
+
+    return multiply([count_node(node) for node in nodes])
+
+
+def _static_components(nodes: Sequence[Node], limits: V2Limits) -> int:
+    builder = _Builder(limits=limits)
+    return _component_count(_prune(builder.realize_children(_resolve_variants(nodes, {}))))
+
+
+def _guided_variant_solve(
+    tree: list[Node],
+    *,
+    limits: V2Limits,
+    chrome: Chrome,
+    reserved_text: int,
+    position: PositionState,
+    nav: PlannedNav | None,
+    search_budget: int,
+) -> SolvedLayout:
+    """Preserve priority and breadth while guiding an intractable product by component savings."""
+    positions: dict[_VariantPath, int] = {}
+    states_explored = 0
+    solved: SolvedLayout | None = None
+    while states_explored < search_budget:
+        structural = _variant_profile(tree, positions)
+        solved = _solve_once(
+            tree,
+            positions=positions,
+            limits=limits,
+            chrome=chrome,
+            reserved_text=reserved_text,
+            position=position,
+            nav=nav,
+            notes=_variant_notes(tree, positions),
+        )
+        states_explored += 1
+        solved = replace(
+            solved,
+            degradation=solved.degradation.merged(structural),
+            states_explored=states_explored,
+            search_fallback=bool(positions) or solved.components > limits.total_components,
+            variant_positions=tuple(positions.items()),
+        )
+        if solved.components <= limits.total_components and not _hard_failure(solved):
+            break
+        remaining = _steppable(tree, positions)
+        if not remaining:
+            break
+        priority, rung = min((ladder.priority, current) for _path, ladder, current in remaining)
+        peers = [
+            (path, ladder, current)
+            for path, ladder, current in remaining
+            if ladder.priority == priority and current == rung
+        ]
+
+        def candidate(
+            order: int,
+            path: _VariantPath,
+            ladder: Variants,
+            current: int,
+            base_positions: dict[_VariantPath, int],
+        ) -> tuple[int, int, dict[_VariantPath, int]]:
+            neighbor = dict(base_positions)
+            neighbor[path] = current + 1
+            neighbor = _canonical_positions(tree, neighbor)
+            current_components = _static_components(ladder.variants[current].nodes, limits)
+            next_components = _static_components(ladder.variants[current + 1].nodes, limits)
+            return next_components - current_components, order, neighbor
+
+        _delta, _order, positions = min(
+            candidate(order, path, ladder, current, positions) for order, (path, ladder, current) in enumerate(peers)
+        )
+    assert solved is not None
+    return solved
+
+
 def _hard_failure(solved: SolvedLayout) -> bool:
     return any(note.startswith("Never nodes need") or note.startswith("Budget floors need") for note in solved.notes)
 
@@ -1126,6 +1227,19 @@ def solve(
         raise ValueError(message)
     chrome = localize_chrome(chrome, localization)
     tree = list(nodes)
+    if _variant_state_bound(tree, search_budget) > search_budget:
+        selected = _guided_variant_solve(
+            tree,
+            limits=limits,
+            chrome=chrome,
+            reserved_text=reserved_text,
+            position=position,
+            nav=nav,
+            search_budget=search_budget,
+        )
+        if strict and selected.notes:
+            raise LayoutOverflowError(selected.notes)
+        return selected
     frontier: list[tuple[DegradationProfile, int, dict[_VariantPath, int]]] = []
     serial = count()
     heappush(frontier, (DegradationProfile(), next(serial), {}))
@@ -1165,6 +1279,9 @@ def solve(
             best_overflow.degradation,
         ):
             best_overflow = solved
+
+        if solved.components <= limits.total_components and not _hard_failure(solved):
+            continue
 
         for path, _ladder, rung in _steppable(tree, positions):
             neighbor = dict(positions)

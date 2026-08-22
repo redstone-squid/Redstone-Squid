@@ -118,5 +118,12 @@ Algorithmic follow-up implemented 2026-08-22: the same bounded search budget now
 measured structural variant states as well as semantic assignments. Degraded candidates carry
 a priority-aware structured loss profile, letting the planner choose semantic fallback before
 truncation, spill, or whole-node drop and use semantic strategy cost only as the tie. Winning
-variant positions are cached alongside strategy assignments. Validation is intentionally
-pending while concurrent changes elsewhere in the repository settle.
+variant positions are cached alongside strategy assignments. Structural products that fit the
+budget are enumerated exactly; larger products use a deterministic guided fallback that preserves
+priority and breadth while choosing the equal-cost rung with the greatest local component saving.
+This keeps large independent ladder sets bounded without weakening exact search for tractable
+documents.
+
+Validation: focused breaking, pagination, solver-pressure, degradation, structure, search,
+semantic-action, and cache regressions pass; the complete package suite passes all 622 tests;
+and `just typecheck` reports zero errors.

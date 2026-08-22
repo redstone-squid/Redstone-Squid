@@ -24,6 +24,7 @@ from squid_layouts.primitives import (
     Alt,
     Lines,
     LinkButton,
+    Never,
     Node,
     Option,
     Paginate,
@@ -138,6 +139,22 @@ class TestVariants:
         solved = solve(panels)
         assert any("exceed" in note for note in solved.notes)
 
+    def test_a_later_rung_can_resolve_a_hard_failure_without_component_pressure(self):
+        solved = solve([Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))])
+
+        assert _rendered(solved) == "plain"
+        assert not any("Never nodes need" in note for note in solved.notes)
+
+    def test_the_bounded_fallback_can_resolve_a_hard_failure(self):
+        hard = Variants.of(Text("x" * 5000, overflow=Never()), Text("plain"))
+        unrelated = Variants.of(Text("preferred"), Text("alternate"))
+
+        solved = solve([hard, unrelated], search_budget=2)
+
+        assert "plain" in _rendered(solved)
+        assert solved.search_fallback
+        assert not any("Never nodes need" in note for note in solved.notes)
+
     def test_reused_ladder_values_still_step_one_occurrence_at_a_time(self):
         shared = _ladder_document(1)[0]
         solved = solve([shared] * 11)
@@ -245,7 +262,7 @@ class TestVariantLadders:
 
         solved = solve([*filler, ineffective, effective], search_budget=2)
 
-        assert solved.components > LIMITS.total_components
+        assert solved.components <= LIMITS.total_components
         assert solved.states_explored == 2
         assert solved.search_fallback
 
