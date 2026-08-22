@@ -63,6 +63,7 @@ from squid_layouts.profiling import (
     OperationRecorder,
     PresentationOutcome,
     Profiler,
+    TraceLink,
     TraceOutcome,
     TraceResult,
 )
@@ -577,7 +578,13 @@ class Mount:
         """
         return self._draw(self.runtime.render(), disabled=disabled)
 
-    def _draw(self, tree: ComponentTree, *, disabled: bool = False) -> _Candidate:
+    def _draw(
+        self,
+        tree: ComponentTree,
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+    ) -> _Candidate:
         """Plan and draw one rendered tree into a candidate generation."""
         self._issued += 1
         generation = self._issued
@@ -627,6 +634,7 @@ class Mount:
                 nav=nav,
                 session=self.presentation,
                 cache=self.runtime.plan_cache,
+                profile=profile,
             )
             if not isinstance(composition.view, MountedView):
                 message = "mounted Discord renderer returned the wrong view type"
@@ -747,7 +755,12 @@ class Mount:
 
     # --- Loading -----------------------------------------------------------------------
 
-    async def _stage_loaded(self, *, disabled: bool = False) -> _Candidate:
+    async def _stage_loaded(
+        self,
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+    ) -> _Candidate:
         """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
@@ -762,19 +775,41 @@ class Mount:
         A raise leaves every completed load completed, every other one eligible to retry, and
         nothing staged, so the mount is exactly as deliverable as it was.
         """
-        for _ in range(_MAX_LOAD_PASSES):
+        for pass_index in range(_MAX_LOAD_PASSES):
             if _needs_load(root := self.runtime.root):
-                await self._load_all((root,))
+                if profile is None:
+                    await self._load_all((root,))
+                else:
+                    with profile.span("component_load", attributes={"count": 1, "pass": pass_index}):
+                        await self._load_all((root,))
                 continue
-            tree = self.runtime.render(defer=_needs_load)
+            if profile is None:
+                tree = self.runtime.render(defer=_needs_load)
+            else:
+                with profile.span("runtime_render", attributes={"pass": pass_index}):
+                    tree = self.runtime.render(defer=_needs_load)
             if tree.deferred:
-                await self._load_all(tree.deferred)
+                if profile is None:
+                    await self._load_all(tree.deferred)
+                else:
+                    with profile.span(
+                        "component_load",
+                        attributes={"count": len(tree.deferred), "pass": pass_index},
+                    ):
+                        await self._load_all(tree.deferred)
                 continue
             atomic = self._pending_resources(tree, ResourceDelivery.ATOMIC)
             if atomic:
-                await self._settle_resources(atomic)
+                if profile is None:
+                    await self._settle_resources(atomic)
+                else:
+                    with profile.span(
+                        "resource_settle.atomic",
+                        attributes={"count": len(atomic), "pass": pass_index},
+                    ):
+                        await self._settle_resources(atomic)
                 continue
-            return self._draw(tree, disabled=disabled)
+            return self._draw(tree, disabled=disabled, profile=profile)
         message = f"mount {self.id}: component and resource loading did not settle in {_MAX_LOAD_PASSES} passes"
         raise LayoutInvariantError(message)
 
@@ -791,21 +826,34 @@ class Mount:
             for resource in resources:
                 tasks.start_soon(resource._settle)
 
-    async def _settle_visible(self, committed: _Candidate, *, through: deliver.EditHandle | None = None) -> None:
+    async def _settle_visible(
+        self,
+        committed: _Candidate,
+        *,
+        through: deliver.EditHandle | None = None,
+        profile: OperationRecorder | None = None,
+    ) -> None:
         """Advance visible resources from their committed pending paint to settled paints."""
         candidate = committed
-        for _ in range(_MAX_LOAD_PASSES):
+        for pass_index in range(_MAX_LOAD_PASSES):
             resources = self._pending_resources(candidate.tree, ResourceDelivery.VISIBLE)
             if not resources or self.runtime.dirty:
                 return
             if self._handle is None or self._handle.expired():
                 self._dirty = True
                 return
-            await self._settle_resources(resources)
+            if profile is None:
+                await self._settle_resources(resources)
+            else:
+                with profile.span(
+                    "resource_settle.visible",
+                    attributes={"count": len(resources), "pass": pass_index},
+                ):
+                    await self._settle_resources(resources)
             settled: _Candidate | None = None
             try:
-                settled = await self._stage_loaded()
-                wrote = await self._deliver(settled, through=through)
+                settled = await self._stage_loaded(profile=profile)
+                wrote = await self._deliver(settled, through=through, profile=profile)
             except Exception:
                 if settled is not None:
                     self._rollback(settled)
@@ -814,7 +862,11 @@ class Mount:
             if wrote is None:
                 self._rollback(settled)
                 return
-            await self._commit_presented(settled)
+            if profile is None:
+                await self._commit_presented(settled)
+            else:
+                with profile.span("commit"):
+                    await self._commit_presented(settled)
             candidate = settled
         self._dirty = True
         logger.error(
@@ -852,32 +904,48 @@ class Mount:
         The structured result distinguishes a committed delivery, including a handle-less
         one, from a destination that deliberately abandoned delivery.
         """
-        async with self._render_lock:
-            if self._finished:
-                return deliver.Abandoned()
-            # A render staged by `_stage_view` and never delivered is superseded, not delivered.
-            if self._pending is not None:
-                self._pending.view.stop()
-                self._pending = None
-            # Component on_load and atomic resources settle first. Visible resources
-            # deliberately make this the pending paint and settle after it commits.
-            candidate = await self._stage_loaded()
+        component = type(self.component)
+        name = f"{component.__module__}.{component.__qualname__}"
+        with self.profiler.operation(OperationKind.SEND, name=name) as profile:
+            with profile.span("render_lock"):
+                await self._render_lock.acquire()
             try:
-                receipt = await destination(candidate.view, files_for(candidate.assets))
-            except deliver.DeliveryAbandoned:
-                logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
-                self._rollback(candidate)
-                return deliver.Abandoned()
-            except Exception:
-                self._rollback(candidate)
-                raise
-            self._handle = receipt.handle
-            if receipt.message is not None:
-                self._note_address(receipt.message)
-            self._active = self.clock()
-            await self._commit_presented(candidate)
-            await self._settle_visible(candidate)
-            return deliver.Delivered(receipt)
+                if self._finished:
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return deliver.Abandoned()
+                # A render staged by `_stage_view` and never delivered is superseded, not delivered.
+                if self._pending is not None:
+                    with profile.span("supersede"):
+                        self._pending.view.stop()
+                        self._pending = None
+                # Component on_load and atomic resources settle first. Visible resources
+                # deliberately make this the pending paint and settle after it commits.
+                candidate = await self._stage_loaded(profile=profile)
+                try:
+                    destination_type = f"{type(destination).__module__}.{type(destination).__qualname__}"
+                    with profile.span("discord_write", attributes={"destination": destination_type}):
+                        receipt = await destination(candidate.view, files_for(candidate.assets))
+                except deliver.DeliveryAbandoned:
+                    logger.debug("mount %s was not delivered: the destination abandoned it", self.id)
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return deliver.Abandoned()
+                except Exception:
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    raise
+                self._handle = receipt.handle
+                if receipt.message is not None:
+                    self._note_address(receipt.message)
+                self._active = self.clock()
+                with profile.span("commit"):
+                    await self._commit_presented(candidate)
+                await self._settle_visible(candidate, profile=profile)
+                profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
+                return deliver.Delivered(receipt)
+            finally:
+                self._render_lock.release()
 
     def _swap_view(self, view: MountedView) -> None:
         if self._view is not None and self._view is not view:
@@ -885,7 +953,12 @@ class Mount:
         self._view = view
 
     async def _deliver(
-        self, candidate: _Candidate, *, through: deliver.EditHandle | None = None, files: bool = True
+        self,
+        candidate: _Candidate,
+        *,
+        through: deliver.EditHandle | None = None,
+        files: bool = True,
+        profile: OperationRecorder | None = None,
     ) -> deliver.EditHandle | None:
         """Show a staged render, through `through` when it is usable and the standing handle otherwise.
 
@@ -902,7 +975,13 @@ class Mount:
             if handle is None or handle.expired():
                 continue
             try:
-                await handle.write(candidate.view, attachments=attachments)
+                if profile is None:
+                    await handle.write(candidate.view, attachments=attachments)
+                else:
+                    source = "interaction" if handle is through else "standing"
+                    handle_type = f"{type(handle).__module__}.{type(handle).__qualname__}"
+                    with profile.span("discord_write", attributes={"source": source, "handle": handle_type}):
+                        await handle.write(candidate.view, attachments=attachments)
             except deliver.StaleHandleError:
                 logger.debug("mount %s discarded a stale edit handle", self.id, exc_info=True)
                 if handle is self._handle:
@@ -1416,9 +1495,33 @@ class Mount:
         profile: _DispatchProfile | None = None,
     ) -> PresentationOutcome:
         """Apply pending state changes as an interaction edit, or just acknowledge."""
+        if profile is not None:
+            with profile.operation.span("flush"):
+                return await self._flush(interaction, profile.operation, dispatch=profile)
+        with self.profiler.operation(OperationKind.DELIVERY, name="flush") as operation:
+            try:
+                presentation = await self._flush(interaction, operation)
+            except Exception:
+                operation.set_result(TraceResult(TraceOutcome.FAILED, presentation=PresentationOutcome.FAILED))
+                raise
+            outcome = (
+                TraceOutcome.ABANDONED if presentation is PresentationOutcome.ABANDONED else TraceOutcome.COMPLETED
+            )
+            operation.set_result(TraceResult(outcome, presentation=presentation))
+            return presentation
+
+    async def _flush(
+        self,
+        interaction: discord.Interaction,
+        operation: OperationRecorder,
+        *,
+        dispatch: _DispatchProfile | None = None,
+    ) -> PresentationOutcome:
         acknowledge = False
         presentation = PresentationOutcome.NO_CHANGE
-        async with self._render_lock:
+        with operation.span("render_lock"):
+            await self._render_lock.acquire()
+        try:
             if self._finished:
                 return PresentationOutcome.ABANDONED
             if not self._dirty:
@@ -1426,29 +1529,34 @@ class Mount:
             else:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
-                candidate = await self._stage_loaded()
+                candidate = await self._stage_loaded(profile=operation)
                 source = deliver.handle_from(interaction)
                 try:
-                    wrote = await self._deliver(candidate, through=source)
+                    wrote = await self._deliver(candidate, through=source, profile=operation)
                 except Exception:
-                    self._rollback(candidate)
+                    with operation.span("rollback"):
+                        self._rollback(candidate)
                     raise
                 if wrote is None:
-                    self._rollback(candidate)
+                    with operation.span("rollback"):
+                        self._rollback(candidate)
                     acknowledge = True
                     presentation = PresentationOutcome.ABANDONED
                 else:
-                    await self._commit_presented(candidate)
-                    await self._settle_visible(candidate, through=source)
+                    with operation.span("commit"):
+                        await self._commit_presented(candidate)
+                    await self._settle_visible(candidate, through=source, profile=operation)
                     presentation = PresentationOutcome.WRITTEN
-                    if profile is not None and wrote is source:
-                        profile.acknowledge("interaction_write")
+                    if dispatch is not None and wrote is source:
+                        dispatch.acknowledge("interaction_write")
                     # Only the interaction's own handle answers the click by editing through
                     # it. Delivery through the standing handle leaves the click unanswered,
                     # and Discord shows the user "This interaction failed" three seconds later.
                     acknowledge = wrote is not source
+        finally:
+            self._render_lock.release()
         if acknowledge:
-            await self._acknowledge(interaction, profile=profile, source="flush")
+            await self._acknowledge(interaction, profile=dispatch, source="flush")
             if presentation is PresentationOutcome.NO_CHANGE:
                 presentation = PresentationOutcome.ACKNOWLEDGED
         return presentation
@@ -1500,27 +1608,42 @@ class Mount:
             return
         await self.refresh_now()
 
-    async def refresh_now(self) -> None:
-        async with self._render_lock:
-            if self._finished:
-                return
-            if self._handle is None or self._handle.expired():
-                self._dirty = True
-                return
-            candidate = await self._stage_loaded()
+    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> None:
+        component = type(self.component)
+        name = f"{component.__module__}.{component.__qualname__}"
+        with self.profiler.operation(OperationKind.REFRESH, name=name, links=links) as profile:
+            with profile.span("render_lock"):
+                await self._render_lock.acquire()
             try:
-                delivered = await self._deliver(candidate) is not None
-            except Exception:
-                self._rollback(candidate)
-                raise
-            if not delivered:
-                # `_rollback` leaves the mount dirty, so the next interaction shows this render.
-                # `refresh` has always promised the next opportunity rather than this instant.
-                self._rollback(candidate)
-                logger.debug("mount %s has no live edit handle; render deferred", self.id)
-                return
-            await self._commit_presented(candidate)
-            await self._settle_visible(candidate)
+                if self._finished:
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return
+                if self._handle is None or self._handle.expired():
+                    self._dirty = True
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return
+                candidate = await self._stage_loaded(profile=profile)
+                try:
+                    delivered = await self._deliver(candidate, profile=profile) is not None
+                except Exception:
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    profile.set_result(TraceResult(TraceOutcome.FAILED, presentation=PresentationOutcome.FAILED))
+                    raise
+                if not delivered:
+                    # `_rollback` leaves the mount dirty, so the next interaction shows this render.
+                    # `refresh` has always promised the next opportunity rather than this instant.
+                    with profile.span("rollback"):
+                        self._rollback(candidate)
+                    logger.debug("mount %s has no live edit handle; render deferred", self.id)
+                    profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
+                    return
+                with profile.span("commit"):
+                    await self._commit_presented(candidate)
+                await self._settle_visible(candidate, profile=profile)
+                profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
+            finally:
+                self._render_lock.release()
 
     def on_presented(self, callback: PresentedHook) -> None:
         """Observe future generations after Discord delivery and local commit both succeed."""

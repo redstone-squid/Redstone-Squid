@@ -80,6 +80,7 @@ from squid_layouts.profiling import (
     ActionOutcome,
     DispatchDisposition,
     MemoryProfiler,
+    OperationKind,
     PresentationOutcome,
     RuntimeTrace,
     TraceOutcome,
@@ -189,6 +190,14 @@ def _profile_trace(profiler: MemoryProfiler) -> RuntimeTrace:
     return next(iter(unique.values()))
 
 
+def _operation_trace(profiler: MemoryProfiler, operation: OperationKind) -> RuntimeTrace:
+    snapshot = profiler.snapshot()
+    traces = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
+    matches = {trace.trace_id: trace for trace in traces if trace.operation is operation}
+    assert len(matches) == 1
+    return next(iter(matches.values()))
+
+
 class TestDispatchProfiling:
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()
@@ -218,6 +227,18 @@ class TestDispatchProfiling:
             "binding",
             "action_lock",
             "handler",
+            "flush",
+            "runtime_render",
+            "planner",
+            "renderer",
+            "discord_write",
+            "commit",
+        }
+        planner = next(span for span in trace.spans if span.name == "planner")
+        assert {attribute.key for attribute in planner.attributes} == {
+            "cache_hit",
+            "states_explored",
+            "search_fallback",
         }
         acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
         assert dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes) == {
@@ -1705,6 +1726,39 @@ class TestSend:
         assert mount.handle is not None
         assert mount.handle.permanent
 
+    async def test_send_and_refresh_share_render_delivery_spans(self) -> None:
+        profiler = MemoryProfiler()
+        component = Counter()
+        mount = Mount(component, access=Everyone(), profiler=profiler, timeout=None)
+        message = fake_message()
+
+        await mount.send(delivered_to(message))
+
+        sent = _operation_trace(profiler, OperationKind.SEND)
+        assert sent.result.presentation is PresentationOutcome.WRITTEN
+        assert {span.name for span in sent.spans} >= {
+            "render_lock",
+            "runtime_render",
+            "planner",
+            "renderer",
+            "discord_write",
+            "commit",
+        }
+
+        component.count = 4
+        await mount.refresh_now()
+
+        refreshed = _operation_trace(profiler, OperationKind.REFRESH)
+        assert refreshed.result.presentation is PresentationOutcome.WRITTEN
+        assert {span.name for span in refreshed.spans} >= {
+            "render_lock",
+            "runtime_render",
+            "planner",
+            "renderer",
+            "discord_write",
+            "commit",
+        }
+
     async def test_a_successful_send_keeps_the_receipts_handle_without_reconstructing_it(self):
         mount = Mount(Counter(), access=Everyone(), timeout=None)
         message = fake_message()
@@ -2364,7 +2418,8 @@ class TestResourceLoading:
         panel = VisibleResourcePanel(load)
         message: Any = fake_message()
         destination = _Destination(message)
-        mount = Mount(panel, access=Everyone(), timeout=None)
+        profiler = MemoryProfiler()
+        mount = Mount(panel, access=Everyone(), profiler=profiler, timeout=None)
 
         await mount.send(destination)
 
@@ -2373,6 +2428,8 @@ class TestResourceLoading:
         message.edit.assert_awaited_once()
         assert "ready:loaded" in str(message.edit.await_args.kwargs["view"].to_components())
         assert not mount.pending
+        trace = _operation_trace(profiler, OperationKind.SEND)
+        assert "resource_settle.visible" in {span.name for span in trace.spans}
 
     async def test_atomic_resource_delivers_only_the_settled_render(self) -> None:
         async def load() -> str:
@@ -2380,13 +2437,16 @@ class TestResourceLoading:
 
         message: Any = fake_message()
         destination = _Destination(message)
-        mount = Mount(AtomicResourcePanel(load), access=Everyone(), timeout=None)
+        profiler = MemoryProfiler()
+        mount = Mount(AtomicResourcePanel(load), access=Everyone(), profiler=profiler, timeout=None)
 
         await mount.send(destination)
 
         assert len(destination.calls) == 1
         assert "ready:loaded" in str(destination.calls[0][0].to_components())
         message.edit.assert_not_awaited()
+        trace = _operation_trace(profiler, OperationKind.SEND)
+        assert "resource_settle.atomic" in {span.name for span in trace.spans}
 
     async def test_visible_failure_is_rendered_as_state(self) -> None:
         async def load(_key: str) -> str:
