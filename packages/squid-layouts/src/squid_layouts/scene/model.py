@@ -25,6 +25,13 @@ class SceneTime:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneFile:
+    asset_key: str
+    name: str
+    media_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class SceneSeparator:
     large: bool = False
     visible: bool = True
@@ -137,6 +144,7 @@ class SceneExtension:
 type SceneNode = (
     SceneText
     | SceneTime
+    | SceneFile
     | SceneSeparator
     | SceneRow
     | SceneSelect

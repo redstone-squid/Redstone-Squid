@@ -17,6 +17,7 @@ from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Protocol, override
+from urllib.parse import urlsplit
 
 import anyio
 import discord
@@ -28,7 +29,7 @@ from squid_layouts.discord import live
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.compose import Composition, compose
 from squid_layouts.discord.renderer import Renderer
-from squid_layouts.document import Asset, Document, InlineAsset
+from squid_layouts.document import Asset, Document, InlineAsset, StoredAsset
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.planning.limits import LIMITS, V2Limits
@@ -52,6 +53,9 @@ from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
     SceneDocument,
+    SceneFile,
+    SceneNode,
+    ScenePanel,
     SceneSelect,
 )
 from squid_layouts.semantic import Status
@@ -510,10 +514,12 @@ class Mount:
             return composition.view, composition
 
         view, composition = draw()
+        linked_assets = _linked_file_assets(composition.plan.scene.children, composition.plan.resources)
         assets = tuple(
             asset
             for scene_asset in composition.plan.scene.assets
             if isinstance(asset := composition.plan.resources.get(f"asset:{scene_asset.key}"), Asset)
+            and scene_asset.key not in linked_assets
         )
         if disabled:
             _disable_all(view)
@@ -1112,6 +1118,23 @@ def _attachment_files(assets: Sequence[Asset]) -> list[discord.File]:
             raise TypeError(message)
         files.append(discord.File(io.BytesIO(asset.source.data), filename=asset.name))
     return files
+
+
+def _linked_file_assets(nodes: Sequence[SceneNode], resources: Mapping[str, object]) -> frozenset[str]:
+    linked: set[str] = set()
+    for node in nodes:
+        if isinstance(node, ScenePanel):
+            linked.update(_linked_file_assets(node.children, resources))
+            continue
+        if not isinstance(node, SceneFile):
+            continue
+        resource = resources.get(f"asset:{node.asset_key}")
+        if not isinstance(resource, Asset) or not isinstance(resource.source, StoredAsset):
+            continue
+        parsed = urlsplit(resource.source.reference)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            linked.add(node.asset_key)
+    return frozenset(linked)
 
 
 def _disable_all(view: discord.ui.LayoutView) -> None:

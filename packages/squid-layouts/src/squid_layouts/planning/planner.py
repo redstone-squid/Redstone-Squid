@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC
 
 from squid_layouts.actions import ActionBinding
+from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
@@ -36,6 +37,7 @@ from squid_layouts.primitives.nodes import (
     Button,
     Embed,
     Extension,
+    File,
     Footer,
     FormButton,
     Gallery,
@@ -66,6 +68,7 @@ from squid_layouts.scene.model import (
     SceneButton,
     SceneDocument,
     SceneExtension,
+    SceneFile,
     SceneGallery,
     SceneGalleryItem,
     SceneLink,
@@ -86,6 +89,17 @@ from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
+
+
+def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
+    merged: dict[str, Asset] = {}
+    for asset in (asset for group in groups for asset in group):
+        existing = merged.get(asset.key)
+        if existing is not None and existing != asset:
+            message = f"asset key {asset.key!r} identifies two different assets"
+            raise LayoutInvariantError(message)
+        merged.setdefault(asset.key, asset)
+    return tuple(merged.values())
 
 
 @dataclass(slots=True)
@@ -148,6 +162,8 @@ class _Converter:
                 return SceneText(content)
             case RTime(instant=instant, style=style, prefix=prefix):
                 return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
+            case File(asset_key=asset_key, name=name, media_type=media_type):
+                return SceneFile(asset_key, name, media_type)
             case RPanel(children=children, accent=accent):
                 return ScenePanel(
                     tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent
@@ -568,10 +584,11 @@ def plan(
             strategies=dict(cached.strategies),
         )
         lowered = _lower_children(semantic.nodes, target, limits)
+        assets = _merge_assets(document.assets, semantic.assets)
         _validate(lowered, limits)
         selected_nodes = _resolve_variants(lowered, dict(cached.variant_positions))
         converter = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
-        resources = {f"asset:{asset.key}": asset for asset in document.assets}
+        resources = {f"asset:{asset.key}": asset for asset in assets}
         return PlanResult(
             scene=cached.scene,
             bindings=converter.bindings,
@@ -600,6 +617,7 @@ def plan(
     )
     broker = attempt.broker
     semantic = attempt.semantic
+    assets = _merge_assets(document.assets, semantic.assets)
     lowered = attempt.lowered
     solved = attempt.solved
     root_events: tuple[PlanEvent, ...] = ()
@@ -652,7 +670,7 @@ def plan(
         target=target.id,
         target_version=target.version,
         children=converter.children(solved.children),
-        assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in document.assets),
+        assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )
     fingerprint = SceneCodec.fingerprint(scene)
@@ -672,7 +690,7 @@ def plan(
         scene_fingerprint=fingerprint,
     )
     resources = dict(converter.resources)
-    resources.update({f"asset:{asset.key}": asset for asset in document.assets})
+    resources.update({f"asset:{asset.key}": asset for asset in assets})
     updates = semantic.updates + broker.updates
     result = PlanResult(
         scene=scene,
