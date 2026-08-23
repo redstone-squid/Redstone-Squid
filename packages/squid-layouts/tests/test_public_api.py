@@ -94,6 +94,9 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.classic.compose
     assert sl.discord.SessionKey
     assert sl.discord.SessionPolicy
+    assert sl.discord.Screen
+    assert sl.discord.Scope
+    assert sl.discord.Opener
     assert sl.discord.DiscordPresentation
     assert sl.discord.DiscordMode.COMPONENTS_V2
     assert sl.discord.DiscordModeError

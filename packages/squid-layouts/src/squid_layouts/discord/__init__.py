@@ -77,6 +77,7 @@ from squid_layouts.discord.routing import (
     RouteRequest,
     routers,
 )
+from squid_layouts.discord.screens import Opener, Scope, Screen
 from squid_layouts.discord.sessions import (
     CollisionDecision,
     CollisionPolicy,
@@ -187,6 +188,7 @@ __all__ = [
     "OpenResult",
     "Opened",
     "OpeningRequest",
+    "Opener",
     "Owner",
     "PauseUpdates",
     "ProtectCrossUserAttachments",
@@ -217,6 +219,8 @@ __all__ = [
     "SessionRegistry",
     "SessionScope",
     "SessionSummary",
+    "Scope",
+    "Screen",
     "StaleHandleError",
     "StaleReservationError",
     "StaticClassicView",
