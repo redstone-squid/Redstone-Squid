@@ -3,6 +3,7 @@
 import pytest
 
 from squid_layouts import (
+    Importance,
     Paragraph,
     UnsolvableLayoutError,
     best_effort,
@@ -30,7 +31,21 @@ def test_optional_explicitly_grants_whole_node_loss() -> None:
     result = plan((Paragraph("x" * 4000), optional(Paragraph("footnote"))), target=V2_TARGET)
 
     assert len(result.scene.components_v2.children) == 1
-    assert any(event.code == f"layout.{SolveNoteCode.NODE_DROPPED}" for event in result.report.events)
+    assert any(event.code == f"layout.{SolveNoteCode.OPTIONAL_DROPPED}" for event in result.report.events)
+
+
+def test_optional_importance_orders_whole_region_loss() -> None:
+    result = plan(
+        (
+            Paragraph("x" * 3980),
+            optional(Paragraph("low priority"), importance=Importance.LOW),
+            optional(Paragraph("high priority"), importance=Importance.HIGH),
+        ),
+        target=V2_TARGET,
+    )
+
+    contents = [child.content for child in result.scene.components_v2.children]  # type: ignore[union-attr]
+    assert contents == ["x" * 3980, "high priority"]
 
 
 def test_best_effort_only_relaxes_prose() -> None:
