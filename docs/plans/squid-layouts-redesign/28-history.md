@@ -113,6 +113,17 @@ stayed changed is the lie this ordering exists to prevent. `redo()` mirrors it w
 do not nest) and real rollback safety for a background caller, and it makes the state
 restore atomic with everything after it.
 
+**Amendment (external review 43):** the stack pop/push and owner invalidation are action
+commit hooks, just like `record()`'s push. The state restore is therefore staged immediately,
+but an enclosing action that later raises rolls back the restore without changing either
+history stack. The hook key also reserves the history for one operation per action: a second
+`record()`, `undo()`, or `redo()` raises instead of applying the same pending stack entry
+twice.
+
+The framework cannot roll back a successful external inverse. After an undo or redo carrying
+one succeeds, do not perform unrelated fallible work in the same action: a later rollback can
+restore component state and preserve the stack, but it cannot un-call a database or API.
+
 ### 6. The inverse may not write component state
 
 For the duration of the `await`, the ambient transaction carries a write block
