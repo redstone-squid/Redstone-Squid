@@ -4,6 +4,7 @@ import logging
 from collections.abc import Callable
 
 import pytest
+
 from squid_reactive import LocalTopicBus, SubscriptionReconciler, Topic, TopicBus, observe_reads, watch
 from squid_reactive.topics import Address
 

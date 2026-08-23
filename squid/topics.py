@@ -9,12 +9,12 @@ every subscriber re-reads the database, exactly as it does for a local publish.
 from typing import Protocol
 
 import asyncpg
-from squid_reactive import Address, Topic, TopicBus
 
 from squid.config import DatabaseConfig
 from squid.persistence.wake_listener import asyncpg_dsn
 from squid.posts.domain import ResourceKind
 from squid_layouts.discord.durability import PostgresTopicBridge
+from squid_reactive import Address, Topic, TopicBus
 
 RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"
 """The PostgreSQL channel every Squid process shares."""
