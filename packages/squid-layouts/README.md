@@ -66,6 +66,9 @@ There are three ways to adopt the package, and they can be mixed in one bot:
    routed controls only, since no mount exists to wire a component-local callback.
 3. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
 
+See [Migrating an existing discord.py bot](docs/migrating.md) for an incremental path covering
+V2 and classic contributions, persistent routes, mounts, sessions, forms, and durability.
+
 A fragment is not a miniature mount. If two independently stateful regions need to edit one
 message, give them a single parent component, or keep the legacy view as the sole owner and make
 the Squid region stateless. Components nest through explicit
