@@ -8,7 +8,7 @@ or drop, so looking at it and acting on it belong to the same message (audit C5'
 the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping
 from typing import cast
 
 import discord
@@ -22,6 +22,7 @@ from squid.accounts.domain import (
     MAX_LINK_URL_LENGTH,
     MAX_PROFILE_LINKS,
     MAX_PRONOUNS_LENGTH,
+    AccountConsent,
     AccountIdentity,
     AccountProfile,
     IdentityProvider,
@@ -29,7 +30,7 @@ from squid.accounts.domain import (
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountNotFoundError
-from squid.bot.consent import NOT_ASKED, prompt_for_consent
+from squid.bot.consent import request_consent
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
 from squid.bot.ui import DISCORD_BLUE, CardField, create_mount
@@ -205,20 +206,24 @@ class AccountPanel(sl.Component):
 
     async def _toggle_identity(self, event: sl.ToggleEvent) -> None:
         identity = self.selected
-        if identity is None or identity.id is None or not await self._consented(event):
+        if identity is None or identity.id is None:
             return
-        await self._accounts.set_identity_visibility(
-            self._account_id,
-            identity.id,
-            is_public=event.value,
-        )
-        await self._reload()
+        identity_id, is_public = identity.id, event.value
+
+        async def apply() -> None:
+            await self._accounts.set_identity_visibility(self._account_id, identity_id, is_public=is_public)
+            await self._reload()
+
+        await self._with_consent(event, apply)
 
     async def _toggle_page(self, event: sl.ToggleEvent) -> None:
-        if not await self._consented(event):
-            return
-        await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=not event.value))
-        await self._reload()
+        hidden = not event.value
+
+        async def apply() -> None:
+            await self._accounts.update_profile(self._account_id, ProfileUpdate(hidden=hidden))
+            await self._reload()
+
+        await self._with_consent(event, apply)
 
     async def _unlink(self, event: sl.PressEvent) -> None:
         identity = self.selected
@@ -240,24 +245,10 @@ class AccountPanel(sl.Component):
         )
 
     async def _edit_page(self, event: sl.PressEvent) -> None:
-        interaction = sl.discord.native(event)
-        if self._needs_consent:
-            consent = await prompt_for_consent(
-                interaction,
-                user_id=self._author_id,
-                locale=self.locale,
-                parent=sl.discord.responder(event).mount,
-            )
-            if consent is NOT_ASKED:
-                return
-            if consent is None:
-                await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
-                return
-            await self._accounts.grant_current_consent(self._account_id)
-            self._needs_consent = False
-            await event.notice(t(self.locale, _("Thanks. Press **Edit page** again to open the editor.")))
-            return
-        self._profile_editor = self._build_profile_editor()
+        async def apply() -> None:
+            self._profile_editor = self._build_profile_editor()
+
+        await self._with_consent(event, apply)
 
     def _build_profile_editor(self) -> sl.patterns.ComponentShell[sl.patterns.EditorState]:
         profile_section = sl.patterns.EditorSection.form(
@@ -386,24 +377,37 @@ class AccountPanel(sl.Component):
     async def _cancel_profile_edit(self, _event: sl.PressEvent) -> None:
         self._profile_editor = None
 
-    async def _consented(self, event: sl.ActionEvent) -> bool:
-        await event.acknowledge()
+    async def _with_consent(self, event: sl.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
+        """Run `work` now, or once the reader has agreed to be recorded.
+
+        Opening the notice ends this press: `request_consent` returns as soon as it is on
+        screen, so the panel's transaction closes and its dispatch lock is released rather
+        than being held for as long as the reader takes to read. `work` then runs inside the
+        prompt's own press, and the panel redraws through its own handle -- never through the
+        prompt's interaction, which addresses the prompt's message rather than the panel's.
+        """
         if not self._needs_consent:
-            return True
-        consent = await prompt_for_consent(
+            await work()
+            return
+        mount = sl.discord.responder(event).mount
+
+        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+            if consent is None:
+                # Cancelled. The notice said agreeing is what stores anything, and the prompt
+                # closing is the whole answer; the panel already shows the unchanged truth.
+                return
+            await self._accounts.grant_current_consent(self._account_id)
+            self._needs_consent = False
+            await work()
+            await mount.refresh()
+
+        await request_consent(
             sl.discord.native(event),
             user_id=self._author_id,
+            on_answer=answered,
             locale=self.locale,
-            parent=sl.discord.responder(event).mount,
+            parent=mount,
         )
-        if consent is NOT_ASKED:
-            return False
-        if consent is None:
-            await event.notice(t(self.locale, _("Cancelled. Nothing was changed.")))
-            return False
-        await self._accounts.grant_current_consent(self._account_id)
-        self._needs_consent = False
-        return True
 
     async def _reload(self) -> None:
         await self._refresh()

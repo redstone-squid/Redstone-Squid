@@ -7,11 +7,13 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import discord
+import pytest
 from whenever import Instant
 
 import squid_layouts as sl
 from squid.accounts.domain import (
     Account,
+    AccountConsent,
     AccountIdentity,
     AccountProfile,
     ProfileLink,
@@ -150,3 +152,111 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
     assert panel._profile_editor is None
     source.notice.assert_awaited_once()
+
+
+def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountPanel, dict[str, Any]]:
+    """A panel whose reader has not consented, with the notice stubbed out.
+
+    The prompt is a mount of its own and is covered in `test_consent_gate`; what matters here
+    is that the press ends without one being awaited, and that the continuation does the work.
+    """
+    panel = AccountPanel(
+        accounts=cast(
+            Any,
+            SimpleNamespace(
+                update_profile=AsyncMock(),
+                set_identity_visibility=AsyncMock(),
+                grant_current_consent=AsyncMock(),
+            ),
+        ),
+        account_id=ACCOUNT_ID,
+        author_id=AUTHOR_ID,
+        locale="en",
+    )
+    panel._profile = AccountProfile.empty(ACCOUNT_ID)
+    panel._needs_consent = True
+    panel._refresh = AsyncMock()  # type: ignore[method-assign]
+    opened: dict[str, Any] = {}
+
+    async def request(_target: object, *, on_answer: Any, **_kwargs: Any) -> bool:
+        opened["on_answer"] = on_answer
+        return True
+
+    monkeypatch.setattr("squid.bot.account_view.request_consent", request)
+    return panel, opened
+
+
+def _press(mount: Any) -> Any:
+    """A press double carrying the Discord facts `_with_consent` reads off an event."""
+    responder = SimpleNamespace(interaction=SimpleNamespace(user=SimpleNamespace(id=AUTHOR_ID)), mount=mount)
+    return SimpleNamespace(responder=responder, value=True)
+
+
+async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The notice goes up and the press is over; it used to be awaited where it stood.
+
+    An action handler runs inside the mount's transaction and, under EXCLUSIVE, inside its
+    dispatch lock, so awaiting the answer held the whole panel for as long as the reader took
+    -- up to two minutes. Nothing here waits, so the editor is simply not open yet.
+    """
+    panel, opened = _gated_panel(monkeypatch)
+    monkeypatch.setattr("squid_layouts.discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_layouts.discord.responder", lambda event: event.responder)
+    mount = SimpleNamespace(refresh=AsyncMock())
+
+    await panel._edit_page(cast(Any, _press(mount)))
+
+    assert panel._profile_editor is None
+    mount.refresh.assert_not_awaited()
+
+    await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
+
+    # The press resumes where the reader left it, on the panel's own message.
+    assert panel._profile_editor is not None
+    cast(AsyncMock, panel._accounts.grant_current_consent).assert_awaited_once()
+    mount.refresh.assert_awaited_once()
+
+
+async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cancelling stores nothing, changes nothing, and does not redraw anything."""
+    panel, opened = _gated_panel(monkeypatch)
+    monkeypatch.setattr("squid_layouts.discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_layouts.discord.responder", lambda event: event.responder)
+    mount = SimpleNamespace(refresh=AsyncMock())
+
+    await panel._edit_page(cast(Any, _press(mount)))
+    await opened["on_answer"](cast(Any, None), None)
+
+    assert panel._profile_editor is None
+    assert panel._needs_consent
+    cast(AsyncMock, panel._accounts.grant_current_consent).assert_not_awaited()
+    mount.refresh.assert_not_awaited()
+
+
+async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A toggle carries no `guard=`, so admission-stage confirmation could not have reached it.
+
+    It is also where two of this panel's three consent waits lived, which is why the fix had
+    to sit in the handler rather than in the control declaration.
+    """
+    panel, opened = _gated_panel(monkeypatch)
+    monkeypatch.setattr("squid_layouts.discord.native", lambda event: event.responder.interaction)
+    monkeypatch.setattr("squid_layouts.discord.responder", lambda event: event.responder)
+    panel._identities = (DISCORD,)
+    panel.selected_id = DISCORD.id
+    mount = SimpleNamespace(refresh=AsyncMock())
+
+    await panel._toggle_identity(cast(Any, _press(mount)))
+
+    cast(AsyncMock, panel._accounts.set_identity_visibility).assert_not_awaited()
+
+    await opened["on_answer"](cast(Any, None), AccountConsent.grant_current())
+
+    cast(AsyncMock, panel._accounts.set_identity_visibility).assert_awaited_once_with(
+        ACCOUNT_ID, DISCORD.id, is_public=True
+    )
+    mount.refresh.assert_awaited_once()
