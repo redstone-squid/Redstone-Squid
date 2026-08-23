@@ -447,6 +447,8 @@ class MountSnapshot:
     access: AccessPolicy
     handler_keys: tuple[str, ...]
     """Action keys the live generation answers to."""
+    suppressed: int
+    """Renders committed without a Discord edit because they matched the live generation."""
     scene: SceneDocument | None
     report: PlanReport | None
     metrics: PlanMetrics | None
@@ -661,6 +663,8 @@ class Mount:
         self._issued = 0
         self._pending: _Candidate | None = None
         self._dirty = False
+        # Renders committed without a Discord edit because the reader already had them.
+        self._suppressed = 0
         self._finished = False
         self._finish_hooks: list[FinishHook] = []
         self._presented_hooks: list[PresentedHook] = []
@@ -792,6 +796,7 @@ class Mount:
             handle_expires_in=handle_expires_in,
             access=self.access,
             handler_keys=tuple(sorted(self._handlers)),
+            suppressed=self._suppressed,
             scene=None if self._plan is None else self._plan.scene,
             report=None if self._plan is None else self._plan.report,
             metrics=None if self._plan is None else self._plan.metrics,
@@ -1184,22 +1189,69 @@ class Mount:
 
     def _commit(self, candidate: _Candidate) -> None:
         """Publish a delivered candidate — the one place a render becomes the mount's state."""
+        self._commit_render(candidate)
+        self._commit_delivery(candidate)
+
+    def _commit_render(self, candidate: _Candidate) -> None:
+        """Make the candidate's tree the committed one; what the reader sees is untouched.
+
+        `session_updates` apply here too: planning's clamps describe the scene that is on
+        screen, and a suppressed candidate is on screen by definition.
+        """
         apply_updates(self.presentation, candidate.session_updates)
+        self._prune_follows(candidate.tree.observations)
+        self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
+        self._dirty = self.runtime.dirty
+        self._pending = None
+
+    def _commit_delivery(self, candidate: _Candidate) -> None:
+        """Make the candidate's generation the live one: its control ids now answer clicks."""
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
         self._generation = candidate.generation
-        self._prune_follows(candidate.tree.observations)
-        self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._assets = candidate.assets
         self._plan = candidate.composition.plan
         self._lifecycle = MountLifecycle.ACTIVE
         candidate.view.timeout = self._remaining_timeout()
-        self._dirty = self.runtime.dirty
-        self._pending = None
         self._swap_view(candidate.view)
         # The commit point is where a mount becomes something a reader can see and click, and
         # so the first moment it is worth listing as live. Idempotent after the first.
         live.track(self)
+
+    def _same_as_live(self, candidate: _Candidate) -> bool:
+        """Whether delivering `candidate` would show the reader exactly what is already there.
+
+        Decided at the scene, which is generation-free; control ids are minted at draw time,
+        so two presentations of one panel never compare equal. The scene misses two things
+        and each gets a guard: asset *content* can change under the same name, and an equal
+        scene can come from a re-embedded child whose bindings now point at a different
+        object. Bound methods compare by instance, so ordinary handlers survive a re-render;
+        a fresh closure does not, and such a panel is simply never suppressed.
+        """
+        plan = self._plan
+        if plan is None or self._lifecycle is not MountLifecycle.ACTIVE:
+            return False
+        if candidate.composition.plan.report.scene_fingerprint != plan.report.scene_fingerprint:
+            return False
+        if candidate.assets != self._assets:
+            return False
+        if candidate.handlers.keys() != self._handlers.keys():
+            return False
+        return all(candidate.handlers[key].handler == self._handlers[key].handler for key in candidate.handlers)
+
+    def _suppress(self, candidate: _Candidate, profile: OperationRecorder | None) -> None:
+        """Commit a render the reader already has, without an edit and without a new generation.
+
+        The live generation keeps its control ids, so a click already in flight still lands.
+        Durability is not notified: nothing visible moved, and 34 checkpoints at visible
+        commits only.
+        """
+        self._commit_render(candidate)
+        candidate.view.stop()
+        self._suppressed += 1
+        if profile is not None:
+            profile.increment("mount.suppressed", 1)
+        logger.debug("mount %s: render identical to the live generation, edit suppressed", self.id)
 
     def _commit_presented(self, candidate: _Candidate) -> None:
         """Commit one successfully delivered candidate and notify durability observers."""
@@ -1398,6 +1450,11 @@ class Mount:
             settled: _Candidate | None = None
             try:
                 settled = await self._stage_loaded(profile=profile)
+                if self._same_as_live(settled):
+                    # A resource that loaded to what the pending paint already showed.
+                    self._suppress(settled, profile)
+                    candidate = settled
+                    continue
                 wrote = await self._deliver(settled, through=through, profile=profile)
             except Exception:
                 if settled is not None:
@@ -2236,28 +2293,37 @@ class Mount:
                 # changed nothing never reaches this at all.
                 candidate = await self._stage_loaded(profile=operation)
                 source = deliver.handle_from(interaction)
-                try:
-                    wrote = await self._deliver(candidate, through=source, profile=operation)
-                except Exception:
-                    with operation.span("rollback"):
-                        self._rollback(candidate)
-                    raise
-                if wrote is None:
-                    with operation.span("rollback"):
-                        self._rollback(candidate)
+                if self._same_as_live(candidate):
+                    with operation.span("suppress"):
+                        self._suppress(candidate, operation)
                     acknowledge = True
-                    presentation = PresentationOutcome.ABANDONED
-                else:
-                    with operation.span("commit"):
-                        self._commit_presented(candidate)
+                    presentation = PresentationOutcome.UNCHANGED
+                    # Only visible resources could still move the panel; they settle through
+                    # their own comparison.
                     await self._settle_visible(candidate, through=source, profile=operation)
-                    presentation = PresentationOutcome.WRITTEN
-                    if dispatch is not None and wrote is source:
-                        dispatch.acknowledge("interaction_write")
-                    # Only the interaction's own handle answers the click by editing through
-                    # it. Delivery through the standing handle leaves the click unanswered,
-                    # and Discord shows the user "This interaction failed" three seconds later.
-                    acknowledge = wrote is not source
+                else:
+                    try:
+                        wrote = await self._deliver(candidate, through=source, profile=operation)
+                    except Exception:
+                        with operation.span("rollback"):
+                            self._rollback(candidate)
+                        raise
+                    if wrote is None:
+                        with operation.span("rollback"):
+                            self._rollback(candidate)
+                        acknowledge = True
+                        presentation = PresentationOutcome.ABANDONED
+                    else:
+                        with operation.span("commit"):
+                            self._commit_presented(candidate)
+                        await self._settle_visible(candidate, through=source, profile=operation)
+                        presentation = PresentationOutcome.WRITTEN
+                        if dispatch is not None and wrote is source:
+                            dispatch.acknowledge("interaction_write")
+                        # Only the interaction's own handle answers the click by editing through
+                        # it. Delivery through the standing handle leaves the click unanswered,
+                        # and Discord shows the user "This interaction failed" three seconds later.
+                        acknowledge = wrote is not source
         finally:
             self._render_lock.release()
         if acknowledge:
@@ -2318,7 +2384,8 @@ class Mount:
             return
         await self.refresh_now()
 
-    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> None:
+    async def refresh_now(self, *, links: Sequence[TraceLink] = ()) -> PresentationOutcome:
+        """Re-render and deliver right now, reporting how the presentation settled."""
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(
@@ -2329,22 +2396,28 @@ class Mount:
             try:
                 if self._finished:
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
-                    return
+                    return PresentationOutcome.ABANDONED
                 armed = await self._apply_expiry_arm(profile)
                 if armed is not None:
                     outcome = (
                         TraceOutcome.ABANDONED if armed is PresentationOutcome.ABANDONED else TraceOutcome.COMPLETED
                     )
                     profile.set_result(TraceResult(outcome, presentation=armed))
-                    return
+                    return armed
                 if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
                     profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.NO_CHANGE))
-                    return
+                    return PresentationOutcome.NO_CHANGE
                 if self._handle is None or self._handle.expired():
                     self._dirty = True
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
-                    return
+                    return PresentationOutcome.ABANDONED
                 candidate = await self._stage_loaded(profile=profile)
+                if self._same_as_live(candidate):
+                    with profile.span("suppress"):
+                        self._suppress(candidate, profile)
+                    await self._settle_visible(candidate, profile=profile)
+                    profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.UNCHANGED))
+                    return PresentationOutcome.UNCHANGED
                 try:
                     delivered = await self._deliver(candidate, profile=profile) is not None
                 except Exception:
@@ -2359,11 +2432,12 @@ class Mount:
                         self._rollback(candidate)
                     logger.debug("mount %s has no live edit handle; render deferred", self.id)
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
-                    return
+                    return PresentationOutcome.ABANDONED
                 with profile.span("commit"):
                     self._commit_presented(candidate)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
+                return PresentationOutcome.WRITTEN
             finally:
                 self._render_lock.release()
 
