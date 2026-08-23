@@ -94,7 +94,7 @@ from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
-from squid_layouts.runtime.resources import Resource, PendingPolicy
+from squid_layouts.runtime.resources import PendingPolicy, Resource
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
@@ -1562,9 +1562,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     @staticmethod
     def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[Resource[Any], ...]:
-        return tuple(
-            resource for resource in tree.resources if resource.pending_policy is pending and resource.pending
-        )
+        return tuple(resource for resource in tree.resources if resource.pending_policy is pending and resource.pending)
 
     async def _settle_resources(self, resources: Sequence[Resource[Any]]) -> None:
         """Settle one observed resource tier concurrently under this render operation."""
