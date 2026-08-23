@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Literal, Protocol, overload
 
-from squid_layouts.runtime.reactivity import (
+from squid_reactive.core import (
     _CONSUMER,
     ReactiveCycleError,
     _bump_epoch,

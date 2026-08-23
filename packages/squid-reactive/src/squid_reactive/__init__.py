@@ -1,4 +1,4 @@
-"""Compatibility exports for the standalone reactive runtime."""
+"""Transactional reactive state with no hosting or presentation opinions."""
 
 from squid_reactive.core import (
     ActionParticipant,

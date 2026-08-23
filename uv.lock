@@ -13,6 +13,7 @@ nucleation = "2026-08-16T00:00:00Z"
 members = [
     "redstone-squid",
     "squid-layouts",
+    "squid-reactive",
 ]
 
 [[package]]
@@ -2650,6 +2651,9 @@ postgresql-psycopg2binary = [
 name = "squid-layouts"
 version = "0.1.0"
 source = { editable = "packages/squid-layouts" }
+dependencies = [
+    { name = "squid-reactive" },
+]
 
 [package.optional-dependencies]
 discord = [
@@ -2667,8 +2671,14 @@ requires-dist = [
     { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.31,<1" },
     { name = "discord-py", marker = "extra == 'discord'", specifier = ">=2.7,<3" },
     { name = "packaging", marker = "extra == 'discord'", specifier = ">=24,<27" },
+    { name = "squid-reactive", editable = "packages/squid-reactive" },
 ]
 provides-extras = ["discord", "postgres"]
+
+[[package]]
+name = "squid-reactive"
+version = "0.1.0"
+source = { editable = "packages/squid-reactive" }
 
 [[package]]
 name = "starlette"

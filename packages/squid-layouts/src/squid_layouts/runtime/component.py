@@ -16,6 +16,18 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import Any, ClassVar, Protocol, Self
 
+from squid_reactive.core import (
+    _CURRENT,
+    _RENDER_OBSERVATION,
+    _Computed,
+    _State,
+    note_born,
+    note_initialized,
+    observe_render,
+    report_undeclared_write,
+    untracked,
+)
+
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives.constraints import Paginate
@@ -38,17 +50,6 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import (
-    _CURRENT,
-    _RENDER_OBSERVATION,
-    _Computed,
-    _State,
-    note_born,
-    note_initialized,
-    observe_render,
-    report_undeclared_write,
-    untracked,
-)
 from squid_layouts.runtime.resources import (
     Resource,
     _AtomicResourcePending,

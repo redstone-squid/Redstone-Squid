@@ -121,6 +121,7 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 squid-layouts = { workspace = true }
+squid-reactive = { workspace = true }
 
 [tool.uv]
 package = false
