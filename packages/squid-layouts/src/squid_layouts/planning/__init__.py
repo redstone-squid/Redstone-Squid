@@ -10,7 +10,7 @@ from squid_layouts.planning.discord import (
     dynamic_classic_target,
     dynamic_components_v2_target,
 )
-from squid_layouts.planning.measure import (
+from squid_layouts.planning.measurement import (
     LayoutOverflowError,
     MeasuredLayout,
     SolveNote,

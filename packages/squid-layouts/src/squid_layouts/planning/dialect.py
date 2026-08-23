@@ -25,7 +25,7 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
 from squid_layouts.planning.cursors import CursorCoordinator
 from squid_layouts.planning.limits import DiscordLimits
-from squid_layouts.planning.measure import MeasuredLayout, Realized
+from squid_layouts.planning.measurement import MeasuredLayout, Realized
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.target import TargetProfile
 from squid_layouts.primitives.nodes import (

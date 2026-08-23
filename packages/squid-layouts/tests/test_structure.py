@@ -20,7 +20,7 @@ from squid_layouts.planning import (
     SolveNoteCode,
     measure,
 )
-from squid_layouts.planning.measure import RPanel, RText
+from squid_layouts.planning.measurement import RPanel, RText
 from squid_layouts.primitives import (
     ActionGroup,
     Alt,
