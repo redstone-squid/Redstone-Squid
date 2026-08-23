@@ -31,15 +31,15 @@ FOLLOW_DISCORD = "-"
 CHANNEL_SETTINGS: tuple[ScalarChannelSetting, ...] = ("Smallest", "Fastest", "First", "Builds", "Vote")
 """Every channel setting, in the order the panel offers them."""
 
-CHANNEL_TYPES = [
-    discord.ChannelType.text,
-    discord.ChannelType.news,
-    discord.ChannelType.voice,
-    discord.ChannelType.stage_voice,
-    discord.ChannelType.public_thread,
-    discord.ChannelType.private_thread,
-    discord.ChannelType.news_thread,
-]
+CHANNEL_TYPES = (
+    sl.ChannelType.TEXT,
+    sl.ChannelType.ANNOUNCEMENT,
+    sl.ChannelType.VOICE,
+    sl.ChannelType.STAGE_VOICE,
+    sl.ChannelType.PUBLIC_THREAD,
+    sl.ChannelType.PRIVATE_THREAD,
+    sl.ChannelType.ANNOUNCEMENT_THREAD,
+)
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
 SETTING_LABELS: dict[ScalarChannelSetting, str] = {
@@ -72,22 +72,13 @@ class SettingsCapabilities:
 
 
 class SettingsPanel(sl.Component):
-    """A semantic, mount-owned settings workspace.
-
-    Discord channel and role pickers are represented as semantic choices so the layout planner
-    can page them when a guild has more than one legal select can hold. Only one channel
-    picker is on screen at a time, because a paged picker costs six components and five of
-    them do not fit beside the rest of the panel. Text-entry operations still use the Discord
-    modal adapter, the one native form boundary in squid-layouts.
-    """
+    """A semantic, mount-owned settings workspace."""
 
     history: sl.History = sl.history(limit=10)
     """Undo for the server page's writes; see `docs/plans/squid-layouts-redesign/28-history.md`."""
 
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
-    editing: ScalarChannelSetting = sl.state(CHANNEL_SETTINGS[0])
-    """Which channel setting the single visible channel picker is currently editing."""
     confirming_reset: bool = sl.state(default=False)
     locale: str | None = sl.state(None, persist=False)
     # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
@@ -186,31 +177,26 @@ class SettingsPanel(sl.Component):
             )
         ]
         if self._capabilities.edit_server:
-            # One picker at a time. A guild with more than 25 channels pages every picker,
-            # and five paged pickers cost 30 of the 40 components a message has — the panel
-            # became unplannable at exactly the guild sizes that need it most. Every current
-            # value is still on screen: the fields above list all five.
-            selected = self.channel_id(self.editing)
-            children.extend(
-                (
-                    sl.Choices(
-                        key="channel-setting",
-                        choices=tuple(
-                            sl.Choice(setting, L(SETTING_LABELS[setting]), available=True)
-                            for setting in CHANNEL_SETTINGS
-                        ),
-                        selection=sl.controlled((self.editing,), self._editing_changed),
-                    ),
-                    sl.Choices(
-                        key=f"channel-{self.editing}",
-                        choices=self._channel_choices(self.editing),
+            for setting in CHANNEL_SETTINGS:
+                selected = self.channel_id(setting)
+
+                async def change(event: sl.EntityEvent, current: ScalarChannelSetting = setting) -> None:
+                    await self._channel_changed(event, current)
+
+                children.append(
+                    sl.entities(
+                        key=f"channel-{setting}",
+                        entity_type=sl.EntityType.CHANNEL,
                         selection=sl.controlled(
-                            (str(selected) if selected is not None else "clear",),
-                            self._channel_changed,
+                            () if selected is None else (sl.EntityRef(sl.EntityKind.CHANNEL, selected),),
+                            change,
                         ),
-                    ),
+                        minimum=0,
+                        maximum=1,
+                        channel_types=CHANNEL_TYPES,
+                        placeholder=L(SETTING_LABELS[setting]),
+                    )
                 )
-            )
             children.append(
                 sl.Choices(
                     key="locale",
@@ -260,12 +246,13 @@ class SettingsPanel(sl.Component):
         ]
         if self._capabilities.edit_voting:
             children.append(
-                sl.Choices(
+                sl.entities(
                     key="role-weight",
-                    choices=self._role_choices(),
-                    selection=sl.controlled(("none",), self._role_changed),
+                    entity_type=sl.EntityType.ROLE,
+                    selection=sl.controlled((), self._role_changed),
                     minimum=1,
                     maximum=1,
+                    placeholder=L(t"Choose a role"),
                 )
             )
         actions: list[sl.primitives.Button] = []
@@ -301,35 +288,10 @@ class SettingsPanel(sl.Component):
         children.append(sl.primitives.Row(tuple(actions)))
         return children
 
-    def _channel_choices(self, setting: ScalarChannelSetting) -> tuple[sl.Choice, ...]:
-        current = self.channel_id(setting)
-        choices = [sl.Choice("clear", L(t"Clear"), L(t"Remove this channel."), available=True)]
-        channels = getattr(self._guild, "channels", ())
-        for channel in channels:
-            if getattr(channel, "type", None) not in CHANNEL_TYPES:
-                continue
-            choices.append(sl.Choice(str(channel.id), f"#{channel.name}", available=True))
-        if current is not None and not any(choice.key == str(current) for choice in choices):
-            choices.append(sl.Choice(str(current), self._channel_display(current), available=True))
-        return tuple(choices)
-
-    def _role_choices(self) -> tuple[sl.Choice, ...]:
-        choices = [sl.Choice("none", L(t"Choose a role"))]
-        roles = {role.id: role for role in getattr(self._guild, "roles", ())}
-        roles.update({weight.role_id: self._guild.get_role(weight.role_id) for weight in self._weights})
-        for role_id, role in sorted(roles.items()):
-            label = role.name if role is not None else L("Deleted role {id}", id=role_id)
-            choices.append(sl.Choice(str(role_id), label))
-        return tuple(choices)
-
-    async def _editing_changed(self, event: sl.ChoiceEvent) -> None:
-        self.editing = cast(ScalarChannelSetting, event.selected[0])
-
-    async def _channel_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        value = event.selected[0]
-        await self.set_channel(self.editing, None if value == "clear" else int(value))
+        await self.set_channel(setting, event.selected[0].id if event.selected else None)
 
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
@@ -339,10 +301,10 @@ class SettingsPanel(sl.Component):
     async def _kind_changed(self, event: sl.ChoiceEvent) -> None:
         await self.open_voting(VoteKind(event.selected[0]))
 
-    async def _role_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _role_changed(self, event: sl.EntityEvent) -> None:
         if not await self._may_event(event, SETTINGS_VOTING_EDIT):
             return
-        role_id = int(event.selected[0])
+        role_id = event.selected[0].id
         role = self._guild.get_role(role_id)
         if role is None:
             await event.notice(L(t"That role has been deleted."))
