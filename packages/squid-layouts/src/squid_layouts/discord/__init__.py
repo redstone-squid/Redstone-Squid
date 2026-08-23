@@ -40,6 +40,7 @@ from squid_layouts.discord.inspection import (
 )
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.modal import (
+    CheckboxGroupField,
     EntityField,
     EntityType,
     FileField,
@@ -158,6 +159,7 @@ __all__ = [
     "AttachedFragment",
     "AuditReport",
     "Check",
+    "CheckboxGroupField",
     "ClassicLimits",
     "ClassicRenderer",
     "CollisionDecision",

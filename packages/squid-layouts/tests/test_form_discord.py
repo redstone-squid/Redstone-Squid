@@ -8,7 +8,9 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import EntityField, EntityType, Everyone, FileField, Mount, build_form_modal
+from squid_layouts.discord.modal import CheckboxGroupField
 from squid_layouts.discord.testing import commit_render, fake_interaction
+from squid_layouts.forms import FormText
 
 
 async def _ignore_raw(interaction, values) -> None: ...
@@ -18,6 +20,39 @@ def _component(modal: discord.ui.Modal) -> discord.ui.Item:
     label = modal.children[0]
     assert isinstance(label, discord.ui.Label)
     return label.component
+
+
+def test_form_items_preserve_static_text_order() -> None:
+    spec = sl.FormSpec(
+        "Ordered",
+        (FormText("Before"), sl.TextField(key="name", label="Name"), FormText("After")),
+    )
+
+    modal = build_form_modal(spec, on_submit=_ignore_raw)
+
+    assert isinstance(modal.children[0], discord.ui.TextDisplay)
+    assert isinstance(modal.children[1], discord.ui.Label)
+    assert isinstance(modal.children[2], discord.ui.TextDisplay)
+
+
+def test_checkbox_group_uses_native_component_and_typed_declaration_order() -> None:
+    fallback = sl.MultiChoiceField(
+        options=(sl.ChoiceOption("a", "A", 1), sl.ChoiceOption("b", "B", 2)),
+        required=False,
+    )
+    field = CheckboxGroupField(
+        key="checks",
+        label="Checks",
+        options=fallback.options,
+        required=False,
+        fallback=fallback,
+    )
+
+    modal = build_form_modal(sl.FormSpec("Checks", (field,)), on_submit=_ignore_raw)
+
+    assert isinstance(_component(modal), discord.ui.CheckboxGroup)
+    assert field.parse(["b", "a"]) == (1, 2)
+    assert field.parse([]) == ()
 
 
 @pytest.mark.parametrize(

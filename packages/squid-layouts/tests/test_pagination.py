@@ -506,7 +506,7 @@ class TestBuildModal:
         # The live-bug shape: a default joined from unbounded user data.
         spec = ModalSpec(
             title="Edit Build " + "x" * 100,
-            labels=(
+            items=(
                 LabelSpec(
                     text="Image URLs " + "y" * 100,
                     input=TextInputSpec(label="urls", default=", ".join(f"https://e.invalid/{i}" for i in range(400))),
@@ -522,7 +522,7 @@ class TestBuildModal:
         async def on_submit(interaction, values):
             received.update(values)
 
-        spec = ModalSpec(title="T", labels=(LabelSpec(text="Name", input=TextInputSpec(label="n", key="name")),))
+        spec = ModalSpec(title="T", items=(LabelSpec(text="Name", input=TextInputSpec(label="n", key="name")),))
         modal = build_modal(spec, on_submit=on_submit)
         next(iter(modal._inputs.values()))._value = "steve"  # pyrefly: ignore
 

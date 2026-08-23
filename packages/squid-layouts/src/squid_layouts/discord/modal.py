@@ -13,11 +13,12 @@ from typing import Any, ClassVar
 import discord
 
 from squid_layouts.discord.conform import conform_modal
-from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.entities import EntityType
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import (
     BoolField,
     ChoiceField,
+    ChoiceOption,
     DateField,
     DateTimeField,
     DurationField,
@@ -25,6 +26,7 @@ from squid_layouts.forms import (
     FloatField,
     FormField,
     FormSpec,
+    FormText,
     FormValueError,
     IntField,
     MultiChoiceField,
@@ -92,6 +94,59 @@ class FileField(ExtensionField[object]):
 
 
 @dataclass(frozen=True, slots=True)
+class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
+    """A Discord-native group of typed checkbox choices."""
+
+    options: tuple[ChoiceOption[ValueT], ...] = ()
+    minimum: int = 0
+    maximum: int | None = None
+    capability: ClassVar[str] = "forms.discord.checkbox_group"
+
+    def __post_init__(self) -> None:
+        keys = [option.key for option in self.options]
+        if len(set(keys)) != len(keys):
+            message = f"CheckboxGroupField option keys must be unique: {keys!r}"
+            raise ValueError(message)
+        maximum = len(self.options) if self.maximum is None else self.maximum
+        if not 1 <= len(self.options) <= 10:
+            message = "CheckboxGroupField needs 1-10 options"
+            raise ValueError(message)
+        if self.minimum < 0 or maximum < self.minimum or maximum > len(self.options):
+            message = "CheckboxGroupField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
+            raise ValueError(message)
+
+    def parse(self, raw: object) -> tuple[ValueT, ...]:
+        if self._missing(raw):
+            if self.required:
+                message = "This field is required."
+                raise FormValueError(message)
+            return ()
+        submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
+        by_key = {option.key: option for option in self.options}
+        if any(key not in by_key for key in submitted):
+            message = "Choose only from the available options."
+            raise FormValueError(message)
+        selected = set(submitted)
+        values = tuple(option.value for option in self.options if option.key in selected)
+        if len(values) < self.minimum:
+            message = f"Choose at least {self.minimum} options."
+            raise FormValueError(message)
+        maximum = len(self.options) if self.maximum is None else self.maximum
+        if len(values) > maximum:
+            message = f"Choose no more than {maximum} options."
+            raise FormValueError(message)
+        return values
+
+    def format_prefill(self, value: object) -> object:
+        submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
+        return tuple(
+            option.key
+            for option in self.options
+            if any(option.key == selected or option.value == selected for selected in submitted)
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class TextInputSpec:
     label: str
     key: str | None = None
@@ -105,23 +160,26 @@ class TextInputSpec:
 
 @dataclass(frozen=True, slots=True)
 class LabelSpec:
-    text: str
+    text: TextLike
     input: TextInputSpec
-    description: str | None = None
+    description: TextLike | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ModalSpec:
-    title: str
-    labels: tuple[LabelSpec, ...]
+    title: TextLike
+    items: tuple[LabelSpec | FormText, ...]
 
 
 class _SpecModal(discord.ui.Modal):
     def __init__(self, spec: ModalSpec, on_submit: SubmitHandler | None, timeout: float | None) -> None:
-        super().__init__(title=spec.title, timeout=timeout)
+        super().__init__(title=_resolve(spec.title, NEUTRAL), timeout=timeout)
         self._handler = on_submit
         self._inputs: dict[str, discord.ui.TextInput] = {}
-        for label in spec.labels:
+        for label in spec.items:
+            if isinstance(label, FormText):
+                self.add_item(discord.ui.TextDisplay(_resolve(label.content, NEUTRAL)))
+                continue
             field = label.input
             style = discord.TextStyle.paragraph if field.long else discord.TextStyle.short
             text_input: discord.ui.TextInput = discord.ui.TextInput(
@@ -134,7 +192,10 @@ class _SpecModal(discord.ui.Modal):
                 max_length=field.max_length,
             )
             self._inputs[field.key or field.label] = text_input
-            self.add_item(discord.ui.Label(text=label.text, description=label.description, component=text_input))
+            description = _resolve(label.description, NEUTRAL) if label.description is not None else None
+            self.add_item(
+                discord.ui.Label(text=_resolve(label.text, NEUTRAL), description=description, component=text_input)
+            )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         if self._handler is None:
@@ -154,7 +215,10 @@ class _FormModal(discord.ui.Modal):
         super().__init__(title=_resolve(spec.title, localization), timeout=timeout)
         self._handler = on_submit
         self._readers: dict[str, Callable[[], object]] = {}
-        for field in spec.fields:
+        for field in spec.items:
+            if isinstance(field, FormText):
+                self.add_item(discord.ui.TextDisplay(_resolve(field.content, localization)))
+                continue
             component, reader = _form_component(field, spec.prefill_for(field), localization)
             label = _resolve(field.label, localization) if field.label is not None else field.key
             description = _resolve(field.description, localization) if field.description is not None else None
@@ -279,6 +343,26 @@ def _form_component(
             ],
         )
         return component, lambda: component.values
+    if isinstance(field, CheckboxGroupField):
+        selected = set(field.format_prefill(prefill))
+        component = discord.ui.CheckboxGroup(
+            custom_id=field.key,
+            min_values=field.minimum,
+            max_values=len(field.options) if field.maximum is None else field.maximum,
+            required=field.required,
+            options=[
+                discord.CheckboxGroupOption(
+                    label=_resolve(option.label, localization),
+                    value=option.key,
+                    description=(
+                        _resolve(option.description, localization) if option.description is not None else None
+                    ),
+                    default=option.key in selected,
+                )
+                for option in field.options
+            ],
+        )
+        return component, lambda: component.values
     if isinstance(field, BoolField):
         component = discord.ui.Checkbox(custom_id=field.key, default=bool(prefill))
         return component, lambda: component.value
@@ -355,7 +439,7 @@ def build_form_modal(
 ) -> discord.ui.Modal:
     """Build a Discord modal from a portable form schema."""
     adapted = spec.adapt(
-        frozenset({"forms.modal", EntityField.capability, FileField.capability}),
+        frozenset({"forms.modal", EntityField.capability, FileField.capability, CheckboxGroupField.capability}),
         maximum_fields=limits.modal_components,
     )
     modal = _FormModal(adapted, on_submit, timeout, localization)
