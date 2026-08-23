@@ -556,7 +556,7 @@ class Variants[ModeT = Any](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of[FirstT, SecondT](
+    def of[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
@@ -566,7 +566,7 @@ class Variants[ModeT = Any](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT](
+    def of[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
@@ -577,7 +577,7 @@ class Variants[ModeT = Any](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT, FourthT](
+    def of[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
@@ -589,7 +589,7 @@ class Variants[ModeT = Any](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](
+    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
         cls,
         first: PrimitiveNode[FirstT] | Variant[FirstT],
         second: PrimitiveNode[SecondT] | Variant[SecondT],
