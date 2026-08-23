@@ -94,7 +94,7 @@ class TestRecording:
         subject = panel()
         with transaction():
             subject.history.record("first")
-            with pytest.raises(HistoryError, match="already recorded"):
+            with pytest.raises(HistoryError, match="already used"):
                 subject.history.record("second")
 
     def test_redo_without_undo_is_refused(self):
@@ -201,6 +201,65 @@ class TestUndo:
         # The known limit, pinned: in-place mutation of the object was never captured.
         assert second == [2, 3]
 
+    async def test_a_later_action_failure_rolls_back_the_state_and_stack(self) -> None:
+        subject = panel()
+        with transaction():
+            subject.channel = 7
+            subject.history.record("channel")
+        entries = subject.history.entries
+
+        with pytest.raises(RuntimeError, match="later work failed"), transaction():
+            await subject.history.undo()
+            message = "later work failed"
+            raise RuntimeError(message)
+
+        assert subject.channel == 7
+        assert subject.history.entries == entries
+        assert subject.history.can_undo
+        assert not subject.history.can_redo
+
+    async def test_two_undos_cannot_reserve_one_action(self) -> None:
+        subject = panel()
+        with transaction():
+            subject.channel = 7
+            subject.history.record("channel")
+
+        with pytest.raises(HistoryError, match="already used"), transaction():
+            await subject.history.undo()
+            await subject.history.undo()
+
+        assert subject.channel == 7
+        assert subject.history.can_undo
+        assert not subject.history.can_redo
+
+    async def test_record_then_undo_cannot_reserve_one_action(self) -> None:
+        subject = panel()
+        with transaction():
+            subject.channel = 7
+            subject.history.record("channel")
+
+        with pytest.raises(HistoryError, match="already used"), transaction():
+            subject.page = 2
+            subject.history.record("page")
+            await subject.history.undo()
+
+        assert subject.channel == 7
+        assert subject.page == 1
+        assert [entry.label for entry in subject.history.entries] == ["channel"]
+
+    async def test_undo_outside_an_action_commits_its_stack_change(self) -> None:
+        subject = panel()
+        with transaction():
+            subject.channel = 7
+            subject.history.record("channel")
+
+        entry = await subject.history.undo()
+
+        assert entry is not None
+        assert subject.channel is None
+        assert not subject.history.can_undo
+        assert subject.history.can_redo
+
 
 class TestRedo:
     async def test_a_framework_only_entry_replays_itself(self):
@@ -249,6 +308,25 @@ class TestRedo:
             subject.page = 9
             subject.history.record("page again")
         assert not subject.history.can_redo
+
+    async def test_a_later_action_failure_rolls_back_the_state_and_stack(self) -> None:
+        subject = panel()
+        with transaction():
+            subject.page = 4
+            subject.history.record("page")
+        await subject.history.undo()
+        redoable = subject.history.redoable
+
+        with pytest.raises(RuntimeError, match="later work failed"), transaction():
+            await subject.history.redo()
+            message = "later work failed"
+            raise RuntimeError(message)
+
+        assert subject.page == 1
+        assert subject.history.entries == ()
+        assert subject.history.redoable == redoable
+        assert not subject.history.can_undo
+        assert subject.history.can_redo
 
 
 class TestControls:

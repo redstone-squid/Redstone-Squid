@@ -34,7 +34,7 @@ _INVERSE_BLOCK = (
 
 
 class HistoryError(RuntimeError):
-    """An entry was recorded where history could not honour it."""
+    """A history operation could not be honoured or was already reserved by this action."""
 
 
 class HistoryOwner(Protocol):
@@ -113,40 +113,59 @@ class History:
         if undo is None and redo is not None:
             message = "redo= replays an action that nothing undoes; pass undo= as well"
             raise TypeError(message)
-        if has_action_hook(self):
-            message = "this action already recorded a history entry; one entry describes the whole action"
-            raise HistoryError(message)
 
         def commit(delta: StateDelta) -> None:
             self._push(HistoryEntry(label, delta, undo, redo))
 
-        on_action_commit(commit, key=self)
+        self._on_action_commit(commit)
 
     async def undo(self) -> HistoryEntry | None:
-        """Reverse the most recent entry, world first. Returns it, or `None` if the stack is empty."""
+        """Stage reversal of the most recent entry, world first.
+
+        Returns the entry this action will pop if it commits, or `None` when the stack is
+        empty. The external inverse cannot be rolled back: after one succeeds, do no
+        unrelated fallible work in the same action.
+        """
         if not self._undone:
             return None
         entry = self._undone[-1]
         with transaction():
             await self._reverse(entry.undo)
             entry.delta.restore_before()
-            self._undone.pop()
-            if entry.redoable:
-                self._redoable.append(entry)
-            self._owner.invalidate()
+
+            def commit(_: StateDelta) -> None:
+                if not self._undone or self._undone[-1] is not entry:
+                    return
+                self._undone.pop()
+                if entry.redoable:
+                    self._redoable.append(entry)
+                self._owner.invalidate()
+
+            self._on_action_commit(commit)
         return entry
 
     async def redo(self) -> HistoryEntry | None:
-        """Replay the most recently undone entry, world first."""
+        """Stage replay of the most recently undone entry, world first.
+
+        Returns the entry this action will restore if it commits, or `None` when the stack
+        is empty. As with undo, an external inverse cannot be rolled back, so do no
+        unrelated fallible work after one succeeds in the same action.
+        """
         if not self._redoable:
             return None
         entry = self._redoable[-1]
         with transaction():
             await self._reverse(entry.redo)
             entry.delta.restore_after()
-            self._redoable.pop()
-            self._undone.append(entry)
-            self._owner.invalidate()
+
+            def commit(_: StateDelta) -> None:
+                if not self._redoable or self._redoable[-1] is not entry:
+                    return
+                self._redoable.pop()
+                self._undone.append(entry)
+                self._owner.invalidate()
+
+            self._on_action_commit(commit)
         return entry
 
     def clear(self) -> None:
@@ -168,6 +187,13 @@ class History:
             return
         with block_writes(_INVERSE_BLOCK):
             await inverse()
+
+    def _on_action_commit(self, callback: Callable[[StateDelta], None]) -> None:
+        """Reserve this history for one operation and publish it with the action."""
+        if has_action_hook(self):
+            message = "this action already used this history; only one record, undo, or redo operation is allowed"
+            raise HistoryError(message)
+        on_action_commit(callback, key=self)
 
     def _push(self, entry: HistoryEntry) -> None:
         self._undone.append(entry)
