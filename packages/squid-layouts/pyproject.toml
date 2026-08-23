@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Declarative, limits-aware UI planning with Discord and HTML renderers"
 requires-python = ">=3.14"
 license = "MIT"
-dependencies = ["squid-reactive"]
+dependencies = ["squid-reactive", "squid-stores"]
 
 [project.optional-dependencies]
 discord = [
@@ -12,7 +12,7 @@ discord = [
     "anyio>=4.14,<5",
     "packaging>=24,<27",
 ]
-postgres = ["asyncpg>=0.31,<1"]
+postgres = ["squid-stores[postgres]"]
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]
