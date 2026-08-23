@@ -22,7 +22,7 @@ class _Clock:
 
 
 def _event(actor: str = "7") -> sl.PressEvent:
-    return sl.PressEvent(sl.Actor(actor), cast(sl.ActionResponder, _Responder()))
+    return sl.PressEvent(sl.interactions.Actor(actor), cast(sl.interactions.ActionResponder, _Responder()))
 
 
 class _Responder:

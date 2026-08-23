@@ -106,7 +106,7 @@ def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
     )
 
     component = panel._build_profile_editor()
-    editor = cast(sl.Editor, component.pattern)
+    editor = cast(sl.patterns.Editor, component.pattern)
     values = editor.values(component.pattern_state)
 
     assert values["profile"] == {"display_name": "Builder", "pronouns": None, "bio": "Hello"}
@@ -121,7 +121,7 @@ def test_profile_editor_rejects_non_https_links_before_staging() -> None:
     issues = panel._validate_link({"label": "Bad", "url": "http://example.com"})
 
     assert len(issues) == 1
-    assert isinstance(issues[0], sl.FormError)
+    assert isinstance(issues[0], sl.forms.FormError)
 
 
 async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> None:
@@ -129,7 +129,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
     component = panel._build_profile_editor()
     panel._profile_editor = component
-    editor = cast(sl.Editor, component.pattern)
+    editor = cast(sl.patterns.Editor, component.pattern)
     staged = editor.transition(
         component.pattern_state,
         "submit:profile",
@@ -139,7 +139,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     source = SimpleNamespace(notice=AsyncMock())
 
     assert component.on_change is not None
-    await component.on_change(sl.PatternEvent(cast(Any, source), "save", staged, committed))
+    await component.on_change(sl.patterns.PatternEvent(cast(Any, source), "save", staged, committed))
 
     cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
     assert panel._profile_editor is None

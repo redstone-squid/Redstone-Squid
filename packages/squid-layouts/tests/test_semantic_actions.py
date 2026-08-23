@@ -4,19 +4,10 @@ from collections.abc import Awaitable, Callable
 
 import pytest
 
-from squid_layouts import (
-    ActionDisplay,
-    Asset,
-    Download,
-    InlineAsset,
-    List,
-    ListItem,
-    Paragraph,
-    Position,
-    fallback,
-    plan,
-    truncate,
-)
+from squid_layouts import fallback, truncate
+from squid_layouts.planning import plan
+from squid_layouts.semantic import ActionDisplay, Asset, Download, InlineAsset, List, ListItem, Paragraph
+from squid_layouts.sources import Position
 from squid_layouts.interactions import ActionEvent, ActionPolicy
 from squid_layouts.discord import V2_TARGET
 from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts

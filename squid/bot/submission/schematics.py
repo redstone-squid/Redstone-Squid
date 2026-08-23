@@ -51,7 +51,7 @@ they are accepted as uploads but never offered as a download target."""
 
 
 class _DownloadDocument(sl.Component):
-    def __init__(self, label: sl.TextLike, asset: sl.Asset, *, description: sl.TextLike | None = None) -> None:
+    def __init__(self, label: sl.TextLike, asset: sl.semantic.Asset, *, description: sl.TextLike | None = None) -> None:
         self.label = label
         self.asset = asset
         self.description = description
@@ -130,7 +130,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             ctx,
             _DownloadDocument(
                 t(locale, _("Download schematic")),
-                sl.Asset("schematic", name, "application/octet-stream", sl.InlineAsset(data)),
+                sl.semantic.Asset("schematic", name, "application/octet-stream", sl.semantic.InlineAsset(data)),
             ),
             access=sl.discord.Everyone(),
             locale=locale,
@@ -208,11 +208,11 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             ctx,
             _DownloadDocument(
                 t(locale, _("Download converted schematic")),
-                sl.Asset(
+                sl.semantic.Asset(
                     "schematic",
                     f"build-{build_id}-converted.litematic",
                     "application/octet-stream",
-                    sl.InlineAsset(data),
+                    sl.semantic.InlineAsset(data),
                 ),
                 description=f"{t(locale, _('Conversion report:'))} {summarise_losses(losses)}",
             ),

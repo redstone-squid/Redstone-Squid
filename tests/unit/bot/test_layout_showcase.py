@@ -159,8 +159,8 @@ async def test_demo_command_and_controls_are_public() -> None:
 class TestSharedAppearance:
     """The worked example: two live panels agreeing on view state neither of them owns."""
 
-    def panels(self) -> tuple[sl.TopicBus, Reactor, Appearance, Session, Mount, Mount]:
-        bus = sl.TopicBus()
+    def panels(self) -> tuple[sl.runtime.TopicBus, Reactor, Appearance, Session, Mount, Mount]:
+        bus = sl.runtime.TopicBus()
         reactor = Reactor(bus)
         appearance, session = Appearance(bus, 7), Session(bus, 7)
         writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
@@ -172,9 +172,9 @@ class TestSharedAppearance:
         await reader.send(delivered_to(fake_message(message_id=2)))
 
         assert set(reader.followed) == {
-            sl.CellAddress(appearance, "accent"),
-            sl.CellAddress(appearance, "density"),
-            sl.CellAddress(session, "focus"),
+            sl.runtime.CellAddress(appearance, "accent"),
+            sl.runtime.CellAddress(appearance, "density"),
+            sl.runtime.CellAddress(session, "focus"),
         }
         assert writer.followed == ()
 

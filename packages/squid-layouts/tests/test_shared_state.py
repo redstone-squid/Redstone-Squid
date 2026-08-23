@@ -9,15 +9,8 @@ from typing import Any
 
 import pytest
 
-from squid_layouts import (
-    CellAddress,
-    Component,
-    Shared,
-    SharedStateConflictError,
-    computed,
-    state,
-    transaction,
-)
+from squid_layouts import Component, computed, state
+from squid_layouts.runtime import CellAddress, Shared, SharedStateConflictError, transaction
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.topics import TopicBus
 

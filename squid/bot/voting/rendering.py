@@ -61,7 +61,7 @@ def render_build_review(
     # The build card is now sl.section()'s semantic Section rather than a bare primitive
     # Panel, so splice into its own children instead of nesting a second container — one
     # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
-    if isinstance(card, sl.Section):
+    if isinstance(card, sl.semantic.Section):
         post: sl.LayoutNode = dataclasses.replace(card, children=(*card.children, *state))
     elif isinstance(card, sl.primitives.Panel):
         post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
@@ -177,6 +177,6 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
         )
         lines.append(f"\n**Poll closed — {outcome}**")
     else:
-        deadline = sl.md(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.TimeStyle.RELATIVE)}").content
+        deadline = sl.md(t"{sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}").content
         lines.append(f"\nCloses {deadline}.")
     return "\n".join(lines)

@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, TYPE_CHECKING, overload
+from typing import Any, TYPE_CHECKING, cast, overload
 
 from squid_layouts.interactions import (
     ActionBinding,
@@ -602,13 +602,13 @@ class Variants[ModeT = Any](Renderable[ModeT]):
 
     @classmethod
     @overload
-    def of(cls, *rungs: object, priority: int = 0) -> Variants[Any]: ...
+    def of(cls, *rungs: PrimitiveNode[Any] | Variant[Any], priority: int = 0) -> Variants[Any]: ...
 
     @classmethod
-    def of(cls, *rungs: object, priority: int = 0) -> Variants[Any]:
+    def of(cls, *rungs: PrimitiveNode[Any] | Variant[Any], priority: int = 0) -> Variants[Any]:
         """Build a ladder from bare nodes, wrapping each in an exact, capability-free Variant."""
         return cls(
-            tuple(rung if isinstance(rung, Variant) else Variant((rung,)) for rung in rungs),  # type: ignore[arg-type]
+            tuple(rung if isinstance(rung, Variant) else Variant((cast(Node, rung),)) for rung in rungs),
             priority,
         )
 

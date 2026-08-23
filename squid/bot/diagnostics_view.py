@@ -47,7 +47,7 @@ class ErrorReportBrowser(sl.Component):
         """The reports the list offers."""
         return self._reports
 
-    def chrome(self) -> sl.Chrome:
+    def chrome(self) -> sl.semantic.Chrome:
         """This browser's chrome: temporal paging labels and a footer that names the attachment."""
         return dataclasses.replace(
             CHROME,
@@ -110,7 +110,7 @@ class ErrorReportBrowser(sl.Component):
             )
         children.append(sl.fields(*_summary_fields(report, self.matches)))
         children.append(
-            sl.download(L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.Emphasis.STRONG)
+            sl.download(L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG)
         )
         controls: list[sl.primitives.Button] = []
         if self._reports:
@@ -141,11 +141,11 @@ class ErrorReportBrowser(sl.Component):
 def report_attachment(report: ErrorReport) -> discord.File:
     """Bundle the traceback and the log tail, for reading outside Discord."""
     asset = report_asset(report)
-    assert isinstance(asset.source, sl.InlineAsset)
+    assert isinstance(asset.source, sl.semantic.InlineAsset)
     return discord.File(io.BytesIO(asset.source.data), filename=asset.name)
 
 
-def report_asset(report: ErrorReport) -> sl.Asset:
+def report_asset(report: ErrorReport) -> sl.semantic.Asset:
     """Describe the full report as a portable inline text asset."""
     lines = [
         f"reference: {report.reference}",
@@ -165,15 +165,15 @@ def report_asset(report: ErrorReport) -> sl.Asset:
         "log tail:",
         *report.log_tail,
     ]
-    return sl.Asset(
+    return sl.semantic.Asset(
         key="full-report",
         name=f"error-{report.reference}.txt",
         media_type="text/plain",
-        source=sl.InlineAsset("\n".join(lines).encode()),
+        source=sl.semantic.InlineAsset("\n".join(lines).encode()),
     )
 
 
-def _summary_fields(report: ErrorReport, matches: int) -> list[sl.Field]:
+def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field]:
     entries = [
         sl.field(
             L(t"When"),

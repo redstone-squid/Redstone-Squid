@@ -1,4 +1,4 @@
-"""Computed values and resources declared on an `sl.Shared` namespace.
+"""Computed values and resources declared on an `sl.runtime.Shared` namespace.
 
 A cell on a namespace is state several mounts share. These are the two derived forms of the
 same idea: a computed, which is a pure function of cells and needs no address of its own, and
@@ -17,7 +17,7 @@ from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.runtime.shared import describe
 
 
-class Prefs(sl.Shared[int]):
+class Prefs(sl.runtime.Shared[int]):
     first: str = sl.state("Ada")
     last: str = sl.state("Lovelace")
     unread: str = sl.state("not looked at")
@@ -27,14 +27,14 @@ class Prefs(sl.Shared[int]):
         return f"{self.first} {self.last}"
 
 
-class Catalog(sl.Shared[int]):
+class Catalog(sl.runtime.Shared[int]):
     key: str = sl.state("k1")
 
-    def __init__(self, bus: sl.TopicBus, scope: int) -> None:
+    def __init__(self, bus: sl.runtime.TopicBus, scope: int) -> None:
         super().__init__(bus, scope)
         self._loads = 0
 
-    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
     async def entries(self) -> str:
         self._loads += 1
         return f"{self.key}#{self._loads}"
@@ -46,7 +46,7 @@ class Reader(sl.Component):
 
     def render(self):
         match self.catalog.entries.state:
-            case sl.Ready(value=value):
+            case sl.runtime.Ready(value=value):
                 return sl.paragraph(value)
             case _:
                 return sl.paragraph("loading")
@@ -67,7 +67,7 @@ async def mounted(catalog: Catalog, reactor: Reactor, message: object) -> Mount:
     return mount
 
 
-async def drain(reactor: Reactor, bus: sl.TopicBus) -> None:
+async def drain(reactor: Reactor, bus: sl.runtime.TopicBus) -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(reactor.run)
         await bus.drain()
@@ -76,14 +76,14 @@ async def drain(reactor: Reactor, bus: sl.TopicBus) -> None:
 
 
 @pytest.fixture
-def bus() -> sl.TopicBus:
-    return sl.TopicBus()
+def bus() -> sl.runtime.TopicBus:
+    return sl.runtime.TopicBus()
 
 
 # --- Computed on a namespace ----------------------------------------------------------
 
 
-def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.TopicBus) -> None:
+def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.runtime.TopicBus) -> None:
     prefs = Prefs(bus, 1)
     assert prefs.full == "Ada Lovelace"
 
@@ -92,7 +92,7 @@ def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.TopicBus) -> No
     assert prefs.full == "Grace Lovelace"
 
 
-def test_two_namespaces_compute_independently(bus: sl.TopicBus) -> None:
+def test_two_namespaces_compute_independently(bus: sl.runtime.TopicBus) -> None:
     """The computed is per-instance, like the cells it reads: the handle is the state."""
     one, two = Prefs(bus, 1), Prefs(bus, 2)
 
@@ -101,7 +101,7 @@ def test_two_namespaces_compute_independently(bus: sl.TopicBus) -> None:
     assert (one.full, two.full) == ("Grace Lovelace", "Ada Lovelace")
 
 
-async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(bus: sl.TopicBus) -> None:
+async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(bus: sl.runtime.TopicBus) -> None:
     """A computed carries no address: what moves is the cells, so those are what to follow."""
     reactor = Reactor(bus)
     prefs = Prefs(bus, 1)
@@ -116,7 +116,7 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
 
     assert {describe(address) for address in mount.followed} == {"Prefs(1).first", "Prefs(1).last"}
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         prefs.first = "Grace"
     await drain(reactor, bus)
     await mount.refresh_now()
@@ -127,7 +127,7 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
 # --- Resource on a namespace ----------------------------------------------------------
 
 
-async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus: sl.TopicBus) -> None:
+async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus: sl.runtime.TopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
 
@@ -137,7 +137,7 @@ async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus:
     assert len(mounts) == 2
 
 
-async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.TopicBus) -> None:
+async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runtime.TopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
@@ -150,7 +150,7 @@ async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.Topic
     assert followed == {"Catalog(1).entries", "Catalog(1).key"}
 
 
-async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.TopicBus) -> None:
+async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.runtime.TopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
@@ -163,13 +163,13 @@ async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.TopicBus) -> No
     assert all(mount.followed for mount in mounts)
 
 
-async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.TopicBus) -> None:
+async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.TopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     mounts = [await mounted(catalog, reactor, message) for message in messages]
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         catalog.key = "k2"
     await drain(reactor, bus)
     await drain(reactor, bus)
@@ -179,13 +179,13 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k2#2"], ["k2#2"]]
 
 
-async def test_a_replace_publishes_when_its_action_commits(bus: sl.TopicBus) -> None:
+async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.TopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
     mount = await mounted(catalog, reactor, message)
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         catalog.entries.replace("installed")
     await drain(reactor, bus)
 
@@ -193,7 +193,7 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.TopicBus) -> 
     assert mount.followed
 
 
-async def test_a_rolled_back_replace_publishes_nothing(bus: sl.TopicBus) -> None:
+async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.TopicBus) -> None:
     """Doc 48 staging, seen from the bus: an action that failed must not wake other mounts."""
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
@@ -201,7 +201,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.TopicBus) -> None
     mount = await mounted(catalog, reactor, message)
     edits = message.edit.await_count
 
-    with pytest.raises(RuntimeError), sl.transaction():
+    with pytest.raises(RuntimeError), sl.runtime.transaction():
         catalog.entries.replace("installed")
         failure = "handler failed"
         raise RuntimeError(failure)
@@ -212,7 +212,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.TopicBus) -> None
     assert mount.followed
 
 
-def test_two_namespaces_hold_separate_resources(bus: sl.TopicBus) -> None:
+def test_two_namespaces_hold_separate_resources(bus: sl.runtime.TopicBus) -> None:
     one, two = Catalog(bus, 1), Catalog(bus, 2)
 
     assert one.entries is not two.entries
@@ -239,7 +239,7 @@ def test_a_component_resource_carries_no_address() -> None:
 def test_a_namespace_resource_may_not_take_a_reserved_name() -> None:
     with pytest.raises(TypeError, match="reserves 'scope'"):
 
-        class Bad(sl.Shared[int]):
+        class Bad(sl.runtime.Shared[int]):
             @sl.resource
             async def scope(self) -> str:  # type: ignore[override]
                 return "x"
@@ -248,7 +248,7 @@ def test_a_namespace_resource_may_not_take_a_reserved_name() -> None:
 def test_a_namespace_computed_may_not_take_a_reserved_name() -> None:
     with pytest.raises(TypeError, match="reserves 'bus'"):
 
-        class Bad(sl.Shared[int]):
+        class Bad(sl.runtime.Shared[int]):
             @sl.computed
             def bus(self) -> str:  # type: ignore[override]
                 return "x"

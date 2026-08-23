@@ -10,12 +10,12 @@ from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.semantic import Actions, RoutedAction, Stack
 
 
-def _form() -> sl.FormSpec:
-    return sl.FormSpec("Entry", (sl.TextField(key="name", label="Name"),))
+def _form() -> sl.forms.FormSpec:
+    return sl.forms.FormSpec("Entry", (sl.forms.TextField(key="name", label="Name"),))
 
 
-def _editor(*, minimum: int = 0, maximum: int | None = None, window_size: int = 25) -> sl.CollectionEditor:
-    return sl.CollectionEditor(
+def _editor(*, minimum: int = 0, maximum: int | None = None, window_size: int = 25) -> sl.patterns.CollectionEditor:
+    return sl.patterns.CollectionEditor(
         "Links",
         create=_form(),
         label=lambda values: str(values["name"]),
@@ -54,7 +54,7 @@ async def _submit(mount: Mount, action: str, value: str) -> discord.ui.Modal:
 async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collection() -> None:
     changes: list[tuple[Mapping[str, object], ...]] = []
 
-    async def changed(_event: sl.PatternEvent[sl.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
+    async def changed(_event: sl.patterns.PatternEvent[sl.patterns.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
         changes.append(values)
 
     component = _editor().component(on_change=changed)
@@ -63,7 +63,7 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
 
     await _submit(mount, "collection.add", "OpenAI")
 
-    assert component.pattern_state == sl.CollectionState((sl.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
+    assert component.pattern_state == sl.patterns.CollectionState((sl.patterns.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
     assert tuple(dict(value) for value in changes[-1]) == ({"name": "OpenAI"},)
 
 
@@ -77,7 +77,7 @@ async def test_edit_prefills_and_retains_the_entry_identity() -> None:
     modal = await _submit(mount, "collection.edit", "New")
 
     assert _text_input(modal).default == "Old"
-    assert component.pattern_state.entries == (sl.CollectionEntry("1", (("name", "New"),)),)
+    assert component.pattern_state.entries == (sl.patterns.CollectionEntry("1", (("name", "New"),)),)
 
 
 def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
@@ -90,8 +90,8 @@ def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
     assert editor.form_for(selected, "add") is None
 
     rendered = editor.component(initial=selected).render()
-    add = next(item for item in _walk(rendered) if isinstance(item, sl.Action) and item.key == "collection.add")
-    remove = next(item for item in _walk(rendered) if isinstance(item, sl.Action) and item.key == "collection.remove")
+    add = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.add")
+    remove = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.remove")
     assert not add.available
     assert not remove.available
 
@@ -116,7 +116,7 @@ def test_window_pages_past_twenty_five_and_clamps_after_removal() -> None:
 
     assert second.page == 1
     rendered = editor.component(initial=second).render()
-    picker = next(item for item in _walk(rendered) if isinstance(item, sl.Choices))
+    picker = next(item for item in _walk(rendered) if isinstance(item, sl.semantic.Choices))
     assert [choice.label for choice in picker.choices] == ["Entry 25"]
 
 
@@ -129,7 +129,7 @@ def test_errors_report_invalid_initial_cardinality() -> None:
 
 
 def test_custom_identity_and_routed_form_parity() -> None:
-    editor = sl.CollectionEditor(
+    editor = sl.patterns.CollectionEditor(
         "Links",
         create=_form(),
         label=lambda values: str(values["name"]),
@@ -137,14 +137,14 @@ def test_custom_identity_and_routed_form_parity() -> None:
     )
     state = editor.initial_from(({"name": "Docs"},))
     state = editor.transition(state, "select", values=("docs",))
-    routes: list[sl.PatternRoute[sl.CollectionState]] = []
+    routes: list[sl.patterns.PatternRoute[sl.patterns.CollectionState]] = []
 
-    def route(request: sl.PatternRoute[sl.CollectionState]) -> str:
+    def route(request: sl.patterns.PatternRoute[sl.patterns.CollectionState]) -> str:
         routes.append(request)
         return f"collection:{request.action}"
 
-    rendered = sl.RouterShell(route).render(editor, state)
+    rendered = sl.patterns.RouterShell(route).render(editor, state)
 
     assert editor.form_for(state, "edit") is not None
     assert any(isinstance(item, RoutedAction) and item.key == "collection.edit" for item in _walk(rendered))
-    assert sl.PatternRoute("edit", state, "input") in routes
+    assert sl.patterns.PatternRoute("edit", state, "input") in routes

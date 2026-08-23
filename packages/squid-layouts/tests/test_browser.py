@@ -15,28 +15,28 @@ class Entry:
 
 async def _loaded(
     items: tuple[Entry, ...], *, extent: int = 2
-) -> tuple[sl.WindowSource[Entry], sl.LoadedWindow[Entry]]:
-    source = sl.list_source(items)
-    loaded = await sl.WindowLoader(source, extent, lambda item: item.key).load()
+) -> tuple[sl.sources.WindowSource[Entry], sl.sources.LoadedWindow[Entry]]:
+    source = sl.sources.list_source(items)
+    loaded = await sl.sources.WindowLoader(source, extent, lambda item: item.key).load()
     assert loaded is not None
     return source, loaded
 
 
 async def test_list_source_returns_exact_offset_windows() -> None:
-    source = sl.list_source(("a", "b", "c"))
+    source = sl.sources.list_source(("a", "b", "c"))
 
-    window = await source.fetch(sl.Position(offset=1), 2)
+    window = await source.fetch(sl.sources.Position(offset=1), 2)
 
     assert window.items == ("b", "c")
-    assert window.position == sl.Position(offset=1)
+    assert window.position == sl.sources.Position(offset=1)
     assert window.has_previous
     assert not window.has_next
     assert window.total == 3
-    assert source.capabilities == sl.SourceCapabilities(
+    assert source.capabilities == sl.sources.SourceCapabilities(
         backward=True,
         offsets=True,
         jumpable=True,
-        count=sl.CountPrecision.EXACT,
+        count=sl.sources.CountPrecision.EXACT,
     )
 
 
@@ -55,7 +55,7 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
         built.append(entry.key)
         return Detail(entry)
 
-    browser = sl.Browser(
+    browser = sl.patterns.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,
@@ -85,7 +85,7 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
 
 async def test_browser_navigation_keeps_previous_window_visible_while_pending() -> None:
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
-    browser = sl.Browser(
+    browser = sl.patterns.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,
@@ -98,16 +98,16 @@ async def test_browser_navigation_keeps_previous_window_visible_while_pending() 
 
     browser._request = type(browser._request)("next")
 
-    assert isinstance(browser.window.state, sl.Pending)
-    assert browser.window.state.previous == sl.Ready(loaded)
+    assert isinstance(browser.window.state, sl.runtime.Pending)
+    assert browser.window.state.previous == sl.runtime.Ready(loaded)
     assert "A" in str(browser.render())
     assert "Loading" in str(browser.render())
 
 
 async def test_browser_overview_receives_the_loaded_window() -> None:
     source, loaded = await _loaded((Entry("a", "A"),))
-    seen: list[sl.LoadedWindow[Entry]] = []
-    browser = sl.Browser(
+    seen: list[sl.sources.LoadedWindow[Entry]] = []
+    browser = sl.patterns.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,

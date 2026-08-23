@@ -5,19 +5,13 @@ from datetime import UTC, datetime
 import discord
 import pytest
 
-from squid_layouts import (
-    Asset,
-    Document,
-    InlineAsset,
-    LayoutInvariantError,
-    Localization,
-    Message,
-    Position,
-    UnsolvableLayoutError,
-    ZonedDateTime,
-    plan,
-    zoned_timestamp,
-)
+from squid_layouts import Document, zoned_timestamp
+from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.planning import plan
+from squid_layouts.semantic import Asset, InlineAsset
+from squid_layouts.sources import Position
+from squid_layouts.temporal import ZonedDateTime
+from squid_layouts.text import Localization, Message
 from squid_layouts.discord import V2_LIMITS as LIMITS
 from squid_layouts.discord import V2_TARGET, NativeItem, V2Renderer
 from squid_layouts.planning import TargetProfile

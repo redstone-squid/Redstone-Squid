@@ -11,15 +11,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_layouts as sl
-from squid_layouts import (
-    DEFAULT_CHROME,
-    Component,
-    field,
-    fields,
-    paragraph,
-    section,
-    truncate,
-)
+from squid_layouts import Component, field, fields, paragraph, section, truncate
+from squid_layouts.semantic import DEFAULT_CHROME
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
@@ -210,7 +203,7 @@ class Catalog(Component):
 
     def render(self):
         keys = (*self.lead, *(str(index) for index in range(36)))
-        return [Items("catalog", tuple(Item(key, sl.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys))]
+        return [Items("catalog", tuple(Item(key, sl.semantic.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys))]
 
 
 class TestMountPagination:

@@ -29,7 +29,7 @@ async def loaded() -> Panel:
 async def test_a_rolled_back_action_does_not_keep_its_replacement() -> None:
     panel = await loaded()
 
-    with pytest.raises(RuntimeError), sl.transaction():
+    with pytest.raises(RuntimeError), sl.runtime.transaction():
         panel.value.replace("edited")
         message = "handler failed"
         raise RuntimeError(message)
@@ -40,7 +40,7 @@ async def test_a_rolled_back_action_does_not_keep_its_replacement() -> None:
 async def test_an_action_reads_back_the_value_it_replaced() -> None:
     panel = await loaded()
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         panel.value.replace("edited")
         assert panel.value.value == "edited"
 
@@ -52,7 +52,7 @@ async def test_a_replacement_is_invisible_until_the_action_commits() -> None:
     panel = await loaded()
     seen: list[str] = []
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         panel.value.replace("edited")
         seen.append(_outside(panel))
 
@@ -74,7 +74,7 @@ def _outside(panel: Panel) -> str:
 async def test_the_last_replacement_in_an_action_is_the_one_that_lands() -> None:
     panel = await loaded()
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         panel.value.replace("first")
         panel.value.replace("second")
 
@@ -91,13 +91,13 @@ async def test_replacing_outside_an_action_still_lands_immediately() -> None:
 
 async def test_a_replacement_rebaselines_its_sources_only_when_it_commits() -> None:
     """Rollback must leave the resource watching what it watched before."""
-    bus = sl.TopicBus()
-    topic = sl.Topic("thing", "1")
+    bus = sl.runtime.TopicBus()
+    topic = sl.runtime.Topic("thing", "1")
 
     class Watching(sl.Component):
         @sl.resource
         async def value(self) -> str:
-            sl.watch(topic)
+            sl.runtime.watch(topic)
             return "loaded"
 
         def render(self):
@@ -106,7 +106,7 @@ async def test_a_replacement_rebaselines_its_sources_only_when_it_commits() -> N
     panel = Watching()
     await panel.value.reload()
 
-    with pytest.raises(RuntimeError), sl.transaction():
+    with pytest.raises(RuntimeError), sl.runtime.transaction():
         panel.value.replace("edited")
         message = "handler failed"
         raise RuntimeError(message)
@@ -136,7 +136,7 @@ async def test_a_replacement_settles_sources_before_the_commit_becomes_irreversi
     panel = DerivedSource()
     await panel.value.reload()
 
-    with pytest.raises(RuntimeError, match="boom"), sl.transaction():
+    with pytest.raises(RuntimeError, match="boom"), sl.runtime.transaction():
         panel.x = 1
         panel.value.replace("authoritative")
 

@@ -17,23 +17,23 @@ from squid_layouts.discord.testing import delivered_to, fake_message
 class Projection(sl.Component):
     """A panel that re-reads its source whenever the build topic is published.
 
-    The whole binding is the `sl.watch` line: no subscription to register, no reload closure
+    The whole binding is the `sl.runtime.watch` line: no subscription to register, no reload closure
     to pass, and no priming call before the send.
     """
 
     def __init__(self, read) -> None:
         self._read = read
 
-    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
     async def value(self) -> str:
-        sl.watch(resource_topic("build", "42"))
+        sl.runtime.watch(resource_topic("build", "42"))
         return self._read()
 
     def render(self):
         # An atomic resource is still rendered once while pending: that discovery render is
         # how the mount learns the resource exists, and what it reads is what it follows.
         match self.value.state:
-            case sl.Ready(value=value):
+            case sl.runtime.Ready(value=value):
                 return sl.paragraph(value)
             case _:
                 return sl.paragraph("loading")
@@ -47,7 +47,7 @@ async def _drain_reactor(reactor: sl.discord.Reactor) -> None:
 
 
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
-    bus = sl.TopicBus()
+    bus = sl.runtime.TopicBus()
     reactor = sl.discord.Reactor(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     source = "before"

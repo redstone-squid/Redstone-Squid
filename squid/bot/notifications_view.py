@@ -102,10 +102,10 @@ class NotificationPanel(sl.Component):
         ]
         if self.subscriptions:
             nodes.append(
-                sl.Choices(
+                sl.semantic.Choices(
                     key="unfollow",
                     choices=tuple(
-                        sl.Choice(
+                        sl.semantic.Choice(
                             str(subscription.id),
                             self.describe(subscription),
                             self.detail(subscription),
