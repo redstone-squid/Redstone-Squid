@@ -12,7 +12,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, overload
 from weakref import WeakValueDictionary
 
 from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink, TraceOutcome, TraceResult
@@ -299,6 +299,26 @@ class TopicBus:
         self._queue: asyncio.Queue[Address] = asyncio.Queue()
         self._topics: dict[Address, _TopicState] = {}
         self._running = False
+
+    @overload
+    def subscribe(
+        self,
+        topic: Topic,
+        callback: Callable[[Topic], Awaitable[None]],
+        *,
+        label: str = "",
+        profile_label: str | None = None,
+    ) -> Callable[[], None]: ...
+
+    @overload
+    def subscribe(
+        self,
+        topic: CellAddress,
+        callback: Callable[[CellAddress], Awaitable[None]],
+        *,
+        label: str = "",
+        profile_label: str | None = None,
+    ) -> Callable[[], None]: ...
 
     def subscribe(
         self,

@@ -13,7 +13,7 @@ pytestmark = pytest.mark.skipif(worker_main.resource is None, reason="rlimits ar
 def test_mapped_pages_are_converted_to_bytes(tmp_path: Path) -> None:
     """The budget is added to this baseline, so a page/byte mix-up would silently under-cap it."""
     assert worker_main.resource is not None
-    page_size = worker_main.resource.getpagesize()
+    page_size = worker_main.resource.getpagesize()  # pyrefly: ignore[missing-attribute]
     statm = tmp_path / "statm"
     # Real /proc/self/statm fields: size, resident, shared, text, lib, data, dt.
     statm.write_text(f"{2500} 400 300 20 0 900 0\n", encoding="utf-8")

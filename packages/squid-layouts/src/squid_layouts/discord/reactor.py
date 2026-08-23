@@ -7,12 +7,12 @@ import weakref
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import anyio
 
 from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationOutcome, Profiler, TraceLink
-from squid_layouts.topics import Address, TopicBus
+from squid_layouts.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
@@ -175,6 +175,12 @@ class Reactor:
             failed=self._failed,
             unchanged=self._unchanged,
         )
+
+    @overload
+    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]: ...
+
+    @overload
+    def follow(self, mount: Mount, *topics: CellAddress) -> Callable[[], None]: ...
 
     def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]:
         """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.

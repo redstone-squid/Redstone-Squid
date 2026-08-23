@@ -13,6 +13,7 @@ from tests.fuzz.api.schemathesis import (
     ANONYMOUS,
     AUTHORIZATION_ENV,
     CHECKS,
+    FORCE_KILL_SIGNAL,
     LOCAL_SMOKE,
     CampaignPaths,
     CampaignState,
@@ -68,7 +69,7 @@ def test_command_is_single_worker_explicitly_bounded_and_contains_no_credential(
     config = config_text_for(campaign_paths, persona)
 
     assert command[:7] == [
-        "/venv/bin/python",
+        str(Path("/venv/bin/python")),
         "-m",
         "schemathesis.cli",
         "--config-file",
@@ -112,16 +113,22 @@ def test_watchdog_returns_before_budget_without_signals() -> None:
 
 
 def test_watchdog_interrupts_then_force_kills_the_process_group() -> None:
-    process = FakeProcess([subprocess.TimeoutExpired("st", 20), subprocess.TimeoutExpired("st", 3), -signal.SIGKILL])
+    process = FakeProcess(
+        [
+            subprocess.TimeoutExpired("st", 20),
+            subprocess.TimeoutExpired("st", 3),
+            -FORCE_KILL_SIGNAL,
+        ]
+    )
     signals: list[tuple[int, signal.Signals]] = []
 
     result = supervise(
         process, budget_seconds=20, cleanup_grace_seconds=3, signal_group=lambda pid, sig: signals.append((pid, sig))
     )
 
-    assert result == SupervisionResult(returncode=-signal.SIGKILL, timed_out=True, forced_kill=True)
+    assert result == SupervisionResult(returncode=-FORCE_KILL_SIGNAL, timed_out=True, forced_kill=True)
     assert process.timeouts == [20, 3, None]
-    assert signals == [(4321, signal.SIGINT), (4321, signal.SIGKILL)]
+    assert signals == [(4321, signal.SIGINT), (4321, FORCE_KILL_SIGNAL)]
 
 
 @pytest.mark.parametrize(

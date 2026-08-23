@@ -1009,7 +1009,7 @@ class BuildEditComponent(sl.Component):
         timeout: float = 300,
         node: sl.LayoutNode | None = None,
     ) -> None:
-        self._seed: tuple[Build, sl.LayoutNode | None] = (build, node)
+        self._seed: tuple[Build, sl.LayoutNode | None] | None = (build, node)
         self._build_id = build.id
         self._refresh: Callable[[int], Awaitable[tuple[Build, sl.LayoutNode] | None]] | None = None
         self.builds = builds
