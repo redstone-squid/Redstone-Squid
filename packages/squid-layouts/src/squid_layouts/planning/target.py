@@ -6,9 +6,15 @@ from typing import Any, Self, cast
 
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.adapter import (
+    EMPTY_COST as EMPTY_COST,
+)
+from squid_layouts.planning.adapter import (
     AdapterProfile,
     ExtensionAdapter,
     ResourceCost,
+)
+from squid_layouts.planning.adapter import (
+    PreparedExtension as PreparedExtension,
 )
 from squid_layouts.target_types import DiscordTarget
 
