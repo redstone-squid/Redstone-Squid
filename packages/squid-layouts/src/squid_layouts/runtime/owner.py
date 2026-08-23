@@ -29,9 +29,14 @@ class ComponentRuntime:
         self.plan_cache = PlanCache(32)
         self.components: dict[str, Component] = {}
         self.revision = 0
+        """Which render inputs the next render would see; a render captures it and `commit`
+        compares against it. Not component state alone -- anything a render reads and a later
+        commit could invalidate moves it, including a shared cell another owner wrote."""
         self.dirty = True
+        """Whether the committed tree is behind the inputs a fresh render would read."""
 
     def invalidate(self) -> None:
+        """Declare the render inputs moved, so anything rendered before now is stale."""
         self.revision += 1
         self.dirty = True
         if self.on_invalidate is not None:
@@ -50,7 +55,12 @@ class ComponentRuntime:
         return render_component_tree(self.root, runtime=self, context=self.context, defer=defer)
 
     def commit(self, tree: ComponentTree, *, rendered_revision: int | None = None) -> None:
-        """Publish one successfully planned tree and reconcile keyed lifecycle hooks."""
+        """Publish one successfully planned tree and reconcile keyed lifecycle hooks.
+
+        `rendered_revision` is what :attr:`revision` was when `tree` was rendered. Delivery
+        succeeding does not mean nothing changed while it was in flight, so the tree stays
+        dirty when the inputs have moved since.
+        """
         if tree.deferred:
             # A discovery tree is missing subtrees; committing one would unmount live
             # components that are only absent because expansion stopped early.
