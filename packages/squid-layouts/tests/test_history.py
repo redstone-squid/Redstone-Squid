@@ -1,9 +1,13 @@
 """Undo: what the framework restores, what the author reverses, and where each stops."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
+import squid_layouts as sl
 from squid_layouts import (
     Action,
+    ActionEvent,
     CellAddress,
     Component,
     History,
@@ -17,6 +21,8 @@ from squid_layouts import (
     state,
     transaction,
 )
+from squid_layouts.discord import Everyone, Mount
+from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import ComponentRuntime
 from squid_layouts.runtime.reactivity import readonly_transaction
@@ -492,3 +498,133 @@ class TestSharedState:
         with pytest.raises(ReactiveWriteError, match="may not write component state"):
             await subject.history.undo()
         assert workspace.filters == ()
+
+
+class Declared(Component):
+    """The `record=` shape: a tier-1 action whose whole delta is state the framework owns."""
+
+    history: History = history(limit=3)
+    page: int = state(1)
+
+    def render(self):
+        return sl.actions(
+            sl.action("Turn the page", self._turn, key="turn", record=self.history),
+            sl.action("Reset", self._reset, key="reset"),
+            key="controls",
+        )
+
+    async def _turn(self, event: ActionEvent) -> None:
+        self.page += 1
+
+    async def _reset(self, event: ActionEvent) -> None:
+        self.page = 1
+
+
+def mounted[ComponentT: Component](component: ComponentT, **kwargs: object) -> Mount:
+    mount = Mount(component, access=Everyone(), timeout=None, **kwargs)  # type: ignore[bad-argument-type]
+    commit_render(mount)
+    return mount
+
+
+class TestDeclaredRecording:
+    """`sl.action(record=...)`: the framework opens the entry, the contract of 28 is unchanged."""
+
+    async def test_a_press_records_one_entry_named_by_the_control(self):
+        subject = Declared()
+        mount = mounted(subject)
+
+        await mount.dispatch("turn", fake_interaction())
+
+        assert subject.page == 2
+        assert [entry.label for entry in subject.history.entries] == ["Turn the page"]
+
+    async def test_undo_restores_the_delta_and_redo_replays_it(self):
+        subject = Declared()
+        mount = mounted(subject)
+
+        await mount.dispatch("turn", fake_interaction())
+        await subject.history.undo()
+        assert subject.page == 1
+        await subject.history.redo()
+        assert subject.page == 2
+
+    async def test_an_action_without_record_enters_nothing(self):
+        subject = Declared()
+        mount = mounted(subject)
+
+        await mount.dispatch("reset", fake_interaction())
+
+        assert subject.history.entries == ()
+
+    async def test_the_entry_covers_writes_the_handler_makes_after_the_press(self):
+        """The entry is opened first but describes the whole transaction, as a manual one does."""
+        subject = Declared()
+        mount = mounted(subject)
+
+        await mount.dispatch("turn", fake_interaction())
+
+        (entry,) = subject.history.entries
+        assert entry.delta.changes
+
+    async def test_a_handler_that_records_too_is_refused(self):
+        class Doubled(Component):
+            history: History = history(limit=3)
+            page: int = state(1)
+
+            def render(self):
+                return sl.actions(
+                    sl.action("Turn the page", self._turn, key="turn", record=self.history), key="controls"
+                )
+
+            async def _turn(self, event: ActionEvent) -> None:
+                self.page += 1
+                self.history.record("and again")
+
+        subject = Doubled()
+        hook = AsyncMock()
+        mount = mounted(subject, on_error=hook)
+
+        await mount.dispatch("turn", fake_interaction())
+
+        assert hook.await_args is not None
+        (_interaction, error, source), _ = hook.await_args
+        assert isinstance(error, HistoryError)
+        assert source == "action:turn"
+        assert subject.page == 1, "the refused action rolled back"
+        assert subject.history.entries == ()
+
+    async def test_a_grouped_action_still_records_through_the_select(self):
+        """Recording rides the route binding, so a row collapsing into a picker keeps it."""
+
+        class Crowd(Component):
+            history: History = history(limit=3)
+            page: int = state(1)
+
+            def render(self):
+                return sl.actions(
+                    *(
+                        sl.action(f"Act {index}", self._act, key=f"act{index}", record=self.history)
+                        for index in range(8)
+                    ),
+                    key="crowd",
+                    display=sl.ActionDisplay.GROUPED,
+                )
+
+            async def _act(self, event: ActionEvent) -> None:
+                self.page += 1
+
+        subject = Crowd()
+        mount = mounted(subject)
+        (picker,) = set(mount.snapshot().handler_keys) - {f"act{index}" for index in range(8)}
+
+        await mount.dispatch(picker, fake_interaction(), ["act3"])
+
+        assert [entry.label for entry in subject.history.entries] == ["Act 3"]
+        await subject.history.undo()
+        assert subject.page == 1
+
+    def test_a_parallel_read_action_has_nothing_to_record(self):
+        async def act(event: ActionEvent) -> None: ...
+
+        with pytest.raises(ValueError, match="nothing to record"):
+            sl.action("Peek", act, key="peek", policy=sl.ActionPolicy.PARALLEL_READ, record=panel().history)

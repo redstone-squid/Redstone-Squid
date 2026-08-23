@@ -19,7 +19,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import Literal, NoReturn, TypeAliasType, get_args
+from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
@@ -100,6 +100,9 @@ from squid_layouts.semantic import (
 )
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import ResolvedText, TextLike, md
+
+if TYPE_CHECKING:
+    from squid_layouts.runtime.history import History
 
 type TextValue = TextLike | Template
 """Author text: trusted Markdown, already-resolved text, or a t-string to interpolate."""
@@ -475,13 +478,24 @@ def action(
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
     guard: Guard | None = None,
     feedback: Feedback | None = None,
+    record: History | None = None,
 ) -> Action:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
 
     ``guard`` decides whether a press may execute now; ``available`` decides whether the
     control is offered at all. A cooldown wants both.
+
+    ``record`` opens the entry for this press, under ``label``, before the handler runs: an
+    action whose whole delta is component state needs no `History.record` of its own. One
+    that touched the world still calls it, for the ``undo=`` only the handler can write --
+    and doing so under ``record=`` raises `HistoryError` rather than making two entries.
     """
-    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback)
+    if record is not None and policy is ActionPolicy.PARALLEL_READ:
+        message = "a parallel-read action changes nothing, so it has nothing to record"
+        raise ValueError(message)
+    return Action(
+        key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback, record
+    )
 
 
 def toggle(

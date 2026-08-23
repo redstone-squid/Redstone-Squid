@@ -11,6 +11,7 @@ from squid_layouts.text import TextLike
 if TYPE_CHECKING:
     from squid_layouts.forms import FormIssue, FormLike, SubmitHandler
     from squid_layouts.guards import Guard
+    from squid_layouts.runtime.history import History
 
 
 class ActionPolicy(StrEnum):
@@ -205,6 +206,10 @@ class ActionBinding:
     """Admission checked by the frontend after the concurrency gate, before the handler."""
     feedback: Feedback | None = None
     """Busy feedback policy for a handler slow enough to need it."""
+    label: TextLike = ""
+    """What the pressed control says, which is what a framework-written entry is called."""
+    record: History | None = None
+    """History this action enters itself into, under `label`, before the handler runs."""
 
     def routed(self, values: tuple[str, ...]) -> ActionBinding | None:
         """Resolve a grouped control to its logical action binding."""

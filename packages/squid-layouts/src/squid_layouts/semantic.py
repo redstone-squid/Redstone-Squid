@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
@@ -14,6 +14,9 @@ from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
+
+if TYPE_CHECKING:
+    from squid_layouts.runtime.history import History
 
 
 class ActionDisplay(StrEnum):
@@ -403,6 +406,8 @@ class Action:
     """Whether this press may execute now. `available` is the render-time question."""
     feedback: Feedback | None = None
     """Busy feedback for a handler slow enough that the reader needs to see it running."""
+    record: History | None = None
+    """History this press enters itself into, under `label`, before `on_trigger` runs."""
 
 
 @dataclass(frozen=True, slots=True)

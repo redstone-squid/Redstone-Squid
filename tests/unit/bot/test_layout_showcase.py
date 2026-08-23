@@ -198,6 +198,18 @@ class TestSharedAppearance:
         await writer.dispatch("controls.undo", fake_interaction(user_id=7))
         assert appearance.density == "comfortable", "one entry restores state the panel does not own"
 
+    async def test_the_accent_button_declares_its_own_recording(self) -> None:
+        """`record=` on the control: the handler only writes, the framework opens the entry."""
+        _, _, appearance, _, writer, _ = self.panels()
+        await writer.send(delivered_to(fake_message(message_id=1)))
+        before = appearance.accent
+
+        await writer.dispatch("controls.accent", fake_interaction(user_id=7))
+        assert appearance.accent != before
+
+        await writer.dispatch("controls.undo", fake_interaction(user_id=7))
+        assert appearance.accent == before
+
     async def test_the_session_dies_with_its_panels_and_appearance_does_not(self) -> None:
         import gc
         import weakref
