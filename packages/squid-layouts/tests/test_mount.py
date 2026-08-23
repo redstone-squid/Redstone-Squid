@@ -2189,7 +2189,7 @@ class TestSend:
             allowed = True
             invoked = 0
 
-            async def click(self, event: PressEvent) -> None:
+            async def click(self, event: ActionEvent) -> None:
                 self.invoked += 1
 
             def render(self):

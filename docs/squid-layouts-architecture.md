@@ -532,7 +532,7 @@ objects, or dynamic import instructions. Restore recipes inject dependencies and
 Component and adapter versions are independent; missing sequential component migrations retain the record as
 incompatible for operator action.
 
-`DurableSessionRuntime.run()` owns recovery, claim renewal, visible-commit checkpointing, bounded retries, expiry,
+`DurableSessionRuntime.run()` owns recovery, claim renewal, runtime-commit checkpointing, bounded retries, expiry,
 and shutdown release under a host-owned anyio task group. `DiscordFrontend` promotes public interaction delivery
 to permanent bot-token authority and reconnects a complete graph before registering it for dispatch. Fenced
 admission publishes the newcomer and retires selected durable victims atomically, while stale claim tokens cannot

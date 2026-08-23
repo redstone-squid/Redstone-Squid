@@ -285,18 +285,20 @@ Collision and protection protocols are asynchronous and receive immutable summar
 live `Session` objects, so one policy vocabulary works for local and distributed occupants. The
 runtime evaluates policy in Python; the store only fences reservation, publish, and retirement.
 
-### 2. Checkpoint at visible commit boundaries
+### 2. Checkpoint at application commit boundaries
 
-Add an asynchronous mount-presented observer fired after a candidate has been successfully
-delivered and committed. `DurableSessionRuntime` registers one observer for every mount in a
-`DurableSession` and checkpoints the whole session graph after visible commits. Its record contains
+Add a synchronous mount-committed observer fired after a candidate's application runtime has
+committed, whether its presentation was delivered or suppressed as identical. `DurableSessionRuntime`
+registers one observer for every mount in a `DurableSession` and checkpoints the whole session graph
+after runtime commits. Its record contains
 every mount snapshot and locator plus parent and actor attribution. Durable attachment therefore
 requires a registered recipe key. State mutations and failed renders never reach storage merely
 because they happened in memory.
 
 Discord and the database cannot share a transaction. The contract is therefore explicit:
 
-- Discord delivery commits first; the snapshot never claims a generation the reader did not see.
+- A delivered candidate commits only after Discord accepts it; a suppressed candidate is already
+  proven equal to the visible scene and retains that generation.
 - A failed checkpoint leaves the live mount usable, marks the durable session unhealthy, and
   enters a bounded retry queue owned by `run()`.
 - A process crash between the Discord commit and snapshot save may restore the previous visible

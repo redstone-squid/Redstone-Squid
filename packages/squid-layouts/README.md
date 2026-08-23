@@ -286,9 +286,11 @@ shared-state conflicts. Component state written by middleware is consequently in
 not roll back with handler state; middleware is a policy surface unless that independence is
 intentional.
 
-`Mount.on_presented()` observers are synchronous. They run at the delivered-generation commit point
-under the mount's render lock and must not await or call lock-taking mount operations. External hosts
-migrating an async observer should enqueue its work or start it through an owned task supervisor.
+`Mount.on_committed()` and `Mount.on_presented()` observers are synchronous. Committed observers run
+whenever application runtime state advances, including when an identical presentation suppresses the
+Discord edit. Presented observers run only at delivered-generation commit points. Both run under the
+mount's render lock and must not await or call lock-taking mount operations. External hosts migrating
+an async observer should enqueue its work or start it through an owned task supervisor.
 
 Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
 `Check` accepts an asynchronous application policy. Visibility stays a destination concern,

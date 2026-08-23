@@ -479,7 +479,7 @@ class DurableSessionRuntime:
             self._observe(active, mount)
 
     def _observe(self, active: _ActiveSession, mount: Mount) -> None:
-        def presented(_: Mount) -> None:
+        def committed(_: Mount) -> None:
             self._request_checkpoint(active.token.key)
 
         async def finished(finished_mount: Mount) -> None:
@@ -491,7 +491,7 @@ class DurableSessionRuntime:
             active.locators.pop(finished_mount, None)
             self._request_checkpoint(active.token.key)
 
-        mount.on_presented(presented)
+        mount.on_committed(committed)
         mount.on_finish(finished)
 
     def _request_checkpoint(self, record_id: str) -> None:
