@@ -1,5 +1,6 @@
 """What a transaction actually covers, and what it says about what it does not."""
 
+import asyncio
 import logging
 from dataclasses import dataclass
 
@@ -9,9 +10,9 @@ from squid_layouts import (
     Component,
     ReactiveWriteError,
     UndeclaredStateError,
+    computed,
     join_action,
     state,
-    strict_state,
     transaction,
 )
 from squid_layouts.primitives import Text
@@ -61,18 +62,17 @@ class TestUndeclaredWrites:
             panel.undeclared = "after"
         assert panel.undeclared == "before"
 
-    def test_strict_mode_rejects_them(self):
+    def test_a_writable_action_rejects_them_too(self):
         panel = attached(Panel(Uncopyable()))
         with pytest.raises(UndeclaredStateError, match=r"Panel\.undeclared"), transaction():
             panel.undeclared = "after"
 
-    def test_otherwise_they_land_and_are_logged(self, caplog: pytest.LogCaptureFixture):
+    def test_the_attribute_is_left_unwritten(self):
+        """Raising before the write lands is the point: a landed write is never rolled back."""
         panel = attached(Panel(Uncopyable()))
-        with caplog.at_level(logging.WARNING), strict_state(enabled=False), transaction():
+        with pytest.raises(UndeclaredStateError), transaction():
             panel.undeclared = "after"
-        assert panel.undeclared == "after"
-        assert "Panel.undeclared" in caplog.text
-        assert "sl.state()" in caplog.text
+        assert panel.undeclared == "before"
 
     def test_declared_writes_say_nothing(self):
         panel = attached(Panel(Uncopyable()))
@@ -136,6 +136,106 @@ class TestOpaqueState:
     def test_it_stays_out_of_snapshots(self):
         panel = attached(Panel(Uncopyable()))
         assert set(export_state(panel)) == {"declared"}
+
+
+class TestStaging:
+    """Writes are held in the transaction's overlay until it commits."""
+
+    def test_an_action_reads_its_own_writes(self):
+        panel = attached(Panel(Uncopyable()))
+        with transaction():
+            panel.declared = 7
+            assert panel.declared == 7
+        assert panel.declared == 7
+
+    def test_another_task_does_not(self):
+        """The reason writes stage rather than write through: a shared read crossing an
+        `await` must not see an action that has not committed."""
+        panel = attached(Panel(Uncopyable()))
+        seen: dict[str, int] = {}
+
+        async def both() -> None:
+            staged, observed = asyncio.Event(), asyncio.Event()
+
+            async def action() -> None:
+                with transaction():
+                    panel.declared = 7
+                    staged.set()
+                    await observed.wait()
+                    seen["action"] = panel.declared
+
+            async def bystander() -> None:
+                await staged.wait()
+                seen["bystander"] = panel.declared
+                observed.set()
+
+            async with asyncio.TaskGroup() as group:
+                group.create_task(action())
+                group.create_task(bystander())
+
+        asyncio.run(both())
+        assert seen == {"bystander": 0, "action": 7}
+        assert panel.declared == 7
+
+    def test_rolling_back_is_dropping_the_overlay(self):
+        panel = attached(Panel(Uncopyable()))
+        with pytest.raises(RuntimeError, match="abort"), transaction():
+            panel.declared = 7
+            panel.declared = 9
+            message = "abort"
+            raise RuntimeError(message)
+        assert panel.declared == 0
+
+    def test_the_delta_reports_the_first_value_and_the_last(self):
+        panel = attached(Panel(Uncopyable()))
+        panel.declared = 1
+        seen: list[StateDelta] = []
+        with transaction():
+            on_action_commit(seen.append)
+            panel.declared = 2
+            panel.declared = 3
+        (delta,) = seen
+        (change,) = delta.changes
+        assert (change.before, change.after) == (1, 3)
+
+    def test_a_computed_sees_the_staged_value(self):
+        """Read-your-writes has to reach derived values, or an action renders its own past."""
+
+        class Derived(Component):
+            count: int = state(0)
+
+            @computed
+            def doubled(self) -> int:
+                return self.count * 2
+
+            def render(self):
+                return Text(str(self.doubled))
+
+        component = attached(Derived())
+        with transaction():
+            component.count = 4
+            assert component.doubled == 8
+        assert component.doubled == 8
+
+    def test_a_rolled_back_computed_goes_back_with_its_source(self):
+        class Derived(Component):
+            count: int = state(0)
+
+            @computed
+            def doubled(self) -> int:
+                return self.count * 2
+
+            def render(self):
+                return Text(str(self.doubled))
+
+        component = attached(Derived())
+        assert component.doubled == 0
+        with pytest.raises(RuntimeError, match="abort"), transaction():
+            component.count = 4
+            assert component.doubled == 8
+            message = "abort"
+            raise RuntimeError(message)
+        assert component.doubled == 0
 
 
 class TestStateWithoutAnInitialValue:

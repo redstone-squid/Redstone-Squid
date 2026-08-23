@@ -65,7 +65,7 @@ class ReactiveWriteError(RuntimeError):
 
 
 class UndeclaredStateError(RuntimeError):
-    """An undeclared attribute was written inside a transaction under strict mode."""
+    """An attribute that is not declared state was written inside a transaction."""
 
 
 class MutableStateError(TypeError):
@@ -116,6 +116,9 @@ def _frozen(value: Any) -> Any:
     return value
 
 
+_CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_layouts_transaction", default=None)
+
+
 class _Cell:
     """One state field's storage: an immutable value, and the version that dates it."""
 
@@ -127,13 +130,28 @@ class _Cell:
 
     def settle(self) -> int:
         """Return the version a reader should compare against. A cell is always settled."""
+        current = _CURRENT.get()
+        if current is not None:
+            entry = current.staged(self)
+            if entry is not None:
+                return entry.version
         return self.version
 
-    def read(self) -> Any:
-        """Return the value, recording the read with whatever is consuming it."""
+    def track(self, version: int) -> None:
+        """Record a read of this cell at `version` with whatever is consuming it."""
         consumer = _CONSUMER.get()
         if consumer is not None:
-            consumer.sources[self] = self.version
+            consumer.sources[self] = version
+
+    def read(self) -> Any:
+        """Return the value this reader should see, staged write included, and record it."""
+        current = _CURRENT.get()
+        if current is not None:
+            entry = current.staged(self)
+            if entry is not None:
+                self.track(entry.version)
+                return entry.value
+        self.track(self.version)
         return self.value
 
     def write(self, value: Any) -> None:
@@ -156,6 +174,15 @@ class _Cell:
         self.value = value
         self.version = version
         _bump_epoch()
+
+
+def _staged_value(cell: _Cell) -> Any:
+    """This action's pending value for `cell`, or `_MISSING` if it has not written one."""
+    current = _CURRENT.get()
+    if current is None:
+        return _MISSING
+    entry = current.staged(cell)
+    return _MISSING if entry is None else entry.value
 
 
 class _Consumer(Protocol):
@@ -195,10 +222,18 @@ def untracked() -> Iterator[None]:
 
 
 @dataclass(slots=True)
-class _Snapshot:
+class _Staged:
+    """One cell an action has written, holding both halves of the change.
+
+    The overlay is the snapshot. Rolling back is putting `before` back; committing is
+    putting `value` in. Neither copies anything, because a state value is immutable.
+    """
+
     owner: ReactiveOwner
     name: str
     cell: _Cell
+    before: Any
+    before_version: int
     value: Any
     version: int
 
@@ -240,24 +275,40 @@ class StateDelta:
             value = (change.before if before else change.after) if existed else _MISSING
             # Nothing is copied on the way out either. A delta outlives its action and may be
             # replayed, and an immutable value is safe to hand back as many times as asked.
-            _before(change.owner, change.name)
-            _write_cell(change.owner, change.name, value)
-            _after(change.owner, change.name)
+            _write(change.owner, change.name, _cell_for(change.owner, change.name), value)
 
 
-def _write_cell(owner: ReactiveOwner, name: str, value: Any) -> None:
-    """Install a value as a fresh write: the version moves forward, never back."""
+def _cell_for(owner: ReactiveOwner, name: str) -> _Cell:
+    """Return the cell behind one state slot, empty until something assigns it.
+
+    The cell outlives every value it holds, so a reader that recorded it keeps seeing this
+    field even across a restore that puts the field back to unassigned.
+    """
     cell = owner.__dict__.get(name)
     if cell is None:
-        owner.__dict__[name] = _Cell(value)
+        cell = owner.__dict__[name] = _Cell()
+    return cell
+
+
+def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
+    """Stage a write into the action in flight, or land it now if there is none.
+
+    `join_action` already returns `None` when no transaction is open; this is the same
+    signal read directly. A component built during the action is not protected by it, so
+    its construction lands immediately too.
+    """
+    current = _CURRENT.get()
+    if current is None or not current.protects(owner):
+        cell.write(value)
+        owner._state_changed(frozenset((name,)))
         return
-    cell.write(value)
+    current.stage(owner, name, cell, value)
 
 
 @dataclass(slots=True)
 class _Transaction:
     readonly: bool = False
-    snapshots: dict[tuple[int, str], _Snapshot] = field(default_factory=dict)
+    writes: dict[_Cell, _Staged] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
@@ -281,29 +332,42 @@ class _Transaction:
         """
         return id(owner) not in self.born
 
-    def record(self, owner: ReactiveOwner, name: str) -> None:
-        if not self.protects(owner):
-            return
-        key = (id(owner), name)
-        if key in self.snapshots:
-            return
-        cell = owner.__dict__.get(name)
-        if cell is None:
-            # The cell outlives every value it holds, so a reader that recorded it keeps
-            # seeing this field even across a restore that puts the field back to unassigned.
-            cell = owner.__dict__[name] = _Cell()
-        self.snapshots[key] = _Snapshot(owner, name, cell, cell.value, cell.version)
+    def staged(self, cell: _Cell) -> _Staged | None:
+        """This action's pending write to `cell`, if it has made one."""
+        return self.writes.get(cell)
 
-    def mark_changed(self, owner: ReactiveOwner, name: str) -> None:
-        if not self.protects(owner):
-            return
+    def stage(self, owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
+        """Hold a write until this action commits, so nothing else can read it meanwhile."""
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
             message = "parallel-read actions cannot mutate component state"
             raise ReactiveWriteError(message)
+        entry = self.writes.get(cell)
+        if entry is None:
+            self.writes[cell] = _Staged(owner, name, cell, cell.value, cell.version, value, cell.version + 1)
+        else:
+            entry.value = value
+            entry.version += 1
         self.changed[id(owner)] = owner
         self.changed_names.setdefault(id(owner), set()).add(name)
+        # The staged version is what a read inside this action reports, so a computed that
+        # sampled it has to be told the world moved even though nothing is published yet.
+        _bump_epoch()
+
+    def publish(self) -> None:
+        """Make this action's writes visible. The staged version becomes the cell's, so a
+        reader that already sampled it inside the action stays valid across the commit."""
+        for entry in self.writes.values():
+            entry.cell.value = entry.value
+            entry.cell.version = entry.version
+        _bump_epoch()
+
+    def restore(self) -> None:
+        """Put every written cell back where the action found it."""
+        for entry in reversed(tuple(self.writes.values())):
+            entry.cell.restore(entry.before, entry.before_version)
+            entry.owner._state_rolled_back()
 
     def enlist[ParticipantT: ActionParticipant](self, key: object, factory: Callable[[], ParticipantT]) -> ParticipantT:
         """Return this action's participant for `key`, creating it on first use.
@@ -324,21 +388,20 @@ class _Transaction:
         return created
 
     def delta(self) -> StateDelta:
-        """What this action changed, both directions, from the snapshots it already took."""
-        changes: list[StateChange] = []
-        for snapshot in self.snapshots.values():
-            after = snapshot.cell.value
-            changes.append(
+        """What this action changed, both directions, from the overlay it already holds."""
+        return StateDelta(
+            tuple(
                 StateChange(
-                    snapshot.owner,
-                    snapshot.name,
-                    snapshot.value is not _MISSING,
-                    None if snapshot.value is _MISSING else snapshot.value,
-                    after is not _MISSING,
-                    None if after is _MISSING else after,
+                    entry.owner,
+                    entry.name,
+                    entry.before is not _MISSING,
+                    None if entry.before is _MISSING else entry.before,
+                    entry.value is not _MISSING,
+                    None if entry.value is _MISSING else entry.value,
                 )
+                for entry in self.writes.values()
             )
-        return StateDelta(tuple(changes))
+        )
 
     def commit(self) -> None:
         """Publish the action, fallible half first.
@@ -352,6 +415,10 @@ class _Transaction:
         transaction -- `sl.history` pushes an entry -- and an entry describing an action
         that a later failure rolled back would be worse than a missing one.
         """
+        # Published before prepare, so a participant validates against the state the action
+        # actually left. Nothing awaits between here and `published`, so no other task can
+        # observe the window, and a failed prepare still rolls the whole action back.
+        self.publish()
         for participant in self.participants.values():
             participant.prepare()
         delta = self.delta() if self.hooks else None
@@ -374,30 +441,18 @@ class _Transaction:
                 # Whatever failed the action is the error worth propagating; a cleanup
                 # failure raised over it would hide why the action failed at all.
                 _log.exception("a transaction participant failed to abort")
-        for snapshot in reversed(tuple(self.snapshots.values())):
-            snapshot.cell.restore(snapshot.value, snapshot.version)
-            snapshot.owner._state_rolled_back()
-
-
-_CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_layouts_transaction", default=None)
-_STRICT: ContextVar[bool] = ContextVar("squid_layouts_strict_state", default=False)
-
-
-@contextmanager
-def strict_state(*, enabled: bool = True) -> Iterator[None]:
-    """Turn transaction-time writes to undeclared attributes into errors."""
-    token = _STRICT.set(enabled)
-    try:
-        yield
-    finally:
-        _STRICT.reset(token)
+        self.restore()
 
 
 def report_undeclared_write(owner: object, name: str) -> None:
-    """Report a transaction-time write to an attribute that is not declared state.
+    """Reject a transaction-time write to an attribute that is not declared state.
 
-    Read-only actions reject it. Writable ones let the write land but say it is uncovered,
-    rather than pretending a half-guarantee reaches it.
+    Raised before the write lands, so the transaction rolls back whole. The alternative --
+    letting it land and logging that it is uncovered -- produced exactly the corruption it
+    described: the attribute stays written while everything around it is restored.
+
+    A component built during the action is exempt; assigning to something the action created
+    is construction, not mutation.
     """
     current = _CURRENT.get()
     if current is None or not current.protects(owner):
@@ -410,25 +465,11 @@ def report_undeclared_write(owner: object, name: str) -> None:
         message = f"parallel-read actions cannot mutate component state ({label})"
         raise ReactiveWriteError(message)
     message = (
-        f"{label} was assigned inside a transaction but is not declared state: it will not be "
-        f"rolled back if the action fails, and it will not trigger a re-render. "
+        f"{label} was assigned inside a transaction but is not declared state: it would not be "
+        f"rolled back if the action failed, and it would not trigger a re-render. "
         f"Declare it with sl.state()."
     )
-    if _STRICT.get():
-        raise UndeclaredStateError(message)
-    _log.warning(message)
-
-
-def _before(owner: ReactiveOwner, name: str) -> None:
-    if current := _CURRENT.get():
-        current.record(owner, name)
-
-
-def _after(owner: ReactiveOwner, name: str) -> None:
-    if current := _CURRENT.get():
-        current.mark_changed(owner, name)
-    else:
-        owner._state_changed(frozenset((name,)))
+    raise UndeclaredStateError(message)
 
 
 @contextmanager
@@ -596,15 +637,12 @@ class _State:
 
     def cell(self, instance: ReactiveOwner) -> _Cell:
         """Return this field's storage on `instance`, empty until something assigns it."""
-        cell = instance.__dict__.get(self._name)
-        if cell is None:
-            cell = instance.__dict__[self._name] = _Cell()
-        return cell
+        return _cell_for(instance, self._name)
 
     def is_set(self, instance: ReactiveOwner) -> bool:
         """Whether this field currently holds a value of its own rather than its default."""
         cell = instance.__dict__.get(self._name)
-        return cell is not None and cell.value is not _MISSING
+        return cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING)
 
     def mutated(self, instance: ReactiveOwner) -> None:
         """Note that the held value changed in place: the version moves, the value does not."""
@@ -614,15 +652,16 @@ class _State:
         if instance is None:
             return self
         cell = instance.__dict__.get(self._name)
-        if cell is None or cell.value is _MISSING:
-            if not self.has_initial:
-                message = f"{type(instance).__name__}.{self.public_name} was never assigned"
-                raise AttributeError(message)
-            # Materializing a default is not a write: no version bump, no invalidation.
-            if cell is None:
-                cell = instance.__dict__[self._name] = _Cell(self._initial(instance))
-            else:
-                cell.value = self._initial(instance)
+        if cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING):
+            return cell.read()
+        if not self.has_initial:
+            message = f"{type(instance).__name__}.{self.public_name} was never assigned"
+            raise AttributeError(message)
+        # Materializing a default is not a write: no version bump, no invalidation.
+        if cell is None:
+            cell = instance.__dict__[self._name] = _Cell(self._initial(instance))
+        else:
+            cell.value = self._initial(instance)
         return cell.read()
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
@@ -632,13 +671,15 @@ class _State:
             except TypeError as error:
                 _reject(f"{type(instance).__name__}.{self.public_name}", value, error)
         cell = instance.__dict__.get(self._name)
-        if cell is not None and (cell.value is value if self.opaque else _equal(cell.value, value)):
+        if cell is not None:
+            held = _staged_value(cell)
+            if held is _MISSING:
+                held = cell.value
             # Opaque fields compare by identity: their values are collaborators, and `==` on
             # one is the author's code, not a cheap settled-value check.
-            return
-        _before(instance, self._name)
-        self.cell(instance).write(value)
-        _after(instance, self._name)
+            if held is value if self.opaque else _equal(held, value):
+                return
+        _write(instance, self._name, self.cell(instance), value)
 
 
 @overload
@@ -692,7 +733,7 @@ def declared_cells(owner: ReactiveOwner) -> dict[Any, int]:
         for descriptor in vars(klass).values():
             if isinstance(descriptor, _State):
                 cell = descriptor.cell(owner)
-                presumed[cell] = cell.version
+                presumed[cell] = cell.settle()
     return presumed
 
 

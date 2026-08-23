@@ -214,6 +214,16 @@ component state is what lets a large amount of the current transaction go:
 | `CopyMode` / `copy=` | Nothing copies, so there is no strategy to choose. `opaque=` carries what was left of the meaning. |
 | `_Transaction.delta()` reading after-values from `__dict__` (`:203-226`) | The overlay knows both halves without touching `__dict__`, which is the `contribute()` seam 40 §5a already adds. |
 
+Two details the phase settled that the sketch did not:
+
+- **The cell outlives every value it holds.** A restore that puts a field back to unassigned
+  empties the cell rather than dropping it, because a reader holds the cell object and a
+  replacement would leave that reader watching something nothing writes to again.
+- **Publication happens before `prepare`, not after.** A participant validates against the
+  state the action actually left, which is what it did when writes went through. Nothing
+  awaits between publication and the point of no return, so no other task can observe the
+  window, and a failed prepare still rolls the whole action back from the overlay.
+
 `born`/`protects`, `block_writes`, `readonly_transaction`, `strict_state` and
 `report_undeclared_write` are unaffected and stay as they are.
 
