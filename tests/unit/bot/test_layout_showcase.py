@@ -172,9 +172,9 @@ class TestSharedAppearance:
         await reader.send(delivered_to(fake_message(message_id=2)))
 
         assert set(reader.followed) == {
-            (appearance, type(appearance)._cells["accent"]),
-            (appearance, type(appearance)._cells["density"]),
-            (session, type(session)._cells["focus"]),
+            sl.CellAddress(appearance, "accent"),
+            sl.CellAddress(appearance, "density"),
+            sl.CellAddress(session, "focus"),
         }
         assert writer.followed == ()
 

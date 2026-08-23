@@ -141,6 +141,10 @@ this exact word.
   edits. The resource owns the `(build, node)` pair, and a local edit calls `Resource.replace
   (value)`, which installs the value and re-baselines its sources so a later publish still
   reloads. Do this second, after `search.py` proves the pattern.
+
+  Doing it exposed [48](48-resource-writes.md): `replace` did not stage, so it survived a
+  rolled-back action -- exactly the property `build`'s `sl.state(opaque=True)` was chosen for.
+  48 fixed that first; this component is why it was found.
 - `delivery=ATOMIC` on both: `VISIBLE` is the `sl.resource` default and would flash a pending paint
   on every external change.
 
@@ -161,7 +165,7 @@ this exact word.
 
 ## Status
 
-Phases 1 and 2 implemented 2026-08-23. Phase 3 (the bot) designed, not started.
+Implemented 2026-08-23, all three phases.
 
 One deviation in phase 2, and it made the change smaller. The plan had
 `_ResourceDescriptor.__get__` register the bound resource with the current `_CONSUMER`, which
