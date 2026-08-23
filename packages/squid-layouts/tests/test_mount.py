@@ -260,6 +260,37 @@ class TestEphemeralRenewal:
         repeated.response.edit_message.assert_not_awaited()
         assert mount.generation == active_generation
 
+    async def test_permanent_authority_disarms_and_restores_the_application(self) -> None:
+        component = Counter()
+        mount, _, _ = await _armed_mount(component)
+        component.count = 4
+        message = fake_message(ephemeral=False)
+
+        await mount.adopt_handle(delivery.handle_for(message))
+
+        payload = str(message.edit.await_args.kwargs["view"].to_components())
+        assert "count: 4" in payload
+        assert mount.handle is not None and mount.handle.permanent
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+
+    async def test_finishing_while_armed_does_not_reconstruct_the_hidden_tree(self) -> None:
+        class Counting(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            def render(self):
+                self.renders += 1
+                return Text(f"render {self.renders}")
+
+        component = Counting()
+        mount, _, _ = await _armed_mount(component)
+        rendered = component.renders
+
+        await mount.finish()
+
+        assert component.renders == rendered
+        assert mount.finished
+
     async def test_stale_arming_leaves_the_application_generation_pending(self) -> None:
         mount, interaction, _ = await _armed_mount()
         # Restore active state so this test can exercise the stale arm branch independently.
