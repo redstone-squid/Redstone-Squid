@@ -25,6 +25,7 @@ from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.topics import resource_topic
+from squid.bot.ui import MOUNT_DEFAULTS
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
@@ -157,10 +158,10 @@ class RedstoneSquid(Bot):
         self.account_ids = AccountIdCache()
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
-        self.mounts = SessionRegistry()
         self.layout_profiler = MemoryProfiler()
         self.topic_bus = TopicBus(profiler=self.layout_profiler)
         self.layout_reactor = Reactor(self.topic_bus)
+        self.mounts = SessionRegistry(defaults=MOUNT_DEFAULTS.replace(scheduler=self.layout_reactor))
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""

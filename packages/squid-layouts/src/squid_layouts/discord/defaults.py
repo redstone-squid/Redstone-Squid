@@ -75,9 +75,26 @@ class MountDefaults:
         **overrides: Unpack[MountOptions],
     ) -> Mount:
         """Construct a mount, applying per-call overrides over these defaults."""
-        options = {field: getattr(self, field) for field in self.__dataclass_fields__}
-        options.update(overrides)
-        return Mount(component, access=access, **options)
+        configured = self.replace(**overrides)
+        return Mount(
+            component,
+            access=access,
+            target=configured.target,
+            chrome=configured.chrome,
+            localization=configured.localization,
+            palette=configured.palette,
+            strict=configured.strict,
+            timeout=configured.timeout,
+            on_error=configured.on_error,
+            middleware=configured.middleware,
+            profiler=configured.profiler,
+            scheduler=configured.scheduler,
+            expiry=configured.expiry,
+            nav=configured.nav,
+            acknowledgement_timeout=configured.acknowledgement_timeout,
+            pending_after=configured.pending_after,
+            clock=configured.clock,
+        )
 
     def replace(self, **changes: Unpack[MountOptions]) -> MountDefaults:
         """Return a copy with selected host defaults replaced."""
