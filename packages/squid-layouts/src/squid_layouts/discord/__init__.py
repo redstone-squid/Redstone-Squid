@@ -16,10 +16,12 @@ from squid_layouts.discord.delivery import (
     DeliveryReceipt,
     Destination,
     EditHandle,
+    Messageable,
     SendResult,
     StaleHandleError,
     reply_to,
     respond_to,
+    send_to,
 )
 from squid_layouts.discord.fragments import (
     AttachedFragment,
@@ -201,6 +203,7 @@ __all__ = [
     "GuildScope",
     "LabelSpec",
     "LimitViolationError",
+    "Messageable",
     "Middleware",
     "ModalSpec",
     "Mount",
@@ -304,6 +307,7 @@ __all__ = [
     "render_static",
     "reply_to",
     "respond_to",
+    "send_to",
     "responder",
     "routers",
     "seek_control",

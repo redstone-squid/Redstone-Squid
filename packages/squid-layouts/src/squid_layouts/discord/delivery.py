@@ -364,6 +364,20 @@ class Destination(Protocol):
     async def __call__(self, presentation: DiscordPresentation, /) -> DeliveryReceipt: ...
 
 
+class Messageable(Protocol):
+    """The channel-shaped part of discord.py's messageable protocol."""
+
+    async def send(
+        self,
+        *,
+        files: Sequence[discord.File],
+        allowed_mentions: discord.AllowedMentions,
+        content: str | None = ...,
+        embeds: Sequence[discord.Embed] = ...,
+        view: Any = ...,
+    ) -> discord.Message: ...
+
+
 def reply_to(
     ctx: Replyable,
     *,
@@ -397,6 +411,25 @@ def reply_to(
         if response_done:
             return DeliveryReceipt(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
         return DeliveryReceipt(message, _OriginalResponseHandle(interaction, message, mode=mode))
+
+    return send
+
+
+def send_to(
+    channel: Messageable,
+    *,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> Destination:
+    """Send a complete presentation to a channel and retain bot-token edit authority."""
+    mentions = no_mentions() if allowed_mentions is None else allowed_mentions
+
+    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+        message = await channel.send(
+            files=presentation.files(),
+            allowed_mentions=mentions,
+            **presentation._send_fields(),
+        )
+        return DeliveryReceipt(message, handle_for(message, mode=presentation.mode))
 
     return send
 
