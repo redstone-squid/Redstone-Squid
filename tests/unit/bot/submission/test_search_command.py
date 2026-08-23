@@ -140,9 +140,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     public_message = fake_message(message_id=42, ephemeral=False)
     interaction.followup.send.return_value = public_message
     build = OtherBuild(id=42)
-    renderer = SimpleNamespace(
-        render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")])
-    )
+    renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
     topic_bus = sl.runtime.TopicBus()
     layout_reactor = sl.discord.Reactor(topic_bus)
     bot = SimpleNamespace(
