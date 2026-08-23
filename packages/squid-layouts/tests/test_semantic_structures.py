@@ -3,11 +3,9 @@
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import (
-    LayoutInvariantError,
-    Position,
-    plan,
-)
+from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning import plan
+from squid_layouts.sources import Position
 from squid_layouts.discord import V2_TARGET
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.scene.model import (
@@ -56,8 +54,8 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
     document = Items(
         "catalog",
         (
-            Item("one", sl.ItemLabel("One"), (Paragraph("first detail"),), "first"),
-            Item("two", sl.ItemLabel("Two"), (Paragraph("second detail"),), "second"),
+            Item("one", sl.semantic.ItemLabel("One"), (Paragraph("first detail"),), "first"),
+            Item("two", sl.semantic.ItemLabel("Two"), (Paragraph("second detail"),), "second"),
         ),
     )
     overview = plan(document, target=V2_TARGET, session=session)
@@ -72,7 +70,7 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
 
 def test_details_disclosure_is_presentation_state() -> None:
     session = PresentationSession()
-    document = Details("debug", sl.Summary("Debug details"), (Paragraph("hidden body"),))
+    document = Details("debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),))
 
     closed = plan(document, target=V2_TARGET, session=session)
     session.disclose("debug", open_=True)
@@ -104,7 +102,7 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)))
     items = Items(
         "catalog",
-        tuple(Item(str(index), sl.ItemLabel(f"Item {index}"), (Paragraph(f"Detail {index}"),)) for index in range(36)),
+        tuple(Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph(f"Detail {index}"),)) for index in range(36)),
     )
     navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
 
@@ -127,7 +125,7 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
     session = PresentationSession()
-    original = tuple(Item(str(index), sl.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36))
+    original = tuple(Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36))
     first = plan(Items("catalog", original), target=V2_TARGET, session=session)
     apply_updates(session, first.session_updates)
     session.move_cursor("catalog.items", Position(offset=1))
@@ -140,7 +138,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
         .value
     )
 
-    inserted = (Item("new", sl.ItemLabel("New"), (Paragraph("detail"),)), *original)
+    inserted = (Item("new", sl.semantic.ItemLabel("New"), (Paragraph("detail"),)), *original)
     replanned = plan(Items("catalog", inserted), target=V2_TARGET, session=session)
     values = {
         option.value
@@ -169,7 +167,7 @@ def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
 
 def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     table = Table(
-        sl.Columns((Column("name", "Name"), Column("value", "Value"))),
+        sl.semantic.Columns((Column("name", "Name"), Column("value", "Value"))),
         (TableRow("one", ("Alpha", "1")), TableRow("two", ("Beta", "2"))),
         "stats",
     )
@@ -186,7 +184,7 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
 
 def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     document = Section(
-        sl.Heading("Title"),
+        sl.semantic.Heading("Title"),
         (Paragraph("body"), Note("Submission ID: 5")),
         accent=0x43B581,
         thumbnail="https://example.invalid/lead.png",
@@ -239,7 +237,7 @@ def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
 
 
 def test_a_lead_image_sits_beside_the_required_heading() -> None:
-    document = Section(sl.Heading("Title"), (Paragraph("body"),), thumbnail="https://example.invalid/lead.png")
+    document = Section(sl.semantic.Heading("Title"), (Paragraph("body"),), thumbnail="https://example.invalid/lead.png")
 
     panel = plan(document, target=V2_TARGET).scene.components_v2.children[0]
 
@@ -252,7 +250,7 @@ def test_a_lead_image_sits_beside_the_required_heading() -> None:
 
 def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
     document = Section(
-        sl.Heading("Fields"),
+        sl.semantic.Heading("Fields"),
         (Fields(tuple(Field(str(index), f"Field {index}", "v" * 400, fallbacks=("short",)) for index in range(20))),),
     )
 

@@ -16,38 +16,13 @@ import pytest
 from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_layouts as sl
-from squid_layouts import (
-    ActionEvent,
-    ActionKind,
-    ActionMiddleware,
-    ActionPolicy,
-    ActionProceed,
-    ActionRequest,
-    Asset,
-    Component,
-    Document,
-    Failed,
-    FormField,
-    FormSpec,
-    InlineAsset,
-    LayoutInvariantError,
-    LayoutNode,
-    Localization,
-    Message,
-    Paragraph,
-    Pending,
-    PressEvent,
-    ReactiveWriteError,
-    Ready,
-    ResourceDelivery,
-    SelectionEvent,
-    TextField,
-    batch,
-    computed,
-    resource,
-    state,
-    transaction,
-)
+from squid_layouts import ActionEvent, Component, Document, LayoutNode, PressEvent, SelectionEvent, computed, resource, state
+from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.forms import FormField, FormSpec, TextField
+from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionPolicy, ActionProceed, ActionRequest
+from squid_layouts.runtime import Failed, Pending, ReactiveWriteError, Ready, ResourceDelivery, batch, transaction
+from squid_layouts.semantic import Asset, InlineAsset, Paragraph
+from squid_layouts.text import Localization, Message
 from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_layouts.discord import (
@@ -2377,7 +2352,7 @@ class TestStateDescriptor:
                 return Text("")
 
         # Neither computed reads itself; the pair is the mistake, so the ring is what is named.
-        with pytest.raises(sl.ReactiveCycleError) as raised:
+        with pytest.raises(sl.runtime.ReactiveCycleError) as raised:
             _ = Cyclic().first
         assert raised.value.path == ("Cyclic.first", "Cyclic.second", "Cyclic.first")
 
@@ -2864,7 +2839,7 @@ class TestResourceLoading:
             return "loaded"
 
         panel = AtomicResourcePanel(load)
-        with pytest.raises(sl.ResourceNotReadyError, match=r"atomic resource .* pending"):
+        with pytest.raises(sl.runtime.ResourceNotReadyError, match=r"atomic resource .* pending"):
             _ = panel.value.state
 
         await panel.value.reload()
@@ -3411,8 +3386,8 @@ class _GuardedPanel(Component):
     def __init__(
         self,
         *,
-        guard: sl.Guard | None = None,
-        feedback: sl.Feedback | None = None,
+        guard: sl.guards.Guard | None = None,
+        feedback: sl.interactions.Feedback | None = None,
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         run: Callable[[], Awaitable[Any]] | None = None,
     ) -> None:
@@ -3567,7 +3542,7 @@ class TestGuards:
                         for index in range(8)
                     ),
                     key="crowd",
-                    display=sl.ActionDisplay.GROUPED,
+                    display=sl.semantic.ActionDisplay.GROUPED,
                 )
 
             async def act(self, event: ActionEvent) -> None:
@@ -3629,7 +3604,7 @@ class TestBusyFeedback:
             release.set()
 
     async def test_a_fast_handler_suppresses_an_unchanged_finished_render(self):
-        panel = _GuardedPanel(feedback=sl.Feedback())
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3643,7 +3618,7 @@ class TestBusyFeedback:
 
     async def test_a_slow_handler_disables_the_panel_and_relabels_the_press(self):
         release = asyncio.Event()
-        panel = _GuardedPanel(feedback=sl.Feedback(pending="Rendering…"), run=release.wait)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(pending="Rendering…"), run=release.wait)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3665,7 +3640,7 @@ class TestBusyFeedback:
         class Idle(Component):
             def render(self):
                 return sl.actions(
-                    sl.action("Go", self.go, key="go", feedback=sl.Feedback(pending="Working…")), key="panel"
+                    sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback(pending="Working…")), key="panel"
                 )
 
             async def go(self, event: ActionEvent) -> None:
@@ -3723,7 +3698,7 @@ class TestBusyFeedback:
 
     async def test_the_pending_label_falls_back_to_chrome(self):
         release = asyncio.Event()
-        panel = _GuardedPanel(feedback=sl.Feedback(), run=release.wait)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(), run=release.wait)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3744,7 +3719,7 @@ class TestBusyFeedback:
         async def hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
             order.append(f"hook:{source}")
 
-        panel = _GuardedPanel(feedback=sl.Feedback(), run=fail)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(), run=fail)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3763,7 +3738,7 @@ class TestBusyFeedback:
             await release.wait()
             raise RuntimeError("render failed")
 
-        panel = _GuardedPanel(feedback=sl.Feedback(restore_on_error=False), run=fail)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(restore_on_error=False), run=fail)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
         commit_render(mount)
         interaction = fake_interaction()
@@ -3779,7 +3754,7 @@ class TestBusyFeedback:
 
         class Idle(Component):
             def render(self):
-                return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.Feedback()), key="panel")
+                return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback()), key="panel")
 
             async def go(self, event: ActionEvent) -> None:
                 await release.wait()
@@ -3798,11 +3773,11 @@ class TestBusyFeedback:
         assert self._labels(restored) == [("Go", False)]
 
     async def test_a_late_watchdog_paints_nothing_over_the_finished_render(self):
-        panel = _GuardedPanel(feedback=sl.Feedback())
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
-        busy = _BusyPaint(mount, "go", sl.Feedback(), interaction)
+        busy = _BusyPaint(mount, "go", sl.interactions.Feedback(), interaction)
         profile = SimpleNamespace(acknowledge=lambda source: None)
 
         assert await busy.close() is False

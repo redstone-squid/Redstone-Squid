@@ -81,7 +81,7 @@ class StubBuilds:
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     cog.builds = cast(Any, StubBuilds(build))
-    topic_bus = sl.TopicBus()
+    topic_bus = sl.runtime.TopicBus()
     layout_reactor = sl.discord.Reactor(topic_bus)
     cog.bot = cast(
         Any,
@@ -164,7 +164,7 @@ async def test_a_stored_editor_follows_its_build_without_rereading_it() -> None:
     """The editor's resource is seeded with the build the command already fetched.
 
     It still declares the dependency, so the mount follows the topic -- but the follow costs
-    a `sl.watch` line inside the loader rather than a second query to prime it.
+    a `sl.runtime.watch` line inside the loader rather than a second query to prime it.
     """
     cog = _cog(_door())
 

@@ -543,7 +543,7 @@ async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
             self.child = child
 
         def render(self):
-            return [sl.Paragraph("Legacy controls below"), self.boundary(self.child, key="legacy")]
+            return [sl.semantic.Paragraph("Legacy controls below"), self.boundary(self.child, key="legacy")]
 
     mount = Mount(Screen(adopt(Paginator())), access=Everyone(), timeout=None)
     commit_render(mount)
@@ -564,7 +564,7 @@ def _record(errors: list[BaseException]) -> Any:
 
 
 def test_adoption_error_is_a_layout_error() -> None:
-    assert issubclass(AdoptionError, sl.LayoutError)
+    assert issubclass(AdoptionError, sl.errors.LayoutError)
     assert AdoptionError in (sl.discord.AdoptionError,)
 
 

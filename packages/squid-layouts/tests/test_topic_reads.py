@@ -1,6 +1,6 @@
-"""Mounts following the named topics their renders read, through `sl.watch`.
+"""Mounts following the named topics their renders read, through `sl.runtime.watch`.
 
-`test_shared_follow.py` covers the same reconciliation for `sl.Shared` cells. The difference
+`test_shared_follow.py` covers the same reconciliation for `sl.runtime.Shared` cells. The difference
 here is where the read happens: a topic is watched inside a `sl.resource` loader, under the
 resource's consumer rather than the render's, so these tests are mostly about whether that
 read still reaches the render that used the value.
@@ -13,7 +13,8 @@ import anyio
 import discord
 
 import squid_layouts as sl
-from squid_layouts import Component, ResourceDelivery, Topic, TopicBus, resource, state
+from squid_layouts import Component, resource, state
+from squid_layouts.runtime import ResourceDelivery, Topic, TopicBus
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.delivery import DeliveryReceipt, handle_for
 from squid_layouts.discord.testing import delivered_to, fake_message
@@ -34,12 +35,12 @@ class Watcher(Component):
 
     @resource(delivery=ResourceDelivery.ATOMIC)
     async def value(self) -> str:
-        sl.watch(*(self._topics if self._topics is not None else (self.topic,)))
+        sl.runtime.watch(*(self._topics if self._topics is not None else (self.topic,)))
         return await self._load()
 
     def render(self):
         match self.value.state:
-            case sl.Ready(value=value):
+            case sl.runtime.Ready(value=value):
                 return Text(f"ready:{value}")
             case _:
                 return Text("pending")
@@ -103,7 +104,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
 
     class Direct(Component):
         def render(self):
-            sl.watch(BUILD)
+            sl.runtime.watch(BUILD)
             return Text("x")
 
     bus = TopicBus()
@@ -282,8 +283,8 @@ def test_watching_a_topic_installs_no_commit_precondition() -> None:
     """A watch is not an observation: nothing writes a topic, so nothing can lose an update."""
     from squid_layouts.runtime.reactivity import _CURRENT, _Transaction
 
-    with sl.transaction():
-        sl.watch(BUILD)
+    with sl.runtime.transaction():
+        sl.runtime.watch(BUILD)
         current = _CURRENT.get()
         assert isinstance(current, _Transaction)
         assert not current.observed
@@ -297,7 +298,7 @@ async def test_a_publish_moves_a_resources_sources_so_it_repends() -> None:
     load, loads = counting_loader(["first", "second"])
     panel = Watcher(load)
     await panel.value.reload()
-    assert isinstance(panel.value.state, sl.Ready)
+    assert isinstance(panel.value.state, sl.runtime.Ready)
 
     TopicBus().publish(BUILD)
 

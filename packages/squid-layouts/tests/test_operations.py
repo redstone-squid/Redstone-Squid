@@ -19,7 +19,7 @@ from squid_layouts.profiling import MemoryProfiler, OperationKind
 
 
 class Panel(sl.Component):
-    history: sl.History = sl.history(limit=4)
+    history: sl.runtime.History = sl.runtime.history(limit=4)
     count: int = sl.state(0)
 
     def render(self):
@@ -68,10 +68,10 @@ async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> 
 
 async def test_wait_idle_drains_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
     profiler = MemoryProfiler()
-    bus = sl.TopicBus(profiler=profiler)
+    bus = sl.runtime.TopicBus(profiler=profiler)
     callback = AsyncMock()
-    bus.subscribe(sl.Topic("devtools", "test"), callback, label="test subscriber")
-    bus.publish(sl.Topic("devtools", "test"))
+    bus.subscribe(sl.runtime.Topic("devtools", "test"), callback, label="test subscriber")
+    bus.publish(sl.runtime.Topic("devtools", "test"))
     with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
         pass
     runtime = DevToolsRuntime(bus=bus, profiler=profiler)

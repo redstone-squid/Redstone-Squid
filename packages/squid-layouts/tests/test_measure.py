@@ -5,7 +5,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import LayoutInvariantError
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.discord import (
     ELLIPSIS,
     conform,

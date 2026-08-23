@@ -6,15 +6,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_layouts import (
-    Component,
-    ReactiveWriteError,
-    UndeclaredStateError,
-    computed,
-    join_action,
-    state,
-    transaction,
-)
+from squid_layouts import Component, computed, state
+from squid_layouts.runtime import ReactiveWriteError, UndeclaredStateError, join_action, transaction
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import ComponentRuntime
 from squid_layouts.runtime.reactivity import (

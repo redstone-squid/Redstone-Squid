@@ -75,10 +75,10 @@ class CardSection:
     fields: Sequence[CardField]
 
 
-def L(message: str | Template, /, **params: object) -> ui.Message:
+def L(message: str | Template, /, **params: object) -> ui.text.Message:
     """Mark and defer a translatable string: ``L(t"Page {page} of {pages}")``."""
     if isinstance(message, str):
-        return ui.Message(message, params)
+        return ui.text.Message(message, params)
     if params:
         detail = "template strings already contain their interpolation values"
         raise TypeError(detail)
@@ -93,23 +93,23 @@ def L(message: str | Template, /, **params: object) -> ui.Message:
         parts.append("{" + name + "}")
         values[name] = interpolation.value
     parts.append(message.strings[-1])
-    return ui.Message("".join(parts), values)
+    return ui.text.Message("".join(parts), values)
 
 
-def localization_for(locale: str | None) -> ui.Localization:
+def localization_for(locale: str | None) -> ui.text.Localization:
     """Build the framework localization backed by the bot's negotiated catalogue."""
     resolved = negotiate_locale(locale)
     catalog = catalog_for(resolved)
-    return ui.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
+    return ui.text.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
 
 
-def _try_again_in(seconds: float) -> ui.Message:
+def _try_again_in(seconds: float) -> ui.text.Message:
     """Round a guard's remaining cooldown up to whole seconds before wording it."""
     whole = max(1, ceil(seconds))
     return L(t"Try again in {whole} seconds.")
 
 
-CHROME = ui.Chrome(
+CHROME = ui.semantic.Chrome(
     and_n_more=lambda count: L(t"…and {count} more."),
     not_yours=L(t"These list controls belong to someone else."),
     session_ended=L(t"This session has ended."),
@@ -307,7 +307,7 @@ def create_mount(
     *,
     access: ui.discord.AccessPolicy,
     locale: str | None = None,
-    chrome: ui.Chrome | None = None,
+    chrome: ui.semantic.Chrome | None = None,
     timeout: float = 180,
     reactor: ui.discord.Reactor | None = None,
     expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,
@@ -388,7 +388,7 @@ class PagedList(ui.Component):
         )
         return [ui.primitives.Panel(children=(ui.primitives.Heading(self.title), body), accent=self.accent_colour)]
 
-    def _page_footer(self, page: int, pages: int) -> ui.Message:
+    def _page_footer(self, page: int, pages: int) -> ui.text.Message:
         total = len(self.entries)
         return L(t"Page {page} of {pages} · {total} in total")
 
@@ -403,11 +403,11 @@ class PagedList(ui.Component):
         )
 
 
-def _fields(fields: Sequence[CardField]) -> tuple[ui.Field, ...]:
+def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:
     return tuple(ui.field(field.name, field.value) for field in fields)
 
 
-def _groups(sections: Sequence[CardSection]) -> tuple[ui.Section, ...]:
+def _groups(sections: Sequence[CardSection]) -> tuple[ui.semantic.Section, ...]:
     # A nested section per group: each field steps its own Condense ladder independently
     # rather than a whole group stepping in lockstep — finer-grained, not a regression.
     return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
@@ -456,11 +456,11 @@ def text_layout(
 
 
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
-    if isinstance(value, ui.Message):
+    if isinstance(value, ui.text.Message):
         plural = None if value.plural is None else prefix + value.plural
-        return ui.Message(prefix + value.template, value.params, value.dialect, plural)
-    if isinstance(value, ui.ResolvedText):
-        return ui.ResolvedText(prefix + value.content, value.dialect)
+        return ui.text.Message(prefix + value.template, value.params, value.dialect, plural)
+    if isinstance(value, ui.text.ResolvedText):
+        return ui.text.ResolvedText(prefix + value.content, value.dialect)
     return prefix + value
 
 

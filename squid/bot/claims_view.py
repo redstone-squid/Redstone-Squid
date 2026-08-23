@@ -269,10 +269,10 @@ class ClaimReviewComponent(sl.Component):
         if self._claims:
             choices = cast(
                 sl.primitives.Node,
-                sl.Choices(
+                sl.semantic.Choices(
                     key="claim",
                     choices=tuple(
-                        sl.Choice(
+                        sl.semantic.Choice(
                             str(claim.id),
                             L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name),
                             sl.md(
@@ -332,7 +332,7 @@ class ClaimReviewComponent(sl.Component):
             sl.primitives.Row(tuple(buttons)),
         )
 
-    def _page_footer(self, page: int, pages: int) -> sl.Message:
+    def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self._claims)
         return L(t"Page {page} of {pages} · {total} in total")
 
@@ -367,7 +367,7 @@ class ClaimReviewComponent(sl.Component):
                 resolved = await self._accounts.reject_alias_claim(claim.id, staff_account_id=staff_account_id)
         except AliasAlreadyClaimedError as conflict:
             self.reassign_armed = claim.id
-            await event.notice(_conflict_text(conflict, self.locale), visibility=sl.Visibility.PUBLIC)
+            await event.notice(_conflict_text(conflict, self.locale), visibility=sl.interactions.Visibility.PUBLIC)
             return
         await self._reload()
         message = (
@@ -385,7 +385,7 @@ class ClaimReviewComponent(sl.Component):
                 claimant=present_claimant(resolved, self.locale),
             )
         )
-        await event.notice(message, visibility=sl.Visibility.PUBLIC)
+        await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
     async def _reload(self) -> None:
         self._claims = tuple(await self._accounts.pending_alias_claims(with_claimants=True))
@@ -466,7 +466,7 @@ def _claim_entry(claim: AliasClaim, locale: str | None) -> str:
         locale,
         _("{claimant} · opened {age}"),
         claimant=present_claimant(claim, locale),
-        age=sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.TimeStyle.RELATIVE)}").content,
+        age=sl.md(t"{sl.timestamp(claim.created_at.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}").content,
     )
     return f"**{heading}**\n{detail}"
 
