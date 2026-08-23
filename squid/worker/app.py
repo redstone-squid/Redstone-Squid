@@ -22,7 +22,7 @@ from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.topics import open_topic_bridge
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from squid.worker.rendering import SchematicRenderProjector
-from squid_layouts.runtime import TopicBus
+from squid_layouts.runtime import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 
@@ -352,7 +352,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
             )
             # The worker subscribes to nothing, so its bus stays empty and the bridge is
             # purely an outbound path: a finished render tells the bot's panels to repaint.
-            topic_bridge = await open_topic_bridge(resolved_config.runtime.database, TopicBus())
+            topic_bridge = await open_topic_bridge(resolved_config.runtime.database, LocalTopicBus())
             schematic_renders = SchematicRenderProjector(
                 runtime.services.schematic_renders,
                 runtime.services.schematics,
