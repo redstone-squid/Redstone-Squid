@@ -71,6 +71,8 @@ class Delivered:
     """A mount render committed through a destination."""
 
     receipt: DeliveryReceipt
+    settled: bool
+    """Whether every async binding observed by the delivered generation reached a terminal status."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +83,16 @@ class Abandoned:
 type SendResult = Delivered | Abandoned
 
 
-class EditHandle(Protocol):
-    """A way to write to one already-sent message, and how long it is good for."""
+class DeleteHandle(Protocol):
+    """Authority to delete one delivered message."""
+
+    async def delete(self) -> None:
+        """Delete the message, translating expired authority to `StaleHandleError`."""
+        ...
+
+
+class EditHandle(DeleteHandle, Protocol):
+    """A way to update or delete one already-sent message."""
 
     permanent: bool
     """The bot's own credentials, which Discord does not expire."""
@@ -177,6 +187,15 @@ class _ChannelMessageHandle:
             raise
         self.mode = presentation.mode
 
+    async def delete(self) -> None:
+        try:
+            await self._message.delete()
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the bot no longer has authority to delete this channel message"
+                raise StaleHandleError(message) from error
+            raise
+
 
 class _WebhookMessageHandle:
     """Writes to one interaction webhook message by id."""
@@ -216,6 +235,15 @@ class _WebhookMessageHandle:
             raise
         self.mode = presentation.mode
 
+    async def delete(self) -> None:
+        try:
+            await self._interaction.followup.delete_message(self._message_id)
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the credentials behind this interaction have expired"
+                raise StaleHandleError(message) from error
+            raise
+
 
 class _OriginalResponseHandle:
     """Writes to an interaction's original response through the `@original` endpoint."""
@@ -246,6 +274,15 @@ class _OriginalResponseHandle:
                 raise StaleHandleError(message) from error
             raise
         self.mode = presentation.mode
+
+    async def delete(self) -> None:
+        try:
+            await self._interaction.delete_original_response()
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the credentials behind this interaction have expired"
+                raise StaleHandleError(message) from error
+            raise
 
 
 def handle_for(message: discord.Message, *, mode: DiscordMode | None = None) -> EditHandle:
@@ -286,9 +323,12 @@ class DeliveryReceipt:
     handle: EditHandle | None
     message_id: int | None = None
     ephemeral: bool | None = None
+    delete_handle: DeleteHandle | None = None
 
     def __post_init__(self) -> None:
         """Fill metadata available on ordinary message-returning delivery paths."""
+        if self.delete_handle is None and self.handle is not None:
+            object.__setattr__(self, "delete_handle", self.handle)
         if self.message is None:
             return
         if self.message_id is None:

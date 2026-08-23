@@ -2002,6 +2002,7 @@ class TestSend:
         sent = await mount.send(destination)
 
         assert isinstance(sent, delivery.Delivered)
+        assert sent.settled
         assert sent.receipt.message is message
         assert "inc" in mount._handlers
         assert mount._generation == 1
@@ -2069,6 +2070,25 @@ class TestSend:
 
         assert component.count == 1
         assert mount.handle is not None
+
+    async def test_handleless_operation_delivery_reports_unsettled(self) -> None:
+        mount = Mount(OperationPanel(), access=Everyone(), timeout=None)
+
+        sent = await mount.send(_Destination(None))
+
+        assert isinstance(sent, delivery.Delivered)
+        assert not sent.settled
+        assert isinstance(mount.component.publication.status, sl.operations.Pending)
+
+    async def test_dismiss_deletes_the_message_and_finishes_the_mount(self) -> None:
+        message = fake_message()
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        await mount.send(delivered_to(message))
+
+        await mount.dismiss()
+
+        message.delete.assert_awaited_once_with()
+        assert mount.finished
 
     async def test_an_abandoned_delivery_leaves_the_mount_resendable(self):
         mount = Mount(Counter(), access=Everyone(), timeout=None)
