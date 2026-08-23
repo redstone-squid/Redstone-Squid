@@ -35,7 +35,7 @@ from squid_layouts.interactions import (
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import Asset, Document, DocumentLike, InlineAsset, StoredAsset, as_document
 from squid_layouts.emoji import Emoji, EmojiLike, normalize_emoji
-from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
+from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.errors import (
     DrawInvariantError,
     LayoutDegradedError,

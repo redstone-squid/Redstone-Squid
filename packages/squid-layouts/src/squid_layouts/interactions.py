@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
-from squid_layouts.entities import EntityRef
+from squid_layouts.entity import EntityRef
 from squid_layouts.text import TextLike
 
 if TYPE_CHECKING:
