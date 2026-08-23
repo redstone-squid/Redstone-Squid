@@ -10,11 +10,11 @@ from datetime import UTC, date, tzinfo
 from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
 
 from squid_layouts.actions import ActionPolicy, SubmitEvent
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.frozen import FrozenMapping
 from squid_layouts.temporal import (
     AmbiguousLocalTimeError,
     AmbiguousTimePolicy,
@@ -617,7 +617,7 @@ class FormSpec:
             message = f"FormSpec prefill contains unknown keys: {sorted(unknown)!r}"
             raise ValueError(message)
         object.__setattr__(self, "fields", normalized)
-        object.__setattr__(self, "prefill", FrozenMapping(self.prefill))
+        object.__setattr__(self, "prefill", MappingProxyType(dict(self.prefill)))
 
     @property
     def field_keys(self) -> tuple[str, ...]:
@@ -626,7 +626,7 @@ class FormSpec:
 
     async def evaluate(self, attempted: Mapping[str, object]) -> FormEvaluation:
         """Parse every field, then run cross-field validation only after parsing succeeds."""
-        raw = FrozenMapping(attempted)
+        raw = MappingProxyType(dict(attempted))
         values: dict[str, object] = {}
         errors: list[FormIssue] = []
         for field in self.fields:
@@ -635,10 +635,10 @@ class FormSpec:
             except FormValueError as error:
                 errors.append(FieldError(field.key, str(error)))
         if not errors and self.validator is not None:
-            validated = self.validator(FrozenMapping(values))
+            validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
             errors.extend(issues)
-        return FormEvaluation(FrozenMapping(values), raw, tuple(errors))
+        return FormEvaluation(MappingProxyType(values), raw, tuple(errors))
 
     def prefill_for(self, field: FormField[Any]) -> object:
         """Return the serialized prefill for one field."""

@@ -1,11 +1,11 @@
 """State values: what a cell will hold, and when its version moves."""
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 import pytest
 
-from squid_layouts import Component, MutableStateError, state
-from squid_layouts.frozen import FrozenMapping
+from squid_layouts import Component, draft, state, transaction
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.reactivity import _Cell, _State
 
@@ -13,13 +13,6 @@ from squid_layouts.runtime.reactivity import _Cell, _State
 @dataclass(frozen=True, slots=True)
 class Filters:
     limit: int = 10
-
-
-@dataclass(frozen=True, slots=True)
-class LeakyFilters:
-    """Frozen, and still mutable: the shape an annotation check waves through."""
-
-    tags: list[str]
 
 
 class Service:
@@ -34,7 +27,8 @@ def cell_of(component: Component, name: str) -> _Cell:
 
 
 class Panel(Component):
-    rows: tuple[str, ...] = state(())
+    rows: Sequence[str] = state([])
+    channels: Mapping[str, int | None] = state({"log": None})
     filters: Filters = state(Filters())
     service: Service = state(opaque=True)
 
@@ -45,47 +39,70 @@ class Panel(Component):
         return Text(str(self.rows))
 
 
-class TestTheValueCheck:
-    def test_a_mutable_container_is_refused(self):
+class TestReplacement:
+    def test_a_builtin_container_is_stored_as_assigned(self):
+        """Nothing freezes at the boundary: the type checker holds the line, not the runtime."""
         panel = Panel(Service())
-        with pytest.raises(MutableStateError, match=r"Panel\.rows was assigned list"):
-            panel.rows = ["a"]  # type: ignore[bad-assignment]
+        rows = ["a"]
+        panel.rows = rows
+        assert panel.rows is rows
 
-    def test_it_reaches_inside_an_immutable_container(self):
-        """The property an annotation check cannot have: `tuple[...]` says nothing about this."""
+    def test_a_default_is_shared_rather_than_copied(self):
+        first, second = Panel(Service()), Panel(Service())
+        assert first.channels is second.channels
+
+    def test_a_replacement_is_a_write(self):
         panel = Panel(Service())
-        with pytest.raises(MutableStateError, match=r"Panel\.rows was assigned tuple"):
-            panel.rows = (1, [2])  # type: ignore[bad-assignment]
+        before = cell_of(panel, "channels").version
+        panel.channels = {**panel.channels, "log": 1}
+        assert panel.channels == {"log": 1}
+        assert cell_of(panel, "channels").version == before + 1
 
-    def test_it_reaches_inside_a_frozen_dataclass(self):
+
+class TestDraft:
+    def test_it_assigns_the_mutated_copy_back_once(self):
         panel = Panel(Service())
-        with pytest.raises(MutableStateError, match=r"Panel\.filters was assigned LeakyFilters"):
-            panel.filters = LeakyFilters(["a"])  # type: ignore[bad-assignment]
+        original = panel.channels
+        before = cell_of(panel, "channels").version
+        with draft(panel, "channels") as channels:
+            channels["log"] = 1
+            channels["audit"] = 2
+            assert cell_of(panel, "channels").version == before
+        assert panel.channels == {"log": 1, "audit": 2}
+        assert original == {"log": None}
+        assert cell_of(panel, "channels").version == before + 1
 
-    def test_a_mutable_default_fails_at_class_creation(self):
-        with pytest.raises(MutableStateError, match=r"Late\.rows was assigned list"):
-
-            class Late(Component):
-                rows: tuple[str, ...] = state([])  # type: ignore[bad-argument-type]
-
-    def test_a_mutable_factory_fails_when_it_runs(self):
-        class Late(Component):
-            rows: tuple[str, ...] = state(factory=list)  # type: ignore[bad-argument-type]
-
-            def render(self):
-                return Text("")
-
-        with pytest.raises(MutableStateError, match=r"Late\.rows was assigned list"):
-            _ = Late().rows
-
-    def test_the_message_points_at_the_way_out(self):
+    def test_it_discards_the_copy_on_a_raise(self):
         panel = Panel(Service())
-        with pytest.raises(MutableStateError, match="opaque=True"):
-            panel.rows = ["a"]  # type: ignore[bad-assignment]
+        with pytest.raises(RuntimeError), draft(panel, "channels") as channels:
+            channels["log"] = 1
+            raise RuntimeError
+        assert panel.channels == {"log": None}
+
+    def test_an_unchanged_copy_is_not_a_write(self):
+        panel = Panel(Service())
+        before = cell_of(panel, "channels").version
+        with draft(panel, "channels"):
+            pass
+        assert cell_of(panel, "channels").version == before
+
+    def test_it_stages_inside_an_action(self):
+        panel = Panel(Service())
+        with pytest.raises(RuntimeError), transaction():
+            with draft(panel, "rows") as rows:
+                rows.append("a")
+            assert panel.rows == ["a"]
+            raise RuntimeError
+        assert panel.rows == []
+
+    def test_it_names_declared_state_only(self):
+        panel = Panel(Service())
+        with pytest.raises(TypeError, match="not declared state"):
+            draft(panel, "service_name")
 
 
 class TestOpaqueFields:
-    def test_they_hold_a_collaborator_the_check_would_refuse(self):
+    def test_they_hold_a_collaborator(self):
         service = Service()
         panel = Panel(service)
         assert panel.service is service
@@ -93,7 +110,7 @@ class TestOpaqueFields:
     def test_they_are_not_persisted_by_default(self):
         from squid_layouts.runtime.reactivity import export_state
 
-        assert set(export_state(Panel(Service()))) == {"rows", "filters"}
+        assert set(export_state(Panel(Service()))) == {"rows", "channels", "filters"}
 
     def test_they_cannot_be_persisted_on_request(self):
         with pytest.raises(TypeError, match="not serializable"):
@@ -133,33 +150,3 @@ class TestVersions:
         panel = Panel(Service())
         assert panel.filters == Filters()
         assert cell_of(panel, "filters").version == 0
-
-    def test_a_default_is_shared_rather_than_copied(self):
-        """Nothing copies any more, which an immutable value makes safe."""
-        first, second = Panel(Service()), Panel(Service())
-        assert first.filters is second.filters
-
-
-class TestFrozenMapping:
-    def test_it_hashes_where_a_proxy_does_not(self):
-        from types import MappingProxyType
-
-        assert hash(FrozenMapping({"a": 1})) == hash(FrozenMapping({"a": 1}))
-        with pytest.raises(TypeError):
-            hash(MappingProxyType({"a": 1}))
-
-    def test_it_compares_as_a_mapping(self):
-        assert FrozenMapping({"a": 1, "b": 2}) == {"b": 2, "a": 1}
-
-    def test_it_keeps_insertion_order_for_rendering(self):
-        assert list(FrozenMapping({"b": 2, "a": 1})) == ["b", "a"]
-
-    def test_an_unhashable_value_still_fails_the_state_check(self):
-        class Holder(Component):
-            values: FrozenMapping[str, object] = state(FrozenMapping())
-
-            def render(self):
-                return Text("")
-
-        with pytest.raises(MutableStateError):
-            Holder().values = FrozenMapping({"a": ["leaky"]})

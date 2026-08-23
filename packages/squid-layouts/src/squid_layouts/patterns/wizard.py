@@ -2,10 +2,10 @@
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 
 from squid_layouts.factories import actions, field, fields, heading, progress, stack
 from squid_layouts.forms import Form, FormField, FormLike, FormSpec
-from squid_layouts.frozen import FrozenMapping
 from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
@@ -126,7 +126,7 @@ class Wizard:
 
     def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep, ...]:
         answer_map = self._answer_map(answers)
-        resolved = tuple(self.steps(FrozenMapping(answer_map)) if callable(self.steps) else self.steps)
+        resolved = tuple(self.steps(MappingProxyType(answer_map)) if callable(self.steps) else self.steps)
         if any(not isinstance(step, WizardStep) for step in resolved):
             message = "Wizard steps must contain WizardStep instances"
             raise TypeError(message)
@@ -149,7 +149,9 @@ class Wizard:
     def live_answers(self, state: WizardState) -> WizardAnswers:
         """Return only answers belonging to the current computed branch."""
         retained = self._answer_map(state.answers)
-        return FrozenMapping({step.key: retained[step.key] for step in self.live_steps(state) if step.key in retained})
+        return MappingProxyType(
+            {step.key: retained[step.key] for step in self.live_steps(state) if step.key in retained}
+        )
 
     def answered(self, state: WizardState) -> bool:
         """Whether every live form step has an answer — what gates Finish."""
