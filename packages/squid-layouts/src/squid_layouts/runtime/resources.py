@@ -1,14 +1,23 @@
 """Reactive async values observed by synchronous component renders."""
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterator
+from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, overload
 
-from squid_layouts.runtime.reactivity import _CONSUMER, action_participant, declared_cells, join_action
+from squid_layouts.runtime.reactivity import (
+    _CONSUMER,
+    ReactiveCycleError,
+    _bump_epoch,
+    action_participant,
+    cycle_path,
+    declared_cells,
+    join_action,
+    settling,
+)
 
 
 class ResourceOwner(Protocol):
@@ -115,11 +124,20 @@ class Resource[ValueT]:
     ) -> None:
         self._owner = owner
         self._loader = loader
-        self._name = name
+        self._label = name
         self.delivery = delivery
         self._state: ResourceState[ValueT] = Pending()
         self._loading: tuple[int, asyncio.Event] | None = None
         self._request_token = 0
+        self._rechecking = False
+        self.version = 0
+        """Dates this resource's state, so a reader can tell whether it has moved.
+
+        Every transition moves it: a load reaching `Ready` or `Failed`, a `replace`, and a
+        re-pend. Including the re-pend is what lets an invalidation reach a dependent
+        immediately rather than one load later, and it is safe because a dependent awaits its
+        input rather than racing it -- see `__await__`.
+        """
         self.sources: dict[Any, int] = declared_cells(owner)
         """State the last load read, and the version each held. Filled by tracking, not declared.
 
@@ -136,24 +154,74 @@ class Resource[ValueT]:
             # should re-pend it -- and `_recheck` would empty the sources `apply` re-baselines.
             return Ready(staged)
         self._recheck()
+        self.track()
         return self._state
+
+    def track(self) -> None:
+        """Record a read of this resource with whatever is consuming reads.
+
+        The same call `_Cell.read` makes, and for the same reason: a value derived from this
+        one has to know when this one moves. It is what lets one resource derive from
+        another, and a computed derive from a resource.
+        """
+        consumer = _CONSUMER.get()
+        if consumer is not None and consumer is not self:
+            consumer.sources[self] = self.version
+
+    def settle(self) -> int:
+        """The version a reader should compare against, as `_Cell.settle` does for a cell.
+
+        Re-checks first, so asking whether this resource moved also propagates a move from
+        whatever *it* reads. That is what carries an invalidation down a chain: the topic
+        moves, this resource re-pends, and its dependent sees a new version to compare
+        against.
+        """
+        self._recheck()
+        return self.version
+
+    def _moved(self) -> None:
+        """Date this resource's state anew, and tell settled readers to look again.
+
+        The epoch half matters as much as the version: a computed that reads this resource
+        short-circuits on the epoch, so without it a `sl.computed` would never re-derive.
+        """
+        self.version += 1
+        _bump_epoch()
 
     def _recheck(self) -> None:
         """Give up a value whose inputs moved since the load that produced it.
 
         Pulled here rather than pushed at commit: the write that moved the input already
         invalidated the owner, so the only thing left is for the next reader to notice.
+
+        Re-entrant through a chain -- asking a source whether it moved re-checks it too -- so
+        a cycle is broken by reporting the version in hand rather than recursing forever. The
+        cycle itself is caught in `_load`, where it can be named.
         """
-        if self.sources and any(source.settle() != seen for source, seen in self.sources.items()):
+        if self._rechecking:
+            return
+        self._rechecking = True
+        try:
+            moved = self.sources and any(source.settle() != seen for source, seen in self.sources.items())
+        finally:
+            self._rechecking = False
+        if moved:
             self.sources = {}
             self._invalidate(notify=False)
 
     @property
     def value(self) -> ValueT:
         """Return the ready value or fail instead of smuggling pending into its type."""
-        if isinstance(self.state, Ready):
-            return self.state.value
-        message = f"resource {self._name!r} is {type(self.state).__name__.lower()}, not ready"
+        state = self.state
+        if isinstance(state, Ready):
+            return state.value
+        # Reading the value of a resource whose loader you are inside is a cycle, not bad
+        # luck: it cannot become ready while it is waiting on you. Say that, rather than
+        # reporting a pending resource and leaving the ring to be worked out.
+        path = cycle_path(self)
+        if path is not None:
+            raise ReactiveCycleError(path)
+        message = f"resource {self._label!r} is {type(state).__name__.lower()}, not ready"
         raise ResourceNotReadyError(message)
 
     @property
@@ -167,7 +235,8 @@ class Resource[ValueT]:
 
     def _invalidate(self, *, notify: bool) -> None:
         self._request_token += 1
-        self._state = Pending(_previous(self.state))
+        self._state = Pending(_previous(self._state))
+        self._moved()
         if notify:
             self._owner.invalidate()
 
@@ -188,6 +257,7 @@ class Resource[ValueT]:
     def _replace_now(self, value: ValueT) -> None:
         self._request_token += 1
         self._state = Ready(value)
+        self._moved()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
         # as they stand now, and a later change to one of them should still reload.
         self.sources = {source: source.settle() for source in self.sources}
@@ -198,19 +268,63 @@ class Resource[ValueT]:
         staged = action_participant(self)
         return staged.value if isinstance(staged, _Replacement) else _MISSING
 
+    def __await__(self) -> Generator[Any, None, ValueT]:
+        """`value = await self.other` inside a loader: settle that resource, then use it.
+
+        A resource derived from another resource has to wait for it, and `value` cannot --
+        it is synchronous, and raises for a pending resource because a render has nowhere to
+        wait. Awaiting is the loader's version: it settles the dependency if it is pending,
+        registers the read so a later change re-pends this resource too, and raises whatever
+        the dependency raised.
+
+        Only meaningful inside another resource's loader, or anywhere else already async.
+        A render cannot await, which is the point: a render reads what has settled.
+        """
+        return self._awaited().__await__()
+
+    async def _awaited(self) -> ValueT:
+        self._recheck()
+        if isinstance(self._state, Pending):
+            await self._load()
+        # Tracked after settling, never before: recording the version this resource held
+        # while still pending would leave the caller stale against the value it just waited
+        # for, and re-pend it the moment anyone looked.
+        self.track()
+        state = self._state
+        if isinstance(state, Failed):
+            raise state.error
+        if isinstance(state, Ready):
+            return state.value
+        message = f"resource {self._label!r} did not settle"
+        raise ResourceNotReadyError(message)
+
     async def reload(self) -> ResourceState[ValueT]:
         """Request and settle a fresh value under the caller's task."""
         self._invalidate(notify=True)
-        return await self._settle()
+        return await self._load()
 
-    async def _settle(self) -> ResourceState[ValueT]:
-        """Settle the current pending generation, sharing an identical in-flight load."""
-        if not isinstance(self.state, Pending):
-            return self.state
+    async def _load(self) -> ResourceState[ValueT]:
+        """Settle the current pending generation, sharing an identical in-flight load.
+
+        Reads `_state` rather than `state` throughout, here and below. The public read
+        tracks, and tracking from inside the machinery would register whoever is loading
+        against the version this resource holds *before* it settles -- leaving them stale
+        against the value they are about to receive. Only `_awaited` tracks, and only once
+        the value is in hand.
+        """
+        self._recheck()
+        if not isinstance(self._state, Pending):
+            return self._state
+        # Before the shared wait below, which for a cycle would be this load waiting on
+        # itself -- a hang with nothing to report rather than an error naming the ring.
+        with settling(self):
+            return await self._loaded()
+
+    async def _loaded(self) -> ResourceState[ValueT]:
         token = self._request_token
         if self._loading is not None and self._loading[0] == token:
             await self._loading[1].wait()
-            return self.state
+            return self._state
 
         settled = asyncio.Event()
         self._loading = (token, settled)
@@ -221,11 +335,13 @@ class Resource[ValueT]:
                 value = await self._loader()
             except Exception as error:
                 if token == self._request_token:
-                    self._state = Failed(error, _previous(self.state))
+                    self._state = Failed(error, _previous(self._state))
+                    self._moved()
                     self._owner.invalidate()
             else:
                 if token == self._request_token:
                     self._state = Ready(value)
+                    self._moved()
                     self._owner.invalidate()
         finally:
             _CONSUMER.reset(consumer)

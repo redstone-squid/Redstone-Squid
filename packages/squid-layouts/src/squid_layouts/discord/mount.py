@@ -1415,11 +1415,11 @@ class Mount:
     async def _settle_resources(self, resources: Sequence[Resource[Any]]) -> None:
         """Settle one observed resource tier concurrently under this render operation."""
         if len(resources) == 1:
-            await resources[0]._settle()
+            await resources[0]._load()
             return
         async with anyio.create_task_group() as tasks:
             for resource in resources:
-                tasks.start_soon(resource._settle)
+                tasks.start_soon(resource._load)
 
     async def _settle_visible(
         self,
