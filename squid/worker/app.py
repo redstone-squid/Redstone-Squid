@@ -8,6 +8,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 
 import anyio
+from squid_reactive import LocalTopicBus
 from whenever import Instant
 
 from squid.bootstrap import create_worker_runtime
@@ -22,7 +23,6 @@ from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.topics import open_topic_bridge
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from squid.worker.rendering import SchematicRenderProjector
-from squid_layouts.runtime import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 
