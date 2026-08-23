@@ -109,7 +109,7 @@ def test_mount_defaults_apply_overrides_without_mutating_the_defaults() -> None:
 async def test_registry_requires_a_constructed_mount() -> None:
     registry = SessionRegistry()
 
-    with pytest.raises(TypeError, match="requires a Mount; use MountDefaults.mount or Screen.open"):
+    with pytest.raises(TypeError, match=r"requires a Mount; use MountDefaults\.mount or Screen\.open"):
         await registry.open(cast(Any, Panel()), to_message())
 
 
