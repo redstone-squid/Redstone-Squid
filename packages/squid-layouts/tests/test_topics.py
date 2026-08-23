@@ -12,7 +12,7 @@ import pytest
 from squid_layouts import Shared, state
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
-from squid_layouts.topics import Address, CellAddress, KindKeyCodec, Topic, TopicBus
+from squid_layouts.runtime.topics import Address, CellAddress, KindKeyCodec, Topic, TopicBus
 
 BUILD = Topic("build", "1")
 """One address reused by the bus contract tests, whose subject is delivery rather than naming."""

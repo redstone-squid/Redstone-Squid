@@ -132,7 +132,7 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
-from squid_layouts.topics import Address
+from squid_layouts.runtime.topics import Address
 
 type RenderNode = LayoutNode
 type RenderResult = Document | LayoutNode | Sequence[LayoutNode]

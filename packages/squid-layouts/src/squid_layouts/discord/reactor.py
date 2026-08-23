@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, overload
 import anyio
 
 from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationOutcome, Profiler, TraceLink
-from squid_layouts.topics import Address, CellAddress, Topic, TopicBus
+from squid_layouts.runtime.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount

@@ -19,7 +19,7 @@ from squid_layouts import (
     transaction,
 )
 from squid_layouts.primitives import Text
-from squid_layouts.topics import TopicBus
+from squid_layouts.runtime.topics import TopicBus
 
 
 @dataclass(frozen=True, slots=True)
