@@ -35,3 +35,14 @@ class LimitViolationError(LayoutError):
     def __init__(self, interventions: list[str]) -> None:
         super().__init__("; ".join(interventions))
         self.interventions = interventions
+
+
+__all__ = [
+    "DrawInvariantError",
+    "ExistingLayoutError",
+    "LayoutDegradedError",
+    "LayoutError",
+    "LayoutInvariantError",
+    "LimitViolationError",
+    "UnsolvableLayoutError",
+]

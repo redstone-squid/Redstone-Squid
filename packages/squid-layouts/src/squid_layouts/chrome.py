@@ -166,3 +166,12 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         jump_to_page=resolve_text(chrome.jump_to_page, localization).content,
         page_option=lambda page: resolve_text(chrome.page_option(page), localization).content,
     )
+
+
+__all__ = [
+    "CHROME_CONTEXT",
+    "Chrome",
+    "DEFAULT_CHROME",
+    "LOCALIZATION_CONTEXT",
+    "localize_chrome",
+]
