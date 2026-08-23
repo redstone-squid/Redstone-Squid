@@ -10,11 +10,14 @@ import discord
 from squid_layouts.interactions import ActionBinding
 from squid_layouts.assets import Asset, StoredAsset
 from squid_layouts.discord.attachments import attachment_assets
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.conformance import LimitViolationError, conform
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.planning.adapter import ADAPTER_RENDER_V2, AdapterProfile
 from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -33,6 +36,7 @@ from squid_layouts.scene.model import (
     SceneRow,
     SceneSection,
     SceneSelect,
+    SceneComponentsV2,
     SceneSeparator,
     SceneText,
     SceneThumbnail,
@@ -93,16 +97,18 @@ class V2Renderer:
         limits: V2Limits = LIMITS,
         audit: bool = True,
         view_factory: ViewFactory = StaticView,
+        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
+        require_discord_py_capability(adapter, ADAPTER_RENDER_V2, "render Components V2")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
 
     def draw(
         self,
-        scene: SceneDocument,
+        scene: SceneDocument[SceneComponentsV2],
         *,
-        plan: PlanResult | None = None,
+        plan: PlanResult[SceneComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> DiscordPresentation:
         """Draw the complete message this scene resolves to.
@@ -118,9 +124,9 @@ class V2Renderer:
 
     def view(
         self,
-        scene: SceneDocument,
+        scene: SceneDocument[SceneComponentsV2],
         *,
-        plan: PlanResult | None = None,
+        plan: PlanResult[SceneComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
         if scene.protocol != SceneCodec.protocol:

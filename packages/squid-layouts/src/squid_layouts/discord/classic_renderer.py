@@ -22,12 +22,15 @@ import discord
 
 from squid_layouts.interactions import ActionBinding
 from squid_layouts.discord.attachments import attachment_assets
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.inspection import audit_classic_payload
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import RoutedItem, RoutedSelectItem
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC, AdapterProfile
 from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -68,7 +71,9 @@ class ClassicRenderer:
         audit: bool = True,
         view_factory: ClassicViewFactory = StaticClassicView,
         always_view: bool = False,
+        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
+        require_discord_py_capability(adapter, ADAPTER_RENDER_CLASSIC, "render a classic message")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
@@ -82,9 +87,9 @@ class ClassicRenderer:
 
     def draw(
         self,
-        scene: SceneDocument,
+        scene: SceneDocument[SceneClassicMessage],
         *,
-        plan: PlanResult | None = None,
+        plan: PlanResult[SceneClassicMessage] | None = None,
         wire: Wire | None = None,
     ) -> DiscordPresentation:
         body = self._body(scene)
@@ -106,7 +111,7 @@ class ClassicRenderer:
                 raise DrawInvariantError(message)
         return presentation
 
-    def _body(self, scene: SceneDocument) -> SceneClassicMessage:
+    def _body(self, scene: SceneDocument[SceneClassicMessage]) -> SceneClassicMessage:
         if scene.protocol != SceneCodec.protocol:
             message = f"ClassicRenderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
