@@ -438,6 +438,7 @@ class AppearanceControls(sl.Component):
                     L(t"Cycle accent"),
                     partial(self._cycle, appearance=appearance),
                     "accent",
+                    record=self.history,
                 ),
                 sl.primitives.Button(
                     L("Density: {density}", density=appearance.density),
@@ -459,9 +460,10 @@ class AppearanceControls(sl.Component):
         # writing a value computed from something that is no longer there.
         current = _ACCENTS.index(appearance.accent) if appearance.accent in _ACCENTS else 0
         appearance.accent = _ACCENTS[(current + 1) % len(_ACCENTS)]
-        self.history.record(L(t"Cycle accent"))
 
     async def _toggle_density(self, event: sl.PressEvent, *, appearance: Appearance) -> None:
+        # Records by hand, unlike the accent button: this control's label names the density
+        # it is showing, which would make a confusing name for the entry that changes it.
         appearance.density = _DENSITIES[(_DENSITIES.index(appearance.density) + 1) % len(_DENSITIES)]
         self.history.record(L(t"Change density"))
 

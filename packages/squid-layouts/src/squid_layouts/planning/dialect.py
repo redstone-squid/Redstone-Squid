@@ -72,17 +72,26 @@ class SceneBindings:
             raise LayoutInvariantError(message)
         handler = node.on_click if isinstance(node, Button) else node.on_select
         routes = node.routes if isinstance(node, SelectMenu) else {}
-        # Only buttons carry admission and busy feedback; a select's guards, if any, live on
-        # the route bindings its grouped actions were lowered into.
+        # Only buttons carry admission, busy feedback and recording; a select's guards and
+        # histories, if any, live on the route bindings its grouped actions were lowered into.
         guard = node.guard if isinstance(node, Button) else None
         feedback = node.feedback if isinstance(node, Button) else None
+        label = node.label if isinstance(node, Button) else ""
+        record = node.record if isinstance(node, Button) else None
         for route_key, binding in routes.items():
             if route_key in self.bindings:
                 message = f"duplicate action key {route_key!r}"
                 raise LayoutInvariantError(message)
             self.bindings[route_key] = binding
         self.bindings[key] = ActionBinding(
-            key=key, handler=handler, policy=node.policy, routes=routes, guard=guard, feedback=feedback
+            key=key,
+            handler=handler,
+            policy=node.policy,
+            routes=routes,
+            guard=guard,
+            feedback=feedback,
+            label=label,
+            record=record,
         )
         return key
 
