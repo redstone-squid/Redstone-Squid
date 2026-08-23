@@ -22,7 +22,7 @@ import discord
 from squid_layouts.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
 from squid_layouts.discord.actions import ActionResponder, responder, selected_entities
 from squid_layouts.discord.mount import _CHANNEL_TYPES
-from squid_layouts.entities import EntityKind, EntityRef, EntityType
+from squid_layouts.entity import EntityKind, EntityRef, EntityType
 from squid_layouts.errors import LayoutError
 from squid_layouts.primitives.nodes import Button, EntitySelect, LinkButton, Node, Option, Row, SelectMenu
 from squid_layouts.primitives.styles import ActionStyle

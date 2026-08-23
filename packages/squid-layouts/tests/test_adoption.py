@@ -15,7 +15,7 @@ from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.mount import _EntityValues
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
+from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.primitives import ActionStyle, Button, EntitySelect, LinkButton, Row, SelectMenu
 
 
