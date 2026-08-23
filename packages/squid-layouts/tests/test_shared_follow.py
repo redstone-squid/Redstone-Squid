@@ -6,11 +6,13 @@ import weakref
 from dataclasses import dataclass
 
 import anyio
+import discord
 import pytest
 
+import squid_layouts as sl
 from squid_layouts import Component, PressEvent, Shared, TopicBus, cell, state, transaction
 from squid_layouts.discord import Everyone, Mount, Reactor
-from squid_layouts.discord.testing import delivered_to, fake_message
+from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
 
 
@@ -38,6 +40,44 @@ class Panel(Component):
 
     async def pick(self, event: PressEvent) -> None:
         self.workspace.selected = 7
+
+
+class Writer(Component):
+    """A panel that writes the cell it renders, which is the case the bus alone handles badly."""
+
+    def __init__(self, workspace: Workspace, *, feedback: sl.Feedback | None = None, run=None) -> None:
+        self.workspace = workspace
+        self.run = run
+        self.feedback = feedback
+
+    def render(self):
+        return [
+            Text(str(self.workspace.selected)),
+            Row(
+                (
+                    Button(label="pick", on_click=self.pick, key="pick", feedback=self.feedback),
+                    Button(label="aside", on_click=self.aside, key="aside"),
+                    Button(label="boom", on_click=self.boom, key="boom"),
+                )
+            ),
+        ]
+
+    async def pick(self, event: PressEvent) -> None:
+        if self.run is not None:
+            await self.run()
+        self.workspace.selected = 7
+
+    async def aside(self, event: PressEvent) -> None:
+        self.workspace.detail = "unrendered"
+
+    async def boom(self, event: PressEvent) -> None:
+        self.workspace.selected = 7
+        message = "handler failed"
+        raise RuntimeError(message)
+
+
+def _texts(view: discord.ui.LayoutView) -> str:
+    return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
 def address(workspace: Workspace, name: str) -> object:
@@ -148,3 +188,76 @@ async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCap
         await mount.send(delivered_to(fake_message()))
         await mount.refresh_now()
     assert sum("cannot follow topics" in record.message for record in caplog.records) == 1
+
+
+class TestSelfWrites:
+    """A mount that writes a cell it renders repaints in the click, not one edit later."""
+
+    def panel(self, *, feedback: sl.Feedback | None = None, run=None) -> tuple[Workspace, Writer, Mount]:
+        bus = TopicBus()
+        workspace = Workspace(bus, Member(1))
+        panel = Writer(workspace, feedback=feedback, run=run)
+        return workspace, panel, Mount(panel, access=Everyone(), timeout=None, pending_after=30)
+
+    async def test_the_writing_mount_repaints_in_its_own_interaction(self) -> None:
+        workspace, _, mount = self.panel()
+        await mount.send(delivered_to(fake_message()))
+        interaction = fake_interaction()
+
+        await mount.dispatch("pick", interaction)
+
+        assert workspace.selected == 7
+        assert interaction.response.edit_message.await_count == 1, "the click edits, it does not defer"
+        assert interaction.response.defer.await_count == 0
+        assert "7" in _texts(interaction.response.edit_message.await_args.kwargs["view"])
+
+    async def test_it_works_without_a_reactor_to_deliver_the_topic(self) -> None:
+        """The observed set is what the render read; subscribing is a separate, optional thing."""
+        _, _, mount = self.panel()
+        await mount.send(delivered_to(fake_message()))
+        assert mount.followed == (), "no scheduler, so nothing is subscribed"
+        assert mount.observed != ()
+
+        interaction = fake_interaction()
+        await mount.dispatch("pick", interaction)
+        assert interaction.response.edit_message.await_count == 1
+
+    async def test_a_write_to_a_cell_it_does_not_render_changes_nothing(self) -> None:
+        _, panel, mount = self.panel()
+        await mount.send(delivered_to(fake_message()))
+        interaction = fake_interaction()
+
+        await mount.dispatch("aside", interaction)
+
+        assert interaction.response.edit_message.await_count == 0, "nothing it shows moved"
+        assert interaction.response.defer.await_count == 1
+
+    async def test_a_feedback_action_does_not_flash_the_stale_scene(self) -> None:
+        """The bug this fixed: flush found nothing, so `restore` repainted the committed plan."""
+        release = asyncio.Event()
+        workspace, _, mount = self.panel(feedback=sl.Feedback(pending="Working…"), run=release.wait)
+        mount.pending_after = 0
+        await mount.send(delivered_to(fake_message()))
+        interaction = fake_interaction()
+
+        async def press() -> None:
+            await mount.dispatch("pick", interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(press)
+            while not interaction.response.edit_message.await_count:
+                await asyncio.sleep(0)
+            release.set()
+
+        assert workspace.selected == 7
+        final = interaction.followup.edit_message.await_args.kwargs["view"]
+        assert "7" in _texts(final), "the last paint is the new scene, not the restored old one"
+
+    async def test_a_rolled_back_action_leaves_the_mount_clean(self) -> None:
+        _, _, mount = self.panel()
+        await mount.send(delivered_to(fake_message()))
+        interaction = fake_interaction()
+
+        await mount.dispatch("boom", interaction)
+
+        assert not mount.pending, "the commit hook never ran, so nothing marked it dirty"
