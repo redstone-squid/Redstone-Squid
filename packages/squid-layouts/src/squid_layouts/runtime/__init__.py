@@ -19,6 +19,8 @@ from squid_layouts.runtime.presentation import (
 )
 from squid_layouts.runtime.reactivity import (
     ActionParticipant,
+    CellReport,
+    ComputedReport,
     MutableStateError,
     ReactiveWriteError,
     StateChange,
@@ -28,6 +30,8 @@ from squid_layouts.runtime.reactivity import (
     block_writes,
     computed,
     export_state,
+    inspect_cells,
+    inspect_computed,
     join_action,
     on_action_commit,
     restore_state,
@@ -58,8 +62,10 @@ def __getattr__(name: str):
 __all__ = [
     "ActionParticipant",
     "ActivePagers",
+    "CellReport",
     "Component",
     "ComponentRuntime",
+    "ComputedReport",
     "ContextKey",
     "CursorState",
     "CursorUpdate",
@@ -93,6 +99,8 @@ __all__ = [
     "export_state",
     "history",
     "history_actions",
+    "inspect_cells",
+    "inspect_computed",
     "join_action",
     "on_action_commit",
     "resource",
