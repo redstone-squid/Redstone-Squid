@@ -3318,10 +3318,13 @@ class TestBusyFeedback:
                 lock_held.set()
                 await release_lock.wait()
 
+        async def dispatch() -> None:
+            await mount.dispatch("go", interaction)
+
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(hold_render_lock)
             await lock_held.wait()
-            tasks.start_soon(mount.dispatch, "go", interaction)
+            tasks.start_soon(dispatch)
             with anyio.fail_after(0.2):
                 while not interaction.response.defer.await_count:
                     await asyncio.sleep(0)
