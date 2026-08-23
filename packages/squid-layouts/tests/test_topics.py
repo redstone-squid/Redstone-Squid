@@ -9,7 +9,8 @@ from typing import Any, cast
 import anyio
 import pytest
 
-from squid_layouts import Shared, state
+from squid_layouts import state
+from squid_layouts.runtime import Shared
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.runtime.topics import Address, CellAddress, KindKeyCodec, Topic, TopicBus

@@ -247,7 +247,7 @@ class TestReservationAxes:
         assert reserved.limits.select_options == LIMITS.select_options
 
     def test_unknown_resources_are_rejected(self):
-        with pytest.raises(sl.LayoutInvariantError, match="no reservable resource"):
+        with pytest.raises(sl.errors.LayoutInvariantError, match="no reservable resource"):
             sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"pixels": 1}))
 
     def test_reservation_never_goes_negative(self):
@@ -275,7 +275,7 @@ class TestReservedPlanning:
         # reservation has to be the difference between composing and refusing.
         document = [sl.primitives.Text(f"line {index}") for index in range(12)]
         assert len(list(sl.discord.compose(document).view.walk_children())) == 12
-        with pytest.raises(sl.UnsolvableLayoutError):
+        with pytest.raises(sl.errors.UnsolvableLayoutError):
             sl.discord.compose(document, reservation=sl.discord.ResourceCost({"components": 35}))
 
     def test_a_reserved_plan_plus_the_host_fits_the_real_budget(self):

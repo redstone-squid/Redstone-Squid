@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from squid_layouts import plan
+from squid_layouts.planning import plan
 from squid_layouts.discord import DISCORD_PY_27_ADAPTER, Target
 from squid_layouts.discord.adapter import discord_py_adapter_profile, require_discord_py_capability
 from squid_layouts.errors import LayoutInvariantError

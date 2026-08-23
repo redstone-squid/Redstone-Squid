@@ -3,7 +3,8 @@
 import discord
 import pytest
 
-from squid_layouts import Heading, Paragraph, UnsolvableLayoutError
+from squid_layouts.errors import UnsolvableLayoutError
+from squid_layouts.semantic import Heading, Paragraph
 from squid_layouts.discord import CLASSIC_LIMITS, DiscordPresentation, ExistingLayoutError, classic, measure
 from squid_layouts.discord.presentation import DiscordModeError
 from squid_layouts.planning.limits import CONTENT_TEXT, CONTROLS, EMBED_TEXT, EMBEDS, ROWS
@@ -86,7 +87,7 @@ class TestContribution:
         assert result.presentation.content == "@here"
 
     def test_squid_controls_go_into_rows_after_the_hosts(self) -> None:
-        from squid_layouts import Actions, Link
+        from squid_layouts.semantic import Actions, Link
 
         host_view_message = host(controls=[button("host")])
         result = classic.contribute(
@@ -101,7 +102,7 @@ class TestContribution:
 
     def test_the_host_view_is_mutated_rather_than_cloned(self) -> None:
         """A control's callback registration belongs to the view that owns it."""
-        from squid_layouts import Actions, Link
+        from squid_layouts.semantic import Actions, Link
 
         message = host(controls=[button("host")])
         result = classic.contribute(Actions((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message)
@@ -118,7 +119,7 @@ class TestContribution:
         assert result.presentation.embeds is not message.embeds
 
     def test_removal_is_identity_based(self) -> None:
-        from squid_layouts import Actions, Link
+        from squid_layouts.semantic import Actions, Link
 
         message = host(controls=[button("host")])
         result = classic.contribute(Actions((Link("d", "Docs", "https://example.invalid"),), key="k"), to=message)
@@ -134,7 +135,7 @@ class TestContribution:
 
 class TestPreflight:
     def test_a_duplicate_custom_id_fails_before_anything_moves(self) -> None:
-        from squid_layouts import Actions, RoutedAction
+        from squid_layouts.semantic import Actions, RoutedAction
 
         message = host(controls=[button("shared")])
         assert isinstance(message.view, discord.ui.View)
@@ -167,7 +168,7 @@ class TestPreflight:
 
     def test_a_component_local_action_cannot_enter_a_host_view(self) -> None:
         """The host view's callbacks stay under its owner."""
-        from squid_layouts import Action, Actions
+        from squid_layouts.semantic import Action, Actions
 
         async def press(event) -> None: ...
 

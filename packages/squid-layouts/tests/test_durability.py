@@ -7,7 +7,8 @@ from pathlib import Path
 import anyio
 import pytest
 
-from squid_layouts import Component, Position, state
+from squid_layouts import Component, state
+from squid_layouts.sources import Position
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,

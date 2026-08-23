@@ -143,7 +143,7 @@ class LayoutShowcase(sl.Component):
         self.right = DemoCounter(L(t"Right child"))
 
     @sl.computed
-    def status(self) -> sl.Message:
+    def status(self) -> sl.text.Message:
         return L("Section: {section} · reactive clicks: {clicks}", section=self.section, clicks=self.clicks)
 
     def render(self) -> Sequence[sl.LayoutNode]:
@@ -248,7 +248,7 @@ class LayoutShowcase(sl.Component):
 
     def _adaptation(self) -> Sequence[sl.LayoutNode]:
         actions = tuple(
-            sl.Action(f"action.{index}", L("Action {number}", number=index), self._action_notice)
+            sl.semantic.Action(f"action.{index}", L("Action {number}", number=index), self._action_notice)
             for index in range(1, 37)
         )
         return (
@@ -265,7 +265,7 @@ class LayoutShowcase(sl.Component):
                 ),
                 accent=DISCORD_YELLOW,
             ),
-            sl.Actions(actions, key="showcase-actions"),
+            sl.semantic.Actions(actions, key="showcase-actions"),
         )
 
     def _degradation(self) -> Sequence[sl.LayoutNode]:
@@ -330,12 +330,12 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _source_example(self) -> sl.Section:
-        return sl.Section(
-            sl.Heading(L(t"Declaration source")),
+    def _source_example(self) -> sl.semantic.Section:
+        return sl.semantic.Section(
+            sl.semantic.Heading(L(t"Declaration source")),
             (
-                sl.Paragraph(L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")),
-                sl.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
+                sl.semantic.Paragraph(L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")),
+                sl.semantic.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
             ),
         )
 
@@ -373,7 +373,7 @@ class LayoutShowcase(sl.Component):
         detail = " ".join(["adaptive layout sample"] * (1 + index % 4))
         return f"**#{index:03d}** · {detail}"
 
-    def _page_footer(self, page: int, pages: int) -> sl.Message:
+    def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self.entries)
         return L(t"Measured page {page} of {pages} · {total} samples")
 
@@ -397,7 +397,7 @@ class LayoutShowcase(sl.Component):
 # --- Shared state ---------------------------------------------------------------------------
 
 
-class Appearance(sl.Shared[int]):
+class Appearance(sl.runtime.Shared[int]):
     """View state two live panels agree on, scoped to one reader.
 
     Nothing outside the screen wants a theme name, so it is not a service and not a row: it
@@ -409,7 +409,7 @@ class Appearance(sl.Shared[int]):
     density: str = sl.state("comfortable")
 
 
-class Session(sl.Shared[int]):
+class Session(sl.runtime.Shared[int]):
     """What one invocation's two panels are looking at, and only for as long as they are."""
 
     focus: str = sl.state("overview")
@@ -428,7 +428,7 @@ class AppearanceControls(sl.Component):
     and a namespace is a dependency.
     """
 
-    history: sl.History = sl.history(limit=5)
+    history: sl.runtime.History = sl.runtime.history(limit=5)
 
     def render(self) -> sl.LayoutNode:
         appearance = self.inject(APPEARANCE)

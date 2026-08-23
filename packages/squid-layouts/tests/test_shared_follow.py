@@ -11,7 +11,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import CellAddress, Component, PressEvent, Shared, TopicBus, state, transaction
+from squid_layouts import Component, PressEvent, state
+from squid_layouts.runtime import CellAddress, Shared, TopicBus, transaction
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
@@ -47,7 +48,7 @@ class Panel(Component):
 class Writer(Component):
     """A panel that writes the cell it renders, which is the case the bus alone handles badly."""
 
-    def __init__(self, workspace: Workspace, *, feedback: sl.Feedback | None = None, run=None) -> None:
+    def __init__(self, workspace: Workspace, *, feedback: sl.interactions.Feedback | None = None, run=None) -> None:
         self.workspace = workspace
         self.run = run
         self.feedback = feedback
@@ -274,7 +275,7 @@ async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCap
 class TestSelfWrites:
     """A mount that writes a cell it renders repaints in the click, not one edit later."""
 
-    def panel(self, *, feedback: sl.Feedback | None = None, run=None) -> tuple[Workspace, Writer, Mount]:
+    def panel(self, *, feedback: sl.interactions.Feedback | None = None, run=None) -> tuple[Workspace, Writer, Mount]:
         bus = TopicBus()
         workspace = Workspace(bus, Member(1))
         panel = Writer(workspace, feedback=feedback, run=run)
@@ -346,7 +347,7 @@ class TestSelfWrites:
     async def test_a_feedback_action_does_not_flash_the_stale_scene(self) -> None:
         """The bug this fixed: flush found nothing, so `restore` repainted the committed plan."""
         release = asyncio.Event()
-        workspace, _, mount = self.panel(feedback=sl.Feedback(pending="Working…"), run=release.wait)
+        workspace, _, mount = self.panel(feedback=sl.interactions.Feedback(pending="Working…"), run=release.wait)
         mount.pending_after = 0
         await mount.send(delivered_to(fake_message()))
         interaction = fake_interaction()

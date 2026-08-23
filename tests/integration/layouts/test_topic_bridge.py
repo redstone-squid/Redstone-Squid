@@ -10,7 +10,7 @@ import pytest
 from testcontainers.postgres import PostgresContainer
 
 from squid.topics import resource_topic
-from squid_layouts import Topic, TopicBus
+from squid_layouts.runtime import Topic, TopicBus
 from squid_layouts.discord.durability import PostgresTopicBridge
 
 

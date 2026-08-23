@@ -20,22 +20,22 @@ RESOURCE_TOPIC_CHANNEL = "squid_resource_topics"
 """The PostgreSQL channel every Squid process shares."""
 
 
-def resource_topic(resource_kind: ResourceKind, resource_key: str) -> sl.Topic:
+def resource_topic(resource_kind: ResourceKind, resource_key: str) -> sl.runtime.Topic:
     """Address one bot-owned resource consistently across publishers and subscribers.
 
-    A thin constructor over `sl.Topic`, kept because it is what carries the `ResourceKind`
+    A thin constructor over `sl.runtime.Topic`, kept because it is what carries the `ResourceKind`
     literal: a bare `Topic` would accept any kind string a caller happened to type.
     """
-    return sl.Topic(resource_kind, resource_key)
+    return sl.runtime.Topic(resource_kind, resource_key)
 
 
 class TopicPublisher(Protocol):
     """What a process publishes through: the local bus, or the bridge in front of it."""
 
-    def publish(self, *topics: sl.Address) -> None: ...
+    def publish(self, *topics: sl.runtime.Address) -> None: ...
 
 
-async def open_topic_bridge(database: DatabaseConfig, bus: sl.TopicBus) -> PostgresTopicBridge | None:
+async def open_topic_bridge(database: DatabaseConfig, bus: sl.runtime.TopicBus) -> PostgresTopicBridge | None:
     """Join the shared resource channel, or return `None` when none is configured.
 
     `LISTEN` needs a session-level connection, so this reuses the direct URL the domain

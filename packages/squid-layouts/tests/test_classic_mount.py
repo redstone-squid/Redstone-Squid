@@ -11,7 +11,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import Action, Actions, Component, Heading, Paragraph
+from squid_layouts import Component
+from squid_layouts.semantic import Action, Actions, Heading, Paragraph
 from squid_layouts.interactions import ActionEvent
 from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Owner
 from squid_layouts.discord.mount import ClassicMountedView, MountedView

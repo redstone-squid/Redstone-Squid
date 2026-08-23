@@ -5,21 +5,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import (
-    Action,
-    ActionEvent,
-    CellAddress,
-    Component,
-    History,
-    HistoryError,
-    ReactiveWriteError,
-    Shared,
-    TopicBus,
-    history,
-    history_actions,
-    state,
-    transaction,
-)
+from squid_layouts import ActionEvent, Component, state
+from squid_layouts.runtime import CellAddress, History, HistoryError, ReactiveWriteError, Shared, TopicBus, history, history_actions, transaction
+from squid_layouts.semantic import Action
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Text
@@ -606,7 +594,7 @@ class TestDeclaredRecording:
                         for index in range(8)
                     ),
                     key="crowd",
-                    display=sl.ActionDisplay.GROUPED,
+                    display=sl.semantic.ActionDisplay.GROUPED,
                 )
 
             async def _act(self, event: ActionEvent) -> None:
@@ -626,4 +614,4 @@ class TestDeclaredRecording:
         async def act(event: ActionEvent) -> None: ...
 
         with pytest.raises(ValueError, match="nothing to record"):
-            sl.action("Peek", act, key="peek", policy=sl.ActionPolicy.PARALLEL_READ, record=panel().history)
+            sl.action("Peek", act, key="peek", policy=sl.interactions.ActionPolicy.PARALLEL_READ, record=panel().history)

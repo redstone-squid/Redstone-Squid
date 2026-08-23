@@ -32,13 +32,13 @@ CHANNEL_SETTINGS: tuple[ScalarChannelSetting, ...] = ("Smallest", "Fastest", "Fi
 """Every channel setting, in the order the panel offers them."""
 
 CHANNEL_TYPES = (
-    sl.ChannelType.TEXT,
-    sl.ChannelType.ANNOUNCEMENT,
-    sl.ChannelType.VOICE,
-    sl.ChannelType.STAGE_VOICE,
-    sl.ChannelType.PUBLIC_THREAD,
-    sl.ChannelType.PRIVATE_THREAD,
-    sl.ChannelType.ANNOUNCEMENT_THREAD,
+    sl.semantic.ChannelType.TEXT,
+    sl.semantic.ChannelType.ANNOUNCEMENT,
+    sl.semantic.ChannelType.VOICE,
+    sl.semantic.ChannelType.STAGE_VOICE,
+    sl.semantic.ChannelType.PUBLIC_THREAD,
+    sl.semantic.ChannelType.PRIVATE_THREAD,
+    sl.semantic.ChannelType.ANNOUNCEMENT_THREAD,
 )
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
@@ -74,7 +74,7 @@ class SettingsCapabilities:
 class SettingsPanel(sl.Component):
     """A semantic, mount-owned settings workspace."""
 
-    history: sl.History = sl.history(limit=10)
+    history: sl.runtime.History = sl.runtime.history(limit=10)
     """Undo for the server page's writes; see `docs/plans/squid-layouts-redesign/28-history.md`."""
 
     page: str = sl.state("server")
@@ -186,9 +186,9 @@ class SettingsPanel(sl.Component):
                 children.append(
                     sl.entities(
                         key=f"channel-{setting}",
-                        entity_type=sl.EntityType.CHANNEL,
+                        entity_type=sl.semantic.EntityType.CHANNEL,
                         selection=sl.controlled(
-                            () if selected is None else (sl.EntityRef(sl.EntityKind.CHANNEL, selected),),
+                            () if selected is None else (sl.semantic.EntityRef(sl.semantic.EntityKind.CHANNEL, selected),),
                             change,
                         ),
                         minimum=0,
@@ -198,10 +198,10 @@ class SettingsPanel(sl.Component):
                     )
                 )
             children.append(
-                sl.Choices(
+                sl.semantic.Choices(
                     key="locale",
                     choices=tuple(
-                        sl.Choice(
+                        sl.semantic.Choice(
                             tag,
                             L(t"Follow Discord") if tag == FOLLOW_DISCORD else tag,
                         )
@@ -238,9 +238,9 @@ class SettingsPanel(sl.Component):
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
                 scope_note and sl.note(scope_note),
             ),
-            sl.Choices(
+            sl.semantic.Choices(
                 key="vote-kind",
-                choices=tuple(sl.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()),
+                choices=tuple(sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()),
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]
@@ -248,7 +248,7 @@ class SettingsPanel(sl.Component):
             children.append(
                 sl.entities(
                     key="role-weight",
-                    entity_type=sl.EntityType.ROLE,
+                    entity_type=sl.semantic.EntityType.ROLE,
                     selection=sl.controlled((), self._role_changed),
                     minimum=1,
                     maximum=1,

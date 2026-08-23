@@ -555,23 +555,23 @@ class SubmissionFormComponent(sl.Component):
                 sl.note(t(self.locale, _("Only the door type and opening size are required."))),
                 accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
             ),
-            sl.Choices(
+            sl.semantic.Choices(
                 key="door_type",
-                choices=tuple(sl.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
+                choices=tuple(sl.semantic.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
                 selection=sl.controlled(
                     (self.build.door_orientation,) if self.build.door_orientation is not None else (),
                     self._door_changed,
                 ),
             ),
-            sl.Choices(
+            sl.semantic.Choices(
                 key="location",
                 choices=(
-                    sl.Choice(
+                    sl.semantic.Choice(
                         "Directional",
                         t(self.locale, _("Directional")),
                         t(self.locale, _("May depend on the direction it faces")),
                     ),
-                    sl.Choice(
+                    sl.semantic.Choice(
                         "Locational",
                         t(self.locale, _("Locational")),
                         t(self.locale, _("May depend on its position in the world")),
@@ -1025,7 +1025,7 @@ class BuildEditComponent(sl.Component):
         self.items = tuple(items)
         self._mount: sl.discord.Mount | None = None
 
-    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
         """The build being edited and its rendered card, current with the build's topic.
 
@@ -1034,13 +1034,13 @@ class BuildEditComponent(sl.Component):
         for the mount to follow the topic.
         """
         if self._build_id is not None:
-            sl.watch(resource_topic("build", str(self._build_id)))
+            sl.runtime.watch(resource_topic("build", str(self._build_id)))
         seed, self._seed = self._seed, None
         if seed is not None:
             return seed
         if self._refresh is None or self._build_id is None:
             message = "this editor has no way to reload itself"
-            raise sl.ResourceNotReadyError(message)
+            raise sl.runtime.ResourceNotReadyError(message)
         latest = await self._refresh(self._build_id)
         if latest is None:
             message = f"build {self._build_id} no longer exists"
@@ -1052,14 +1052,14 @@ class BuildEditComponent(sl.Component):
         if self._seed is not None:
             return self._seed
         state = self.projection.state
-        if isinstance(state, sl.Ready):
+        if isinstance(state, sl.runtime.Ready):
             return state.value
         if state.previous is not None:
             # A failed or in-flight reload keeps showing what is on screen rather than
             # blanking an editor someone is typing into.
             return state.previous.value
         message = "this editor has not loaded a build yet"
-        raise sl.ResourceNotReadyError(message)
+        raise sl.runtime.ResourceNotReadyError(message)
 
     @property
     def build(self) -> Build:

@@ -3,7 +3,8 @@
 import discord
 import pytest
 
-from squid_layouts import LayoutInvariantError, UnsolvableLayoutError, plan
+from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_layouts.planning import plan
 from squid_layouts.discord import CLASSIC_LIMITS, CLASSIC_TARGET, V2_LIMITS, V2_TARGET, Target
 from squid_layouts.planning.limits import (
     ATTACHMENTS,

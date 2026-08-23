@@ -3,21 +3,10 @@
 from dataclasses import replace
 from time import perf_counter
 
-from squid_layouts import (
-    Action,
-    Actions,
-    Heading,
-    List,
-    ListItem,
-    Localization,
-    Message,
-    Palette,
-    Paragraph,
-    Section,
-    Stack,
-    fallback,
-    plan,
-)
+from squid_layouts import Palette, fallback
+from squid_layouts.planning import plan
+from squid_layouts.semantic import Action, Actions, Heading, List, ListItem, Paragraph, Section, Stack
+from squid_layouts.text import Localization, Message
 from squid_layouts.discord import V2_TARGET, compose
 from squid_layouts.planning import PlanCache
 from squid_layouts.planning.cache import CachedPlan
