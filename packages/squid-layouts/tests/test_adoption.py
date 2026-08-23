@@ -433,6 +433,67 @@ async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
     assert ran == []
 
 
+async def test_a_refusing_interaction_check_still_reports_mutation_and_finishes() -> None:
+    class Guarded(discord.ui.View):
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            self.go.disabled = True
+            self.stop()
+            return False
+
+        @discord.ui.button(label="go", custom_id="go")
+        async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            raise AssertionError("the item callback must not run")
+
+    view = Guarded()
+    mount, errors = _mounted(view)
+
+    await mount.dispatch("go", fake_interaction())
+
+    button = view.children[0]
+    assert isinstance(button, discord.ui.Button)
+    assert button.disabled
+    assert mount.finished
+    assert errors == []
+
+
+async def test_an_interaction_check_error_uses_the_legacy_error_hook() -> None:
+    caught: list[BaseException] = []
+
+    class Failing(discord.ui.View):
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            raise RuntimeError("check failed")
+
+        async def on_error(self, interaction, error, item) -> None:
+            caught.append(error)
+
+        @discord.ui.button(label="go", custom_id="go")
+        async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            raise AssertionError("the item callback must not run")
+
+    mount, errors = _mounted(Failing())
+
+    await mount.dispatch("go", fake_interaction())
+
+    assert [type(error) for error in caught] == [RuntimeError]
+    assert errors == []
+
+
+async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_the_mount() -> None:
+    class Failing(discord.ui.View):
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            raise RuntimeError("check failed")
+
+        @discord.ui.button(label="go", custom_id="go")
+        async def go(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            raise AssertionError("the item callback must not run")
+
+    mount, errors = _mounted(Failing())
+
+    await mount.dispatch("go", fake_interaction())
+
+    assert [type(error) for error in errors] == [RuntimeError]
+
+
 async def test_an_overridden_on_error_intercepts_before_the_mount_sees_it() -> None:
     caught: list[BaseException] = []
 
