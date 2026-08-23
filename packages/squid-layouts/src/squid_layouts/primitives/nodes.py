@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, overload
 
 from squid_layouts.interactions import (
     ActionBinding,
@@ -25,6 +25,7 @@ from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
 from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordTarget, Renderable
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
@@ -33,14 +34,14 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class Text:
+class Text(Renderable[DiscordTarget]):
     content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
 
 
 @dataclass(frozen=True, slots=True)
-class Heading:
+class Heading(Renderable[DiscordTarget]):
     content: TextLike
     level: int = 2
     overflow: Overflow = field(default_factory=Truncate)
@@ -48,7 +49,7 @@ class Heading:
 
 
 @dataclass(frozen=True, slots=True)
-class Footer:
+class Footer(Renderable[DiscordTarget]):
     """Small (`-#`) text at the card's foot; first to shrink by default."""
 
     content: TextLike
@@ -57,7 +58,7 @@ class Footer:
 
 
 @dataclass(frozen=True, slots=True)
-class Code:
+class Code(Renderable[DiscordTarget]):
     """Fenced code block; embedded fences are escaped so content cannot break out."""
 
     content: TextLike
@@ -67,7 +68,7 @@ class Code:
 
 
 @dataclass(frozen=True, slots=True)
-class Lines:
+class Lines(Renderable[DiscordTarget]):
     """A list of entries joined by ``join``; spills to "…and N more" by default.
 
     Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
@@ -84,7 +85,7 @@ class Lines:
 
 
 @dataclass(frozen=True, slots=True)
-class Time:
+class Time(Renderable[DiscordTarget]):
     """A typed instant retained through scene conversion."""
 
     instant: datetime
@@ -93,7 +94,7 @@ class Time:
 
 
 @dataclass(frozen=True, slots=True)
-class ZonedTime:
+class ZonedTime(Renderable[DiscordTarget]):
     """An exact instant visibly retained with its named timezone."""
 
     value: ZonedDateTime
@@ -101,7 +102,7 @@ class ZonedTime:
 
 
 @dataclass(frozen=True, slots=True)
-class File:
+class File(Renderable[ComponentsV2Target]):
     """A visible file component backed by a separately carried asset resource."""
 
     asset_key: str
@@ -111,13 +112,13 @@ class File:
 
 
 @dataclass(frozen=True, slots=True)
-class Sep:
+class Sep(Renderable[ComponentsV2Target]):
     large: bool = False
     visible: bool = True
 
 
 @dataclass(frozen=True, slots=True)
-class LinkButton:
+class LinkButton(Renderable[DiscordTarget]):
     label: TextLike | None
     url: str
     emoji: EmojiLike | None = None
@@ -128,7 +129,7 @@ class LinkButton:
 
 
 @dataclass(frozen=True, slots=True)
-class PremiumButton:
+class PremiumButton(Renderable[DiscordTarget]):
     """A Discord premium button identified solely by its application SKU."""
 
     sku_id: int
@@ -140,7 +141,7 @@ class PremiumButton:
 
 
 @dataclass(frozen=True, slots=True)
-class Button:
+class Button(Renderable[DiscordTarget]):
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
     label: TextLike | None
@@ -171,7 +172,7 @@ class FormButton(Button):
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedButton:
+class RoutedButton(Renderable[DiscordTarget]):
     """A button whose route id *is* its state, dispatched by a router rather than a mount.
 
     Carries no handler, so it needs no binding and survives the process that drew it: a
@@ -203,7 +204,7 @@ class Option:
 
 
 @dataclass(frozen=True, slots=True)
-class SelectMenu:
+class SelectMenu(Renderable[DiscordTarget]):
     """A string select; occupies its own row when materialized."""
 
     options: tuple[Option, ...]
@@ -218,7 +219,7 @@ class SelectMenu:
 
 
 @dataclass(frozen=True, slots=True)
-class EntitySelect:
+class EntitySelect(Renderable[DiscordTarget]):
     """A frontend-resolved entity picker; occupies its own row."""
 
     entity_type: EntityType
@@ -242,7 +243,7 @@ class EntitySelect:
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedSelect:
+class RoutedSelect(Renderable[DiscordTarget]):
     """A string select dispatched by its stable route id rather than a mount binding."""
 
     options: tuple[Option, ...]
@@ -254,7 +255,7 @@ class RoutedSelect:
 
 
 @dataclass(frozen=True, slots=True)
-class RawItem:
+class RawItem(Renderable[DiscordTarget]):
     """Internal prepared target item retained until scene drawing."""
 
     factory: Callable[[], object]
@@ -266,7 +267,7 @@ class RawItem:
 
 
 @dataclass(frozen=True, slots=True)
-class Boundary:
+class Boundary(Renderable[DiscordTarget]):
     """A keyed component boundary expanded before portable planning.
 
     Named for what it is rather than what it draws to. It has never had anything to do with
@@ -296,7 +297,7 @@ class Boundary:
 
 
 @dataclass(frozen=True, slots=True)
-class Content:
+class Content(Renderable[ClassicTarget]):
     """The classic message's `content` field: the text a reply preview or push shows.
 
     A Components V2 message has no `content` at all, which is the whole reason the classic
@@ -357,7 +358,7 @@ class CardMedia:
 
 
 @dataclass(frozen=True, slots=True)
-class Card:
+class Card(Renderable[ClassicTarget]):
     """One embed: a titled, coloured, field-structured block beside the message text.
 
     ``children`` are description blocks, joined with blank lines in document order — one
@@ -382,7 +383,7 @@ class Card:
 
 
 @dataclass(frozen=True, slots=True)
-class Extension:
+class Extension[ModeT = Any](Renderable[ModeT]):
     """Target extension with a mandatory portable fallback."""
 
     kind: str
@@ -392,21 +393,21 @@ class Extension:
 
 
 @dataclass(frozen=True, slots=True)
-class Row:
+class Row(Renderable[DiscordTarget]):
     """An exact target row; invalid local structure is a planning error."""
 
     items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class ActionGroup:
+class ActionGroup(Renderable[DiscordTarget]):
     """Buttons automatically arranged into as many valid target rows as needed."""
 
     items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class Thumbnail:
+class Thumbnail(Renderable[ComponentsV2Target]):
     url: str
     description: TextLike | None = None
     spoiler: bool = False
@@ -422,7 +423,7 @@ class GalleryItem:
 
 
 @dataclass(frozen=True, slots=True)
-class Gallery:
+class Gallery(Renderable[ComponentsV2Target]):
     """One exact target gallery."""
 
     items: tuple[str | GalleryItem, ...]
@@ -432,7 +433,7 @@ class Gallery:
 
 
 @dataclass(frozen=True, slots=True)
-class MediaCollection:
+class MediaCollection(Renderable[ComponentsV2Target]):
     """Media automatically arranged into valid target galleries."""
 
     items: tuple[str | GalleryItem, ...]
@@ -442,7 +443,7 @@ class MediaCollection:
 
 
 @dataclass(frozen=True, slots=True)
-class Section:
+class Section(Renderable[ComponentsV2Target]):
     """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
 
     texts: tuple[Text | Heading | Footer, ...]
@@ -450,7 +451,7 @@ class Section:
 
 
 @dataclass(frozen=True, slots=True)
-class Panel:
+class Panel(Renderable[ComponentsV2Target]):
     """A Container: children grouped under an optional accent colour."""
 
     children: tuple[Node, ...]
@@ -459,7 +460,7 @@ class Panel:
 
 
 @dataclass(frozen=True, slots=True)
-class Budget:
+class Budget[ModeT = Any](Renderable[ModeT]):
     """Transparent group carrying an author-sized character reservation and ceiling."""
 
     children: tuple[Node, ...]
@@ -470,7 +471,7 @@ class Budget:
 
 
 @dataclass(frozen=True, slots=True)
-class Break:
+class Break[ModeT = Any](Renderable[ModeT]):
     """Transparent group carrying region-break annotations through semantic lowering."""
 
     children: tuple[Node, ...]
@@ -499,7 +500,7 @@ class Fidelity(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class Variant:
+class Variant[ModeT = Any]:
     """One structural representation of a region and the capabilities it requires.
 
     ``nodes`` is a tuple because a variant may lower to several nodes — an ActionGroup becomes
@@ -522,7 +523,7 @@ class Variant:
 
 
 @dataclass(frozen=True, slots=True)
-class Variants:
+class Variants[ModeT = Any](Renderable[ModeT]):
     """An ordered ladder of structural representations for one region.
 
     Overflow policies shrink *text*; nothing they do returns a component, so a document with
@@ -545,7 +546,7 @@ class Variants:
     abandons it and opens whatever the new rung holds at rung 0.
     """
 
-    variants: tuple[Variant, ...]
+    variants: tuple[Variant[Any], ...]
     priority: int = 0
 
     def __post_init__(self) -> None:
@@ -554,9 +555,62 @@ class Variants:
             raise ValueError(message)
 
     @classmethod
-    def of(cls, *rungs: Node | Variant, priority: int = 0) -> Variants:
+    @overload
+    def of[FirstT, SecondT](
+        cls,
+        first: PrimitiveNode[FirstT] | Variant[FirstT],
+        second: PrimitiveNode[SecondT] | Variant[SecondT],
+        *,
+        priority: int = 0,
+    ) -> Variants[FirstT | SecondT]: ...
+
+    @classmethod
+    @overload
+    def of[FirstT, SecondT, ThirdT](
+        cls,
+        first: PrimitiveNode[FirstT] | Variant[FirstT],
+        second: PrimitiveNode[SecondT] | Variant[SecondT],
+        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        *,
+        priority: int = 0,
+    ) -> Variants[FirstT | SecondT | ThirdT]: ...
+
+    @classmethod
+    @overload
+    def of[FirstT, SecondT, ThirdT, FourthT](
+        cls,
+        first: PrimitiveNode[FirstT] | Variant[FirstT],
+        second: PrimitiveNode[SecondT] | Variant[SecondT],
+        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        fourth: PrimitiveNode[FourthT] | Variant[FourthT],
+        *,
+        priority: int = 0,
+    ) -> Variants[FirstT | SecondT | ThirdT | FourthT]: ...
+
+    @classmethod
+    @overload
+    def of[FirstT, SecondT, ThirdT, FourthT, FifthT](
+        cls,
+        first: PrimitiveNode[FirstT] | Variant[FirstT],
+        second: PrimitiveNode[SecondT] | Variant[SecondT],
+        third: PrimitiveNode[ThirdT] | Variant[ThirdT],
+        fourth: PrimitiveNode[FourthT] | Variant[FourthT],
+        fifth: PrimitiveNode[FifthT] | Variant[FifthT],
+        *,
+        priority: int = 0,
+    ) -> Variants[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...
+
+    @classmethod
+    @overload
+    def of(cls, *rungs: object, priority: int = 0) -> Variants[Any]: ...
+
+    @classmethod
+    def of(cls, *rungs: object, priority: int = 0) -> Variants[Any]:
         """Build a ladder from bare nodes, wrapping each in an exact, capability-free Variant."""
-        return cls(tuple(rung if isinstance(rung, Variant) else Variant((rung,)) for rung in rungs), priority)
+        return cls(
+            tuple(rung if isinstance(rung, Variant) else Variant((rung,)) for rung in rungs),  # type: ignore[arg-type]
+            priority,
+        )
 
 
 type Node = (
@@ -590,6 +644,8 @@ type Node = (
     | Extension
     | Variants
 )
+
+type PrimitiveNode[ModeT = Any] = Renderable[ModeT]
 
 
 def as_nodes(rendered: Node | Sequence[Node]) -> list[Node]:

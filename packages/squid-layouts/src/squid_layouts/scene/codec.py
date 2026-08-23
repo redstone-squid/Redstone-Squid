@@ -70,7 +70,7 @@ class SceneCodec:
         return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
 
     @classmethod
-    def dumps(cls, scene: SceneDocument) -> str:
+    def dumps(cls, scene: SceneDocument[Any]) -> str:
         return json.dumps(cls.to_dict(scene), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     @classmethod
@@ -85,11 +85,11 @@ class SceneCodec:
         return cls.from_dict(raw)
 
     @classmethod
-    def fingerprint(cls, scene: SceneDocument) -> str:
+    def fingerprint(cls, scene: SceneDocument[Any]) -> str:
         return hashlib.blake2s(cls.dumps(scene).encode(), digest_size=16).hexdigest()
 
     @classmethod
-    def to_dict(cls, scene: SceneDocument) -> dict[str, Any]:
+    def to_dict(cls, scene: SceneDocument[Any]) -> dict[str, Any]:
         if scene.protocol != cls.protocol:
             msg = f"unsupported scene protocol {scene.protocol}"
             raise SceneCodecError(msg)

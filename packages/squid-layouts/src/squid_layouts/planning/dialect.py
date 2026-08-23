@@ -17,7 +17,7 @@ extract it instead.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
 from squid_layouts.interactions import ActionBinding
 from squid_layouts.chrome import Chrome
@@ -134,7 +134,9 @@ class SceneBindings:
 class TargetDialect(Protocol):
     """One target's shape, isolated from everything the targets share."""
 
-    def normalize(self, nodes: Sequence[Node], target: TargetProfile, limits: DiscordLimits) -> tuple[Node, ...]:
+    def normalize(
+        self, nodes: Sequence[Node], target: TargetProfile[Any, Any, Any], limits: DiscordLimits
+    ) -> tuple[Node, ...]:
         """Rewrite semantically lowered nodes into this target's own primitive shape."""
         ...
 

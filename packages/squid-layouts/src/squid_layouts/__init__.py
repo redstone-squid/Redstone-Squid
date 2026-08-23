@@ -196,6 +196,17 @@ from squid_layouts.patterns import (
     confirm,
 )
 from squid_layouts.planning.planner import plan
+from squid_layouts.planning.adapter import AdapterProfile
+from squid_layouts.target_types import (
+    ClassicTarget,
+    ComponentsV2Target,
+    DiscordAdapter,
+    DiscordPy27Adapter,
+    DiscordPyAdapter,
+    DiscordTarget,
+    Renderable,
+    TargetRequirements,
+)
 from squid_layouts.routing import Route
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
@@ -393,6 +404,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "ADMIT",
+    "AdapterProfile",
     "CLOSED",
     "DEFAULT_CHROME",
     "DEFAULT_PALETTE",
@@ -445,6 +457,7 @@ __all__ = [
     "ChoiceField",
     "ChoiceOption",
     "ChoiceOwnership",
+    "ClassicTarget",
     "Choices",
     "Chrome",
     "Cluster",
@@ -458,6 +471,7 @@ __all__ = [
     "CommitPolicy",
     "Component",
     "ComponentShell",
+    "ComponentsV2Target",
     "Conditional",
     "ContextKey",
     "Controlled",
@@ -475,6 +489,10 @@ __all__ = [
     "DisclosureOwnership",
     "Document",
     "DocumentLike",
+    "DiscordAdapter",
+    "DiscordPy27Adapter",
+    "DiscordPyAdapter",
+    "DiscordTarget",
     "Download",
     "DrawInvariantError",
     "DurationField",
@@ -602,6 +620,7 @@ __all__ = [
     "ResourceDelivery",
     "ResourceNotReadyError",
     "ResourceState",
+    "Renderable",
     "Route",
     "RouteBuilder",
     "RoutedAction",
@@ -639,6 +658,7 @@ __all__ = [
     "TextField",
     "TextLike",
     "TextValue",
+    "TargetRequirements",
     "Themed",
     "TimeField",
     "TimeStyle",

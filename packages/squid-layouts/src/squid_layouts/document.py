@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 from squid_layouts.assets import Asset, AssetSource, InlineAsset, StoredAsset
 from squid_layouts.semantic import LayoutNode
@@ -10,18 +11,18 @@ __all__ = ["Asset", "AssetSource", "Document", "DocumentLike", "InlineAsset", "S
 
 
 @dataclass(frozen=True, slots=True)
-class Document:
+class Document[ModeT = Any]:
     """Visual nodes and delivery assets derived from one component state snapshot."""
 
-    children: tuple[LayoutNode, ...]
+    children: tuple[LayoutNode[ModeT], ...]
     assets: tuple[Asset, ...] = ()
     key: str | None = None
 
 
-type DocumentLike = Document | LayoutNode | Sequence[LayoutNode]
+type DocumentLike[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
-def as_document(rendered: DocumentLike) -> Document:
+def as_document[ModeT](rendered: DocumentLike[ModeT]) -> Document[ModeT]:
     if isinstance(rendered, Document):
         return rendered
     if isinstance(rendered, Sequence):

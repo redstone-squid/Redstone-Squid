@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import TYPE_CHECKING, Literal
+from typing import Any, TYPE_CHECKING, Literal, cast, overload
 
 from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
@@ -13,6 +13,7 @@ from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
+from squid_layouts.target_types import Renderable
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
@@ -643,11 +644,11 @@ class OptionalContent:
 
 
 @dataclass(frozen=True, slots=True)
-class FallbackContent:
+class FallbackContent[ModeT = Any](Renderable[ModeT]):
     """Complete author-supplied representations of one region, best first."""
 
-    primary: LayoutNode
-    alternates: tuple[LayoutNode, ...]
+    primary: LayoutNode[ModeT]
+    alternates: tuple[LayoutNode[ModeT], ...]
 
     def __post_init__(self) -> None:
         if not self.alternates:
@@ -755,10 +756,9 @@ type SemanticNode = (
     | Navigation
 )
 
-type Adaptation = (
-    Truncated | Spilled | OptionalContent | FallbackContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
-)
-type LayoutNode = SemanticNode | Adaptation | PrimitiveNode
+type Adaptation = Truncated | Spilled | OptionalContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
+type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
+type LayoutNode[ModeT = Any] = SemanticNode | Adaptation | FallbackContent[ModeT] | Renderable[ModeT]
 
 
 def truncate(node: LayoutNode, *, keep: str = "head") -> Truncated:
@@ -776,7 +776,42 @@ def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> Op
     return OptionalContent(node, importance)
 
 
-def fallback(primary: LayoutNode, *alternates: LayoutNode) -> FallbackContent:
+@overload
+def fallback[FirstT, SecondT](
+    primary: LayoutNode[FirstT], alternate: LayoutNode[SecondT]
+) -> FallbackContent[FirstT | SecondT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT](
+    primary: LayoutNode[FirstT], first: LayoutNode[SecondT], second: LayoutNode[ThirdT]
+) -> FallbackContent[FirstT | SecondT | ThirdT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT, FourthT](
+    primary: LayoutNode[FirstT],
+    first: LayoutNode[SecondT],
+    second: LayoutNode[ThirdT],
+    third: LayoutNode[FourthT],
+) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](
+    primary: LayoutNode[FirstT],
+    first: LayoutNode[SecondT],
+    second: LayoutNode[ThirdT],
+    third: LayoutNode[FourthT],
+    fourth: LayoutNode[FifthT],
+) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...
+
+
+@overload
+def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]: ...
+
+
+def fallback(primary: object, *alternates: object) -> FallbackContent[Any]:
     """Declare complete author-supplied alternate representations, in descending preference.
 
     Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
@@ -785,7 +820,10 @@ def fallback(primary: LayoutNode, *alternates: LayoutNode) -> FallbackContent:
     if not alternates:
         message = "sl.fallback() needs at least one alternate"
         raise ValueError(message)
-    return FallbackContent(primary, alternates)
+    return FallbackContent(
+        cast(LayoutNode[Any], primary),
+        tuple(cast(LayoutNode[Any], alternate) for alternate in alternates),
+    )
 
 
 def best_effort(node: LayoutNode) -> BestEffort:
