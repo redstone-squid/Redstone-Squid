@@ -16,7 +16,7 @@ def test_root_is_semantic_first() -> None:
     assert {"section", "paragraph", "note", "actions", "action", "ChildLike"} <= set(sl.__all__)
     assert {"budget", "paged", "unbreakable", "keep_with_next"} <= set(sl.__all__)
     assert {"Toggle", "ToggleEvent", "ToggleOwnership", "OFF", "toggle"} <= set(sl.__all__)
-    assert {"MultiChoiceField", "UploadedFile"} <= set(sl.__all__)
+    assert {"Emoji", "FormText", "MultiChoiceField", "UploadedFile"} <= set(sl.__all__)
     assert {
         "AmbiguousTimePolicy",
         "DateTimeField",
@@ -86,6 +86,8 @@ def test_root_is_semantic_first() -> None:
 def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.primitives.Button
     assert sl.primitives.File
+    assert sl.primitives.GalleryItem
+    assert sl.primitives.PremiumButton
     assert sl.planning.measure
     assert sl.profiling.MemoryProfiler
     assert sl.profiling.snapshot_json
@@ -94,6 +96,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
+    assert sl.discord.CheckboxGroupField
     assert sl.discord.MountDefaults
     assert sl.discord.SessionRegistry
     assert sl.discord.routers
