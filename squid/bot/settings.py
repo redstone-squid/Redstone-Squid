@@ -9,8 +9,9 @@ from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.operations import run_command_operation
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import destination, error_layout, info_layout, reply_presentation
+from squid.bot.ui import destination, error_layout, error_node, info_layout, info_node, reply_presentation
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -26,11 +27,6 @@ from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     import squid.bot.app
-
-
-async def _edit(message: discord.Message, presentation: sl.discord.presentation.DiscordPresentation) -> None:
-    """Replace a running command message through the presentation delivery handle."""
-    await sl.discord.delivery.handle_for(message, mode=presentation.mode).write(presentation)
 
 
 class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
@@ -104,33 +100,24 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
 
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
+        async def update(_progress, _receipt):
             if channel is None:
                 await self.settings_service.clear(ctx.guild.id, setting)
-                await _edit(
-                    sent_message,
-                    info_layout(
-                        t(locale, _("Setting updated")),
-                        t(locale, _("{setting} has been cleared."), setting=setting),
-                    ),
+                return info_node(
+                    t(locale, _("Setting updated")),
+                    t(locale, _("{setting} has been cleared."), setting=setting),
                 )
-                return
 
             if ctx.guild.get_channel_or_thread(channel.id) is None:
-                await _edit(
-                    sent_message,
-                    error_layout(t(locale, _("Error")), t(locale, _("Could not find that channel."))),
-                )
-                return
+                return error_node(t(locale, _("Error")), t(locale, _("Could not find that channel.")))
 
             await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
-            await _edit(
-                sent_message,
-                info_layout(
-                    t(locale, _("Settings updated")),
-                    t(locale, _("{setting} channel has successfully been set."), setting=setting),
-                ),
+            return info_node(
+                t(locale, _("Settings updated")),
+                t(locale, _("{setting} channel has successfully been set."), setting=setting),
             )
+
+        await run_command_operation(ctx, update, locale=locale, reports=self.bot.services.error_reports)
 
     @settings_hybrid_group.command(name="locale")
     @app_commands.describe(language=app_commands.locale_str(_("The language the bot should respond in")))
@@ -154,26 +141,35 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             return
 
         if language == FOLLOW_DISCORD:
-            await self.settings_service.set_locale(ctx.guild.id, None)
-            async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-                await _edit(
-                    sent_message,
-                    info_layout(
-                        t(locale, _("Settings updated")),
-                        t(locale, _("This server now follows its Discord language.")),
-                    ),
+
+            async def follow_discord(_progress, _receipt):
+                await self.settings_service.set_locale(ctx.guild.id, None)
+                return info_node(
+                    t(locale, _("Settings updated")),
+                    t(locale, _("This server now follows its Discord language.")),
                 )
+
+            await run_command_operation(
+                ctx,
+                follow_discord,
+                locale=locale,
+                reports=self.bot.services.error_reports,
+            )
             return
 
-        await self.settings_service.set_locale(ctx.guild.id, language)
-        async with self.bot.get_running_message(ctx, locale=language) as sent_message:
-            await _edit(
-                sent_message,
-                info_layout(
-                    t(language, _("Settings updated")),
-                    t(language, _("This server's language has been set to {language}."), language=language),
-                ),
+        async def set_language(_progress, _receipt):
+            await self.settings_service.set_locale(ctx.guild.id, language)
+            return info_node(
+                t(language, _("Settings updated")),
+                t(language, _("This server's language has been set to {language}."), language=language),
             )
+
+        await run_command_operation(
+            ctx,
+            set_language,
+            locale=language,
+            reports=self.bot.services.error_reports,
+        )
 
     @settings_hybrid_group.group(name="voting")
     @requires(SETTINGS_VOTING_EDIT)

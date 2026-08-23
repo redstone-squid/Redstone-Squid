@@ -11,8 +11,9 @@ from discord.ext.commands import Cog
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import error_layout, respond_presentation, send_to, text_layout
+from squid.bot.ui import error_layout, info_node, respond_presentation, send_to, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import present_poll_form
 from squid.bot.voting.publisher import DiscordPollPublisher
@@ -232,13 +233,28 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
         # The card is a public artifact of a public decision, so it goes in the channel
         # rather than into the ephemeral reply the right-click opened.
-        async with self.bot.get_running_message(message.channel, locale=locale) as published:
+        async def publish(_progress, receipt):
+            published = receipt.message
+            if published is None:
+                detail = "a public vote operation requires the delivered Discord message"
+                raise RuntimeError(detail)
             await start_delete_log_vote(
                 self.bot,
                 author_account_id=author_account_id,
                 target_message=message,
                 published_message=published,
             )
+            # The reconciler has replaced the progress card with the authoritative vote card.
+            # Keeping the operation's terminal scene equal to its initial scene suppresses a
+            # mount edit that would otherwise overwrite that adopted message.
+            return info_node(t(locale, _("Working")), t(locale, _("Getting information...")))
+
+        await run_command_operation(
+            message.channel,
+            publish,
+            locale=locale,
+            reports=self.bot.services.error_reports,
+        )
         await respond_presentation(interaction, text_layout(t(locale, _("Deletion vote opened."))))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:

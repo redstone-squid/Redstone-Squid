@@ -8,12 +8,13 @@ from discord import app_commands
 from discord.ext import commands
 from pytest_mock import MockerFixture
 
+import squid_layouts as sl
 from squid.bot.errors import (
     SquidCommandTree,
     build_error_presentation,
     handle_interaction_error,
-    handle_message_error,
     is_error_presented,
+    record_operation_error,
     unwrap_error,
 )
 from squid.bot.utils.permissions import PermissionNodeRequired
@@ -253,15 +254,15 @@ async def test_presented_error_is_not_rendered_or_logged_twice() -> None:
     interaction = make_interaction()
 
     with patch("squid.bot.errors.logger.error") as log_error:
-        await handle_message_error(message.message, error)
+        await record_operation_error(
+            error,
+            locale=None,
+            receipt=sl.discord.delivery.DeliveryReceipt(message.message, None),
+            presented=True,
+        )
         await handle_interaction_error(interaction.interaction, error, surface="command")
 
-    message.edit.assert_awaited_once()
-    edit_call = message.edit.await_args
-    assert edit_call is not None
-    assert edit_call.kwargs["content"] is None
-    assert edit_call.kwargs["embed"] is None
-    assert edit_call.kwargs["view"].has_components_v2()
+    message.edit.assert_not_awaited()
     interaction.send_initial.assert_not_awaited()
     log_error.assert_called_once()
     assert is_error_presented(error)

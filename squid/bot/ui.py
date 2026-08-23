@@ -41,12 +41,15 @@ __all__ = [
     "Private",
     "Visibility",
     "card_layout",
+    "card_node",
     "contribute",
     "create_mount",
     "destination",
     "error_layout",
+    "error_node",
     "help_layout",
     "info_layout",
+    "info_node",
     "link_layout",
     "localization_for",
     "render_item",
@@ -514,7 +517,7 @@ def _groups(sections: Sequence[CardSection]) -> tuple[ui.semantic.Section, ...]:
     return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
 
 
-def card_layout(
+def card_node(
     title: ui.TextLike,
     description: ui.TextLike | None = None,
     *,
@@ -523,11 +526,10 @@ def card_layout(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
-    locale: str | None = None,
-) -> ui.discord.presentation.DiscordPresentation:
-    """Create a standalone V2 card."""
+) -> ui.LayoutNode:
+    """Build a semantic card that can be composed inside a component render."""
     extra_media = media[1:]
-    node = ui.section(
+    return ui.section(
         ui.heading(title),
         # The body is the card's shock absorber: truncate lets it give up characters under
         # pressure before a field or the footer loses any.
@@ -541,7 +543,34 @@ def card_layout(
         accent=accent_colour,
         thumbnail=media[0] if media else None,
     )
-    return render_static([node], locale=locale)
+
+
+def card_layout(
+    title: ui.TextLike,
+    description: ui.TextLike | None = None,
+    *,
+    accent_colour: int = DISCORD_GREEN,
+    fields: Sequence[CardField] = (),
+    sections: Sequence[CardSection] = (),
+    footer: ui.TextLike | None = None,
+    media: Sequence[str] = (),
+    locale: str | None = None,
+) -> ui.discord.presentation.DiscordPresentation:
+    """Create a standalone V2 card."""
+    return render_static(
+        [
+            card_node(
+                title,
+                description,
+                accent_colour=accent_colour,
+                fields=fields,
+                sections=sections,
+                footer=footer,
+                media=media,
+            )
+        ],
+        locale=locale,
+    )
 
 
 def text_layout(
@@ -568,11 +597,15 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 def error_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
 ) -> ui.discord.presentation.DiscordPresentation:
-    return card_layout(
+    return render_static([error_node(title, description)], locale=locale)
+
+
+def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
+    """Build an error card for composition inside a component render."""
+    return card_node(
         title,
         _prefixed(":x: ", description or ""),
         accent_colour=DISCORD_RED,
-        locale=locale,
     )
 
 
@@ -590,7 +623,12 @@ def warning_layout(
 def info_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
 ) -> ui.discord.presentation.DiscordPresentation:
-    return card_layout(title, description, accent_colour=DISCORD_GREEN, locale=locale)
+    return render_static([info_node(title, description)], locale=locale)
+
+
+def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode:
+    """Build an informational card for composition inside a component render."""
+    return card_node(title, description, accent_colour=DISCORD_GREEN)
 
 
 def help_layout(

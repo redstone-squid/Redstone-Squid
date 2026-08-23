@@ -15,6 +15,7 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.operations import run_command_operation
 from squid.bot.submission.build_info import BuildInfoComponent
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
@@ -27,7 +28,8 @@ from squid.bot.ui import (
     create_mount,
     destination,
     error_layout,
-    info_layout,
+    error_node,
+    info_node,
     reply_presentation,
     text_layout,
 )
@@ -50,11 +52,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-async def _edit(message: discord.Message, presentation: sl.discord.presentation.DiscordPresentation) -> None:
-    """Replace a running command message through its delivery handle."""
-    await sl.discord.delivery.handle_for(message, mode=presentation.mode).write(presentation)
 
 
 class SearchModeChoice(StrEnum):
@@ -240,19 +237,18 @@ class SearchCog[
     async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
         """Add another name for a restriction."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
+
+        async def add_alias(_progress, _receipt):
             try:
                 await self.restrictions.add_alias(restriction, alias)
             except AliasAlreadyAddedError:
-                await _edit(
-                    sent_message,
-                    info_layout(t(locale, _("Already added")), t(locale, _("Alias already on this restriction."))),
+                return info_node(
+                    t(locale, _("Already added")),
+                    t(locale, _("Alias already on this restriction.")),
                 )
-            else:
-                await _edit(
-                    sent_message,
-                    info_layout(t(locale, _("Success")), t(locale, _("Alias added."))),
-                )
+            return info_node(t(locale, _("Success")), t(locale, _("Alias added.")))
+
+        await run_command_operation(ctx, add_alias, locale=locale, reports=self.bot.services.error_reports)
 
     @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
@@ -286,7 +282,7 @@ class SearchCog[
                     error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     visibility="personal",
                 )
-                return None
+                return
 
             node = await self.bot.for_build(build).render_node()
 
@@ -306,21 +302,18 @@ class SearchCog[
                 reactor=self.bot.layout_reactor,
             )
             await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
-            return None
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
+            return
+
+        async def load_build(_progress, _receipt):
             build = await self.queries.get(build_id)
 
             if build is None:
-                return await _edit(
-                    sent_message,
-                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
-                )
+                return error_node(t(locale, _("Error")), t(locale, _("No build with that ID.")))
 
-            await _edit(
-                sent_message,
-                await self.bot.for_build(build).render_layout(),
-            )
-        return None
+            return await self.bot.for_build(build).render_node()
+
+        await run_command_operation(ctx, load_build, locale=locale, reports=self.bot.services.error_reports)
+        return
 
     @autocompletes(build_id="builds_pending")
     @BuildCommandGroup.build_hybrid_group.command(name="approve")  # type: ignore
@@ -330,13 +323,12 @@ class SearchCog[
     async def confirm_build(self, ctx: Context[BotT], build_id: int):
         """Mark a submission as confirmed and publish it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            await self.builds.confirm(build_id)
 
-            await _edit(
-                sent_message,
-                info_layout(t(locale, _("Success")), t(locale, _("Submission has been confirmed."))),
-            )
+        async def confirm(_progress, _receipt):
+            await self.builds.confirm(build_id)
+            return info_node(t(locale, _("Success")), t(locale, _("Submission has been confirmed.")))
+
+        await run_command_operation(ctx, confirm, locale=locale, reports=self.bot.services.error_reports)
 
     @autocompletes(build_id="builds_pending")
     @BuildCommandGroup.build_hybrid_group.command(name="reject")  # type: ignore
@@ -346,17 +338,16 @@ class SearchCog[
     async def deny_build(self, ctx: Context[BotT], build_id: int):
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
+
+        async def deny(_progress, _receipt):
             await self.builds.deny(build_id)
 
             # Denying removes the card rather than editing it, which the renderer
             # expresses by wanting no posts for a build in this state.
             await self.bot.refresh_posts("build", str(build_id))
+            return info_node(t(locale, _("Success")), t(locale, _("Submission has been denied.")))
 
-            await _edit(
-                sent_message,
-                info_layout(t(locale, _("Success")), t(locale, _("Submission has been denied."))),
-            )
+        await run_command_operation(ctx, deny, locale=locale, reports=self.bot.services.error_reports)
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="debug")  # type: ignore
