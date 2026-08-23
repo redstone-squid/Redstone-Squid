@@ -3,6 +3,7 @@
 import json
 import math
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from squid_layouts.discord.sessions import (
@@ -176,19 +177,27 @@ class DurableSessionCodec:
         encode_session_key(record.key)
 
 
+class SessionScopeKind(StrEnum):
+    USER = "user"
+    GUILD = "guild"
+    USER_GUILD = "user_guild"
+    GLOBAL = "global"
+    CUSTOM = "custom"
+
+
 def encode_session_key(key: SessionKey) -> dict[str, Any]:
     """Return the canonical JSON object used for storage scope and record payloads."""
     scope = key.scope
     if isinstance(scope, UserScope):
-        encoded = {"type": "user", "user_id": scope.user_id}
+        encoded = {"type": SessionScopeKind.USER, "user_id": scope.user_id}
     elif isinstance(scope, GuildScope):
-        encoded = {"type": "guild", "guild_id": scope.guild_id}
+        encoded = {"type": SessionScopeKind.GUILD, "guild_id": scope.guild_id}
     elif isinstance(scope, UserGuildScope):
-        encoded = {"type": "user_guild", "user_id": scope.user_id, "guild_id": scope.guild_id}
+        encoded = {"type": SessionScopeKind.USER_GUILD, "user_id": scope.user_id, "guild_id": scope.guild_id}
     elif isinstance(scope, GlobalScope):
-        encoded = {"type": "global"}
+        encoded = {"type": SessionScopeKind.GLOBAL}
     elif isinstance(scope, CustomScope):
-        encoded = {"type": "custom", "value": _encode_custom_scope(scope.value)}
+        encoded = {"type": SessionScopeKind.CUSTOM, "value": _encode_custom_scope(scope.value)}
     else:
         message = f"unsupported durable session scope {type(scope).__name__}"
         raise SnapshotError(message)
@@ -203,15 +212,15 @@ def decode_session_key(raw: dict[str, Any]) -> SessionKey:
     name = _string(raw, "name")
     scope = _object(raw.get("scope"), "session scope")
     kind = _string(scope, "type")
-    if kind == "user":
+    if kind == SessionScopeKind.USER:
         return SessionKey.user(name, _integer(scope, "user_id"))
-    if kind == "guild":
+    if kind == SessionScopeKind.GUILD:
         return SessionKey.guild(name, _integer(scope, "guild_id"))
-    if kind == "user_guild":
+    if kind == SessionScopeKind.USER_GUILD:
         return SessionKey.user_guild(name, _integer(scope, "user_id"), _integer(scope, "guild_id"))
-    if kind == "global":
+    if kind == SessionScopeKind.GLOBAL:
         return SessionKey.global_(name)
-    if kind == "custom":
+    if kind == SessionScopeKind.CUSTOM:
         return SessionKey.custom(name, _decode_custom_scope(scope.get("value")))
     message = f"unsupported durable session scope type {kind!r}"
     raise SnapshotError(message)
