@@ -87,6 +87,7 @@ anyio==4.14.2 \
     #   openai
     #   redstone-squid
     #   squid-layouts
+    #   squid-stores
     #   starlette
 async-lru==2.3.0 \
     --hash=sha256:89bdb258a0140d7313cf8f4031d816a042202faa61d0ab310a0a538baa1c24b6 \
