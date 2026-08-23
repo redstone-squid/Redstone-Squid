@@ -18,11 +18,8 @@ from squid.diagnostics.domain import ErrorReport
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts.discord import (
-    Mount,
-    MountedView,
-    Owner,
-)
+from squid_layouts.discord import Mount, Owner
+from squid_layouts.discord.mount import MountedView
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.sources import Position
 
