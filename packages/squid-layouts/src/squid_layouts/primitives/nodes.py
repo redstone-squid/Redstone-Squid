@@ -19,6 +19,7 @@ from squid_layouts.actions import (
     PressHandler,
     SelectionHandler,
 )
+from squid_layouts.emoji import EmojiLike, normalize_emoji
 from squid_layouts.entities import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
@@ -106,6 +107,7 @@ class File:
     asset_key: str
     name: str
     media_type: str
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,25 +118,45 @@ class Sep:
 
 @dataclass(frozen=True, slots=True)
 class LinkButton:
-    label: TextLike
+    label: TextLike | None
     url: str
+    emoji: EmojiLike | None = None
+    disabled: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
+
+
+@dataclass(frozen=True, slots=True)
+class PremiumButton:
+    """A Discord premium button identified solely by its application SKU."""
+
+    sku_id: int
+
+    def __post_init__(self) -> None:
+        if self.sku_id <= 0:
+            message = "PremiumButton sku_id must be positive"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
 class Button:
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
-    label: TextLike
+    label: TextLike | None
     on_click: PressHandler
     key: str
     style: ActionStyle = ActionStyle.SECONDARY
-    emoji: str | None = None
+    emoji: EmojiLike | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     guard: Guard | None = None
     feedback: Feedback | None = None
     record: History | None = None
     """Enter this press in history under `label` before `on_click` runs."""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,11 +180,14 @@ class RoutedButton:
     a `squid_layouts.routing.Route` rather than by hand.
     """
 
-    label: TextLike
+    label: TextLike | None
     route_id: str
     style: ActionStyle = ActionStyle.SECONDARY
-    emoji: str | None = None
+    emoji: EmojiLike | None = None
     disabled: bool = False
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +196,10 @@ class Option:
     value: str
     description: TextLike | None = None
     default: bool = False
+    emoji: EmojiLike | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,34 +395,50 @@ class Extension:
 class Row:
     """An exact target row; invalid local structure is a planning error."""
 
-    items: tuple[LinkButton | Button | RoutedButton | RawItem, ...]
+    items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ActionGroup:
     """Buttons automatically arranged into as many valid target rows as needed."""
 
-    items: tuple[LinkButton | Button | RoutedButton | RawItem, ...]
+    items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Thumbnail:
     url: str
     description: TextLike | None = None
+    spoiler: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class GalleryItem:
+    """One gallery image with its accessible description and spoiler state."""
+
+    url: str
+    description: TextLike | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class Gallery:
     """One exact target gallery."""
 
-    urls: tuple[str, ...]
+    items: tuple[str | GalleryItem, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items))
 
 
 @dataclass(frozen=True, slots=True)
 class MediaCollection:
     """Media automatically arranged into valid target galleries."""
 
-    urls: tuple[str, ...]
+    items: tuple[str | GalleryItem, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items))
 
 
 @dataclass(frozen=True, slots=True)
@@ -410,6 +455,7 @@ class Panel:
 
     children: tuple[Node, ...]
     accent: Color | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -529,6 +575,7 @@ type Node = (
     | EntitySelect
     | RoutedSelect
     | RoutedButton
+    | PremiumButton
     | Thumbnail
     | Gallery
     | MediaCollection

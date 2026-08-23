@@ -150,8 +150,8 @@ class _V2Converter:
                 )
             case Thumbnail(url=url, description=description):
                 return SceneThumbnail(url, description)
-            case Gallery(urls=urls):
-                return SceneGallery(tuple(SceneGalleryItem(url) for url in urls))
+            case Gallery(items=items):
+                return SceneGallery(tuple(SceneGalleryItem(item.url, item.description) for item in items))
             case RawItem():
                 return self.accessory(node, path)
             case LinkButton() | RoutedButton():
@@ -174,10 +174,10 @@ def _lower(
                     Row(tuple(items[start : start + limits.row_buttons]))
                     for start in range(0, len(items), limits.row_buttons)
                 )
-            case MediaCollection(urls=urls):
+            case MediaCollection(items=items):
                 lowered.extend(
-                    Gallery(tuple(urls[start : start + limits.gallery_items]))
-                    for start in range(0, len(urls), limits.gallery_items)
+                    Gallery(tuple(items[start : start + limits.gallery_items]))
+                    for start in range(0, len(items), limits.gallery_items)
                 )
             case Panel(children=children, accent=accent):
                 lowered.append(Panel(_lower(children, target, limits), accent))
@@ -289,9 +289,9 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                     fail(path, "entity select value bounds are invalid")
                 if len(defaults) > maximum:
                     fail(path, "entity select has more defaults than max_values")
-            case Gallery(urls=urls):
-                if len(urls) > limits.gallery_items:
-                    fail(path, f"gallery has {len(urls)} items; use MediaCollection")
+            case Gallery(items=items):
+                if len(items) > limits.gallery_items:
+                    fail(path, f"gallery has {len(items)} items; use MediaCollection")
             case Section(texts=texts):
                 if len(texts) > limits.section_texts:
                     fail(path, f"section has {len(texts)} text slots; maximum is {limits.section_texts}")

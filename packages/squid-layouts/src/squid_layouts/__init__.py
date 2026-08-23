@@ -34,6 +34,7 @@ from squid_layouts.actions import (
 )
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.document import Asset, Document, DocumentLike, InlineAsset, StoredAsset, as_document
+from squid_layouts.emoji import Emoji, EmojiLike, normalize_emoji
 from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.errors import (
     DrawInvariantError,
@@ -483,6 +484,8 @@ __all__ = [
     "EditorSectionState",
     "EditorState",
     "EditorValues",
+    "Emoji",
+    "EmojiLike",
     "Emphasis",
     "Entities",
     "EntityChoice",
@@ -720,6 +723,7 @@ __all__ = [
     "media",
     "media_item",
     "navigation",
+    "normalize_emoji",
     "note",
     "on_action_commit",
     "optional",

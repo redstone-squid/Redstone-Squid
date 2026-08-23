@@ -5,6 +5,7 @@ primitives are the escape hatch for target-specific structure and are intentiona
 behind ``squid_layouts.primitives``.
 """
 
+from squid_layouts.emoji import Emoji, EmojiLike, normalize_emoji
 from squid_layouts.primitives.constraints import (
     Alt,
     Alts,
@@ -37,6 +38,7 @@ from squid_layouts.primitives.nodes import (
     File,
     Footer,
     Gallery,
+    GalleryItem,
     Heading,
     Lines,
     LinkButton,
@@ -44,6 +46,7 @@ from squid_layouts.primitives.nodes import (
     Node,
     Option,
     Panel,
+    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -82,12 +85,15 @@ __all__ = [
     "Condense",
     "Content",
     "Drop",
+    "Emoji",
+    "EmojiLike",
     "EntitySelect",
     "Extension",
     "Fidelity",
     "File",
     "Footer",
     "Gallery",
+    "GalleryItem",
     "Heading",
     "Lines",
     "LinkButton",
@@ -98,6 +104,7 @@ __all__ = [
     "Overflow",
     "Paginate",
     "Panel",
+    "PremiumButton",
     "RawItem",
     "RoutedButton",
     "RoutedSelect",
@@ -116,4 +123,5 @@ __all__ = [
     "alts",
     "as_nodes",
     "card_text",
+    "normalize_emoji",
 ]

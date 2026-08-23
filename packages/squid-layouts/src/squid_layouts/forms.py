@@ -14,6 +14,7 @@ from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
 
 from squid_layouts.actions import ActionPolicy, SubmitEvent
+from squid_layouts.emoji import EmojiLike, normalize_emoji
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.temporal import (
     AmbiguousLocalTimeError,
@@ -474,6 +475,10 @@ class ChoiceOption[ValueT]:
     label: TextLike
     value: ValueT
     description: TextLike | None = None
+    emoji: EmojiLike | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
 @dataclass(frozen=True, slots=True)
