@@ -54,3 +54,12 @@ def supports_entity(entity_type: EntityType, kind: EntityKind) -> bool:
     return (entity_type is EntityType.MENTIONABLE and kind in {EntityKind.USER, EntityKind.ROLE}) or (
         entity_type.value == kind.value
     )
+
+
+__all__ = [
+    "ChannelType",
+    "EntityKind",
+    "EntityRef",
+    "EntityType",
+    "supports_entity",
+]
