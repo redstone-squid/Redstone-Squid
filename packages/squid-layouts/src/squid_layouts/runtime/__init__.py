@@ -21,10 +21,13 @@ from squid_layouts.runtime.reactivity import (
     ActionParticipant,
     CellReport,
     ComputedReport,
+    Observation,
     ReactiveWriteError,
+    SharedStateConflictError,
     StateChange,
     StateDelta,
     UndeclaredStateError,
+    addresses,
     batch,
     block_writes,
     computed,
@@ -48,6 +51,7 @@ from squid_layouts.runtime.resources import (
     ResourceState,
     resource,
 )
+from squid_layouts.runtime.shared import Shared, cell
 
 
 def __getattr__(name: str):
@@ -73,6 +77,7 @@ __all__ = [
     "History",
     "HistoryEntry",
     "HistoryError",
+    "Observation",
     "Pending",
     "PresentationSession",
     "ReactiveWriteError",
@@ -83,6 +88,8 @@ __all__ = [
     "ResourceState",
     "SelectionState",
     "SessionUpdate",
+    "Shared",
+    "SharedStateConflictError",
     "StateChange",
     "StateDelta",
     "StrategyState",
@@ -90,9 +97,11 @@ __all__ = [
     "ToggleState",
     "ToggleUpdate",
     "UndeclaredStateError",
+    "addresses",
     "apply_updates",
     "batch",
     "block_writes",
+    "cell",
     "computed",
     "export_state",
     "history",
