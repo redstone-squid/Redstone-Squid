@@ -80,6 +80,52 @@ async def test_screen_applies_options_overrides_and_access() -> None:
     assert result.session.actor_for(result.session.root) == 7
 
 
+async def test_screen_respond_derives_identity_and_delivery_from_the_interaction() -> None:
+    registry = SessionRegistry(MountDefaults(timeout=30))
+    interaction = fake_interaction(user_id=7)
+    interaction.guild_id = 42
+    screen = Screen("panel", scope=Scope.USER_GUILD)
+
+    result = await screen.respond(
+        registry,
+        Panel(),
+        interaction,
+        ephemeral=False,
+        wait=True,
+        timeout=None,
+    )
+
+    assert isinstance(result, Opened)
+    assert result.session.key == sl.discord.SessionKey.user_guild("panel", 7, 42)
+    assert result.session.root.access == Owner(7)
+    assert result.session.root.timeout is None
+    assert result.session.actor_for(result.session.root) == 7
+    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is False
+    interaction.original_response.assert_awaited_once_with()
+
+
+async def test_screen_respond_forwards_parent_attachment() -> None:
+    registry = SessionRegistry()
+    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_mount, to_message())
+    assert isinstance(root, Opened)
+    interaction = fake_interaction(user_id=7)
+    interaction.guild_id = None
+
+    attached = await Screen("child").respond(
+        registry,
+        Panel(),
+        interaction,
+        parent=root.session.root,
+        timeout=None,
+    )
+
+    assert isinstance(attached, Opened)
+    assert attached.session is root.session
+    assert attached.session.root is root.session.root
+    assert len(attached.session.mounts) == 2
+
+
 async def test_screen_attaches_to_a_live_parent_session() -> None:
     registry = SessionRegistry()
     root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
