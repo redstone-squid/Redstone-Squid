@@ -29,7 +29,6 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     get_text_input,
 )
-from squid.bot.topics import follow_resource
 from squid.bot.ui import contribute, create_mount, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
@@ -999,10 +998,6 @@ class BuildEditComponent(sl.Component):
     saved: bool = sl.state(default=False)
     validation_error: str | None = sl.state(None)
     locale: str | None = sl.state(None, persist=False)
-    # Both are large object graphs the editor replaces wholesale, so they snapshot by reference:
-    # assignment rolls back, in-place mutation of the Build does not.
-    build: Build = sl.state(opaque=True)
-    _node: sl.LayoutNode | None = sl.state(None, opaque=True)
 
     def __init__(
         self,
@@ -1014,11 +1009,12 @@ class BuildEditComponent(sl.Component):
         timeout: float = 300,
         node: sl.LayoutNode | None = None,
     ) -> None:
-        self.build = build
+        self._seed: tuple[Build, sl.LayoutNode | None] = (build, node)
+        self._build_id = build.id
+        self._refresh: Callable[[int], Awaitable[tuple[Build, sl.LayoutNode] | None]] | None = None
         self.builds = builds
         self.locale = locale
         self._timeout = timeout
-        self._node = node
         self.expiry_time = Instant.now().add(seconds=timeout)
         if items is DEFAULT:
             items = [
@@ -1028,6 +1024,56 @@ class BuildEditComponent(sl.Component):
             ]
         self.items = tuple(items)
         self._mount: sl.discord.Mount | None = None
+
+    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
+        """The build being edited and its rendered card, current with the build's topic.
+
+        `send` seeds this with what the caller already had, so the first settle costs no
+        query -- but it still runs, because the watch has to be a tracked read of this loader
+        for the mount to follow the topic.
+        """
+        if self._build_id is not None:
+            sl.watch(resource_topic("build", str(self._build_id)))
+        seed, self._seed = self._seed, None
+        if seed is not None:
+            return seed
+        if self._refresh is None or self._build_id is None:
+            message = "this editor has no way to reload itself"
+            raise sl.ResourceNotReadyError(message)
+        latest = await self._refresh(self._build_id)
+        if latest is None:
+            message = f"build {self._build_id} no longer exists"
+            raise LookupError(message)
+        return latest
+
+    def _current(self) -> tuple[Build, sl.LayoutNode | None]:
+        """What is on screen: the last value that loaded, or the seed before one has."""
+        state = self.projection.state
+        if isinstance(state, sl.Ready):
+            return state.value
+        if state.previous is not None:
+            # A failed or in-flight reload keeps showing what is on screen rather than
+            # blanking an editor someone is typing into.
+            return state.previous.value
+        if self._seed is not None:
+            # Read before the first settle -- `can_edit` runs before this is ever mounted.
+            return self._seed
+        message = "this editor has not loaded a build yet"
+        raise sl.ResourceNotReadyError(message)
+
+    @property
+    def build(self) -> Build:
+        """The build being edited. Replaced wholesale, never mutated field by field."""
+        return self._current()[0]
+
+    def _replace(self, build: Build, node: sl.LayoutNode | None) -> None:
+        """Install a locally-edited build, staged with the action that made the edit."""
+        if self._seed is not None:
+            # Nothing has settled yet, so there is no resource state to replace.
+            self._seed = (build, node)
+            return
+        self.projection.replace((build, node))
 
     @property
     def max_pages(self) -> int:
@@ -1128,8 +1174,8 @@ class BuildEditComponent(sl.Component):
                 accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
             )
         ]
-        if self._node is not None:
-            nodes.append(self._node)
+        if (node := self._current()[1]) is not None:
+            nodes.append(node)
         nodes.append(sl.primitives.ActionGroup(tuple(controls)))
         return tuple(nodes)
 
@@ -1170,16 +1216,18 @@ class BuildEditComponent(sl.Component):
         await event.acknowledge()
         patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
         edited_build_id: int | None = None
-        if self.build.id is None:
-            patch.apply(self.build)
-            await self.builds.save(self.build)
+        build = self.build
+        if build.id is None:
+            patch.apply(build)
+            await self.builds.save(build)
+            self._build_id = build.id
         else:
-            async with self.builds.edit(self.build.id, patch) as edit:
-                self.build = await edit.commit()
-            edited_build_id = self.build.id
+            async with self.builds.edit(build.id, patch) as edit:
+                build = await edit.commit()
+            edited_build_id = build.id
         self.saved = True
         self.confirming = False
-        self._node = await interaction.client.for_build(self.build).render_node()
+        self._replace(build, await interaction.client.for_build(build).render_node())
         await event.finish()
         if edited_build_id is not None:
             await interaction.client.refresh_posts("build", str(edited_build_id))
@@ -1214,7 +1262,8 @@ class BuildEditComponent(sl.Component):
 
     async def update(self, interaction: discord.Interaction[Any]) -> None:
         self.validation_error = None
-        self._node = await interaction.client.for_build(self.build).render_node()
+        build = self.build
+        self._replace(build, await interaction.client.for_build(build).render_node())
         self.invalidate()
         if self._mount is None:
             return
@@ -1252,39 +1301,28 @@ class BuildEditComponent(sl.Component):
                     allowed_mentions=no_mentions(),
                 )
             return
-        if self._node is None:
-            handler = interaction.client.for_build(self.build)
+        client = interaction.client
+        build, node = self._current()
+        if node is None:
+            handler = client.for_build(build)
             render_node = getattr(handler, "render_node", None)
-            self._node = (
+            node = (
                 await render_node()
                 if render_node is not None
                 else sl.status(t(self.locale, _("Build preview unavailable.")))
             )
+            self._seed = (build, node)
+
+        async def refresh(build_id: int) -> tuple[Build, sl.LayoutNode] | None:
+            latest = await self.builds.get(build_id)
+            if latest is None:
+                return None
+            return latest, await client.for_build(latest).render_node()
+
+        self._refresh = refresh
         # Keyed per user per build: a second editor for the same build replaces the first
         # rather than leaving two of them staging edits to one row.
-        mount = self.mount(interaction.user.id, reactor=interaction.client.layout_reactor)
-
-        async def reload(current: BuildEditComponent) -> None:
-            if current.build.id is None:
-                return
-            latest = await current.builds.get(current.build.id)
-            if latest is None:
-                return
-            node = await interaction.client.for_build(latest).render_node()
-            with sl.batch():
-                current.build = latest
-                current._node = node
-
-        if self.build.id is not None:
-            follow_resource(
-                interaction.client.topic_bus,
-                interaction.client.layout_reactor,
-                mount,
-                resource_topic("build", str(self.build.id)),
-                self,
-                reload,
-            )
-            await reload(self)
+        mount = self.mount(interaction.user.id, reactor=client.layout_reactor)
         destination = sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True)
         parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
         if parent_session is None:
