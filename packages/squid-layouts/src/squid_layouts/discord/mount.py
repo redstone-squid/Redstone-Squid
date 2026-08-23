@@ -873,12 +873,18 @@ class Mount:
             yield
 
     def _note_shared_writes(self, delta: StateDelta) -> None:
-        """Mark this mount dirty if the action changed a shared cell its render read."""
-        if self._dirty or not self._observed:
+        """Move the render-input revision if the action wrote a shared cell this mount reads.
+
+        Through `invalidate` rather than `_dirty` directly, because a candidate delivered
+        while the handler ran commits `runtime.dirty` over whatever this set: the revision is
+        the only dirtiness a render in flight is measured against. Against `_watched` rather
+        than `_observed`, because a candidate that newly reads the written cell must not
+        commit a value it has already been told is stale.
+        """
+        if not self._watched:
             return
-        observed = frozenset(self._observed)
-        if any(address in observed for address in delta.addresses()):
-            self._dirty = True
+        if any(address in self._watched for address in delta.addresses()):
+            self.runtime.invalidate()
 
     def _composer(self) -> Callable[..., Composition[Any]]:
         """Which composition this mount's target uses. One of exactly four target-owned choices.

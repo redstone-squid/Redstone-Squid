@@ -4,6 +4,7 @@ import asyncio
 import gc
 import weakref
 from dataclasses import dataclass
+from typing import Any
 
 import anyio
 import discord
@@ -90,10 +91,21 @@ class Swapper(Component):
 
     def render(self):
         text = self.workspace.detail if self.other else str(self.workspace.selected)
-        return [Text(text), Row((Button(label="pick", on_click=self.pick, key="pick"),))]
+        return [
+            Text(text),
+            Row(
+                (
+                    Button(label="pick", on_click=self.pick, key="pick"),
+                    Button(label="detail", on_click=self.write_detail, key="detail"),
+                )
+            ),
+        ]
 
     async def pick(self, event: PressEvent) -> None:
         self.workspace.selected = 7
+
+    async def write_detail(self, event: PressEvent) -> None:
+        self.workspace.detail = "new detail"
 
 
 def _texts(view: discord.ui.LayoutView) -> str:
@@ -329,3 +341,64 @@ class TestSelfWrites:
         await mount.dispatch("boom", interaction)
 
         assert not mount.pending, "the commit hook never ran, so nothing marked it dirty"
+
+    async def test_a_write_racing_a_candidate_survives_its_commit(self) -> None:
+        workspace, _, mount = self.panel()
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def edit(*args: Any, **kwargs: Any) -> Any:
+            started.set()
+            await release.wait()
+            return message
+
+        message.edit = edit
+        interaction = fake_interaction()
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.refresh_now)
+            await started.wait()
+            tasks.start_soon(mount.dispatch, "pick", interaction)
+            while workspace.selected != 7:
+                await asyncio.sleep(0)
+            release.set()
+
+        assert interaction.response.edit_message.await_count == 1
+        assert "7" in _texts(interaction.response.edit_message.await_args.kwargs["view"])
+        assert not mount.pending
+
+    async def test_a_write_to_an_in_flight_candidates_new_read_keeps_it_dirty(self) -> None:
+        bus = TopicBus()
+        workspace = Workspace(bus, Member(1))
+        panel = Swapper(workspace)
+        mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+        assert mount.observed == (address(workspace, "selected"),)
+
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def edit(*args: Any, **kwargs: Any) -> Any:
+            started.set()
+            await release.wait()
+            return message
+
+        message.edit = edit
+        panel.other = True
+        interaction = fake_interaction()
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.refresh_now)
+            await started.wait()
+            assert address(workspace, "detail") in mount._watched
+            tasks.start_soon(mount.dispatch, "detail", interaction)
+            while workspace.detail != "new detail":
+                await asyncio.sleep(0)
+            release.set()
+
+        assert interaction.response.edit_message.await_count == 1
+        assert "new detail" in _texts(interaction.response.edit_message.await_args.kwargs["view"])
+        assert not mount.pending
