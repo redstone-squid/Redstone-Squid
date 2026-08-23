@@ -196,7 +196,14 @@ still lets the mount acknowledge and flush; `proceed()` is one-shot and expires 
 middleware call returns. Middleware runs after mount admission and stale-generation handling.
 Its `ActionRequest.rebased` flag is generation metadata, not a completion result. Handler state
 rolls back before an exception reaches outer middleware, and Discord rendering/delivery remains
-outside the onion.
+outside the onion. The onion itself is outside the handler transaction so it can catch commit-time
+shared-state conflicts. Component state written by middleware is consequently independent and does
+not roll back with handler state; middleware is a policy surface unless that independence is
+intentional.
+
+`Mount.on_presented()` observers are synchronous. They run at the delivered-generation commit point
+under the mount's render lock and must not await or call lock-taking mount operations. External hosts
+migrating an async observer should enqueue its work or start it through an owned task supervisor.
 
 Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
 `Check` accepts an asynchronous application policy. Visibility stays a destination concern,

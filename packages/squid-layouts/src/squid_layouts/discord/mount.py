@@ -167,9 +167,14 @@ class FinishHook(Protocol):
 
 
 class PresentedHook(Protocol):
-    """Observer told that Discord accepted and the mount committed a generation."""
+    """Observer told that Discord accepted and the mount committed a generation.
 
-    def __call__(self, mount: Mount, /) -> Awaitable[None]: ...
+    Synchronous on purpose: it runs at the commit point, under the lock every operation
+    that can replace the visible message shares, so a hook that could await would be able
+    to wait on the mount that is calling it.
+    """
+
+    def __call__(self, mount: Mount, /) -> None: ...
 
 
 class Scheduler(Protocol):
@@ -977,12 +982,12 @@ class Mount:
         # so the first moment it is worth listing as live. Idempotent after the first.
         live.track(self)
 
-    async def _commit_presented(self, candidate: _Candidate) -> None:
+    def _commit_presented(self, candidate: _Candidate) -> None:
         """Commit one successfully delivered candidate and notify durability observers."""
         self._commit(candidate)
         for hook in tuple(self._presented_hooks):
             try:
-                await hook(self)
+                hook(self)
             except Exception:
                 logger.exception("presented hook failed for mount %s", self.id)
 
@@ -1166,10 +1171,10 @@ class Mount:
                 self._rollback(settled)
                 return
             if profile is None:
-                await self._commit_presented(settled)
+                self._commit_presented(settled)
             else:
                 with profile.span("commit"):
-                    await self._commit_presented(settled)
+                    self._commit_presented(settled)
             candidate = settled
         self._dirty = True
         logger.error(
@@ -1243,7 +1248,7 @@ class Mount:
                     self._note_address(receipt.message)
                 self._active = self.clock()
                 with profile.span("commit"):
-                    await self._commit_presented(candidate)
+                    self._commit_presented(candidate)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
                 return deliver.Delivered(receipt)
@@ -1936,7 +1941,7 @@ class Mount:
                     presentation = PresentationOutcome.ABANDONED
                 else:
                     with operation.span("commit"):
-                        await self._commit_presented(candidate)
+                        self._commit_presented(candidate)
                     await self._settle_visible(candidate, through=source, profile=operation)
                     presentation = PresentationOutcome.WRITTEN
                     if dispatch is not None and wrote is source:
@@ -2033,14 +2038,18 @@ class Mount:
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
                     return
                 with profile.span("commit"):
-                    await self._commit_presented(candidate)
+                    self._commit_presented(candidate)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
             finally:
                 self._render_lock.release()
 
     def on_presented(self, callback: PresentedHook) -> None:
-        """Observe future generations after Discord delivery and local commit both succeed."""
+        """Synchronously observe future generations after delivery and commit succeed.
+
+        The callback runs under the render lock and must not await or call an operation that
+        acquires it. Schedule asynchronous follow-up through an owned supervisor or a queue.
+        """
         self._presented_hooks.append(callback)
 
     def on_finish(self, callback: FinishHook) -> None:

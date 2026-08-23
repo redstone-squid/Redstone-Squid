@@ -174,7 +174,14 @@ type ActionProceed = Callable[[], Awaitable[None]]
 
 
 class ActionMiddleware(ABC):
-    """Application-wide policy around an admitted mounted action."""
+    """Application-wide policy around an admitted mounted action.
+
+    The middleware onion surrounds the handler's state transaction so it can observe and
+    catch commit-time failures such as shared-state conflicts. State a middleware writes
+    itself is therefore independent of the handler transaction and does not roll back with
+    it. Middleware is a policy surface, not a component-state mutation surface, unless that
+    independence is deliberate.
+    """
 
     @abstractmethod
     async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
