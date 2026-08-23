@@ -25,6 +25,7 @@ from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder, SpanRecorder
+from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanResult, SceneComponentsV2
 from squid_layouts.sources import Position
@@ -139,7 +140,7 @@ def compose(
 
 
 def render_static(
-    nodes: DocumentLike,
+    nodes: DocumentLike | Component,
     *,
     target: Target[ComponentsV2Target, DiscordPyAdapter, SceneComponentsV2] = V2_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
@@ -150,7 +151,7 @@ def render_static(
 ) -> DiscordPresentation:
     """Plan and draw a sessionless Components V2 document as a complete message."""
     return compose(
-        nodes,
+        nodes.render() if isinstance(nodes, Component) else nodes,
         target=target,
         chrome=chrome,
         localization=localization,

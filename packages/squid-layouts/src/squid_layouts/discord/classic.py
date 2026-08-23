@@ -41,6 +41,7 @@ from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder
+from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanReport, PlanResult, SceneClassicMessage
 from squid_layouts.sources import Position
@@ -112,7 +113,7 @@ def compose(
 
 
 def render_static(
-    nodes: DocumentLike,
+    nodes: DocumentLike | Component,
     *,
     target: Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage] = CLASSIC_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
@@ -127,7 +128,7 @@ def render_static(
     only the controls would leave the caller to reassemble the half that carries the content.
     """
     return compose(
-        nodes,
+        nodes.render() if isinstance(nodes, Component) else nodes,
         target=target,
         chrome=chrome,
         localization=localization,
