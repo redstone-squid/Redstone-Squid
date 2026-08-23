@@ -42,6 +42,13 @@ are not re-derived or accidentally adopted later.
   is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
   `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
   rejected because it names the wrong relationship.
+- **Class-body operational policy** (CascadeUI's `owner_only`, `instance_limit`,
+  `instance_scope`, `instance_policy`, `participant_limit` as class attributes) — rejected
+  2026-08-23 by [43](43-mount-defaults.md). Every one of those values is an actor, a scope,
+  or a host decision the same component is opened with differently (`ConsentPrompt` opens as
+  a root under `Reject()` and as an attached child two lines apart). A class attribute would
+  couple portable components to Discord session vocabulary, and 34 already declines to copy
+  class-variable policy. The ergonomics go into a `MountDefaults` value instead.
 - **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
