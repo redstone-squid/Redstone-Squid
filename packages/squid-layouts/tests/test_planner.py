@@ -8,8 +8,8 @@ import pytest
 from squid_layouts import Document, zoned_timestamp
 from squid_layouts.discord import V2_LIMITS as LIMITS
 from squid_layouts.discord import V2_TARGET
-from squid_layouts.discord.rendering import V2Renderer
-from squid_layouts.discord.targets import NativeItem
+from squid_layouts.discord.renderer import V2Renderer
+from squid_layouts.discord.target import NativeItem
 from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import TargetProfile, plan

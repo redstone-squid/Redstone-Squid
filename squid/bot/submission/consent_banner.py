@@ -15,7 +15,8 @@ from squid.bot.ui import CardField, localization_for, render_static
 from squid.bot.utils.components import no_mentions, reply_layout, text_layout
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord.sessions import Opened, Opener, Rejected
+from squid_layouts.discord.screens import Opener
+from squid_layouts.discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime

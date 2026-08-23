@@ -90,7 +90,7 @@ class MountInspector(sl.Component):
         nodes.append(self._controls(back=False))
         return nodes
 
-    def _row(self, snapshot: sl.discord.MountSnapshot) -> str:
+    def _row(self, snapshot: sl.discord.mount.MountSnapshot) -> str:
         mine = " *(this panel)*" if snapshot.id == self.own_id else ""
         key = self._session_key(snapshot.id)
         session = "" if key is None else f" · session `{key!r}`"
@@ -115,7 +115,7 @@ class MountInspector(sl.Component):
 
     # --- Detail -------------------------------------------------------------------------
 
-    def _detail(self, snapshot: sl.discord.MountSnapshot, mount: sl.discord.Mount) -> Sequence[sl.LayoutNode]:
+    def _detail(self, snapshot: sl.discord.mount.MountSnapshot, mount: sl.discord.Mount) -> Sequence[sl.LayoutNode]:
         children: list[sl.LayoutNode] = [sl.bullets(*_summary(snapshot), key="summary")]
         if snapshot.handler_keys:
             children.append(
@@ -152,7 +152,7 @@ class MountInspector(sl.Component):
             self._controls(back=True),
         ]
 
-    def _plan_section(self, snapshot: sl.discord.MountSnapshot) -> Iterable[sl.LayoutNode]:
+    def _plan_section(self, snapshot: sl.discord.mount.MountSnapshot) -> Iterable[sl.LayoutNode]:
         if snapshot.report is None or snapshot.metrics is None:
             yield sl.section(sl.heading("Plan"), sl.note("nothing has been committed yet"))
             return
@@ -169,14 +169,14 @@ class MountInspector(sl.Component):
 
     # --- Controls -----------------------------------------------------------------------
 
-    def _controls(self, *, back: bool) -> sl.Actions:
-        controls: list[sl.Action] = []
+    def _controls(self, *, back: bool) -> sl.semantic.Actions:
+        controls: list[sl.semantic.Action] = []
         if back:
             controls.append(sl.action("Back", self._back, key="back"))
         controls.extend(
             (
-                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.Emphasis.SUBTLE),
-                sl.action("Close", self._close, key="close", emphasis=sl.Emphasis.SUBTLE),
+                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.semantic.Emphasis.SUBTLE),
+                sl.action("Close", self._close, key="close", emphasis=sl.semantic.Emphasis.SUBTLE),
             )
         )
         return sl.actions(*controls, key="controls")
@@ -225,7 +225,7 @@ class OperationalInspector(sl.Component):
             return nodes
         return (sl.status(self.notice, tone=sl.Tone.INFO), *nodes)
 
-    def _overview(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _overview(self, snapshot: sl.discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         counts = [
             f"mounts       {len(snapshot.mounts)}",
             f"sessions     {len(snapshot.sessions)}",
@@ -240,7 +240,7 @@ class OperationalInspector(sl.Component):
             self._controls(),
         ]
 
-    def _mounts(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _mounts(self, snapshot: sl.discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         if self.mount_id is not None:
             mount = sl.discord.live.find(self.mount_id)
             if mount is not None:
@@ -294,7 +294,7 @@ class OperationalInspector(sl.Component):
             nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
         return (*nodes, self._controls(back=True))
 
-    def _sessions(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _sessions(self, snapshot: sl.discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         if self.session_id is not None:
             session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
             if session is not None:
@@ -349,7 +349,7 @@ class OperationalInspector(sl.Component):
             nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
         return (*nodes, self._controls(back=True))
 
-    def _queues(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _queues(self, snapshot: sl.discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         lines = [
             f"reactor  {_reactor_summary(snapshot.reactor)}",
             f"topics   {_topic_summary(snapshot.topics)}",
@@ -361,7 +361,7 @@ class OperationalInspector(sl.Component):
             )
         return [sl.section(sl.heading("Queues and subscribers"), sl.code("\n".join(lines))), self._controls(back=True)]
 
-    def _profile(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _profile(self, snapshot: sl.discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         health = snapshot.profiler.health
         lines = [
             f"process  {snapshot.profiler.process_id}",
@@ -373,7 +373,7 @@ class OperationalInspector(sl.Component):
         ]
         return [sl.section(sl.heading("Profiler"), sl.code("\n".join(lines))), self._controls(back=True)]
 
-    def _persistence(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+    def _persistence(self, snapshot: sl.discord.operations.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         durable = snapshot.durable
         if durable is None:
             body = "No durable session runtime is configured."
@@ -399,14 +399,14 @@ class OperationalInspector(sl.Component):
             selection=sl.controlled((), self._select_section),
         )
 
-    def _controls(self, *, back: bool = False) -> sl.Actions:
-        controls: list[sl.Action] = []
+    def _controls(self, *, back: bool = False) -> sl.semantic.Actions:
+        controls: list[sl.semantic.Action] = []
         if back:
             controls.append(sl.action("Back", self._back, key="back"))
         controls.extend(
             (
-                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.Emphasis.SUBTLE),
-                sl.action("Close", self._close, key="close", emphasis=sl.Emphasis.SUBTLE),
+                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.semantic.Emphasis.SUBTLE),
+                sl.action("Close", self._close, key="close", emphasis=sl.semantic.Emphasis.SUBTLE),
             )
         )
         return sl.actions(*controls, key="controls")
@@ -453,19 +453,19 @@ class OperationalInspector(sl.Component):
         await event.finish()
 
 
-def scene_attachment(snapshot: sl.discord.MountSnapshot) -> sl.Asset | None:
+def scene_attachment(snapshot: sl.discord.mount.MountSnapshot) -> sl.document.Asset | None:
     """The mount's committed scene as the protocol JSON, for reading outside Discord."""
     if snapshot.scene is None:
         return None
-    return sl.Asset(
+    return sl.document.Asset(
         key="scene",
         name=f"scene-{snapshot.id}-gen{snapshot.generation}.json",
         media_type="application/json",
-        source=sl.InlineAsset(sl.scene.Codec.dumps(snapshot.scene).encode()),
+        source=sl.document.InlineAsset(sl.scene.Codec.dumps(snapshot.scene).encode()),
     )
 
 
-def plan_text(snapshot: sl.discord.MountSnapshot) -> str:
+def plan_text(snapshot: sl.discord.mount.MountSnapshot) -> str:
     """Render the retained plan report, grouping adaptations by severity."""
     report = snapshot.report
     if report is None:
@@ -487,7 +487,7 @@ def plan_text(snapshot: sl.discord.MountSnapshot) -> str:
     return "\n".join(lines)
 
 
-def metrics_text(snapshot: sl.discord.MountSnapshot) -> str:
+def metrics_text(snapshot: sl.discord.mount.MountSnapshot) -> str:
     """Render the planner work and cache disposition retained by a mount."""
     metrics = snapshot.metrics
     if metrics is None:
@@ -501,7 +501,7 @@ def metrics_text(snapshot: sl.discord.MountSnapshot) -> str:
     )
 
 
-def _summary(snapshot: sl.discord.MountSnapshot) -> list[str]:
+def _summary(snapshot: sl.discord.mount.MountSnapshot) -> list[str]:
     entries = [
         f"**Component**\n`{snapshot.component}`",
         f"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed",
@@ -527,18 +527,18 @@ def _access_text(access: sl.discord.AccessPolicy) -> str:
     if isinstance(access, sl.discord.Users):
         users = ", ".join(f"<@{user_id}>" for user_id in sorted(access.user_ids))
         return f"Users ({users})"
-    if isinstance(access, sl.discord.Check):
+    if isinstance(access, sl.discord.access.Check):
         return "Check"
     return type(access).__name__
 
 
-def _option_description(snapshot: sl.discord.MountSnapshot) -> str:
+def _option_description(snapshot: sl.discord.mount.MountSnapshot) -> str:
     return f"gen {snapshot.generation} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}"
 
 
-def _flags(snapshot: sl.discord.MountSnapshot) -> str:
+def _flags(snapshot: sl.discord.mount.MountSnapshot) -> str:
     flags = []
-    if snapshot.lifecycle is sl.discord.MountLifecycle.RENEWAL_ARMED:
+    if snapshot.lifecycle is sl.discord.mount.MountLifecycle.RENEWAL_ARMED:
         flags.append("renewal armed")
     if snapshot.pending:
         flags.append("dirty")
@@ -549,7 +549,7 @@ def _flags(snapshot: sl.discord.MountSnapshot) -> str:
     return " ".join(flags) if flags else "clean"
 
 
-def _expiry(snapshot: sl.discord.MountSnapshot) -> str:
+def _expiry(snapshot: sl.discord.mount.MountSnapshot) -> str:
     timeout = "no timeout" if snapshot.expires_in is None else f"timeout in {_duration(snapshot.expires_in)}"
     if snapshot.handle_expires_in is None:
         return timeout
@@ -649,14 +649,14 @@ def _reactivity(mount: sl.discord.Mount) -> list[str]:
     return lines
 
 
-def _pair(topic: object) -> tuple[sl.Shared[Any] | None, object]:
+def _pair(topic: object) -> tuple[sl.runtime.Shared[Any] | None, object]:
     """An observed address split into its namespace and cell, or `(None, topic)` otherwise.
 
     Read from what the render observed rather than from what it subscribed to, so a mount
     with no reactor still reports the shared state it is showing.
     """
     match topic:
-        case (sl.Shared() as owner, descriptor):
+        case (sl.runtime.Shared() as owner, descriptor):
             return owner, descriptor
         case _:
             return None, topic
