@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from squid_layouts.assets import Asset
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
-from squid_layouts.entity import EntityRef
+from squid_layouts.entity import EntityKind, EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
 from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
@@ -1224,6 +1224,11 @@ def _entity_key(ref: EntityRef) -> str:
     return f"{ref.kind.value}:{ref.id}"
 
 
+def _entity_ref(key: str) -> EntityRef:
+    kind, raw_id = key.split(":", 1)
+    return EntityRef(EntityKind(kind), int(raw_id))
+
+
 def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
@@ -1231,9 +1236,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
         case Managed(initial=initial):
             initial_keys = tuple(_entity_key(value) for value in initial)
             stored = context.session.selection(node.key, initial=initial_keys).selected
-            by_key = {_entity_key(choice.ref): choice.ref for choice in node.choices}
-            by_key.update({_entity_key(value): value for value in initial})
-            previous = tuple(by_key[key] for key in stored if key in by_key)
+            previous = tuple(_entity_ref(key) for key in stored)
 
     async def commit(event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
         match node.selection:
@@ -1277,6 +1280,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
 
     available = tuple(choice for choice in node.choices if choice.available)
     by_key = {_entity_key(choice.ref): choice.ref for choice in available}
+    previous = tuple(value for value in previous if _entity_key(value) in by_key)
 
     async def choose_fallback(event: ChoiceEvent) -> None:
         await commit(event, tuple(by_key[key] for key in event.selected if key in by_key))
