@@ -316,6 +316,11 @@ class FakeConnection:
     def add_termination_listener(self, callback: Callable[..., None]) -> None:
         self.terminations.append(callback)
 
+    async def execute(self, query: str, *arguments: str) -> None:
+        assert "pg_notify" in query
+        channel, payload = arguments
+        self.server.notify(channel, payload)
+
 
 class _Acquire:
     def __init__(self, server: FakePostgres) -> None:
@@ -432,6 +437,62 @@ async def test_a_bridge_ignores_its_own_notification() -> None:
     assert deliveries == 1
     assert bus.snapshot().queued == 0
     assert bridge.snapshot().ignored == 1
+
+
+async def test_publish_in_delivers_to_the_originating_bus_after_notification() -> None:
+    server = FakePostgres()
+    here, there = TopicBus(), TopicBus()
+    seen_here: list[Topic] = []
+    seen_there: list[Topic] = []
+
+    async def record(into: list[Topic], topic: Topic) -> None:
+        into.append(topic)
+
+    topic = Topic("build", "42")
+    here.subscribe(topic, partial(record, seen_here))
+    there.subscribe(topic, partial(record, seen_there))
+    bridge_here = _bridge(server, here)
+    bridge_there = _bridge(server, there)
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(bridge_here.run)
+        tasks.start_soon(bridge_there.run)
+        await _until(lambda: len(server.listeners) == 2)
+        await bridge_here.publish_in(FakeConnection(server), topic)
+        await here.drain()
+        await there.drain()
+        tasks.cancel_scope.cancel()
+
+    assert seen_here == [topic]
+    assert seen_there == [topic]
+    assert bridge_here.snapshot().ignored == 0
+    assert bridge_here.snapshot().received == 1
+
+
+async def test_publish_in_rejects_an_unencodable_topic_before_notifying() -> None:
+    class NoCodec:
+        def encode(self, topic: Topic) -> str | None:
+            del topic
+            return None
+
+        def decode(self, payload: str) -> Topic | None:
+            del payload
+            return None
+
+    server = FakePostgres()
+    bridge = _bridge(server, TopicBus(), codec=NoCodec())
+
+    with pytest.raises(ValueError, match="cannot be carried"):
+        await bridge.publish_in(FakeConnection(server), Topic("build", "42"))
+
+    assert server.sent == []
+
+
+async def test_publish_in_requires_a_running_bridge() -> None:
+    bridge = _bridge(FakePostgres(), TopicBus())
+
+    with pytest.raises(RuntimeError, match="must be running"):
+        await bridge.publish_in(FakeConnection(FakePostgres()), Topic("build", "42"))
 
 
 async def test_a_cell_address_is_published_locally_only() -> None:
