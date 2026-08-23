@@ -46,7 +46,12 @@ from squid_layouts.runtime.reactivity import (
     report_undeclared_write,
     untracked,
 )
-from squid_layouts.runtime.resources import Resource, observe_resources, unique_resources
+from squid_layouts.runtime.resources import (
+    Resource,
+    _AtomicResourcePending,
+    observe_resources,
+    unique_resources,
+)
 from squid_layouts.runtime.shared import _SharedCell
 from squid_layouts.semantic import (
     Action as SemanticAction,
@@ -524,7 +529,13 @@ def render_component_tree(
             active.remove(identity)
 
     with observe_render() as observation, observe_resources() as observed:
-        nodes = tuple(expand(root, "$", context or {}))
+        try:
+            nodes = tuple(expand(root, "$", context or {}))
+        except _AtomicResourcePending as pending:
+            # Atomic state is never rendered while pending. Keep the resource observation from
+            # the aborted discovery pass so the frontend can settle it before retrying.
+            observed.append(pending.resource)
+            nodes = ()
     return ComponentTree(
         nodes,
         components,

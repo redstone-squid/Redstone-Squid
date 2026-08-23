@@ -207,6 +207,8 @@ from squid_layouts.runtime.reactivity import (
     untracked,
 )
 from squid_layouts.runtime.resources import (
+    AtomicResource,
+    AtomicResourceState,
     Failed,
     Pending,
     Ready,
@@ -383,6 +385,8 @@ __all__ = [
     "ActionKind",
     "ActionMiddleware",
     "ActionParticipant",
+    "AtomicResource",
+    "AtomicResourceState",
     "ActionPolicy",
     "ActionProceed",
     "ActionRequest",
