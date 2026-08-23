@@ -124,6 +124,24 @@ call `publish()`, then `await bus.drain()` and assert without starting backgroun
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
+Every delivered mount using a reactor is observed for edit-authority expiry, even when it follows
+no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
+ephemeral panel can opt into an explicit, non-mutating handoff instead:
+
+```python
+mount = sl.discord.Mount(
+    panel,
+    access=sl.discord.Owner(user_id),
+    scheduler=reactor,
+    expiry=sl.discord.RenewEphemeral(warning=90),
+)
+```
+
+The renewal screen preserves the mount and hidden application state, then restores the latest
+render on the same message when its owner clicks **Continue Session**. Pass `expiry=None` to
+disable pre-expiry UI. `RenewEphemeral` requires a reactor-backed scheduler so timed arming cannot
+silently be missed.
+
 ### Runtime profiling
 
 Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the whole
