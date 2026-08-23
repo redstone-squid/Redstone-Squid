@@ -1049,6 +1049,24 @@ class TestFinishHooks:
 
 
 class TestPresentedHooks:
+    async def test_written_and_suppressed_renders_have_distinct_observer_boundaries(self) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        committed: list[Mount] = []
+        presented: list[Mount] = []
+        mount.on_committed(committed.append)
+        mount.on_presented(presented.append)
+
+        await mount.send(delivered_to(fake_message()))
+
+        assert committed == [mount]
+        assert presented == [mount]
+        committed.clear()
+        presented.clear()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+        assert committed == [mount]
+        assert presented == []
+
     async def test_a_hook_can_invalidate_and_the_mount_remains_usable(self) -> None:
         mount = Mount(Counter(), access=Everyone(), timeout=None)
         message = fake_message()
@@ -2133,22 +2151,72 @@ class TestSend:
         assert outcome is PresentationOutcome.WRITTEN
         message.edit.assert_awaited_once()
 
-    async def test_changed_handler_identity_prevents_scene_suppression(self) -> None:
+    async def test_changed_handler_identity_is_published_without_repainting(self) -> None:
         class FreshHandler(Component):
+            version = 0
+            invoked: list[int] = []
+
             def render(self):
+                version = self.version
+
                 async def click(event: PressEvent) -> None:
-                    pass
+                    self.invoked.append(version)
 
                 return Row((Button("same", click, "same"),))
 
         message: Any = fake_message()
-        mount = Mount(FreshHandler(), access=Everyone(), timeout=None)
+        component = FreshHandler()
+        mount = Mount(component, access=Everyone(), timeout=None)
         await mount.send(_Destination(message))
+        generation = mount._generation
+        view = mount._view
+        component.version = 1
+        mount.invalidate()
 
         outcome = await mount.refresh_now()
 
-        assert outcome is PresentationOutcome.WRITTEN
-        message.edit.assert_awaited_once()
+        assert outcome is PresentationOutcome.UNCHANGED
+        message.edit.assert_not_awaited()
+        assert mount._generation == generation
+        assert mount._view is view
+
+        await mount.dispatch("same", fake_interaction(), generation=generation)
+
+        assert component.invoked == [1]
+
+    async def test_suppression_publishes_runtime_only_action_semantics(self) -> None:
+        class Guarded(Component):
+            allowed = True
+            invoked = 0
+
+            async def click(self, event: PressEvent) -> None:
+                self.invoked += 1
+
+            def render(self):
+                return sl.actions(
+                    sl.action(
+                        "same",
+                        self.click,
+                        key="same",
+                        guard=sl.guards.when(lambda event: self.allowed, reason="Closed."),
+                    ),
+                    key="guarded",
+                )
+
+        component = Guarded()
+        message: Any = fake_message()
+        mount = Mount(component, access=Everyone(), timeout=None)
+        await mount.send(_Destination(message))
+        component.allowed = False
+        mount.invalidate()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+
+        interaction = fake_interaction()
+        await mount.dispatch("same", interaction, generation=mount._generation)
+
+        assert component.invoked == 0
+        interaction.response.send_message.assert_awaited_once()
 
     async def test_send_supersedes_a_render_that_was_only_staged(self):
         component = Counter()
