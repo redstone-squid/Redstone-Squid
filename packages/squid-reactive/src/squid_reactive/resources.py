@@ -33,6 +33,8 @@ class AsyncBinding(Protocol):
     """A caller-owned asynchronous value discovered during a synchronous render."""
 
     pending_policy: PendingPolicy
+    reconcile_while_pending: bool
+    settle_without_delivery: bool
 
     @property
     def pending(self) -> bool: ...
@@ -153,6 +155,9 @@ def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
 
 class Resource[ValueT]:
     """One component-bound async value with synchronous observable state."""
+
+    reconcile_while_pending = False
+    settle_without_delivery = False
 
     def __init__(
         self,
