@@ -64,6 +64,16 @@ from squid_layouts.discord.delivery import (
 )
 from squid_layouts.discord.fragments import contribute
 from squid_layouts.discord.live import mounts
+from squid_layouts.discord.managed import (
+    ErrorObserver,
+    ErrorRenderer,
+    ManagedDelivery,
+    ManagedError,
+    MountFactory,
+    SuccessRenderer,
+    Work,
+    run_managed_result,
+)
 from squid_layouts.discord.mount import (
     Mount,
     PauseUpdates,
@@ -135,11 +145,16 @@ __all__ = [
     "DiscordMode",
     "DiscordModeError",
     "DiscordPresentation",
+    "ErrorObserver",
+    "ErrorRenderer",
     "Everyone",
     "ExistingLayoutError",
     "LimitViolationError",
+    "ManagedDelivery",
+    "ManagedError",
     "Mount",
     "MountDefaults",
+    "MountFactory",
     "MountOptions",
     "Owner",
     "PauseUpdates",
@@ -161,8 +176,10 @@ __all__ = [
     "Screen",
     "SessionKey",
     "SessionRegistry",
+    "SuccessRenderer",
     "Target",
     "Users",
+    "Work",
     "access",
     "actions",
     "adapter",
@@ -198,6 +215,7 @@ __all__ = [
     "responder",
     "roles",
     "routing",
+    "run_managed_result",
     "screens",
     "sessions",
     "target",
