@@ -21,11 +21,25 @@ from squid_layouts.runtime.reactivity import (
 
 
 class ResourceOwner(Protocol):
-    """The component behavior a bound resource needs."""
+    """The behaviour a bound resource needs from whatever declared it."""
 
     __dict__: dict[str, Any]
 
     def invalidate(self) -> None: ...
+
+
+class AddressedOwner(Protocol):
+    """An owner whose resources are named, so their changes can be published.
+
+    A component's resource is private to one instance and needs no address: the mount
+    re-renders it and nobody else is looking. A namespace's resource is shared by every
+    mount holding the namespace, so a reload has to reach the others the way a shared cell
+    write does -- by publishing an address they follow.
+    """
+
+    def _resource_binding(self, name: str) -> tuple[Any, Callable[[Any], None]]:
+        """The address this resource publishes under, and what to publish it with."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,11 +149,20 @@ class Resource[ValueT]:
         *,
         name: str,
         delivery: ResourceDelivery,
+        address: Any = None,
+        publish: Callable[[Any], None] | None = None,
     ) -> None:
         self._owner = owner
         self._loader = loader
         self._label = name
         self.delivery = delivery
+        self.address = address
+        """Where this resource's changes are published, or `None` for a component's own.
+
+        Mirrors `_Cell.address`: present exactly when something other than the owner might
+        be looking, which for a resource means it was declared on an `sl.Shared` namespace.
+        """
+        self._publish = publish
         self._state: ResourceState[ValueT] = Pending()
         self._loading: tuple[int, asyncio.Event] | None = None
         self._request_token = 0
@@ -192,6 +215,27 @@ class Resource[ValueT]:
         """
         self._recheck()
         return self.version
+
+    def _landed(self) -> None:
+        """A new value is installed: date it, and tell anyone following this address.
+
+        Only where a value lands -- `Ready`, `Failed`, `replace` -- and never on a re-pend.
+        Publishing a re-pend would wake every follower to look at a value that is still on
+        its way, and the reload that follows publishes anyway.
+        """
+        self._moved()
+        if self.address is not None and self._publish is not None:
+            self._publish(self.address)
+
+    def _notify(self) -> None:
+        """Tell whoever is watching that this resource moved.
+
+        A component's resource invalidates its component, the only thing looking at it. A
+        namespace's resource has already published its address, and the namespace renders
+        nothing itself, so the publish *is* the notification and there is nobody else to tell.
+        """
+        if self.address is None:
+            self._owner.invalidate()
 
     def _moved(self) -> None:
         """Date this resource's state anew, and tell settled readers to look again.
@@ -252,7 +296,7 @@ class Resource[ValueT]:
         self._state = Pending(_previous(self._state))
         self._moved()
         if notify:
-            self._owner.invalidate()
+            self._notify()
 
     def replace(self, value: ValueT) -> None:
         """Install an authoritative value and supersede every in-flight request.
@@ -273,11 +317,11 @@ class Resource[ValueT]:
             baseline = {source: source.settle() for source in self.sources}
         self._request_token += 1
         self._state = Ready(value)
-        self._moved()
+        self._landed()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
         # as they stand now, and a later change to one of them should still reload.
         self.sources = baseline
-        self._owner.invalidate()
+        self._notify()
 
     def _staged(self) -> ValueT | _Missing:
         """This action's replacement for this resource, if it made one."""
@@ -352,13 +396,13 @@ class Resource[ValueT]:
             except Exception as error:
                 if token == self._request_token:
                     self._state = Failed(error, _previous(self._state))
-                    self._moved()
-                    self._owner.invalidate()
+                    self._landed()
+                    self._notify()
             else:
                 if token == self._request_token:
                     self._state = Ready(value)
-                    self._moved()
-                    self._owner.invalidate()
+                    self._landed()
+                    self._notify()
         finally:
             _CONSUMER.reset(consumer)
             if self._loading is not None and self._loading[0] == token:
@@ -432,11 +476,17 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
             return self
         bound = instance.__dict__.get(self._name)
         if bound is None:
+            # Asked once per instance, on the binding that caches: an owner that addresses
+            # its resources says so, and a component simply does not have the hook.
+            binding = getattr(instance, "_resource_binding", None)
+            address, publish = binding(self.public_name) if binding is not None else (None, None)
             bound = Resource(
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
                 delivery=self.delivery,
+                address=address,
+                publish=publish,
             )
             instance.__dict__[self._name] = bound
         _observe(bound)

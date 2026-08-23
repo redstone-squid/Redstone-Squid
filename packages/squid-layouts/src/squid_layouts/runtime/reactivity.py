@@ -1126,7 +1126,7 @@ class Observation:
         Anything with sources of its own is walked rather than re-run -- a cached computed, a
         settled resource. It did not read its sources again, but a reader that used its value
         still depends on every one of them, so a topic watched two loaders down is still this
-        render's dependency.
+        render's dependency. One that carries an address of its own contributes that too.
         """
         found: list[Any] = []
         seen: set[int] = set()
@@ -1141,6 +1141,12 @@ class Observation:
                     if source.address is not None:
                         found.append(source.address)
                 elif (nested := getattr(source, "sources", None)) is not None:
+                    # An addressed source is followed *and* walked. A resource on a namespace
+                    # publishes its own address when it reloads, but it can also be re-pended
+                    # by a cell its loader read, and a reader depends on both routes.
+                    address = getattr(source, "address", None)
+                    if address is not None:
+                        found.append(address)
                     walk(nested)
 
         walk(self.sources)
