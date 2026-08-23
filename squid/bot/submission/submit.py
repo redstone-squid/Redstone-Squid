@@ -210,7 +210,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         delivered = await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.
-        assert isinstance(delivered, sl.discord.Delivered), "the interaction response cannot be abandoned"
+        assert isinstance(delivered, sl.discord.delivery.Delivered), "the interaction response cannot be abandoned"
         workspace_message = delivered.receipt.message
         assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()

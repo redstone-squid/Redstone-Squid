@@ -25,7 +25,7 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
-from squid_layouts.discord import conform_modal
+from squid_layouts.discord.conformance import conform_modal
 
 logger = logging.getLogger(__name__)
 

@@ -22,7 +22,8 @@ from squid.bot.ui import localization_for
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_layouts.discord import Opened, Opener, Reject, Rejected, Screen, SessionPolicy, SessionRegistry
+from squid_layouts.discord import Screen, SessionRegistry
+from squid_layouts.discord.sessions import Opened, Opener, Reject, Rejected, SessionPolicy
 
 CONSENT_SCREEN = Screen(
     "consent",
@@ -363,7 +364,7 @@ def _destination(target: ConsentTarget) -> sl.discord.Destination:
 
 async def _send(target: ConsentTarget, view: discord.ui.LayoutView) -> None:
     """Send one plain layout where the prompt itself would have gone."""
-    await _destination(target)(sl.discord.DiscordPresentation.components_v2(view))
+    await _destination(target)(sl.discord.presentation.DiscordPresentation.components_v2(view))
 
 
 def _default_ephemeral(target: ConsentTarget) -> bool:

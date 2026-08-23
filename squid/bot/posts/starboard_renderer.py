@@ -67,7 +67,7 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
                 channel_id=state.config.channel_id,
                 guild_id=state.config.guild_id,
                 surface="starboard_entry",
-                layout=starboard_layout(state, origin, locale=locale),
+                presentation=starboard_layout(state, origin, locale=locale),
                 allowed_mentions=mentions,
             )
         ]

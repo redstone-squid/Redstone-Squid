@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, MountDefaults, Opened, Opener, Owner, Scope, Screen, SessionRegistry
+from squid_layouts.discord import Everyone, MountDefaults, Owner, Screen, SessionRegistry
+from squid_layouts.discord.sessions import Opened, Opener, Scope
 from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Heading
 
@@ -16,9 +17,9 @@ class Panel(sl.Component):
 
 
 def to_message() -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         message = fake_message()
-        return sl.discord.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
+        return sl.discord.delivery.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
 
     return send
 

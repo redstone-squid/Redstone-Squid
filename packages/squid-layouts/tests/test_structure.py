@@ -11,12 +11,8 @@ from squid_layouts.planning import plan
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts.discord import (
-    V2_TARGET,
-    NavigationContext,
-    default_nav,
-    render_static,
-)
+from squid_layouts.discord import V2_TARGET, render_static
+from squid_layouts.discord.navigation import NavigationContext, default_nav
 from squid_layouts.planning import (
     SolveNoteCode,
     measure,

@@ -3,11 +3,8 @@
 import discord
 
 from squid_layouts import Component
-from squid_layouts.discord import (
-    Everyone,
-    Mount,
-    Navigator,
-)
+from squid_layouts.discord import Everyone, Mount
+from squid_layouts.discord.navigation import Navigator
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Heading, Text
 
