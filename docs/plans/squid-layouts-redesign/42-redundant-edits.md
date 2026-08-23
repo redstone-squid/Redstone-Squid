@@ -92,12 +92,10 @@ The scene misses two things, and each gets a guard in `Mount._same_as_live(candi
 
 - **asset content** — `Asset.source` can change under the same name; the candidate's
   `assets` tuple must equal the live one by value, and unequal means deliver;
-- **handler identity** — an equal scene can come from a re-embedded child instance whose
-  bindings now point at a different object; every key must be present on both sides and
-  `candidate.handlers[k].handler == live.handlers[k].handler`. Bound methods compare by
-  instance, so ordinary handlers survive a re-render; a fresh closure (the nav factory's
-  pager callbacks) does not, so a paged panel is simply never suppressed. A narrowing, not
-  a bug, and the cost is one edit that was being paid anyway.
+- **handler keys** — the retained controls must resolve the same logical keys. Binding values
+  are runtime state rather than pixels, so a suppressed render publishes the candidate's
+  handlers, policies, routes, guards, feedback, records and form bindings through the mount's
+  existing key indirection.
 
 `Status` is a scene node, so the reactor's paused-status edit is a genuine difference and
 still delivers. A renewal screen ([39](39-ephemeral-handoff.md)) is a `_LifecycleCandidate`
@@ -106,8 +104,8 @@ and never reaches the comparison; `_same_as_live` also refuses any lifecycle but
 ### 2. No generation bump on suppression
 
 `Mount._commit` splits into `_commit_render` — `apply_updates`, `_prune_follows`,
-`runtime.commit(tree, rendered_revision)`, `_dirty`, `_pending` — and `_commit_delivery` —
-handlers, form bindings, `_generation`, `_assets`, `_plan`, the view swap, `live.track`.
+`runtime.commit(tree, rendered_revision)`, handlers, form bindings, `_plan`, `_dirty`, `_pending` —
+and `_commit_delivery` — `_generation`, `_assets`, the view swap, `live.track`.
 `_commit` is the two in sequence; `_suppress` is `_commit_render` plus `candidate.view.stop()`.
 The live generation keeps its control ids, so a click already in flight still matches and
 never travels the rebase-or-stale path. `_issued` has already advanced for the staged
@@ -118,9 +116,8 @@ candidate, which is harmless: it only needs to be unique.
 - `session_updates` **apply**: planning's clamps describe the scene on screen, and a
   suppressed candidate is on screen by definition.
 - Assets are unchanged by construction (guard 1).
-- `_commit_presented` hooks **do not fire**: [34](34-safe-session-runtime.md) §C.2
-  checkpoints at visible commit boundaries, and nothing visible moved. Recorded in
-  `docs/durable-mounts.md`.
+- `on_committed` hooks **do fire**, while `on_presented` hooks do not. Durability follows
+  application runtime commits because hidden persistent state can advance without changing pixels.
 
 ### 4. At the mount, not upstream
 
@@ -147,7 +144,7 @@ REFRESH trace at all, versus a REFRESH trace ending `UNCHANGED`.
   interaction edit is 1; `ReactorSnapshot.unchanged == 1`.
 - A click in flight against generation N still dispatches after a suppressed refresh.
 - Status text, asset content, handler identity and any scene change all still deliver.
-- A suppressed refresh does not request a durability checkpoint.
+- A suppressed refresh requests a durability checkpoint without firing presentation observers.
 - A visible resource that settles to the pending paint's value commits without a second edit.
 - `tests/test_mount.py test_reactor.py test_shared_follow.py test_durable_runtime.py --no-cov`.
 
