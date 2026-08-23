@@ -198,6 +198,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             lines.append(
                 "reactor  "
                 f"queued={reactor.queued} in_flight={reactor.in_flight} redeliver={reactor.redeliver} "
+                f"watched={reactor.watched} "
                 f"scheduled={reactor.scheduled} coalesced={reactor.coalesced} "
                 f"delivered={reactor.delivered} failed={reactor.failed}"
             )
