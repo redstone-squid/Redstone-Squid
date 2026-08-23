@@ -27,18 +27,39 @@ from squid_reactive.core import (
     transaction,
     untracked,
 )
+from squid_reactive.shared import Shared
+from squid_reactive.topics import (
+    Address,
+    CellAddress,
+    KindKeyCodec,
+    LocalTopicBus,
+    SubscriptionReconciler,
+    Topic,
+    TopicBus,
+    TopicCodec,
+    watch,
+)
 
 __all__ = [
     "ActionParticipant",
+    "Address",
+    "CellAddress",
     "CellReport",
     "ComputedReport",
+    "KindKeyCodec",
+    "LocalTopicBus",
     "Observation",
     "Reactive",
     "ReactiveCycleError",
     "ReactiveWriteError",
+    "Shared",
     "SharedStateConflictError",
     "StateChange",
     "StateDelta",
+    "SubscriptionReconciler",
+    "Topic",
+    "TopicBus",
+    "TopicCodec",
     "UndeclaredStateError",
     "addresses",
     "batch",
@@ -54,4 +75,5 @@ __all__ = [
     "state",
     "transaction",
     "untracked",
+    "watch",
 ]

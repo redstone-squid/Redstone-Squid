@@ -55,7 +55,7 @@ from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_layouts.discord import Reactor, SessionRegistry
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
-from squid_layouts.runtime import TopicBus
+from squid_layouts.runtime import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -163,8 +163,8 @@ class RedstoneSquid(Bot):
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
         self.layout_profiler = MemoryProfiler()
-        self.topic_bus = TopicBus(profiler=self.layout_profiler)
-        self.layout_reactor = Reactor(self.topic_bus)
+        self.topic_bus = LocalTopicBus()
+        self.layout_reactor = Reactor(self.topic_bus, profiler=self.layout_profiler)
         self.topic_bridge: PostgresTopicBridge | None = None
         # Publishing goes through whichever of the two reaches every process. Until
         # `setup_hook` opens the bridge -- and forever, if no listener URL is configured --
@@ -222,7 +222,6 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.topic_bus.run(), name="layout-topics")
         self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
