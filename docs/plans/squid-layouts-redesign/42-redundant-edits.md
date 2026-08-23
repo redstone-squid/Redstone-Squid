@@ -75,3 +75,83 @@ A mount with a `Reactor` over a `TopicBus`, a component that renders one `sl.cel
 writes it from a handler, `fake_message()` and `fake_interaction()` from
 `squid_layouts.discord.testing`: dispatch the press, then run the reactor over `bus.drain()`
 and count `interaction.response.edit_message` against the message double's `edit`.
+
+## Design
+
+Decided 2026-08-23, answering the five questions above in order.
+
+### 1. Compare at the scene, with two guards
+
+`PlanReport.scene_fingerprint` (`planning/planner.py`) is already computed for every
+render, and the scene is generation-free: control ids are minted at draw time by
+`_WiredButton`/`_WiredSelect`, so the scene is the last layer at which "the same panel" is
+even expressible. Comparing `DiscordPresentation` is impossible (a live view per generation),
+and comparing discord.py's payload is the wrong altitude — it would rediscover the ids.
+
+The scene misses two things, and each gets a guard in `Mount._same_as_live(candidate)`:
+
+- **asset content** — `Asset.source` can change under the same name; the candidate's
+  `assets` tuple must equal the live one by value, and unequal means deliver;
+- **handler identity** — an equal scene can come from a re-embedded child instance whose
+  bindings now point at a different object; every key must be present on both sides and
+  `candidate.handlers[k].handler == live.handlers[k].handler`. Bound methods compare by
+  instance, so ordinary handlers survive a re-render; a fresh closure (the nav factory's
+  pager callbacks) does not, so a paged panel is simply never suppressed. A narrowing, not
+  a bug, and the cost is one edit that was being paid anyway.
+
+`Status` is a scene node, so the reactor's paused-status edit is a genuine difference and
+still delivers. A renewal screen ([39](39-ephemeral-handoff.md)) is a `_LifecycleCandidate`
+and never reaches the comparison; `_same_as_live` also refuses any lifecycle but `ACTIVE`.
+
+### 2. No generation bump on suppression
+
+`Mount._commit` splits into `_commit_render` — `apply_updates`, `_prune_follows`,
+`runtime.commit(tree, rendered_revision)`, `_dirty`, `_pending` — and `_commit_delivery` —
+handlers, form bindings, `_generation`, `_assets`, `_plan`, the view swap, `live.track`.
+`_commit` is the two in sequence; `_suppress` is `_commit_render` plus `candidate.view.stop()`.
+The live generation keeps its control ids, so a click already in flight still matches and
+never travels the rebase-or-stale path. `_issued` has already advanced for the staged
+candidate, which is harmless: it only needs to be unique.
+
+### 3. What a suppressed render earns
+
+- `session_updates` **apply**: planning's clamps describe the scene on screen, and a
+  suppressed candidate is on screen by definition.
+- Assets are unchanged by construction (guard 1).
+- `_commit_presented` hooks **do not fire**: [34](34-safe-session-runtime.md) §C.2
+  checkpoints at visible commit boundaries, and nothing visible moved. Recorded in
+  `docs/durable-mounts.md`.
+
+### 4. At the mount, not upstream
+
+Only the mount knows what the reader sees. The reactor cannot tell a self-publish from a
+sibling's, the bus carries no origin, and [40](40-shared-state.md) §7 deliberately refused
+a subscriber index. The check sits in the three paths that stage a render against an
+existing one — `refresh_now`, `_flush` (an identical dirty render becomes acknowledge +
+`UNCHANGED`; `_BusyPaint.restore()` already handles the non-written case) and
+`_settle_visible` (a resource that loads to what the pending paint already showed) — and
+never in `send`, which has nothing to compare against.
+
+### 5. Observable, so silence is distinguishable from breakage
+
+`PresentationOutcome.UNCHANGED` (distinct from `NO_CHANGE`, which means *not dirty*) is the
+trace result; `refresh_now` now returns the outcome so the reactor can count it.
+`ReactorSnapshot.unchanged`, `MountSnapshot.suppressed`, a `mount.suppressed` operation
+counter, and one `logger.debug`. `/dev profile queues` prints `unchanged=`; `/dev ui inspect`
+prints the mount's count. A dead subscription now looks different from a working one: no
+REFRESH trace at all, versus a REFRESH trace ending `UNCHANGED`.
+
+## Verification
+
+- The reproduction above: after the self-write click, standing-handle edits are 0 and the
+  interaction edit is 1; `ReactorSnapshot.unchanged == 1`.
+- A click in flight against generation N still dispatches after a suppressed refresh.
+- Status text, asset content, handler identity and any scene change all still deliver.
+- A suppressed refresh does not request a durability checkpoint.
+- A visible resource that settles to the pending paint's value commits without a second edit.
+- `tests/test_mount.py test_reactor.py test_shared_follow.py test_durable_runtime.py --no-cov`.
+
+## Status
+
+Designed 2026-08-23 after [39](39-ephemeral-handoff.md) shipped; implementation in progress on
+`local-development`.
