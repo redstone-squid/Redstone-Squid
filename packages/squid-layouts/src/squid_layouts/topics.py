@@ -9,7 +9,7 @@ import asyncio
 import contextvars
 import logging
 import time
-from collections.abc import Awaitable, Callable, Hashable
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -18,23 +18,69 @@ from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, Trace
 
 logger = logging.getLogger(__name__)
 
-type Topic = Hashable
-type Subscriber = Callable[[Topic], Awaitable[None]]
+
+@dataclass(frozen=True, slots=True)
+class Topic:
+    """One named address a host publishes and a render watches.
+
+    Equal by value, so two publishers agree without sharing a constructor, and encodable in
+    full, which is what makes it the only address able to cross a process boundary. Keys are
+    text on purpose: `Topic("build", 123)` is a type error rather than a topic nobody else
+    ever addresses.
+    """
+
+    kind: str
+    key: str
+
+    def __str__(self) -> str:
+        return f"{self.kind}:{self.key}"
+
+
+@dataclass(frozen=True, slots=True, eq=False)
+class CellAddress:
+    """A shared cell's identity, which lives and dies with this process.
+
+    Handed out by `Observation.addresses()` and `Mount.observed`, never constructed by a
+    host. It names an object rather than a value, so nothing can put it on a wire and a
+    bridge does not have to decide whether to try.
+    """
+
+    owner: object
+    name: str
+
+    def __eq__(self, other: object) -> bool:
+        # Identity on the namespace rather than equality: a `Shared` subclass that defines
+        # `__eq__` must not be able to make two live namespaces share one address.
+        if not isinstance(other, CellAddress):
+            return NotImplemented
+        return other.owner is self.owner and other.name == self.name
+
+    def __hash__(self) -> int:
+        return hash((id(self.owner), self.name))
+
+
+type Address = Topic | CellAddress
+"""Everything the bus carries: a host's named topic, or a shared cell's local identity."""
+
+type Subscriber = Callable[[Address], Awaitable[None]]
 
 _SELF_PUBLISH_WARNING_THRESHOLD = 100
 _NO_TOPIC = object()
-_current_topic: contextvars.ContextVar[Topic | object] = contextvars.ContextVar("topic_bus_topic", default=_NO_TOPIC)
+_current_topic: contextvars.ContextVar[Address | object] = contextvars.ContextVar("topic_bus_topic", default=_NO_TOPIC)
 _NOOP_PROFILER = NoOpProfiler()
 
 
 class TopicCodec(Protocol):
     """Translate a topic to and from the text an external transport can carry.
 
-    A host owns its topic vocabulary, so it owns the wire form too. `encode` returns `None`
-    for an address this codec cannot express -- an identity-bearing address such as a
-    `Shared` cell -- and the bridge keeps that topic local rather than inventing a name for
-    it. `decode` returns `None` for text this process does not recognise, which is what a
-    rolling deployment looks like from the older side.
+    A host needs one of these only to speak a wire format someone else already defined;
+    :class:`KindKeyCodec` is the default and is total on :class:`Topic`. `encode` returns
+    `None` for a topic this codec does not claim, and the bridge keeps it local rather than
+    inventing a name for it. `decode` returns `None` for text this process does not
+    recognise, which is what a rolling deployment looks like from the older side.
+
+    Only a :class:`Topic` ever reaches a codec. A :class:`CellAddress` names a live object
+    rather than a value, so it cannot be encoded at all and the type says so.
     """
 
     def encode(self, topic: Topic) -> str | None: ...
@@ -42,11 +88,36 @@ class TopicCodec(Protocol):
     def decode(self, text: str) -> Topic | None: ...
 
 
+class KindKeyCodec:
+    """The default wire form, ``kind:key``.
+
+    Total on :class:`Topic` unless a kind contains the separator, which would make the split
+    ambiguous. A key may contain it freely, because only the first occurrence divides.
+    """
+
+    def __init__(self, separator: str = ":") -> None:
+        if not separator:
+            message = "topic codec separator must be a non-empty string"
+            raise ValueError(message)
+        self.separator = separator
+
+    def encode(self, topic: Topic) -> str | None:
+        if not topic.kind or not topic.key or self.separator in topic.kind:
+            return None
+        return f"{topic.kind}{self.separator}{topic.key}"
+
+    def decode(self, text: str) -> Topic | None:
+        kind, separator, key = text.partition(self.separator)
+        if not separator or not kind or not key:
+            return None
+        return Topic(kind, key)
+
+
 @dataclass(frozen=True, slots=True)
 class TopicSnapshot:
     """Diagnostic state for one topic known to a bus."""
 
-    topic: Topic
+    topic: Address
     subscribers: int
     labels: tuple[str, ...]
     queued: bool
@@ -118,11 +189,11 @@ class TopicBus:
     deliberately unspecified. A topic's subscribers run sequentially in registration order,
     and at most one delivery for a topic is in flight at once.
 
-    Topics use exact hash/equality matching. Prefer a single host-side constructor for each
-    tuple vocabulary: ``("build", 123)`` and ``("build", "123")`` are different topics.
-    Subscriptions are process-local; bridge an external change feed into :meth:`publish` when
-    multiple processes need to refresh one another. Calls must originate on the event-loop
-    thread; worker threads can use ``loop.call_soon_threadsafe(bus.publish, topic)``.
+    Addresses match by value, so two publishers that build the same :class:`Topic` agree
+    without sharing a constructor. Subscriptions are process-local; bridge an external change
+    feed into :meth:`publish` when multiple processes need to refresh one another. Calls must
+    originate on the event-loop thread; worker threads can use
+    ``loop.call_soon_threadsafe(bus.publish, topic)``.
 
     Args:
         concurrency: Maximum number of different topics delivered concurrently.
@@ -149,13 +220,13 @@ class TopicBus:
         self.profiler = profiler
         self.max_causal_links = max_causal_links
         self._clock = clock
-        self._queue: asyncio.Queue[Topic] = asyncio.Queue()
-        self._topics: dict[Topic, _TopicState] = {}
+        self._queue: asyncio.Queue[Address] = asyncio.Queue()
+        self._topics: dict[Address, _TopicState] = {}
         self._running = False
 
     def subscribe(
         self,
-        topic: Topic,
+        topic: Address,
         callback: Subscriber,
         *,
         label: str = "",
@@ -182,7 +253,7 @@ class TopicBus:
 
         return unsubscribe
 
-    def publish(self, *topics: Topic) -> None:
+    def publish(self, *topics: Address) -> None:
         """Synchronously enqueue change notifications for all currently subscribed topics."""
         current = _current_topic.get()
         triggered = self._clock()
@@ -268,7 +339,7 @@ class TopicBus:
         while True:
             await self._deliver(await self._queue.get())
 
-    async def _deliver(self, topic: Topic) -> None:
+    async def _deliver(self, topic: Address) -> None:
         state = self._topics.get(topic)
         if state is None:
             self._queue.task_done()
@@ -340,7 +411,7 @@ class TopicBus:
             self._forget_if_idle(topic, state)
             self._queue.task_done()
 
-    def _forget_if_idle(self, topic: Topic, state: _TopicState) -> None:
+    def _forget_if_idle(self, topic: Address, state: _TopicState) -> None:
         if not state.subscriptions and not state.queued and not state.in_flight:
             self._topics.pop(topic, None)
 

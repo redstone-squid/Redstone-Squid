@@ -127,7 +127,7 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
-from squid_layouts.topics import Topic
+from squid_layouts.topics import Address
 
 type RenderNode = LayoutNode
 type RenderResult = Document | LayoutNode | Sequence[LayoutNode]
@@ -195,7 +195,7 @@ class ComponentTree:
     Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
     never plan it, draw it, or commit it.
     """
-    observations: tuple[Topic, ...] = ()
+    observations: tuple[Address, ...] = ()
     """The bus addresses of every shared cell this render read, deduplicated.
 
     A frontend reconciles its subscriptions against this so a panel follows exactly what it

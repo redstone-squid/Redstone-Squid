@@ -388,9 +388,9 @@ class _Transaction:
         for cell, seen in self.observed.items():
             if cell not in self.writes or _equal(cell.value, seen):
                 continue
-            owner, descriptor = cell.address
+            address = cell.address
             message = (
-                f"{owner!r}.{descriptor.public_name} changed while this action was running: it "
+                f"{address.owner!r}.{address.name} changed while this action was running: it "
                 f"was read and then written, and the value it read is no longer there. Nothing "
                 f"was published."
             )

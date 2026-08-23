@@ -24,9 +24,10 @@ Soundness against the bus contract:
   local contract holds;
 - the NOTIFY payload is an *encoded topic*, never state, so payload-free holds and subscribers
   still re-read;
-- `Shared` cell addresses are `(handle, descriptor)` identities and are not encodable; the
-  codec returns `None` and the bridge publishes them locally only. That is the right outcome
-  and leaves 40 §3 untouched.
+- `Shared` cell addresses are identities rather than values and are not encodable; the bridge
+  publishes them locally only. That is the right outcome and leaves 40 §3 untouched. Since
+  [47](47-topic-values.md) they are `CellAddress`, so this is a type distinction rather than a
+  codec returning `None`.
 
 ## Design
 
@@ -39,6 +40,12 @@ class TopicCodec(Protocol):
 ```
 
 Nothing else in `topics.py` changes.
+
+Superseded by [47](47-topic-values.md) phase 1. `Topic` is now a value type, so encoding is
+total and the package ships `KindKeyCodec` as the bridge's default; `TopicCodec` survives only
+as an override for a host that must speak a wire format someone else defined. The `None` return
+no longer carries the "an identity-bearing address cannot be encoded" case, because a
+`CellAddress` is not a `Topic` and the bridge is never offered one.
 
 ### 2. `PostgresTopicBridge` (`discord/durability/postgres.py`)
 
@@ -61,7 +68,8 @@ await bridge.run()             # LISTEN on one dedicated pooled connection
 
 ### 3. The bot
 
-- `squid/bot/topics.py` supplies the `ResourceTopic` codec (`kind:id`).
+- `squid/bot/topics.py` supplies the `ResourceTopic` codec (`kind:id`). Deleted by
+  [47](47-topic-values.md) phase 1, which made `KindKeyCodec` the default.
 - Publishers move onto the bridge: `squid/bot/app.py` and `squid/bot/sync/reconciler.py`.
 - `squid/worker/rendering.py` publishes the build's resource topic when a render completes,
   so a panel showing that build repaints without a click.

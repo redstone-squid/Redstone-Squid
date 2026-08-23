@@ -22,7 +22,7 @@ from squid_layouts.runtime.reactivity import (
     _State,
     rendering,
 )
-from squid_layouts.topics import Topic, TopicBus
+from squid_layouts.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
 """Attribute names a namespace owns, so a cell may not take one.
@@ -44,7 +44,7 @@ class _SharedCell(_State):
     """
 
     def address(self, instance: ReactiveOwner) -> Any:
-        return (instance, self)
+        return CellAddress(instance, self.public_name)
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
         if rendering():
@@ -176,23 +176,22 @@ class Shared[ScopeT = None]:
         re-read. Coalescing and delivery are the bus's, already tested.
         """
         slots = type(self)._slots
-        self.bus.publish(*((self, slots[name]) for name in names if name in slots))
+        self.bus.publish(*(slots[name].address(self) for name in names if name in slots))
 
     def _state_rolled_back(self) -> None:
         """Nothing to undo: a shared write stages, so a rolled-back one was never published."""
 
 
-def describe(address: Topic) -> str:
-    """One shared cell address as ``Preferences(Member(1, 2)).theme``, for diagnostics.
+def describe(address: Address) -> str:
+    """One address as ``Preferences(Member(1, 2)).theme`` or ``build:123``, for diagnostics.
 
-    Devtools and host logs get a readable name out of an address without knowing that an
-    address is a pair; anything that is not one is reported as itself.
+    Devtools and host logs get a readable name without knowing how an address is built.
     """
     match address:
-        case (Shared() as owner, _SharedCell() as descriptor):
-            return f"{owner!r}.{descriptor.public_name}"
+        case CellAddress(owner=Shared() as owner, name=name):
+            return f"{owner!r}.{name}"
         case _:
-            return repr(address)
+            return str(address)
 
 
 __all__ = ["Shared", "cell", "describe"]
