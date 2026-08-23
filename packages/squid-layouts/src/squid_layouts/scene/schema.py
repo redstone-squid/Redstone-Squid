@@ -84,6 +84,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                             {"$ref": "#/$defs/routed_button"},
                             {"$ref": "#/$defs/select"},
                             {"$ref": "#/$defs/routed_select"},
+                            {"$ref": "#/$defs/entity_select"},
                             {"$ref": "#/$defs/extension"},
                         ]
                     },
@@ -178,6 +179,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "routed_button",
                     "select",
                     "routed_select",
+                    "entity_select",
                     "row",
                     "thumbnail",
                     "gallery",
@@ -305,6 +307,57 @@ SCENE_SCHEMA: dict[str, Any] = {
             "min_values",
             "max_values",
             "disabled",
+        ),
+        "entity_select": _node(
+            "entity_select",
+            {
+                "entity_type": {"enum": ["user", "role", "channel", "mentionable"]},
+                "action": {"type": "string"},
+                "placeholder": {"type": ["string", "null"], "maxLength": 150},
+                "default_values": {
+                    "type": "array",
+                    "maxItems": 25,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "kind": {"enum": ["user", "role", "channel"]},
+                            "id": {"type": "integer", "minimum": 1},
+                        },
+                        "required": ["kind", "id"],
+                    },
+                },
+                "channel_types": {
+                    "type": "array",
+                    "items": {
+                        "enum": [
+                            "text",
+                            "voice",
+                            "category",
+                            "announcement",
+                            "announcement_thread",
+                            "public_thread",
+                            "private_thread",
+                            "stage_voice",
+                            "forum",
+                            "media",
+                        ]
+                    },
+                },
+                "min_values": {"type": "integer", "minimum": 0, "maximum": 25},
+                "max_values": {"type": "integer", "minimum": 0, "maximum": 25},
+                "disabled": {"type": "boolean"},
+                "policy": {"enum": ["exclusive", "rebase", "parallel_read", "immediate"]},
+            },
+            "entity_type",
+            "action",
+            "placeholder",
+            "default_values",
+            "channel_types",
+            "min_values",
+            "max_values",
+            "disabled",
+            "policy",
         ),
         "option": {
             "type": "object",

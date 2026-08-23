@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any, cast
 
 from squid_layouts.actions import ActionPolicy
+from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.model import (
     SceneAsset,
@@ -23,6 +24,7 @@ from squid_layouts.scene.model import (
     SceneEmbedFooter,
     SceneEmbedMedia,
     SceneExtension,
+    SceneEntitySelect,
     SceneFile,
     SceneGallery,
     SceneGalleryItem,
@@ -359,6 +361,29 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton)
                 "max_values": max_values,
                 "disabled": disabled,
             }
+        case SceneEntitySelect(
+            entity_type=entity_type,
+            action=action,
+            placeholder=placeholder,
+            default_values=default_values,
+            channel_types=channel_types,
+            min_values=min_values,
+            max_values=max_values,
+            disabled=disabled,
+            policy=policy,
+        ):
+            return {
+                "kind": "entity_select",
+                "entity_type": entity_type.value,
+                "action": action,
+                "placeholder": placeholder,
+                "default_values": [{"kind": value.kind.value, "id": value.id} for value in default_values],
+                "channel_types": [value.value for value in channel_types],
+                "min_values": min_values,
+                "max_values": max_values,
+                "disabled": disabled,
+                "policy": policy.value,
+            }
         case SceneRow(items=items):
             return {"kind": "row", "items": [_node_to_dict(item) for item in items]}
         case SceneThumbnail(url=url, description=description):
@@ -473,6 +498,25 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
             )
+        case "entity_select":
+            defaults = raw.get("default_values")
+            if not isinstance(defaults, list):
+                msg = "entity select default_values must be an array"
+                raise SceneCodecError(msg)
+            return SceneEntitySelect(
+                entity_type=EntityType(_string(raw, "entity_type")),
+                action=_string(raw, "action"),
+                placeholder=_optional_string(raw, "placeholder"),
+                default_values=tuple(
+                    EntityRef(EntityKind(_string(_object(value), "kind")), _integer(_object(value), "id"))
+                    for value in defaults
+                ),
+                channel_types=tuple(ChannelType(value) for value in _string_array(raw, "channel_types")),
+                min_values=_integer(raw, "min_values"),
+                max_values=_integer(raw, "max_values"),
+                disabled=_boolean(raw, "disabled"),
+                policy=ActionPolicy(_string(raw, "policy")),
+            )
         case "row":
             items = raw.get("items")
             if not isinstance(items, list):
@@ -552,6 +596,14 @@ def _optional_string(raw: Mapping[str, Any], key: str) -> str | None:
     value = raw.get(key)
     if value is not None and not isinstance(value, str):
         msg = f"{key} must be a string or null"
+        raise SceneCodecError(msg)
+    return value
+
+
+def _string_array(raw: Mapping[str, Any], key: str) -> list[str]:
+    value = raw.get(key)
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        msg = f"{key} must be an array of strings"
         raise SceneCodecError(msg)
     return value
 

@@ -30,6 +30,7 @@ from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.target import TargetProfile
 from squid_layouts.primitives.nodes import (
     Button,
+    EntitySelect,
     FormButton,
     LinkButton,
     Node,
@@ -61,7 +62,7 @@ class SceneBindings:
     form_bindings: dict[str, FormBinding] = field(default_factory=dict)
     resources: dict[str, object] = field(default_factory=dict)
 
-    def action(self, node: Button | SelectMenu) -> str:
+    def action(self, node: Button | SelectMenu | EntitySelect) -> str:
         key = node.key
         if isinstance(node, FormButton) and node.form is not None:
             # Recorded beside the binding, not in place of it: the button presents the form
