@@ -96,7 +96,7 @@ path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
 other processes; `sl.discord.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
 
-Presentation colours are an immutable `sl.Palette`, supplied to `sl.plan`, `sl.discord.compose`,
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sl.discord.compose`,
 `sl.discord.render_static`, or `sl.discord.Mount`. An omitted section or article accent inherits
 `Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
 Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
@@ -110,28 +110,28 @@ remain Discord-specific and declare their portable fallback explicitly:
 
 ```python
 choices = (
-    sl.ChoiceOption("alerts", "Alerts", "alerts", emoji="🔔"),
-    sl.ChoiceOption("reports", "Reports", "reports"),
+    sl.forms.ChoiceOption("alerts", "Alerts", "alerts", emoji="🔔"),
+    sl.forms.ChoiceOption("reports", "Reports", "reports"),
 )
 field = sl.discord.CheckboxGroupField(
     key="subscriptions",
     label="Subscriptions",
     options=choices,
     required=False,
-    fallback=sl.MultiChoiceField(options=choices, required=False),
+    fallback=sl.forms.MultiChoiceField(options=choices, required=False),
 )
-form = sl.FormSpec(
+form = sl.forms.FormSpec(
     "Preferences",
-    (sl.FormText("Choose every update you want to receive."), field),
+    (sl.forms.FormText("Choose every update you want to receive."), field),
 )
 ```
 
 The exact primitive API exposes Discord-only controls and complete media metadata. A premium
 button must have a positive SKU and no interactive or link fields; link and interactive buttons
-may omit their label when they have an emoji. Custom emoji use `sl.Emoji(name, id, animated=...)`.
+may omit their label when they have an emoji. Custom emoji use `sl.emoji.Emoji(name, id, animated=...)`.
 
 ```python
-from squid_layouts import Emoji
+from squid_layouts.emoji import Emoji
 from squid_layouts.primitives import Gallery, GalleryItem, LinkButton, PremiumButton, Row
 
 document = (
@@ -156,10 +156,10 @@ discarding that content.
 address changed; every subscriber re-reads the application's source of truth. It is not durable,
 and queued topics disappear with the process.
 
-An address is either a `sl.Topic(kind, key)` -- a value a host writes, equal by value so two
-publishers agree without sharing a constructor -- or a `sl.CellAddress`, which is a `Shared` cell's
-identity and is only ever received, never built. `sl.Address` is the union the bus carries. Keys
-are text on purpose: `sl.Topic("build", 123)` is a type error rather than a topic nobody else ever
+An address is either a `sl.runtime.Topic(kind, key)` -- a value a host writes, equal by value so two
+publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `Shared` cell's
+identity and is only ever received, never built. `sl.runtime.Address` is the union the bus carries. Keys
+are text on purpose: `sl.runtime.Topic("build", 123)` is a type error rather than a topic nobody else ever
 addresses.
 
 Watch a topic where you read the thing it names, and the mount follows it for you:
@@ -169,16 +169,16 @@ class BuildPanel(sl.Component):
     def __init__(self, build_id: str) -> None:
         self.build_id = build_id
 
-    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
     async def build(self) -> Build:
-        sl.watch(sl.Topic("build", self.build_id))
+        sl.runtime.watch(sl.runtime.Topic("build", self.build_id))
         return await queries.get_build(self.build_id)
 
     def render(self):
         return sl.Text(self.build.value.name)
 ```
 
-`sl.watch` is a tracked read like any other, so the render that used the resource's value
+`sl.runtime.watch` is a tracked read like any other, so the render that used the resource's value
 follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
 the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
 unsubscribed -- and the initial load is just the resource's first settle. Prefer
@@ -187,17 +187,17 @@ every external change.
 
 Because the topic carries a version, a publish landing *during* the load is not lost: it moves
 what the load is being compared against, so the value it produced is already stale and settles
-again. There is no "subscribe before the first read" rule to get wrong. `sl.watch` belongs in a
+again. There is no "subscribe before the first read" rule to get wrong. `sl.runtime.watch` belongs in a
 resource, never in `on_load`, which runs once and under no consumer.
 
 `reactor.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
 for a subscriber that is not a mount:
 
 ```python
-bus = sl.TopicBus()
+bus = sl.runtime.TopicBus()
 reactor = sl.discord.Reactor(bus)
 mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
-reactor.follow(mount, sl.Topic("build", "123"))  # subscribe before the first read/send
+reactor.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
 # The host visibly owns both long-running coroutines.
@@ -222,10 +222,10 @@ payload is an encoded *address*, never state.
 ```python
 bridge = sl.discord.durability.PostgresTopicBridge(pool, bus)
 tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
-bridge.publish(sl.Topic("build", "123"))  # local subscribers now, other processes shortly after
+bridge.publish(sl.runtime.Topic("build", "123"))  # local subscribers now, other processes shortly after
 ```
 
-The default wire form is `sl.KindKeyCodec`, which writes `kind:key` and is total on `Topic`, so
+The default wire form is `sl.runtime.KindKeyCodec`, which writes `kind:key` and is total on `Topic`, so
 most hosts pass no codec at all. A `CellAddress` cannot reach a codec -- it names a live object
 rather than a value -- so shared cells stay process-local by type rather than by convention. Pass
 `codec=` only to speak a format someone else already defined:
@@ -246,7 +246,7 @@ inside an application-owned PostgreSQL transaction, use `publish_in()` instead:
 ```python
 async with connection.transaction():
     await save_change(connection)
-    await bridge.publish_in(connection, sl.Topic("build", "123"))
+    await bridge.publish_in(connection, sl.runtime.Topic("build", "123"))
 ```
 
 `publish_in()` does not commit the transaction. PostgreSQL holds its notification until commit,
@@ -281,7 +281,7 @@ same collector directly.
 
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
-bus = sl.TopicBus(profiler=profiler)
+bus = sl.runtime.TopicBus(profiler=profiler)
 reactor = sl.discord.Reactor(bus)
 
 mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
@@ -308,8 +308,8 @@ They do not choose between in-memory callbacks and restart-surviving routes. Ins
 that control construction:
 
 ```python
-tabs = sl.Tabs(
-    (sl.Tab("summary", "Summary", summary), sl.Tab("history", "History", history)),
+tabs = sl.patterns.Tabs(
+    (sl.patterns.Tab("summary", "Summary", summary), sl.patterns.Tab("history", "History", history)),
     key="build-tabs",
 )
 
@@ -317,16 +317,16 @@ tabs = sl.Tabs(
 mount = sl.discord.Mount(tabs.component(), access=sl.discord.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
-shell = sl.RouterShell(
+shell = sl.patterns.RouterShell(
     lambda request: BUILD_TAB.id(build_id=build.id, tab=request.state.selected),
 )
-document = shell.render(tabs, sl.TabsState(selected=tab))
+document = shell.render(tabs, sl.patterns.TabsState(selected=tab))
 ```
 
 Mounted actions accept application-wide middleware directly on the mount:
 
 ```python
-class TraceActions(sl.ActionMiddleware):
+class TraceActions(sl.interactions.ActionMiddleware):
     async def dispatch(self, request, proceed) -> None:
         with tracer.span("ui.action", action=request.key, rebased=request.rebased):
             await proceed()
@@ -430,11 +430,11 @@ committed value until then, and a rollback is dropping the overlay.
 
 ### Shared state
 
-`sl.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
+`sl.runtime.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
 state with `sl.state()`, and hand the same instance to whoever should see the same values:
 
 ```python
-class Workspace(sl.Shared[GuildId]):
+class Workspace(sl.runtime.Shared[GuildId]):
     selected: int | None = sl.state(None)
     filters: tuple[str, ...] = sl.state(())
 
@@ -450,8 +450,8 @@ rendered, reconciled each time it stages one. The mount that *made* the write re
 click itself rather than waiting for the bus, so a panel writing shared state feels no
 different from one writing local state — and needs no reactor to do it. A field an action both read and
 wrote carries the value it read as a commit precondition, so a lost update raises
-`sl.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
-no `compare_and_set` to remember. `sl.history` covers shared writes in the same entry as local
+`sl.runtime.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
+no `compare_and_set` to remember. `sl.runtime.history` covers shared writes in the same entry as local
 ones and restores them blindly.
 
 There is no store: two panels converge because something gave them the same object, so the
@@ -476,7 +476,7 @@ class SearchResults(sl.Component):
 A computed may read another component's state, or another computed. It is lazy — one nobody
 renders is never evaluated — and one that raises fails where its value is used rather than at
 commit. Values form selector boundaries: downstream computed values recompute only when the
-refreshed value compares unequal. `sl.untracked()` reads state without subscribing to it.
+refreshed value compares unequal. `sl.runtime.untracked()` reads state without subscribing to it.
 
 ### Reactive async resources
 
@@ -493,13 +493,13 @@ class VotingPanel(sl.Component):
 
     def render(self):
         match self.configuration.state:
-            case sl.Pending(previous=None):
+            case sl.runtime.Pending(previous=None):
                 return sl.note("Loading…")
-            case sl.Pending(previous=sl.Ready(value=config)):
+            case sl.runtime.Pending(previous=sl.runtime.Ready(value=config)):
                 return refreshing_panel(config)
-            case sl.Failed(error=error, previous=previous):
+            case sl.runtime.Failed(error=error, previous=previous):
                 return failed_panel(error, previous)
-            case sl.Ready(value=config):
+            case sl.runtime.Ready(value=config):
                 return voting_panel(config)
 ```
 
@@ -511,7 +511,7 @@ value when available, while request tokens prevent stale completions from publis
 
 Visible delivery is the default: Discord commits the pending render, settles observed sibling
 resources concurrently, then edits to the settled render. Use
-`@sl.resource(delivery=sl.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
+`@sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
 the first delivery must already be settled. Its `.state` is typed as `Ready[T] | Failed[T]`:
 refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
 by the mount. Both policies use the same internal state machine and neither starts detached
@@ -528,13 +528,13 @@ only what it can prove and fetches one window at a time:
 
 ```python
 class BuildSource:
-    capabilities = sl.SourceCapabilities(backward=True)
+    capabilities = sl.sources.SourceCapabilities(backward=True)
 
-    async def fetch(self, position: sl.Position, extent: int) -> sl.Window[Build]:
+    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
         resolved, rows, has_previous, has_more = await builds.window(position, extent)
-        return sl.Window(resolved, tuple(rows), has_previous, has_more)
+        return sl.sources.Window(resolved, tuple(rows), has_previous, has_more)
 
-ranking = sl.SourceRankedList(
+ranking = sl.patterns.SourceRankedList(
     BuildSource(),
     key="builds",
     label=lambda build: build.title,
@@ -560,7 +560,7 @@ outside planning and cannot run in `RouterShell.render()`.
 ## Host integration rules
 
 - The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The
-  adapter never starts background work on its own — start `sl.TopicBus.run()` and
+  adapter never starts background work on its own — start `sl.runtime.TopicBus.run()` and
   `sl.discord.Reactor.run()` under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;

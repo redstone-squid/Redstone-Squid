@@ -231,9 +231,9 @@ class DurationPanel(sl.Component):
     seconds: int = sl.state(0)
 
     def __init__(self) -> None:
-        self.spec = sl.FormSpec(
+        self.spec = sl.forms.FormSpec(
             "Duration",
-            (sl.DurationField(key="duration", label="Duration"),),
+            (sl.forms.DurationField(key="duration", label="Duration"),),
         )
 
     def render(self) -> sl.LayoutNode:
@@ -247,7 +247,7 @@ class DurationPanel(sl.Component):
 ```
 
 This example is shortened from `tests/test_form_discord.py`. `FormSpec` is the explicit schema;
-subclass `sl.Form` when descriptors are more convenient. Under the default
+subclass `sl.forms.Form` when descriptors are more convenient. Under the default
 `FormValidationPolicy.RETRY`, invalid input reopens a fresh modal with the submitted values and
 errors. `ACCEPT_AND_MARK` instead delivers a `SubmitEvent` carrying errors to the handler. A legacy
 `discord.ui.Modal` instance does not carry over: move its fields and validation into the schema and
@@ -262,7 +262,7 @@ its callback body into the submit handler.
 | `View.on_error` | `Mount(on_error=...)` / `MountDefaults(on_error=...)` | One host hook receives the interaction, exception, and action source. Routers configure their own hook. |
 | `DynamicItem` | `Route`, `RouteGroup`, `Router` | Keep stable IDs and aliases; register the router at startup. |
 | Decorated button callback | `sl.action(..., on_click=...)` | Reuse the service call, not the live item. Use `sl.discord.native(event)` only when the interaction itself is required. |
-| `Modal.on_submit` | `FormSpec` or `sl.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
+| `Modal.on_submit` | `FormSpec` or `sl.forms.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
 | Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `Reactor` | Interactive edits can renew credentials; unattended authority still expires. |
 
 `RenewEphemeral` presents a replacement control before known edit authority expires. It requires a
