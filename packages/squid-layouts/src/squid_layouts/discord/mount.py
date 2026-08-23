@@ -99,7 +99,7 @@ from squid_layouts.scene.model import (
 from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
-from squid_layouts.topics import Address
+from squid_layouts.runtime.topics import Address
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()

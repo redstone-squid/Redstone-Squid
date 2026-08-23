@@ -18,7 +18,7 @@ import squid_layouts as sl
 from squid_layouts.discord.durability import DurableRuntimeSnapshot, RecoveryReport
 from squid_layouts.discord.operations import DevToolsRuntime
 from squid_layouts.profiling import RuntimeSnapshot
-from squid_layouts.topics import BusSnapshot
+from squid_layouts.runtime.topics import BusSnapshot
 
 SESSION_SECONDS = 300
 """Short-lived on purpose: an inspector left open is one more mount in its own list."""

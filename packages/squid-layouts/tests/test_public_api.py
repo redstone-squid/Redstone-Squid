@@ -144,7 +144,7 @@ import squid_layouts.planning
 import squid_layouts.profiling
 import squid_layouts.runtime
 import squid_layouts.runtime.shared
-import squid_layouts.topics
+import squid_layouts.runtime.topics
 assert squid_layouts.runtime.shared.Shared
 assert "discord" not in sys.modules
 assert "anyio" not in sys.modules
