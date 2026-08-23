@@ -19,9 +19,11 @@ from squid_layouts.runtime.reactivity import (
     _MISSING,
     ReactiveOwner,
     ReactiveWriteError,
+    _Computed,
     _State,
     rendering,
 )
+from squid_layouts.runtime.resources import _ResourceDescriptor
 from squid_layouts.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
@@ -106,6 +108,12 @@ def cell(
     return _SharedCell(default, factory=factory, persist=False, opaque=opaque)
 
 
+def _check_name(cls: type, name: str) -> None:
+    if name in _RESERVED or name.startswith("_"):
+        message = f"{cls.__name__}.{name}: a namespace reserves {name!r} and every underscored name"
+        raise TypeError(message)
+
+
 class Shared[ScopeT = None]:
     """Base class for a namespace of view state that several mounts share.
 
@@ -130,23 +138,41 @@ class Shared[ScopeT = None]:
     """Declared cells by public name."""
     _slots: ClassVar[dict[str, _SharedCell]] = {}
     """The same cells by storage name, which is what a commit reports changed."""
+    _resources: ClassVar[frozenset[str]] = frozenset()
+    """Declared resources by public name. Addressed like cells, but loaded rather than written."""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         declared: dict[str, _SharedCell] = {}
+        loaded: set[str] = set()
         for klass in reversed(cls.__mro__):
             for name, descriptor in vars(klass).items():
+                if isinstance(descriptor, _ResourceDescriptor):
+                    _check_name(cls, name)
+                    loaded.add(name)
+                    continue
+                if isinstance(descriptor, _Computed):
+                    _check_name(cls, name)
+                    continue
                 if not isinstance(descriptor, _State):
                     continue
                 if not isinstance(descriptor, _SharedCell):
                     message = f"{cls.__name__}.{name}: a shared namespace declares sl.cell(), not sl.state()"
                     raise TypeError(message)
-                if name in _RESERVED or name.startswith("_"):
-                    message = f"{cls.__name__}.{name}: a namespace reserves {name!r} and every underscored name"
-                    raise TypeError(message)
+                _check_name(cls, name)
                 declared[name] = descriptor
         cls._cells = declared
         cls._slots = {descriptor._name: descriptor for descriptor in declared.values()}
+        cls._resources = frozenset(loaded)
+
+    def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[Any], None]]:
+        """Address a resource declared here, and hand it the bus to announce itself on.
+
+        This is what makes a namespace resource *shared* rather than merely reachable from
+        several places: a component's resource reloads and re-renders its one component,
+        while this one reloads and publishes, so every mount that read it re-reads.
+        """
+        return CellAddress(self, name), self.bus.publish
 
     def __init__(self, bus: TopicBus, scope: ScopeT = _NO_SCOPE) -> None:
         self.bus = bus
