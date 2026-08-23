@@ -1,6 +1,6 @@
 """Pins target-mode variance and adapter profile families under the project type check."""
 
-from typing import assert_type
+from typing import Any, assert_type
 
 from squid_layouts.planning import (
     AdapterProfile,
@@ -15,8 +15,11 @@ from squid_layouts.planning import (
     components_v2_target,
 )
 from squid_layouts.discord import Target
-from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
+from squid_layouts.scene.model import PlanResult, SceneClassicMessage, SceneComponentsV2
 from squid_layouts.planning import TargetProfile
+from squid_layouts import fallback, plan
+from squid_layouts.primitives import Card, Panel, Text, Variants
+from squid_layouts.semantic import FallbackContent
 
 
 class Portable(Renderable[DiscordTarget]):
@@ -56,4 +59,24 @@ assert_type(
 assert_type(
     Target.classic(adapter=discord_py),
     Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage],
+)
+assert_type(plan(Text("v2"), target=Target.v2()), PlanResult[SceneComponentsV2])
+assert_type(plan(Text("classic"), target=Target.classic()), PlanResult[SceneClassicMessage])
+
+v2_only = Panel((Text("v2"),))
+classic_only = Card(children=(Text("classic"),))
+plan(v2_only, target=Target.classic())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+plan(classic_only, target=Target.v2())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+
+assert_type(
+    fallback(v2_only, classic_only),
+    FallbackContent[ComponentsV2Target | ClassicTarget],
+)
+assert_type(
+    Variants.of(v2_only, classic_only),
+    Variants[ComponentsV2Target | ClassicTarget],
+)
+assert_type(
+    Variants.of(v2_only, classic_only, Text("a"), Text("b"), Text("c"), Text("long")),
+    Variants[Any],
 )

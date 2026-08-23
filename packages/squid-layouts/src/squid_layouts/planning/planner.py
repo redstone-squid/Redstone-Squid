@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from heapq import heappop, heappush
 from itertools import count
-from typing import cast
+from typing import Any, cast
 
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
@@ -84,11 +84,11 @@ from squid_layouts.text import NEUTRAL, Localization
 EMPTY_RESERVATION = ResourceCost()
 
 
-def _dialect_for(target: TargetProfile) -> TargetDialect:
+def _dialect_for(target: TargetProfile[Any, Any, Any]) -> TargetDialect:
     """A target's shape, defaulting to Components V2 for a profile that names none."""
     dialect = target.dialect
     if dialect is None:
-        return V2_DIALECT
+        return cast(TargetDialect, V2_DIALECT)
     return cast(TargetDialect, dialect)
 
 
@@ -168,7 +168,7 @@ class _Search:
     """Everything one document's search needs that does not change between candidates."""
 
     document: Document
-    target: TargetProfile
+    target: TargetProfile[Any, Any, Any]
     dialect: TargetDialect
     limits: DiscordLimits
     chrome: Chrome
@@ -474,10 +474,10 @@ def _search(search: _Search, *, search_budget: int) -> _Candidate:
     )
 
 
-def plan(
-    rendered: DocumentLike,
+def plan[ModeT, AdapterT, BodyT](
+    rendered: DocumentLike[ModeT],
     *,
-    target: TargetProfile,
+    target: TargetProfile[ModeT, AdapterT, BodyT],
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -488,7 +488,7 @@ def plan(
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
-) -> PlanResult:
+) -> PlanResult[BodyT]:
     """Resolve a complete logical document for one target.
 
     Planning owns every fit and fallback decision. The resulting scene contains visual action
@@ -540,7 +540,7 @@ def plan(
         collected = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
         resources = {f"asset:{asset.key}": asset for asset in assets}
         return PlanResult(
-            scene=cached.scene,
+            scene=cast(SceneDocument[BodyT], cached.scene),
             bindings=collected.bindings,
             form_bindings=collected.form_bindings,
             report=cached.report,
@@ -623,11 +623,18 @@ def plan(
         message = "; ".join(note.message for note in hard_failures)
         raise UnsolvableLayoutError(message)
     bindings = SceneBindings()
+    body = dialect.body(measured.children, bindings)
+    if target.body_type is not None and not isinstance(body, target.body_type):
+        message = (
+            f"target {target.id!r} declared {target.body_type.__name__}, "
+            f"but its dialect produced {type(body).__name__}"
+        )
+        raise LayoutInvariantError(message)
     scene = SceneDocument(
         protocol=SceneCodec.protocol,
         target=target.id,
         target_version=target.version,
-        body=dialect.body(measured.children, bindings),
+        body=cast(BodyT, body),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )
@@ -709,7 +716,7 @@ def _reconcile_pagers(measured: MeasuredLayout, broker: CursorCoordinator) -> No
 def _plan_cache_key(
     nodes: Sequence[object],
     *,
-    target: TargetProfile,
+    target: TargetProfile[Any, Any, Any],
     limits: DiscordLimits,
     chrome: Chrome,
     localization: Localization,

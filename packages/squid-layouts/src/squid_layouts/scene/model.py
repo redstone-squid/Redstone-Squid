@@ -309,13 +309,13 @@ class ScenePager:
 
 
 @dataclass(frozen=True, slots=True)
-class SceneDocument:
+class SceneDocument[BodyT = SceneBody]:
     """A target-resolved scene with no callbacks or native frontend objects."""
 
     protocol: int
     target: str
     target_version: int
-    body: SceneBody
+    body: BodyT
     assets: tuple[SceneAsset, ...] = ()
     pagers: tuple[ScenePager, ...] = ()
 
@@ -328,6 +328,16 @@ class SceneDocument:
         """
         if not isinstance(self.body, SceneComponentsV2):
             message = f"scene for target {self.target!r} has a {type(self.body).__name__} body, not Components V2"
+            raise LayoutInvariantError(message)
+        return self.body
+
+    def expect_body[ExpectedT](self, body_type: type[ExpectedT]) -> ExpectedT:
+        """Narrow a broadly decoded scene at an explicit frontend boundary."""
+        if not isinstance(self.body, body_type):
+            message = (
+                f"scene for target {self.target!r} has a {type(self.body).__name__} body, "
+                f"not {body_type.__name__}"
+            )
             raise LayoutInvariantError(message)
         return self.body
 
@@ -366,8 +376,8 @@ class PlanMetrics:
 
 
 @dataclass(frozen=True, slots=True)
-class PlanResult:
-    scene: SceneDocument
+class PlanResult[BodyT = SceneBody]:
+    scene: SceneDocument[BodyT]
     bindings: Mapping[str, ActionBinding]
     report: PlanReport
     form_bindings: Mapping[str, FormBinding] = field(default_factory=dict)
