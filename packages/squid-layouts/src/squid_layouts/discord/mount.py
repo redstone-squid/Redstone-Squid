@@ -1060,8 +1060,8 @@ class Mount:
             if not self._follow_warned:
                 self._follow_warned = True
                 logger.warning(
-                    "mount %s renders shared state but its scheduler cannot follow topics, "
-                    "so another mount's writes will not refresh it",
+                    "mount %s renders shared state or a watched topic but its scheduler cannot "
+                    "follow addresses, so changes made elsewhere will not refresh it",
                     self.id,
                 )
             return

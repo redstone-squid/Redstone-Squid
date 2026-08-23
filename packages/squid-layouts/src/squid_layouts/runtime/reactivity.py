@@ -104,10 +104,11 @@ _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_layouts_transactio
 class _Cell:
     """One state field's storage: an immutable value, and the version that dates it.
 
-    `address` is what a shared cell publishes under -- the ``(namespace, descriptor)`` pair
-    from :mod:`squid_layouts.runtime.shared`. A component's cell has none, and the two
-    behaviours a namespace adds -- the commit precondition below, and being followed by a
-    render -- both key off its presence rather than off a second cell type.
+    `address` is what an addressed cell publishes under: a ``CellAddress`` for a shared cell
+    from :mod:`squid_layouts.runtime.shared`, or a ``Topic`` for the valueless cell behind
+    ``sl.watch()``. A component's cell has none, and the two behaviours an address adds --
+    the commit precondition below, and being followed by a render -- both key off its
+    presence rather than off a second cell type.
     """
 
     __slots__ = ("address", "value", "version")
@@ -1050,17 +1051,20 @@ class Observation:
     """What one run read, so its shared cells can be turned into bus addresses.
 
     A plain :class:`_Consumer`: the same tracked read a computed records is what a render
-    records, and the context the read happens in is the only difference between them. That
-    is why there is no separate ``watch()`` to forget to call.
+    records, and the context the read happens in is the only difference between them. For a
+    shared cell that is the whole story -- there is no separate ``watch()`` to forget to
+    call. ``sl.watch()`` exists only for a named topic, which has no value to read.
     """
 
     sources: dict[Any, int] = field(default_factory=dict)
 
-    def addresses(self) -> tuple[Any, ...]:
-        """Every shared cell this run reached, deduplicated, in read order.
+    def addresses(self, resources: Sequence[_Consumer] = ()) -> tuple[Any, ...]:
+        """Every addressed cell this run reached, deduplicated, in read order.
 
         A cached computed is walked rather than re-run: it did not read its sources again,
-        but a render that used its value still depends on every one of them.
+        but a render that used its value still depends on every one of them. A resource is
+        walked for the same reason and needs passing in, because a render reads its *state*
+        synchronously while its loader did the tracked reads earlier, under its own consumer.
         """
         found: list[Any] = []
         seen: set[int] = set()
@@ -1078,6 +1082,8 @@ class Observation:
                     walk(source.sources)
 
         walk(self.sources)
+        for resource in resources:
+            walk(resource.sources)
         return tuple(found)
 
 

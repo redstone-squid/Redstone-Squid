@@ -110,6 +110,37 @@ identity and is only ever received, never built. `sl.Address` is the union the b
 are text on purpose: `sl.Topic("build", 123)` is a type error rather than a topic nobody else ever
 addresses.
 
+Watch a topic where you read the thing it names, and the mount follows it for you:
+
+```python
+class BuildPanel(sl.Component):
+    def __init__(self, build_id: str) -> None:
+        self.build_id = build_id
+
+    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    async def build(self) -> Build:
+        sl.watch(sl.Topic("build", self.build_id))
+        return await queries.get_build(self.build_id)
+
+    def render(self):
+        return sl.Text(self.build.value.name)
+```
+
+`sl.watch` is a tracked read like any other, so the render that used the resource's value
+follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
+the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
+unsubscribed -- and the initial load is just the resource's first settle. Prefer
+`ResourceDelivery.ATOMIC` for live data: the default `VISIBLE` would flash a pending paint on
+every external change.
+
+Because the topic carries a version, a publish landing *during* the load is not lost: it moves
+what the load is being compared against, so the value it produced is already stale and settles
+again. There is no "subscribe before the first read" rule to get wrong. `sl.watch` belongs in a
+resource, never in `on_load`, which runs once and under no consumer.
+
+`reactor.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
+for a subscriber that is not a mount:
+
 ```python
 bus = sl.TopicBus()
 reactor = sl.discord.Reactor(bus)
