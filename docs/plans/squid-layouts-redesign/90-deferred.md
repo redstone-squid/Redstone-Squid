@@ -26,7 +26,7 @@ are not re-derived or accidentally adopted later.
   namespace an unsuitable home for anything durable.
   **Revisited 2026-08-23**: the CascadeUI comparison's "steal the scoping/keying ergonomics, but
   not the singleton store" finding lands as [59](59-shared-pool.md)'s scope vocabulary and
-  [63](63-stores-package.md), and neither reopens this. 59 keys a *lifetime owner* the host
+  [63](../completed/squid-layouts-redesign/63-stores-package.md), and neither reopens this. 59 keys a *lifetime owner* the host
   constructs and holds — there is still no global, no lookup by type, and no way to reach a
   namespace you were not given; adopting `sessions.py`'s existing scope taxonomy as `ScopeT` makes
   the keying typed, not ambient. 63 is a store, but a store of application values in a package
@@ -51,7 +51,7 @@ are not re-derived or accidentally adopted later.
   is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
   `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
   rejected because it names the wrong relationship.
-  **Revisited again 2026-08-23**: [53](53-view-adoption.md) splits the surviving half on one
+  **Revisited again 2026-08-23**: [53](../completed/squid-layouts-redesign/53-view-adoption.md) splits the surviving half on one
   fact — whether the view has been *sent*. A live view owns a message and will edit it, and
   that case stays rejected exactly as written above. An unsent view owns nothing: it is items
   and callbacks that have not met Discord, so Squid can translate them into its own exact
@@ -86,7 +86,7 @@ are not re-derived or accidentally adopted later.
   host-side helpers *into* `sl.discord` rather than out of it, and a fourth layer would
   re-split what that round deliberately joined. What was worth keeping — that per-open session
   policy is spread across call sites — is 51, landing in `sl.discord` as a value.
-  **Revisited 2026-08-23**: [63](63-stores-package.md) adds a package and this entry does not
+  **Revisited 2026-08-23**: [63](../completed/squid-layouts-redesign/63-stores-package.md) adds a package and this entry does not
   forbid it. What was rejected was a *fourth UI layer above* `sl.discord`, re-splitting what the
   productization round deliberately joined and re-deriving `MountDefaults`, `sl.watch` and the
   class-body policy surface under new names. 63 is the opposite direction: durable application
