@@ -2071,14 +2071,15 @@ class TestSend:
         assert component.count == 1
         assert mount.handle is not None
 
-    async def test_handleless_operation_delivery_reports_unsettled(self) -> None:
-        mount = Mount(OperationPanel(), access=Everyone(), timeout=None)
+    async def test_handleless_operation_settles_without_repainting(self) -> None:
+        panel = OperationPanel()
+        mount = Mount(panel, access=Everyone(), timeout=None)
 
         sent = await mount.send(_Destination(None))
 
         assert isinstance(sent, delivery.Delivered)
-        assert not sent.settled
-        assert isinstance(mount.component.publication.status, sl.operations.Pending)
+        assert sent.settled
+        assert panel.publication.status == sl.operations.Succeeded(42)
 
     async def test_dismiss_deletes_the_message_and_finishes_the_mount(self) -> None:
         message = fake_message()
@@ -2852,6 +2853,7 @@ class TestResourceLoading:
         resume = asyncio.Event()
         painted = asyncio.Event()
         message: Any = fake_message()
+
         def record_edit(**_kwargs: object) -> object:
             painted.set()
             return message

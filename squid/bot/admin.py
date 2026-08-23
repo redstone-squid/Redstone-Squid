@@ -10,6 +10,7 @@ from discord.ext.commands import Context, Greedy
 
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import info_layout, link_layout, reply_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes
@@ -314,9 +315,18 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def raise_error(self, ctx: Context[BotT]):
         """Raises an error for testing purposes."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        async with self.bot.get_running_message(ctx, delete_on_exit=True, locale=locale):
+
+        async def fail(_progress, _receipt):
             msg = "This is a test error."
             raise ValueError(msg)
+
+        await run_command_operation(
+            ctx,
+            fail,
+            locale=locale,
+            dismiss_on_success=True,
+            reports=self.bot.services.error_reports,
+        )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
