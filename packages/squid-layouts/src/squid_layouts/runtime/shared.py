@@ -19,7 +19,7 @@ from squid_layouts.runtime.reactivity import (
     _State,
 )
 from squid_layouts.runtime.resources import _ResourceDescriptor
-from squid_layouts.topics import Address, CellAddress, TopicBus
+from squid_layouts.runtime.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
 """Attribute names a namespace owns, so a cell may not take one.
