@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field, replace
-from typing import Protocol
+from typing import Protocol, Self
 
 from squid_layouts.errors import LayoutInvariantError
 
@@ -160,7 +160,7 @@ class TargetProfile:
         """Every axis this cost overspends, as (axis, spent, capacity)."""
         return tuple(cost.over(self.capacities))
 
-    def reserve(self, cost: ResourceCost) -> TargetProfile:
+    def reserve(self, cost: ResourceCost) -> Self:
         """Return this profile with every reserved resource withheld from its budget.
 
         A reservation is a smaller target, not a parameter threaded beside one: planning,
@@ -185,12 +185,4 @@ class TargetProfile:
         }
         if not reductions:
             return self
-        return TargetProfile(
-            id=self.id,
-            version=self.version,
-            capabilities=self.capabilities,
-            limits=replace(limits, **reductions),
-            extensions=self.extensions,
-            dialect=self.dialect,
-            resources=self.resources,
-        )
+        return replace(self, limits=replace(limits, **reductions))
