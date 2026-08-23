@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 
+import discord
 import pytest
 
 from squid_layouts import LayoutInvariantError
@@ -47,13 +48,20 @@ def test_v2_draws_premium_links_select_emoji_and_media_metadata() -> None:
         target=V2_TARGET,
     )
     row = presentation.layout.children[0]
+    assert isinstance(row, discord.ui.ActionRow)
     premium, link = row.children
-    select = presentation.layout.children[1].children[0]
+    select_row = presentation.layout.children[1]
     gallery = presentation.layout.children[2]
+    assert isinstance(premium, discord.ui.Button)
+    assert isinstance(link, discord.ui.Button)
+    assert isinstance(select_row, discord.ui.ActionRow)
+    select = select_row.children[0]
+    assert isinstance(select, discord.ui.Select)
+    assert isinstance(gallery, discord.ui.MediaGallery)
 
     assert premium.sku_id == 42
-    assert link.label is None and link.emoji.id == 7 and link.disabled is True
-    assert select.options[0].emoji.name == "1️⃣"
+    assert link.label is None and link.emoji is not None and link.emoji.id == 7 and link.disabled is True
+    assert select.options[0].emoji is not None and select.options[0].emoji.name == "1️⃣"
     assert gallery.items[0].description == "accessible preview"
     assert gallery.items[0].spoiler is True
 
@@ -64,9 +72,11 @@ def test_classic_draws_premium_and_disabled_emoji_links() -> None:
     )
     assert presentation.view is not None
     premium, link = presentation.view.children
+    assert isinstance(premium, discord.ui.Button)
+    assert isinstance(link, discord.ui.Button)
 
     assert premium.sku_id == 42
-    assert link.label is None and link.emoji.name == "🔗" and link.disabled is True
+    assert link.label is None and link.emoji is not None and link.emoji.name == "🔗" and link.disabled is True
 
 
 def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
