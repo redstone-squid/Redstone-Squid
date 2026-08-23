@@ -1,3 +1,4 @@
+import inspect
 from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock
@@ -6,9 +7,10 @@ import pytest
 from discord.abc import Messageable
 
 from squid.bot.errors import is_error_presented
-from squid.bot.operations import run_command_operation
+from squid.bot.operations import managed_result, run_command_operation
 from squid.bot.ui import info_node
 from squid_layouts.discord.testing import fake_message
+from squid_layouts.runtime.component import RenderResult
 
 
 def _target(message: object) -> tuple[Messageable, AsyncMock]:
@@ -58,3 +60,24 @@ async def test_command_operation_suppresses_a_terminal_scene_equal_to_its_initia
     await run_command_operation(target, adopt_external_card)
 
     message.edit.assert_not_awaited()
+
+
+async def test_managed_result_keeps_the_command_signature_and_renders_its_return_value() -> None:
+    message = fake_message()
+    send = AsyncMock(return_value=message)
+    ctx = SimpleNamespace(send=send, interaction=None, guild=None)
+    seen: list[tuple[object, int]] = []
+
+    class Handler:
+        @managed_result
+        async def command(self, context: object, value: int) -> RenderResult:
+            seen.append((context, value))
+            return info_node("Done", "Complete")
+
+    assert str(inspect.signature(Handler.command)) == "(self, context: object, value: int) -> RenderResult"
+
+    await Handler().command(ctx, 42)
+
+    assert seen == [(ctx, 42)]
+    send.assert_awaited_once()
+    assert "Done" in str(message.edit.await_args.kwargs["view"].to_components())
