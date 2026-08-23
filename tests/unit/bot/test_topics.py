@@ -47,7 +47,7 @@ async def _drain_reactor(reactor: sl.discord.Reactor) -> None:
 
 
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
-    bus = sl.runtime.TopicBus()
+    bus = sl.runtime.LocalTopicBus()
     reactor = sl.discord.Reactor(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     source = "before"
@@ -68,7 +68,6 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     source = "after"
 
     await RedstoneSquid.refresh_posts(bot, "build", "42")
-    await bus.drain()
     await _drain_reactor(reactor)
 
     assert all("after" in str(message.edit.await_args.kwargs["view"].to_components()) for message in messages)

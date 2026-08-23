@@ -91,7 +91,7 @@ async def test_replacing_outside_an_action_still_lands_immediately() -> None:
 
 async def test_a_replacement_rebaselines_its_sources_only_when_it_commits() -> None:
     """Rollback must leave the resource watching what it watched before."""
-    bus = sl.runtime.TopicBus()
+    bus = sl.runtime.LocalTopicBus()
     topic = sl.runtime.Topic("thing", "1")
 
     class Watching(sl.Component):

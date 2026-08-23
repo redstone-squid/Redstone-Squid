@@ -30,7 +30,7 @@ class Prefs(sl.runtime.Shared[int]):
 class Catalog(sl.runtime.Shared[int]):
     key: str = sl.state("k1")
 
-    def __init__(self, bus: sl.runtime.TopicBus, scope: int) -> None:
+    def __init__(self, bus: sl.runtime.LocalTopicBus, scope: int) -> None:
         super().__init__(bus, scope)
         self._loads = 0
 
@@ -67,23 +67,23 @@ async def mounted(catalog: Catalog, reactor: Reactor, message: object) -> Mount:
     return mount
 
 
-async def drain(reactor: Reactor, bus: sl.runtime.TopicBus) -> None:
+async def drain(reactor: Reactor, bus: sl.runtime.LocalTopicBus) -> None:
+    del bus
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(reactor.run)
-        await bus.drain()
         await asyncio.wait_for(reactor._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
 
 @pytest.fixture
-def bus() -> sl.runtime.TopicBus:
-    return sl.runtime.TopicBus()
+def bus() -> sl.runtime.LocalTopicBus:
+    return sl.runtime.LocalTopicBus()
 
 
 # --- Computed on a namespace ----------------------------------------------------------
 
 
-def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.runtime.TopicBus) -> None:
+def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.runtime.LocalTopicBus) -> None:
     prefs = Prefs(bus, 1)
     assert prefs.full == "Ada Lovelace"
 
@@ -92,7 +92,7 @@ def test_a_namespace_computed_derives_from_its_own_cells(bus: sl.runtime.TopicBu
     assert prefs.full == "Grace Lovelace"
 
 
-def test_two_namespaces_compute_independently(bus: sl.runtime.TopicBus) -> None:
+def test_two_namespaces_compute_independently(bus: sl.runtime.LocalTopicBus) -> None:
     """The computed is per-instance, like the cells it reads: the handle is the state."""
     one, two = Prefs(bus, 1), Prefs(bus, 2)
 
@@ -101,7 +101,9 @@ def test_two_namespaces_compute_independently(bus: sl.runtime.TopicBus) -> None:
     assert (one.full, two.full) == ("Grace Lovelace", "Ada Lovelace")
 
 
-async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(bus: sl.runtime.TopicBus) -> None:
+async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
+    bus: sl.runtime.LocalTopicBus,
+) -> None:
     """A computed carries no address: what moves is the cells, so those are what to follow."""
     reactor = Reactor(bus)
     prefs = Prefs(bus, 1)
@@ -127,7 +129,7 @@ async def test_a_mount_reading_a_namespace_computed_follows_the_cells_behind_it(
 # --- Resource on a namespace ----------------------------------------------------------
 
 
-async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus: sl.runtime.TopicBus) -> None:
+async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus: sl.runtime.LocalTopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
 
@@ -137,7 +139,7 @@ async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus:
     assert len(mounts) == 2
 
 
-async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runtime.TopicBus) -> None:
+async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runtime.LocalTopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
@@ -150,7 +152,7 @@ async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.runti
     assert followed == {"Catalog(1).entries", "Catalog(1).key"}
 
 
-async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.runtime.TopicBus) -> None:
+async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.runtime.LocalTopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
@@ -163,7 +165,7 @@ async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.runtime.TopicBu
     assert all(mount.followed for mount in mounts)
 
 
-async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.TopicBus) -> None:
+async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.runtime.LocalTopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
@@ -179,7 +181,7 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k2#2"], ["k2#2"]]
 
 
-async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.TopicBus) -> None:
+async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.LocalTopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
@@ -193,7 +195,7 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.Topic
     assert mount.followed
 
 
-async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.TopicBus) -> None:
+async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopicBus) -> None:
     """Doc 48 staging, seen from the bus: an action that failed must not wake other mounts."""
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
@@ -212,7 +214,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.TopicBus)
     assert mount.followed
 
 
-def test_two_namespaces_hold_separate_resources(bus: sl.runtime.TopicBus) -> None:
+def test_two_namespaces_hold_separate_resources(bus: sl.runtime.LocalTopicBus) -> None:
     one, two = Catalog(bus, 1), Catalog(bus, 2)
 
     assert one.entries is not two.entries
