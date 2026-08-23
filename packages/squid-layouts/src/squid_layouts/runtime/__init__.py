@@ -42,6 +42,8 @@ from squid_layouts.runtime.reactivity import (
     untracked,
 )
 from squid_layouts.runtime.resources import (
+    AtomicResource,
+    AtomicResourceState,
     Failed,
     Pending,
     Ready,
@@ -65,6 +67,8 @@ def __getattr__(name: str):
 __all__ = [
     "ActionParticipant",
     "ActivePagers",
+    "AtomicResource",
+    "AtomicResourceState",
     "CellReport",
     "Component",
     "ComponentRuntime",
