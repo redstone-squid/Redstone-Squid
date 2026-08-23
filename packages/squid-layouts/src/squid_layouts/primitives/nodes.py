@@ -451,7 +451,7 @@ class Section(Renderable[ComponentsV2Target]):
     """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
 
     texts: tuple[Text | Heading | Footer, ...]
-    accessory: Thumbnail | LinkButton | PremiumButton | RoutedButton | RawItem
+    accessory: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
