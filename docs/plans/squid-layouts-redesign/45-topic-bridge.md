@@ -56,8 +56,9 @@ await bridge.run()             # LISTEN on one dedicated pooled connection
 ```
 
 - A per-process `origin` (uuid) travels in the payload; the listener drops its own.
-- `publish` inside the caller's transaction is commit-ordered by Postgres, which is the
-  ordering a host wants: a subscriber re-reads and finds the row.
+- `publish` is immediate locally and queued remotely; `publish_in(connection, topic)` uses the
+  caller's transaction connection, so both local and remote listeners receive the notification
+  only after PostgreSQL commits.
 - Listener reconnect fires an optional `on_resync()` so the host can publish its coarse
   topics; NOTIFY is not durable, which matches the bus contract exactly.
 - The 8000-byte payload limit is documented; the codec is expected to produce short keys.
@@ -104,6 +105,7 @@ needs a session-level connection -- so a deployment without one keeps the local 
 reconciler's poll.
 
 `publish` stayed synchronous, matching `TopicBus.publish`, with the notification queued and
-sent by `run()`. That puts the NOTIFY on the bridge's own connection rather than the caller's
-transaction, so the commit-ordering property in §2 is available through a public `payload()`
-the host sends itself with `pg_notify` when it wants it.
+sent by `run()`. `publish_in(connection, topic)` is the transaction-ordered form: it sends a
+tagged notification on the caller's connection, and the bridge listener echoes it into the
+originating bus after commit as well as delivering it to other processes. The raw payload escape
+hatch was removed so callers cannot accidentally omit the local delivery.
