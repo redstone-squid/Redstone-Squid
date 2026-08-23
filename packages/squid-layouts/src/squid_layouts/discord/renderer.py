@@ -20,6 +20,7 @@ from squid_layouts.scene.model import (
     SceneButton,
     SceneDocument,
     SceneExtension,
+    SceneEntitySelect,
     SceneFile,
     SceneGallery,
     SceneLink,
@@ -39,7 +40,7 @@ from squid_layouts.scene.model import (
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import discord_text
 
-type Control = SceneButton | SceneSelect
+type Control = SceneButton | SceneSelect | SceneEntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ViewFactory = Callable[[], discord.ui.LayoutView]
 
@@ -211,6 +212,8 @@ class V2Renderer:
                 case SceneRow(items=items):
                     return discord.ui.ActionRow(*(accessory(entry) for entry in items))
                 case SceneSelect():
+                    return discord.ui.ActionRow(control(node))
+                case SceneEntitySelect():
                     return discord.ui.ActionRow(control(node))
                 case SceneRoutedSelect(
                     options=options,

@@ -2,7 +2,7 @@
 
 from squid_layouts.discord import classic, delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
-from squid_layouts.discord.actions import ActionResponder, native, responder
+from squid_layouts.discord.actions import ActionResponder, native, responder, selected_entities
 from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
@@ -258,6 +258,7 @@ __all__ = [
     "mode_of",
     "mounts",
     "native",
+    "selected_entities",
     "navigation_controls",
     "open_personal",
     "owned_mount",
