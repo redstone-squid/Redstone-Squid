@@ -169,7 +169,7 @@ async def test_a_premium_button_and_a_dynamic_item_refuse() -> None:
             super().__init__(discord.ui.Button(label="dyn", custom_id="dyn:1"))
 
         @classmethod
-        async def from_custom_id(cls, interaction, item, match):  # noqa: ANN001, ANN206
+        async def from_custom_id(cls, interaction, item, match):
             return cls()
 
     dynamic = discord.ui.View(timeout=None)
@@ -437,7 +437,7 @@ async def test_an_overridden_on_error_intercepts_before_the_mount_sees_it() -> N
     caught: list[BaseException] = []
 
     class Failing(discord.ui.View):
-        async def on_error(self, interaction, error, item) -> None:  # noqa: ANN001
+        async def on_error(self, interaction, error, item) -> None:
             caught.append(error)
 
         @discord.ui.button(label="go", custom_id="go")
@@ -475,7 +475,7 @@ async def test_a_modal_submit_refreshes_the_mount_and_issues_no_edit_of_its_own(
     class Renaming(discord.ui.Modal, title="Rename"):
         field: discord.ui.TextInput[Any] = discord.ui.TextInput(label="name")
 
-        def __init__(self, view: "Named") -> None:
+        def __init__(self, view: Named) -> None:
             super().__init__()
             self.owner = view
 
