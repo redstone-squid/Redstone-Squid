@@ -180,6 +180,16 @@ class PresentedHook(Protocol):
     def __call__(self, mount: Mount, /) -> None: ...
 
 
+class CommittedHook(Protocol):
+    """Observer told that an application render committed its runtime state.
+
+    Synchronous for the same reason as `PresentedHook`: commits run under the shared
+    render lock, where awaiting or re-entering the mount would deadlock.
+    """
+
+    def __call__(self, mount: Mount, /) -> None: ...
+
+
 class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `Reactor`)."""
 
@@ -667,6 +677,7 @@ class Mount:
         self._suppressed = 0
         self._finished = False
         self._finish_hooks: list[FinishHook] = []
+        self._committed_hooks: list[CommittedHook] = []
         self._presented_hooks: list[PresentedHook] = []
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
@@ -1193,7 +1204,7 @@ class Mount:
         self._commit_delivery(candidate)
 
     def _commit_render(self, candidate: _Candidate) -> None:
-        """Make the candidate's tree the committed one; what the reader sees is untouched.
+        """Commit the candidate's application runtime; what the reader sees is untouched.
 
         `session_updates` apply here too: planning's clamps describe the scene that is on
         screen, and a suppressed candidate is on screen by definition.
@@ -1201,16 +1212,16 @@ class Mount:
         apply_updates(self.presentation, candidate.session_updates)
         self._prune_follows(candidate.tree.observations)
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
+        self._handlers = candidate.handlers
+        self._form_bindings = candidate.form_bindings
+        self._plan = candidate.composition.plan
         self._dirty = self.runtime.dirty
         self._pending = None
 
     def _commit_delivery(self, candidate: _Candidate) -> None:
         """Make the candidate's generation the live one: its control ids now answer clicks."""
-        self._handlers = candidate.handlers
-        self._form_bindings = candidate.form_bindings
         self._generation = candidate.generation
         self._assets = candidate.assets
-        self._plan = candidate.composition.plan
         self._lifecycle = MountLifecycle.ACTIVE
         candidate.view.timeout = self._remaining_timeout()
         self._swap_view(candidate.view)
@@ -1222,11 +1233,10 @@ class Mount:
         """Whether delivering `candidate` would show the reader exactly what is already there.
 
         Decided at the scene, which is generation-free; control ids are minted at draw time,
-        so two presentations of one panel never compare equal. The scene misses two things
-        and each gets a guard: asset *content* can change under the same name, and an equal
-        scene can come from a re-embedded child whose bindings now point at a different
-        object. Bound methods compare by instance, so ordinary handlers survive a re-render;
-        a fresh closure does not, and such a panel is simply never suppressed.
+        so two presentations of one panel never compare equal. Asset *content* can change
+        under the same name, and the visible controls must retain the same logical key set.
+        Binding semantics are deliberately excluded: suppression publishes their latest
+        values through the mount's key indirection without replacing the live controls.
         """
         plan = self._plan
         if plan is None or self._lifecycle is not MountLifecycle.ACTIVE:
@@ -1237,25 +1247,27 @@ class Mount:
             return False
         if candidate.handlers.keys() != self._handlers.keys():
             return False
-        return all(candidate.handlers[key].handler == self._handlers[key].handler for key in candidate.handlers)
+        return True
 
     def _suppress(self, candidate: _Candidate, profile: OperationRecorder | None) -> None:
         """Commit a render the reader already has, without an edit and without a new generation.
 
         The live generation keeps its control ids, so a click already in flight still lands.
-        Durability is not notified: nothing visible moved, and 34 checkpoints at visible
-        commits only.
+        Runtime observers are notified because component state and action semantics advanced;
+        presentation observers are not because nothing visible moved.
         """
         self._commit_render(candidate)
         candidate.view.stop()
+        self._notify_committed()
         self._suppressed += 1
         if profile is not None:
             profile.increment("mount.suppressed", 1)
         logger.debug("mount %s: render identical to the live generation, edit suppressed", self.id)
 
     def _commit_presented(self, candidate: _Candidate) -> None:
-        """Commit one successfully delivered candidate and notify durability observers."""
+        """Commit one successfully delivered candidate and notify both observer boundaries."""
         self._commit(candidate)
+        self._notify_committed()
         self._notify_presented()
 
     def _commit_renewal(self, candidate: _LifecycleCandidate) -> None:
@@ -1277,6 +1289,14 @@ class Mount:
                 hook(self)
             except Exception:
                 logger.exception("presented hook failed for mount %s", self.id)
+
+    def _notify_committed(self) -> None:
+        """Notify observers after a complete application runtime commit."""
+        for hook in tuple(self._committed_hooks):
+            try:
+                hook(self)
+            except Exception:
+                logger.exception("committed hook failed for mount %s", self.id)
 
     def _rollback(self, candidate: _Candidate) -> None:
         """Discard an undelivered candidate; the message still shows the live generation.
@@ -2453,6 +2473,14 @@ class Mount:
         acquires it. Schedule asynchronous follow-up through an owned supervisor or a queue.
         """
         self._presented_hooks.append(callback)
+
+    def on_committed(self, callback: CommittedHook) -> None:
+        """Synchronously observe application commits, including suppressed presentations.
+
+        The callback runs under the render lock and must not await or call an operation that
+        acquires it. Schedule asynchronous follow-up through an owned supervisor or a queue.
+        """
+        self._committed_hooks.append(callback)
 
     def on_finish(self, callback: FinishHook) -> None:
         """Call `callback` once this mount has finished, after its teardown.
