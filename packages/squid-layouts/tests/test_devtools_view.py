@@ -103,6 +103,7 @@ class TestList:
 class TestDetail:
     async def test_a_detail_view_reports_state_plan_and_handlers(self) -> None:
         subject = await live_subject(access=Owner(7))
+        await subject.refresh_now()
         _, view = mount_inspector(MountInspector(focus=subject.id))
 
         body = "\n".join(_texts(view))
@@ -110,6 +111,7 @@ class TestDetail:
         assert "<@7>" in body
         assert "open" in body
         assert "states explored" in body
+        assert "1 suppressed" in body
 
     async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
         now = datetime.now(UTC)

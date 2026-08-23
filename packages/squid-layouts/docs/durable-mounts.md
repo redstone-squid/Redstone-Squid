@@ -80,9 +80,10 @@ recoverable and therefore return `NotDurable` without replacing an incumbent. A 
 publishes the first whole-session record and retires any collision-policy victims. Attach child messages through
 the returned `DurableSession.attach(..., recipe=...)` so parent and actor attribution remain in the same record.
 
-Visible mount commits trigger whole-session checkpoints. A failed checkpoint leaves the live UI usable, marks
-`session.health` as `CHECKPOINT_PENDING`, and enters the runtime's retry queue. Finishing the root deletes the
-record; process shutdown releases its claim without deleting it.
+Visible mount commits trigger whole-session checkpoints. A render the mount suppressed because it matched the live
+generation is not a visible commit and requests no checkpoint. A failed checkpoint leaves the live UI usable, marks
+`session.health` as `CHECKPOINT_PENDING`, and enters the runtime's retry queue. Finishing the root deletes the record;
+process shutdown releases its claim without deleting it.
 
 `RecoveryReport` separates restored, missing, expired, unreachable, incompatible, failed, and claimed-elsewhere
 records. Missing roots and expired sessions are deleted. Missing child branches are pruned. Temporarily
