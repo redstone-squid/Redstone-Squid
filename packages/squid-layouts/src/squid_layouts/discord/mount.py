@@ -806,6 +806,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
         self._handle: deliver.EditHandle | None = None
+        self._delete_handle: deliver.DeleteHandle | None = None
         self._ephemeral: bool | None = None
         self._lifecycle = MountLifecycle.ACTIVE
         self._unwatch_expiry: Callable[[], None] | None = None
@@ -1740,6 +1741,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                         self._rollback(candidate)
                     raise
                 self._handle = receipt.handle
+                self._delete_handle = receipt.delete_handle
                 self._ephemeral = receipt.ephemeral
                 if receipt.message is not None:
                     self._note_address(receipt.message)
@@ -1750,7 +1752,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     self._unwatch_expiry = self.scheduler.watch(self)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
-                return deliver.Delivered(receipt)
+                return deliver.Delivered(receipt, settled=not self._dirty)
             finally:
                 self._render_lock.release()
 
@@ -2722,6 +2724,27 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     # working, or even on it failing in a way this anticipated. The mount is
                     # finished either way, and an observer that never heard so would hold a dead
                     # mount forever.
+                    self._teardown()
+                    run_hooks = True
+        except BaseException:
+            if run_hooks:
+                await self._run_finish_hooks()
+            raise
+        if run_hooks:
+            await self._run_finish_hooks()
+
+    async def dismiss(self) -> None:
+        """Delete the delivered message and finish this mount."""
+        run_hooks = False
+        try:
+            async with self._render_lock:
+                if self._finished:
+                    return
+                self._finished = True
+                try:
+                    if self._delete_handle is not None:
+                        await self._delete_handle.delete()
+                finally:
                     self._teardown()
                     run_hooks = True
         except BaseException:
