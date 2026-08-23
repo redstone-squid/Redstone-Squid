@@ -211,7 +211,7 @@ So: a cell value is replaced, never mutated in place, and the type checker holds
 `sl.cell()` carries the same overloads as `sl.state()` — a `dict` default declares
 `Mapping`, a `list` declares `Sequence`, a `set` declares `AbstractSet` — so a concrete
 annotation and every mutating method are type errors, and the stored value is the one
-assigned. `sl.draft(namespace, "field")` works on a namespace as it does on a component.
+assigned.
 `opaque=True` is the escape hatch for a collaborator the namespace holds and never mutates.
 
 **Nothing copies.** The copy-on-read the proxy version needed — materialising a deep copy
@@ -503,7 +503,7 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 | # | Deliverable | Exit criteria |
 |---|---|---|
 | 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. **Shipped.** |
-| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; `sl.cell()` narrowing a builtin default to its read-only ABC under `just typecheck`; `sl.draft` on a namespace; an `opaque=` cell settling by identity; an undeclared write raising. |
+| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; `sl.cell()` narrowing a builtin default to its read-only ABC under `just typecheck`; an `opaque=` cell settling by identity; an undeclared write raising. |
 | 2 | `contribute()`, prepare/apply, `SharedStateConflictError`. Staging and read tracking come from 41. | A raising handler leaks no staged value; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces prepares all before applying any; a `@sl.computed` over a shared cell recomputing when another owner writes it. |
 | 3 | Render observation, `topic()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; no follow outlives its mount; a write during a render raising. |
 | 4 | Shared changes in `StateDelta`; blind undo and redo. | One entry undoes local plus multi-namespace shared state in one press; a sibling panel's intervening write does not disable the control and does not fail the press; undo publishes to the sibling; an entry with an external inverse whose inverse raises restores nothing. |

@@ -262,8 +262,8 @@ short-circuit cannot produce Discord's generic interaction failure.
 `sl.state` holds a value that is replaced, never mutated in place. The type checker enforces
 it: a `dict`, `list` or `set` default declares the field as `Mapping`, `Sequence` or
 `AbstractSet`, so `self.rows.append(x)` and `rows: list[str] = sl.state([])` are both type
-errors, while the stored value is exactly the one assigned. `{**m, k: v}` replaces a key;
-`sl.draft(self, "field")` hands out a shallow copy to mutate and assigns it back on exit.
+errors, while the stored value is exactly the one assigned. `{**m, k: v}` replaces a key; for more
+than that, copy into a local and assign it back.
 `sl.state(..., opaque=True)` declares a collaborator the component holds and never mutates — a
 service, a guild, a session — which settles on identity and is never persisted.
 
