@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from squid_layouts.actions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
+from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.entities import EntityRef

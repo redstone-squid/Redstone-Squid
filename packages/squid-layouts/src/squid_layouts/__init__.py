@@ -16,7 +16,7 @@ from squid_layouts import (
     sources,
     temporal,
 )
-from squid_layouts.actions import (
+from squid_layouts.interactions import (
     ActionEvent,
     ActionKind,
     ActionMiddleware,

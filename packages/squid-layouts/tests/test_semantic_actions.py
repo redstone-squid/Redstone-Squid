@@ -17,7 +17,7 @@ from squid_layouts import (
     plan,
     truncate,
 )
-from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.interactions import ActionEvent, ActionPolicy
 from squid_layouts.discord import V2_TARGET
 from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_layouts.runtime import PresentationSession, apply_updates

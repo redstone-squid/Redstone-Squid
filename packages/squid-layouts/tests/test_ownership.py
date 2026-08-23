@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
 from squid_layouts import ActionPolicy, FormLike, SubmitHandler, TextLike, plan
-from squid_layouts.actions import Actor, SelectionEvent, Visibility
+from squid_layouts.interactions import Actor, SelectionEvent, Visibility
 from squid_layouts.discord import V2_TARGET
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.model import SceneSelect, SceneText

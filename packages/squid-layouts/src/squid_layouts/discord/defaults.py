@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import TypedDict, Unpack
 
-from squid_layouts.actions import ActionMiddleware
+from squid_layouts.interactions import ActionMiddleware
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.access import AccessPolicy
 from squid_layouts.discord.mount import (

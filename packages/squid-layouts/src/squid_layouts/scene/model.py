@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.emoji import Emoji
 from squid_layouts.entities import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
