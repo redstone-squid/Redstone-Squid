@@ -8,7 +8,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, Mount
-from squid_layouts.discord.modals import EntityField, EntityType, FileField, build_form_modal
+from squid_layouts.discord.modal import EntityField, EntityType, FileField, build_form_modal
 from squid_layouts.discord.modal import CheckboxGroupField
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.forms import FormText

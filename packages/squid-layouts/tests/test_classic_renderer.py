@@ -7,8 +7,8 @@ import pytest
 
 from squid_layouts.semantic import Actions, Link, Note, Paragraph
 from squid_layouts.discord import CLASSIC_TARGET, classic
-from squid_layouts.discord.classic import ClassicRenderer, audit_classic_payload
-from squid_layouts.discord.limits import CLASSIC_LIMITS
+from squid_layouts.discord.classic_renderer import ClassicRenderer, audit_classic_payload
+from squid_layouts.planning.limits import CLASSIC_LIMITS
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (

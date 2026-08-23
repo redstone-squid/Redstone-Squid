@@ -217,14 +217,14 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.MountDefaults
     assert sl.discord.SessionRegistry
     assert sl.discord.routing.routers
-    assert sl.discord.rendering.V2Renderer
-    assert sl.discord.classic.ClassicRenderer
+    assert sl.discord.renderer.V2Renderer
+    assert sl.discord.classic_renderer.ClassicRenderer
     assert sl.discord.classic.compose
     assert sl.discord.SessionKey
     assert sl.discord.sessions.SessionPolicy
     assert sl.discord.Screen
-    assert sl.discord.sessions.Scope
-    assert sl.discord.sessions.Opener
+    assert sl.discord.screens.Scope
+    assert sl.discord.screens.Opener
     assert sl.discord.presentation.DiscordPresentation
     assert sl.discord.DiscordMode.COMPONENTS_V2
     assert sl.discord.DiscordModeError
@@ -240,6 +240,8 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
     assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.runtime.__all__)
+    for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
+        assert removed not in sl.discord.__all__ and not hasattr(sl.discord, removed)
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:
