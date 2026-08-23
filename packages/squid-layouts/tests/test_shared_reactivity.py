@@ -5,8 +5,8 @@ from dataclasses import dataclass
 import pytest
 
 from squid_layouts import Component, computed, state
-from squid_layouts.runtime import CellAddress, Shared, addresses, transaction
-from squid_layouts.primitives import Text
+from squid_layouts.primitives import Boundary, Text
+from squid_layouts.runtime import CellAddress, ReactiveWriteError, Shared, addresses, transaction
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
 from squid_layouts.runtime.topics import Topic, TopicBus
@@ -119,6 +119,64 @@ def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
     with pytest.raises(RuntimeError, match="while a render was reading it"):
         render_component_tree(Writes())
     assert preferences.theme == "system"
+
+
+def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> None:
+    """Component state has no address, but the same render still may not write it back."""
+
+    class Torn(Component):
+        n: int = state(0)
+
+        def render(self) -> Text:
+            self.n = 1
+            return Text(str(self.n))
+
+    torn = Torn()
+    with pytest.raises(ReactiveWriteError) as excinfo:
+        render_component_tree(torn)
+    assert "factory=" in str(excinfo.value)
+    assert "sl.computed" in str(excinfo.value)
+    assert torn.n == 0
+
+
+def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> None:
+    """Construction is not mutation: a child's __init__ runs while the parent is rendering."""
+
+    class Child(Component):
+        label: str = state("")
+
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def render(self) -> Text:
+            return Text(self.label)
+
+    class Parent(Component):
+        def render(self) -> Boundary:
+            return self.boundary(Child("hi"), key="child")
+
+    tree = render_component_tree(Parent())
+    child = tree.components["child"]
+    assert isinstance(child, Child)
+    assert child.label == "hi"
+
+
+def test_a_component_born_this_render_still_raises_once_its_own_render_runs() -> None:
+    """The exemption ends at construction: a child tearing its own tree is not excused."""
+
+    class TornChild(Component):
+        n: int = state(0)
+
+        def render(self) -> Text:
+            self.n = 1
+            return Text(str(self.n))
+
+    class Parent(Component):
+        def render(self) -> Boundary:
+            return self.boundary(TornChild(), key="child")
+
+    with pytest.raises(ReactiveWriteError, match="factory="):
+        render_component_tree(Parent())
 
 
 # --- Naming an address by hand --------------------------------------------------------------

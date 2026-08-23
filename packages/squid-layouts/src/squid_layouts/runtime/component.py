@@ -40,6 +40,7 @@ from squid_layouts.primitives.nodes import (
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.reactivity import (
     _CURRENT,
+    _RENDER_OBSERVATION,
     _Computed,
     _State,
     observe_render,
@@ -52,6 +53,7 @@ from squid_layouts.runtime.resources import (
     observe_resources,
     unique_resources,
 )
+from squid_layouts.runtime.topics import Address
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -132,7 +134,6 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
-from squid_layouts.runtime.topics import Address
 
 type RenderNode[ModeT = Any] = LayoutNode[ModeT]
 type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
@@ -252,6 +253,10 @@ class Component[ModeT = Any]:
         instance = super().__new__(cls)
         if current := _CURRENT.get():
             current.note_born(instance)
+        # Same rule for a render: a parent's render() may build a child, and the child's
+        # __init__ assigning its own declared state is construction, not a render-time write.
+        if observation := _RENDER_OBSERVATION.get():
+            observation.note_born(instance)
         return instance
 
     def __setattr__(self, name: str, value: Any) -> None:
@@ -514,6 +519,11 @@ def render_component_tree(
             return tuple(expanded)
 
         try:
+            # Past this point, a write of this component's own state is no longer construction:
+            # its own render() is the thing that could tear, so the exemption ends here and not
+            # a moment later.
+            if observation := _RENDER_OBSERVATION.get():
+                observation.entering_own_render(component)
             nodes: list[LayoutNode] = []
             for index, item in enumerate(items(component.render(), path)):
                 nodes.extend(expand_item(item, f"{path}.{index}"))
