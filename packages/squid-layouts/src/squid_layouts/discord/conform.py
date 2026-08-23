@@ -154,6 +154,11 @@ def _conform_select(select: BaseSelect, limits: V2Limits, notes: Notes = None) -
     if select.placeholder is not None and len(select.placeholder) > limits.select_placeholder:
         _note(notes, f"select placeholder {len(select.placeholder)} > {limits.select_placeholder}")
         select.placeholder = trim(select.placeholder, limits.select_placeholder)
+    defaults = getattr(select, "default_values", ())
+    if len(defaults) > limits.select_options:
+        _note(notes, f"{len(defaults)} entity select defaults exceed {limits.select_options}")
+    if len(defaults) > select.max_values:
+        _note(notes, f"{len(defaults)} entity select defaults exceed max_values {select.max_values}")
     if not isinstance(select, discord.ui.Select):
         return
     options = select.options
