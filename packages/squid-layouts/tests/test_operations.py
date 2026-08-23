@@ -98,7 +98,7 @@ class _IdleQueue:
         self.on_wait: Callable[[], None] | None = None
 
     def snapshot(self) -> BusSnapshot:
-        return BusSnapshot((), queued=self.queued, in_flight=self.in_flight)
+        return BusSnapshot((), queued=self.queued, in_flight=self.in_flight, delivered=0, failed=0)
 
     async def wait_idle(self) -> None:
         self.waits += 1
