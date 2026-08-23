@@ -54,12 +54,12 @@ class DiscordUiVisitor(ast.NodeVisitor):
                 keyword.arg for keyword in node.keywords if keyword.arg is not None and keyword.arg in LEGACY_KEYWORDS
             }
             is_archive_relay = self.path.name == "admin.py" and self.function_names[-1:] == ["archive_message"]
-            # The legacy->V2 conversion boundaries: the framework's deliver module and, until
-            # its consumers migrate, the old components helpers.
-            is_conversion_boundary = (
-                self.path.name == "components.py"
-                and self.function_names[-1:] in [["edit_layout"], ["edit_interaction_layout"]]
-            ) or (self.path.name == "delivery.py" and self.function_names[-1:] in [["apply"], ["apply_interaction"]])
+            # The framework delivery module is the only place that translates a presentation
+            # into discord.py's message kwargs.
+            is_conversion_boundary = self.path.name == "delivery.py" and self.function_names[-1:] in [
+                ["apply"],
+                ["apply_interaction"],
+            ]
             if legacy and not is_archive_relay and not is_conversion_boundary:
                 self.violations.append(f"{self.path}:{node.lineno}: legacy message fields {sorted(legacy)}")
         self.generic_visit(node)

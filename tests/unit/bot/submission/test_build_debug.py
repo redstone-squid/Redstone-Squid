@@ -72,7 +72,7 @@ async def test_the_state_is_attached_instead_of_pasted() -> None:
     await SearchCog.debug_build.callback(_cog(build), ctx, build_id=42)  # type: ignore[arg-type]
 
     kwargs = cast(Any, ctx).send.call_args.kwargs
-    attachment = kwargs["file"]
+    attachment = kwargs["files"][0]
     assert isinstance(attachment, discord.File)
     assert attachment.filename == "build-42-debug.json"
     assert json.loads(attachment.fp.read())["id"] == 42

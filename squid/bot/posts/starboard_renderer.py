@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, final
 
 import discord
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
 from squid.bot.posts.renderer import DesiredPost
 from squid.bot.starboard.render import starboard_layout
-from squid.bot.utils.components import no_mentions
 from squid.posts.domain import ResourceKind
 from squid.starboard.domain import entry_should_be_posted
 
@@ -59,7 +59,7 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         mentions = (
             discord.AllowedMentions(everyone=False, roles=False, users=(origin.author,), replied_user=False)
             if state.config.ping_author
-            else no_mentions()
+            else sl.discord.delivery.no_mentions()
         )
         locale = await resolve_locale(origin, self.bot.services.settings)
         return [

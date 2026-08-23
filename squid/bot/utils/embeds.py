@@ -5,8 +5,7 @@ from types import TracebackType
 from discord import Message, Webhook
 from discord.abc import Messageable
 
-import squid_layouts as sl
-from squid.bot.ui import info_layout
+from squid.bot.ui import info_layout, send_to
 from squid.core.i18n import _, translate
 
 
@@ -30,7 +29,7 @@ class RunningMessage:
         self.sent_message: Message
 
     async def __aenter__(self) -> Message:
-        receipt = await sl.discord.delivery.send_to(self.ctx)(
+        receipt = await send_to(self.ctx)(
             info_layout(translate(self.locale, self.title), translate(self.locale, self.description))
         )
         sent_message = receipt.message

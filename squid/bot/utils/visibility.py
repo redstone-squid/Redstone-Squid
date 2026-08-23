@@ -29,10 +29,10 @@ from typing import Any
 import discord
 from discord.ext.commands import Context
 
-from squid.bot.i18n import t
-from squid.bot.ui import error_layout, info_layout, reply_presentation
-from squid.core.i18n import _
 import squid_layouts as sl
+from squid.bot.i18n import t
+from squid.bot.ui import error_layout, info_layout, reply_presentation, send_to
+from squid.core.i18n import _
 
 
 def personal(ctx: Context[Any]) -> bool:
@@ -74,7 +74,9 @@ async def deliver_privately(
         return receipt.message
 
     try:
-        receipt = await sl.discord.delivery.send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
+        receipt = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(
+            presentation
+        )
     except discord.Forbidden:
         await reply_presentation(
             ctx,

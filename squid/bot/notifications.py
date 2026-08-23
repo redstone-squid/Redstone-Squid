@@ -11,8 +11,8 @@ from discord.ext import commands
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.notifications_view import NotificationPanel
+from squid.bot.ui import error_layout, info_layout, respond_presentation
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import error_layout, info_layout, reply_layout
 from squid.core.i18n import _
 from squid.notifications import (
     PendingNotificationDelivery,
@@ -108,7 +108,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         filters = (build_kind, record_class, version_scope, tag)
         chosen = [bool(creator), bool(competition), any(value is not None for value in filters)]
         if sum(chosen) != 1:
-            await reply_layout(
+            await respond_presentation(
                 interaction,
                 error_layout(
                     t(locale, _("Nothing to follow")),
@@ -141,7 +141,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             )
             followed = t(locale, _("Following records matching that filter."))
         del subscription  # Nothing user-facing needs its id: `/notifications` lists and removes it.
-        await reply_layout(
+        await respond_presentation(
             interaction,
             info_layout(followed, t(locale, _("Open `/notifications` to see or undo everything you follow."))),
         )

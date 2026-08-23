@@ -15,6 +15,7 @@ import discord
 import pytest
 from whenever import Instant
 
+import squid_layouts as sl
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
@@ -42,7 +43,7 @@ class FakeMessage:
         return _Identified(999)
 
     content: str = ""
-    flags: Any = None
+    flags: Any = field(default_factory=lambda: SimpleNamespace(components_v2=True))
 
     async def edit(self, **kwargs: object) -> FakeMessage:
         self.edits.append(kwargs.get("view"))
@@ -72,8 +73,8 @@ class FakeChannel:
         self.sent: list[object] = []
         self.messages: dict[int, FakeMessage] = {}
 
-    async def send(self, *, view: object, allowed_mentions: object) -> FakeMessage:
-        del allowed_mentions
+    async def send(self, *, files: object, view: object, allowed_mentions: object) -> FakeMessage:
+        del files, allowed_mentions
         if self.explode:
             msg = "discord is down"
             raise RuntimeError(msg)
@@ -192,7 +193,12 @@ class FakeRenderer:
         if self.channels is None:
             return None
         return [
-            DesiredPost(channel_id=channel.id, guild_id=GUILD, surface="build_card", layout=object())  # type: ignore[arg-type]
+            DesiredPost(
+                channel_id=channel.id,
+                guild_id=GUILD,
+                surface="build_card",
+                presentation=sl.discord.render_static([]),
+            )
             for channel in self.channels
         ]
 
