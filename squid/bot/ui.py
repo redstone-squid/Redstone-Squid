@@ -190,7 +190,7 @@ async def reply_presentation(
     *,
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
-) -> ui.discord.delivery.DeliveryReceipt:
+) -> ui.discord.DeliveryReceipt:
     """Deliver a complete Squid presentation through the selected command audience."""
     from squid.bot.utils.visibility import personal
 
@@ -204,9 +204,9 @@ async def reply_presentation(
             allowed_mentions=allowed_mentions,
         )
         if message is None:
-            raise ui.discord.delivery.DeliveryAbandoned
+            raise ui.discord.DeliveryAbandoned
         handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
-        return ui.discord.delivery.DeliveryReceipt(message, handle)
+        return ui.discord.DeliveryReceipt(message, handle)
 
     destination = ui.discord.reply_to(
         ctx,
@@ -239,7 +239,7 @@ def destination(
         if ctx.interaction is not None:
             return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(presentation: ui.discord.DiscordPresentation) -> ui.discord.delivery.DeliveryReceipt:
+        async def privately(presentation: ui.discord.DiscordPresentation) -> ui.discord.DeliveryReceipt:
             message = await deliver_privately(
                 ctx,
                 presentation.layout,
@@ -248,9 +248,9 @@ def destination(
                 files=[*files, *presentation.files()],
             )
             if message is None:
-                raise ui.discord.delivery.DeliveryAbandoned
+                raise ui.discord.DeliveryAbandoned
             handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
-            return ui.discord.delivery.DeliveryReceipt(message, handle)
+            return ui.discord.DeliveryReceipt(message, handle)
 
         return privately
 
@@ -265,7 +265,7 @@ def contribute(
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     locale: str | None = None,
     strict: bool = False,
-) -> ui.discord.fragments.AttachedFragment:
+) -> ui.discord.AttachedFragment:
     """Contribute a Squid region to a hand-assembled view, through the bot's chrome.
 
     `followed_by` carries the rows the host adds after the Squid region: they are costed
@@ -361,7 +361,7 @@ def create_mount(
     chrome: ui.chrome.Chrome | None = None,
     timeout: float = 180,
     reactor: ui.discord.Reactor | None = None,
-    expiry: ui.discord.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
+    expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
     defaults = MOUNT_DEFAULTS if chrome is None else MOUNT_DEFAULTS.replace(chrome=chrome)
