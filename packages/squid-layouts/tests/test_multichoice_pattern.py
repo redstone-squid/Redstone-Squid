@@ -116,7 +116,7 @@ def test_small_panel_offers_a_modal_alternate_with_staged_prefill() -> None:
     rendered = pattern.component(initial=sl.MultiChoiceState(("role-1",))).render()
     alternate = next(node for node in _walk(rendered) if isinstance(node, FormTrigger))
     assert alternate.spec.prefill == {"selection": ("role-1",)}
-    field = alternate.spec.fields[0]
+    field = alternate.spec.items[0]
     assert isinstance(field, sl.MultiChoiceField)
 
 

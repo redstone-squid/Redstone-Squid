@@ -34,8 +34,8 @@ def test_descriptor_form_compiles_keys_labels_and_prefill() -> None:
     spec = form.spec()
 
     assert spec.title == "Edit profile"
-    assert [field.key for field in spec.fields] == ["name", "age", "public"]
-    assert [field.label for field in spec.fields] == ["Name", "Age", "Public"]
+    assert [field.key for field in spec.items] == ["name", "age", "public"]
+    assert [field.label for field in spec.items] == ["Name", "Age", "Public"]
     assert spec.prefill == {"name": "Ada", "age": 36, "public": False}
 
 
