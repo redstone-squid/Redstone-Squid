@@ -3,6 +3,7 @@
 from squid_layouts.discord import classic, delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder, selected_entities
+from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
@@ -135,6 +136,7 @@ __all__ = [
     "AccessDecision",
     "AccessPolicy",
     "ActionResponder",
+    "AdoptionError",
     "Allowed",
     "AttachedFragment",
     "AuditReport",
@@ -237,6 +239,7 @@ __all__ = [
     "Violation",
     "ViolationCode",
     "Wire",
+    "adopt",
     "audit",
     "audit_classic_payload",
     "build_form_modal",

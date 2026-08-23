@@ -172,5 +172,6 @@ and a screen is not involved in a command that simply replies with a panel.
 
 ## Status
 
-Designed 2026-08-23. Independent of [52](52-entity-selects.md) and
+Shipped 2026-08-23 — `Screen` and `Opener` are at `discord/screens.py:25,51`, with
+`tests/test_screens.py`. Independent of [52](52-entity-selects.md) and
 [53](53-view-adoption.md); first of the three because it is smallest and unblocks nothing.
