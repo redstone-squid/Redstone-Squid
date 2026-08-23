@@ -33,6 +33,7 @@ __all__ = [
     "DISCORD_GREY",
     "DISCORD_RED",
     "DISCORD_YELLOW",
+    "MOUNT_DEFAULTS",
     "CardField",
     "CardSection",
     "L",
@@ -298,6 +299,9 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
+MOUNT_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+
+
 def create_mount(
     component: ui.Component,
     *,
@@ -309,13 +313,12 @@ def create_mount(
     expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
-    return ui.discord.Mount(
+    defaults = MOUNT_DEFAULTS if chrome is None else MOUNT_DEFAULTS.replace(chrome=chrome)
+    return defaults.mount(
         component,
         access=access,
-        chrome=chrome if chrome is not None else CHROME,
         localization=localization_for(locale),
         timeout=timeout,
-        on_error=_component_error_hook,
         scheduler=reactor,
         expiry=expiry,
     )
