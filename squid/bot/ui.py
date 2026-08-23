@@ -109,7 +109,7 @@ def _try_again_in(seconds: float) -> ui.text.Message:
     return L(t"Try again in {whole} seconds.")
 
 
-CHROME = ui.semantic.Chrome(
+CHROME = ui.chrome.Chrome(
     and_n_more=lambda count: L(t"…and {count} more."),
     not_yours=L(t"These list controls belong to someone else."),
     session_ended=L(t"This session has ended."),
@@ -307,7 +307,7 @@ def create_mount(
     *,
     access: ui.discord.AccessPolicy,
     locale: str | None = None,
-    chrome: ui.semantic.Chrome | None = None,
+    chrome: ui.chrome.Chrome | None = None,
     timeout: float = 180,
     reactor: ui.discord.Reactor | None = None,
     expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,

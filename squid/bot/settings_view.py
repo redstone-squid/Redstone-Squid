@@ -32,13 +32,13 @@ CHANNEL_SETTINGS: tuple[ScalarChannelSetting, ...] = ("Smallest", "Fastest", "Fi
 """Every channel setting, in the order the panel offers them."""
 
 CHANNEL_TYPES = (
-    sl.semantic.ChannelType.TEXT,
-    sl.semantic.ChannelType.ANNOUNCEMENT,
-    sl.semantic.ChannelType.VOICE,
-    sl.semantic.ChannelType.STAGE_VOICE,
-    sl.semantic.ChannelType.PUBLIC_THREAD,
-    sl.semantic.ChannelType.PRIVATE_THREAD,
-    sl.semantic.ChannelType.ANNOUNCEMENT_THREAD,
+    sl.entity.ChannelType.TEXT,
+    sl.entity.ChannelType.ANNOUNCEMENT,
+    sl.entity.ChannelType.VOICE,
+    sl.entity.ChannelType.STAGE_VOICE,
+    sl.entity.ChannelType.PUBLIC_THREAD,
+    sl.entity.ChannelType.PRIVATE_THREAD,
+    sl.entity.ChannelType.ANNOUNCEMENT_THREAD,
 )
 """What `GuildMessageable` admits, as channel types a picker can offer."""
 
@@ -186,9 +186,9 @@ class SettingsPanel(sl.Component):
                 children.append(
                     sl.entities(
                         key=f"channel-{setting}",
-                        entity_type=sl.semantic.EntityType.CHANNEL,
+                        entity_type=sl.entity.EntityType.CHANNEL,
                         selection=sl.controlled(
-                            () if selected is None else (sl.semantic.EntityRef(sl.semantic.EntityKind.CHANNEL, selected),),
+                            () if selected is None else (sl.entity.EntityRef(sl.entity.EntityKind.CHANNEL, selected),),
                             change,
                         ),
                         minimum=0,
@@ -248,7 +248,7 @@ class SettingsPanel(sl.Component):
             children.append(
                 sl.entities(
                     key="role-weight",
-                    entity_type=sl.semantic.EntityType.ROLE,
+                    entity_type=sl.entity.EntityType.ROLE,
                     selection=sl.controlled((), self._role_changed),
                     minimum=1,
                     maximum=1,
