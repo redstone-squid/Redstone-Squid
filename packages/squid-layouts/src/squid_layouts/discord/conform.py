@@ -116,6 +116,9 @@ def conform_modal(modal: discord.ui.Modal, *, strict: bool = False, limits: V2Li
                 text_input = component
         elif isinstance(child, discord.ui.TextInput):
             text_input = child
+        elif isinstance(child, discord.ui.TextDisplay) and len(child.content) > limits.modal_text:
+            interventions.append(f"modal text display {len(child.content)} > {limits.modal_text}")
+            child.content = trim(child.content, limits.modal_text)
         if text_input is not None:
             _conform_text_input(text_input, limits, interventions)
         elif isinstance(component, BaseSelect):

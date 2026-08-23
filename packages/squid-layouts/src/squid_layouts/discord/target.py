@@ -37,11 +37,13 @@ class _DiscordItemExtension:
 V2_CAPABILITIES = frozenset(
     {
         "actions.buttons",
+        "actions.discord.premium",
         "actions.select",
         "actions.discord.entity",
         "extension.discord.item",
         "forms.discord.entity",
         "forms.discord.file",
+        "forms.discord.checkbox_group",
         "forms.modal",
         "layout.container",
         "layout.gallery",
@@ -52,9 +54,11 @@ V2_CAPABILITIES = frozenset(
 CLASSIC_CAPABILITIES = frozenset(
     {
         "actions.buttons",
+        "actions.discord.premium",
         "actions.select",
         "actions.discord.entity",
         "forms.modal",
+        "forms.discord.checkbox_group",
         "layout.embed",
         "layout.embed_fields",
         "message.content",

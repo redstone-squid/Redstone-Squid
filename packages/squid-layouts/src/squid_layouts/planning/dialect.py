@@ -34,6 +34,7 @@ from squid_layouts.primitives.nodes import (
     FormButton,
     LinkButton,
     Node,
+    PremiumButton,
     RawItem,
     RoutedButton,
     SelectMenu,
@@ -45,6 +46,7 @@ from squid_layouts.scene.model import (
     SceneExtension,
     SceneLink,
     SceneNode,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneThumbnail,
 )
@@ -96,13 +98,15 @@ class SceneBindings:
         )
         return key
 
-    def control(self, node: Thumbnail | LinkButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
+    def control(self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
         """Convert one leaf every target draws the same way."""
         match node:
-            case Thumbnail(url=url, description=description):
-                return SceneThumbnail(url, description)
-            case LinkButton(label=label, url=url):
-                return SceneLink(label, url)
+            case Thumbnail(url=url, description=description, spoiler=spoiler):
+                return SceneThumbnail(url, description, spoiler)
+            case LinkButton(label=label, url=url, emoji=emoji, disabled=disabled):
+                return SceneLink(label, url, emoji, disabled)
+            case PremiumButton(sku_id=sku_id):
+                return ScenePremiumButton(sku_id)
             case RoutedButton(label=label, route_id=route_id):
                 # No binding: the router owns dispatch, so the scene is complete without one.
                 return SceneRoutedButton(
