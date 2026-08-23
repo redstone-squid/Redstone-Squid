@@ -56,6 +56,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    EntitySelect,
     Card,
     Extension,
     Node,
@@ -756,7 +757,7 @@ def _collect_bindings(nodes: Sequence[Node]) -> SceneBindings:
 
     def collect(node: Node) -> None:
         match node:
-            case Button() | SelectMenu():
+            case Button() | SelectMenu() | EntitySelect():
                 collected.action(node)
             case Row(items=items):
                 for item in items:

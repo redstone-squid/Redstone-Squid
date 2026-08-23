@@ -3,7 +3,8 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from squid_layouts.actions import ActionBinding, ActionEvent, PressEvent, SelectionEvent
+from squid_layouts.actions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
+from squid_layouts.entities import EntityRef
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
@@ -33,6 +34,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    EntitySelect,
     Card,
     CardField,
     CardFooter,
@@ -89,6 +91,8 @@ from squid_layouts.semantic import (
     Budgeted,
     ChoiceEvent,
     Choices,
+    Entities,
+    EntityEvent,
     Cluster,
     Code,
     Controlled,
@@ -536,6 +540,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _form(node, context)
         case Choices():
             return _choices(node, path, context)
+        case Entities():
+            return _entities(node, path, context)
         case RoutedChoices():
             return _routed_choices(node, path, context)
         case Items():
@@ -845,6 +851,8 @@ def _primitive(node: Node, context: _Context) -> Node:
                 ),
                 placeholder=_resolve(placeholder, context) if placeholder is not None else None,
             )
+        case EntitySelect(placeholder=placeholder):
+            return replace(node, placeholder=_resolve(placeholder, context) if placeholder is not None else None)
         case Thumbnail(description=description):
             return replace(node, description=_resolve(description, context) if description is not None else None)
         case PrimitiveSection(texts=texts, accessory=accessory):
@@ -1170,6 +1178,80 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     ]
     result.extend(context.pages.controls(page_key, Position(offset=page), pages))
     return result
+
+
+def _entity_key(ref: EntityRef) -> str:
+    return f"{ref.kind.value}:{ref.id}"
+
+
+def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
+    match node.selection:
+        case Controlled(value=value):
+            previous = tuple(value)
+        case Managed(initial=initial):
+            initial_keys = tuple(_entity_key(value) for value in initial)
+            stored = context.session.selection(node.key, initial=initial_keys).selected
+            by_key = {_entity_key(choice.ref): choice.ref for choice in node.choices}
+            by_key.update({_entity_key(value): value for value in initial})
+            previous = tuple(by_key[key] for key in stored if key in by_key)
+
+    async def commit(event: ActionEvent, selected: tuple[EntityRef, ...]) -> None:
+        match node.selection:
+            case Controlled(on_change=on_change):
+                await on_change(
+                    EntityEvent(
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.context,
+                        selected,
+                        tuple(value for value in selected if value not in previous),
+                        tuple(value for value in previous if value not in selected),
+                    )
+                )
+            case Managed():
+                await event.acknowledge()
+                context.session.select(node.key, tuple(_entity_key(value) for value in selected))
+                event.invalidate()
+
+    if "actions.discord.entity" in context.capabilities:
+
+        async def select_entities(event: EntitySelectionEvent) -> None:
+            await commit(event, event.values)
+
+        return [
+            EntitySelect(
+                node.entity_type,
+                select_entities,
+                node.key,
+                placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
+                default_values=previous,
+                channel_types=node.channel_types,
+                min_values=node.minimum,
+                max_values=node.maximum,
+            )
+        ]
+    if not node.choices:
+        message = f"{path}: Entities requires actions.discord.entity or enumerated fallback choices"
+        raise LayoutInvariantError(message)
+
+    available = tuple(choice for choice in node.choices if choice.available)
+    by_key = {_entity_key(choice.ref): choice.ref for choice in available}
+
+    async def choose_fallback(event: ChoiceEvent) -> None:
+        await commit(event, tuple(by_key[key] for key in event.selected if key in by_key))
+
+    fallback = Choices(
+        key=node.key,
+        choices=tuple(
+            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available) for choice in node.choices
+        ),
+        selection=Controlled(tuple(_entity_key(value) for value in previous), choose_fallback),
+        minimum=node.minimum,
+        maximum=node.maximum,
+        flexibility=node.flexibility,
+    )
+    return _choices(fallback, path, context)
 
 
 def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
