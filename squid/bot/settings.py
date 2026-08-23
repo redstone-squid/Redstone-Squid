@@ -11,7 +11,6 @@ from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import destination, error_layout, info_layout, reply_presentation
-from squid.bot.utils.components import edit_layout
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -27,6 +26,11 @@ from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+
+async def _edit(message: discord.Message, presentation: sl.discord.presentation.DiscordPresentation) -> None:
+    """Replace a running command message through the presentation delivery handle."""
+    await sl.discord.delivery.handle_for(message, mode=presentation.mode).write(presentation)
 
 
 class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
@@ -103,7 +107,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             if channel is None:
                 await self.settings_service.clear(ctx.guild.id, setting)
-                await edit_layout(
+                await _edit(
                     sent_message,
                     info_layout(
                         t(locale, _("Setting updated")),
@@ -113,20 +117,19 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                 return
 
             if ctx.guild.get_channel_or_thread(channel.id) is None:
-                await edit_layout(
+                await _edit(
                     sent_message,
                     error_layout(t(locale, _("Error")), t(locale, _("Could not find that channel."))),
                 )
                 return
 
             await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
-            await edit_layout(
+            await _edit(
                 sent_message,
                 info_layout(
                     t(locale, _("Settings updated")),
                     t(locale, _("{setting} channel has successfully been set."), setting=setting),
                 ),
-
             )
 
     @settings_hybrid_group.command(name="locale")
@@ -153,7 +156,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         if language == FOLLOW_DISCORD:
             await self.settings_service.set_locale(ctx.guild.id, None)
             async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-                await edit_layout(
+                await _edit(
                     sent_message,
                     info_layout(
                         t(locale, _("Settings updated")),
@@ -164,7 +167,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
 
         await self.settings_service.set_locale(ctx.guild.id, language)
         async with self.bot.get_running_message(ctx, locale=language) as sent_message:
-            await edit_layout(
+            await _edit(
                 sent_message,
                 info_layout(
                     t(language, _("Settings updated")),

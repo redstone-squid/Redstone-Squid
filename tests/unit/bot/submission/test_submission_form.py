@@ -29,7 +29,9 @@ def test_basics_form_describes_portable_fields() -> None:
     form = _submission_basics_form(BuildDraft(), None)
 
     assert form.field_keys == ("door_size", "pattern", "dimensions", "versions", "creators")
-    assert form.items[0].label == "Door opening size"
+    first = form.items[0]
+    assert isinstance(first, sl.forms.FormField)
+    assert first.label == "Door opening size"
 
 
 async def test_changing_the_door_type_marks_the_mount_dirty() -> None:

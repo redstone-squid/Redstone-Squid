@@ -305,9 +305,11 @@ class RedstoneSquid(Bot):
         Usage:
             ```python
             async with bot.get_running_message(ctx, title="Processing") as msg:
-                await edit_layout(msg, info_layout("Processing", "Still working..."))
+                presentation = info_layout("Processing", "Still working...")
+                await squid_layouts.discord.delivery.handle_for(msg, mode=presentation.mode).write(presentation)
                 # Do some work here
-                await edit_layout(msg, info_layout("Processing", "Done!"))
+                finished = info_layout("Processing", "Done!")
+                await squid_layouts.discord.delivery.handle_for(msg, mode=finished.mode).write(finished)
             ```
         """
         return RunningMessage(

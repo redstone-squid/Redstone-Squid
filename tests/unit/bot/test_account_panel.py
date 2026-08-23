@@ -72,7 +72,13 @@ async def test_somebody_elses_creator_page_is_a_public_read() -> None:
         ),
     )
     ctx = SimpleNamespace(
-        interaction=SimpleNamespace(guild_locale=None, locale="en-US"),
+        interaction=SimpleNamespace(
+            guild_locale=None,
+            locale="en-US",
+            response=SimpleNamespace(is_done=lambda: False),
+            is_expired=lambda: False,
+            expires_at=None,
+        ),
         guild=SimpleNamespace(id=5, preferred_locale="en-US"),
         author=SimpleNamespace(id=AUTHOR_ID),
         send=AsyncMock(),
