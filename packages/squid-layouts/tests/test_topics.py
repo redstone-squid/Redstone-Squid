@@ -9,7 +9,7 @@ from typing import Any, cast
 import anyio
 import pytest
 
-from squid_layouts import Shared, cell
+from squid_layouts import Shared, state
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.topics import Address, CellAddress, KindKeyCodec, Topic, TopicBus
@@ -19,7 +19,7 @@ BUILD = Topic("build", "1")
 
 
 class Workspace(Shared[int]):
-    selected: int | None = cell(None)
+    selected: int | None = state(None)
 
 
 class Clock:
@@ -547,7 +547,7 @@ def test_a_namespace_that_defines_equality_cannot_merge_two_addresses() -> None:
     """Identity, not equality: a host's `__eq__` must not collapse two live namespaces."""
 
     class Loose(Shared[int]):
-        selected: int | None = cell(None)
+        selected: int | None = state(None)
 
         def __eq__(self, other: object) -> bool:
             return isinstance(other, Loose)

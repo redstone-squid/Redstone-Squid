@@ -405,14 +405,14 @@ class Appearance(sl.Shared[int]):
     reaches the other panel through the bot's topic bus with nothing declared for it.
     """
 
-    accent: int = sl.cell(DISCORD_BLUE)
-    density: str = sl.cell("comfortable")
+    accent: int = sl.state(DISCORD_BLUE)
+    density: str = sl.state("comfortable")
 
 
 class Session(sl.Shared[int]):
     """What one invocation's two panels are looking at, and only for as long as they are."""
 
-    focus: str = sl.cell("overview")
+    focus: str = sl.state("overview")
 
 
 APPEARANCE = sl.ContextKey[Appearance]("showcase.appearance")

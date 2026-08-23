@@ -229,7 +229,7 @@ That guarantee reaches declared state, and only declared state:
 |---|---|---|
 | `sl.state(...)` | yes | yes |
 | `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
-| `sl.cell(...)` on an `sl.Shared` | every mount that rendered it, through the bus | yes |
+| `sl.state(...)` on an `sl.Shared` | every mount that rendered it, through the bus | yes |
 | a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
 
@@ -244,12 +244,12 @@ until then. Rolling back is dropping the overlay.
 *view* owns -- a filter, a selection, a theme -- declare an `sl.Shared` namespace instead:
 
     class Appearance(sl.Shared[int]):
-        accent: int = sl.cell(DISCORD_BLUE)
-        density: str = sl.cell("comfortable")
+        accent: int = sl.state(DISCORD_BLUE)
+        density: str = sl.state("comfortable")
 
     appearance = Appearance(bot.topic_bus, user.id)
 
-`sl.cell()` is `sl.state()` one level out and is literally the same storage, so replacement,
+State on a namespace is `sl.state()` one level out and is literally the same storage, so replacement,
 the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
 a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
 one component, and a cell an action both **read and wrote** carries the value it read as a
