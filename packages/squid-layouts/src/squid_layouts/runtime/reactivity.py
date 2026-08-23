@@ -264,6 +264,23 @@ class StateDelta:
 
     changes: tuple[StateChange, ...] = ()
 
+    def addresses(self) -> tuple[Any, ...]:
+        """Every shared cell address this action wrote, deduplicated, in write order.
+
+        What a frontend needs to answer "did this action change anything I am looking at",
+        which is a question about its own commit rather than about the bus. A component's
+        cell has no address and does not appear.
+        """
+        found: list[Any] = []
+        seen: set[int] = set()
+        for change in self.changes:
+            address = _cell_for(change.owner, change.name).address
+            if address is None or id(address) in seen:
+                continue
+            seen.add(id(address))
+            found.append(address)
+        return tuple(found)
+
     def restore_before(self) -> None:
         """Return every attribute to the value the action found."""
         self._apply(before=True)
