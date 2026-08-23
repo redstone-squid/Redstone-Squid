@@ -479,7 +479,7 @@ class DurableSessionRuntime:
             self._observe(active, mount)
 
     def _observe(self, active: _ActiveSession, mount: Mount) -> None:
-        async def presented(_: Mount) -> None:
+        def presented(_: Mount) -> None:
             self._request_checkpoint(active.token.key)
 
         async def finished(finished_mount: Mount) -> None:

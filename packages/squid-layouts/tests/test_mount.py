@@ -832,6 +832,48 @@ class TestFinishHooks:
         assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
+class TestPresentedHooks:
+    async def test_a_hook_can_invalidate_and_the_mount_remains_usable(self) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message = fake_message()
+        calls = 0
+
+        def invalidate_once(presented: Mount) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                presented.invalidate()
+
+        mount.on_presented(invalidate_once)
+
+        await mount.send(delivered_to(message))
+        assert calls == 1
+        assert mount.pending
+
+        await mount.refresh_now()
+        assert calls == 2
+        assert not mount.pending
+
+    async def test_a_raising_hook_is_logged_and_does_not_stop_later_hooks(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        seen: list[Mount] = []
+
+        def explode(_: Mount) -> None:
+            raise RuntimeError("observer is broken")
+
+        mount.on_presented(explode)
+        mount.on_presented(seen.append)
+
+        with caplog.at_level("ERROR"):
+            await mount.send(delivered_to(fake_message()))
+
+        assert seen == [mount]
+        assert "presented hook failed" in caplog.text
+        assert not mount.pending
+
+
 async def _record(seen: list[Mount], mount: Mount) -> None:
     seen.append(mount)
 
