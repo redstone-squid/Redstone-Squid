@@ -94,7 +94,7 @@ from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
-from squid_layouts.runtime.resources import PendingPolicy, Resource
+from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
@@ -1561,10 +1561,14 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[Resource[Any], ...]:
-        return tuple(resource for resource in tree.resources if resource.pending_policy is pending and resource.pending)
+    def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[AsyncBinding, ...]:
+        return tuple(
+            binding
+            for binding in tree.async_bindings
+            if binding.pending_policy is pending and binding.pending
+        )
 
-    async def _settle_resources(self, resources: Sequence[Resource[Any]]) -> None:
+    async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
         """Settle one observed resource tier concurrently under this render operation."""
         if len(resources) == 1:
             await resources[0]._load()

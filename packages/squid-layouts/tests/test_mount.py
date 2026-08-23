@@ -2784,7 +2784,36 @@ class AtomicResourcePanel(Component):
                 return Text(f"ready:{value}")
 
 
+class OperationPanel(Component):
+    @sl.operation(initial="starting")
+    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+        progress.set("publishing")
+        return 42
+
+    def render(self):
+        match self.publication.status:
+            case sl.operations.Pending(progress=progress):
+                return Text(f"pending:{progress}")
+            case sl.operations.Succeeded(value=value):
+                return Text(f"succeeded:{value}")
+            case sl.operations.Failed(error=error):
+                return Text(f"failed:{error}")
+            case sl.operations.Cancelled(progress=progress):
+                return Text(f"cancelled:{progress}")
+
+
 class TestResourceLoading:
+    async def test_operation_delivers_pending_then_succeeded(self) -> None:
+        message: Any = fake_message()
+        destination = _Destination(message)
+        mount = Mount(OperationPanel(), access=Everyone(), timeout=None)
+
+        await mount.send(destination)
+
+        assert "pending:starting" in str(destination.calls[0][0].to_components())
+        message.edit.assert_awaited_once()
+        assert "succeeded:42" in str(message.edit.await_args.kwargs["view"].to_components())
+
     async def test_visible_resource_delivers_pending_then_ready(self) -> None:
         async def load(_key: str) -> str:
             return "loaded"

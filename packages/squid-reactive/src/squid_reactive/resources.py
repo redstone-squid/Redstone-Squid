@@ -29,6 +29,17 @@ class ResourceOwner(ReactiveOwner, Protocol):
     def invalidate(self) -> None: ...
 
 
+class AsyncBinding(Protocol):
+    """A caller-owned asynchronous value discovered during a synchronous render."""
+
+    pending_policy: PendingPolicy
+
+    @property
+    def pending(self) -> bool: ...
+
+    async def _load(self) -> object: ...
+
+
 class AddressedOwner(Protocol):
     """An owner whose resources are named, so their changes can be published.
 
@@ -88,8 +99,8 @@ class _AtomicResourcePending(ResourceNotReadyError):
         super().__init__(f"atomic resource {resource._label!r} is pending")
 
 
-_CURRENT_RESOURCES: ContextVar[list[Resource[Any]] | None] = ContextVar(
-    "squid_reactive_observed_resources", default=None
+_CURRENT_BINDINGS: ContextVar[list[AsyncBinding] | None] = ContextVar(
+    "squid_reactive_observed_async_bindings", default=None
 )
 
 
@@ -583,30 +594,35 @@ def resource(
     return decorate if loader is None else decorate(loader)
 
 
-def _observe(resource: Resource[Any]) -> None:
-    observed = _CURRENT_RESOURCES.get()
+def _observe(binding: AsyncBinding) -> None:
+    observed = _CURRENT_BINDINGS.get()
     if observed is not None:
-        observed.append(resource)
+        observed.append(binding)
 
 
 @contextmanager
-def observe_resources() -> Iterator[list[Resource[Any]]]:
-    """Collect resources accessed by one expanded component render."""
-    observed: list[Resource[Any]] = []
-    token = _CURRENT_RESOURCES.set(observed)
+def observe_async_bindings() -> Iterator[list[AsyncBinding]]:
+    """Collect asynchronous bindings accessed by one expanded component render."""
+    observed: list[AsyncBinding] = []
+    token = _CURRENT_BINDINGS.set(observed)
     try:
         yield observed
     finally:
-        _CURRENT_RESOURCES.reset(token)
+        _CURRENT_BINDINGS.reset(token)
 
 
-def unique_resources(resources: list[Resource[Any]]) -> tuple[Resource[Any], ...]:
+def unique_async_bindings(bindings: list[AsyncBinding]) -> tuple[AsyncBinding, ...]:
     """Preserve render order while removing repeat accesses to the same binding."""
     seen: set[int] = set()
-    unique: list[Resource[Any]] = []
-    for resource in resources:
-        identity = id(resource)
+    unique: list[AsyncBinding] = []
+    for binding in bindings:
+        identity = id(binding)
         if identity not in seen:
             seen.add(identity)
-            unique.append(resource)
+            unique.append(binding)
     return tuple(unique)
+
+
+# Compatibility for integrations still naming the resource-only implementation detail.
+observe_resources = observe_async_bindings
+unique_resources = unique_async_bindings
