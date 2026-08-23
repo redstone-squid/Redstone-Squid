@@ -321,25 +321,26 @@ class _AdoptedView(Component):
 
         answers = responder(event)
         proxy = _InteractionProxy(self, answers, view)
-        if _overrides(view, "interaction_check") and not await view.interaction_check(proxy):
-            # discord.py's contract is that a refusing check has already answered the reader.
-            return
-        if values is not None:
-            # Never the item discord.py dispatched -- Squid built the control that was clicked --
-            # so `values` reaches the legacy select through the same field discord.py fills.
-            item._values = values  # pyrefly: ignore[missing-attribute]
         try:
-            await item.callback(proxy)
-        except Exception as error:
-            if not _overrides(view, "on_error"):
-                raise
-            await view.on_error(proxy, error, item)
+            try:
+                if _overrides(view, "interaction_check") and not await view.interaction_check(proxy):
+                    # discord.py's contract is that a refusing check has already answered the reader.
+                    return
+                if values is not None:
+                    # Never the item discord.py dispatched -- Squid built the control that was clicked --
+                    # so `values` reaches the legacy select through the same field discord.py fills.
+                    item._values = values  # pyrefly: ignore[missing-attribute]
+                await item.callback(proxy)
+            except Exception as error:
+                if not _overrides(view, "on_error"):
+                    raise
+                await view.on_error(proxy, error, item)
         finally:
-            # In the `finally` on purpose: a callback that raised still mutated the view, and
-            # `mutated` cannot undo that. Reporting it is what keeps the next render honest.
+            # In the `finally` on purpose: a check or callback that raised still mutated the view,
+            # and `mutated` cannot undo that. Reporting it is what keeps the next render honest.
             self.mutated(view)
-        if view.is_finished():
-            await answers.finish()
+            if view.is_finished():
+                await answers.finish()
 
     def _adopt_modal(self, modal: discord.ui.Modal, mount: Any) -> None:
         """Put the proxy in front of a modal's submit, which is a second interaction.
