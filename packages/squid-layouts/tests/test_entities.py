@@ -5,12 +5,28 @@ from dataclasses import replace
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_layouts.planning import measure
 from squid_layouts.primitives import EntitySelect
+from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene import Codec, SceneEntitySelect, SceneSelect
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...
+
+
+class _Responder:
+    async def acknowledge(self) -> None: ...
+
+    async def notice(self, _text: sl.TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None: ...
+
+    async def redirect(self, _url: str) -> None: ...
+
+    async def finish(self) -> None: ...
+
+    async def present_form(self, _form, *, key: str = "form", on_submit=None, policy=None) -> None: ...
+
+    def invalidate(self) -> None: ...
 
 
 def test_entity_reference_rejects_non_positive_ids() -> None:
@@ -44,6 +60,31 @@ def test_native_semantic_picker_lowers_to_entity_scene() -> None:
     )
 
     assert isinstance(plan.scene.components_v2.children[0], SceneEntitySelect)
+
+
+async def test_managed_native_entity_selection_survives_a_second_render() -> None:
+    session = PresentationSession()
+    node = sl.entities(
+        key="moderator",
+        entity_type=sl.entity.EntityType.USER,
+        selection=sl.managed(()),
+    )
+    first = sl.planning.plan(node, target=sl.discord.V2_TARGET, session=session)
+    handler = first.bindings["moderator"].handler
+    await handler(
+        EntitySelectionEvent(
+            Actor("7"),
+            _Responder(),
+            values=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),),
+        )
+    )
+
+    second = sl.planning.plan(node, target=sl.discord.V2_TARGET, session=session)
+
+    assert isinstance(second.scene.components_v2.children[0], SceneEntitySelect)
+    assert second.scene.components_v2.children[0].default_values == (
+        sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),
+    )
 
 
 def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
