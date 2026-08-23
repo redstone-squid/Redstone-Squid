@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
 
-from squid.bot.topics import resource_topic
 from squid.observability import trace_span
 from squid.runtime import JobHandle
 from squid.sync import ReconciliationJob
+from squid.topics import resource_topic
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -61,5 +61,5 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     extra={"resource_kind": job.resource_kind, "source_key": job.source_key},
                 )
             return
-        self.bot.topic_bus.publish(resource_topic(job.resource_kind.post_kind, job.source_key))
+        self.bot.topic_publisher.publish(resource_topic(job.resource_kind.post_kind, job.source_key))
         await self.bot.services.discord_reconciliation.complete(job)

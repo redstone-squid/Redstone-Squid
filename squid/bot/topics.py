@@ -1,17 +1,14 @@
-"""The bot's exact topic vocabulary and live-resource binding helper."""
+"""The live-resource binding helper for Discord panels.
+
+The vocabulary itself lives in `squid.topics`, because the worker publishes into it too and
+must not import the Discord layer to do so.
+"""
 
 import weakref
 from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
-from squid.posts.domain import ResourceKind
-
-type ResourceTopic = tuple[ResourceKind, str]
-
-
-def resource_topic(resource_kind: ResourceKind, resource_key: str) -> ResourceTopic:
-    """Address one bot-owned resource consistently across publishers and subscribers."""
-    return resource_kind, resource_key
+from squid.topics import ResourceTopic
 
 
 def follow_resource[TargetT: object](

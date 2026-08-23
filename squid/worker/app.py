@@ -7,6 +7,7 @@ import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 
+import anyio
 from whenever import Instant
 
 from squid.bootstrap import create_worker_runtime
@@ -18,8 +19,10 @@ from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_ca
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.topics import open_topic_bridge
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from squid.worker.rendering import SchematicRenderProjector
+from squid_layouts import TopicBus
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +350,9 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 native_analyzer,
                 schematic_config,
             )
+            # The worker subscribes to nothing, so its bus stays empty and the bridge is
+            # purely an outbound path: a finished render tells the bot's panels to repaint.
+            topic_bridge = await open_topic_bridge(resolved_config.runtime.database, TopicBus())
             schematic_renders = SchematicRenderProjector(
                 runtime.services.schematic_renders,
                 runtime.services.schematics,
@@ -355,6 +361,7 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 if schematic_config.render_public_base_url is not None
                 else None,
                 enabled=schematic_config.render_enabled,
+                topics=topic_bridge,
             )
             worker = DatabaseWorker(
                 runtime.services,
@@ -373,6 +380,8 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
             # task, so it is held here rather than inside DatabaseWorker.
             async with worker.running():
                 worker.start()
+                if topic_bridge is not None:
+                    worker.supervisor.start(topic_bridge.run(), name="layout-topic-bridge")
                 start_log_capture(
                     worker.supervisor,
                     runtime.services.error_reports,
@@ -384,6 +393,10 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                         await stop.wait()
                 finally:
                     await worker.close()
+                    if topic_bridge is not None:
+                        with anyio.move_on_after(3.0):
+                            await topic_bridge.pool.close()
+                        topic_bridge.pool.terminate()
                     # The pool's own `running()` closes it; only the null analyzer, which owns
                     # no task group and so is not on the stack, still needs closing here.
                     if not isinstance(native_analyzer, SchematicWorkerPool):
