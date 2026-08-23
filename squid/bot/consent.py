@@ -23,7 +23,8 @@ from squid.bot.utils.components import CardField, card_container, edit_interacti
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
 from squid_layouts.discord import Screen, SessionRegistry
-from squid_layouts.discord.sessions import Opened, Opener, Reject, Rejected, SessionPolicy
+from squid_layouts.discord.screens import Opener
+from squid_layouts.discord.sessions import Opened, Reject, Rejected, SessionPolicy
 
 CONSENT_SCREEN = Screen(
     "consent",

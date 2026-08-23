@@ -6,7 +6,8 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, MountDefaults, Owner, Screen, SessionRegistry
-from squid_layouts.discord.sessions import Opened, Opener, Scope
+from squid_layouts.discord.screens import Opener, Scope
+from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Heading
 

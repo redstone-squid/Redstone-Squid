@@ -12,9 +12,9 @@ LEGACY_KEYWORDS = {"content", "embed", "embeds"}
 # The framework has to *name* the classic message vocabulary to model it: a
 # `DiscordPresentation` says which mode a payload is in, and the delivery protocol says what a
 # host `send` must accept. Naming the types is allowed there; building one is not.
-# `compose.py` names `View` only in a generic bound: a `Composition` is typed by which
+# `composition.py` names `View` only in a generic bound: a `Composition` is typed by which
 # kind of view its mode produces, and it never builds one.
-LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py", "compose.py"}
+LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py", "composition.py"}
 
 # The classic target *is* the classic message vocabulary, so these modules build it on
 # purpose: they draw embeds and plain views, measure a host's, and mount one. This is the
