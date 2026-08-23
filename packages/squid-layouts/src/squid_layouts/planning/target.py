@@ -12,7 +12,7 @@ from squid_layouts.planning.adapter import (
     PreparedExtension,
     ResourceCost,
 )
-from squid_layouts.planning.types import DiscordTarget
+from squid_layouts.target_types import DiscordTarget
 
 
 def _limit_values(limits: object) -> tuple[tuple[str, object], ...]:
@@ -49,6 +49,34 @@ class TargetProfile[ModeT = DiscordTarget, AdapterT = Any, BodyT = Any]:
     mode: type[ModeT] | None = None
     adapter: AdapterProfile[AdapterT] | None = None
     body_type: type[BodyT] | None = None
+    selected_adapter_capabilities: frozenset[str] | None = None
+
+    @property
+    def adapter_capabilities(self) -> frozenset[str]:
+        """Adapter behaviors and extensions selected for this effective target."""
+        if self.selected_adapter_capabilities is not None:
+            return self.selected_adapter_capabilities
+        if self.adapter is None:
+            return frozenset()
+        extensions = frozenset(f"extension.{kind}" for kind in self.extensions)
+        return self.adapter.capabilities | extensions
+
+    def restrict_adapter_capabilities(self, capabilities: frozenset[str]) -> Self:
+        """Freeze planning to a recorded subset supplied by the current adapter."""
+        if capabilities == self.adapter_capabilities:
+            return self
+        protocol = self.capabilities - self.adapter_capabilities
+        extensions = {
+            kind: extension
+            for kind, extension in self.extensions.items()
+            if f"extension.{kind}" in capabilities
+        }
+        return replace(
+            self,
+            capabilities=protocol | capabilities,
+            extensions=extensions,
+            selected_adapter_capabilities=capabilities,
+        )
 
     @property
     def budgets(self) -> Mapping[str, str]:
