@@ -224,7 +224,7 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     rendered = wizard.component(initial=state).render()
     values = [node.value for node in _walk(rendered) if isinstance(node, sl.semantic.Field)]
 
-    assert values == ["Ada", "advanced", sl.semantic.DEFAULT_CHROME.unanswered]
+    assert values == ["Ada", "advanced", sl.chrome.DEFAULT_CHROME.unanswered]
     assert "Finish" in _labels(rendered)
 
 

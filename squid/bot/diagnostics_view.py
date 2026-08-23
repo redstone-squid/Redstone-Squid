@@ -47,7 +47,7 @@ class ErrorReportBrowser(sl.Component):
         """The reports the list offers."""
         return self._reports
 
-    def chrome(self) -> sl.semantic.Chrome:
+    def chrome(self) -> sl.chrome.Chrome:
         """This browser's chrome: temporal paging labels and a footer that names the attachment."""
         return dataclasses.replace(
             CHROME,
@@ -141,11 +141,11 @@ class ErrorReportBrowser(sl.Component):
 def report_attachment(report: ErrorReport) -> discord.File:
     """Bundle the traceback and the log tail, for reading outside Discord."""
     asset = report_asset(report)
-    assert isinstance(asset.source, sl.semantic.InlineAsset)
+    assert isinstance(asset.source, sl.document.InlineAsset)
     return discord.File(io.BytesIO(asset.source.data), filename=asset.name)
 
 
-def report_asset(report: ErrorReport) -> sl.semantic.Asset:
+def report_asset(report: ErrorReport) -> sl.document.Asset:
     """Describe the full report as a portable inline text asset."""
     lines = [
         f"reference: {report.reference}",
@@ -165,11 +165,11 @@ def report_asset(report: ErrorReport) -> sl.semantic.Asset:
         "log tail:",
         *report.log_tail,
     ]
-    return sl.semantic.Asset(
+    return sl.document.Asset(
         key="full-report",
         name=f"error-{report.reference}.txt",
         media_type="text/plain",
-        source=sl.semantic.InlineAsset("\n".join(lines).encode()),
+        source=sl.document.InlineAsset("\n".join(lines).encode()),
     )
 
 

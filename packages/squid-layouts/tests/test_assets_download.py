@@ -11,8 +11,8 @@ from squid_layouts.scene import Codec
 from squid_layouts.scene.model import SceneFile, SceneText
 
 
-def _inline() -> sl.semantic.Asset:
-    return sl.semantic.Asset("report", "report.txt", "text/plain", sl.semantic.InlineAsset(b"full report"))
+def _inline() -> sl.document.Asset:
+    return sl.document.Asset("report", "report.txt", "text/plain", sl.document.InlineAsset(b"full report"))
 
 
 def test_download_factory_hoists_its_asset_and_preserves_file_metadata() -> None:
@@ -43,7 +43,7 @@ def test_equal_asset_keys_deduplicate_but_conflicting_assets_raise() -> None:
     result = sl.planning.plan(sl.Document((node,), (asset,)), target=V2_TARGET)
     assert result.scene.assets == (sl.scene.SceneAsset("report", "report.txt", "text/plain"),)
 
-    conflicting = sl.semantic.Asset("report", "other.txt", "text/plain", sl.semantic.InlineAsset(b"other"))
+    conflicting = sl.document.Asset("report", "other.txt", "text/plain", sl.document.InlineAsset(b"other"))
     with pytest.raises(sl.errors.LayoutInvariantError, match="identifies two different assets"):
         sl.planning.plan(sl.Document((node,), (conflicting,)), target=V2_TARGET)
 
@@ -66,7 +66,7 @@ def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
     inline_view = V2Renderer().view(inline.scene, plan=inline)
     assert any(isinstance(item, discord.ui.File) for item in inline_view.walk_children())
 
-    stored = sl.semantic.Asset("report", "report.txt", "text/plain", sl.semantic.StoredAsset("https://example.com/report.txt"))
+    stored = sl.document.Asset("report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt"))
     linked = sl.planning.plan(sl.download("Report", stored, key="report-download"), target=V2_TARGET)
     linked_view = V2Renderer().view(linked.scene, plan=linked)
     link = next(item for item in linked_view.walk_children() if isinstance(item, discord.ui.Button))
@@ -74,7 +74,7 @@ def test_discord_renderer_draws_an_attachment_file_or_url_link() -> None:
 
 
 class _DownloadComponent(Component):
-    def __init__(self, asset: sl.semantic.Asset) -> None:
+    def __init__(self, asset: sl.document.Asset) -> None:
         self.asset = asset
 
     def render(self) -> RenderResult:
@@ -100,14 +100,14 @@ async def test_mount_attaches_inline_bytes_and_does_not_attach_url_assets() -> N
     assert files[0].filename == "report.txt"
     assert files[0].fp.read() == b"full report"
 
-    stored = sl.semantic.Asset("report", "report.txt", "text/plain", sl.semantic.StoredAsset("https://example.com/report.txt"))
+    stored = sl.document.Asset("report", "report.txt", "text/plain", sl.document.StoredAsset("https://example.com/report.txt"))
     view, linked_files = await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
     assert linked_files == []
     assert any(isinstance(item, discord.ui.Button) and item.url for item in view.walk_children())
 
 
 async def test_mount_keeps_raising_for_non_url_stored_references() -> None:
-    stored = sl.semantic.Asset("report", "report.txt", "text/plain", sl.semantic.StoredAsset("reports/current"))
+    stored = sl.document.Asset("report", "report.txt", "text/plain", sl.document.StoredAsset("reports/current"))
 
     with pytest.raises(TypeError, match="needs a host resolver"):
         await _send(Mount(_DownloadComponent(stored), access=Everyone(), timeout=None))
