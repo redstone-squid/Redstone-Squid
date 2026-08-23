@@ -145,12 +145,12 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
     )
 
     async def settle_new() -> None:
-        await lookup.results._settle()
+        await lookup.results._load()
         new_settled.set()
 
     lookup.query = "old"
     async with anyio.create_task_group() as tasks:
-        tasks.start_soon(lookup.results._settle)
+        tasks.start_soon(lookup.results._load)
         await entered["old"].wait()
         lookup.query = "new"
         tasks.start_soon(settle_new)

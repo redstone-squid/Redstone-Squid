@@ -192,6 +192,7 @@ from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
 from squid_layouts.runtime.reactivity import (
     ActionParticipant,
+    ReactiveCycleError,
     ReactiveWriteError,
     SharedStateConflictError,
     StateDelta,
@@ -543,6 +544,7 @@ __all__ = [
     "RankedList",
     "RankedListState",
     "RawMarkdown",
+    "ReactiveCycleError",
     "ReactiveWriteError",
     "Ready",
     "ResolvedText",
