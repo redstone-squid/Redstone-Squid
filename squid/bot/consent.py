@@ -24,7 +24,6 @@ from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
 from squid_layouts.discord import Opened, Opener, Reject, Rejected, Screen, SessionPolicy, SessionRegistry
 
-
 CONSENT_SCREEN = Screen(
     "consent",
     policy=SessionPolicy(collision=Reject()),
@@ -145,6 +144,7 @@ class ConsentPrompt(sl.Component):
         with anyio.move_on_after(self._timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self._consent
+
 
 class ConsentPromptView(ExpiringLayoutView):
     """Ask one Discord user to accept the current privacy notice.
