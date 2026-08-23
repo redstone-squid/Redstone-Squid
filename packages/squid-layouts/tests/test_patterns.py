@@ -6,7 +6,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, Mount, NavigationContext, page_select_nav
+from squid_layouts.discord import Everyone, Mount
+from squid_layouts.discord.navigation import NavigationContext, page_select_nav
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.planning.navigation import SEEK_OPTION_LIMIT, _seek_pages
 from squid_layouts.primitives import Button, Lines, Row

@@ -9,15 +9,8 @@ from hypothesis import strategies as st
 
 import squid_layouts as sl
 from squid_layouts.discord import V2_LIMITS as LIMITS
-from squid_layouts.discord import (
-    ExistingLayoutError,
-    LimitViolationError,
-    ViolationCode,
-    audit,
-    conform,
-    cost,
-    measure,
-)
+from squid_layouts.discord import ExistingLayoutError, LimitViolationError, conform
+from squid_layouts.discord.inspection import ViolationCode, audit, cost, measure
 
 
 def _view(*items: discord.ui.Item) -> discord.ui.LayoutView:

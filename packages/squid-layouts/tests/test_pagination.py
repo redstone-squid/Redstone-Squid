@@ -16,18 +16,9 @@ from squid_layouts.chrome import DEFAULT_CHROME
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts.discord import (
-    Everyone,
-    LabelSpec,
-    ModalSpec,
-    Mount,
-    NavigationContext,
-    TextInputSpec,
-    build_modal,
-    conform,
-    default_nav,
-    page_select_nav,
-)
+from squid_layouts.discord import Everyone, Mount, conform
+from squid_layouts.discord.modals import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_layouts.discord.navigation import NavigationContext, default_nav, page_select_nav
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import SolveNoteCode, measure

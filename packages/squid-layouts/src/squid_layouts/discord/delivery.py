@@ -31,8 +31,8 @@ import discord
 from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation, mode_of
 from squid_layouts.errors import LayoutError, LimitViolationError
-from squid_layouts.planning.limits import LIMITS
 from squid_layouts.planning.adapter import ADAPTER_INTERACTION_DELIVERY, AdapterProfile
+from squid_layouts.planning.limits import LIMITS
 from squid_layouts.target_types import DiscordPyAdapter
 
 # Discord's way of saying the credentials behind a handle are gone.

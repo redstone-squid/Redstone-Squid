@@ -9,7 +9,8 @@ import anyio
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, Opened, SessionKey, SessionPolicy, SessionRegistry, Unprotected
+from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
+from squid_layouts.discord.sessions import Opened, SessionPolicy, Unprotected
 from squid_layouts.discord.delivery import DeliveryReceipt
 from squid_layouts.discord.durability import (
     ComponentRegistry,

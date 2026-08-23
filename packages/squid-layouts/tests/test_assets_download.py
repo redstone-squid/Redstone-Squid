@@ -4,7 +4,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import V2_TARGET, Everyone, Mount, V2Renderer, delivery
+from squid_layouts.discord import V2_TARGET, Everyone, Mount, delivery
+from squid_layouts.discord.rendering import V2Renderer
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.scene import Codec
@@ -84,7 +85,7 @@ class _DownloadComponent(Component):
 async def _send(mount: Mount) -> tuple[discord.ui.LayoutView, list[discord.File]]:
     delivered: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def destination(presentation: sl.discord.DiscordPresentation) -> delivery.DeliveryReceipt:
+    async def destination(presentation: sl.discord.presentation.DiscordPresentation) -> delivery.DeliveryReceipt:
         # Materializing the files is the destination's job, so this is where an asset the
         # host never resolved is refused.
         delivered.append((presentation.layout, presentation.files()))

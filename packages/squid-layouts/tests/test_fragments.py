@@ -7,15 +7,9 @@ import squid_layouts as sl
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts.discord import (
-    ExistingLayoutError,
-    FragmentOwnershipError,
-    ResourceCost,
-    StaleReservationError,
-    audit,
-    contribute,
-    fragment,
-)
+from squid_layouts.discord import ExistingLayoutError, ResourceCost, contribute
+from squid_layouts.discord.fragments import FragmentOwnershipError, StaleReservationError, fragment
+from squid_layouts.discord.inspection import audit
 
 
 def _host(*items: discord.ui.Item) -> discord.ui.LayoutView:
@@ -139,12 +133,12 @@ class TestPreflight:
 class TestInteractionBoundary:
     def test_routed_controls_are_allowed(self):
         host = _host()
-        routed = sl.discord.RoutedItem(label="go", custom_id="r:go")
+        routed = sl.discord.rendering.RoutedItem(label="go", custom_id="r:go")
         contribute(_text("body"), to=host, followed_by=(_row(routed),))
         assert routed in list(host.walk_children())
 
     def test_a_dispatchable_native_item_is_refused(self):
-        native = sl.discord.NativeItem(
+        native = sl.discord.targets.NativeItem(
             lambda: _row(discord.ui.Button(label="local", custom_id="local")),
             fallback=sl.primitives.Text("fallback"),
         )
@@ -152,7 +146,7 @@ class TestInteractionBoundary:
             fragment([native], alongside=_host())
 
     def test_a_native_display_item_is_fine(self):
-        native = sl.discord.NativeItem(
+        native = sl.discord.targets.NativeItem(
             lambda: discord.ui.TextDisplay("native"),
             fallback=sl.primitives.Text("fallback"),
         )

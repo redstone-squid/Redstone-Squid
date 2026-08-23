@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.message_adapter import to_message_fact
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
-from squid.bot.utils.components import edit_layout
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
 
@@ -107,7 +107,11 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         if channel is None:
             logger.debug("Skipping a post to an unreachable channel %s", want.channel_id)
             return
-        message = await channel.send(view=want.layout, allowed_mentions=want.allowed_mentions)
+        receipt = await sl.discord.send_to(channel, allowed_mentions=want.allowed_mentions)(want.presentation)
+        message = receipt.message
+        if message is None:
+            detail = "channel post delivery returned no message"
+            raise RuntimeError(detail)
         # The fact has to land before the post: `discord_posts.message_id` is RESTRICT,
         # so a post row cannot reference a message the database has not recorded yet.
         await self.bot.services.messages.observe(to_message_fact(message))
@@ -133,7 +137,8 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         message = await self._fetch(post)
         if message is None:
             return False
-        await edit_layout(message, want.layout, allowed_mentions=want.allowed_mentions)
+        handle = sl.discord.delivery.handle_for(message)
+        await handle.write(want.presentation)
         await self.bot.services.posts.mark_rendered(post.message_id, generation)
         return True
 
