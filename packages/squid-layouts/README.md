@@ -4,7 +4,7 @@ A declarative, limits-aware UI engine with Discord Components V2, classic-messag
 
 Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
 40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
-package makes those failures unrepresentable: views describe *intent*, and the engine measures
+package prevents known target-limit violations before delivery: views describe *intent*, and the engine measures
 every markdown prefix and code fence exactly, allocates the shared budgets by priority, and
 degrades content the way its author said it should degrade.
 
