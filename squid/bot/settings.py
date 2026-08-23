@@ -9,7 +9,7 @@ from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.operations import run_command_operation
+from squid.bot.operations import managed_result
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
 from squid.bot.ui import destination, error_layout, error_node, info_layout, info_node, reply_presentation
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
@@ -24,6 +24,7 @@ from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_layouts.discord import SessionKey
+from squid_layouts.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -90,34 +91,32 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     )
     @app_commands.rename(setting="type")
     @requires(SETTINGS_SERVER_EDIT)
+    @managed_result
     async def change_setting(
         self,
         ctx: Context[BotT],
         setting: ScalarChannelSetting,
         channel: GuildMessageable | None = None,
-    ) -> None:
+    ) -> RenderResult:
         """Point one setting at a channel, or clear it. The panel edits several at once."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
 
-        async def update(_progress, _receipt):
-            if channel is None:
-                await self.settings_service.clear(ctx.guild.id, setting)
-                return info_node(
-                    t(locale, _("Setting updated")),
-                    t(locale, _("{setting} has been cleared."), setting=setting),
-                )
-
-            if ctx.guild.get_channel_or_thread(channel.id) is None:
-                return error_node(t(locale, _("Error")), t(locale, _("Could not find that channel.")))
-
-            await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
+        if channel is None:
+            await self.settings_service.clear(ctx.guild.id, setting)
             return info_node(
-                t(locale, _("Settings updated")),
-                t(locale, _("{setting} channel has successfully been set."), setting=setting),
+                t(locale, _("Setting updated")),
+                t(locale, _("{setting} has been cleared."), setting=setting),
             )
 
-        await run_command_operation(ctx, update, locale=locale, reports=self.bot.services.error_reports)
+        if ctx.guild.get_channel_or_thread(channel.id) is None:
+            return error_node(t(locale, _("Error")), t(locale, _("Could not find that channel.")))
+
+        await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
+        return info_node(
+            t(locale, _("Settings updated")),
+            t(locale, _("{setting} channel has successfully been set."), setting=setting),
+        )
 
     @settings_hybrid_group.command(name="locale")
     @app_commands.describe(language=app_commands.locale_str(_("The language the bot should respond in")))
@@ -128,47 +127,26 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         ],
     )
     @requires(SETTINGS_SERVER_EDIT)
-    async def set_locale(self, ctx: Context[BotT], language: str) -> None:
+    @managed_result
+    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult:
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
 
         if language != FOLLOW_DISCORD and language not in SUPPORTED_LOCALES:
-            await reply_presentation(
-                ctx,
-                error_layout(t(locale, _("Error")), t(locale, _("That language is not supported."))),
-            )
-            return
+            return error_node(t(locale, _("Error")), t(locale, _("That language is not supported.")))
 
         if language == FOLLOW_DISCORD:
-
-            async def follow_discord(_progress, _receipt):
-                await self.settings_service.set_locale(ctx.guild.id, None)
-                return info_node(
-                    t(locale, _("Settings updated")),
-                    t(locale, _("This server now follows its Discord language.")),
-                )
-
-            await run_command_operation(
-                ctx,
-                follow_discord,
-                locale=locale,
-                reports=self.bot.services.error_reports,
-            )
-            return
-
-        async def set_language(_progress, _receipt):
-            await self.settings_service.set_locale(ctx.guild.id, language)
+            await self.settings_service.set_locale(ctx.guild.id, None)
             return info_node(
-                t(language, _("Settings updated")),
-                t(language, _("This server's language has been set to {language}."), language=language),
+                t(locale, _("Settings updated")),
+                t(locale, _("This server now follows its Discord language.")),
             )
 
-        await run_command_operation(
-            ctx,
-            set_language,
-            locale=language,
-            reports=self.bot.services.error_reports,
+        await self.settings_service.set_locale(ctx.guild.id, language)
+        return info_node(
+            t(language, _("Settings updated")),
+            t(language, _("This server's language has been set to {language}."), language=language),
         )
 
     @settings_hybrid_group.group(name="voting")

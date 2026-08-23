@@ -10,7 +10,7 @@ from discord.ext.commands import Context, Greedy
 
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.operations import run_command_operation
+from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.ui import info_layout, link_layout, reply_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes
@@ -25,6 +25,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_REJECT,
 )
 from squid.tags.domain import TagValueType
+from squid_layouts.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -312,21 +313,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     # someone reaches for while holding a reference a user reported.
     @commands.command(name="raise-error", aliases=["e"], hidden=True)
     @commands.is_owner()
-    async def raise_error(self, ctx: Context[BotT]):
+    @managed_result(dismiss_on_success=True)
+    async def raise_error(self, ctx: Context[BotT]) -> RenderResult:
         """Raises an error for testing purposes."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-
-        async def fail(_progress, _receipt):
-            msg = "This is a test error."
-            raise ValueError(msg)
-
-        await run_command_operation(
-            ctx,
-            fail,
-            locale=locale,
-            dismiss_on_success=True,
-            reports=self.bot.services.error_reports,
-        )
+        msg = "This is a test error."
+        raise ValueError(msg)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
