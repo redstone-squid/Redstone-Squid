@@ -2,7 +2,16 @@
 
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
+from squid_layouts.runtime.history import (
+    History,
+    HistoryEntry,
+    HistoryEntrySnapshot,
+    HistoryError,
+    HistorySnapshot,
+    history,
+    history_actions,
+    inspect_histories,
+)
 from squid_layouts.runtime.presentation import (
     ActivePagers,
     CursorState,
@@ -80,7 +89,9 @@ __all__ = [
     "Failed",
     "History",
     "HistoryEntry",
+    "HistoryEntrySnapshot",
     "HistoryError",
+    "HistorySnapshot",
     "Observation",
     "Pending",
     "PresentationSession",
@@ -111,6 +122,7 @@ __all__ = [
     "history_actions",
     "inspect_cells",
     "inspect_computed",
+    "inspect_histories",
     "join_action",
     "on_action_commit",
     "resource",

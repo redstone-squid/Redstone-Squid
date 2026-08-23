@@ -1,0 +1,115 @@
+"""Operational devtools runtime contracts."""
+
+from unittest.mock import AsyncMock
+
+import pytest
+
+import squid_layouts as sl
+from squid_layouts.discord import Everyone, Opened, SessionKey, SessionRegistry
+from squid_layouts.discord.durability import PurgeResult
+from squid_layouts.discord.operations import (
+    ActionDisabled,
+    ConfirmationRequired,
+    DevToolsAction,
+    DevToolsPolicy,
+    DevToolsRuntime,
+)
+from squid_layouts.discord.testing import delivered_to, fake_message
+from squid_layouts.profiling import MemoryProfiler, OperationKind
+
+
+class Panel(sl.Component):
+    history: sl.History = sl.history(limit=4)
+    count: int = sl.state(0)
+
+    def render(self):
+        return sl.paragraph(f"count {self.count}")
+
+
+async def open_panel(registry: SessionRegistry, *, key: SessionKey | None = None) -> Opened:
+    result = await registry.open(
+        sl.discord.Mount(Panel(), access=Everyone(), timeout=None),
+        delivered_to(fake_message()),
+        key=key,
+    )
+    assert isinstance(result, Opened)
+    return result
+
+
+async def test_snapshot_and_mount_inspection_include_sessions_history_and_middleware() -> None:
+    registry = SessionRegistry()
+    opened = await open_panel(registry, key=SessionKey.global_("devtools"))
+    runtime = DevToolsRuntime(sessions=registry)
+
+    snapshot = runtime.snapshot()
+    assert snapshot.sessions[0].id == opened.session.id
+    assert snapshot.sessions[0].mounts == (opened.session.root.id,)
+
+    inspection = runtime.inspect_mount(opened.session.root.id)
+    assert inspection.snapshot.id == opened.session.root.id
+    assert inspection.histories[0].name == "history"
+    assert inspection.histories[0].undo == ()
+
+
+async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> None:
+    registry = SessionRegistry()
+    opened = await open_panel(registry, key=SessionKey.global_("devtools"))
+    runtime = DevToolsRuntime(sessions=registry)
+
+    with pytest.raises(ConfirmationRequired):
+        await runtime.close_session(opened.session.id)
+
+    result = await runtime.close_session(opened.session.id, confirmed=True)
+
+    assert result.action is DevToolsAction.CLOSE_SESSION
+    assert tuple(registry.active()) == ()
+    assert opened.session.root.finished
+
+
+async def test_wait_idle_drains_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
+    profiler = MemoryProfiler()
+    bus = sl.TopicBus(profiler=profiler)
+    callback = AsyncMock()
+    bus.subscribe(sl.Topic("devtools", "test"), callback, label="test subscriber")
+    bus.publish(sl.Topic("devtools", "test"))
+    with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
+        pass
+    runtime = DevToolsRuntime(bus=bus, profiler=profiler)
+
+    await runtime.wait_idle()
+    assert callback.await_count == 1
+    topics = runtime.snapshot().topics
+    assert topics is not None
+    assert topics.queued == 0
+
+    runtime.clear_profile()
+    assert runtime.snapshot().profiler.aggregates == ()
+
+
+async def test_policy_can_disable_confirmation_required_actions() -> None:
+    policy = DevToolsPolicy(
+        enabled=frozenset({DevToolsAction.CLEAR_PROFILE}),
+        confirmations=frozenset(),
+    )
+    runtime = DevToolsRuntime(policy=policy)
+
+    with pytest.raises(ActionDisabled):
+        await runtime.wait_idle()
+
+
+async def test_purge_persistence_requires_confirmation_and_returns_store_results() -> None:
+    durable = AsyncMock()
+    durable.purge.return_value = (PurgeResult(record_key="record-1", deleted=True, reason="deleted"),)
+    policy = DevToolsPolicy(
+        enabled=frozenset({DevToolsAction.PURGE_PERSISTENCE}),
+        confirmations=frozenset({DevToolsAction.PURGE_PERSISTENCE}),
+    )
+    runtime = DevToolsRuntime(durable=durable, policy=policy)
+
+    with pytest.raises(ConfirmationRequired):
+        await runtime.purge_persistence(("record-1",))
+
+    result = await runtime.purge_persistence(("record-1",), confirmed=True)
+
+    assert result == (PurgeResult(record_key="record-1", deleted=True, reason="deleted"),)
+    durable.purge.assert_awaited_once_with(("record-1",))

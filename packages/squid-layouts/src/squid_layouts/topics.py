@@ -413,6 +413,13 @@ class TopicBus:
                         break
                     tasks.create_task(self._deliver(topic))
 
+    async def wait_idle(self) -> None:
+        """Wait for queued topic deliveries to settle under the bus's current owner."""
+        if not self._running:
+            await self.drain()
+            return
+        await self._queue.join()
+
     def snapshot(self) -> BusSnapshot:
         """Return subscriber, queue, in-flight, and callback outcome diagnostics."""
         topics = tuple(

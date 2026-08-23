@@ -197,7 +197,16 @@ from squid_layouts.planning.planner import plan
 from squid_layouts.routing import Route
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
+from squid_layouts.runtime.history import (
+    History,
+    HistoryEntry,
+    HistoryEntrySnapshot,
+    HistoryError,
+    HistorySnapshot,
+    history,
+    history_actions,
+    inspect_histories,
+)
 from squid_layouts.runtime.reactivity import (
     ActionParticipant,
     ReactiveCycleError,
@@ -510,7 +519,9 @@ __all__ = [
     "Heading",
     "History",
     "HistoryEntry",
+    "HistoryEntrySnapshot",
     "HistoryError",
+    "HistorySnapshot",
     "Importance",
     "InlineAsset",
     "IntField",
@@ -693,6 +704,7 @@ __all__ = [
     "history",
     "history_actions",
     "html",
+    "inspect_histories",
     "item",
     "item_label",
     "items",
