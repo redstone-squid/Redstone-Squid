@@ -32,21 +32,6 @@ logger = logging.getLogger(__name__)
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
 type ErrorResponder = Callable[[sl.discord.presentation.DiscordPresentation], Awaitable[None]]
 
-_reporter: ErrorReportService | None = None
-
-
-def set_error_reporter(service: ErrorReportService | None) -> None:
-    """Register the process's error report store for surfaces that carry no client reference.
-
-    A command and an interaction both reach the bot through their own arguments, so those
-    handlers resolve the service themselves. A progress message does not: `RunningMessage` is
-    built from a `Messageable` or a `Webhook`, neither of which exposes the client. There is one
-    bot per process, so registering it here is more honest than threading a service through every
-    UI helper that might one day fail.
-    """
-    global _reporter
-    _reporter = service
-
 
 def _reports_from(client: object) -> ErrorReportService | None:
     """Read the error report store off a bot, tolerating a client that is not one."""
@@ -300,7 +285,7 @@ async def _handle_discord_error(
             presentation,
             surface=surface,
             context={**safe_context, "application_context": application_context},
-            reports=reports if reports is not None else _reporter,
+            reports=reports,
         )
         # Both widths are logged: a backend that cannot do prefix queries still resolves whichever
         # one the reporter quoted by exact match.
@@ -381,31 +366,43 @@ async def handle_interaction_error(
     )
 
 
-async def handle_message_error(
-    message: discord.Message,
+async def record_operation_error(
     error: BaseException,
     *,
-    locale: str | None = None,
+    locale: str | None,
+    receipt: sl.discord.delivery.DeliveryReceipt | None,
+    presented: bool,
     reports: ErrorReportService | None = None,
 ) -> None:
-    """Render an exception into an existing progress message.
-
-    `locale` should be the locale the message was originally sent in (e.g.
-    `RunningMessage.locale`), since a bare message carries no locale info of
-    its own.
-    """
-
-    async def respond(presentation: sl.discord.presentation.DiscordPresentation) -> None:
-        await sl.discord.delivery.handle_for(message, mode=presentation.mode).write(presentation)
-
-    await _handle_discord_error(
-        error,
-        respond,
-        surface="running_message",
-        context={"channel_id": message.channel.id, "message_id": message.id},
-        locale=locale,
-        reports=reports,
-    )
+    """Capture an operation failure and mark it only when its card reached Discord."""
+    if is_error_presented(error):
+        return
+    original = unwrap_error(error)
+    presentation = build_error_presentation(original, locale)
+    context = {
+        "channel_id": receipt.message.channel.id if receipt is not None and receipt.message is not None else None,
+        "message_id": receipt.message_id if receipt is not None else None,
+    }
+    if presentation.error_id is not None:
+        application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
+        await _capture(
+            original,
+            presentation,
+            surface="command_operation",
+            context={**context, "application_context": application_context},
+            reports=reports,
+        )
+        logger.error(
+            "Discord failure [error_id=%s error_ref=%s surface=command_operation context=%r application_context=%r]",
+            presentation.error_id,
+            presentation.reference,
+            context,
+            application_context,
+            exc_info=original,
+            extra=captured(),
+        )
+    if presented:
+        mark_error_presented(original)
 
 
 class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT]):

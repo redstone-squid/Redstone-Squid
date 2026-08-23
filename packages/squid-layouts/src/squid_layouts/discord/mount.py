@@ -1567,9 +1567,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
     @staticmethod
     def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[AsyncBinding, ...]:
         return tuple(
-            binding
-            for binding in tree.async_bindings
-            if binding.pending_policy is pending and binding.pending
+            binding for binding in tree.async_bindings if binding.pending_policy is pending and binding.pending
         )
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
@@ -1596,32 +1594,36 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             bindings = self._pending_resources(candidate.tree, PendingPolicy.EXPLICIT)
             if not bindings or self.runtime.dirty:
                 return
-            if self._handle is None or self._handle.expired():
-                self._dirty = True
-                return
             wake = asyncio.Event()
             done = asyncio.Event()
-            delivery_open = True
+            delivery_open = self._handle is not None and not self._handle.expired()
 
-            async def settle() -> None:
+            async def settle(
+                current_bindings: tuple[AsyncBinding, ...] = bindings,
+                current_done: asyncio.Event = done,
+                current_wake: asyncio.Event = wake,
+            ) -> None:
                 try:
-                    await self._settle_resources(bindings)
+                    await self._settle_resources(current_bindings)
                 finally:
-                    done.set()
-                    wake.set()
+                    current_done.set()
+                    current_wake.set()
 
-            async def reconcile() -> None:
+            async def reconcile(
+                current_done: asyncio.Event = done,
+                current_wake: asyncio.Event = wake,
+            ) -> None:
                 nonlocal candidate, delivery_open
                 while True:
-                    await wake.wait()
-                    wake.clear()
+                    await current_wake.wait()
+                    current_wake.clear()
                     while delivery_open and self.runtime.dirty:
                         presented = await self._present_async_update(candidate, through=through, profile=profile)
                         if presented is None:
                             delivery_open = False
                             break
                         candidate = presented
-                    if done.is_set():
+                    if current_done.is_set():
                         return
 
             self._settlement_wake = wake
@@ -1752,7 +1754,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     self._unwatch_expiry = self.scheduler.watch(self)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
-                return deliver.Delivered(receipt, settled=not self._dirty)
+                settled = all(not binding.pending for binding in candidate.tree.async_bindings)
+                return deliver.Delivered(receipt, settled=settled)
             finally:
                 self._render_lock.release()
 

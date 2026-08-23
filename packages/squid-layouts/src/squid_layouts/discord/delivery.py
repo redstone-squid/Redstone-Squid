@@ -24,7 +24,7 @@ Delivery *policy* (ephemeral rules, DM fallback) stays host-side.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import discord
 
@@ -91,7 +91,7 @@ class DeleteHandle(Protocol):
         ...
 
 
-class EditHandle(DeleteHandle, Protocol):
+class EditHandle(Protocol):
     """A way to update or delete one already-sent message."""
 
     permanent: bool
@@ -327,8 +327,8 @@ class DeliveryReceipt:
 
     def __post_init__(self) -> None:
         """Fill metadata available on ordinary message-returning delivery paths."""
-        if self.delete_handle is None and self.handle is not None:
-            object.__setattr__(self, "delete_handle", self.handle)
+        if self.delete_handle is None and self.handle is not None and hasattr(self.handle, "delete"):
+            object.__setattr__(self, "delete_handle", cast(DeleteHandle, self.handle))
         if self.message is None:
             return
         if self.message_id is None:
