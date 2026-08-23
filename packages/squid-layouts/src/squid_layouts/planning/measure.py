@@ -1369,7 +1369,9 @@ def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
         match node:
             case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
                 continue
-            case SelectMenu() | RoutedSelect() | EntitySelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
+            case (
+                SelectMenu() | RoutedSelect() | EntitySelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0)
+            ):
                 continue
             case _:
                 message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"

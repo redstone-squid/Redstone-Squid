@@ -1245,7 +1245,8 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     fallback = Choices(
         key=node.key,
         choices=tuple(
-            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available) for choice in node.choices
+            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
+            for choice in node.choices
         ),
         selection=Controlled(tuple(_entity_key(value) for value in previous), choose_fallback),
         minimum=node.minimum,

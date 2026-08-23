@@ -258,7 +258,6 @@ __all__ = [
     "mode_of",
     "mounts",
     "native",
-    "selected_entities",
     "navigation_controls",
     "open_personal",
     "owned_mount",
@@ -270,5 +269,6 @@ __all__ = [
     "responder",
     "routers",
     "seek_control",
+    "selected_entities",
     "trim",
 ]
