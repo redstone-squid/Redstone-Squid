@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import anyio
 
@@ -37,6 +37,13 @@ else:
 
 
 logger = logging.getLogger(__name__)
+
+
+class _NotifyConnection(Protocol):
+    """The small asyncpg connection surface needed for transactional notifications."""
+
+    async def execute(self, query: str, *args: object) -> object: ...
+
 
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
 _DEFAULT_TOPIC_CHANNEL = "squid_topics"
@@ -548,7 +555,7 @@ class PostgresTopicBridge:
                 continue
             self._pending.add(payload)
 
-    async def publish_in(self, connection: Connection, topic: Topic) -> None:
+    async def publish_in(self, connection: _NotifyConnection, topic: Topic) -> None:
         """Publish `topic` when the supplied PostgreSQL transaction commits.
 
         The supplied connection owns the `pg_notify` call, so PostgreSQL holds the

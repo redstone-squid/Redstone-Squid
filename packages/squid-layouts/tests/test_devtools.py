@@ -180,8 +180,8 @@ class TestProfiles:
         async def refresh(topic) -> None:
             pass
 
-        bus.subscribe("build", refresh)
-        bus.publish("build")
+        bus.subscribe(sl.Topic("build", "devtools"), refresh)
+        bus.publish(sl.Topic("build", "devtools"))
         ctx = make_context()
         cog = DevTools(reactor=reactor)
 
