@@ -2802,6 +2802,19 @@ class OperationPanel(Component):
                 return Text(f"cancelled:{progress}")
 
 
+class ProgressiveOperationPanel(OperationPanel):
+    def __init__(self, progressed: asyncio.Event, resume: asyncio.Event) -> None:
+        self.progressed = progressed
+        self.resume = resume
+
+    @sl.operation(initial="starting")
+    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+        progress.set("publishing")
+        self.progressed.set()
+        await self.resume.wait()
+        return 42
+
+
 class TestResourceLoading:
     async def test_operation_delivers_pending_then_succeeded(self) -> None:
         message: Any = fake_message()
@@ -2813,6 +2826,28 @@ class TestResourceLoading:
         assert "pending:starting" in str(destination.calls[0][0].to_components())
         message.edit.assert_awaited_once()
         assert "succeeded:42" in str(message.edit.await_args.kwargs["view"].to_components())
+
+    async def test_operation_progress_reconciles_while_it_is_running(self) -> None:
+        progressed = asyncio.Event()
+        resume = asyncio.Event()
+        painted = asyncio.Event()
+        message: Any = fake_message()
+        def record_edit(**_kwargs: object) -> object:
+            painted.set()
+            return message
+
+        message.edit.side_effect = record_edit
+        mount = Mount(ProgressiveOperationPanel(progressed, resume), access=Everyone(), timeout=None)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.send, _Destination(message))
+            await progressed.wait()
+            await painted.wait()
+            assert "pending:publishing" in str(message.edit.await_args_list[0].kwargs["view"].to_components())
+            resume.set()
+
+        assert message.edit.await_count == 2
+        assert "succeeded:42" in str(message.edit.await_args_list[1].kwargs["view"].to_components())
 
     async def test_visible_resource_delivers_pending_then_ready(self) -> None:
         async def load(_key: str) -> str:
