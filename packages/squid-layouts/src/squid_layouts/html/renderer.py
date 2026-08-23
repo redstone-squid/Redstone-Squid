@@ -22,6 +22,7 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneNode,
     ScenePanel,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneRow,
@@ -48,6 +49,7 @@ border-radius:4px}.squid-gallery{display:grid;grid-template-columns:repeat(auto-
 .squid-gallery img{width:100%;border-radius:4px}.squid-separator{height:1px;margin:4px 0;border:0;background:#3f4147}
 .squid-separator--large{margin:12px 0}.squid-extension{padding:8px;border:1px dashed #6d6f78;border-radius:3px}
 .squid-file[aria-disabled=true]{opacity:.5}
+.squid-spoiler{filter:blur(12px);transition:filter .15s}.squid-spoiler:hover,.squid-spoiler:focus{filter:none}
 """.strip()
 
 type AssetResolver = Callable[[SceneAsset], str | None]
@@ -125,7 +127,7 @@ class Renderer:
 
     def _node(
         self,
-        node: SceneNode | SceneLink | SceneButton | SceneRoutedButton,
+        node: SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton,
         resolve_file: FileResolver,
     ) -> str:
         match node:
@@ -144,23 +146,29 @@ class Renderer:
                     f'<time datetime="{_attribute(instant)}" data-squid-timezone="{_attribute(timezone)}">'
                     f"{escape(value.isoformat())}</time></div>"
                 )
-            case SceneFile(name=name):
+            case SceneFile(name=name, spoiler=spoiler):
+                spoiler_class = " squid-spoiler" if spoiler else ""
+                focus = ' tabindex="0"' if spoiler else ""
                 resolved = resolve_file(node)
                 if resolved is None:
-                    return f'<span class="squid-button squid-file" aria-disabled="true">{escape(name)}</span>'
+                    return (
+                        f'<span class="squid-button squid-file{spoiler_class}" aria-disabled="true"{focus}>'
+                        f"{escape(name)}</span>"
+                    )
                 return (
-                    f'<a class="squid-button squid-link squid-file" href="{_attribute(resolved)}" '
-                    f'download="{_attribute(name)}">{escape(name)}</a>'
+                    f'<a class="squid-button squid-link squid-file{spoiler_class}" href="{_attribute(resolved)}" '
+                    f'download="{_attribute(name)}"{focus}>{escape(name)}</a>'
                 )
             case SceneSeparator(large=large, visible=visible):
                 if not visible:
                     return ""
                 modifier = " squid-separator--large" if large else ""
                 return f'<hr class="squid-separator{modifier}">'
-            case ScenePanel(children=children, accent=accent):
+            case ScenePanel(children=children, accent=accent, spoiler=spoiler):
                 style = f' style="--squid-accent:#{accent:06x}"' if accent is not None else ""
+                spoiler_attributes = ' squid-spoiler" tabindex="0' if spoiler else '"'
                 return (
-                    f'<section class="squid-panel"{style}>'
+                    f'<section class="squid-panel{spoiler_attributes}{style}>'
                     f"{''.join(self._node(child, resolve_file) for child in children)}</section>"
                 )
             case SceneSection(texts=texts, accessory=accessory):
@@ -180,27 +188,33 @@ class Renderer:
                 policy=policy,
             ):
                 disabled_attribute = " disabled" if disabled else ""
-                icon = f'<span class="squid-button__emoji">{escape(emoji)}</span> ' if emoji else ""
+                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 return (
                     f'<button type="button" class="squid-button squid-button--{style.value}" '
                     f'data-squid-action="{_attribute(action)}" data-squid-policy="{policy.value}"'
-                    f"{disabled_attribute}>{icon}{escape(label)}</button>"
+                    f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
                 )
             case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
                 disabled_attribute = " disabled" if disabled else ""
-                icon = f'<span class="squid-button__emoji">{escape(emoji)}</span> ' if emoji else ""
+                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 return (
                     f'<button type="button" class="squid-button squid-button--{style.value}" '
                     f'data-route-id="{_attribute(route_id)}"'
-                    f"{disabled_attribute}>{icon}{escape(label)}</button>"
+                    f"{disabled_attribute}>{icon}{escape(label or '')}</button>"
                 )
-            case SceneLink(label=label, url=url):
+            case SceneLink(label=label, url=url, emoji=emoji, disabled=disabled):
+                icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
                 safe = _url(url)
-                if safe is None:
-                    return f'<span class="squid-button squid-link">{escape(label)}</span>'
+                if safe is None or disabled:
+                    return f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
                 return (
                     f'<a class="squid-button squid-link" href="{_attribute(safe)}" '
-                    f'rel="noopener noreferrer">{escape(label)}</a>'
+                    f'rel="noopener noreferrer">{icon}{escape(label or "")}</a>'
+                )
+            case ScenePremiumButton(sku_id=sku_id):
+                return (
+                    f'<button type="button" class="squid-button squid-premium" disabled '
+                    f'data-sku-id="{sku_id}">Premium</button>'
                 )
             case SceneSelect(
                 options=options,
@@ -220,7 +234,7 @@ class Renderer:
                 )
                 rendered = "".join(
                     f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
-                    f"{escape(option.label)}</option>"
+                    f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
                     for option in options
                 )
                 return (
@@ -245,7 +259,7 @@ class Renderer:
                 )
                 rendered = "".join(
                     f'<option value="{_attribute(option.value)}"{" selected" if option.default else ""}>'
-                    f"{escape(option.label)}</option>"
+                    f"{escape((option.emoji.name + ' ') if option.emoji else '')}{escape(option.label)}</option>"
                     for option in options
                 )
                 return (
@@ -253,14 +267,17 @@ class Renderer:
                     f'data-squid-min="{minimum}" data-squid-max="{maximum}"'
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
-            case SceneThumbnail(url=url, description=description):
+            case SceneThumbnail(url=url, description=description, spoiler=spoiler):
                 safe = _url(url)
                 if safe is None:
                     return ""
-                return f'<img class="squid-thumbnail" src="{_attribute(safe)}" alt="{_attribute(description or "")}">'
+                spoiler_class = " squid-spoiler" if spoiler else ""
+                focus = ' tabindex="0"' if spoiler else ""
+                return f'<img class="squid-thumbnail{spoiler_class}" src="{_attribute(safe)}" alt="{_attribute(description or "")}"{focus}>'
             case SceneGallery(items=items):
                 images = "".join(
-                    f'<img src="{_attribute(safe)}" alt="{_attribute(item.description or "")}">'
+                    f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
+                    f'alt="{_attribute(item.description or "")}"{" tabindex=\"0\"" if item.spoiler else ""}>'
                     for item in items
                     if (safe := _url(item.url)) is not None
                 )
