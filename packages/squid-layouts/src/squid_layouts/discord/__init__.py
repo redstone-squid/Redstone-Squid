@@ -49,11 +49,15 @@ from squid_layouts.discord.modal import (
 )
 from squid_layouts.discord.mount import (
     ErrorHook,
+    ExpiryPolicy,
     FinishHook,
     Mount,
     MountAddress,
     MountedView,
+    MountLifecycle,
     MountSnapshot,
+    PauseUpdates,
+    RenewEphemeral,
     owned_mount,
 )
 from squid_layouts.discord.navigation import Navigator
@@ -156,6 +160,7 @@ __all__ = [
     "ErrorHook",
     "Everyone",
     "ExistingLayoutError",
+    "ExpiryPolicy",
     "FileField",
     "FinishHook",
     "Fragment",
@@ -168,6 +173,7 @@ __all__ = [
     "ModalSpec",
     "Mount",
     "MountAddress",
+    "MountLifecycle",
     "MountSnapshot",
     "MountedView",
     "NativeItem",
@@ -179,6 +185,7 @@ __all__ = [
     "Opened",
     "OpeningRequest",
     "Owner",
+    "PauseUpdates",
     "ProtectCrossUserAttachments",
     "Reactor",
     "ReactorSnapshot",
@@ -186,6 +193,7 @@ __all__ = [
     "Reject",
     "Rejected",
     "RejectionReason",
+    "RenewEphemeral",
     "Replace",
     "ReplaceOldest",
     "ReplacementProtection",

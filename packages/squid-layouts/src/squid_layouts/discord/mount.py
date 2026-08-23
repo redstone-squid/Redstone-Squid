@@ -9,11 +9,14 @@ stopped after a successful edit so dispatch tables do not accumulate.
 import asyncio
 import hashlib
 import logging
+import math
 import secrets
 import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any, Protocol, cast, runtime_checkable
 
 import anyio
@@ -184,6 +187,13 @@ class Scheduler(Protocol):
 
 
 @runtime_checkable
+class ExpirySupervisor(Protocol):
+    """A scheduler that observes mount edit-authority deadlines."""
+
+    def watch(self, mount: Mount) -> Callable[[], None]: ...
+
+
+@runtime_checkable
 class TopicFollower(Protocol):
     """A scheduler that can also subscribe a mount to topics (see `Reactor`).
 
@@ -201,6 +211,44 @@ def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionM
         if not any(existing is candidate for existing in unique):
             unique.append(candidate)
     return tuple(unique)
+
+
+def _validate_warning(warning: float) -> None:
+    if not math.isfinite(warning) or warning <= 0:
+        message = "an expiry warning must be a finite positive number of seconds"
+        raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class PauseUpdates:
+    """Show status chrome before temporary edit authority expires."""
+
+    warning: float = 60.0
+
+    def __post_init__(self) -> None:
+        _validate_warning(self.warning)
+
+
+@dataclass(frozen=True, slots=True)
+class RenewEphemeral:
+    """Replace an expiring ephemeral panel with an explicit renewal screen."""
+
+    warning: float = 90.0
+    label: TextLike | None = None
+
+    def __post_init__(self) -> None:
+        _validate_warning(self.warning)
+
+
+type ExpiryPolicy = PauseUpdates | RenewEphemeral
+DEFAULT_EXPIRY = PauseUpdates()
+
+
+class MountLifecycle(StrEnum):
+    """Which mount-owned generation the reader can currently see."""
+
+    ACTIVE = "active"
+    RENEWAL_ARMED = "renewal_armed"
 
 
 class _MountedBehaviour:
@@ -373,6 +421,10 @@ class MountSnapshot:
     """Seconds since the initial send or last accepted click — what the timeout counts."""
     expires_in: float | None
     """Seconds of idle timeout left, or `None` for a mount that never times out."""
+    lifecycle: MountLifecycle
+    """Whether the application tree or framework renewal generation is visible."""
+    handle_expires_in: float | None
+    """Seconds of known edit authority left, or `None` for permanent/unknown authority."""
     access: AccessPolicy
     handler_keys: tuple[str, ...]
     """Action keys the live generation answers to."""
@@ -505,6 +557,7 @@ class Mount:
         middleware: Sequence[ActionMiddleware] = (),
         profiler: Profiler | None = None,
         scheduler: Scheduler | None = None,
+        expiry: ExpiryPolicy | None = DEFAULT_EXPIRY,
         nav: NavFactory | None = None,
         acknowledgement_timeout: float = 2.5,
         pending_after: float = 1.0,
@@ -563,9 +616,16 @@ class Mount:
             else _NOOP_PROFILER
         )
         self.scheduler = scheduler
+        if isinstance(expiry, RenewEphemeral) and not isinstance(scheduler, ExpirySupervisor):
+            message = "RenewEphemeral requires a scheduler that supervises mount expiry"
+            raise TypeError(message)
+        self.expiry = expiry
         self.status: TextLike | None = None
         """Framework-drawn status appended to the document until the next accepted interaction."""
         self._handle: deliver.EditHandle | None = None
+        self._ephemeral: bool | None = None
+        self._lifecycle = MountLifecycle.ACTIVE
+        self._unwatch_expiry: Callable[[], None] | None = None
         self._view: MountedView | None = None
         self._handlers: dict[str, ActionBinding] = {}
         # What each render-declared form key presents right now. Separate from `_handlers`,
@@ -677,6 +737,11 @@ class Mount:
         now = self.clock()
         idle = now - self._active
         component = type(self.component)
+        handle_expires_in = None
+        if self._handle is not None and not self._handle.permanent and self._handle.expires_at is not None:
+            wall_clock = getattr(self.scheduler, "clock", None)
+            current = wall_clock() if callable(wall_clock) else datetime.now(UTC)
+            handle_expires_in = max(0.0, (self._handle.expires_at - current).total_seconds())
         return MountSnapshot(
             id=self.id,
             component=f"{component.__module__}.{component.__qualname__}",
@@ -687,6 +752,8 @@ class Mount:
             age=now - self._born,
             idle=idle,
             expires_in=None if self.timeout is None else max(0.0, self.timeout - idle),
+            lifecycle=self._lifecycle,
+            handle_expires_in=handle_expires_in,
             access=self.access,
             handler_keys=tuple(sorted(self._handlers)),
             scene=None if self._plan is None else self._plan.scene,
@@ -1244,11 +1311,14 @@ class Mount:
                         self._rollback(candidate)
                     raise
                 self._handle = receipt.handle
+                self._ephemeral = receipt.ephemeral
                 if receipt.message is not None:
                     self._note_address(receipt.message)
                 self._active = self.clock()
                 with profile.span("commit"):
                     self._commit_presented(candidate)
+                if self._unwatch_expiry is None and isinstance(self.scheduler, ExpirySupervisor):
+                    self._unwatch_expiry = self.scheduler.watch(self)
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.WRITTEN))
                 return deliver.Delivered(receipt)
@@ -2113,6 +2183,9 @@ class Mount:
 
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""
+        if self._unwatch_expiry is not None:
+            self._unwatch_expiry()
+            self._unwatch_expiry = None
         if self._view is not None:
             self._view.stop()
             self._view = None
