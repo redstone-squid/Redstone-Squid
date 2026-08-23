@@ -41,6 +41,8 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
 _DEFAULT_TOPIC_CHANNEL = "squid_topics"
 _ORIGIN_SEPARATOR = ":"
+_NORMAL_DELIVERY = "normal"
+_TRANSACTION_DELIVERY = "transaction"
 _MAX_NOTIFY_PAYLOAD = 8000
 """PostgreSQL refuses a NOTIFY payload of 8000 bytes or more, counting the terminator."""
 
@@ -509,6 +511,7 @@ class PostgresTopicBridge:
         self.origin = origin or uuid.uuid4().hex
         self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=queue_size)
         self._pending: set[str] = set()
+        self._listener_ready = asyncio.Event()
         self._running = False
         self._published = 0
         self._local_only = 0
@@ -524,15 +527,14 @@ class PostgresTopicBridge:
         Synchronous like `TopicBus.publish`, and with the same guarantee for local
         subscribers. The notification leaves on the bridge's own connection shortly after
         this returns, so it is *not* ordered against a write the caller has not committed
-        yet. Publish after that write commits, or send `payload()` with
-        ``SELECT pg_notify($1, $2)`` on the transaction's own connection, which PostgreSQL
-        holds back until the transaction commits.
+        yet. Use `publish_in()` when the notification must be ordered with an application
+        transaction.
         """
         self.bus.publish(*addresses)
         for address in addresses:
             self._published += 1
             # A `CellAddress` names a live object, so it has no wire form to look for.
-            payload = self.payload(address) if isinstance(address, Topic) else None
+            payload = self._wire_payload(address, _NORMAL_DELIVERY) if isinstance(address, Topic) else None
             if payload is None:
                 self._local_only += 1
                 continue
@@ -546,12 +548,38 @@ class PostgresTopicBridge:
                 continue
             self._pending.add(payload)
 
-    def payload(self, topic: Topic) -> str | None:
-        """This bridge's wire form for `topic`, or `None` when it cannot be carried."""
+    async def publish_in(self, connection: Connection, topic: Topic) -> None:
+        """Publish `topic` when the supplied PostgreSQL transaction commits.
+
+        The supplied connection owns the `pg_notify` call, so PostgreSQL holds the
+        notification until its current transaction commits. The bridge listener then
+        publishes it to this process's bus as well as to listeners in other processes.
+        This method does not commit the transaction.
+
+        Raises:
+            RuntimeError: If the bridge has not been started with :meth:`run`.
+            ValueError: If the topic cannot fit on the configured NOTIFY channel.
+        """
+        payload = self._wire_payload(topic, _TRANSACTION_DELIVERY)
+        if payload is None:
+            message = f"topic {topic!r} cannot be carried over PostgreSQL NOTIFY"
+            raise ValueError(message)
+        if not self._running:
+            message = "topic bridge must be running before publish_in()"
+            raise RuntimeError(message)
+        await self._listener_ready.wait()
+        if not self._running:
+            message = "topic bridge stopped before publish_in() could notify"
+            raise RuntimeError(message)
+        await connection.execute("SELECT pg_notify($1, $2)", self.channel, payload)
+        self._notified += 1
+
+    def _wire_payload(self, topic: Topic, delivery: str) -> str | None:
+        """Return a tagged wire payload, or `None` when the topic cannot be carried."""
         encoded = self.codec.encode(topic)
         if encoded is None:
             return None
-        payload = f"{self.origin}{_ORIGIN_SEPARATOR}{encoded}"
+        payload = f"{self.origin}{_ORIGIN_SEPARATOR}{delivery}{_ORIGIN_SEPARATOR}{encoded}"
         if len(payload.encode()) >= _MAX_NOTIFY_PAYLOAD:
             logger.warning("topic bridge payload for %r exceeds the %d byte NOTIFY limit", topic, _MAX_NOTIFY_PAYLOAD)
             return None
@@ -573,6 +601,7 @@ class PostgresTopicBridge:
                 tasks.start_soon(self._listen)
                 tasks.start_soon(self._send)
         finally:
+            self._listener_ready.clear()
             self._running = False
 
     def snapshot(self) -> TopicBridgeSnapshot:
@@ -601,9 +630,12 @@ class PostgresTopicBridge:
                         connection.add_termination_listener(lambda _connection, event=disconnected: event.set())
                         if self.on_resync is not None:
                             await self.on_resync()
+                        self._listener_ready.set()
                         await disconnected.wait()
+                        self._listener_ready.clear()
                         logger.warning("topic bridge listener on %r disconnected; reconnecting", self.channel)
                     finally:
+                        self._listener_ready.clear()
                         # The pool resets a released connection anyway, but asyncpg warns
                         # about the listener it still holds. Shielded so shutdown -- the
                         # usual reason for landing here -- still unsubscribes.
@@ -629,12 +661,17 @@ class PostgresTopicBridge:
 
     def _notified_by(self, _connection: object, _process_id: int, _channel: str, payload: str) -> None:
         """Republish one remote notification locally, on the event loop thread."""
-        origin, separator, encoded = payload.partition(_ORIGIN_SEPARATOR)
+        origin, separator, remainder = payload.partition(_ORIGIN_SEPARATOR)
         if not separator:
             self._undecodable += 1
             logger.warning("topic bridge received an unattributed payload on %r", self.channel)
             return
-        if origin == self.origin:
+        delivery, separator, encoded = remainder.partition(_ORIGIN_SEPARATOR)
+        if not separator or delivery not in {_NORMAL_DELIVERY, _TRANSACTION_DELIVERY}:
+            self._undecodable += 1
+            logger.debug("topic bridge received an unknown delivery mode from %s", origin)
+            return
+        if origin == self.origin and delivery == _NORMAL_DELIVERY:
             self._ignored += 1
             return
         topic = self.codec.decode(encoded)
