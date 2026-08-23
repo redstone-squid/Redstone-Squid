@@ -293,7 +293,7 @@ class SearchCog[
                 return latest, await self.bot.for_build(latest).render_node()
 
             component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
-            navigator = sl.discord.Navigator(component)
+            navigator = sl.discord.navigation.Navigator(component)
             mount = create_mount(
                 navigator,
                 access=sl.discord.Everyone(),

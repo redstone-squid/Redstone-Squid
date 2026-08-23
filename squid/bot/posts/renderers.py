@@ -37,13 +37,13 @@ class BuildCardRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
             return ()
 
         handler = self.bot.for_build(build)
-        layout = await handler.render_layout()
+        presentation = await handler.render_presentation()
         return [
             DesiredPost(
                 channel_id=channel.id,
                 guild_id=channel.guild.id,
                 surface="build_card",
-                layout=layout,
+                presentation=presentation,
             )
             for channel in await handler.get_channels_to_post_to()
         ]

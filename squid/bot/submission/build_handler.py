@@ -9,7 +9,7 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import render_item, render_static, truncate_display_text
+from squid.bot.ui import render_item, render_presentation, render_static, truncate_display_text
 from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
@@ -97,6 +97,10 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
     async def render_layout(self) -> discord.ui.LayoutView:
         """Render a standalone Components V2 layout for the build."""
         return render_static([await self.render_node()])
+
+    async def render_presentation(self) -> sl.discord.DiscordPresentation:
+        """Render the complete presentation used by post delivery."""
+        return render_presentation([await self.render_node()])
 
     async def render_container(
         self, *, reservation: sl.discord.ResourceCost = sl.discord.EMPTY_RESERVATION

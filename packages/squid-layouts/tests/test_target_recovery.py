@@ -6,7 +6,8 @@ import re
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Target, TargetRegistry
+from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Target
+from squid_layouts.discord.targets import TargetRegistry
 from squid_layouts.discord.adapter import discord_py_adapter_profile
 from squid_layouts.discord.durability import DEFAULT_TARGETS, ComponentRegistry, SnapshotCodec
 from squid_layouts.discord.testing import commit_classic_render, commit_render

@@ -9,23 +9,9 @@ import anyio
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import (
-    Abandoned,
-    Everyone,
-    MountDefaults,
-    Opened,
-    Owner,
-    ProtectCrossUserAttachments,
-    Reject,
-    Rejected,
-    RejectionReason,
-    Replace,
-    SessionKey,
-    SessionPolicy,
-    SessionRegistry,
-    Unprotected,
-    open_personal,
-)
+from squid_layouts.discord import Everyone, MountDefaults, Owner, SessionKey, SessionRegistry
+from squid_layouts.discord.delivery import Abandoned
+from squid_layouts.discord.sessions import Opened, ProtectCrossUserAttachments, Reject, Rejected, RejectionReason, Replace, SessionPolicy, Unprotected, open_personal
 from squid_layouts.discord.sessions import OpeningRequest
 from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
@@ -49,31 +35,31 @@ _DEFAULT_MESSAGE = object()
 def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
     delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         handle = None if delivered is None else sl.discord.delivery.handle_for(delivered)
-        return sl.discord.DeliveryReceipt(delivered, handle)
+        return sl.discord.delivery.DeliveryReceipt(delivered, handle)
 
     return send
 
 
 def slowly() -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         await anyio.sleep(0)
         message = fake_message()
-        return sl.discord.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
+        return sl.discord.delivery.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
 
     return send
 
 
 def abandoning() -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
-        raise sl.discord.DeliveryAbandoned
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
+        raise sl.discord.delivery.DeliveryAbandoned
 
     return send
 
 
 def failing(error: Exception) -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         raise error
 
     return send
@@ -83,11 +69,11 @@ KEY = SessionKey.user_guild("panel", 7, 42)
 
 
 def test_session_keys_use_typed_frozen_scopes() -> None:
-    assert SessionKey.user("account", 7).scope == sl.discord.UserScope(7)
-    assert SessionKey.guild("roles", 42).scope == sl.discord.GuildScope(42)
-    assert SessionKey.user_guild("settings", 7, 42).scope == sl.discord.UserGuildScope(7, 42)
-    assert SessionKey.global_("status").scope == sl.discord.GlobalScope()
-    assert SessionKey.custom("edit", (7, 99)).scope == sl.discord.CustomScope((7, 99))
+    assert SessionKey.user("account", 7).scope == sl.discord.sessions.UserScope(7)
+    assert SessionKey.guild("roles", 42).scope == sl.discord.sessions.GuildScope(42)
+    assert SessionKey.user_guild("settings", 7, 42).scope == sl.discord.sessions.UserGuildScope(7, 42)
+    assert SessionKey.global_("status").scope == sl.discord.sessions.GlobalScope()
+    assert SessionKey.custom("edit", (7, 99)).scope == sl.discord.sessions.CustomScope((7, 99))
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
 
 
@@ -254,7 +240,7 @@ class TestCardinality:
 
     async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
         class ReplaceNewest:
-            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.sessions.SessionSummary, ...]):
                 return Replace(occupants[-request.required_victims :])
 
         registry = SessionRegistry()
@@ -274,7 +260,7 @@ class TestCardinality:
 
     async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
         class SelectNobody:
-            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.sessions.SessionSummary, ...]):
                 return Replace(())
 
         registry = SessionRegistry()

@@ -9,7 +9,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, Mount, Owner, Router, live
+from squid_layouts.discord import Everyone, Mount, Owner, live
+from squid_layouts.discord.routing import Router
 from squid_layouts.discord.devtools import DevTools
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Heading

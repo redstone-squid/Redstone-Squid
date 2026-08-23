@@ -7,7 +7,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Router, render_static
+from squid_layouts.discord import render_static
+from squid_layouts.discord.routing import Router
 from squid_layouts.discord.routing import _dispatch_item
 from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
@@ -147,7 +148,7 @@ class TestRouter:
         await router.dispatch(
             fake_interaction(),
             "edit:build:42",
-            component=sl.discord.RouteComponent.SELECT,
+            component=sl.discord.routing.RouteComponent.SELECT,
             values=("one", "two"),
         )  # type: ignore[arg-type]
         assert seen == [(("one", "two"), 42)]
@@ -176,7 +177,7 @@ class TestRouter:
         await router.dispatch(
             fake_interaction(),
             "poll:close",
-            component=sl.discord.RouteComponent.SELECT,
+            component=sl.discord.routing.RouteComponent.SELECT,
             values=("now",),
         )  # type: ignore[arg-type]
 
@@ -189,8 +190,8 @@ class TestRouter:
         async def edit(_interaction, _values: tuple[str, ...], build_id: int) -> None: ...
 
         assert router.describe() == (
-            sl.discord.RouteDescription(
-                component=sl.discord.RouteComponent.SELECT,
+            sl.discord.routing.RouteDescription(
+                component=sl.discord.routing.RouteComponent.SELECT,
                 format=EDIT_BUILD.format,
                 params=(("build_id", "int"),),
                 aliases=EDIT_BUILD.aliases,
@@ -433,7 +434,7 @@ class TestRouter:
 
 class TestRouteGroups:
     async def test_child_groups_build_stable_routes_and_dispatch_them(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         close = polls.define("close", aliases=("poll:close",))
         seen: list[str] = []
@@ -451,7 +452,7 @@ class TestRouteGroups:
         assert router.template().fullmatch("r:polls:close")
 
     def test_a_namespace_group_is_an_ordinary_one_segment_group(self) -> None:
-        nested = sl.discord.RouteGroup("r", "polls")
+        nested = sl.discord.routing.RouteGroup("r", "polls")
 
         with pytest.raises(ValueError, match="exactly one prefix segment"):
             Router(namespace=nested, on_gone=_noop)
@@ -459,10 +460,10 @@ class TestRouteGroups:
     @pytest.mark.parametrize("prefix", [(), ("{kind}",), ("bad:prefix",)])
     def test_group_prefixes_are_nonempty_literal_segments(self, prefix: tuple[str, ...]) -> None:
         with pytest.raises(ValueError, match=r"route group|literal segment"):
-            sl.discord.RouteGroup(*prefix)
+            sl.discord.routing.RouteGroup(*prefix)
 
     def test_sibling_groups_are_checked_for_identity_overlap(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         first = root.group("polls")
         second = root.group("polls")
         first.define("{action}")
@@ -473,13 +474,13 @@ class TestRouteGroups:
 
     def test_a_group_from_another_namespace_is_rejected(self) -> None:
         router = Router(namespace="r", on_gone=_noop)
-        foreign = sl.discord.RouteGroup("other")
+        foreign = sl.discord.routing.RouteGroup("other")
 
         with pytest.raises(ValueError, match="does not belong"):
             router.include(foreign)
 
     def test_including_an_existing_descendant_is_a_no_op(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -491,7 +492,7 @@ class TestRouteGroups:
         assert router.describe()[0].group_prefix == "r:polls"
 
     def test_every_defined_identity_needs_a_handler_before_registration(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         root.group("polls").define("close")
         router = Router(namespace=root, on_gone=_noop)
 
@@ -499,7 +500,7 @@ class TestRouteGroups:
             router.register(_FakeClient())  # type: ignore[arg-type]
 
     def test_identity_and_group_structure_freeze_at_registration(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -512,7 +513,7 @@ class TestRouteGroups:
             root.group("builds")
 
     async def test_a_frozen_group_accepts_same_identity_handler_replacement(self) -> None:
-        root = sl.discord.RouteGroup("r")
+        root = sl.discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
         polls.add(route, _noop)
@@ -532,12 +533,12 @@ class TestRouteGroups:
 class TestMiddleware:
     def test_the_base_class_requires_dispatch(self) -> None:
         with pytest.raises(TypeError, match="abstract"):
-            cast(Any, sl.discord.Middleware)()
+            cast(Any, sl.discord.routing.Middleware)()
 
     async def test_router_and_group_middleware_compose_outermost_first(self) -> None:
         seen: list[str] = []
 
-        class Record(sl.discord.Middleware[discord.Client]):
+        class Record(sl.discord.routing.Middleware[discord.Client]):
             def __init__(self, name: str) -> None:
                 self.name = name
 
@@ -546,7 +547,7 @@ class TestMiddleware:
                 await proceed()
                 seen.append(f"{self.name}:after")
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         router = Router(namespace=root, on_gone=_noop)
@@ -573,7 +574,7 @@ class TestMiddleware:
     async def test_returning_without_calling_next_short_circuits_and_still_acknowledges(self) -> None:
         seen: list[str] = []
 
-        class Stop(sl.discord.Middleware[discord.Client]):
+        class Stop(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 seen.append("stopped")
 
@@ -596,7 +597,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             seen.append("router-error")
 
-        class Catch(sl.discord.Middleware[discord.Client]):
+        class Catch(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 try:
                     await proceed()
@@ -620,7 +621,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             seen.append("router-error")
 
-        class Observe(sl.discord.Middleware[discord.Client]):
+        class Observe(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 seen.append("before")
                 try:
@@ -645,7 +646,7 @@ class TestMiddleware:
         async def on_error(interaction, error: Exception, source: str) -> None:
             errors.append(error)
 
-        class Twice(sl.discord.Middleware[discord.Client]):
+        class Twice(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
                 await proceed()
@@ -660,9 +661,9 @@ class TestMiddleware:
         assert "only be called once" in str(errors[0])
 
     async def test_proceed_expires_when_middleware_returns(self) -> None:
-        saved: list[sl.discord.RouteProceed] = []
+        saved: list[sl.discord.routing.RouteProceed] = []
 
-        class Save(sl.discord.Middleware[discord.Client]):
+        class Save(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 saved.append(proceed)
 
@@ -677,7 +678,7 @@ class TestMiddleware:
     async def test_instances_are_idempotent_only_by_identity(self) -> None:
         seen: list[str] = []
 
-        class Record(sl.discord.Middleware[discord.Client]):
+        class Record(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 seen.append("middleware")
                 await proceed()
@@ -694,14 +695,14 @@ class TestMiddleware:
         assert seen == ["middleware", "middleware"]
 
     async def test_request_facts_are_immutable_and_distinguish_aliases(self) -> None:
-        requests: list[sl.discord.RouteRequest[discord.Client]] = []
+        requests: list[sl.discord.routing.RouteRequest[discord.Client]] = []
 
-        class Capture(sl.discord.Middleware[discord.Client]):
+        class Capture(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 requests.append(request)
                 await proceed()
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         builds = root.group("builds")
         edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
         builds.add(edit, _noop)
@@ -724,15 +725,15 @@ class TestMiddleware:
         assert not gone.matched_alias
 
     def test_descriptions_include_effective_middleware_provenance(self) -> None:
-        class RouterPolicy(sl.discord.Middleware[discord.Client]):
+        class RouterPolicy(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        class GroupPolicy(sl.discord.Middleware[discord.Client]):
+        class GroupPolicy(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         polls.add(close, _noop)
@@ -746,11 +747,11 @@ class TestMiddleware:
         )
 
     def test_middleware_freezes_at_registration(self) -> None:
-        class Policy(sl.discord.Middleware[discord.Client]):
+        class Policy(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
-        root = sl.discord.RouteGroup[discord.Client]("r")
+        root = sl.discord.routing.RouteGroup[discord.Client]("r")
         polls = root.group("polls")
         close = polls.define("close")
         polls.add(close, _noop)
@@ -836,7 +837,7 @@ class TestAcknowledgement:
 
 class TestProfiling:
     async def test_route_trace_profiles_middleware_handler_and_acknowledgement(self) -> None:
-        class Continue(sl.discord.Middleware[discord.Client]):
+        class Continue(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
@@ -864,7 +865,7 @@ class TestProfiling:
         )
 
     async def test_short_circuit_and_caught_failure_remain_distinct(self) -> None:
-        class Stop(sl.discord.Middleware[discord.Client]):
+        class Stop(sl.discord.routing.Middleware[discord.Client]):
             async def dispatch(self, request, proceed) -> None:
                 pass
 
@@ -1084,7 +1085,7 @@ class TestClientRegistration:
         first.register(client)  # type: ignore[arg-type]
         second.register(client)  # type: ignore[arg-type]
 
-        assert sl.discord.routers(client) == (first, second)  # type: ignore[arg-type]
+        assert sl.discord.routing.routers(client) == (first, second)  # type: ignore[arg-type]
 
     def test_registering_the_same_pair_again_is_a_no_op(self) -> None:
         client = _FakeClient()

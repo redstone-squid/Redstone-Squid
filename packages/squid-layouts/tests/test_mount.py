@@ -26,20 +26,9 @@ from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.text import Localization, Message
 from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
-from squid_layouts.discord import (
-    Allowed,
-    Check,
-    Denied,
-    Everyone,
-    Mount,
-    MountLifecycle,
-    Owner,
-    PauseUpdates,
-    Reactor,
-    RenewEphemeral,
-    Users,
-    delivery,
-)
+from squid_layouts.discord import Everyone, Mount, Owner, PauseUpdates, Reactor, RenewEphemeral, Users, delivery
+from squid_layouts.discord.access import Allowed, Check, Denied
+from squid_layouts.discord.mount import MountLifecycle
 from squid_layouts.discord.mount import _BusyPaint, _custom_id
 from squid_layouts.discord.testing import (
     assert_within_limits,
@@ -117,7 +106,7 @@ async def _armed_mount(
     component: Component | None = None,
     *,
     access: sl.discord.AccessPolicy | None = None,
-    on_error: sl.discord.ErrorHook | None = None,
+    on_error: sl.discord.mount.ErrorHook | None = None,
 ) -> tuple[Mount, Any, Reactor]:
     now = datetime.now(UTC)
     reactor = Reactor(clock=lambda: now)
@@ -1957,7 +1946,7 @@ class _Destination:
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def __call__(self, presentation: sl.discord.DiscordPresentation) -> Any:
+    async def __call__(self, presentation: sl.discord.presentation.DiscordPresentation) -> Any:
         self.calls.append((presentation.layout, presentation.files()))
         if self.raises is not None:
             raise self.raises
