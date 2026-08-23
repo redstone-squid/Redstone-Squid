@@ -257,36 +257,48 @@ short-circuits; calling it twice or after `dispatch` returns is an error. The ro
 initial interaction acknowledgement deadline outside this chain, so a slow handler or deliberate
 short-circuit cannot produce Discord's generic interaction failure.
 
+### State values
+
+`sl.state` holds an immutable value and is replaced rather than mutated. Every assignment is
+checked with `hash()`, which reaches all the way down: `(1, [2])` and a frozen dataclass with a
+`list` field are both refused, and `sl.FrozenMapping` is the container to reach for when a
+mapping has to be state. `sl.state(..., opaque=True)` is the escape hatch for a collaborator the
+component holds and never mutates — a service, a guild, a session.
+
+Inside an action a write stages into the transaction's overlay and becomes visible at commit.
+The action reads its own writes; another task reading the same field across an `await` sees the
+committed value until then, and a rollback is dropping the overlay.
+
 ### Computed values
 
-`sl.computed` caches synchronous derived values against explicit `sl.state` dependencies. A write
-to any other state field may re-render the component, but it does not recompute the value:
+`sl.computed` caches a synchronous derived value against whatever state its body read. Nothing
+is declared, so a conditional dependency is exactly the branch that ran:
 
 ```python
 class SearchResults(sl.Component):
     query: str = sl.state("")
     filters: frozenset[str] = sl.state(frozenset())
 
-    @sl.computed(depends=(query, filters))
+    @sl.computed
     def visible_results(self) -> tuple[Result, ...]:
         return apply_filters(search(self.query), self.filters)
 ```
 
-Dependencies may be `sl.state` or earlier `@sl.computed` descriptors declared on the same
-component. Computed dependencies form selector boundaries: downstream computed values and
-resources invalidate only when the refreshed value compares unequal. The explicit declaration is
-required; there is no component-wide invalidation mode.
+A computed may read another component's state, or another computed. It is lazy — one nobody
+renders is never evaluated — and one that raises fails where its value is used rather than at
+commit. Values form selector boundaries: downstream computed values recompute only when the
+refreshed value compares unequal. `sl.untracked()` reads state without subscribing to it.
 
 ### Reactive async resources
 
-`sl.resource` keeps async data in a synchronous, renderable state machine. Dependencies are the
-actual `sl.state` or `@sl.computed` descriptors declared earlier in the same class:
+`sl.resource` keeps async data in a synchronous, renderable state machine. Its dependencies are
+whatever its loader read, tracked the same way a computed's are:
 
 ```python
 class VotingPanel(sl.Component):
     kind: VoteKind = sl.state(VoteKind.BUILD)
 
-    @sl.resource(depends=(kind,))
+    @sl.resource
     async def configuration(self) -> VoteConfiguration:
         return await votes.configuration(self.kind)
 
@@ -302,7 +314,9 @@ class VotingPanel(sl.Component):
                 return voting_panel(config)
 ```
 
-A committed dependency change synchronously invalidates the resource. Hidden branches remain lazy:
+A committed write to state the loader read re-pends the resource at the next read. A loader
+that reads something only in one branch must hoist that read, or a run that skipped the branch
+will not subscribe to it. Hidden branches remain lazy:
 only resources observed during rendering are loaded. `Pending` and `Failed` retain the last `Ready`
 value when available, while request tokens prevent stale completions from publishing.
 
