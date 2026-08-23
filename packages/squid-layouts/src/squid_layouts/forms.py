@@ -817,7 +817,6 @@ Choice = ChoiceField
 MultiChoice = MultiChoiceField
 Bool = BoolField
 
-
 __all__ = [
     "AmbiguousTimePolicy",
     "Bool",
