@@ -447,8 +447,10 @@ value when available, while request tokens prevent stale completions from publis
 Visible delivery is the default: Discord commits the pending render, settles observed sibling
 resources concurrently, then edits to the settled render. Use
 `@sl.resource(delivery=sl.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
-the first delivery must already be settled. Both policies use the same state machine and neither
-starts detached background work.
+the first delivery must already be settled. Its `.state` is typed as `Ready[T] | Failed[T]`:
+refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
+by the mount. Both policies use the same internal state machine and neither starts detached
+background work.
 
 `await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
 new value without immediately loading it, and `replace(value)` publishes an authoritative local

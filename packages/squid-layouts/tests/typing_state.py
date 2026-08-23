@@ -9,7 +9,22 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any, assert_type
 
-from squid_layouts import Shared, addresses, cell, state
+from squid_layouts import (
+    AtomicResource,
+    AtomicResourceState,
+    Component,
+    Failed,
+    Pending,
+    Ready,
+    Resource,
+    ResourceDelivery,
+    ResourceState,
+    Shared,
+    addresses,
+    cell,
+    resource,
+    state,
+)
 from squid_layouts.topics import TopicBus
 
 bus = TopicBus()
@@ -48,3 +63,22 @@ assert_type(Anonymous(bus).scope, None)
 assert_type(Scoped(bus, 7).scope, int)
 assert_type(Scoped(bus, 7).theme, str)
 assert_type(addresses(lambda: Scoped(bus, 7).theme), tuple[Any, ...])
+
+
+class ResourceTypes(Component):
+    @resource(delivery=ResourceDelivery.ATOMIC)
+    async def atomic(self) -> int:
+        return 1
+
+    @resource
+    async def visible(self) -> int:
+        return 1
+
+
+assert_type(ResourceTypes().atomic, AtomicResource[int])
+assert_type(ResourceTypes().atomic.state, AtomicResourceState[int])
+assert_type(ResourceTypes().visible, Resource[int])
+assert_type(ResourceTypes().visible.state, ResourceState[int])
+assert_type(Ready[int](1), Ready[int])
+assert_type(Failed[int](ValueError()), Failed[int])
+assert_type(Pending[int](), Pending[int])

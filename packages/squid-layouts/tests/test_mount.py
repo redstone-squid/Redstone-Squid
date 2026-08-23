@@ -2796,8 +2796,6 @@ class AtomicResourcePanel(Component):
 
     def render(self):
         match self.value.state:
-            case Pending():
-                return Text("pending")
             case Failed(error=error):
                 return Text(f"failed:{error}")
             case Ready(value=value):
@@ -2860,6 +2858,21 @@ class TestResourceLoading:
         message.edit.assert_not_awaited()
         trace = _operation_trace(profiler, OperationKind.SEND)
         assert "resource_settle.atomic" in {span.name for span in trace.spans}
+
+    async def test_atomic_state_excludes_pending_and_keeps_previous_ready_value(self) -> None:
+        async def load() -> str:
+            return "loaded"
+
+        panel = AtomicResourcePanel(load)
+        with pytest.raises(sl.ResourceNotReadyError, match=r"atomic resource .* pending"):
+            _ = panel.value.state
+
+        await panel.value.reload()
+        assert panel.value.state == Ready("loaded")
+
+        panel.value.invalidate()
+        assert panel.value.pending
+        assert panel.value.state == Ready("loaded")
 
     async def test_visible_failure_is_rendered_as_state(self) -> None:
         async def load(_key: str) -> str:

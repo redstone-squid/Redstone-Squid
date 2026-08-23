@@ -1049,6 +1049,8 @@ class BuildEditComponent(sl.Component):
 
     def _current(self) -> tuple[Build, sl.LayoutNode | None]:
         """What is on screen: the last value that loaded, or the seed before one has."""
+        if self._seed is not None:
+            return self._seed
         state = self.projection.state
         if isinstance(state, sl.Ready):
             return state.value
@@ -1056,9 +1058,6 @@ class BuildEditComponent(sl.Component):
             # A failed or in-flight reload keeps showing what is on screen rather than
             # blanking an editor someone is typing into.
             return state.previous.value
-        if self._seed is not None:
-            # Read before the first settle -- `can_edit` runs before this is ever mounted.
-            return self._seed
         message = "this editor has not loaded a build yet"
         raise sl.ResourceNotReadyError(message)
 
