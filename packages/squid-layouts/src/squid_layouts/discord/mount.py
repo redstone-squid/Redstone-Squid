@@ -32,6 +32,7 @@ from squid_layouts.actions import (
     ActionRequest,
     Actor,
     Feedback,
+    EntitySelectionEvent,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -50,6 +51,7 @@ from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.guards import GuardLedger
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
@@ -90,6 +92,7 @@ from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
     SceneDocument,
+    SceneEntitySelect,
     SceneSelect,
 )
 from squid_layouts.semantic import Status
@@ -356,6 +359,116 @@ class _WiredSelect(discord.ui.Select[AnyMountedView]):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._mount.dispatch(self._key, interaction, self.values, generation=self._generation)
+
+
+_CHANNEL_TYPES = {
+    ChannelType.TEXT: discord.ChannelType.text,
+    ChannelType.VOICE: discord.ChannelType.voice,
+    ChannelType.CATEGORY: discord.ChannelType.category,
+    ChannelType.ANNOUNCEMENT: discord.ChannelType.news,
+    ChannelType.ANNOUNCEMENT_THREAD: discord.ChannelType.news_thread,
+    ChannelType.PUBLIC_THREAD: discord.ChannelType.public_thread,
+    ChannelType.PRIVATE_THREAD: discord.ChannelType.private_thread,
+    ChannelType.STAGE_VOICE: discord.ChannelType.stage_voice,
+    ChannelType.FORUM: discord.ChannelType.forum,
+    ChannelType.MEDIA: discord.ChannelType.media,
+}
+
+
+def _default_value(value: EntityRef) -> discord.SelectDefaultValue:
+    kind = {
+        EntityKind.USER: discord.SelectDefaultValueType.user,
+        EntityKind.ROLE: discord.SelectDefaultValueType.role,
+        EntityKind.CHANNEL: discord.SelectDefaultValueType.channel,
+    }[value.kind]
+    return discord.SelectDefaultValue(id=value.id, type=kind)
+
+
+def _entity_ref(value: object) -> EntityRef:
+    if isinstance(value, discord.Role):
+        return EntityRef(EntityKind.ROLE, value.id)
+    if isinstance(value, discord.User | discord.Member):
+        return EntityRef(EntityKind.USER, value.id)
+    if isinstance(value, discord.abc.GuildChannel | discord.Thread):
+        return EntityRef(EntityKind.CHANNEL, value.id)
+    message = f"unsupported resolved entity {type(value).__name__}"
+    raise TypeError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class _EntityValues:
+    refs: tuple[EntityRef, ...]
+    resolved: tuple[object, ...]
+
+
+type _SelectionValues = list[str] | _EntityValues | None
+
+
+class _EntityDispatch:
+    _mount: Mount
+    _key: str
+    _generation: int
+
+    def _wire(self, mount: Mount, key: str, generation: int) -> None:
+        self._mount = mount
+        self._key = key
+        self._generation = generation
+
+    async def _dispatch(self, interaction: discord.Interaction, values: Sequence[object]) -> None:
+        resolved = tuple(values)
+        await self._mount.dispatch(
+            self._key,
+            interaction,
+            _EntityValues(tuple(_entity_ref(value) for value in resolved), resolved),
+            generation=self._generation,
+        )
+
+
+def _entity_kwargs(node: SceneEntitySelect, mount: Mount, key: str, generation: int) -> dict[str, object]:
+    return {
+        "placeholder": node.placeholder,
+        "min_values": node.min_values,
+        "max_values": node.max_values,
+        "disabled": node.disabled,
+        "custom_id": _custom_id(mount.id, generation, key),
+        "default_values": [_default_value(value) for value in node.default_values],
+    }
+
+
+class _WiredUserSelect(_EntityDispatch, discord.ui.UserSelect[AnyMountedView]):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._dispatch(interaction, self.values)
+
+
+class _WiredRoleSelect(_EntityDispatch, discord.ui.RoleSelect[AnyMountedView]):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._dispatch(interaction, self.values)
+
+
+class _WiredChannelSelect(_EntityDispatch, discord.ui.ChannelSelect[AnyMountedView]):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._dispatch(interaction, self.values)
+
+
+class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyMountedView]):
+    async def callback(self, interaction: discord.Interaction) -> None:
+        await self._dispatch(interaction, self.values)
+
+
+def _wired_entity_select(
+    node: SceneEntitySelect, mount: Mount, key: str, generation: int
+) -> discord.ui.BaseSelect[Any]:
+    kwargs = _entity_kwargs(node, mount, key, generation)
+    if node.entity_type is EntityType.USER:
+        item = _WiredUserSelect(**kwargs)
+    elif node.entity_type is EntityType.ROLE:
+        item = _WiredRoleSelect(**kwargs)
+    elif node.entity_type is EntityType.CHANNEL:
+        item = _WiredChannelSelect(channel_types=[_CHANNEL_TYPES[value] for value in node.channel_types], **kwargs)
+    else:
+        item = _WiredMentionableSelect(**kwargs)
+    item._wire(mount, key, generation)
+    return item
 
 
 @dataclass(frozen=True, slots=True)
@@ -931,11 +1044,13 @@ class Mount:
         def draw() -> tuple[MountedView, Composition]:
             handlers.clear()
 
-            def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
                 key = binding.key
                 handlers[key] = binding
                 if isinstance(node, SceneButton):
                     item: discord.ui.Item[Any] = _WiredButton(node, self, key, generation)
+                elif isinstance(node, SceneEntitySelect):
+                    item = _wired_entity_select(node, self, key, generation)
                 else:
                     item = _WiredSelect(node, self, key, generation)
                 if disabled:
@@ -1014,7 +1129,7 @@ class Mount:
             )
         )
 
-        def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+        def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
             if not isinstance(node, SceneButton):
                 message = "the renewal generation may only contain its framework button"
                 raise TypeError(message)
@@ -1178,7 +1293,7 @@ class Mount:
             generation = self._generation
             busy = busy_key is not None
 
-            def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
                 if isinstance(node, SceneButton):
                     if busy:
                         node = replace(
@@ -1187,6 +1302,10 @@ class Mount:
                             label=pending if binding.key == busy_key and pending is not None else node.label,
                         )
                     return _WiredButton(node, self, binding.key, generation)
+                if isinstance(node, SceneEntitySelect):
+                    return _wired_entity_select(
+                        replace(node, disabled=True) if busy else node, self, binding.key, generation
+                    )
                 return _WiredSelect(replace(node, disabled=True) if busy else node, self, binding.key, generation)
 
             # No timeout on the paint: the committed view still owns the mount's idle timer,
@@ -1645,7 +1764,7 @@ class Mount:
         self,
         key: str,
         interaction: discord.Interaction,
-        values: list[str] | None = None,
+        values: _SelectionValues = None,
         *,
         generation: int | None = None,
     ) -> None:
@@ -1675,7 +1794,7 @@ class Mount:
                 if isinstance(binding, _RenewalBinding):
                     await self._dispatch_renewal(binding, key, interaction, generation, profile)
                     return
-                if values is not None:
+                if isinstance(values, list):
                     with operation.span("selection"):
                         binding = binding.routed(tuple(values))
                     if binding is None:
@@ -1901,13 +2020,15 @@ class Mount:
             self.invalidate()
         return True
 
-    def _event(self, interaction: discord.Interaction, values: list[str] | None) -> ActionEvent:
+    def _event(self, interaction: discord.Interaction, values: _SelectionValues) -> ActionEvent:
         """The portable event one Discord interaction becomes."""
         actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
-        responder = ActionResponder(interaction, self)
+        responder = ActionResponder(interaction, self, () if not isinstance(values, _EntityValues) else values.resolved)
         locale = self.localization.locale
         if values is None:
             return PressEvent(actor, responder, locale, {"frontend": "discord"})
+        if isinstance(values, _EntityValues):
+            return EntitySelectionEvent(actor, responder, locale, {"frontend": "discord"}, values.refs)
         return SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
 
     async def _admit(
@@ -1915,7 +2036,7 @@ class Mount:
         binding: ActionBinding,
         key: str,
         interaction: discord.Interaction,
-        values: list[str] | None,
+        values: _SelectionValues,
         profile: _DispatchProfile,
     ) -> bool:
         """Run this action's guard, answering the reader privately when it refuses.
@@ -1960,7 +2081,7 @@ class Mount:
         invoke: Callable[[ActionBinding, bool, int], Awaitable[None]],
         profile: _DispatchProfile,
         *,
-        values: list[str] | None = None,
+        values: _SelectionValues = None,
         rebase: Callable[[], ActionBinding | None] | None = None,
     ) -> None:
         if binding.policy in {ActionPolicy.IMMEDIATE, ActionPolicy.PARALLEL_READ}:
@@ -2008,7 +2129,7 @@ class Mount:
         binding: ActionBinding,
         key: str,
         interaction: discord.Interaction,
-        values: list[str] | None,
+        values: _SelectionValues,
         submitted_generation: int | None,
         active_generation: int,
         rebased: bool,
@@ -2051,7 +2172,7 @@ class Mount:
         binding: ActionBinding,
         key: str,
         interaction: discord.Interaction,
-        values: list[str] | None,
+        values: _SelectionValues,
         submitted_generation: int | None,
         active_generation: int,
         rebased: bool,

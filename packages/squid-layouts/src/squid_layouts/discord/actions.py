@@ -18,9 +18,15 @@ if TYPE_CHECKING:
 class ActionResponder:
     """Translate portable response intents onto one Discord interaction."""
 
-    def __init__(self, interaction: discord.Interaction, mount: Mount) -> None:
+    def __init__(
+        self,
+        interaction: discord.Interaction,
+        mount: Mount,
+        selected_entities: tuple[object, ...] = (),
+    ) -> None:
         self.interaction = interaction
         self.mount = mount
+        self.selected_entities = selected_entities
 
     async def acknowledge(self) -> None:
         if not self.interaction.response.is_done():
@@ -170,6 +176,11 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
         LookupError: The event came from a frontend other than Discord.
     """
     return responder(event).interaction
+
+
+def selected_entities(event: ActionEvent) -> tuple[object, ...]:
+    """Return the Discord objects resolved for an entity-selection event."""
+    return responder(event).selected_entities
 
 
 class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):

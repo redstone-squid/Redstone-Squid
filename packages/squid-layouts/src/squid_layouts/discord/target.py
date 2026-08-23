@@ -38,6 +38,7 @@ V2_CAPABILITIES = frozenset(
     {
         "actions.buttons",
         "actions.select",
+        "actions.discord.entity",
         "extension.discord.item",
         "forms.discord.entity",
         "forms.discord.file",
@@ -52,6 +53,7 @@ CLASSIC_CAPABILITIES = frozenset(
     {
         "actions.buttons",
         "actions.select",
+        "actions.discord.entity",
         "forms.modal",
         "layout.embed",
         "layout.embed_fields",
