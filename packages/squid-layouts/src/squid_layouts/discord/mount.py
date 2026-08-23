@@ -61,7 +61,7 @@ from squid_layouts.planning.navigation import (
     NavigationState,
     default_nav,
 )
-from squid_layouts.primitives.nodes import Node
+from squid_layouts.primitives.nodes import Button, Node, Row
 from squid_layouts.profiling import (
     ActionOutcome,
     DetachedSpanRecorder,
@@ -355,6 +355,11 @@ class _SubmitBinding(ActionBinding):
     spec: FormSpec | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _RenewalBinding(ActionBinding):
+    """Framework lifecycle action kept out of application dispatch policy."""
+
+
 @dataclass(slots=True)
 class _Candidate:
     """One staged render generation, which becomes the mount's state only when committed."""
@@ -378,6 +383,20 @@ class _Candidate:
         not reassemble one, because doing so would be a second place that has to know what
         each mode is allowed to carry.
         """
+        return self.composition.presentation
+
+
+@dataclass(slots=True)
+class _LifecycleCandidate:
+    """A framework-owned visible generation that commits no component runtime state."""
+
+    view: AnyMountedView
+    composition: Composition[Any]
+    handlers: dict[str, _RenewalBinding]
+    generation: int
+
+    @property
+    def presentation(self) -> DiscordPresentation:
         return self.composition.presentation
 
 
@@ -777,6 +796,7 @@ class Mount:
         if (
             policy is None
             or self._finished
+            or self._lifecycle is not MountLifecycle.ACTIVE
             or self._plan is None
             or handle is not self._handle
             or handle.permanent
@@ -788,23 +808,36 @@ class Mount:
         timeout = self._remaining_timeout()
         return remaining <= policy.warning and (timeout is None or timeout > remaining)
 
-    def _apply_expiry_arm(self) -> None:
-        """Apply a queued pause policy only when its delivery facts are still current."""
+    async def _apply_expiry_arm(self, profile: OperationRecorder) -> PresentationOutcome | None:
+        """Apply queued policy UI, returning an outcome when renewal consumed the refresh."""
         requested = self._expiry_arm_requested
         self._expiry_arm_requested = None
         if requested is None:
-            return
+            return None
         policy = self.expiry
         wall_clock = getattr(self.scheduler, "clock", None)
         now = wall_clock() if callable(wall_clock) else datetime.now(UTC)
         if not self._should_arm_expiry(requested, now) or requested.expired():
-            return
+            return None
         assert policy is not None
         if isinstance(policy, RenewEphemeral):
-            # The lifecycle generation is added by the next implementation slice.
-            return
+            candidate = self._draw_renewal(profile=profile)
+            try:
+                wrote = await self._deliver(candidate, files=False, profile=profile)
+            except Exception:
+                candidate.view.stop()
+                self._dirty = True
+                raise
+            if wrote is None:
+                candidate.view.stop()
+                self._dirty = True
+                logger.debug("mount %s could not arm renewal before its edit handle expired", self.id)
+                return PresentationOutcome.ABANDONED
+            self._commit_renewal(candidate)
+            return PresentationOutcome.WRITTEN
         self.status = self.chrome.updates_paused
         self.invalidate()
+        return None
 
     def _note_address(self, message: discord.Message | None) -> None:
         """Remember where this mount's message is, the first time Discord says.
@@ -927,6 +960,68 @@ class Mount:
             composition.plan.session_updates,
         )
 
+    def _draw_renewal(self, *, disabled: bool = False, profile: OperationRecorder | None = None) -> _LifecycleCandidate:
+        """Plan the compact framework-owned renewal generation without rendering the component."""
+        policy = self.expiry
+        if not isinstance(policy, RenewEphemeral):
+            message = "a renewal screen requires RenewEphemeral policy"
+            raise TypeError(message)
+        self._issued += 1
+        generation = self._issued
+        handlers: dict[str, _RenewalBinding] = {}
+
+        async def renew_marker(event: PressEvent) -> None:
+            # Dispatch recognizes the binding type and never invokes this marker.
+            return None
+
+        label = self.chrome.continue_session if policy.label is None else self._chrome_text(policy.label)
+        document = Document(
+            (
+                Status(self.chrome.session_expiring),
+                Row((Button(label, renew_marker, "__squid_continue_session"),)),
+            )
+        )
+
+        def wire(node: SceneButton | SceneSelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            if not isinstance(node, SceneButton):
+                message = "the renewal generation may only contain its framework button"
+                raise TypeError(message)
+            internal = _RenewalBinding(
+                binding.key,
+                binding.handler,
+                binding.policy,
+                binding.routes,
+                binding.guard,
+                binding.feedback,
+            )
+            handlers[internal.key] = internal
+            item = _WiredButton(node, self, internal.key, generation)
+            if disabled:
+                item.disabled = True
+            return item
+
+        composition = self._composer()(
+            document,
+            wire=wire,
+            renderer=self._renderer(self._remaining_timeout()),
+            target=self.target,
+            chrome=self._chrome,
+            localization=self.localization,
+            palette=self.palette,
+            strict=self.strict,
+            nav=lambda state: (),
+            session=self.presentation,
+            cache=self.runtime.plan_cache,
+            profile=profile,
+        )
+        view = composition.presentation.view
+        if not isinstance(view, MountedView | ClassicMountedView):
+            message = "mounted Discord renderer returned the wrong view type"
+            raise TypeError(message)
+        if disabled:
+            _disable_all(view)
+        return _LifecycleCandidate(view, composition, handlers, generation)
+
     def _ensure_follows(self, observed: Sequence[Topic]) -> None:
         """Acquire whatever a staged render newly reads, and retire nothing.
 
@@ -1043,7 +1138,7 @@ class Mount:
         is mid-transaction and a re-render would observe half-written state.
         """
         async with self._render_lock:
-            if self._finished:
+            if self._finished or self._lifecycle is MountLifecycle.RENEWAL_ARMED:
                 return None
             plan = self._plan
             if plan is None:
@@ -1081,6 +1176,7 @@ class Mount:
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._assets = candidate.assets
         self._plan = candidate.composition.plan
+        self._lifecycle = MountLifecycle.ACTIVE
         candidate.view.timeout = self._remaining_timeout()
         self._dirty = self.runtime.dirty
         self._pending = None
@@ -1092,6 +1188,22 @@ class Mount:
     def _commit_presented(self, candidate: _Candidate) -> None:
         """Commit one successfully delivered candidate and notify durability observers."""
         self._commit(candidate)
+        self._notify_presented()
+
+    def _commit_renewal(self, candidate: _LifecycleCandidate) -> None:
+        """Publish a renewal generation while retaining the hidden application runtime."""
+        self._handlers = candidate.handlers
+        self._form_bindings = {}
+        self._generation = candidate.generation
+        self._plan = candidate.composition.plan
+        self._lifecycle = MountLifecycle.RENEWAL_ARMED
+        candidate.view.timeout = self._remaining_timeout()
+        self._swap_view(candidate.view)
+        live.track(self)
+        self._notify_presented()
+
+    def _notify_presented(self) -> None:
+        """Notify observers after Discord and the matching visible state commit."""
         for hook in tuple(self._presented_hooks):
             try:
                 hook(self)
@@ -1249,6 +1361,8 @@ class Mount:
         profile: OperationRecorder | None = None,
     ) -> None:
         """Advance visible resources from their committed pending paint to settled paints."""
+        if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+            return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
             resources = self._pending_resources(candidate.tree, ResourceDelivery.VISIBLE)
@@ -1372,7 +1486,7 @@ class Mount:
 
     async def _deliver(
         self,
-        candidate: _Candidate,
+        candidate: _Candidate | _LifecycleCandidate,
         *,
         through: deliver.EditHandle | None = None,
         files: bool = True,
@@ -1465,6 +1579,9 @@ class Mount:
                     profile.presentation = await self.flush(interaction, profile=profile)
                     profile.finish(DispatchDisposition.MISSING)
                     return
+                if isinstance(binding, _RenewalBinding):
+                    await self._dispatch_renewal(binding, key, interaction, generation, profile)
+                    return
                 if values is not None:
                     with operation.span("selection"):
                         binding = binding.routed(tuple(values))
@@ -1505,6 +1622,69 @@ class Mount:
                 profile.presentation = PresentationOutcome.FAILED
                 profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
                 raise
+
+    async def _dispatch_renewal(
+        self,
+        binding: _RenewalBinding,
+        key: str,
+        interaction: discord.Interaction,
+        generation: int | None,
+        profile: _DispatchProfile,
+    ) -> None:
+        """Restore the latest application tree through a renewal click's fresh authority."""
+        source = deliver.handle_from(interaction)
+        acknowledge = False
+        failure: Exception | None = None
+        with profile.operation.span("render_lock"):
+            await self._render_lock.acquire()
+        try:
+            if (
+                source is None
+                or source.expired()
+                or self._finished
+                or self._lifecycle is not MountLifecycle.RENEWAL_ARMED
+                or generation != self._generation
+                or self._handlers.get(key) is not binding
+            ):
+                acknowledge = True
+            else:
+                # Adopt before staging or responding. A failed restore remains armed but now
+                # has the authority needed for another attempt.
+                self._handle = source
+                candidate: _Candidate | None = None
+                try:
+                    candidate = await self._stage_loaded(profile=profile.operation)
+                    wrote = await self._deliver(candidate, through=source, profile=profile.operation)
+                except Exception as error:
+                    if candidate is not None:
+                        with profile.operation.span("rollback"):
+                            self._rollback(candidate)
+                    failure = error
+                else:
+                    if wrote is None:
+                        self._rollback(candidate)
+                        acknowledge = True
+                    else:
+                        with profile.operation.span("commit"):
+                            self._commit_presented(candidate)
+                        await self._settle_visible(candidate, through=source, profile=profile.operation)
+                        profile.presentation = PresentationOutcome.WRITTEN
+                        if wrote is source:
+                            profile.acknowledge("interaction_write")
+                        acknowledge = wrote is not source
+        finally:
+            self._render_lock.release()
+        if failure is not None:
+            profile.presentation = PresentationOutcome.FAILED
+            await self.handle_error(interaction, failure, "renewal")
+            profile.acknowledge("error_hook")
+            profile.finish(DispatchDisposition.ACTION_FAILED, failure)
+            return
+        if acknowledge:
+            await self._acknowledge(interaction, profile=profile, source="renewal")
+            if profile.presentation is PresentationOutcome.NOT_REQUIRED:
+                profile.presentation = PresentationOutcome.ACKNOWLEDGED
+        profile.finish(DispatchDisposition.COMPLETED)
 
     async def dispatch_submit(
         self,
@@ -2031,9 +2211,11 @@ class Mount:
         try:
             if self._finished:
                 return PresentationOutcome.ABANDONED
+            if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+                acknowledge = True
             if not self._dirty:
                 acknowledge = True
-            else:
+            elif self._lifecycle is MountLifecycle.ACTIVE:
                 # A component cannot enter the tree without a state write, so a click that
                 # changed nothing never reaches this at all.
                 candidate = await self._stage_loaded(profile=operation)
@@ -2077,7 +2259,11 @@ class Mount:
                     return
                 # Marked before delivery: a failed disable-edit must not resurrect the mount.
                 self._finished = True
-                candidate = self._stage(disabled=True)
+                candidate = (
+                    self._draw_renewal(disabled=True)
+                    if self._lifecycle is MountLifecycle.RENEWAL_ARMED
+                    else self._stage(disabled=True)
+                )
                 source = deliver.handle_from(interaction)
                 try:
                     wrote = await self._deliver(candidate, through=source, files=False)
@@ -2086,7 +2272,8 @@ class Mount:
                     if wrote is None or wrote is not source:
                         await self._acknowledge(interaction)
                 except Exception:
-                    self._rollback(candidate)
+                    if isinstance(candidate, _Candidate):
+                        self._rollback(candidate)
                     raise
                 finally:
                     # The terminal tree is never committed, so `finish` unmounts the live one once.
@@ -2127,7 +2314,16 @@ class Mount:
                 if self._finished:
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
                     return
-                self._apply_expiry_arm()
+                armed = await self._apply_expiry_arm(profile)
+                if armed is not None:
+                    outcome = (
+                        TraceOutcome.ABANDONED if armed is PresentationOutcome.ABANDONED else TraceOutcome.COMPLETED
+                    )
+                    profile.set_result(TraceResult(outcome, presentation=armed))
+                    return
+                if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+                    profile.set_result(TraceResult(TraceOutcome.COMPLETED, presentation=PresentationOutcome.NO_CHANGE))
+                    return
                 if self._handle is None or self._handle.expired():
                     self._dirty = True
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
@@ -2198,14 +2394,20 @@ class Mount:
                 self._finished = True
                 try:
                     if disable and self._handle is not None:
-                        candidate = self._stage(disabled=True)
+                        candidate = (
+                            self._draw_renewal(disabled=True)
+                            if self._lifecycle is MountLifecycle.RENEWAL_ARMED
+                            else self._stage(disabled=True)
+                        )
                         try:
                             if await self._deliver(candidate, files=False) is None:
                                 logger.debug("could not disable controls on finish: no live edit handle")
-                                self._rollback(candidate)
+                                if isinstance(candidate, _Candidate):
+                                    self._rollback(candidate)
                         except discord.HTTPException:
                             logger.debug("could not disable controls on finish", exc_info=True)
-                            self._rollback(candidate)
+                            if isinstance(candidate, _Candidate):
+                                self._rollback(candidate)
                         finally:
                             candidate.view.stop()
                 finally:

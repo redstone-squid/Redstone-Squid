@@ -137,6 +137,159 @@ async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
     assert snapshot.handle_expires_in == pytest.approx(45)
 
 
+async def _armed_mount(
+    component: Component | None = None,
+    *,
+    access: sl.discord.AccessPolicy | None = None,
+    on_error: sl.discord.ErrorHook | None = None,
+) -> tuple[Mount, Any, Reactor]:
+    now = datetime.now(UTC)
+    reactor = Reactor(clock=lambda: now)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=30)
+    mount = Mount(
+        Counter() if component is None else component,
+        access=Everyone() if access is None else access,
+        scheduler=reactor,
+        timeout=None,
+        expiry=RenewEphemeral(warning=60),
+        on_error=on_error,
+    )
+    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    assert mount.handle is not None
+    mount._queue_expiry_arm(mount.handle)
+    await mount.refresh_now()
+    return mount, interaction, reactor
+
+
+class TestEphemeralRenewal:
+    async def test_arming_replaces_a_full_layout_without_committing_application_state(self) -> None:
+        component = RootToolbar()
+        subject, interaction, _ = await _armed_mount(component)
+        runtime_revision = subject.runtime.revision
+
+        written = interaction.response.edit_message.await_args.kwargs
+        payload = str(written["view"].to_components())
+
+        assert "This session is about to expire" in payload
+        assert "Continue Session" in payload
+        assert "attachments" not in written
+        assert subject.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        assert subject.runtime.revision == runtime_revision
+        assert subject.pending is False
+        assert subject.generation == 2
+
+    async def test_refreshes_freeze_behind_the_renewal_screen_without_rendering(self) -> None:
+        class Counting(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            def render(self):
+                self.renders += 1
+                return Text(f"render {self.renders}")
+
+        component = Counting()
+        mount, interaction, _ = await _armed_mount(component)
+        rendered = component.renders
+        interaction.response.edit_message.reset_mock()
+
+        mount.invalidate()
+        await mount.refresh_now()
+
+        assert component.renders == rendered
+        assert mount.pending
+        interaction.response.edit_message.assert_not_awaited()
+        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+
+    async def test_renewal_restores_latest_state_on_the_same_message(self) -> None:
+        component = Counter()
+        mount, _, _ = await _armed_mount(component)
+        component.count = 7
+        generation = mount.generation
+        interaction = fake_interaction(message_id=99)
+
+        await mount.dispatch("__squid_continue_session", interaction, generation=generation)
+
+        payload = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        assert "count: 7" in payload
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+        assert mount.handle is not None and mount.handle.expires_at == interaction.expires_at
+        assert not mount.pending
+
+    async def test_denied_renewal_keeps_the_screen_and_old_authority(self) -> None:
+        mount, _, _ = await _armed_mount(access=Owner(1))
+        original = mount.handle
+        interaction = fake_interaction(user_id=2)
+
+        await mount.dispatch("__squid_continue_session", interaction, generation=mount.generation)
+
+        interaction.response.send_message.assert_awaited_once()
+        assert mount.handle is original
+        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+
+    async def test_failed_renewal_keeps_fresh_authority_and_is_retryable(self) -> None:
+        errors = AsyncMock()
+        mount, _, _ = await _armed_mount(on_error=errors)
+        generation = mount.generation
+        failed = fake_interaction()
+        failed.response.edit_message.side_effect = RuntimeError("Discord refused the restore")
+
+        await mount.dispatch("__squid_continue_session", failed, generation=generation)
+
+        errors.assert_awaited_once()
+        assert errors.await_args is not None
+        assert errors.await_args.args[2] == "renewal"
+        assert mount.handle is not None and mount.handle.expires_at == failed.expires_at
+        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        retry = fake_interaction()
+        await mount.dispatch("__squid_continue_session", retry, generation=generation)
+        retry.response.edit_message.assert_awaited_once()
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+
+    async def test_repeated_renewal_click_is_acknowledged_without_a_second_commit(self) -> None:
+        mount, _, _ = await _armed_mount()
+        generation = mount.generation
+        first = fake_interaction()
+        await mount.dispatch("__squid_continue_session", first, generation=generation)
+        active_generation = mount.generation
+        repeated = fake_interaction()
+
+        await mount.dispatch("__squid_continue_session", repeated, generation=generation)
+
+        repeated.response.defer.assert_awaited_once()
+        repeated.response.edit_message.assert_not_awaited()
+        assert mount.generation == active_generation
+
+    async def test_stale_arming_leaves_the_application_generation_pending(self) -> None:
+        mount, interaction, _ = await _armed_mount()
+        # Restore active state so this test can exercise the stale arm branch independently.
+        await mount.dispatch("__squid_continue_session", fake_interaction(), generation=mount.generation)
+        active_generation = mount.generation
+
+        class StaleHandle:
+            permanent = False
+            expires_at: datetime | None = datetime.now(UTC) + timedelta(seconds=30)
+            mode = sl.discord.DiscordMode.COMPONENTS_V2
+
+            def expired(self) -> bool:
+                return False
+
+            async def write(self, *args: Any, **kwargs: Any) -> None:
+                raise delivery.StaleHandleError("expired")
+
+        stale = StaleHandle()
+        mount._handle = stale
+        mount._queue_expiry_arm(stale)
+        interaction.response.edit_message.reset_mock()
+
+        await mount.refresh_now()
+
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+        assert mount.generation == active_generation
+        assert mount.pending
+        assert mount.handle is None
+
+
 class RootToolbar(Component):
     def render(self):
         return Document(
