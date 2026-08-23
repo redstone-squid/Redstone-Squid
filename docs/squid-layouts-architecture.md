@@ -195,23 +195,27 @@ policy behind pattern state.
 
 ## Components and Vue-inspired reactivity
 
-Components render synchronously from state. A state field holds an **immutable** value and
-is replaced rather than mutated; every assignment is checked with `hash()`, which is deep, so
-`(1, [2])` and a frozen dataclass with a `list` field are both refused. Reach for
-`state(factory=...)` when the initial value must be *computed* per instance, since the
-declaration itself runs once, at class-body time; a plain default needs no copy and is shared:
+Components render synchronously from state. A state field is **replaced, never mutated in
+place** -- an in-place change moves no version, so nothing would notice it. The type checker
+holds that line rather than the runtime: `sl.state()` is overloaded so a `dict` default
+declares `Mapping`, a `list` declares `Sequence` and a `set` declares `AbstractSet`, which
+makes a concrete annotation and every mutating method a type error while the stored value
+stays the one assigned. Reach for `state(factory=...)` when the initial value must be
+*computed* per instance, since the declaration itself runs once, at class-body time; a plain
+default needs no copy and is shared:
 
     class Search(sl.Component):
         query: str = sl.state("")
-        results: tuple[str, ...] = sl.state(())
+        results: Sequence[str] = sl.state([])
+        channels: Mapping[str, int | None] = sl.state({})
         opened_at: Instant = sl.state(factory=Instant.now)
 
         @sl.computed
         def title(self) -> str:
             return f"{len(self.results)} results for {self.query}"
 
-A mapping in state needs a container the check accepts: `sl.FrozenMapping` is a `Mapping`
-that copies its entries once and hashes, where `MappingProxyType` is read-only but neither.
+`{**self.channels, "log": 1}` replaces one key. For more than that, `sl.draft(self, "channels")`
+hands out a shallow copy to mutate and assigns it back as one write on a clean exit.
 
 `computed` records what its body read and recomputes when one of those values moves --
 nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
@@ -268,9 +272,9 @@ action started from and such a component had no state then. Handlers are free to
 The rule is birth, not mounting: a component built earlier and not currently in the tree is
 still covered, since it may be about to go back in.
 
-A state value is immutable, so the only field whose contents can change behind the
-framework's back is an `opaque=True` one -- setting an attribute on the collaborator it holds.
-Neither rollback nor invalidation reaches that, so say it explicitly:
+A state value is never mutated in place, so the only field whose contents can change behind
+the framework's back is an `opaque=True` one -- setting an attribute on the collaborator it
+holds. Neither rollback nor invalidation reaches that, so say it explicitly:
 
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = event.selected[0]
@@ -282,8 +286,8 @@ signal cannot drift away from the declaration it depends on.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
 must be JSON-safe. `sl.state(opaque=True)` covers the opposite case, a collaborator the
-component holds and never mutates -- a service, a guild, a session. The immutability check is
-skipped for it, it settles on identity rather than equality, and it is never persisted:
+component holds and never mutates -- a service, a guild, a session. It settles on identity
+rather than equality, and it is never persisted:
 
     class Panel(sl.Component):
         page: str = sl.state("server")

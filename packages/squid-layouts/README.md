@@ -259,11 +259,13 @@ short-circuit cannot produce Discord's generic interaction failure.
 
 ### State values
 
-`sl.state` holds an immutable value and is replaced rather than mutated. Every assignment is
-checked with `hash()`, which reaches all the way down: `(1, [2])` and a frozen dataclass with a
-`list` field are both refused, and `sl.FrozenMapping` is the container to reach for when a
-mapping has to be state. `sl.state(..., opaque=True)` is the escape hatch for a collaborator the
-component holds and never mutates — a service, a guild, a session.
+`sl.state` holds a value that is replaced, never mutated in place. The type checker enforces
+it: a `dict`, `list` or `set` default declares the field as `Mapping`, `Sequence` or
+`AbstractSet`, so `self.rows.append(x)` and `rows: list[str] = sl.state([])` are both type
+errors, while the stored value is exactly the one assigned. `{**m, k: v}` replaces a key;
+`sl.draft(self, "field")` hands out a shallow copy to mutate and assigns it back on exit.
+`sl.state(..., opaque=True)` declares a collaborator the component holds and never mutates — a
+service, a guild, a session — which settles on identity and is never persisted.
 
 Inside an action a write stages into the transaction's overlay and becomes visible at commit.
 The action reads its own writes; another task reading the same field across an `await` sees the
