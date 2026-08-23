@@ -48,6 +48,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    EntitySelect,
     Card,
     CardMedia,
     CardText,
@@ -256,6 +257,7 @@ type Realized = (
     | Sep
     | Row
     | SelectMenu
+    | EntitySelect
     | RoutedSelect
     | Thumbnail
     | Gallery
@@ -776,6 +778,19 @@ class _Builder:
             max_values=min(select.max_values, len(clamped_options) or 1),
         )
 
+    def _clamp_entity_select(self, select: EntitySelect) -> EntitySelect:
+        placeholder = select.placeholder
+        if placeholder is not None and len(placeholder) > self.limits.select_placeholder:
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
+                    f"select placeholder clamped from {len(placeholder)}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
+            placeholder = _trim_keep(placeholder, self.limits.select_placeholder, "head")
+        return replace(select, placeholder=placeholder)
+
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
         return [self.realize(node) for node in nodes]
 
@@ -855,6 +870,8 @@ class _Builder:
                 return Row(items=clamped)
             case SelectMenu() | RoutedSelect():
                 return self._clamp_select(node)
+            case EntitySelect():
+                return self._clamp_entity_select(node)
             case RawItem(text_cost=text_cost):
                 self.charge(text_cost)
                 return node
@@ -1352,7 +1369,7 @@ def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
         match node:
             case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
                 continue
-            case SelectMenu() | RoutedSelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
+            case SelectMenu() | RoutedSelect() | EntitySelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
                 continue
             case _:
                 message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"
@@ -1395,7 +1412,7 @@ def _structural_cost(children: Sequence[Realized]) -> dict[str, int]:
                     totals[COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
                     totals[ROWS] += 1
                     totals[CONTROLS] += len(items)
-                case SelectMenu() | RoutedSelect():
+                case SelectMenu() | RoutedSelect() | EntitySelect():
                     totals[COMPONENTS] += 2  # the implicit ActionRow plus the select itself
                     totals[ROWS] += 1  # a select always occupies a whole row
                     totals[CONTROLS] += 1

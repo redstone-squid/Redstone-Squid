@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.entities import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.styles import ActionStyle, Color
@@ -107,6 +108,19 @@ class SceneRoutedSelect:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneEntitySelect:
+    entity_type: EntityType
+    action: str
+    placeholder: str | None = None
+    default_values: tuple[EntityRef, ...] = ()
+    channel_types: tuple[ChannelType, ...] = ()
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+
+@dataclass(frozen=True, slots=True)
 class SceneRow:
     items: tuple[SceneLink | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
@@ -158,6 +172,7 @@ type SceneNode = (
     | SceneRow
     | SceneSelect
     | SceneRoutedSelect
+    | SceneEntitySelect
     | SceneRoutedButton
     | SceneThumbnail
     | SceneGallery
@@ -233,7 +248,9 @@ class SceneEmbed:
     """An ISO-8601 instant, or None. Stored as text so the scene stays plain data."""
 
 
-type SceneControl = SceneLink | SceneButton | SceneRoutedButton | SceneSelect | SceneRoutedSelect | SceneExtension
+type SceneControl = (
+    SceneLink | SceneButton | SceneRoutedButton | SceneSelect | SceneRoutedSelect | SceneEntitySelect | SceneExtension
+)
 
 
 @dataclass(frozen=True, slots=True)

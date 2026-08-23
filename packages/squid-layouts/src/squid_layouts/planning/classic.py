@@ -33,6 +33,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    EntitySelect,
     Card,
     CardMedia,
     Content,
@@ -64,6 +65,7 @@ from squid_layouts.scene.model import (
     SceneEmbedFooter,
     SceneEmbedMedia,
     SceneExtension,
+    SceneEntitySelect,
     SceneLink,
     SceneOption,
     SceneRoutedButton,
@@ -193,6 +195,18 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                         fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
                     if option.description is not None and len(option.description) > limits.option_description:
                         fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
+            case EntitySelect(
+                placeholder=placeholder,
+                default_values=defaults,
+                min_values=minimum,
+                max_values=maximum,
+            ):
+                if placeholder is not None and len(placeholder) > limits.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
+                if minimum < 0 or maximum < minimum or maximum > limits.select_options:
+                    fail(path, "entity select value bounds are invalid")
+                if len(defaults) > maximum:
+                    fail(path, "entity select has more defaults than max_values")
             case Budget(children=children) | Break(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
@@ -303,6 +317,24 @@ class _ClassicConverter:
                                     options=tuple(_options(options)),
                                     action=self.bindings.action(child),
                                     placeholder=child.placeholder,
+                                    min_values=child.min_values,
+                                    max_values=child.max_values,
+                                    disabled=child.disabled,
+                                    policy=child.policy,
+                                ),
+                            )
+                        )
+                    )
+                case EntitySelect():
+                    self.rows.append(
+                        SceneClassicRow(
+                            (
+                                SceneEntitySelect(
+                                    entity_type=child.entity_type,
+                                    action=self.bindings.action(child),
+                                    placeholder=child.placeholder,
+                                    default_values=child.default_values,
+                                    channel_types=child.channel_types,
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
