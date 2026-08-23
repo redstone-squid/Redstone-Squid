@@ -43,9 +43,7 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
             else:
                 continue
             violations.extend(
-                (path, line, module)
-                for line, module in imported
-                if module.partition(".")[0] not in allowed
+                (path, line, module) for line, module in imported if module.partition(".")[0] not in allowed
             )
 
     assert violations == []
