@@ -2,8 +2,10 @@
 
 import asyncio
 import inspect
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
@@ -54,8 +56,11 @@ from squid_layouts.discord import (
     Denied,
     Everyone,
     Mount,
+    MountLifecycle,
     Owner,
+    PauseUpdates,
     Reactor,
+    RenewEphemeral,
     Users,
     delivery,
 )
@@ -103,6 +108,33 @@ class Counter(Component):
 
     async def increment(self, event: PressEvent) -> None:
         self.count += 1
+
+
+@pytest.mark.parametrize("warning", [0, -1, math.inf, -math.inf, math.nan])
+def test_expiry_policies_require_a_finite_positive_warning(warning: float) -> None:
+    with pytest.raises(ValueError, match="finite positive"):
+        PauseUpdates(warning)
+    with pytest.raises(ValueError, match="finite positive"):
+        RenewEphemeral(warning)
+
+
+def test_renewal_policy_requires_an_expiry_supervisor() -> None:
+    with pytest.raises(TypeError, match="scheduler"):
+        Mount(Counter(), access=Everyone(), expiry=RenewEphemeral())
+
+
+async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
+    now = datetime.now(UTC)
+    reactor = Reactor(clock=lambda: now)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=45)
+    mount = Mount(Counter(), access=Everyone(), scheduler=reactor)
+    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+
+    snapshot = mount.snapshot()
+
+    assert snapshot.lifecycle is MountLifecycle.ACTIVE
+    assert snapshot.handle_expires_in == pytest.approx(45)
 
 
 class RootToolbar(Component):

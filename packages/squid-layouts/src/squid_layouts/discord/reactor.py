@@ -113,12 +113,34 @@ class Reactor:
         self._queued_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
         self._redelivery_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
         self._followed: weakref.WeakKeyDictionary[Mount, int] = weakref.WeakKeyDictionary()
+        self._watched: weakref.WeakSet[Mount] = weakref.WeakSet()
         self._warned_handles: weakref.WeakKeyDictionary[Mount, object] = weakref.WeakKeyDictionary()
         self._running = False
         self._scheduled = 0
         self._coalesced = 0
         self._delivered = 0
         self._failed = 0
+
+    def watch(self, mount: Mount) -> Callable[[], None]:
+        """Observe a delivered mount's edit-authority deadline until it finishes."""
+        if mount.finished:
+            message = "cannot watch a finished mount"
+            raise ValueError(message)
+        if mount.scheduler is not self:
+            message = "a watched mount must use this reactor as its scheduler"
+            raise ValueError(message)
+        self._watched.add(mount)
+        active = True
+
+        def unwatch() -> None:
+            nonlocal active
+            if not active:
+                return
+            active = False
+            self._watched.discard(mount)
+            self._warned_handles.pop(mount, None)
+
+        return unwatch
 
     def schedule(self, mount: Mount) -> None:
         """Enqueue a refresh while coalescing requests for the same mount."""
