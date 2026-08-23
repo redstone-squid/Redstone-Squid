@@ -195,39 +195,50 @@ policy behind pattern state.
 
 ## Components and Vue-inspired reactivity
 
-Components render synchronously from state. state observes assignment and nested list, dict,
-and set mutation. A default is deep-copied per instance, so `sl.state([])` is safe; reach for
-`state(factory=...)` when the initial value must be *computed* per instance rather than copied
-from a template, since the declaration itself runs once, at class-body time:
+Components render synchronously from state. A state field holds an **immutable** value and
+is replaced rather than mutated; every assignment is checked with `hash()`, which is deep, so
+`(1, [2])` and a frozen dataclass with a `list` field are both refused. Reach for
+`state(factory=...)` when the initial value must be *computed* per instance, since the
+declaration itself runs once, at class-body time; a plain default needs no copy and is shared:
 
     class Search(sl.Component):
         query: str = sl.state("")
-        results: list[str] = sl.state([])
+        results: tuple[str, ...] = sl.state(())
         opened_at: Instant = sl.state(factory=Instant.now)
 
         @sl.computed
         def title(self) -> str:
             return f"{len(self.results)} results for {self.query}"
 
-computed caches until the component tree invalidates. batch coalesces related writes.
-transaction restores every touched field if an exception escapes, and `sl.discord.Mount`
-dispatch wraps mutating actions in one.
+A mapping in state needs a container the check accepts: `sl.FrozenMapping` is a `Mapping`
+that copies its entries once and hashes, where `MappingProxyType` is read-only but neither.
+
+`computed` records what its body read and recomputes when one of those values moves --
+nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
+never evaluated, and one that raises fails where its value is used. `untracked()` reads
+without subscribing. batch coalesces related writes. transaction rolls back every write if an
+exception escapes, and `sl.discord.Mount` dispatch wraps mutating actions in one.
 
 That guarantee reaches declared state, and only declared state:
 
 | Attribute | Re-renders on write | Rolled back on failure |
 |---|---|---|
-| `sl.state(...)` | yes, including nested list, dict, and set mutation | yes |
-| `sl.state(copy="ref")` | on assignment | to the previous reference |
-| a plain attribute | no | no |
+| `sl.state(...)` | yes | yes |
+| `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
+| a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
+
+A write inside an action **stages**: it lands in the transaction's overlay and becomes visible
+when the action commits. The action reads its own writes, and so do the computeds downstream
+of them; another task reading the same component across an `await` sees the committed value
+until then. Rolling back is dropping the overlay.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
     class Search(sl.Component):
         query: str = sl.state("")
 
-        @sl.resource(depends=(query,))
+        @sl.resource
         async def results(self) -> tuple[Result, ...]:
             return await index.search(self.query)
 
@@ -237,26 +248,29 @@ That guarantee reaches declared state, and only declared state:
                 case sl.Failed(error=error, previous=previous): ...
                 case sl.Ready(value=results): ...
 
-Dependencies are exact `sl.state` fields and invalidate the resource only when their transaction
-commits. Render observation keeps hidden resources lazy. The default visible delivery commits the
+The loader's reads are tracked the way a computed's are, so the state it consults is its
+dependency set and a committed write to any of it re-pends the resource at the next read. A
+resource whose loader has not run -- one holding a `.replace(value)` result -- presumes it
+reads every field its component declares, and narrows to the truth after its first real load.
+Render observation keeps hidden resources lazy. The default visible delivery commits the
 `Pending` branch before settling it; `ResourceDelivery.ATOMIC` settles the same state machine before
 delivery. Siblings settle concurrently under the frontend's task group, and newly revealed resources
 are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
 `.replace(value)` publishes an authoritative local result.
 
-A plain attribute assigned during a transaction is therefore uncovered, so the framework says
-so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
-the attribute. `sl.strict_state()` turns that warning into `UndeclaredStateError`; the test
-suite runs with it on. Declare the field to make it stop.
+A plain attribute assigned during a transaction is therefore uncovered, and the framework
+refuses it: `UndeclaredStateError`, or `ReactiveWriteError` in a read-only action. It raises
+*before* the write lands, which is the point -- a landed write is exactly the one thing a
+rollback would leave standing. Declare the field to make it stop.
 
 A component *created* during an action is exempt, because a transaction restores the view the
 action started from and such a component had no state then. Handlers are free to build one.
 The rule is birth, not mounting: a component built earlier and not currently in the tree is
 still covered, since it may be about to go back in.
 
-Neither rollback nor invalidation reaches a change made *through* a field — setting an
-attribute on the object a `copy="ref"` field holds, for instance. Nothing can observe that, so
-say it explicitly:
+A state value is immutable, so the only field whose contents can change behind the
+framework's back is an `opaque=True` one -- setting an attribute on the collaborator it holds.
+Neither rollback nor invalidation reaches that, so say it explicitly:
 
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = event.selected[0]
@@ -267,13 +281,13 @@ field is the point — the call fails if that field stops being declared state, 
 signal cannot drift away from the declaration it depends on.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
-must be JSON-safe. `sl.state(copy="ref")` covers the opposite case, a collaborator that is
-real state but must never be copied — a service, a guild, a session. It is never persisted,
-and it snapshots the reference rather than a deep copy:
+must be JSON-safe. `sl.state(opaque=True)` covers the opposite case, a collaborator the
+component holds and never mutates -- a service, a guild, a session. The immutability check is
+skipped for it, it settles on identity rather than equality, and it is never persisted:
 
     class Panel(sl.Component):
         page: str = sl.state("server")
-        guild: discord.Guild = sl.state(copy="ref")
+        guild: discord.Guild = sl.state(opaque=True)
 
         def __init__(self, guild: discord.Guild) -> None:
             self.guild = guild
