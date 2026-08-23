@@ -14,7 +14,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 import anyio
 import discord
@@ -92,6 +92,7 @@ from squid_layouts.scene.model import (
 from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_layouts.topics import Topic
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -175,6 +176,17 @@ class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `Reactor`)."""
 
     def schedule(self, mount: Mount) -> None: ...
+
+
+@runtime_checkable
+class TopicFollower(Protocol):
+    """A scheduler that can also subscribe a mount to topics (see `Reactor`).
+
+    Separate from `Scheduler` because following is optional: a mount with no scheduler, or
+    one whose scheduler only absorbs refreshes, is simply not live-updated.
+    """
+
+    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]: ...
 
 
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
@@ -565,6 +577,11 @@ class Mount:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
+        # One unfollow per shared cell the latest staged render read. Reconciled at stage
+        # time rather than after delivery, because a write landing between a render's read
+        # and its subscription is lost and the bus is not durable.
+        self._follows: dict[Topic, Callable[[], None]] = {}
+        self._follow_warned = False
 
     @property
     def handle(self) -> deliver.EditHandle | None:
@@ -600,6 +617,15 @@ class Mount:
     def pending(self) -> bool:
         """Whether a render is staged that Discord has not seen."""
         return self._dirty
+
+    @property
+    def followed(self) -> tuple[Topic, ...]:
+        """The bus addresses this mount is subscribed to, for diagnostics.
+
+        Shared cells its latest staged render read; a host that followed a topic of its own
+        through the reactor holds that subscription itself and is not listed here.
+        """
+        return tuple(self._follows)
 
     @property
     def generation(self) -> int:
@@ -755,6 +781,7 @@ class Mount:
         assets = composition.assets
         if disabled:
             _disable_all(view)
+        self._reconcile_follows(tree.observations)
         return _Candidate(
             view,
             composition,
@@ -766,6 +793,34 @@ class Mount:
             assets,
             composition.plan.session_updates,
         )
+
+    def _reconcile_follows(self, observed: Sequence[Topic]) -> None:
+        """Follow exactly the shared cells this render read, dropping the ones it stopped reading.
+
+        Over-subscribe, never under-subscribe: a staged render that is later discarded leaves a
+        subscription the next successful render removes, and the worst case is one spurious
+        refresh. A read that a conditional branch dropped stops refreshing on the next render.
+        """
+        if self._finished or (not observed and not self._follows):
+            return
+        follower = self.scheduler
+        if not isinstance(follower, TopicFollower):
+            if observed and not self._follow_warned:
+                self._follow_warned = True
+                logger.warning(
+                    "mount %s renders shared state but its scheduler cannot follow topics, "
+                    "so another mount's writes will not refresh it",
+                    self.id,
+                )
+            return
+        wanted = dict.fromkeys(observed)
+        for topic, unfollow in tuple(self._follows.items()):
+            if topic not in wanted:
+                del self._follows[topic]
+                unfollow()
+        for topic in wanted:
+            if topic not in self._follows:
+                self._follows[topic] = follower.follow(self, topic)
 
     def _composer(self) -> Callable[..., Composition[Any]]:
         """Which composition this mount's target uses. One of exactly four target-owned choices.
@@ -1985,6 +2040,11 @@ class Mount:
         if self._view is not None:
             self._view.stop()
             self._view = None
+        # Reactor.follow unfollows on finish anyway; dropping the handles here is what lets a
+        # namespace nobody else holds be collected as soon as its last panel closes.
+        for unfollow in tuple(self._follows.values()):
+            unfollow()
+        self._follows.clear()
         self.runtime.finish()
 
     async def handle_timeout(self) -> None:

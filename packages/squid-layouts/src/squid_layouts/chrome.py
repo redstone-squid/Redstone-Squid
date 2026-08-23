@@ -61,6 +61,8 @@ class Chrome:
     """What a control with `Feedback` says while its handler runs."""
     updates_paused: TextLike = "Live updates paused — press any control to resume."
     """Status shown before an interaction edit token expires and unattended refreshes pause."""
+    changed_elsewhere: TextLike = "Someone else changed this while you were working. Try again."
+    """Wording for a shared-state conflict: what the action read moved before it committed."""
     previous: TextLike = "Previous"
     next: TextLike = "Next"
     older: TextLike = "Older"
@@ -118,6 +120,7 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         try_again_in=lambda seconds: resolve_text(chrome.try_again_in(seconds), localization).content,
         working=resolve_text(chrome.working, localization).content,
         updates_paused=resolve_text(chrome.updates_paused, localization).content,
+        changed_elsewhere=resolve_text(chrome.changed_elsewhere, localization).content,
         previous=resolve_text(chrome.previous, localization).content,
         next=resolve_text(chrome.next, localization).content,
         older=resolve_text(chrome.older, localization).content,
