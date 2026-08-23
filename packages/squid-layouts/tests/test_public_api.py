@@ -107,6 +107,8 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.TopicBus
     assert sl.discord.Reactor.follow
+    assert {"Shared", "SharedStateConflictError", "cell", "addresses"} <= set(sl.__all__)
+    assert {"Shared", "SharedStateConflictError", "cell", "addresses"} <= set(sl.runtime.__all__)
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:
@@ -126,7 +128,9 @@ import squid_layouts.html
 import squid_layouts.planning
 import squid_layouts.profiling
 import squid_layouts.runtime
+import squid_layouts.runtime.shared
 import squid_layouts.topics
+assert squid_layouts.runtime.shared.Shared
 assert "discord" not in sys.modules
 assert "anyio" not in sys.modules
 """

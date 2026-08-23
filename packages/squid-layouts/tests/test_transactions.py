@@ -651,3 +651,42 @@ class TestCommitFailures:
             join_action(object(), lambda: Recorder(log, "a"))
             panel.declared = 7
         assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]
+
+
+class TestPrePublicationRollback:
+    """What a failed action puts back, and what it must leave alone."""
+
+    def test_a_failed_action_does_not_clobber_a_write_it_never_saw(self):
+        """Rollback restores the overlay, and before publication the overlay never left.
+
+        Component state cannot show this -- one owner writes it -- but a shared cell can, and
+        restoring `before` over a value another action committed meanwhile would revert a
+        write this action never observed.
+        """
+        component = attached(Panel(Uncopyable()))
+        with pytest.raises(RuntimeError, match="abort"), transaction():
+            component.declared = 1
+            component.__dict__["__state_declared"].write(99)
+            message = "abort"
+            raise RuntimeError(message)
+        assert component.declared == 99
+
+    def test_a_failed_action_still_restores_what_it_published(self):
+        """A participant rejecting after publication is the one path that writes cells back."""
+
+        class Rejects:
+            def prepare(self) -> None:
+                message = "rejected"
+                raise RuntimeError(message)
+
+            def apply(self) -> None: ...
+
+            def abort(self) -> None: ...
+
+            def finalize(self) -> None: ...
+
+        component = attached(Panel(Uncopyable()))
+        with pytest.raises(RuntimeError, match="rejected"), transaction():
+            component.declared = 1
+            join_action(self, Rejects)
+        assert component.declared == 0
