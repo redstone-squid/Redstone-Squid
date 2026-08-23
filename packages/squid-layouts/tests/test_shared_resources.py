@@ -34,7 +34,7 @@ class Catalog(sl.runtime.Shared[int]):
         super().__init__(bus, scope)
         self._loads = 0
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def entries(self) -> str:
         self._loads += 1
         return f"{self.key}#{self._loads}"
@@ -45,8 +45,8 @@ class Reader(sl.Component):
         self.catalog = catalog
 
     def render(self):
-        match self.catalog.entries.state:
-            case sl.runtime.Ready(value=value):
+        match self.catalog.entries.status:
+            case sl.resources.Ready(value=value):
                 return sl.paragraph(value)
             case _:
                 return sl.paragraph("loading")

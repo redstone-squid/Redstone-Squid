@@ -69,7 +69,7 @@ from squid_layouts.runtime import (
     Pending,
     ReactiveWriteError,
     Ready,
-    ResourceDelivery,
+    PendingPolicy,
     batch,
     transaction,
 )
@@ -2758,7 +2758,7 @@ class VisibleResourcePanel(Component):
         self.key = "second"
 
     def render(self):
-        match self.value.state:
+        match self.value.status:
             case Pending(previous=previous):
                 label = "pending" if previous is None else f"pending:{previous.value}"
             case Failed(error=error):
@@ -2772,12 +2772,12 @@ class AtomicResourcePanel(Component):
     def __init__(self, load: Callable[[], Awaitable[str]]) -> None:
         self._load = load
 
-    @resource(delivery=ResourceDelivery.ATOMIC)
+    @resource(pending=PendingPolicy.ATOMIC)
     async def value(self) -> str:
         return await self._load()
 
     def render(self):
-        match self.value.state:
+        match self.value.status:
             case Failed(error=error):
                 return Text(f"failed:{error}")
             case Ready(value=value):
@@ -2812,7 +2812,7 @@ class TestResourceLoading:
                 return "loaded"
 
             def render(self):
-                _ = self.value.state
+                _ = self.value.status
                 return Text("constant")
 
         message: Any = fake_message()
@@ -2846,15 +2846,15 @@ class TestResourceLoading:
             return "loaded"
 
         panel = AtomicResourcePanel(load)
-        with pytest.raises(sl.runtime.ResourceNotReadyError, match=r"atomic resource .* pending"):
-            _ = panel.value.state
+        with pytest.raises(sl.resources.ResourceNotReadyError, match=r"atomic resource .* pending"):
+            _ = panel.value.status
 
         await panel.value.reload()
-        assert panel.value.state == Ready("loaded")
+        assert panel.value.status == Ready("loaded")
 
         panel.value.invalidate()
         assert panel.value.pending
-        assert panel.value.state == Ready("loaded")
+        assert panel.value.status == Ready("loaded")
 
     async def test_visible_failure_is_rendered_as_state(self) -> None:
         async def load(_key: str) -> str:
@@ -2885,7 +2885,7 @@ class TestResourceLoading:
                 return "second"
 
             def render(self):
-                return Text(f"{type(self.first.state).__name__}:{type(self.second.state).__name__}")
+                return Text(f"{type(self.first.status).__name__}:{type(self.second.status).__name__}")
 
         message: Any = fake_message()
         mount = Mount(Pair(), access=Everyone(), timeout=None)
@@ -2906,7 +2906,7 @@ class TestResourceLoading:
                 return "child loaded"
 
             def render(self):
-                return Text(f"child:{type(self.value.state).__name__}")
+                return Text(f"child:{type(self.value.status).__name__}")
 
         class Parent(Component):
             def __init__(self) -> None:
@@ -2918,7 +2918,7 @@ class TestResourceLoading:
                 return "parent loaded"
 
             def render(self):
-                match self.value.state:
+                match self.value.status:
                     case Pending():
                         return Text("parent:Pending")
                     case Failed(error=error):
@@ -2948,7 +2948,7 @@ class TestResourceLoading:
                 return "loaded"
 
             def render(self):
-                return Text(type(self.value.state).__name__) if self.shown else Text("hidden")
+                return Text(type(self.value.status).__name__) if self.shown else Text("hidden")
 
         panel = Conditional()
         message: Any = fake_message()
@@ -2976,7 +2976,7 @@ class TestResourceLoading:
         await mount.send(_Destination(None))
 
         assert loads == []
-        assert isinstance(panel.value.state, Pending)
+        assert isinstance(panel.value.status, Pending)
         assert mount.pending
 
     async def test_dependency_reload_uses_the_interaction_for_both_paints(self) -> None:
@@ -3006,7 +3006,7 @@ class TestResourceLoading:
 
         await mount.send(_Destination(message))
 
-        assert isinstance(panel.value.state, Ready)
+        assert isinstance(panel.value.status, Ready)
         assert mount.pending
         assert mount._view is not None
         assert "pending" in str(mount._view.to_components())

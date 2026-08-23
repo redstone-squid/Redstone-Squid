@@ -83,7 +83,7 @@ class SourceRankedList[EntryT](Component):
 
     @resource
     async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
-        state = self.loaded.state
+        state = self.loaded.status
         previous = state.previous.value if isinstance(state, Pending | Failed) and state.previous is not None else None
         match self._request:
             case _WindowRequest("previous") if previous is not None:
@@ -126,7 +126,7 @@ class SourceRankedList[EntryT](Component):
         )
 
     def render(self) -> RenderResult:
-        match self.loaded.state:
+        match self.loaded.status:
             case Pending(previous=None):
                 return self._status(self.loading)
             case Failed(previous=None):
