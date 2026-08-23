@@ -108,7 +108,6 @@ from squid_layouts.runtime.reactivity import (
     state,
 )
 from squid_layouts.runtime.resources import resource
-from squid_reactive.operations import operation
 from squid_layouts.semantic import (
     ChoiceEvent,
     EntityEvent,
@@ -134,6 +133,7 @@ from squid_layouts.text import (
     plain,
     raw_md,
 )
+from squid_reactive.operations import operation
 
 
 def __getattr__(name: str) -> object:

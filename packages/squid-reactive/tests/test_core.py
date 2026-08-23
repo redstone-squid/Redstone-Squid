@@ -1,6 +1,7 @@
 """Standalone contracts for the transactional state kernel."""
 
 import pytest
+
 from squid_reactive import Reactive, ReactiveWriteError, computed, observe_reads, state, transaction
 
 
