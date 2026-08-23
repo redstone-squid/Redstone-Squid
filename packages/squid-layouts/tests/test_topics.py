@@ -458,7 +458,7 @@ async def test_publish_in_delivers_to_the_originating_bus_after_notification() -
         tasks.start_soon(bridge_here.run)
         tasks.start_soon(bridge_there.run)
         await _until(lambda: len(server.listeners) == 2)
-        await bridge_here.publish_in(FakeConnection(server), topic)
+        await bridge_here.publish_in(cast(Any, FakeConnection(server)), topic)
         await here.drain()
         await there.drain()
         tasks.cancel_scope.cancel()
@@ -483,7 +483,7 @@ async def test_publish_in_rejects_an_unencodable_topic_before_notifying() -> Non
     bridge = _bridge(server, TopicBus(), codec=NoCodec())
 
     with pytest.raises(ValueError, match="cannot be carried"):
-        await bridge.publish_in(FakeConnection(server), Topic("build", "42"))
+        await bridge.publish_in(cast(Any, FakeConnection(server)), Topic("build", "42"))
 
     assert server.sent == []
 
@@ -492,7 +492,7 @@ async def test_publish_in_requires_a_running_bridge() -> None:
     bridge = _bridge(FakePostgres(), TopicBus())
 
     with pytest.raises(RuntimeError, match="must be running"):
-        await bridge.publish_in(FakeConnection(FakePostgres()), Topic("build", "42"))
+        await bridge.publish_in(cast(Any, FakeConnection(FakePostgres())), Topic("build", "42"))
 
 
 async def test_a_cell_address_is_published_locally_only() -> None:
