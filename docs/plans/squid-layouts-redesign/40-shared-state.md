@@ -67,7 +67,7 @@ class Preferences(sl.Shared[Member]):
 
 class Workspace(sl.Shared[Member]):
     selected: int | None = sl.cell(None)
-    filters: list[str] = sl.cell([])
+    filters: tuple[str, ...] = sl.cell(())
 
 here = Member(user.id, guild.id)
 preferences = Preferences(bus, here)              # the host's TopicBus, per §7
@@ -89,8 +89,9 @@ class Toolbar(sl.Component):
 
 `sl.cell(default)` is `sl.state(default)` one level out: the same
 declared-type-is-the-real-type signature (`cell(default: ValueT) -> ValueT`), the same
-`factory=` alternative, the same descriptor mechanics. What differs is who is told when it
-changes, and where a write goes while an action is in flight.
+`factory=` alternative, the same `opaque=` escape hatch, the same descriptor mechanics —
+and, since [41](41-reactivity-cells.md), literally the same storage. What differs is who is
+told when it changes; where a write goes while an action is in flight is now the same too.
 
 | Expression | Semantics |
 |---|---|
@@ -114,16 +115,27 @@ in full, and it is the mechanism the package already has.
 
 ### 2. Cells and namespaces
 
-**A namespace is a `ReactiveOwner`.** `runtime/reactivity.py:16` asks for exactly three
-things — a `__dict__`, `_state_changed(names)`, `_state_rolled_back()` — and `Component`
-supplies them at `runtime/component.py:291-316`. `Shared` supplies the same three, with
-`_state_changed` publishing to the bus where `Component` calls `invalidate()`. Cells live
-in the instance `__dict__` under mangled names, exactly as `_State` stores component state.
+**A namespace holds the same `_Cell` a component does.** This plan originally reached for
+`ReactiveOwner` — a `__dict__`, `_state_changed(names)`, `_state_rolled_back()` — so that a
+namespace could inherit the component-state machinery rather than grow a parallel copy.
+[41](41-reactivity-cells.md) §6 took that further than the conformance: with component
+state already stored in a cell that stages through the transaction and tracks its own reads,
+the two are not similar designs, they are one.
 
-This is the load-bearing decision of the whole plan. Snapshots, rollback, `StateChange`,
-`StateDelta`, the `_observe` proxies and the undeclared-write report all key off
-`ReactiveOwner`, so a namespace inherits every one of them rather than growing a parallel
-copy.
+```text
+_Cell           value, version; staged through the transaction; read-tracked
+  owned by a Component   -> a write calls owner.invalidate()
+  owned by a Shared      -> a write publishes (owner, descriptor) on the bus
+```
+
+Everything else — immutability, tracking, staging, rollback, `StateChange`, `StateDelta`,
+the undeclared-write report — is the same code, and the only thing a namespace declares is
+what a write does after it lands.
+
+**A computed may depend on a shared cell.** `self.workspace.selected` read inside an
+`@sl.computed` records that cell as a source and recomputes when another panel writes it.
+That falls out of tracking rather than being designed for: a read is a read, whoever owns
+the cell.
 
 **Cell identity is descriptor identity.** `Preferences.theme` and `Workspace.theme` are two
 cells because they are two descriptors, and no rule has to say so — it falls out of the
@@ -185,55 +197,47 @@ obvious line in host code rather than a lifetime rule inside the package.
 
 ### 4. Values: cells behave like component state
 
-`workspace.filters.append(tag)` works, and other mounts see it.
+`workspace.filters = (*workspace.filters, tag)`, and other mounts see it.
 
-The first draft of this plan said the opposite. It required cells to be declared immutable,
-banned `list`, `dict` and `set` at class creation, and asked authors to write
-`workspace.filters = (*workspace.filters, tag)`. That was wrong for a reason worth
-recording: **`sl.state()` proxies.** `ReactiveList`, `ReactiveDict` and `ReactiveSet`
-(`runtime/reactivity.py:459-613`) have made `self.items.append(x)` a real state write since
-the beginning, and a sibling primitive where the same line is a silent no-op — or a class
-that will not import — is two rules for one gesture.
+This section has been rewritten twice and the principle survived both times: **a shared cell
+behaves like component state, whatever that turns out to mean.** The first draft required
+cells to be declared immutable while `sl.state()` proxied, so the same line was a real write
+on one and a silent no-op on the other; the second draft reversed itself and reused the
+proxies for exactly that reason. [41](41-reactivity-cells.md) removed the proxies, so parity
+now points back the other way — and this time it costs nothing, because both sides move
+together rather than one side being asked to carry a rule the other does not.
 
-So `_observe` (`:614`) is reused unchanged. It already takes `(value, owner, name)` and a
-namespace is a `ReactiveOwner`, so a proxy over a cell is the proxy that already exists.
+So: a cell value is immutable, checked with `hash()` at the write, and `opaque=True` is the
+escape hatch for a collaborator the namespace holds and never mutates. A mapping that has to
+be a cell is an `sl.FrozenMapping`.
 
-**Copy-on-read inside an action.** Reading a proxyable cell inside an action materialises a
-copy into the transaction's overlay and returns a proxy over *that*; mutations land on the
-copy. This is not an optimisation detail, it is what makes two other things true:
+**Nothing copies.** The copy-on-read the proxy version needed — materialising a deep copy
+into the overlay so that rollback stayed "drop the overlay" and §5b's guard still compared
+against an untouched committed value — has nothing to do. An immutable value *is* its own
+snapshot: the overlay holds a reference to the committed value and a reference to the staged
+one, and both properties hold by construction.
 
-- Rollback stays "drop the overlay". A proxy that mutated the committed value in place
-  would have nothing to undo it with.
-- §5b's guard stays meaningful. The recorded read value is the committed object, untouched,
-  so comparing it at prepare answers the question it is supposed to answer.
-
-The honest cost: a mutable cell read inside an action pays one deep copy per action, where
-a component's `sl.state()` pays it on the first write instead. Immutable cells pay nothing,
-`_observe` proxies nothing else, and most cells hold an enum, an int or `None`.
-
-**Mutating a proxy during a render raises.** A render is not a transaction, so the mutation
-would commit and publish halfway through producing a tree, which is a re-entrant refresh of
-the thing currently rendering.
+**Mutating during a render is not a case any more.** There is nothing to mutate. A write
+during a render is still wrong for the reason the proxy rule gave — it would publish
+halfway through producing a tree — and `__set__` is where that is caught, not a proxy.
 
 **Equality short-circuit.** Assigning an equal value is a no-op: no publish, no history
 change. "Equal" means `is`, then `==` inside a `try` that treats a raising or non-boolean
-comparison as *not* equal — the conservative shape `_Computed.refresh_for` already uses at
-`:787-790`, and stricter than `_State.__set__`, which short-circuits on `is` alone.
-
-**Undeclared writes are reported.** `Shared.__setattr__` mirrors `Component.__setattr__`
-(`runtime/component.py:291-295`): a transaction-time write to an attribute that is not a
-cell goes through `report_undeclared_write`, so it warns, or raises under `strict_state()`.
+comparison as *not* equal. 41 made this the rule for component state too, so the two agree;
+an `opaque=` cell compares by identity alone, because `==` on a collaborator is the author's
+code rather than a cheap settled-value check.
 
 ### 5. Actions: staging, one commit
 
 Writes inside an action stage into a per-namespace overlay and become visible together, or
 not at all. Outside an action they commit synchronously.
 
-The overlay is the one thing a namespace cannot inherit from `_State`, which writes through
-and relies on a snapshot to undo it. That is safe only because nothing else can observe a
-component's state mid-action. A shared cell crossing an `await` can be read by another
-action, so a write-through namespace would publish a dirty read that a later rollback then
-retracts.
+The overlay was the one thing a namespace could not inherit from `_State`, which wrote
+through and relied on a snapshot to undo it. That was safe only because nothing else can
+observe a component's state mid-action, and it stopped being safe the moment the cell was
+shared: a shared write crossing an `await` would publish a dirty read that a later rollback
+retracts. [41](41-reactivity-cells.md) §4 moved component state onto the overlay as well, so
+this is no longer a difference between the two — it is how a cell works.
 
 Guarantees, in the vocabulary the reader already has:
 
@@ -303,9 +307,9 @@ async def toggle(self, event: sl.ActionEvent) -> None:
 ```
 
 That is compare-and-set, `update()` and `expect()` all three, derived from what the code
-did rather than declared alongside it. `workspace.filters.append(tag)` is a guarded
-read-modify-write with no ceremony, and the author cannot forget to ask for the guard,
-because asking for it is not a separate act.
+did rather than declared alongside it. `workspace.filters = (*workspace.filters, tag)` is a
+guarded read-modify-write with no ceremony, and the author cannot forget to ask for the
+guard, because asking for it is not a separate act.
 
 **Read *and* write, not read alone.** A handler that reads a shared cell to compose a
 message and never writes it records nothing; guarding on reads alone would make every
@@ -320,7 +324,8 @@ guard is about.
 **Value, not revision.** The precondition is "this cell still holds what I read", compared
 with §4's conservative equality. A revision counter would additionally catch A→B→A, and
 that was the first draft's choice; it is a false positive. A write computed from A, landing
-on a cell that holds A, has lost nothing.
+on a cell that holds A, has lost nothing. 41 gives every cell a version as well, and this
+guard still does not use it, for the same reason.
 
 **The guard is the first value read**, and a later write does not clear it: the action
 already branched on what it read.
@@ -375,11 +380,11 @@ it was constructed with.**
    into a string — no canonical form to get wrong, no collision surface invented on the way
    to the bus. `handle.topic(Preferences.theme)` is the one constructor, for a host that
    wants `reactor.follow(mount, preferences.topic(Preferences.theme))` by hand.
-2. During render, a cell read records its address into a render-observation collector — the
-   ContextVar shape `runtime/resources.py:56` already uses for resources, which is the same
-   gesture: things read while rendering get collected. This is why there is no separate
-   `watch()`; the context the read happens in is what distinguishes a render dependency
-   from a transaction read, and both are just reading the attribute.
+2. During render, a cell read records its address into a render-observation collector.
+   [41](41-reactivity-cells.md) made tracked reads the package's one mechanism, so this is
+   that mechanism with a render as the consumer rather than a new one. This is why there is
+   no separate `watch()`; the context the read happens in is what distinguishes a render
+   dependency from a transaction read, and both are just reading the attribute.
 3. The rendered result carries the deduplicated address set, and the mount reconciles its
    follows against it through `Reactor.follow`.
 4. Commit step 5 publishes the addresses whose cells actually changed, from
@@ -495,9 +500,9 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 | # | Deliverable | Exit criteria |
 |---|---|---|
 | 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. **Shipped.** |
-| 1 | `Shared[ScopeT]`, `cell`, `ReactiveOwner` conformance, `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour; `_observe` proxies over cells. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; a `list` cell mutated in place publishing; an undeclared write warning and raising under `strict_state()`. |
-| 2 | Overlays, `contribute()`, read tracking, prepare/apply, `SharedStateConflictError`. | A raising handler leaks no staged value and leaves no mutated proxy; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces prepares all before applying any. |
-| 3 | Render observation, `topic()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; no follow outlives its mount; mutating a proxy during render raises. |
+| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; a mutable cell value refused and an `opaque=` one accepted; an undeclared write raising. |
+| 2 | `contribute()`, prepare/apply, `SharedStateConflictError`. Staging and read tracking come from 41. | A raising handler leaks no staged value; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces prepares all before applying any; a `@sl.computed` over a shared cell recomputing when another owner writes it. |
+| 3 | Render observation, `topic()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; no follow outlives its mount; a write during a render raising. |
 | 4 | Shared changes in `StateDelta`; blind undo and redo. | One entry undoes local plus multi-namespace shared state in one press; a sibling panel's intervening write does not disable the control and does not fail the press; undo publishes to the sibling; an entry with an external inverse whose inverse raises restores nothing. |
 | 5 | Docs, conflict diagnostics, devtools namespace/cell inspection, the worked example. | Examples cover deep injection, provider shadowing, and both retention shapes from §3; a namespace dropped by its last holder is collected. |
 
@@ -568,17 +573,16 @@ wait for a consumer.
   explicit precondition either. CAS had a third problem: inside a transaction its `True`
   would mean "valid right now, may still raise at commit", which is not what CAS means
   anywhere else.
-- **Requiring immutable cell declarations.** The previous shape of §4: `list`, `dict` and
-  `set` annotations rejected at class creation, and `workspace.filters = (*workspace.filters,
-  tag)` at every call site. It lost on consistency — `sl.state()` proxies, so the same line
-  meant two different things in two sibling primitives. It lost on mechanism too:
-  `__set_name__` does not receive annotations, and reaching `owner.__annotations__` during
-  class creation forces PEP 649 evaluation of names the module may not have defined yet, in
-  a package that bans quoted forward references precisely to rely on that laziness. The
-  precedent it claimed — `_State.__init__` rejecting `copy="ref"` plus `persist` — checks
-  arguments and never touches an annotation. And the argument it used against freezing reads
-  ("only ever partial: a dataclass whose field is a list sails straight through") applied to
-  itself unchanged.
+- **Requiring immutable cell declarations *by annotation*.** The previous shape of §4:
+  `list`, `dict` and `set` annotations rejected at class creation. The conclusion was right
+  and [41](41-reactivity-cells.md) adopted it; the mechanism was not, and 41 rejects it for
+  the reasons this plan already found. `__set_name__` does not receive annotations, and
+  reaching `owner.__annotations__` during class creation forces PEP 649 evaluation of names
+  the module may not have defined yet, in a package that bans quoted forward references
+  precisely to rely on that laziness. And the argument it used against freezing reads ("only
+  ever partial: a dataclass whose field is a list sails straight through") applied to itself
+  unchanged. `hash()` at the write is deep where an annotation is shallow, and it is what
+  ships.
 - **Freezing reads, or validating every write.** Still rejected, and these were always the
   better half of the old §4's case. Coercing `list` → `tuple` on the way out makes the
   declared type a lie, since there is no way to spell "frozen `T`". An immutability
@@ -607,10 +611,11 @@ wait for a consumer.
   bus delivers.
 - **Payloads on the bus.** Still rejected, for 26's reasons, in full. Cell addresses are
   addresses.
-- **Reference-copy cells (`copy="ref"`).** `sl.state()` has it for services and guilds that
-  cannot be copied. A shared cell holding an uncopyable collaborator is a service and should
-  be injected as one; §4's model has no room for it and needs none. Shared `StateChange`
-  entries are always `copy="deep"`.
+- **A shared cell as a place to keep a service.** `opaque=True` exists on both primitives
+  and a shared cell inherits it, but a namespace holding an uncopyable collaborator is a
+  service and should be injected as one. The hatch is there for the same reason it is on
+  `sl.state()` — a value the owner holds and never mutates — not as a way to put a
+  connection pool behind a bus topic.
 - **Snapshot isolation, or a public `atomic()` / lock.** Read-committed plus the §5b guard
   keeps every wait visible. A public lock in a handler is a deadlock in a UI.
 - **Automatic retry on conflict.** Unsafe for handlers with external effects, and the
