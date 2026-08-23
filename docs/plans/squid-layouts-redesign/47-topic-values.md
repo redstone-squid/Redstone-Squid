@@ -161,4 +161,19 @@ this exact word.
 
 ## Status
 
-Phase 1 implemented 2026-08-23. Phases 2 and 3 designed, not started.
+Phases 1 and 2 implemented 2026-08-23. Phase 3 (the bot) designed, not started.
+
+One deviation in phase 2, and it made the change smaller. The plan had
+`_ResourceDescriptor.__get__` register the bound resource with the current `_CONSUMER`, which
+would have put a `Resource` in a consumer's `sources` -- where `_recheck` calls `settle()` on
+every key, and a `Resource` has no `settle`. `render_component_tree` already collects exactly
+the resources one render touched, through `observe_resources()`, so it passes them to
+`observation.addresses(resources)` instead. `resources.py` is untouched, and the hazard never
+arises.
+
+`watch()` and its cell live in `topics.py` rather than `runtime/reactivity.py`. Nothing in
+reactivity needs to know a topic exists: `Observation.addresses()` already yields
+`cell.address` for any addressed cell, and a `_TopicCell`'s address is its `Topic`. That also
+keeps the import one-way -- `topics.py` imports `runtime.reactivity`, never the reverse.
+
+`_invalidate` stayed private, so `sl.watch` really is the only callable this phase adds.

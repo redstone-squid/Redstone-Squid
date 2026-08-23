@@ -294,6 +294,10 @@ class Component:
         A raise leaves the instance eligible to retry on the next delivery attempt, and
         nothing is delivered in the meantime. Data the component can degrade without belongs
         in declared state with a render branch, refreshed by a handler, not here.
+
+        Data that has to stay live belongs in a `sl.resource` instead. Because this runs once
+        and under no consumer, its reads are untracked: `sl.watch()` here would follow
+        nothing, and there would be no second run to reload it anyway.
         """
 
     def on_mount(self) -> None:
@@ -521,14 +525,17 @@ def render_component_tree(
 
     with observe_render() as observation, observe_resources() as observed:
         nodes = tuple(expand(root, "$", context or {}))
+    resources = unique_resources(observed)
     return ComponentTree(
         nodes,
         components,
         tuple(assets),
         document_key,
         tuple(deferred),
-        unique_resources(observed),
-        observation.addresses(),
+        resources,
+        # A resource's own tracked reads count as this render's: the render used its value,
+        # so it depends on everything the loader consulted to produce one.
+        observation.addresses(resources),
     )
 
 

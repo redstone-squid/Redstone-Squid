@@ -350,6 +350,7 @@ from squid_layouts.topics import (
     TopicBus,
     TopicCodec,
     TopicSnapshot,
+    watch,
 )
 
 
@@ -701,5 +702,6 @@ __all__ = [
     "truncate",
     "unbreakable",
     "untracked",
+    "watch",
     "zoned_timestamp",
 ]

@@ -268,7 +268,7 @@ async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCap
     with caplog.at_level("WARNING"):
         await mount.send(delivered_to(fake_message()))
         await mount.refresh_now()
-    assert sum("cannot follow topics" in record.message for record in caplog.records) == 1
+    assert sum("cannot follow addresses" in record.message for record in caplog.records) == 1
 
 
 class TestSelfWrites:
