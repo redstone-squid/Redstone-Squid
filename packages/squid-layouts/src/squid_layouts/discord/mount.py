@@ -1597,6 +1597,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             wake = asyncio.Event()
             done = asyncio.Event()
             delivery_open = self._handle is not None and not self._handle.expired()
+            if not delivery_open:
+                bindings = tuple(binding for binding in bindings if binding.settle_without_delivery)
+                if not bindings:
+                    self._dirty = True
+                    return
 
             async def settle(
                 current_bindings: tuple[AsyncBinding, ...] = bindings,
@@ -1612,12 +1617,16 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             async def reconcile(
                 current_done: asyncio.Event = done,
                 current_wake: asyncio.Event = wake,
+                current_bindings: tuple[AsyncBinding, ...] = bindings,
             ) -> None:
                 nonlocal candidate, delivery_open
                 while True:
                     await current_wake.wait()
                     current_wake.clear()
-                    while delivery_open and self.runtime.dirty:
+                    live_progress = any(
+                        binding.reconcile_while_pending and binding.pending for binding in current_bindings
+                    )
+                    while delivery_open and self.runtime.dirty and (current_done.is_set() or live_progress):
                         presented = await self._present_async_update(candidate, through=through, profile=profile)
                         if presented is None:
                             delivery_open = False

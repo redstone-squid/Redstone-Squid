@@ -66,6 +66,8 @@ class Operation[ValueT, ProgressT]:
     """One component-bound effect with a synchronous, terminal status."""
 
     pending_policy = PendingPolicy.EXPLICIT
+    reconcile_while_pending = True
+    settle_without_delivery = True
 
     def __init__(
         self,
