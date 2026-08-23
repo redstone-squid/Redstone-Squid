@@ -1,10 +1,26 @@
 """Discord component fields that must survive planning and drawing unchanged."""
 
+from dataclasses import replace
 
+import pytest
+
+from squid_layouts import LayoutInvariantError
 from squid_layouts.discord import V2_TARGET, classic, render_static
 from squid_layouts.emoji import Emoji
 from squid_layouts.html import Renderer as HtmlRenderer
-from squid_layouts.primitives import Gallery, GalleryItem, LinkButton, Option, PremiumButton, RoutedSelect, Row
+from squid_layouts.planning import plan
+from squid_layouts.primitives import (
+    Gallery,
+    GalleryItem,
+    LinkButton,
+    Option,
+    PremiumButton,
+    RoutedSelect,
+    Row,
+    Text,
+    Variant,
+    Variants,
+)
 from squid_layouts.scene.model import (
     SceneComponentsV2,
     SceneDocument,
@@ -12,6 +28,7 @@ from squid_layouts.scene.model import (
     SceneGalleryItem,
     ScenePanel,
     ScenePremiumButton,
+    SceneText,
 )
 
 
@@ -75,3 +92,22 @@ def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
     assert 'data-sku-id="42"' in rendered
     assert 'alt="preview"' in rendered
     assert "squid-spoiler" in rendered and 'tabindex="0"' in rendered
+
+
+def test_non_discord_target_requires_explicit_premium_fallback() -> None:
+    target = replace(V2_TARGET, id="generic-v2", capabilities=V2_TARGET.capabilities - {"actions.discord.premium"})
+
+    with pytest.raises(LayoutInvariantError, match="explicit Variants fallback"):
+        plan(Row((PremiumButton(42),)), target=target)
+
+    result = plan(
+        Variants(
+            (
+                Variant((Row((PremiumButton(42),)),), requires=frozenset({"actions.discord.premium"})),
+                Variant((Text("Purchase unavailable"),)),
+            )
+        ),
+        target=target,
+    )
+
+    assert result.scene.components_v2.children == (SceneText("Purchase unavailable"),)
