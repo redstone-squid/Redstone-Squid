@@ -1,11 +1,13 @@
 """Entity picker semantics, planning, and scene contracts."""
 
+from dataclasses import replace
+
 import pytest
 
 import squid_layouts as sl
 from squid_layouts.planning import measure
 from squid_layouts.primitives import EntitySelect
-from squid_layouts.scene import Codec, SceneEntitySelect
+from squid_layouts.scene import Codec, SceneEntitySelect, SceneSelect
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...
@@ -40,6 +42,27 @@ def test_native_semantic_picker_lowers_to_entity_scene() -> None:
     plan = sl.plan(sl.entities(key="users", entity_type=sl.EntityType.USER), target=sl.discord.V2_TARGET)
 
     assert isinstance(plan.scene.components_v2.children[0], SceneEntitySelect)
+
+
+def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
+    target = replace(sl.discord.V2_TARGET, capabilities=sl.discord.V2_TARGET.capabilities - {"actions.discord.entity"})
+    plan = sl.plan(
+        sl.entities(
+            sl.entity_choice(sl.EntityRef(sl.EntityKind.USER, 1), "Ada"),
+            key="users",
+            entity_type=sl.EntityType.USER,
+        ),
+        target=target,
+    )
+
+    assert isinstance(plan.scene.components_v2.children[0], SceneSelect)
+
+
+def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None:
+    target = replace(sl.discord.V2_TARGET, capabilities=sl.discord.V2_TARGET.capabilities - {"actions.discord.entity"})
+
+    with pytest.raises(sl.LayoutInvariantError, match="enumerated fallback"):
+        sl.plan(sl.entities(key="users", entity_type=sl.EntityType.USER), target=target)
 
 
 def test_entity_scene_round_trips_mixed_mentionable_defaults() -> None:

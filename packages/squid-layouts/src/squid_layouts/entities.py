@@ -51,6 +51,6 @@ class EntityRef:
 
 def supports_entity(entity_type: EntityType, kind: EntityKind) -> bool:
     """Whether a picker family may contain a concrete entity kind."""
-    return entity_type is EntityType.MENTIONABLE and kind in {EntityKind.USER, EntityKind.ROLE} or (
+    return (entity_type is EntityType.MENTIONABLE and kind in {EntityKind.USER, EntityKind.ROLE}) or (
         entity_type.value == kind.value
     )
