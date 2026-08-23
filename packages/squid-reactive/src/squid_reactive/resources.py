@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Literal, Protocol, overload
 
+from squid_reactive.completion import Completion
 from squid_reactive.core import (
     _CONSUMER,
     ReactiveCycleError,
@@ -18,7 +19,6 @@ from squid_reactive.core import (
     join_action,
     settling,
 )
-from squid_reactive.completion import Completion
 
 
 class ResourceOwner(ReactiveOwner, Protocol):
