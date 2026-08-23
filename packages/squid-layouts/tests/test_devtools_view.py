@@ -17,10 +17,19 @@ class Subject(sl.Component):
 
     opened: bool = sl.state(default=False)
 
+    @sl.computed
+    def label(self) -> str:
+        return "open" if self.opened else "closed"
+
+    @sl.computed
+    def unread(self) -> str:
+        """Never rendered, so never evaluated -- which the inspector should say."""
+        return "unused"
+
     def render(self):
         return [
             Heading("Subject"),
-            Text(f"opened: {self.opened}"),
+            Text(f"opened: {self.opened} ({self.label})"),
             Row((Button(label="Open", on_click=self._open, key="open"),)),
         ]
 
@@ -100,6 +109,16 @@ class TestDetail:
         assert "<@7>" in body
         assert "open" in body
         assert "states explored" in body
+
+    async def test_a_detail_view_reports_cell_versions_and_computed_sources(self) -> None:
+        subject = await live_subject()
+        await subject.dispatch("open", fake_interaction(message_id=42))
+        _, view = mount_inspector(MountInspector(focus=subject.id))
+
+        body = "\n".join(_texts(view))
+        assert "opened v1" in body
+        assert "label v2 <- $.opened" in body
+        assert "unread (never evaluated)" in body
 
     async def test_it_reflects_the_subject_changing_under_it(self) -> None:
         subject = await live_subject()

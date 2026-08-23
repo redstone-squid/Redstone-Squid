@@ -721,6 +721,54 @@ def state(
     return _State(default, factory=factory, persist=persist, opaque=opaque)
 
 
+@dataclass(frozen=True, slots=True)
+class CellReport:
+    """One state field as devtools sees it."""
+
+    identity: int
+    """`id()` of the cell, so a computed's sources can be resolved back to a name."""
+    version: int
+    assigned: bool
+    """Whether the field holds a value of its own rather than its declared default."""
+    opaque: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ComputedReport:
+    """One computed as devtools sees it, including what it currently depends on."""
+
+    identity: int
+    evaluated: bool
+    """False until something reads it. A computed nobody renders is never evaluated."""
+    version: int
+    sources: tuple[int, ...]
+    """Identities of the cells and computeds its last run read, in read order."""
+
+
+def inspect_cells(owner: ReactiveOwner) -> dict[str, CellReport]:
+    """Report every declared state field on `owner`, by public name."""
+    reports: dict[str, CellReport] = {}
+    for klass in reversed(type(owner).__mro__):
+        for name, descriptor in vars(klass).items():
+            if isinstance(descriptor, _State):
+                cell = descriptor.cell(owner)
+                reports[name] = CellReport(id(cell), cell.settle(), descriptor.is_set(owner), descriptor.opaque)
+    return reports
+
+
+def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
+    """Report every computed on `owner`, without evaluating one that has never run."""
+    reports: dict[str, ComputedReport] = {}
+    for klass in reversed(type(owner).__mro__):
+        for name, descriptor in vars(klass).items():
+            if isinstance(descriptor, _Computed):
+                node = descriptor.node(owner)
+                reports[name] = ComputedReport(
+                    id(node), node.evaluated, node.version, tuple(id(source) for source in node.sources)
+                )
+    return reports
+
+
 def declared_cells(owner: ReactiveOwner) -> dict[Any, int]:
     """Every declared state cell on `owner`, at the version it holds now.
 
@@ -820,6 +868,11 @@ class _Derived:
             self.value = value
             self.version += 1
         return self.version
+
+    @property
+    def evaluated(self) -> bool:
+        """Whether this node has ever produced a value. Reading it is what does that."""
+        return self._settled
 
     def read(self) -> Any:
         self.settle()
