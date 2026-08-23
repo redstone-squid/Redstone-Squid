@@ -2,6 +2,7 @@ import asyncio
 
 import anyio
 import pytest
+
 from squid_reactive import LocalTopicBus, Reactive, Shared, Topic, state, transaction, watch
 from squid_reactive.resources import Pending, Ready, resource
 

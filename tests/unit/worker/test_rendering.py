@@ -4,7 +4,6 @@ import uuid
 from typing import Any, cast
 
 import pytest
-from squid_reactive import Topic
 
 from squid.artifacts import ArtifactMetadata
 from squid.schematics.application import ClaimedRenderJob
@@ -16,6 +15,7 @@ from squid.schematics.application.queries import (
     SkippedRender,
 )
 from squid.worker.rendering import SchematicRenderProjector
+from squid_reactive import Topic
 
 PNG = b"\x89PNG\r\n\x1a\npreview"
 RECIPE_HASH = "a" * 64
