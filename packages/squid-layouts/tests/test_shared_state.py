@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 
 from squid_layouts import (
+    CellAddress,
     Component,
     Shared,
     SharedStateConflictError,
@@ -142,7 +143,7 @@ def test_an_equal_write_changes_nothing(bus: TopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     preferences.theme = "dark"
     published: list[object] = []
-    bus.subscribe((preferences, type(preferences)._cells["theme"]), _record(published))
+    bus.subscribe(CellAddress(preferences, "theme"), _record(published))
     preferences.theme = "dark"
     assert published == []
     preferences.theme = "light"
@@ -188,24 +189,23 @@ def _record(into: list[object]):
 
 async def test_a_write_outside_an_action_publishes_immediately(bus: TopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
-    theme = type(preferences)._cells["theme"]
+    theme = CellAddress(preferences, "theme")
     seen: list[object] = []
-    bus.subscribe((preferences, theme), _record(seen))
+    bus.subscribe(theme, _record(seen))
     preferences.theme = "dark"
     await bus.drain()
-    assert seen == [(preferences, theme)]
+    assert seen == [theme]
 
 
 async def test_only_the_cells_that_moved_publish(bus: TopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
-    cells = type(preferences)._cells
     seen: list[object] = []
-    bus.subscribe((preferences, cells["theme"]), _record(seen))
-    bus.subscribe((preferences, cells["locale"]), _record(seen))
+    bus.subscribe(CellAddress(preferences, "theme"), _record(seen))
+    bus.subscribe(CellAddress(preferences, "locale"), _record(seen))
     with transaction():
         preferences.theme = "dark"
     await bus.drain()
-    assert seen == [(preferences, cells["theme"])]
+    assert seen == [CellAddress(preferences, "theme")]
 
 
 # --- Actions ----------------------------------------------------------------------------
@@ -216,7 +216,7 @@ async def test_writes_stage_and_publish_together(bus: TopicBus, here: Member) ->
     workspace = Workspace(bus, here)
     seen: list[object] = []
     for handle, name in ((preferences, "theme"), (workspace, "selected")):
-        bus.subscribe((handle, type(handle)._cells[name]), _record(seen))
+        bus.subscribe(CellAddress(handle, name), _record(seen))
     with transaction():
         preferences.theme = "dark"
         assert preferences.theme == "dark", "an action reads its own writes"
@@ -248,7 +248,7 @@ def elsewhere[ValueT](what: Callable[[], ValueT]) -> ValueT:
 async def test_a_failed_action_leaks_no_staged_value(bus: TopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     seen: list[object] = []
-    bus.subscribe((preferences, type(preferences)._cells["theme"]), _record(seen))
+    bus.subscribe(CellAddress(preferences, "theme"), _record(seen))
     with pytest.raises(RuntimeError, match="handler failed"), transaction():
         preferences.theme = "dark"
         message = "handler failed"
@@ -394,7 +394,7 @@ def test_a_computed_recomputes_when_another_owner_writes(bus: TopicBus, here: Me
 async def test_a_namespace_with_no_holder_is_collected(bus: TopicBus, here: Member) -> None:
     workspace = Workspace(bus, here)
     gone = weakref.ref(workspace)
-    unfollow = bus.subscribe((workspace, type(workspace)._cells["selected"]), _record([]))
+    unfollow = bus.subscribe(CellAddress(workspace, "selected"), _record([]))
     workspace.selected = 3
     await bus.drain()
     # Both halves of what keeps a namespace alive: the handle itself, and the unfollow that

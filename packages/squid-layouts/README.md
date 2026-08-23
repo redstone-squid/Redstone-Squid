@@ -102,15 +102,19 @@ only exact colours. Discord buttons retain Discord's platform-owned style colour
 
 `TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
 address changed; every subscriber re-reads the application's source of truth. It is not durable,
-and queued topics disappear with the process. Exact matching means hosts should construct every
-topic through one vocabulary function rather than mixing values such as `("build", 123)` and
-`("build", "123")`.
+and queued topics disappear with the process.
+
+An address is either a `sl.Topic(kind, key)` -- a value a host writes, equal by value so two
+publishers agree without sharing a constructor -- or a `sl.CellAddress`, which is a `Shared` cell's
+identity and is only ever received, never built. `sl.Address` is the union the bus carries. Keys
+are text on purpose: `sl.Topic("build", 123)` is a type error rather than a topic nobody else ever
+addresses.
 
 ```python
 bus = sl.TopicBus()
 reactor = sl.discord.Reactor(bus)
 mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
-reactor.follow(mount, ("build", "123"))  # subscribe before the first read/send
+reactor.follow(mount, sl.Topic("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
 # The host visibly owns both long-running coroutines.
@@ -133,22 +137,18 @@ PostgreSQL: it publishes through the bus rather than relaying it, so nothing loo
 payload is an encoded *address*, never state.
 
 ```python
-class ResourceCodec:  # the host owns its vocabulary, so it owns the wire form
-    def encode(self, topic: sl.Topic) -> str | None:
-        match topic:
-            case ("build", str() as key):
-                return f"build:{key}"
-            case _:
-                return None  # an address this codec cannot name stays process-local
-
-    def decode(self, text: str) -> sl.Topic | None:
-        kind, separator, key = text.partition(":")
-        return (kind, key) if separator and kind == "build" else None
-
-
-bridge = sl.discord.durability.PostgresTopicBridge(pool, bus, ResourceCodec())
+bridge = sl.discord.durability.PostgresTopicBridge(pool, bus)
 tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
-bridge.publish(("build", "123"))  # local subscribers now, other processes shortly after
+bridge.publish(sl.Topic("build", "123"))  # local subscribers now, other processes shortly after
+```
+
+The default wire form is `sl.KindKeyCodec`, which writes `kind:key` and is total on `Topic`, so
+most hosts pass no codec at all. A `CellAddress` cannot reach a codec -- it names a live object
+rather than a value -- so shared cells stay process-local by type rather than by convention. Pass
+`codec=` only to speak a format someone else already defined:
+
+```python
+bridge = sl.discord.durability.PostgresTopicBridge(pool, bus, LegacyCodec())
 ```
 
 Every process that takes part runs the bridge, including one that only publishes. Delivery is

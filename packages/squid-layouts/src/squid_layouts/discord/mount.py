@@ -95,7 +95,7 @@ from squid_layouts.scene.model import (
 from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
-from squid_layouts.topics import Topic
+from squid_layouts.topics import Address
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -201,7 +201,7 @@ class TopicFollower(Protocol):
     one whose scheduler only absorbs refreshes, is simply not live-updated.
     """
 
-    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]: ...
+    def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]: ...
 
 
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
@@ -677,9 +677,9 @@ class Mount:
         # it even when nobody can deliver a topic to it. A follow is acquired at stage time,
         # because a write landing between a render's read and its subscription is lost and the
         # bus is not durable -- but only a delivered render may retire one.
-        self._observed: tuple[Topic, ...] = ()
-        self._watched: dict[Topic, None] = {}
-        self._follows: dict[Topic, Callable[[], None]] = {}
+        self._observed: tuple[Address, ...] = ()
+        self._watched: dict[Address, None] = {}
+        self._follows: dict[Address, Callable[[], None]] = {}
         self._follow_warned = False
 
     @property
@@ -734,7 +734,7 @@ class Mount:
         return self._dirty
 
     @property
-    def observed(self) -> tuple[Topic, ...]:
+    def observed(self) -> tuple[Address, ...]:
         """The shared cell addresses the generation on screen read.
 
         What the reader is looking at, whether or not anything can notify this mount about
@@ -744,7 +744,7 @@ class Mount:
         return self._observed
 
     @property
-    def followed(self) -> tuple[Topic, ...]:
+    def followed(self) -> tuple[Address, ...]:
         """The bus addresses this mount is subscribed to, for diagnostics.
 
         `observed`, minus everything a scheduler that cannot follow topics could not
@@ -1043,7 +1043,7 @@ class Mount:
             _disable_all(view)
         return _LifecycleCandidate(view, composition, handlers, generation)
 
-    def _ensure_follows(self, observed: Sequence[Topic]) -> None:
+    def _ensure_follows(self, observed: Sequence[Address]) -> None:
         """Acquire whatever a staged render newly reads, and retire nothing.
 
         Over-subscribe, never under-subscribe. Staging is the only moment early enough to
@@ -1069,7 +1069,7 @@ class Mount:
             if topic not in self._follows:
                 self._follows[topic] = follower.follow(self, topic)
 
-    def _prune_follows(self, observed: Sequence[Topic]) -> None:
+    def _prune_follows(self, observed: Sequence[Address]) -> None:
         """Publish a delivered render's reads and drop the follows nothing visible needs.
 
         The mirror of `_ensure_follows`: what a candidate provisionally acquired becomes this

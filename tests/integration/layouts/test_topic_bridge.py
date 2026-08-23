@@ -7,7 +7,7 @@ import anyio
 import asyncpg
 from testcontainers.postgres import PostgresContainer
 
-from squid.topics import ResourceTopicCodec, resource_topic
+from squid.topics import resource_topic
 from squid_layouts import Topic, TopicBus
 from squid_layouts.discord.durability import PostgresTopicBridge
 
@@ -36,11 +36,9 @@ async def test_two_processes_exchange_topics_over_one_channel(postgres_container
     here.subscribe(resource_topic("build", "42"), record_here)
     there.subscribe(resource_topic("build", "42"), record_there)
     listening_here, listening_there = anyio.Event(), anyio.Event()
-    bridge_here = PostgresTopicBridge(
-        here_pool, here, ResourceTopicCodec(), channel=channel, on_resync=partial(_announce, listening_here)
-    )
+    bridge_here = PostgresTopicBridge(here_pool, here, channel=channel, on_resync=partial(_announce, listening_here))
     bridge_there = PostgresTopicBridge(
-        there_pool, there, ResourceTopicCodec(), channel=channel, on_resync=partial(_announce, listening_there)
+        there_pool, there, channel=channel, on_resync=partial(_announce, listening_there)
     )
 
     try:
