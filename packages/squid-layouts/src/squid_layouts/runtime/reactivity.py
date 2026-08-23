@@ -262,6 +262,20 @@ def rendering() -> bool:
     return _OBSERVING.get()
 
 
+def note_born(owner: object) -> None:
+    """Record an object whose construction began in the active transactional contexts."""
+    if current := _CURRENT.get():
+        current.note_born(owner)
+    if observation := _RENDER_OBSERVATION.get():
+        observation.note_born(owner)
+
+
+def note_initialized(owner: object) -> None:
+    """End an object's construction exemption in the active render observation."""
+    if observation := _RENDER_OBSERVATION.get():
+        observation.entering_own_render(owner)
+
+
 _EPOCH = 0
 """Bumped by every write anywhere.
 
