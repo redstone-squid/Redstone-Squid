@@ -5,7 +5,8 @@ from types import TracebackType
 from discord import Message, Webhook
 from discord.abc import Messageable
 
-from squid.bot.utils.components import info_layout, no_mentions
+import squid_layouts as sl
+from squid.bot.ui import info_layout
 from squid.core.i18n import _, translate
 
 
@@ -29,10 +30,10 @@ class RunningMessage:
         self.sent_message: Message
 
     async def __aenter__(self) -> Message:
-        sent_message = await self.ctx.send(
-            view=info_layout(translate(self.locale, self.title), translate(self.locale, self.description)),
-            allowed_mentions=no_mentions(),
+        receipt = await sl.discord.delivery.send_to(self.ctx)(
+            info_layout(translate(self.locale, self.title), translate(self.locale, self.description))
         )
+        sent_message = receipt.message
         if sent_message is None:
             msg = "Failed to send message. (You are probably sending a message to a webhook, try looking into Webhook.send)"
             raise ValueError(msg)
