@@ -42,6 +42,7 @@ from squid_layouts.primitives.nodes import (
     Footer,
     FormButton,
     Gallery,
+    GalleryItem,
     Lines,
     LinkButton,
     Node,
@@ -489,6 +490,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Code(content=content, language=language):
             return [PrimitiveCode(content, language, overflow=Never())]
         case Figure(media=media, caption=caption):
+            if media.spoiler and _cards(context):
+                message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+                raise LayoutInvariantError(message)
             if _cards(context):
                 # The description rides along even where Discord will not show it: it is the
                 # author's alternative text, and a scene that dropped it could not restore it.
@@ -498,7 +502,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
-            children: list[Node] = [Gallery((media.url,))]
+            children: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
             if caption is not None:
                 children.append(Footer(_resolve(caption, context)))
             return children
@@ -508,7 +512,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _details(node, path, context)
         case Toggle():
             return _toggle(node, context)
-        case Download(label=label, asset=asset, description=description, emphasis=emphasis):
+        case Download(label=label, asset=asset, description=description, emphasis=emphasis, spoiler=spoiler):
             context.assets.append(asset)
             resolved_label = _resolve(context.chrome.download if label is None else label, context)
             if emphasis is Emphasis.STRONG:
@@ -519,6 +523,11 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             if description is not None:
                 text += f"\n{_resolve(description, context)}"
             if _cards(context):
+                if spoiler:
+                    message = (
+                        f"{path}: classic targets cannot preserve file spoilers; provide an explicit Variants fallback"
+                    )
+                    raise LayoutInvariantError(message)
                 # No file *component* exists outside Components V2. The asset still uploads and
                 # the label and description still show; what is lost is the dedicated
                 # affordance, which the report says out loud rather than leaving to be noticed.
@@ -531,7 +540,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                     )
                 )
                 return [Text(text, overflow=Never())]
-            return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type)]
+            return [Text(text, overflow=Never()), PrimitiveFile(asset.key, asset.name, asset.media_type, spoiler)]
         case Status(content=content, tone=tone):
             prefix = {
                 Tone.INFO: "\N{INFORMATION SOURCE}\N{VARIATION SELECTOR-16} ",
@@ -861,7 +870,7 @@ def _primitive(node: Node, context: _Context) -> Node:
                 overflow = replace(overflow, footer=localized)
             return replace(node, lines=resolved_lines, overflow=overflow)
         case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
-            return replace(node, label=_resolve(label, context))
+            return replace(node, label=None if label is None else _resolve(label, context))
         case Row(items=items) | PrimitiveActionGroup(items=items):
             return replace(node, items=tuple(_primitive(item, context) for item in items))
         case (
@@ -1623,12 +1632,23 @@ def _media(node: Media, path: str, context: _Context) -> list[Node]:
         return []
     if strategy == "featured":
         first = node.items[0]
-        result: list[Node] = [Gallery((first.url,))]
+        if first.spoiler and _cards(context):
+            message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+            raise LayoutInvariantError(message)
+        result: list[Node] = [Gallery((GalleryItem(first.url, first.description, first.spoiler),))]
         if first.description is not None:
             result.append(Footer(_resolve(first.description, context), overflow=Never()))
         return result
+    if _cards(context) and any(item.spoiler for item in node.items):
+        message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
+        raise LayoutInvariantError(message)
     return [
-        Gallery(tuple(item.url for item in node.items[start : start + context.limits.gallery_items]))
+        Gallery(
+            tuple(
+                GalleryItem(item.url, item.description, item.spoiler)
+                for item in node.items[start : start + context.limits.gallery_items]
+            )
+        )
         for start in range(0, len(node.items), context.limits.gallery_items)
     ]
 

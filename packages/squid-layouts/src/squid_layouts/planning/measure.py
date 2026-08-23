@@ -64,6 +64,7 @@ from squid_layouts.primitives.nodes import (
     Node,
     Option,
     Panel,
+    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -195,13 +196,14 @@ class RZonedTime:
 @dataclass(frozen=True, slots=True)
 class RSection:
     texts: list[RText]
-    accessory: Thumbnail | LinkButton | RawItem
+    accessory: Thumbnail | LinkButton | PremiumButton | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
 class RPanel:
     children: list[Realized]
     accent: Color | None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -725,6 +727,8 @@ class _Builder:
         )
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
+        if button.label is None:
+            return button
         if len(button.label) <= self.limits.button_label:
             return button
         self.notes.append(
@@ -836,8 +840,8 @@ class _Builder:
             case Card():
                 with self.pool(EMBED_TEXT):
                     return self.card(node)
-            case Panel(children=children, accent=accent):
-                return RPanel(children=self.realize_children(children), accent=accent)
+            case Panel(children=children, accent=accent, spoiler=spoiler):
+                return RPanel(children=self.realize_children(children), accent=accent, spoiler=spoiler)
             case Budget(
                 children=children,
                 minimum=minimum,
@@ -1322,10 +1326,10 @@ def _prune(children: list[Realized]) -> list[Realized]:
                 pruned.append(replace(child, blocks=_prune(blocks)))
             case RContent(slot=slot) if slot.dropped:
                 continue
-            case RPanel(children=inner, accent=accent):
+            case RPanel(children=inner, accent=accent, spoiler=spoiler):
                 kept = _prune(inner)
                 if kept:
-                    pruned.append(RPanel(children=kept, accent=accent))
+                    pruned.append(RPanel(children=kept, accent=accent, spoiler=spoiler))
             case RGroup(children=inner):
                 pruned.extend(_prune(inner))
             case RSection(texts=texts, accessory=accessory):

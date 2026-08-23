@@ -46,6 +46,7 @@ from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.classic import compose as classic_compose
 from squid_layouts.discord.classic_renderer import ClassicRenderer
 from squid_layouts.discord.compose import Composition, compose
+from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
 from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.discord.target import V2_TARGET, Target
@@ -326,7 +327,7 @@ class _WiredButton(discord.ui.Button[AnyMountedView]):
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
             label=node.label,
-            emoji=node.emoji,
+            emoji=discord_emoji(node.emoji),
             disabled=node.disabled,
             custom_id=_custom_id(mount.id, generation, key),
         )
@@ -348,7 +349,11 @@ class _WiredSelect(discord.ui.Select[AnyMountedView]):
             custom_id=_custom_id(mount.id, generation, key),
             options=[
                 discord.SelectOption(
-                    label=option.label, value=option.value, description=option.description, default=option.default
+                    label=option.label,
+                    value=option.value,
+                    description=option.description,
+                    default=option.default,
+                    emoji=discord_emoji(option.emoji),
                 )
                 for option in node.options
             ],

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
+from squid_layouts.emoji import Emoji
 from squid_layouts.entities import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
@@ -38,6 +39,7 @@ class SceneFile:
     asset_key: str
     name: str
     media_type: str
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,16 +50,23 @@ class SceneSeparator:
 
 @dataclass(frozen=True, slots=True)
 class SceneLink:
-    label: str
+    label: str | None
     url: str
+    emoji: Emoji | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class ScenePremiumButton:
+    sku_id: int
 
 
 @dataclass(frozen=True, slots=True)
 class SceneButton:
-    label: str
+    label: str | None
     action: str
     style: ActionStyle = ActionStyle.SECONDARY
-    emoji: str | None = None
+    emoji: Emoji | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
 
@@ -71,10 +80,10 @@ class SceneRoutedButton:
     which a process-local handler could never be.
     """
 
-    label: str
+    label: str | None
     route_id: str
     style: ActionStyle = ActionStyle.SECONDARY
-    emoji: str | None = None
+    emoji: Emoji | None = None
     disabled: bool = False
 
 
@@ -84,6 +93,7 @@ class SceneOption:
     value: str
     description: str | None = None
     default: bool = False
+    emoji: Emoji | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,19 +132,21 @@ class SceneEntitySelect:
 
 @dataclass(frozen=True, slots=True)
 class SceneRow:
-    items: tuple[SceneLink | SceneButton | SceneRoutedButton | SceneExtension, ...]
+    items: tuple[SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class SceneThumbnail:
     url: str
     description: str | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
 class SceneGalleryItem:
     url: str
     description: str | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,13 +157,14 @@ class SceneGallery:
 @dataclass(frozen=True, slots=True)
 class SceneSection:
     texts: tuple[SceneText, ...]
-    accessory: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension
+    accessory: SceneThumbnail | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension
 
 
 @dataclass(frozen=True, slots=True)
 class ScenePanel:
     children: tuple[SceneNode, ...]
     accent: Color | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +187,7 @@ type SceneNode = (
     | SceneRoutedSelect
     | SceneEntitySelect
     | SceneRoutedButton
+    | ScenePremiumButton
     | SceneThumbnail
     | SceneGallery
     | SceneSection
@@ -249,7 +263,14 @@ class SceneEmbed:
 
 
 type SceneControl = (
-    SceneLink | SceneButton | SceneRoutedButton | SceneSelect | SceneRoutedSelect | SceneEntitySelect | SceneExtension
+    SceneLink
+    | ScenePremiumButton
+    | SceneButton
+    | SceneRoutedButton
+    | SceneSelect
+    | SceneRoutedSelect
+    | SceneEntitySelect
+    | SceneExtension
 )
 
 
