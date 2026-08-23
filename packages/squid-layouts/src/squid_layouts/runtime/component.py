@@ -256,12 +256,7 @@ class Component[ModeT = Any]:
         # A handler may build components. Noting the ones born mid-action is what lets their
         # __init__ write freely while a live component's writes stay covered.
         instance = super().__new__(cls)
-        if current := _CURRENT.get():
-            current.note_born(instance)
-        # Same rule for a render: a parent's render() may build a child, and the child's
-        # __init__ assigning its own declared state is construction, not a render-time write.
-        if observation := _RENDER_OBSERVATION.get():
-            observation.note_born(instance)
+        note_born(instance)
         return instance
 
     def __setattr__(self, name: str, value: Any) -> None:
