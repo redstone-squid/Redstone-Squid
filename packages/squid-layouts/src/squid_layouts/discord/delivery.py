@@ -269,6 +269,15 @@ def handle_from(interaction: discord.Interaction[Any]) -> EditHandle | None:
     return _WebhookMessageHandle(interaction, message.id, message, mode=mode_of(message))
 
 
+def handle_for_original(interaction: discord.Interaction[Any], *, mode: DiscordMode) -> EditHandle:
+    """Return the edit authority for an interaction's original response.
+
+    A deferred channel response has no source message for :func:`handle_from`, but its
+    ``@original`` webhook message is still writable through this handle.
+    """
+    return _OriginalResponseHandle(interaction, mode=mode)
+
+
 @dataclass(frozen=True, slots=True)
 class DeliveryReceipt:
     """What a delivery exposed and the authority it created to edit it."""
@@ -372,6 +381,7 @@ class Messageable(Protocol):
         *,
         files: Sequence[discord.File],
         allowed_mentions: discord.AllowedMentions,
+        delete_after: float | None = ...,
         content: str | None = ...,
         embeds: Sequence[discord.Embed] = ...,
         view: Any = ...,
@@ -418,15 +428,18 @@ def reply_to(
 def send_to(
     channel: Messageable,
     *,
+    files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
+    delete_after: float | None = None,
 ) -> Destination:
     """Send a complete presentation to a channel and retain bot-token edit authority."""
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
         message = await channel.send(
-            files=presentation.files(),
+            files=_merged_files(files, presentation),
             allowed_mentions=mentions,
+            **({"delete_after": delete_after} if delete_after is not None else {}),
             **presentation._send_fields(),
         )
         return DeliveryReceipt(message, handle_for(message, mode=presentation.mode))

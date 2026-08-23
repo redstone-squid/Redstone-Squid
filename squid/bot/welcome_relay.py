@@ -8,8 +8,9 @@ import discord
 from discord import AllowedMentions
 from discord.ext.commands import Cog
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.utils.components import text_layout
+from squid.bot.ui import text_layout
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -54,10 +55,10 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             logger.warning("Could not find member %s for welcome message", decision.member_id)
             return
 
-        await general_channel.send(
-            view=text_layout(message.system_content.replace(decision.matched_name, member.mention)),
+        await sl.discord.delivery.send_to(
+            general_channel,
             allowed_mentions=AllowedMentions(users=False, roles=False, everyone=False, replied_user=False),
-        )
+        )(text_layout(message.system_content.replace(decision.matched_name, member.mention)))
 
     @Cog.listener(name="on_member_join")
     async def track_new_member(self, member: discord.Member):

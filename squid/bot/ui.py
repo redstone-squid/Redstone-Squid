@@ -54,6 +54,7 @@ __all__ = [
     "render_static",
     "reply",
     "reply_presentation",
+    "respond_presentation",
     "send_component",
     "text_layout",
     "truncate_display_text",
@@ -162,13 +163,13 @@ type Visibility = Private | Literal["public", "personal"]
 
 async def reply(
     ctx: Context[Any],
-    view: discord.ui.LayoutView,
+    presentation: ui.discord.presentation.DiscordPresentation,
     *,
     visibility: Visibility = "public",
     locale: str | None = None,
     files: Sequence[discord.File] = (),
 ) -> discord.Message | None:
-    """The one reply entry point: send `view` with an explicit audience.
+    """The one reply entry point: send a presentation with an explicit audience.
 
     "public" answers in the channel; "personal" is ephemeral where the transport allows it
     (see `squid.bot.utils.visibility.personal`); `Private(reason)` must never reach a channel
@@ -178,18 +179,25 @@ async def reply(
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
-        return await deliver_privately(ctx, view, reason=visibility.reason, locale=locale, files=files)
-    extra: dict[str, Any] = {"files": list(files)} if files else {}
+        return await deliver_privately(
+            ctx,
+            presentation,
+            reason=visibility.reason,
+            locale=locale,
+            files=files,
+        )
     ephemeral = visibility == "personal" and personal(ctx)
-    return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.discord.delivery.no_mentions(), **extra)
+    receipt = await ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
+    return receipt.message
 
 
 async def reply_presentation(
     ctx: Context[Any],
-    presentation: ui.discord.DiscordPresentation,
+    presentation: ui.discord.presentation.DiscordPresentation,
     *,
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
+    files: Sequence[discord.File] = (),
 ) -> ui.discord.delivery.DeliveryReceipt:
     """Deliver a complete Squid presentation through the selected command audience."""
     from squid.bot.utils.visibility import personal
@@ -202,6 +210,7 @@ async def reply_presentation(
             presentation,
             reason=visibility.reason,
             allowed_mentions=allowed_mentions,
+            files=files,
         )
         if message is None:
             raise ui.discord.delivery.DeliveryAbandoned
@@ -211,9 +220,27 @@ async def reply_presentation(
     destination = ui.discord.reply_to(
         ctx,
         ephemeral=visibility == "personal" and personal(ctx),
+        files=files,
         allowed_mentions=allowed_mentions,
     )
     return await destination(presentation)
+
+
+async def respond_presentation(
+    interaction: discord.Interaction[Any],
+    presentation: ui.discord.DiscordPresentation,
+    *,
+    ephemeral: bool = True,
+    wait: bool = False,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> ui.discord.delivery.DeliveryReceipt:
+    """Deliver a complete presentation as an interaction response or follow-up."""
+    return await ui.discord.respond_to(
+        interaction,
+        ephemeral=ephemeral,
+        wait=wait,
+        allowed_mentions=allowed_mentions,
+    )(presentation)
 
 
 def destination(
@@ -239,13 +266,13 @@ def destination(
         if ctx.interaction is not None:
             return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(presentation: ui.discord.DiscordPresentation) -> ui.discord.delivery.DeliveryReceipt:
+        async def privately(presentation: ui.discord.presentation.DiscordPresentation) -> ui.discord.delivery.DeliveryReceipt:
             message = await deliver_privately(
                 ctx,
-                presentation.layout,
+                presentation,
                 reason=visibility.reason,
                 locale=locale,
-                files=[*files, *presentation.files()],
+                files=files,
             )
             if message is None:
                 raise ui.discord.delivery.DeliveryAbandoned
@@ -292,9 +319,9 @@ def render_item(
     Prefer `contribute`, which measures the host and places the result atomically. This
     stays for callers that build the surrounding view themselves and know their own budget.
     """
-    view = render_static([node], locale=locale, reservation=reservation)
-    item = view.children[0]
-    view.remove_item(item)
+    presentation = render_static([node], locale=locale, reservation=reservation)
+    item = presentation.layout.children[0]
+    presentation.layout.remove_item(item)
     return item
 
 
@@ -304,17 +331,15 @@ def render_static(
     locale: str | None = None,
     strict: bool = False,
     reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Render a sessionless document through the bot's chrome and catalogue."""
-    # `.layout` rather than the whole presentation: the bot is entirely on Components V2,
-    # where the layout *is* the message, and every caller here wants a view to send.
     return ui.discord.render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
         strict=strict,
         reservation=reservation,
-    ).layout
+    )
 
 
 def render_presentation(
@@ -323,7 +348,7 @@ def render_presentation(
     locale: str | None = None,
     strict: bool = False,
     reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
-) -> ui.discord.DiscordPresentation:
+) -> ui.discord.presentation.DiscordPresentation:
     """Render a complete presentation for framework-owned delivery."""
     return ui.discord.render_static(
         nodes,
@@ -399,7 +424,7 @@ async def send_component(
 class PagedList(ui.Component):
     """A card holding one page of a pre-rendered list, plus the controls to walk it.
 
-    The reactive successor to `squid.bot.utils.pagination.ListPaginator`: `page_size` entries
+    The reactive page primitive: `page_size` entries
     per page is a deliberate UX pin, expressed as the engine's count-based `Paginate`.
     Passing ``None`` lets the engine fill each page from the target's measured text budget.
     The mount owns paging, its access policy, and expiry. It does not fetch — every caller
@@ -474,7 +499,7 @@ def card_layout(
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
     locale: str | None = None,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Create a standalone V2 card."""
     extra_media = media[1:]
     node = ui.section(
@@ -496,7 +521,7 @@ def card_layout(
 
 def text_layout(
     content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
@@ -517,7 +542,7 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 
 def error_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     return card_layout(
         title,
         _prefixed(":x: ", description or ""),
@@ -528,7 +553,7 @@ def error_layout(
 
 def warning_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     return card_layout(
         _prefixed(":warning: ", title),
         description,
@@ -539,7 +564,7 @@ def warning_layout(
 
 def info_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     return card_layout(title, description, accent_colour=DISCORD_GREEN, locale=locale)
 
 
@@ -550,7 +575,7 @@ def help_layout(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     locale: str | None = None,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     return card_layout(
         title,
         description,
@@ -568,7 +593,7 @@ def link_layout(
     description: ui.TextLike | None = None,
     label: ui.TextLike = _OPEN_LINK,
     locale: str | None = None,
-) -> discord.ui.LayoutView:
+) -> ui.discord.presentation.DiscordPresentation:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
         ui.heading(title),
