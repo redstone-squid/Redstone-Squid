@@ -12,6 +12,7 @@ import time
 from collections.abc import Awaitable, Callable, Hashable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from typing import Protocol
 
 from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink, TraceOutcome, TraceResult
 
@@ -24,6 +25,21 @@ _SELF_PUBLISH_WARNING_THRESHOLD = 100
 _NO_TOPIC = object()
 _current_topic: contextvars.ContextVar[Topic | object] = contextvars.ContextVar("topic_bus_topic", default=_NO_TOPIC)
 _NOOP_PROFILER = NoOpProfiler()
+
+
+class TopicCodec(Protocol):
+    """Translate a topic to and from the text an external transport can carry.
+
+    A host owns its topic vocabulary, so it owns the wire form too. `encode` returns `None`
+    for an address this codec cannot express -- an identity-bearing address such as a
+    `Shared` cell -- and the bridge keeps that topic local rather than inventing a name for
+    it. `decode` returns `None` for text this process does not recognise, which is what a
+    rolling deployment looks like from the older side.
+    """
+
+    def encode(self, topic: Topic) -> str | None: ...
+
+    def decode(self, text: str) -> Topic | None: ...
 
 
 @dataclass(frozen=True, slots=True)

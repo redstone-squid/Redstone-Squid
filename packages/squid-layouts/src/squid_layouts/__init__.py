@@ -340,7 +340,7 @@ from squid_layouts.text import (
     plain,
     raw_md,
 )
-from squid_layouts.topics import BusSnapshot, Subscriber, Topic, TopicBus, TopicSnapshot
+from squid_layouts.topics import BusSnapshot, Subscriber, Topic, TopicBus, TopicCodec, TopicSnapshot
 
 
 def __getattr__(name: str) -> object:
@@ -582,6 +582,7 @@ __all__ = [
     "Tone",
     "Topic",
     "TopicBus",
+    "TopicCodec",
     "TopicSnapshot",
     "Truncated",
     "Unbreakable",
