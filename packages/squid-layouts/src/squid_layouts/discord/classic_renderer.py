@@ -37,13 +37,14 @@ from squid_layouts.scene.model import (
     SceneDocument,
     SceneEmbed,
     SceneExtension,
+    SceneEntitySelect,
     SceneLink,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneSelect,
 )
 
-type Control = SceneButton | SceneSelect
+type Control = SceneButton | SceneSelect | SceneEntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ClassicViewFactory = Callable[[], discord.ui.View]
 
@@ -172,7 +173,7 @@ class ClassicRenderer:
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> list[discord.ui.Item[Any]]:
-        selects = sum(isinstance(control, SceneSelect | SceneRoutedSelect) for control in row.controls)
+        selects = sum(isinstance(control, SceneSelect | SceneRoutedSelect | SceneEntitySelect) for control in row.controls)
         if selects and len(row.controls) > 1:
             message = f"row {index} mixes a select with other controls; a select occupies its whole row"
             raise DrawInvariantError(message)
@@ -212,7 +213,7 @@ class ClassicRenderer:
                     max_values=control.max_values,
                     disabled=control.disabled,
                 )
-            case SceneButton() | SceneSelect():
+            case SceneButton() | SceneSelect() | SceneEntitySelect():
                 if plan is None or wire is None:
                     message = "interactive scene controls require a mounted Discord frontend"
                     raise TypeError(message)
