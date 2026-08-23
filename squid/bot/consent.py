@@ -1,5 +1,7 @@
 """Asking one Discord user for informed consent, and continuing what they asked for."""
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, cast
 
@@ -41,6 +43,30 @@ NOT_ASKED = NotAskedType.NOT_ASKED
 type ConsentTarget = commands.Context[Any] | discord.Interaction[Any]
 """Anywhere the bot can identify a user and answer them."""
 
+type ConsentContinuation = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
+"""What to do once the reader has answered, run by the prompt's own press.
+
+The awaiting form is only safe where the caller owns the wait. Inside a mounted action
+handler it is not: the handler runs in the mount's transaction and, under the default
+`EXCLUSIVE` policy, in its dispatch lock, so awaiting an answer holds both for as long as
+the reader takes to read. A continuation runs in the *prompt's* dispatch instead, which is
+a separate mount, so the press that opened it is already finished by then.
+"""
+
+
+@dataclass(slots=True)
+class _Answer:
+    """What the reader said, held off the component on purpose.
+
+    Nothing renders it, and it has to outlive the press that writes it: the answering handler
+    runs in a transaction, so a declared cell would only be staged -- invisible to a waiter in
+    another task, and dropped by the teardown `finish` performs a line later. Writing through
+    an object the component merely holds is what keeps it off `Component.__setattr__`, which
+    is where an undeclared write raises.
+    """
+
+    consent: AccountConsent | None = None
+
 
 class ConsentPrompt(sl.Component):
     """A semantic consent prompt with a native-free waiting lifecycle."""
@@ -57,6 +83,7 @@ class ConsentPrompt(sl.Component):
         accept_label: str,
         locale: str | None,
         timeout: float,
+        on_answer: ConsentContinuation | None = None,
     ) -> None:
         self.user_id = user_id
         self.locale = locale
@@ -65,12 +92,13 @@ class ConsentPrompt(sl.Component):
         self._fields = fields
         self._accept_label = accept_label
         self._timeout = timeout
-        self._consent: AccountConsent | None = None
+        self._on_answer = on_answer
+        self._answer = _Answer()
         self._done = anyio.Event()
 
     @property
     def consent(self) -> AccountConsent | None:
-        return self._consent
+        return self._answer.consent
 
     @property
     def notice_version(self) -> str:
@@ -99,19 +127,24 @@ class ConsentPrompt(sl.Component):
         )
 
     async def _accept(self, event: sl.PressEvent) -> None:
-        self._consent = AccountConsent.grant_current()
-        await self._finish(event)
+        await self._finish(event, AccountConsent.grant_current())
 
     async def _cancel(self, event: sl.PressEvent) -> None:
-        await self._finish(event)
+        await self._finish(event, None)
 
     async def _privacy(self, event: sl.PressEvent) -> None:
         await event.notice(t(self.locale, PRIVACY_NOTICE))
 
-    async def _finish(self, event: sl.PressEvent) -> None:
+    async def _finish(self, event: sl.PressEvent, consent: AccountConsent | None) -> None:
+        self._answer.consent = consent
         self.closed = True
         self._done.set()
+        # The continuation runs last, so nothing in this handler can fail after it and roll
+        # back what it wrote. Closing first also answers the click inside its own deadline,
+        # whatever the continuation then goes on to do.
         await event.finish()
+        if self._on_answer is not None:
+            await self._on_answer(event, consent)
 
     def on_unmount(self) -> None:
         self._done.set()
@@ -119,7 +152,7 @@ class ConsentPrompt(sl.Component):
     async def wait(self) -> AccountConsent | None:
         with anyio.move_on_after(self._timeout) as scope:
             await self._done.wait()
-        return None if scope.cancel_called else self._consent
+        return None if scope.cancel_called else self._answer.consent
 
 
 def _is_context(target: ConsentTarget) -> bool:
@@ -190,16 +223,15 @@ def _link_credit_value(preview: LinkPreview, locale: str | None) -> str:
     )
 
 
-async def prompt_for_consent(
-    target: ConsentTarget,
+def _build_prompt(
     *,
     user_id: int,
-    locale: str | None = None,
-    preview: LinkPreview | None = None,
-    timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
-) -> AccountConsent | NotAskedType | None:
-    """Show the notice and wait, returning the consent the user granted."""
+    locale: str | None,
+    preview: LinkPreview | None,
+    timeout: float,
+    on_answer: ConsentContinuation | None,
+) -> ConsentPrompt:
+    """The notice this reader is owed, worded for what agreeing would actually store."""
     if preview is None:
         component = ConsentPrompt(
             user_id=user_id,
@@ -224,6 +256,7 @@ async def prompt_for_consent(
             accept_label=t(locale, _("Agree")),
             locale=locale,
             timeout=timeout,
+            on_answer=on_answer,
         )
     else:
         component = ConsentPrompt(
@@ -254,7 +287,21 @@ async def prompt_for_consent(
             accept_label=t(locale, _("Agree and link")),
             locale=locale,
             timeout=timeout,
+            on_answer=on_answer,
         )
+    return component
+
+
+async def _open_prompt(
+    target: ConsentTarget,
+    component: ConsentPrompt,
+    *,
+    user_id: int,
+    locale: str | None,
+    timeout: float,
+    parent: sl.discord.Mount | None,
+) -> bool:
+    """Put the prompt on screen, telling the reader why not when it could not be opened."""
     opened = await CONSENT_SCREEN.open(
         _registry_of(target),
         component,
@@ -268,10 +315,100 @@ async def prompt_for_consent(
         await _send(
             target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one.")))
         )
-        return NOT_ASKED
-    if not isinstance(opened, Opened):
+        return False
+    return isinstance(opened, Opened)
+
+
+async def prompt_for_consent(
+    target: ConsentTarget,
+    *,
+    user_id: int,
+    locale: str | None = None,
+    preview: LinkPreview | None = None,
+    timeout: float = 120.0,
+    parent: sl.discord.Mount | None = None,
+) -> AccountConsent | NotAskedType | None:
+    """Show the notice and wait, returning the consent the user granted.
+
+    For callers that own their own wait -- a command, which holds no mount state while it
+    blocks. A mounted action handler wants `request_consent` instead, because the wait it
+    would do here happens inside the mount's transaction and dispatch lock.
+    """
+    component = _build_prompt(user_id=user_id, locale=locale, preview=preview, timeout=timeout, on_answer=None)
+    if not await _open_prompt(target, component, user_id=user_id, locale=locale, timeout=timeout, parent=parent):
         return NOT_ASKED
     return await component.wait()
+
+
+async def request_consent(
+    target: ConsentTarget,
+    *,
+    user_id: int,
+    on_answer: ConsentContinuation,
+    locale: str | None = None,
+    preview: LinkPreview | None = None,
+    timeout: float = 120.0,
+    parent: sl.discord.Mount | None = None,
+) -> bool:
+    """Show the notice and return, running `on_answer` from the prompt's own press.
+
+    Returns whether the prompt was opened; `False` means the reader has already been told
+    why not, and `on_answer` will never run. An unanswered prompt expires with its mount and
+    also never runs it, which is the right reading of an abandoned question: nothing was
+    stored, and nothing the reader did not ask for happens later.
+    """
+    component = _build_prompt(user_id=user_id, locale=locale, preview=preview, timeout=timeout, on_answer=on_answer)
+    return await _open_prompt(target, component, user_id=user_id, locale=locale, timeout=timeout, parent=parent)
+
+
+type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
+"""Work needing a consented account id, run against whichever press is live when it runs."""
+
+
+async def with_consented_account(
+    event: sl.ActionEvent,
+    accounts: AccountService,
+    work: ConsentedAccountWork,
+    *,
+    locale: str | None = None,
+    timeout: float = 120.0,
+) -> None:
+    """Run `work` with the reader's consented account id, asking first when consent is stale.
+
+    The mounted counterpart of `ensure_consented_account`, which may not be called from an
+    action handler: this one never awaits the answer, so the press that called it ends and
+    the panel's transaction and dispatch lock end with it.
+
+    `work` receives whichever press is live when it runs -- this one when the reader had
+    already agreed, the prompt's own when the question had to be put -- so a notice always
+    answers the click the reader last made. On the asking path the panel is redrawn here,
+    through its own handle: the prompt's interaction addresses the prompt's message, and
+    flushing the panel through it would draw the panel into the dialog.
+    """
+    interaction = sl.discord.native(event)
+    user = interaction.user
+    account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
+    if account is not None and account.id is not None and not account.needs_consent_refresh:
+        await work(event, account.id)
+        return
+    mount = sl.discord.responder(event).mount
+
+    async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+        if consent is None:
+            return
+        granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
+        assert granted.id is not None, "get_or_create_identity always returns a persisted account"
+        await work(prompt, granted.id)
+        await mount.refresh()
+
+    await request_consent(
+        interaction,
+        user_id=user.id,
+        on_answer=answered,
+        locale=locale,
+        timeout=timeout,
+        parent=mount,
+    )
 
 
 async def ensure_consented_account(
@@ -282,7 +419,11 @@ async def ensure_consented_account(
     timeout: float = 120.0,
     parent: sl.discord.Mount | None = None,
 ) -> int | None:
-    """Return the user's account id after current consent has been granted."""
+    """Return the user's account id after current consent has been granted.
+
+    Awaits the answer, so it belongs to a command rather than to a mounted action handler;
+    `with_consented_account` is the form for the latter.
+    """
     user = _user_of(target)
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
