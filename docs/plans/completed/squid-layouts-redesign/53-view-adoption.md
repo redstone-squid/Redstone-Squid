@@ -2,7 +2,7 @@
 
 ## Problem
 
-The migration ladder in `packages/squid-layouts/docs/migrating.md` has a missing rung. A host
+The migration ladder in `../../../../packages/squid-layouts/docs/migrating.md` has a missing rung. A host
 can contribute a measured region to a view it still owns ([35](35-discord-v2-fragments.md)),
 keep persistent custom ids with a `Router` ([14](14-routed-actions.md)), or hand a whole
 message to a `Mount` — but the step from the second to the third is a rewrite. Every control,
@@ -14,20 +14,20 @@ panel, a confirm dialog. Its callbacks mutate `self`, flip `disabled`, and end i
 `await interaction.response.edit_message(view=self)`. That logic is fine as it stands; its
 *layout* is what Squid could measure.
 
-**This repository is not that audience, and the plan does not pretend otherwise.** `squid/`
+**This repository is not that audience, and the plan does not pretend otherwise.** `../../../../squid`
 contains zero `discord.ui.View` subclasses — all thirteen hosts are Components V2 `LayoutView`s
 built on `ErrorHandledLayoutView` / `ExpiringLayoutView` (`squid/bot/errors.py:469,483`), which
 §2 refuses on purpose. The six hand-rolled selects an earlier draft of this plan cited
 (`squid/bot/voting/poll_wizard.py:235,258,281`, `squid/bot/claims_view.py:408`,
 `squid/bot/submission/ui/components.py:30,60`) are real, but five of their six hosts are
-constructed only from `tests/`: production already runs the `sl.Component` twins beside them
+constructed only from `../../../../tests`: production already runs the `sl.Component` twins beside them
 (`PollConfirmationComponent`, `ClaimReviewComponent`, `SubmissionFormComponent`,
 `BuildEditComponent`, `PagedList`). Adoption is a package capability with no in-repo consumer,
 so it ships against synthetic fixtures and the live gate is its only real-world signal.
 
 ## Relation to the standing rejection
 
-[90](90-deferred.md) rejects `compose(into=view)` / adopting existing discord.py views, and the
+[90](../../squid-layouts-redesign/90-deferred.md) rejects `compose(into=view)` / adopting existing discord.py views, and the
 2026-08-22 revisit refined it:
 
 > *Adoption* — Squid and a live view both claiming lifecycle or edit ownership of one
@@ -227,12 +227,12 @@ would produce surprises in all three.
 
 ## Docs
 
-- `90-deferred.md`: the entry is already amended with the live/unsent distinction; the
+- `../../squid-layouts-redesign/90-deferred.md`: the entry is already amended with the live/unsent distinction; the
   2026-08-23 paragraph is corrected to cite `is_dispatching()` rather than `view.message`.
 - `packages/squid-layouts/README.md:57-58`: "adopting an arbitrary existing `discord.py` view is
   intentionally unsupported" becomes "adopting a *live* view"; adoption joins the list of
   adoption routes at 60-67 as a fourth entry.
-- `packages/squid-layouts/docs/migrating.md`: a section between "Keep persistent custom IDs with
+- `../../../../packages/squid-layouts/docs/migrating.md`: a section between "Keep persistent custom IDs with
   a Router" (`:97`) and "Hand one whole message to a Mount" (`:128`) — adoption is literally the
   rung between those two. It carries the three warnings a reader needs: the timeout is the
   mount's, in-place mutations do not roll back, and a rebuilding view wants `keys=`.

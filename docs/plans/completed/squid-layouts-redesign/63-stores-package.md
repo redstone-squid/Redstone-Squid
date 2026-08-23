@@ -1,4 +1,4 @@
-# 63 — `packages/squid-stores`: extract the backing stores, add a scoped expiring one
+# 63 — `../../../../packages/squid-stores`: extract the backing stores, add a scoped expiring one
 
 ## Problem
 
@@ -39,7 +39,7 @@ reach it, and a new store built anywhere else would re-derive it by copy-paste.
 
 ## Decision
 
-Extract the storage half into **`packages/squid-stores`**, and add the scoped expiring store there
+Extract the storage half into **`../../../../packages/squid-stores`**, and add the scoped expiring store there
 as one more member rather than as a package of its own.
 
 ```
@@ -54,7 +54,7 @@ bridge, and the `PersistedPool` below needs the transaction seam. It does **not*
 `docs/squid-layouts-architecture.md:268` draws the line — *"Nothing durable belongs here; anything
 the application would still want with nobody looking at it is a service"* — and this package is
 where such a service's storage lives. A store inside `squid_layouts` would make the UI library the
-durable domain layer, which is what [90](90-deferred.md)'s Redux rejection exists to prevent.
+durable domain layer, which is what [90](../../squid-layouts-redesign/90-deferred.md)'s Redux rejection exists to prevent.
 
 Two units, landable separately.
 
@@ -79,7 +79,7 @@ re-open it, it relocates the fill.
   for the bridge's task group and reconnect loop (`postgres.py:607, 649, 653`), unlike `asyncpg`,
   which is import-guarded. Today it rides in on `squid-layouts[discord]`, which would be the wrong
   extra to require for a storage package.
-- The store half of `packages/squid-layouts/tests/test_durability.py` moves with the code; the
+- The store half of `../../../../packages/squid-layouts/tests/test_durability.py` moves with the code; the
   recipe/runtime/recovery tests stay.
 
 ### Unit 2 — `ScopedStore`
@@ -128,7 +128,7 @@ whose version is *newer* than the declaration is refused rather than decoded, ma
 `ComponentRegistry._migrate`'s treatment of future snapshots.
 
 The scope is any hashable the host encodes. The `sl.discord.scopes` vocabulary
-([59](59-shared-pool.md)) is the conventional one, and encoding it is the host's business, so
+([59](../../squid-layouts-redesign/59-shared-pool.md)) is the conventional one, and encoding it is the host's business, so
 `squid-stores` stays Discord-free exactly as `squid-reactive` does.
 
 ### What co-location earns
@@ -177,7 +177,7 @@ pool = PersistedPool(Preferences, bus, store=store, slot=preferences_slot)
 prefs = await pool.load(GuildScope(guild_id))     # async: it does I/O, and says so
 ```
 
-- **`load` is async; `SharedPool.get` stays synchronous.** [59](59-shared-pool.md) fixed
+- **`load` is async; `SharedPool.get` stays synchronous.** [59](../../squid-layouts-redesign/59-shared-pool.md) fixed
   synchronous factories because creating reactive view state performs no I/O. Hydration *is* I/O,
   so this is a different class, not a widened one — `SharedPool` is untouched. It is awaited from
   `on_load` ([09](09-async-data-loading.md)), which exists for this, and an unloaded namespace
@@ -210,7 +210,7 @@ that stays behind. `squid-slots` was rejected as naming one member for the whole
   Discord adapter as its own package — is the larger question this extraction invites and does not
   answer. It wants its own plan and its own evidence.
 - No reducers, dispatch, middleware, or subscriptions. This is storage, not a state manager;
-  [90](90-deferred.md)'s Redux rejection is untouched and this plan does not lean on it.
+  [90](../../squid-layouts-redesign/90-deferred.md)'s Redux rejection is untouched and this plan does not lean on it.
 - No cross-process invalidation *of slots*. A value changing in another process reaches a live UI
   through `Topic` and the bridge that now lives in this package
   ([45](45-topic-bridge.md)) — payload-free by design.
@@ -260,10 +260,10 @@ backends (a real temp file); Postgres is integration-gated like the rest of the 
   `UserScope` passed to a guild-scoped slot.
 
 Then focused tests with `--no-cov`, `just typecheck`, `alembic heads`, and `git diff --check`.
-`packages/squid-stores` is picked up by the existing `packages/*` workspace glob and needs one line
+`../../../../packages/squid-stores` is picked up by the existing `packages/*` workspace glob and needs one line
 in `[tool.uv.sources]`.
 
 ## Status
 
 Designed. Unit 1 is independent and mechanical. Unit 2's `PersistedPool` needs
-[59](59-shared-pool.md)'s `SharedPool` to exist first; `ScopedStore` itself does not.
+[59](../../squid-layouts-redesign/59-shared-pool.md)'s `SharedPool` to exist first; `ScopedStore` itself does not.
