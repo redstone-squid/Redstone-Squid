@@ -1067,8 +1067,20 @@ class TestPresentedHooks:
         assert mount.pending
 
         await mount.refresh_now()
-        assert calls == 2
+        assert calls == 1
         assert not mount.pending
+        assert mount.snapshot().suppressed == 1
+
+    async def test_a_suppressed_refresh_does_not_fire_presented_hooks(self) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        presented: list[Mount] = []
+        mount.on_presented(presented.append)
+        await mount.send(delivered_to(fake_message()))
+        presented.clear()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+
+        assert presented == []
 
     async def test_a_raising_hook_is_logged_and_does_not_stop_later_hooks(
         self, caplog: pytest.LogCaptureFixture
@@ -1682,8 +1694,7 @@ class TestLifecycle:
             now = 100.0 + elapsed
             await mount.refresh_now()
 
-        written = message.edit.await_args.kwargs["view"]
-        assert written.timeout == 20
+        message.edit.assert_not_awaited()
         assert mount.snapshot().idle == 10
         assert mount.snapshot().expires_in == 20
 
@@ -1857,8 +1868,8 @@ class TestDeliveryAtomicity:
             def render(self):
                 return Row(
                     (
-                        Button("a", self.click, "a", policy=ActionPolicy.IMMEDIATE),
-                        Button("b", self.click, "b", policy=ActionPolicy.IMMEDIATE),
+                        Button(f"a:{self.count}", self.click, "a", policy=ActionPolicy.IMMEDIATE),
+                        Button(f"b:{self.count}", self.click, "b", policy=ActionPolicy.IMMEDIATE),
                     )
                 )
 
@@ -1966,6 +1977,17 @@ class Report(Component):
         return Document(
             (Text("summary"),),
             (Asset("report", "report.txt", "text/plain", InlineAsset(b"full report")),),
+        )
+
+
+class MutableReport(Component):
+    def __init__(self) -> None:
+        self.contents = b"first"
+
+    def render(self):
+        return Document(
+            (Text("summary"),),
+            (Asset("report", "report.txt", "text/plain", InlineAsset(self.contents)),),
         )
 
 
@@ -2098,6 +2120,35 @@ class TestSend:
 
         _, files = destination.calls[0]
         assert [file.filename for file in files] == ["report.txt"]
+
+    async def test_changed_asset_content_prevents_scene_suppression(self) -> None:
+        component = MutableReport()
+        message: Any = fake_message()
+        mount = Mount(component, access=Everyone(), timeout=None)
+        await mount.send(_Destination(message))
+        component.contents = b"second"
+
+        outcome = await mount.refresh_now()
+
+        assert outcome is PresentationOutcome.WRITTEN
+        message.edit.assert_awaited_once()
+
+    async def test_changed_handler_identity_prevents_scene_suppression(self) -> None:
+        class FreshHandler(Component):
+            def render(self):
+                async def click(event: PressEvent) -> None:
+                    pass
+
+                return Row((Button("same", click, "same"),))
+
+        message: Any = fake_message()
+        mount = Mount(FreshHandler(), access=Everyone(), timeout=None)
+        await mount.send(_Destination(message))
+
+        outcome = await mount.refresh_now()
+
+        assert outcome is PresentationOutcome.WRITTEN
+        message.edit.assert_awaited_once()
 
     async def test_send_supersedes_a_render_that_was_only_staged(self):
         component = Counter()
@@ -2703,6 +2754,25 @@ class TestResourceLoading:
         assert not mount.pending
         trace = _operation_trace(profiler, OperationKind.SEND)
         assert "resource_settle.visible" in {span.name for span in trace.spans}
+
+    async def test_visible_resource_suppresses_an_identical_settled_scene(self) -> None:
+        class UnprojectedResource(Component):
+            @resource
+            async def value(self) -> str:
+                return "loaded"
+
+            def render(self):
+                _ = self.value.state
+                return Text("constant")
+
+        message: Any = fake_message()
+        mount = Mount(UnprojectedResource(), access=Everyone(), timeout=None)
+
+        await mount.send(_Destination(message))
+
+        message.edit.assert_not_awaited()
+        assert mount.snapshot().suppressed == 1
+        assert not mount.pending
 
     async def test_atomic_resource_delivers_only_the_settled_render(self) -> None:
         async def load() -> str:
@@ -3475,7 +3545,7 @@ class TestBusyFeedback:
                 await asyncio.sleep(0)
             release.set()
 
-    async def test_a_fast_handler_paints_nothing(self):
+    async def test_a_fast_handler_suppresses_an_unchanged_finished_render(self):
         panel = _GuardedPanel(feedback=sl.Feedback())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
         commit_render(mount)
@@ -3484,9 +3554,9 @@ class TestBusyFeedback:
         await mount.dispatch("go", interaction)
 
         assert panel.count == 1
-        # One write, and it is the finished render: no interim ever reached Discord.
-        assert interaction.response.edit_message.await_count == 1
-        assert self._labels(interaction.response.edit_message.await_args.kwargs["view"]) == [("Go", False)]
+        interaction.response.edit_message.assert_not_awaited()
+        interaction.response.defer.assert_awaited_once()
+        assert mount.snapshot().suppressed == 1
 
     async def test_a_slow_handler_disables_the_panel_and_relabels_the_press(self):
         release = asyncio.Event()

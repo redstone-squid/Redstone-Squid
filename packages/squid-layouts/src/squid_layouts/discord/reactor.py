@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import anyio
 
-from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink
+from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationOutcome, Profiler, TraceLink
 from squid_layouts.topics import Topic, TopicBus
 
 if TYPE_CHECKING:
@@ -37,6 +37,8 @@ class ReactorSnapshot:
     coalesced: int
     delivered: int
     failed: int
+    unchanged: int = 0
+    """Refreshes that found the render identical to the live one and wrote nothing."""
 
 
 @dataclass(slots=True)
@@ -115,6 +117,7 @@ class Reactor:
         self._coalesced = 0
         self._delivered = 0
         self._failed = 0
+        self._unchanged = 0
 
     def watch(self, mount: Mount) -> Callable[[], None]:
         """Observe a delivered mount's edit-authority deadline until it finishes."""
@@ -170,6 +173,7 @@ class Reactor:
             coalesced=self._coalesced,
             delivered=self._delivered,
             failed=self._failed,
+            unchanged=self._unchanged,
         )
 
     def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]:
@@ -270,7 +274,9 @@ class Reactor:
                     operation.increment("reactor.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
-                        await mount.refresh_now(links=() if link is None else (link,))
+                        outcome = await mount.refresh_now(links=() if link is None else (link,))
+                        if outcome is PresentationOutcome.UNCHANGED:
+                            self._unchanged += 1
                     finally:
                         if causes.last_triggered is not None:
                             operation.record_span("freshness", max(0.0, self._monotonic() - causes.last_triggered))
