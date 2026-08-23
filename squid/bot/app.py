@@ -12,6 +12,7 @@ from discord import Webhook
 from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Bot
+from squid_reactive import LocalTopicBus
 
 from squid.bootstrap import create_bot_runtime
 
@@ -55,7 +56,6 @@ from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_layouts.discord import Reactor, SessionRegistry
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
-from squid_layouts.runtime import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
