@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.planning.discord import V2_TARGET_ID
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
@@ -83,7 +84,7 @@ class Renderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"Renderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
-        if scene.target != "discord.components-v2" or scene.target_version != 1:
+        if scene.target != V2_TARGET_ID or scene.target_version != 1:
             message = f"Renderer cannot preview target {scene.target!r} version {scene.target_version}"
             raise DrawInvariantError(message)
         if not isinstance(scene.body, SceneComponentsV2):
