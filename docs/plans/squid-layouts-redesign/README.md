@@ -12,6 +12,24 @@ consumers, and a comparison against CascadeUI
 flexible, and `90-deferred.md` records what was consciously rejected or postponed so it
 is not re-derived later.
 
+## Status
+
+Completed plans are archived under `docs/plans/completed/squid-layouts-redesign`.
+
+The active index now intentionally remains only for:
+
+- `32-demand-driven.md`
+- `36-classic-discord-target.md`
+- `53-view-adoption.md`
+- `58-public-api-narrowing.md`
+- `59-shared-pool.md`
+- `60-session-membership.md`
+- `61-role-panel.md`
+- `62-layout-view-adoption.md`
+- `63-stores-package.md`
+- `64-challenged-admission.md`
+- `90-deferred.md`
+
 ## Core sequence (dependency-ordered)
 
 | # | Plan | Why this position |
