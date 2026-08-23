@@ -1044,7 +1044,9 @@ class Mount:
         def draw() -> tuple[MountedView, Composition]:
             handlers.clear()
 
-            def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            def wire(
+                node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding
+            ) -> discord.ui.Item[Any]:
                 key = binding.key
                 handlers[key] = binding
                 if isinstance(node, SceneButton):
@@ -1293,7 +1295,9 @@ class Mount:
             generation = self._generation
             busy = busy_key is not None
 
-            def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            def wire(
+                node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding
+            ) -> discord.ui.Item[Any]:
                 if isinstance(node, SceneButton):
                     if busy:
                         node = replace(
