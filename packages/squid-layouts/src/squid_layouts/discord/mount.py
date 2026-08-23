@@ -12,6 +12,7 @@ import logging
 import math
 import secrets
 import time
+import weakref
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -94,7 +95,7 @@ from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
 from squid_layouts.runtime.resources import Resource, ResourceDelivery
-from squid_layouts.runtime.topics import Address
+from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
     PlanReport,
@@ -216,14 +217,16 @@ class ExpirySupervisor(Protocol):
 
 
 @runtime_checkable
-class TopicFollower(Protocol):
-    """A scheduler that can also subscribe a mount to topics (see `Reactor`).
+class TopicScheduler(Protocol):
+    """A scheduler backed by a topic bus (see `Reactor`).
 
     Separate from `Scheduler` because following is optional: a mount with no scheduler, or
     one whose scheduler only absorbs refreshes, is simply not live-updated.
     """
 
-    def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]: ...
+    bus: TopicBus
+
+    def schedule(self, mount: Mount) -> None: ...
 
 
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
@@ -777,6 +780,25 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             else _NOOP_PROFILER
         )
         self.scheduler = scheduler
+        topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
+        reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
+
+        def collected(_reference: weakref.ReferenceType[Mount]) -> None:
+            if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
+                reconciler.close()
+
+        mount_ref = weakref.ref(self, collected)
+
+        def refresh(_address: Address) -> None:
+            if (current := mount_ref()) is None:
+                if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
+                    reconciler.close()
+                return
+            if current.scheduler is not None:
+                current.scheduler.schedule(current)
+
+        self._subscriptions = SubscriptionReconciler(topic_bus, refresh)
+        reconciler_ref = weakref.ref(self._subscriptions)
         if isinstance(expiry, RenewEphemeral) and not isinstance(scheduler, ExpirySupervisor):
             message = "RenewEphemeral requires a scheduler that supervises mount expiry"
             raise TypeError(message)
@@ -812,15 +834,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
-        # What the committed generation read, what it plus every render staged since read,
-        # and what this mount managed to subscribe to. Three different things: a mount with no
-        # reactor still knows what it is looking at, which is what lets its own writes repaint
-        # it even when nobody can deliver a topic to it. A follow is acquired at stage time,
-        # because a write landing between a render's read and its subscription is lost and the
-        # bus is not durable -- but only a delivered render may retire one.
-        self._observed: tuple[Address, ...] = ()
-        self._watched: dict[Address, None] = {}
-        self._follows: dict[Address, Callable[[], None]] = {}
+        # What the committed generation read, what its single staged successor read, and what
+        # this mount managed to subscribe to are three different things. A mount with no bus
+        # still knows what it is looking at, which lets its own writes repaint it. A follow is
+        # acquired at stage time because a write landing between the read and subscription is
+        # lost, but only a delivered render may retire one.
         self._follow_warned = False
 
     @property
@@ -882,7 +900,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         them. A render staged since is not here until it is delivered; `followed` may
         already cover it, because a subscription is acquired early and retired late.
         """
-        return self._observed
+        return self._subscriptions.committed
 
     @property
     def followed(self) -> tuple[Address, ...]:
@@ -892,7 +910,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         subscribe to. A host that followed a topic of its own through the reactor holds that
         subscription itself and is not listed here.
         """
-        return tuple(self._follows)
+        return self._subscriptions.followed
 
     @property
     def middleware(self) -> tuple[str, ...]:
@@ -1035,9 +1053,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         staged here and never delivered is superseded by the next one.
         """
         pending = self._pending
-        candidate = self._stage(disabled=disabled)
         if pending is not None:
             pending.view.stop()
+            self._subscriptions.discard()
+        candidate = self._stage(disabled=disabled)
         self._pending = candidate
         return candidate.view
 
@@ -1114,11 +1133,23 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 raise TypeError(message)
             return view, composition
 
-        view, composition = draw()
+        observed = tree.observations
+        if observed and self._subscriptions.bus is None and not self._follow_warned:
+            self._follow_warned = True
+            logger.warning(
+                "mount %s renders shared state or a watched topic but its scheduler has no "
+                "topic bus, so changes made elsewhere will not refresh it",
+                self.id,
+            )
+        self._subscriptions.stage(observed)
+        try:
+            view, composition = draw()
+        except BaseException:
+            self._subscriptions.discard()
+            raise
         assets = composition.assets
         if disabled:
             _disable_all(view)
-        self._ensure_follows(tree.observations)
         return _Candidate(
             view,
             composition,
@@ -1193,50 +1224,6 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             _disable_all(view)
         return _LifecycleCandidate(view, composition, handlers, generation)
 
-    def _ensure_follows(self, observed: Sequence[Address]) -> None:
-        """Acquire whatever a staged render newly reads, and retire nothing.
-
-        Over-subscribe, never under-subscribe. Staging is the only moment early enough to
-        close the read-to-subscribe race, and it is far too early to drop anything: the
-        candidate may never be delivered, and the generation still on screen displays cells
-        this render stopped reading. `_prune_follows` is the other half, and delivery is what
-        earns it.
-        """
-        if self._finished or not observed:
-            return
-        self._watched.update(dict.fromkeys(observed))
-        follower = self.scheduler
-        if not isinstance(follower, TopicFollower):
-            if not self._follow_warned:
-                self._follow_warned = True
-                logger.warning(
-                    "mount %s renders shared state or a watched topic but its scheduler cannot "
-                    "follow addresses, so changes made elsewhere will not refresh it",
-                    self.id,
-                )
-            return
-        for topic in observed:
-            if topic not in self._follows:
-                self._follows[topic] = follower.follow(self, topic)
-
-    def _prune_follows(self, observed: Sequence[Address]) -> None:
-        """Publish a delivered render's reads and drop the follows nothing visible needs.
-
-        The mirror of `_ensure_follows`: what a candidate provisionally acquired becomes this
-        mount's own only here, and a subscription the previous generation depended on is
-        retired only once its generation is off screen. A read that a conditional branch
-        dropped therefore stops refreshing when that branch reaches Discord, not before.
-        """
-        if self._finished:
-            return
-        wanted = dict.fromkeys(observed)
-        self._observed = tuple(wanted)
-        self._watched = wanted
-        for topic, unfollow in tuple(self._follows.items()):
-            if topic not in wanted:
-                del self._follows[topic]
-                unfollow()
-
     @contextmanager
     def _action_transaction(self, policy: ActionPolicy) -> Iterator[None]:
         """Run one handler in its transaction, watching for writes this mount renders.
@@ -1264,9 +1251,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         than `_observed`, because a candidate that newly reads the written cell must not
         commit a value it has already been told is stale.
         """
-        if not self._watched:
+        watched = self._subscriptions.watched
+        if not watched:
             return
-        if any(address in self._watched for address in delta.addresses()):
+        if any(address in watched for address in delta.addresses()):
             self.runtime.invalidate()
 
     def _composer(self) -> Callable[..., Composition[Any]]:
@@ -1355,7 +1343,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         screen, and a suppressed candidate is on screen by definition.
         """
         apply_updates(self.presentation, candidate.session_updates)
-        self._prune_follows(candidate.tree.observations)
+        self._subscriptions.commit()
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
@@ -1448,6 +1436,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         its presentation writes with it.
         """
         candidate.view.stop()
+        self._subscriptions.discard()
         self._dirty = True
         if self._pending is candidate:
             self._pending = None
@@ -1683,6 +1672,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     with profile.span("supersede"):
                         self._pending.view.stop()
                         self._pending = None
+                        self._subscriptions.discard()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
                 candidate = await self._stage_loaded(profile=profile)
@@ -2700,13 +2690,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         if self._view is not None:
             self._view.stop()
             self._view = None
-        # Reactor.follow unfollows on finish anyway; dropping the handles here is what lets a
-        # namespace nobody else holds be collected as soon as its last panel closes.
-        for unfollow in tuple(self._follows.values()):
-            unfollow()
-        self._follows.clear()
-        self._watched.clear()
-        self._observed = ()
+        self._subscriptions.close()
         self._expiry_arm_requested = None
         self.runtime.finish()
 

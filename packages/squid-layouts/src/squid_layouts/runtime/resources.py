@@ -446,6 +446,8 @@ class AtomicResource[ValueT](Resource[ValueT]):
 
 
 class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
+    _reactive_resource_descriptor = True
+
     """Bind one loader per component instance."""
 
     def __init__(
