@@ -27,7 +27,7 @@ def render_build_review(
     card: sl.LayoutNode,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
-) -> sl.discord.presentation.DiscordPresentation:
+) -> sl.discord.DiscordPresentation:
     """Compose a build card with the review vote state beneath it.
 
     The card arrives as IR rather than as a built container so the whole post is solved in
@@ -72,7 +72,7 @@ def render_build_review(
     return render_presentation([post])
 
 
-def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sl.discord.presentation.DiscordPresentation:
+def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sl.discord.DiscordPresentation:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
@@ -119,7 +119,7 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sl.
 def render_generic_poll(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int] = {},
-) -> sl.discord.presentation.DiscordPresentation:
+) -> sl.discord.DiscordPresentation:
     """Render a user-created poll, honouring its visibility setting.
 
     An open poll carries its own close and refresh controls; a closed one has nothing left
