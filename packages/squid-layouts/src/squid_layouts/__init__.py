@@ -340,7 +340,17 @@ from squid_layouts.text import (
     plain,
     raw_md,
 )
-from squid_layouts.topics import BusSnapshot, Subscriber, Topic, TopicBus, TopicCodec, TopicSnapshot
+from squid_layouts.topics import (
+    Address,
+    BusSnapshot,
+    CellAddress,
+    KindKeyCodec,
+    Subscriber,
+    Topic,
+    TopicBus,
+    TopicCodec,
+    TopicSnapshot,
+)
 
 
 def __getattr__(name: str) -> object:
@@ -378,6 +388,7 @@ __all__ = [
     "Actions",
     "Actor",
     "Adaptation",
+    "Address",
     "AmbiguousTimePolicy",
     "Article",
     "Aside",
@@ -390,6 +401,7 @@ __all__ = [
     "BrowserOverview",
     "Budgeted",
     "BusSnapshot",
+    "CellAddress",
     "ChildLike",
     "Choice",
     "ChoiceEvent",
@@ -472,6 +484,7 @@ __all__ = [
     "ItemOwnership",
     "Items",
     "KeepWithNext",
+    "KindKeyCodec",
     "LayoutDegradedError",
     "LayoutError",
     "LayoutInvariantError",

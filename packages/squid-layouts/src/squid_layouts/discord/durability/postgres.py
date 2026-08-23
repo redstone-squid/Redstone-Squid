@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import anyio
 
-from squid_layouts.topics import Topic, TopicBus, TopicCodec
+from squid_layouts.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
 
 from .stores import (
     _LEGACY_SCHEMA_KEY,
@@ -468,7 +468,8 @@ class PostgresTopicBridge:
     Args:
         pool: An asyncpg connection pool. `run` holds one connection for the whole process.
         bus: The local bus that receives remote publishes and this host's own.
-        codec: The host's topic vocabulary. Topics it cannot encode stay local.
+        codec: The wire form for this channel. Defaults to `kind:key`, which carries
+            every `Topic`; supply one only to speak a format someone else defined.
         channel: PostgreSQL channel name shared by every process in the deployment.
         on_resync: Awaited after each successful (re)connection, for hosts that want to
             republish their coarse topics once notifications may have been missed.
@@ -482,7 +483,7 @@ class PostgresTopicBridge:
         self,
         pool: Pool,
         bus: TopicBus,
-        codec: TopicCodec,
+        codec: TopicCodec | None = None,
         *,
         channel: str = _DEFAULT_TOPIC_CHANNEL,
         on_resync: Callable[[], Awaitable[None]] | None = None,
@@ -501,7 +502,7 @@ class PostgresTopicBridge:
             raise ValueError(message)
         self.pool = pool
         self.bus = bus
-        self.codec = codec
+        self.codec: TopicCodec = KindKeyCodec() if codec is None else codec
         self.channel = channel
         self.on_resync = on_resync
         self.reconnect_seconds = reconnect_seconds
@@ -517,8 +518,8 @@ class PostgresTopicBridge:
         self._ignored = 0
         self._undecodable = 0
 
-    def publish(self, *topics: Topic) -> None:
-        """Publish on the local bus now, and queue a notification for the encodable topics.
+    def publish(self, *addresses: Address) -> None:
+        """Publish on the local bus now, and queue a notification for the named topics.
 
         Synchronous like `TopicBus.publish`, and with the same guarantee for local
         subscribers. The notification leaves on the bridge's own connection shortly after
@@ -527,10 +528,11 @@ class PostgresTopicBridge:
         ``SELECT pg_notify($1, $2)`` on the transaction's own connection, which PostgreSQL
         holds back until the transaction commits.
         """
-        self.bus.publish(*topics)
-        for topic in topics:
+        self.bus.publish(*addresses)
+        for address in addresses:
             self._published += 1
-            payload = self.payload(topic)
+            # A `CellAddress` names a live object, so it has no wire form to look for.
+            payload = self.payload(address) if isinstance(address, Topic) else None
             if payload is None:
                 self._local_only += 1
                 continue
@@ -540,7 +542,7 @@ class PostgresTopicBridge:
                 self._queue.put_nowait(payload)
             except asyncio.QueueFull:
                 self._undelivered += 1
-                logger.warning("topic bridge outbound queue is full; dropped a notification for %r", topic)
+                logger.warning("topic bridge outbound queue is full; dropped a notification for %r", address)
                 continue
             self._pending.add(payload)
 

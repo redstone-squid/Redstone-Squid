@@ -9,9 +9,17 @@ from typing import Any, cast
 import anyio
 import pytest
 
+from squid_layouts import Shared, cell
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
-from squid_layouts.topics import Topic, TopicBus
+from squid_layouts.topics import Address, CellAddress, KindKeyCodec, Topic, TopicBus
+
+BUILD = Topic("build", "1")
+"""One address reused by the bus contract tests, whose subject is delivery rather than naming."""
+
+
+class Workspace(Shared[int]):
+    selected: int | None = cell(None)
 
 
 class Clock:
@@ -32,13 +40,13 @@ async def test_burst_coalesces_to_one_queued_topic() -> None:
     async def record(topic: Topic) -> None:
         seen.append(topic)
 
-    bus.subscribe(("build", "123"), record, label="build panel")
+    bus.subscribe(Topic("build", "123"), record, label="build panel")
     for _ in range(100):
-        bus.publish(("build", "123"))
+        bus.publish(Topic("build", "123"))
 
     assert bus.snapshot().queued == 1
     await bus.drain()
-    assert seen == [("build", "123")]
+    assert seen == [Topic("build", "123")]
     assert bus.snapshot().delivered == 1
 
 
@@ -55,12 +63,12 @@ async def test_publish_during_delivery_redelivers_after_publish_returns() -> Non
             first_started.set()
             await release_first.wait()
 
-    bus.subscribe("build", block_once)
-    bus.publish("build")
+    bus.subscribe(BUILD, block_once)
+    bus.publish(BUILD)
     task = asyncio.create_task(bus.drain())
     await first_started.wait()
 
-    bus.publish("build")
+    bus.publish(BUILD)
     starts_when_publish_returned = starts
     release_first.set()
     await task
@@ -85,9 +93,9 @@ async def test_subscribers_are_sequential_and_keep_registration_order() -> None:
         assert not first_running
         order.append("second")
 
-    bus.subscribe("build", first)
-    bus.subscribe("build", second)
-    bus.publish("build")
+    bus.subscribe(BUILD, first)
+    bus.subscribe(BUILD, second)
+    bus.publish(BUILD)
 
     await bus.drain()
 
@@ -129,9 +137,9 @@ async def test_unsubscribe_before_and_during_drain_is_exact() -> None:
     async def second(topic: Topic) -> None:
         seen.append("second")
 
-    bus.subscribe("build", first)
-    unsubscribe = bus.subscribe("build", second)
-    bus.publish("build")
+    bus.subscribe(BUILD, first)
+    unsubscribe = bus.subscribe(BUILD, second)
+    bus.publish(BUILD)
     task = asyncio.create_task(bus.drain())
     await first_started.wait()
 
@@ -154,9 +162,9 @@ async def test_subscriber_failure_is_logged_and_does_not_stop_siblings(caplog: p
     async def succeed(topic: Topic) -> None:
         seen.append("sibling")
 
-    bus.subscribe("build", fail, label="broken panel")
-    bus.subscribe("build", succeed, label="healthy panel")
-    bus.publish("build")
+    bus.subscribe(BUILD, fail, label="broken panel")
+    bus.subscribe(BUILD, succeed, label="healthy panel")
+    bus.publish(BUILD)
 
     with caplog.at_level(logging.ERROR):
         await bus.drain()
@@ -174,8 +182,8 @@ async def test_delivery_profile_includes_queue_wait_and_stable_subscriber_spans(
     async def refresh(topic: Topic) -> None:
         clock.advance(0.5)
 
-    bus.subscribe(("build", 42), refresh, label="mount:instance-42", profile_label="build_projection")
-    bus.publish(("build", 42))
+    bus.subscribe(Topic("build", "42"), refresh, label="mount:instance-42", profile_label="build_projection")
+    bus.publish(Topic("build", "42"))
     clock.advance(2.0)
 
     await bus.drain()
@@ -197,10 +205,10 @@ async def test_coalesced_delivery_retains_producer_link_and_trigger_count() -> N
     async def refresh(topic: Topic) -> None:
         pass
 
-    bus.subscribe("build", refresh, profile_label="build_projection")
+    bus.subscribe(BUILD, refresh, profile_label="build_projection")
     with profiler.operation(OperationKind.DISPATCH, name="save"):
-        bus.publish("build")
-        bus.publish("build")
+        bus.publish(BUILD)
+        bus.publish(BUILD)
 
     await bus.drain()
 
@@ -222,8 +230,8 @@ async def test_caught_subscriber_failure_marks_delivery_trace_failed() -> None:
     async def fail(topic: Topic) -> None:
         raise RuntimeError("broken view")
 
-    bus.subscribe("build", fail, profile_label="broken_projection")
-    bus.publish("build")
+    bus.subscribe(BUILD, fail, profile_label="broken_projection")
+    bus.publish(BUILD)
 
     await bus.drain()
 
@@ -246,8 +254,8 @@ async def test_run_cancellation_waits_for_callback_cancellation() -> None:
         finally:
             stopped.set()
 
-    bus.subscribe("build", block)
-    bus.publish("build")
+    bus.subscribe(BUILD, block)
+    bus.publish(BUILD)
     task = asyncio.create_task(bus.run())
     await started.wait()
 
@@ -291,25 +299,10 @@ def test_unsubscribe_forgets_an_idle_topic() -> None:
     async def callback(topic: Topic) -> None:
         pass
 
-    unsubscribe = bus.subscribe("build", callback)
+    unsubscribe = bus.subscribe(BUILD, callback)
     unsubscribe()
 
     assert bus.snapshot().topics == ()
-
-
-class ResourceCodec:
-    """A two-part ``kind:key`` vocabulary; anything else stays process-local."""
-
-    def encode(self, topic: Topic) -> str | None:
-        match topic:
-            case (str() as kind, str() as key):
-                return f"{kind}:{key}"
-            case _:
-                return None
-
-    def decode(self, text: str) -> Topic | None:
-        kind, separator, key = text.partition(":")
-        return (kind, key) if separator else None
 
 
 class FakeConnection:
@@ -369,7 +362,7 @@ class FakePostgres:
 
 
 def _bridge(server: FakePostgres, bus: TopicBus, **options: Any) -> PostgresTopicBridge:
-    return PostgresTopicBridge(cast(Any, server), bus, ResourceCodec(), **options)
+    return PostgresTopicBridge(cast(Any, server), bus, **options)
 
 
 async def _until(predicate: Callable[[], bool]) -> None:
@@ -393,8 +386,8 @@ async def test_two_processes_see_each_others_publish_exactly_once() -> None:
     async def record(into: list[Topic], topic: Topic) -> None:
         into.append(topic)
 
-    here.subscribe(("build", "42"), partial(record, seen_here))
-    there.subscribe(("build", "42"), partial(record, seen_there))
+    here.subscribe(Topic("build", "42"), partial(record, seen_here))
+    there.subscribe(Topic("build", "42"), partial(record, seen_there))
     bridge_here = _bridge(server, here)
     bridge_there = _bridge(server, there)
 
@@ -402,14 +395,14 @@ async def test_two_processes_see_each_others_publish_exactly_once() -> None:
         tasks.start_soon(bridge_here.run)
         tasks.start_soon(bridge_there.run)
         await _until(lambda: len(server.listeners) == 2)
-        bridge_here.publish(("build", "42"))
+        bridge_here.publish(Topic("build", "42"))
         await _flush(bridge_here)
         tasks.cancel_scope.cancel()
 
     await here.drain()
     await there.drain()
-    assert seen_here == [("build", "42")]
-    assert seen_there == [("build", "42")]
+    assert seen_here == [Topic("build", "42")]
+    assert seen_there == [Topic("build", "42")]
     assert bridge_there.snapshot().received == 1
     assert bridge_here.snapshot().ignored == 1
 
@@ -423,13 +416,13 @@ async def test_a_bridge_ignores_its_own_notification() -> None:
         nonlocal deliveries
         deliveries += 1
 
-    bus.subscribe(("build", "42"), count)
+    bus.subscribe(Topic("build", "42"), count)
     bridge = _bridge(server, bus)
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(bridge.run)
         await _until(lambda: len(server.listeners) == 1)
-        bridge.publish(("build", "42"))
+        bridge.publish(Topic("build", "42"))
         await _flush(bridge)
         # A relayed self-publish would queue a second delivery behind the first, so the
         # queue depth is what separates "ignored" from "coalesced".
@@ -441,22 +434,24 @@ async def test_a_bridge_ignores_its_own_notification() -> None:
     assert bridge.snapshot().ignored == 1
 
 
-async def test_an_unencodable_topic_is_published_locally_only() -> None:
+async def test_a_cell_address_is_published_locally_only() -> None:
+    """A shared cell names a live object, so no wire form for it can exist."""
     server = FakePostgres()
     bus = TopicBus()
-    seen: list[Topic] = []
+    seen: list[Address] = []
 
-    async def record(topic: Topic) -> None:
-        seen.append(topic)
+    async def record(address: Address) -> None:
+        seen.append(address)
 
-    cell = object()
-    bus.subscribe(cell, record)
+    workspace = Workspace(bus, 7)
+    address = CellAddress(workspace, "selected")
+    bus.subscribe(address, record)
     bridge = _bridge(server, bus)
 
-    bridge.publish(cell)
+    bridge.publish(address)
     await bus.drain()
 
-    assert seen == [cell]
+    assert seen == [address]
     assert server.sent == []
     assert bridge.snapshot().local_only == 1
 
@@ -465,7 +460,7 @@ async def test_an_oversized_payload_stays_local() -> None:
     server = FakePostgres()
     bridge = _bridge(server, TopicBus())
 
-    bridge.publish(("build", "x" * 8000))
+    bridge.publish(Topic("build", "x" * 8000))
 
     assert server.sent == []
     assert bridge.snapshot().local_only == 1
@@ -499,13 +494,13 @@ async def test_drain_terminates_with_a_bridge_attached() -> None:
     async def record(topic: Topic) -> None:
         seen.append(topic)
 
-    bus.subscribe(("build", "42"), record)
+    bus.subscribe(Topic("build", "42"), record)
     bridge = _bridge(server, bus)
 
-    bridge.publish(("build", "42"))
+    bridge.publish(Topic("build", "42"))
     await bus.drain()
 
-    assert seen == [("build", "42")]
+    assert seen == [Topic("build", "42")]
 
 
 async def test_a_malformed_payload_is_counted_rather_than_published() -> None:
@@ -526,3 +521,59 @@ async def test_a_malformed_payload_is_counted_rather_than_published() -> None:
 def test_an_origin_cannot_shadow_the_payload_separator() -> None:
     with pytest.raises(ValueError, match="origin"):
         _bridge(FakePostgres(), TopicBus(), origin="a:b")
+
+
+# --- Addresses ----------------------------------------------------------------------------
+
+
+def test_a_topic_is_equal_and_hashes_by_value() -> None:
+    """Two publishers agree without sharing a constructor, which is the point of the type."""
+    assert Topic("build", "123") == Topic("build", "123")
+    assert hash(Topic("build", "123")) == hash(Topic("build", "123"))
+    assert Topic("build", "123") != Topic("build", "124")
+    assert Topic("build", "123") != Topic("group", "123")
+    assert str(Topic("build", "123")) == "build:123"
+
+
+def test_a_cell_address_separates_two_namespaces_of_one_class() -> None:
+    bus = TopicBus()
+    first, second = Workspace(bus, 1), Workspace(bus, 2)
+    assert CellAddress(first, "selected") == CellAddress(first, "selected")
+    assert CellAddress(first, "selected") != CellAddress(second, "selected")
+    assert CellAddress(first, "selected") != CellAddress(first, "other")
+
+
+def test_a_namespace_that_defines_equality_cannot_merge_two_addresses() -> None:
+    """Identity, not equality: a host's `__eq__` must not collapse two live namespaces."""
+
+    class Loose(Shared[int]):
+        selected: int | None = cell(None)
+
+        def __eq__(self, other: object) -> bool:
+            return isinstance(other, Loose)
+
+        def __hash__(self) -> int:
+            return 0
+
+    bus = TopicBus()
+    first, second = Loose(bus, 1), Loose(bus, 2)
+    assert first == second
+    assert CellAddress(first, "selected") != CellAddress(second, "selected")
+
+
+@pytest.mark.parametrize("topic", [Topic("build", "123"), Topic("build", "a:b"), Topic("b", "x" * 500)])
+def test_the_default_codec_round_trips_a_topic(topic: Topic) -> None:
+    codec = KindKeyCodec()
+    encoded = codec.encode(topic)
+    assert encoded is not None
+    assert codec.decode(encoded) == topic
+
+
+def test_the_default_codec_refuses_what_it_cannot_split_back() -> None:
+    codec = KindKeyCodec()
+    assert codec.encode(Topic("a:b", "123")) is None
+    assert codec.encode(Topic("", "123")) is None
+    assert codec.encode(Topic("build", "")) is None
+    assert codec.decode("build") is None
+    assert codec.decode("build:") is None
+    assert codec.decode(":123") is None

@@ -4,6 +4,7 @@ import pytest
 
 from squid_layouts import (
     Action,
+    CellAddress,
     Component,
     History,
     HistoryError,
@@ -451,7 +452,7 @@ class TestSharedState:
         async def subscriber(topic: object) -> None:
             seen.append(topic)
 
-        bus.subscribe((workspace, type(workspace)._cells["selected"]), subscriber)
+        bus.subscribe(CellAddress(workspace, "selected"), subscriber)
         with transaction():
             subject.select(7)
         await bus.drain()
@@ -459,7 +460,7 @@ class TestSharedState:
 
         await subject.history.undo()
         await bus.drain()
-        assert seen == [(workspace, type(workspace)._cells["selected"])]
+        assert seen == [CellAddress(workspace, "selected")]
 
     async def test_a_failed_external_inverse_restores_nothing(self):
         subject, workspace, preferences, _ = self.sharing()
