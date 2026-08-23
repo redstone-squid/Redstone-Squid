@@ -17,7 +17,7 @@ from enum import StrEnum
 from inspect import isawaitable
 from typing import Any, Protocol, cast
 
-from squid_layouts.actions import ActionEvent
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.text import TextLike
 
 

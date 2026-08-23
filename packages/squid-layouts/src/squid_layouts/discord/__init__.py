@@ -3,6 +3,7 @@
 from squid_layouts.discord import classic, delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder, selected_entities
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, discord_py_adapter_profile
 from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
 from squid_layouts.discord.compose import Composition, compose, render_static
@@ -172,6 +173,7 @@ __all__ = [
     "DeliveryAbandoned",
     "DeliveryReceipt",
     "Denied",
+    "DISCORD_PY_27_ADAPTER",
     "Destination",
     "DevToolsAction",
     "DevToolsError",
@@ -285,6 +287,7 @@ __all__ = [
     "default_nav",
     "delivery",
     "devtools",
+    "discord_py_adapter_profile",
     "durability",
     "fragment",
     "guards",

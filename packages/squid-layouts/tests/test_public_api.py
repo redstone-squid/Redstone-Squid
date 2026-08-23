@@ -180,4 +180,5 @@ def test_package_metadata_keeps_version_and_adapter_extra() -> None:
     assert set(project["optional-dependencies"]["discord"]) == {
         "discord-py>=2.7,<3",
         "anyio>=4.14,<5",
+        "packaging>=24,<27",
     }
