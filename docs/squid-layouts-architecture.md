@@ -408,8 +408,18 @@ the deterministic no-background-task seam for subscriber tests.
 Publish from the existing committed-change funnel or durable change-feed drain. Never attach the
 bus to a message already owned by a durable reconciliation loop: that creates a second writer. In
 this bot, build panels follow `("build", str(build_id))`, while posted build cards remain solely
-owned by the Discord reconciliation queue. The same queue drain publishes locally after a
-successful reconciliation, which carries database changes from other processes into live panels.
+owned by the Discord reconciliation queue. The same queue drain publishes after a successful
+reconciliation.
+
+The bus is process-local, so a write made in another process reaches it through a host-owned
+bridge rather than a subscription. `sl.discord.durability.PostgresTopicBridge` is that bridge over
+`LISTEN`/`NOTIFY`: it takes a host `sl.TopicCodec`, publishes an encoded address and never state,
+drops its own notifications by process origin, and calls `TopicBus.publish` for everything it
+receives — so it composes with the bus contract instead of relaying it, and an address the codec
+cannot name stays local. In this bot the vocabulary is `squid.topics.ResourceTopicCodec`, and the
+worker publishes a build's topic when its schematic render lands, so a panel repaints without a
+click. Delivery is a latency hint exactly like a local publish: the reconciler's poll is still
+what makes the projection converge.
 
 A followed mount with expiring interaction credentials is swept before its handle dies. Its final
 reachable render includes “Live updates paused — press any control to resume”; an accepted click

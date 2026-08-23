@@ -24,7 +24,6 @@ from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRen
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.topics import resource_topic
 from squid.bot.ui import MOUNT_DEFAULTS
 from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import AccountIdCache
@@ -37,6 +36,7 @@ from squid.config import (
     BuildConfig,
     CatboxConfig,
     CommunityConfig,
+    DatabaseConfig,
     NotificationConfig,
     load_bot_process_config,
     load_or_exit,
@@ -51,8 +51,10 @@ from squid.runtime import (
     start_log_capture,
     start_permission_epoch_watch,
 )
+from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_layouts import TopicBus
 from squid_layouts.discord import Reactor, SessionRegistry
+from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
 
 logger = logging.getLogger(__name__)
@@ -111,12 +113,14 @@ class RedstoneSquid(Bot):
         build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
         community_config: CommunityConfig = DEFAULT_COMMUNITY_CONFIG,
         notification_config: NotificationConfig = DEFAULT_NOTIFICATION_CONFIG,
+        database_config: DatabaseConfig | None = None,
         inference_model: str = "gpt-5.6-luna",
         inference_reasoning_effort: str = "low",
         development_mode: bool = False,
     ):
         self.services = services
         self.build_config = build_config
+        self.database_config = database_config
         self.community_config = community_config
         self.notification_site_url = (
             None
@@ -161,6 +165,11 @@ class RedstoneSquid(Bot):
         self.layout_profiler = MemoryProfiler()
         self.topic_bus = TopicBus(profiler=self.layout_profiler)
         self.layout_reactor = Reactor(self.topic_bus)
+        self.topic_bridge: PostgresTopicBridge | None = None
+        # Publishing goes through whichever of the two reaches every process. Until
+        # `setup_hook` opens the bridge -- and forever, if no listener URL is configured --
+        # that is the local bus, and the reconciler's poll is what the other processes get.
+        self.topic_publisher: TopicPublisher = self.topic_bus
         self.mounts = SessionRegistry(defaults=MOUNT_DEFAULTS.replace(scheduler=self.layout_reactor))
 
     def is_operational(self) -> bool:
@@ -189,6 +198,13 @@ class RedstoneSquid(Bot):
         with anyio.move_on_after(3.0):
             await self.mounts.close_all()
         await self.background_tasks.close()
+        # After the supervisor, so the bridge's listener is already cancelled and cannot
+        # log a torn connection on the way out. Bounded, then hung up: shutdown must not
+        # wait on a channel that only ever carried latency hints.
+        if self.topic_bridge is not None:
+            with anyio.move_on_after(3.0):
+                await self.topic_bridge.pool.close()
+            self.topic_bridge.pool.terminate()
         await self.catbox.aclose()
         await self.media_previews.aclose()
         await super().close()
@@ -208,6 +224,11 @@ class RedstoneSquid(Bot):
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
         self.background_tasks.start(self.topic_bus.run(), name="layout-topics")
         self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
+        if self.database_config is not None:
+            self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
+        if self.topic_bridge is not None:
+            self.topic_publisher = self.topic_bridge
+            self.background_tasks.start(self.topic_bridge.run(), name="layout-topic-bridge")
 
         extensions = [*EXTENSIONS]
         if self.development_mode:
@@ -308,7 +329,7 @@ class RedstoneSquid(Bot):
         way to publish: the write that prompted it already enqueued durable work, so a
         failure here is retried rather than lost, and a duplicate run is a no-op.
         """
-        self.topic_bus.publish(resource_topic(resource_kind, resource_key))
+        self.topic_publisher.publish(resource_topic(resource_kind, resource_key))
         generation = await self.services.posts.pending_generation(resource_kind, resource_key)
         if generation is None:
             return
@@ -333,6 +354,7 @@ async def main(
                 build_config=resolved_config.build,
                 community_config=resolved_config.community,
                 notification_config=resolved_config.notification,
+                database_config=resolved_config.runtime.database,
                 inference_model=resolved_config.openai.chat_model,
                 inference_reasoning_effort=resolved_config.openai.reasoning_effort,
                 development_mode=resolved_config.development_mode,

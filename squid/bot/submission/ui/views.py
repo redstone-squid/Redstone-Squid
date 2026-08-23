@@ -29,7 +29,7 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     get_text_input,
 )
-from squid.bot.topics import follow_resource, resource_topic
+from squid.bot.topics import follow_resource
 from squid.bot.ui import contribute, create_mount, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
@@ -48,6 +48,7 @@ from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.topics import resource_topic
 from squid_layouts.discord import SessionKey
 
 if TYPE_CHECKING:

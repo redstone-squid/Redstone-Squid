@@ -9,7 +9,8 @@ import anyio
 
 import squid_layouts as sl
 from squid.bot.app import RedstoneSquid
-from squid.bot.topics import follow_resource, resource_topic
+from squid.bot.topics import follow_resource
+from squid.topics import resource_topic
 from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import delivered_to, fake_message
 
@@ -49,6 +50,7 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     reconciler = SimpleNamespace(reconcile=AsyncMock())
     bot = RedstoneSquid.__new__(RedstoneSquid)
     bot.topic_bus = bus
+    bot.topic_publisher = bus
     bot.services = cast(Any, SimpleNamespace(posts=posts))
     bot.post_reconciler = cast(Any, reconciler)
     source = "after"
