@@ -261,4 +261,11 @@ async def run_command_operation(
             raise RuntimeError(message)
 
 
-__all__ = ["CommandOperation", "ManagedResultCallback", "ManagedResultHandler", "OperationWork", "managed_result", "run_command_operation"]
+__all__ = [
+    "CommandOperation",
+    "ManagedResultCallback",
+    "ManagedResultHandler",
+    "OperationWork",
+    "managed_result",
+    "run_command_operation",
+]
