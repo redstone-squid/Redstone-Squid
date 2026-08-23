@@ -1,5 +1,6 @@
 """Reusable per-open Discord screen policy."""
 
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -49,6 +50,18 @@ def test_opener_reads_discord_identity() -> None:
     interaction.guild_id = 42
 
     assert Opener.of(interaction) == Opener(7, 42)
+
+
+def test_screen_options_are_defensively_copied_and_read_only() -> None:
+    source = {"timeout": 20}
+    screen = Screen("panel", options=source)
+    source["timeout"] = None
+
+    assert screen.options["timeout"] == 20
+
+    options = cast(dict[str, object], screen.options)
+    with pytest.raises(TypeError):
+        options["timeout"] = None
 
 
 async def test_screen_applies_options_overrides_and_access() -> None:
