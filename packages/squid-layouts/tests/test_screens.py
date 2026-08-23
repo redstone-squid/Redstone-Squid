@@ -53,7 +53,7 @@ def test_opener_reads_discord_identity() -> None:
 
 
 def test_screen_options_are_defensively_copied_and_read_only() -> None:
-    source = {"timeout": 20}
+    source: dict[str, object] = {"timeout": 20}
     screen = Screen("panel", options=source)
     source["timeout"] = None
 
