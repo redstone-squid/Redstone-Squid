@@ -67,9 +67,9 @@ from squid_layouts.runtime import (
     ComponentRuntime,
     Failed,
     Pending,
+    PendingPolicy,
     ReactiveWriteError,
     Ready,
-    PendingPolicy,
     batch,
     transaction,
 )
