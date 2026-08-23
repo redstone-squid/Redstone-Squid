@@ -7,7 +7,7 @@ import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
-from squid.bot.consent import ensure_consented_account
+from squid.bot.consent import with_consented_account
 from squid.bot.i18n import t
 from squid.bot.profile_render import present_claimant
 from squid.bot.ui import DISCORD_BLUE, L, create_mount
@@ -153,10 +153,20 @@ class ClaimReviewComponent(sl.Component):
             return
         interaction = sl.discord.native(event)
         await enforce(interaction, ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT)
-        await interaction.response.defer()
-        staff_account_id = await ensure_consented_account(interaction, self._accounts, locale=self.locale)
-        if staff_account_id is None:
-            return
+
+        async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
+            await self._resolve(live, claim, staff_account_id, approve=approve)
+
+        await with_consented_account(event, self._accounts, resolve, locale=self.locale)
+
+    async def _resolve(
+        self,
+        event: sl.ActionEvent,
+        claim: AliasClaim,
+        staff_account_id: int,
+        *,
+        approve: bool,
+    ) -> None:
         try:
             if approve:
                 resolved = await self._accounts.approve_alias_claim(
