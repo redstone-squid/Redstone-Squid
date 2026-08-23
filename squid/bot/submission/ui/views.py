@@ -475,7 +475,7 @@ class BuildEditComponent(sl.Component):
         self.items = tuple(items)
         self._mount: sl.discord.Mount | None = None
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
         """Load the edited build and keep its preview current with the build topic."""
         if self._build_id is not None:
@@ -485,7 +485,7 @@ class BuildEditComponent(sl.Component):
             return seed
         if self._refresh is None or self._build_id is None:
             message = "this editor has no way to reload itself"
-            raise sl.runtime.ResourceNotReadyError(message)
+            raise sl.resources.ResourceNotReadyError(message)
         latest = await self._refresh(self._build_id)
         if latest is None:
             message = f"build {self._build_id} no longer exists"
@@ -495,13 +495,13 @@ class BuildEditComponent(sl.Component):
     def _current(self) -> tuple[Build, sl.LayoutNode | None]:
         if self._seed is not None:
             return self._seed
-        state = self.projection.state
-        if isinstance(state, sl.runtime.Ready):
+        state = self.projection.status
+        if isinstance(state, sl.resources.Ready):
             return state.value
         if state.previous is not None:
             return state.previous.value
         message = "this editor has not loaded a build yet"
-        raise sl.runtime.ResourceNotReadyError(message)
+        raise sl.resources.ResourceNotReadyError(message)
 
     @property
     def build(self) -> Build:
@@ -549,8 +549,8 @@ class BuildEditComponent(sl.Component):
                     accent=DISCORD_BLUE,
                 ),
             )
-        state = self.projection.state
-        if self._seed is None and not isinstance(state, sl.runtime.Ready) and state.previous is None:
+        state = self.projection.status
+        if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(t(self.locale, _("Loading build."))),)
         description = (
             t(
