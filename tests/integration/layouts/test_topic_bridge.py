@@ -2,6 +2,7 @@
 
 import uuid
 from functools import partial
+from typing import Any, cast
 
 import anyio
 import asyncpg
@@ -96,10 +97,10 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
     async def record_there(topic: Topic) -> None:
         seen_there.append(topic)
 
-    here.subscribe(committed, record_here)
-    here.subscribe(rolled_back, record_here)
-    there.subscribe(committed, record_there)
-    there.subscribe(rolled_back, record_there)
+    here.subscribe(committed, cast(Any, record_here))
+    here.subscribe(rolled_back, cast(Any, record_here))
+    there.subscribe(committed, cast(Any, record_there))
+    there.subscribe(rolled_back, cast(Any, record_there))
     listening_here, listening_there = anyio.Event(), anyio.Event()
     bridge_here = PostgresTopicBridge(here_pool, here, channel=channel, on_resync=partial(_announce, listening_here))
     bridge_there = PostgresTopicBridge(
