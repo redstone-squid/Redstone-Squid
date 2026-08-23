@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from squid_layouts.assets import Asset
+from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.entity import EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
@@ -472,7 +473,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             )
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
-            if "layout.embed_fields" in context.capabilities:
+            if Capability.LAYOUT_EMBED_FIELDS in context.capabilities:
                 entries = _card_fields(fields, context)
                 per_card = getattr(context.limits, "embed_fields", 25)
                 # More fields than one embed holds continue into the next card. Lossless:
@@ -828,7 +829,7 @@ def _individual_fits(controls: int, limits: V2Limits) -> bool:
 
 def _cards(context: _Context) -> bool:
     """Whether this target draws regions as embeds rather than as container components."""
-    return "layout.embed" in context.capabilities
+    return Capability.LAYOUT_EMBED in context.capabilities
 
 
 def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
@@ -1091,11 +1092,10 @@ def _paged_region(
 
 
 def _form(node: FormTrigger, context: _Context) -> list[Node]:
-    if not {"forms.modal", "forms.inline"} & context.capabilities:
+    if Capability.FORMS_MODAL not in context.capabilities:
         message = "target does not support forms"
         raise LayoutInvariantError(message)
-    maximum = context.limits.modal_components if "forms.modal" in context.capabilities else None
-    spec = node.spec.adapt(context.capabilities, maximum_fields=maximum)
+    spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.modal_components)
 
     async def present(event: PressEvent) -> None:
         await event.present_form(spec, key=node.key, on_submit=node.on_submit, policy=node.policy)
@@ -1254,7 +1254,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
                 context.session.select(node.key, tuple(_entity_key(value) for value in selected))
                 event.invalidate()
 
-    if "actions.discord.entity" in context.capabilities:
+    if Capability.ACTIONS_DISCORD_ENTITY in context.capabilities:
 
         async def select_entities(event: EntitySelectionEvent) -> None:
             await commit(event, event.values)
