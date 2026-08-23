@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, overload
 
 from squid_reactive.completion import Completion
-from squid_reactive.resources import PendingPolicy, _observe
+from squid_reactive.resources import AsyncBinding, PendingPolicy, _observe
 
 
 class OperationOwner(Protocol):
@@ -62,7 +62,7 @@ class Progress[ProgressT]:
         self._operation._set_progress(value)
 
 
-class Operation[ValueT, ProgressT]:
+class Operation[ValueT, ProgressT](AsyncBinding):
     """One component-bound effect with a synchronous, terminal status."""
 
     pending_policy = PendingPolicy.EXPLICIT
