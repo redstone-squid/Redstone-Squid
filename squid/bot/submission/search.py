@@ -22,7 +22,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid.bot.topics import follow_resource, resource_topic
+from squid.bot.topics import follow_resource
 from squid.bot.ui import PagedList, create_mount, destination
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
@@ -44,6 +44,7 @@ from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.topics import resource_topic
 
 if TYPE_CHECKING:
     import squid.bot.app
