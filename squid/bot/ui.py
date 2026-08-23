@@ -52,6 +52,8 @@ __all__ = [
     "render_item",
     "render_static",
     "reply",
+    "reply_presentation",
+    "render_presentation",
     "send_component",
     "text_layout",
     "truncate_display_text",
@@ -182,6 +184,38 @@ async def reply(
     return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.discord.delivery.no_mentions(), **extra)
 
 
+async def reply_presentation(
+    ctx: Context[Any],
+    presentation: ui.discord.DiscordPresentation,
+    *,
+    visibility: Visibility = "public",
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> ui.discord.DeliveryReceipt:
+    """Deliver a complete Squid presentation through the selected command audience."""
+    from squid.bot.utils.visibility import personal
+
+    if isinstance(visibility, Private):
+        from squid.bot.utils.visibility import deliver_privately
+
+        message = await deliver_privately(
+            ctx,
+            presentation,
+            reason=visibility.reason,
+            allowed_mentions=allowed_mentions,
+        )
+        if message is None:
+            raise ui.discord.DeliveryAbandoned
+        handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
+        return ui.discord.DeliveryReceipt(message, handle)
+
+    destination = ui.discord.reply_to(
+        ctx,
+        ephemeral=visibility == "personal" and personal(ctx),
+        allowed_mentions=allowed_mentions,
+    )
+    return await destination(presentation)
+
+
 def destination(
     ctx: Context[Any],
     *,
@@ -281,6 +315,23 @@ def render_static(
         strict=strict,
         reservation=reservation,
     ).layout
+
+
+def render_presentation(
+    nodes: ui.DocumentLike,
+    *,
+    locale: str | None = None,
+    strict: bool = False,
+    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
+) -> ui.discord.DiscordPresentation:
+    """Render a complete presentation for framework-owned delivery."""
+    return ui.discord.render_static(
+        nodes,
+        chrome=CHROME,
+        localization=localization_for(locale),
+        strict=strict,
+        reservation=reservation,
+    )
 
 
 def truncate_display_text(content: str, limit: int) -> str:
