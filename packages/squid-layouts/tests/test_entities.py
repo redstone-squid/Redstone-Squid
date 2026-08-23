@@ -101,6 +101,23 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
     assert isinstance(plan.scene.components_v2.children[0], SceneSelect)
 
 
+def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
+    target = replace(sl.discord.V2_TARGET, capabilities=sl.discord.V2_TARGET.capabilities - {"actions.discord.entity"})
+    session = PresentationSession()
+    session.select("users", ("user:999",))
+    node = sl.entities(
+        sl.entity_choice(sl.entity.EntityRef(sl.entity.EntityKind.USER, 1), "Ada"),
+        key="users",
+        entity_type=sl.entity.EntityType.USER,
+        selection=sl.managed(()),
+    )
+
+    plan = sl.planning.plan(node, target=target, session=session)
+
+    assert isinstance(plan.scene.components_v2.children[0], SceneSelect)
+    assert all(not option.default for option in plan.scene.components_v2.children[0].options)
+
+
 def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None:
     target = replace(sl.discord.V2_TARGET, capabilities=sl.discord.V2_TARGET.capabilities - {"actions.discord.entity"})
 
