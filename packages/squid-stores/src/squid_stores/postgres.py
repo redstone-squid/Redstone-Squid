@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING, Protocol
 
 import anyio
 
-from squid_layouts.runtime.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
-
-from .stores import (
+from squid_reactive.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
+from squid_stores.stores import (
     _LEGACY_SCHEMA_KEY,
     _SCHEMA_VERSION,
     AdmissionToken,
