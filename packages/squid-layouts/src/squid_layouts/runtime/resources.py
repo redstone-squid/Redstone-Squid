@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Protocol, overload
+from typing import Any, Literal, Protocol, overload
 
 from squid_layouts.runtime.reactivity import (
     _CONSUMER,
@@ -51,6 +51,7 @@ class Failed[ValueT]:
 
 
 type ResourceState[ValueT] = Pending[ValueT] | Ready[ValueT] | Failed[ValueT]
+type AtomicResourceState[ValueT] = Ready[ValueT] | Failed[ValueT]
 
 
 class ResourceDelivery(StrEnum):
@@ -62,6 +63,14 @@ class ResourceDelivery(StrEnum):
 
 class ResourceNotReadyError(LookupError):
     """A resource value was read while its state was not ready."""
+
+
+class _AtomicResourcePending(ResourceNotReadyError):
+    """Abort a discovery render until an atomic resource has settled."""
+
+    def __init__(self, resource: Resource[Any]) -> None:
+        self.resource = resource
+        super().__init__(f"atomic resource {resource._label!r} is pending")
 
 
 _CURRENT_RESOURCES: ContextVar[list[Resource[Any]] | None] = ContextVar(
@@ -358,6 +367,37 @@ class Resource[ValueT]:
         return self._state
 
 
+class AtomicResource[ValueT](Resource[ValueT]):
+    """A resource whose render-visible state is always settled.
+
+    The mount catches a pending read during discovery, settles the resource, and retries the
+    render. Direct reads before a mount has settled the resource raise ``ResourceNotReadyError``.
+    """
+
+    @property
+    def state(self) -> AtomicResourceState[ValueT]:
+        state = super().state
+        if isinstance(state, Pending):
+            raise _AtomicResourcePending(self)
+        return state
+
+    @property
+    def pending(self) -> bool:
+        """Whether this resource still needs settlement without exposing pending state."""
+        staged = self._staged()
+        if not isinstance(staged, _Missing):
+            return False
+        self._recheck()
+        return isinstance(self._state, Pending)
+
+    async def reload(self) -> AtomicResourceState[ValueT]:
+        self._invalidate(notify=True)
+        state = await self._load()
+        if isinstance(state, Pending):
+            raise ResourceNotReadyError(f"atomic resource {self._label!r} did not settle")
+        return state
+
+
 class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
     """Bind one loader per component instance."""
 
@@ -400,6 +440,42 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
         return bound
 
 
+class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescriptor[OwnerT, ValueT]):
+    """Bind an atomic resource while preserving its narrowed descriptor type."""
+
+    @overload
+    def __get__(self, instance: None, owner: type | None = None) -> _AtomicResourceDescriptor[OwnerT, ValueT]: ...
+
+    @overload
+    def __get__(self, instance: OwnerT, owner: type | None = None) -> AtomicResource[ValueT]: ...
+
+    def __get__(
+        self, instance: OwnerT | None, owner: type | None = None
+    ) -> _AtomicResourceDescriptor[OwnerT, ValueT] | AtomicResource[ValueT]:
+        if instance is None:
+            return self
+        bound = instance.__dict__.get(self._name)
+        if bound is None:
+            bound = AtomicResource(
+                instance,
+                lambda: self.loader(instance),
+                name=f"{type(instance).__name__}.{self.public_name}",
+                delivery=self.delivery,
+            )
+            instance.__dict__[self._name] = bound
+        _observe(bound)
+        return bound
+
+
+@overload
+def resource[OwnerT: ResourceOwner, ValueT](
+    loader: Callable[[OwnerT], Awaitable[ValueT]],
+    /,
+    *,
+    delivery: Literal[ResourceDelivery.ATOMIC],
+) -> _AtomicResourceDescriptor[OwnerT, ValueT]: ...
+
+
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
@@ -407,6 +483,13 @@ def resource[OwnerT: ResourceOwner, ValueT](
     *,
     delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
 ) -> _ResourceDescriptor[OwnerT, ValueT]: ...
+
+
+@overload
+def resource[OwnerT: ResourceOwner, ValueT](
+    *,
+    delivery: Literal[ResourceDelivery.ATOMIC],
+) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _AtomicResourceDescriptor[OwnerT, ValueT]]: ...
 
 
 @overload
@@ -430,8 +513,9 @@ def resource(
 
     def decorate(
         function: Callable[[ResourceOwner], Awaitable[Any]],
-    ) -> _ResourceDescriptor[ResourceOwner, Any]:
-        return _ResourceDescriptor(function, delivery=delivery)
+    ) -> _ResourceDescriptor[ResourceOwner, Any] | _AtomicResourceDescriptor[ResourceOwner, Any]:
+        descriptor = _AtomicResourceDescriptor if delivery is ResourceDelivery.ATOMIC else _ResourceDescriptor
+        return descriptor(function, delivery=delivery)
 
     return decorate if loader is None else decorate(loader)
 
