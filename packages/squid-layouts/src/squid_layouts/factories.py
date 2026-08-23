@@ -22,7 +22,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
-from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.entities import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form

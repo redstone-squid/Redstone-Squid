@@ -22,7 +22,7 @@ from typing import Any, Protocol, cast, runtime_checkable
 import anyio
 import discord
 
-from squid_layouts.actions import (
+from squid_layouts.interactions import (
     ActionBinding,
     ActionEvent,
     ActionKind,

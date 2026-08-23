@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from squid_layouts.actions import ActionBinding
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding

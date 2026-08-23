@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.actions import ActionEvent, SubmitEvent
+from squid_layouts.interactions import ActionEvent, SubmitEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, choice, choices, controlled, form, heading, note, paragraph, stack
