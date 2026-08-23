@@ -108,7 +108,7 @@ class AccountPanel(sl.Component):
         if self.closed:
             # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
             # rather than sl.status's fixed tone palette.
-            return (sl.section(sl.paragraph(t(self.locale, _("Account controls closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Account controls closed"))), accent=DISCORD_BLUE),)
         if self._profile_editor is not None:
             return (
                 self.boundary(self._profile_editor, key="profile-editor"),
@@ -128,13 +128,13 @@ class AccountPanel(sl.Component):
         extra_media = media[1:]
         nodes: list[sl.LayoutNode] = [
             sl.section(
+                sl.heading(self._profile.display_name or t(self.locale, _("Your account"))),
                 # The bio is the card's shock absorber: truncate lets it give up characters
                 # under pressure before the fields or footer lose any.
                 self._profile.bio and sl.truncate(sl.paragraph(self._profile.bio)),
                 sl.fields(*fields),
                 bool(extra_media) and sl.media(*extra_media, key="media"),
                 footer and sl.note(footer),
-                heading=self._profile.display_name or t(self.locale, _("Your account")),
                 accent=DISCORD_BLUE,
                 thumbnail=media[0] if media else None,
             )
@@ -368,9 +368,9 @@ class AccountPanel(sl.Component):
         draft = self._raw_profile_update(values).apply(self._profile)
         fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft, self.locale))
         return sl.section(
+            sl.heading(draft.display_name or t(self.locale, _("Your account"))),
             draft.bio and sl.truncate(sl.paragraph(draft.bio)),
             sl.fields(*fields) if fields else None,
-            heading=draft.display_name or t(self.locale, _("Your account")),
             accent=DISCORD_BLUE,
         )
 

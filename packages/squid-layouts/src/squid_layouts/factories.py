@@ -4,11 +4,12 @@ The frozen dataclasses in :mod:`squid_layouts.semantic` remain the IR and remain
 these factories are sugar over them, normalizing what render code actually writes:
 conditional children (``cond and node``), bare strings and t-strings.
 
-Every factory has one shape: **content is positional, identity and configuration are
-keyword-only**. ``key`` is required exactly where the runtime reads it back — on nodes that
-own session state or custom ids. Records whose key no target reads today (`Field`, `Column`,
-`TableRow`, `MediaItem`, `ListItem`) default it to ``""`` rather than making authors invent
-identities that nothing consumes.
+Factories follow reading order: a semantic identity such as a heading, summary, item label,
+table columns, or form label comes before the content it introduces. Runtime identity and
+configuration remain keyword-only. ``key`` is required exactly where the runtime reads it
+back — on nodes that own session state or custom ids. Records whose key no target reads today
+(`Field`, `Column`, `TableRow`, `MediaItem`, `ListItem`) default it to ``""`` rather than
+making authors invent identities that nothing consumes.
 
 Collections are unpacked by the caller (``sl.section(*(sl.field(k, v) for k, v in rows))``).
 Factories deliberately do not flatten a list argument: ``*`` already says it, says it at the
@@ -41,6 +42,7 @@ from squid_layouts.semantic import (
     Actions,
     Article,
     Aside,
+    Block,
     Choice,
     ChoiceEvent,
     ChoiceOwnership,
@@ -48,6 +50,7 @@ from squid_layouts.semantic import (
     Cluster,
     Code,
     Column,
+    Columns,
     Controlled,
     Destination,
     Details,
@@ -67,6 +70,7 @@ from squid_layouts.semantic import (
     Importance,
     Item,
     ItemDisplay,
+    ItemLabel,
     ItemOwnership,
     Items,
     LayoutNode,
@@ -92,6 +96,7 @@ from squid_layouts.semantic import (
     Section,
     Stack,
     Status,
+    Summary,
     Table,
     TableDisplay,
     TableRow,
@@ -228,24 +233,29 @@ def themed(palette: Palette, *children: ChildLike) -> Themed:
     return Themed(_children(children, "sl.themed()"), palette)
 
 
+def block(*children: ChildLike, accent: Accent = INHERIT) -> Block:
+    """An untitled region; ``accent`` is a house-colour override."""
+    return Block(_children(children, "sl.block()"), accent)
+
+
 def section(
+    heading: Heading,
     *children: ChildLike,
-    heading: TextValue | None = None,
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Section:
     """A titled block of related content; ``accent`` is a house-colour override."""
-    return Section(_children(children, "sl.section()"), _opt_text(heading), accent, thumbnail)
+    return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
 def article(
+    heading: Heading,
     *children: ChildLike,
-    heading: TextValue | None = None,
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Article:
     """A self-contained block that stands on its own."""
-    return Article(_children(children, "sl.article()"), _opt_text(heading), accent, thumbnail)
+    return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
 def aside(*children: ChildLike, tone: Tone = Tone.NEUTRAL) -> Aside:
@@ -267,20 +277,25 @@ def managed[ValueT](initial: ValueT) -> Managed[ValueT]:
 
 
 def details(
+    summary: Summary,
     *children: ChildLike,
     key: str,
-    summary: TextValue,
     open: DisclosureOwnership = CLOSED,
 ) -> Details:
     """Content the reader expands; ``key`` carries its disclosure state."""
-    return Details(key, _text(summary), _children(children, "sl.details()"), open)
+    return Details(key, summary, _children(children, "sl.details()"), open)
+
+
+def summary(content: TextValue) -> Summary:
+    """The control text that identifies a `details` region."""
+    return Summary(_text(content))
 
 
 def form(
+    label: TextValue,
     spec: FormLike,
     *,
     key: str,
-    label: TextValue = "Open form",
     on_submit: SubmitHandler | None = None,
     policy: ActionPolicy | None = None,
     tone: Tone = Tone.NEUTRAL,
@@ -296,9 +311,14 @@ def form(
     return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis, guard)
 
 
-def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | None = None) -> Item:
+def item(label: ItemLabel, *children: ChildLike, key: str, summary: TextValue | None = None) -> Item:
     """One entry of an `items` collection."""
-    return Item(key, _text(label), _children(children, "sl.item()"), _opt_text(summary))
+    return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
+
+
+def item_label(content: TextValue) -> ItemLabel:
+    """The identity shown for one `items` entry."""
+    return ItemLabel(_text(content))
 
 
 def items(
@@ -420,9 +440,18 @@ def bullets(
     )
 
 
-def column(heading: TextValue, *, key: str = "", importance: Importance = Importance.NORMAL) -> Column:
+def column(heading: TextValue, *, key: str = "") -> Column:
     """One column of a `table`."""
-    return Column(key, _text(heading), importance)
+    return Column(key, _text(heading))
+
+
+def columns(*entries: Conditional[Column]) -> Columns:
+    """The ordered schema that precedes a `table`'s rows."""
+    collected = _collect(entries, (Column,), "sl.columns()")
+    if not collected:
+        message = "sl.columns() needs at least one column"
+        raise ValueError(message)
+    return Columns(collected)
 
 
 def table_row(*cells: TextValue, key: str = "") -> TableRow:
@@ -431,15 +460,15 @@ def table_row(*cells: TextValue, key: str = "") -> TableRow:
 
 
 def table(
+    columns: Columns,
     *rows: Conditional[TableRow],
-    columns: Iterable[Conditional[Column]],
     key: str,
     display: TableDisplay = TableDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Table:
     """Tabular data; ``key`` carries the chosen representation and page."""
     return Table(
-        _collect(columns, (Column,), "sl.table(columns=)"),
+        columns,
         _collect(rows, (TableRow,), "sl.table()"),
         key,
         display,

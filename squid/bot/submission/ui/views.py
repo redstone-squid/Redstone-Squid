@@ -517,7 +517,7 @@ class SubmissionFormComponent(sl.Component):
         if self.closed:
             # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
             # rather than sl.status's fixed tone palette.
-            return (sl.section(sl.paragraph(t(self.locale, _("Submission closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Submission closed"))), accent=DISCORD_BLUE),)
         missing = []
         if self.build.door_orientation is None:
             missing.append(t(self.locale, _("door type")))
@@ -547,12 +547,12 @@ class SubmissionFormComponent(sl.Component):
         )
         return (
             sl.section(
+                sl.heading(t(self.locale, _("Submit a build"))),
                 # The guidance text is the card's shock absorber: truncate lets it give up
                 # characters under pressure before a field or the footer loses any.
                 sl.truncate(sl.paragraph(guidance)),
                 sl.fields(*fields),
                 sl.note(t(self.locale, _("Only the door type and opening size are required."))),
-                heading=t(self.locale, _("Submit a build")),
                 accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
             ),
             sl.Choices(
@@ -1105,8 +1105,8 @@ class BuildEditComponent(sl.Component):
         if self.saved:
             return (
                 sl.section(
+                    sl.heading(t(self.locale, _("Changes saved"))),
                     sl.paragraph(t(self.locale, _("The build card has been refreshed."))),
-                    heading=t(self.locale, _("Changes saved")),
                     accent=DISCORD_BLUE,
                 ),
             )
@@ -1165,11 +1165,11 @@ class BuildEditComponent(sl.Component):
         controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
         nodes: list[sl.LayoutNode] = [
             sl.section(
+                sl.heading(t(self.locale, _("Edit build"))),
                 # The description is the card's shock absorber: truncate lets it give up
                 # characters under pressure before the summary field loses any.
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(sl.field(t(self.locale, _("Fields in this section")), summary)),
-                heading=t(self.locale, _("Edit build")),
                 accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
             )
         ]
