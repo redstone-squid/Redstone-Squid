@@ -64,10 +64,12 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
 @pytest.mark.parametrize(
     ("section", "source_marker"),
     [
-        ("tour", "class Counter(sl.Component)"),
         ("pagination", "sl.primitives.Paginate("),
         ("adaptation", 'return sl.actions(*actions, key="showcase-actions")'),
         ("degradation", "overflow=sl.primitives.Spill()"),
+        ("data", 'sl.table(columns, *rows, key="capability-table")'),
+        ("ownership", "on=sl.controlled(self.subscribed, self._set_subscribed)"),
+        ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
         ("localization", 'mount.localize(localization_for("zh-CN"))'),
     ],
@@ -91,10 +93,74 @@ def test_degradation_exhibit_makes_each_compromise_visible() -> None:
     mount = Mount(LayoutShowcase(section="degradation", entries=20, locale="en"), access=Everyone(), timeout=None)
     view = commit_render(mount)
 
-    assert "…and 14 more" in _texts(view)
+    assert "…and 15 more" in _texts(view)
     assert "The report records every compromise" in _texts(view)
     assert mount.plan is not None
     assert len(mount.plan.report.events) >= 2
+    assert_within_limits(view)
+
+
+def test_data_exhibit_formats_typed_nodes_rather_than_strings() -> None:
+    mount = Mount(LayoutShowcase(section="data", entries=40, locale="en"), access=Everyone(), timeout=None)
+    view = commit_render(mount)
+    content = _texts(view)
+
+    assert "**Loaded samples:** 40 rows" in content
+    assert "░░░░░░░░░░ 0%" in content, "a proportion, drawn from the value and its maximum"
+    assert "<t:" in content, "the instant reaches each reader in their own timezone"
+    assert ":R>" in content, "and does so relative to when they read it"
+    assert "Adapts by" in content, "the table kept its tabular shape"
+    assert "Pickers of 25 and 11" in content, "with every declared row"
+    assert_within_limits(view)
+
+
+async def test_ownership_exhibit_separates_session_owned_and_component_owned_values() -> None:
+    component = LayoutShowcase(section="ownership", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("ownership.controlled", fake_interaction())
+    await mount.dispatch("ownership.rating.4", fake_interaction())
+
+    assert component.subscribed is True, "a controlled value only moves through its handler"
+    assert component.rating == 4
+    assert "\N{BLACK STAR}" * 4 in _texts(commit_render(mount))
+
+    await mount.dispatch("ownership.managed", fake_interaction())
+    labels = [button.label for button in _buttons(commit_render(mount))]
+
+    assert "Session-owned toggle: Session says on" in labels
+    assert mount.presentation.toggles["ownership.managed"].on is True, "the session holds it, not the component"
+    assert not hasattr(component, "managed"), "no component state backs the managed toggle"
+
+
+async def test_forms_exhibit_validates_then_binds_typed_values_and_prefills() -> None:
+    component = LayoutShowcase(section="forms", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+    assert mount.plan is not None
+    binding = mount.plan.form_bindings["feedback"]
+
+    rejected = await binding.spec.evaluate({"exhibit": "data", "headline": "Readable", "score": "1"})
+    caught = [issue.key for issue in rejected.errors if isinstance(issue, sl.forms.FieldError)]
+    assert caught == ["detail"], "cross-field validation sees typed values"
+
+    await mount.dispatch_submit(
+        "feedback",
+        fake_interaction(),
+        binding.spec,
+        {"exhibit": "data", "headline": "Typed all the way down", "score": "5"},
+        binding.on_submit,
+    )
+
+    assert (component.feedback_exhibit, component.feedback_headline, component.feedback_score) == (
+        "data",
+        "Typed all the way down",
+        5,
+    )
+    view = commit_render(mount)
+    assert "Typed all the way down" in _texts(view)
+    assert mount.plan.form_bindings["feedback"].spec.prefill["headline"] == "Typed all the way down"
     assert_within_limits(view)
 
 
@@ -147,7 +213,7 @@ async def test_demo_command_and_controls_are_public() -> None:
         ),
     )
 
-    await LayoutShowcaseCog.demo.callback(cog, ctx, "tour", 20)  # type: ignore[arg-type]
+    await LayoutShowcaseCog.demo.callback(cog, ctx, "pagination", 20)  # type: ignore[arg-type]
 
     sent = cast(Any, ctx).send.await_args.kwargs
     assert sent["ephemeral"] is False
