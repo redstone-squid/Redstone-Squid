@@ -9,6 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, Feedback, PressHandler, SelectionHandler
 from squid_layouts.forms import FormBinding
@@ -17,6 +18,9 @@ from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Tr
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
+
+if TYPE_CHECKING:
+    from squid_layouts.runtime.history import History
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +125,8 @@ class Button:
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     guard: Guard | None = None
     feedback: Feedback | None = None
+    record: History | None = None
+    """Enter this press in history under `label` before `on_click` runs."""
 
 
 @dataclass(frozen=True, slots=True)

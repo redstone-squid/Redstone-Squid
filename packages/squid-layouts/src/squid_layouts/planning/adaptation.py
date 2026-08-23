@@ -1685,7 +1685,14 @@ def _page_items[T](
 
 def _picker(actions: Sequence[Action], key: str, label: str | None, context: _Context) -> SelectMenu:
     routes = {
-        action.key: ActionBinding(action.key, action.on_trigger, action.policy, guard=action.guard)
+        action.key: ActionBinding(
+            action.key,
+            action.on_trigger,
+            action.policy,
+            guard=action.guard,
+            label=_resolve(action.label, context),
+            record=action.record,
+        )
         for action in actions
     }
 
@@ -1731,4 +1738,5 @@ def _button(action: Action, context: _Context) -> Button:
         policy=action.policy,
         guard=action.guard,
         feedback=action.feedback,
+        record=action.record,
     )

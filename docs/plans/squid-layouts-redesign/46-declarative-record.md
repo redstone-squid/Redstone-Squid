@@ -35,4 +35,14 @@ right signal. Nothing in 28 moves: one entry per action, world-first undo, inver
 
 ## Status
 
-Proposed 2026-08-23. Last in the series; independent of 42–45.
+Implemented 2026-08-23. Last in the series; independent of 42–45.
+
+Two additions the design implied. `ActionBinding` gained a `label` beside `record`, because
+the entry's name is the control's and the binding is where the invoke path can still read it;
+recording rides the route bindings too, so a row of grouped actions that collapses into a
+picker keeps it. `sl.action` rejects `record=` under `ActionPolicy.PARALLEL_READ` at authoring
+time -- the transaction would have raised the same objection at press time, one press later.
+
+The showcase's density button keeps its manual `record`: that control's label names the
+density it is showing, which would be a confusing name for the entry that changes it. Both
+shapes now stand side by side in the demo.
