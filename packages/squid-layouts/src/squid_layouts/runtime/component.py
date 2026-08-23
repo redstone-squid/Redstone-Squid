@@ -525,17 +525,14 @@ def render_component_tree(
 
     with observe_render() as observation, observe_resources() as observed:
         nodes = tuple(expand(root, "$", context or {}))
-    resources = unique_resources(observed)
     return ComponentTree(
         nodes,
         components,
         tuple(assets),
         document_key,
         tuple(deferred),
-        resources,
-        # A resource's own tracked reads count as this render's: the render used its value,
-        # so it depends on everything the loader consulted to produce one.
-        observation.addresses(resources),
+        unique_resources(observed),
+        observation.addresses(),
     )
 
 

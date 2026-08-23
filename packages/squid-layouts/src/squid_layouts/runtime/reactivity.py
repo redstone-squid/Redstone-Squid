@@ -69,6 +69,22 @@ class UndeclaredStateError(RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
 
+class ReactiveCycleError(RuntimeError):
+    """A derived value depends, through some chain, on itself.
+
+    Raised for a computed that reads itself and for a resource whose loader awaits one
+    waiting on it -- the same mistake, and a chain can cross both kinds, so it is one error.
+    Carries the whole ring rather than the node that closed it, because `a` needing `b` is
+    usually fine and `b` needing `a` is usually fine, and only the pair is wrong.
+    """
+
+    def __init__(self, path: Sequence[str]) -> None:
+        self.path = tuple(path)
+        joined = " -> ".join(self.path)
+        message = f"cycle: {joined}. Nothing in that ring can settle, because each waits on the next."
+        super().__init__(message)
+
+
 class SharedStateConflictError(RuntimeError):
     """An action read a shared cell, wrote it, and someone else moved it in between.
 
@@ -186,6 +202,47 @@ class _Consumer(Protocol):
 
 
 _CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_layouts_consumer", default=None)
+
+_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_layouts_settling", default=())
+"""The derived nodes currently producing a value on this task, outermost first.
+
+Task-local rather than global: two independent values settled concurrently each copy the
+context, so one cannot be mistaken for the other's dependency. A computed and a resource share
+one stack because a chain can run through both, and a cycle should be named whole.
+"""
+
+
+def cycle_path(node: Any) -> tuple[str, ...] | None:
+    """The ring `node` closes if it is already producing a value on this task, else `None`.
+
+    Reported from the first time `node` appears, so the answer is the ring itself and not the
+    run-up to it: naming a caller that merely reached the cycle sends the reader to the wrong
+    line. `node` needs a `_label`.
+    """
+    stack = _SETTLING.get()
+    for index, entered in enumerate(stack):
+        if entered is node:
+            return (*(held._label for held in stack[index:]), node._label)
+    return None
+
+
+@contextmanager
+def settling(node: Any) -> Iterator[None]:
+    """Mark `node` as producing a value, and refuse to enter a ring twice.
+
+    The check precedes the push, so the error is raised before whatever would otherwise
+    deadlock or recurse.
+    """
+    path = cycle_path(node)
+    if path is not None:
+        raise ReactiveCycleError(path)
+    token = _SETTLING.set((*_SETTLING.get(), node))
+    try:
+        yield
+    finally:
+        _SETTLING.reset(token)
+
+
 _OBSERVING: ContextVar[bool] = ContextVar("squid_layouts_observing_render", default=False)
 
 
@@ -964,7 +1021,7 @@ class _Derived:
     alive; a version comparison at read time answers the same question with no back-edge.
     """
 
-    __slots__ = ("_epoch", "_function", "_label", "_running", "_settled", "owner", "sources", "value", "version")
+    __slots__ = ("_epoch", "_function", "_label", "_settled", "owner", "sources", "value", "version")
 
     def __init__(self, function: Callable[[Any], Any], owner: ReactiveOwner, label: str) -> None:
         self._function = function
@@ -974,7 +1031,6 @@ class _Derived:
         self.value: Any = None
         self.version = 0
         self._settled = False
-        self._running = False
         self._epoch = -1
 
     def settle(self) -> int:
@@ -984,21 +1040,17 @@ class _Derived:
         if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
             self._epoch = _EPOCH
             return self.version
-        if self._running:
-            message = f"{self._label} reads itself, so it can never settle"
-            raise RuntimeError(message)
         # Cleared before the run, not after: a body that raises must leave the node asking to
         # be recomputed rather than holding a value nothing verified.
         self._settled = False
         self._epoch = -1
         self.sources = {}
-        self._running = True
         token = _CONSUMER.set(self)
         try:
-            value = self._function(self.owner)
+            with settling(self):
+                value = self._function(self.owner)
         finally:
             _CONSUMER.reset(token)
-            self._running = False
         self._settled = True
         # Recomputing is not a write, so the epoch stays put: nothing downstream can be stale
         # from it, and bumping would make every settled node in the process walk its sources.
@@ -1068,13 +1120,13 @@ class Observation:
 
     sources: dict[Any, int] = field(default_factory=dict)
 
-    def addresses(self, resources: Sequence[_Consumer] = ()) -> tuple[Any, ...]:
+    def addresses(self) -> tuple[Any, ...]:
         """Every addressed cell this run reached, deduplicated, in read order.
 
-        A cached computed is walked rather than re-run: it did not read its sources again,
-        but a render that used its value still depends on every one of them. A resource is
-        walked for the same reason and needs passing in, because a render reads its *state*
-        synchronously while its loader did the tracked reads earlier, under its own consumer.
+        Anything with sources of its own is walked rather than re-run -- a cached computed, a
+        settled resource. It did not read its sources again, but a reader that used its value
+        still depends on every one of them, so a topic watched two loaders down is still this
+        render's dependency.
         """
         found: list[Any] = []
         seen: set[int] = set()
@@ -1088,12 +1140,10 @@ class Observation:
                 if isinstance(source, _Cell):
                     if source.address is not None:
                         found.append(source.address)
-                elif isinstance(source, _Derived):
-                    walk(source.sources)
+                elif (nested := getattr(source, "sources", None)) is not None:
+                    walk(nested)
 
         walk(self.sources)
-        for resource in resources:
-            walk(resource.sources)
         return tuple(found)
 
 
