@@ -8,7 +8,7 @@ import discord
 from squid_layouts.actions import ActionEvent, ActionPolicy, Visibility
 from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord.modal import ModalSpec, build_form_modal, build_modal
-from squid_layouts.forms import FieldError, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
+from squid_layouts.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
@@ -105,7 +105,7 @@ class ActionResponder:
     ) -> None:
         """Render validation errors with a button that reopens the attempted form."""
         lines: list[str] = []
-        labels = {field.key: field.label or field.key for field in spec.fields}
+        labels = {field.key: field.label or field.key for field in spec.items if isinstance(field, FormField)}
         for error in errors:
             if isinstance(error, FieldError):
                 label = resolve_text(labels.get(error.key, error.key), self.mount.localization).content
