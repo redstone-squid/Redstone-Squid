@@ -32,6 +32,7 @@ class ReactorSnapshot:
     queued: int
     in_flight: int
     redeliver: int
+    watched: int
     scheduled: int
     coalesced: int
     delivered: int
@@ -164,6 +165,7 @@ class Reactor:
             queued=len(self._queued),
             in_flight=len(self._in_flight),
             redeliver=len(self._redeliver),
+            watched=len(self._watched),
             scheduled=self._scheduled,
             coalesced=self._coalesced,
             delivered=self._delivered,

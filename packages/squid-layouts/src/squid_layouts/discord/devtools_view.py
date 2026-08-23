@@ -275,6 +275,8 @@ def _option_description(snapshot: sl.discord.MountSnapshot) -> str:
 
 def _flags(snapshot: sl.discord.MountSnapshot) -> str:
     flags = []
+    if snapshot.lifecycle is sl.discord.MountLifecycle.RENEWAL_ARMED:
+        flags.append("renewal armed")
     if snapshot.pending:
         flags.append("dirty")
     if snapshot.finished:
@@ -285,9 +287,10 @@ def _flags(snapshot: sl.discord.MountSnapshot) -> str:
 
 
 def _expiry(snapshot: sl.discord.MountSnapshot) -> str:
-    if snapshot.expires_in is None:
-        return "no timeout"
-    return f"{_duration(snapshot.expires_in)} left"
+    timeout = "no timeout" if snapshot.expires_in is None else f"timeout in {_duration(snapshot.expires_in)}"
+    if snapshot.handle_expires_in is None:
+        return timeout
+    return f"{timeout} · edit handle {_duration(snapshot.handle_expires_in)} left"
 
 
 def _duration(seconds: float) -> str:

@@ -1,5 +1,6 @@
 """The owner-only mount inspector: what it lists, what it opens, and what it refuses."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import discord
@@ -109,6 +110,36 @@ class TestDetail:
         assert "<@7>" in body
         assert "open" in body
         assert "states explored" in body
+
+    async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
+        now = datetime.now(UTC)
+        reactor = sl.discord.Reactor(clock=lambda: now)
+        interaction = fake_interaction(message_id=42)
+        interaction.expires_at = now + timedelta(seconds=30)
+        subject = Mount(
+            Subject(),
+            access=Everyone(),
+            scheduler=reactor,
+            timeout=None,
+            expiry=sl.discord.RenewEphemeral(warning=60),
+        )
+        await subject.send(
+            delivered_to(
+                sl.discord.testing.fake_message(message_id=42, ephemeral=True),
+                handle=sl.discord.delivery.handle_from(interaction),
+            )
+        )
+        assert subject.handle is not None
+        subject._queue_expiry_arm(subject.handle)
+        await subject.refresh_now()
+        subject.invalidate()
+
+        _, view = mount_inspector(MountInspector(focus=subject.id))
+        body = "\n".join(_texts(view))
+
+        assert "renewal armed" in body
+        assert "dirty" in body
+        assert "edit handle 30s left" in body
 
     async def test_a_detail_view_reports_cell_versions_and_computed_sources(self) -> None:
         subject = await live_subject()
