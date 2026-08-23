@@ -8,6 +8,9 @@ from squid_layouts import (
     History,
     HistoryError,
     ReactiveWriteError,
+    Shared,
+    TopicBus,
+    cell,
     history,
     history_actions,
     state,
@@ -282,3 +285,131 @@ def test_each_instance_owns_its_stack():
     first, second = panel(), panel()
     assert first.history is not second.history
     assert first.history is first.history
+
+
+class Workspace(Shared[str]):
+    selected: int | None = cell(None)
+    filters: tuple[str, ...] = cell(())
+
+
+class Preferences(Shared[str]):
+    theme: str = cell("system")
+
+
+class Sharing(Component):
+    """A panel whose actions write local state and two namespaces at once."""
+
+    history: History = history(limit=3)
+    open: bool = state(default=False)
+
+    def __init__(self, workspace: Workspace, preferences: Preferences) -> None:
+        self.workspace = workspace
+        self.preferences = preferences
+
+    def render(self):
+        return Text(f"{self.open} {self.workspace.selected} {self.preferences.theme}")
+
+    def select(self, build_id: int) -> None:
+        self.open = True
+        self.workspace.selected = build_id
+        self.preferences.theme = "dark"
+        self.history.record(f"Select build {build_id}")
+
+
+class TestSharedState:
+    """One entry covers an action's local writes and its shared writes, in both directions."""
+
+    def sharing(self) -> tuple[Sharing, Workspace, Preferences, TopicBus]:
+        bus = TopicBus()
+        workspace, preferences = Workspace(bus, "here"), Preferences(bus, "here")
+        return attached(Sharing(workspace, preferences)), workspace, preferences, bus
+
+    async def test_one_entry_undoes_local_and_two_namespaces(self):
+        subject, workspace, preferences, _ = self.sharing()
+        with transaction():
+            subject.select(7)
+        assert (subject.open, workspace.selected, preferences.theme) == (True, 7, "dark")
+
+        await subject.history.undo()
+        assert (subject.open, workspace.selected, preferences.theme) == (False, None, "system")
+
+    async def test_redo_reapplies_every_half(self):
+        subject, workspace, preferences, _ = self.sharing()
+        with transaction():
+            subject.select(7)
+        await subject.history.undo()
+        await subject.history.redo()
+        assert (subject.open, workspace.selected, preferences.theme) == (True, 7, "dark")
+
+    async def test_undo_is_blind_and_a_sibling_write_cannot_brick_the_stack(self):
+        """A sibling panel setting the same filter is the motivating case, not an error case."""
+        subject, workspace, _, _ = self.sharing()
+        with transaction():
+            subject.select(7)
+        with transaction():
+            workspace.selected = 99
+
+        assert subject.history.can_undo
+        await subject.history.undo()
+        assert workspace.selected is None, "undo restores what the entry recorded, reading nothing"
+        assert subject.open is False, "the local half is not held hostage by the shared one"
+
+    async def test_undo_redo_undo_stays_guard_free(self):
+        """Every direction is a blind restore, so the round trip never runs out of moves."""
+        subject, workspace, _, _ = self.sharing()
+        with transaction():
+            subject.select(7)
+        await subject.history.undo()
+        assert workspace.selected is None
+        await subject.history.redo()
+        assert workspace.selected == 7
+        await subject.history.undo()
+        assert workspace.selected is None
+
+    async def test_undo_publishes_to_a_sibling(self):
+        subject, workspace, _, bus = self.sharing()
+        seen: list[object] = []
+
+        async def subscriber(topic: object) -> None:
+            seen.append(topic)
+
+        bus.subscribe((workspace, type(workspace)._cells["selected"]), subscriber)
+        with transaction():
+            subject.select(7)
+        await bus.drain()
+        seen.clear()
+
+        await subject.history.undo()
+        await bus.drain()
+        assert seen == [(workspace, type(workspace)._cells["selected"])]
+
+    async def test_a_failed_external_inverse_restores_nothing(self):
+        subject, workspace, preferences, _ = self.sharing()
+
+        async def boom() -> None:
+            message = "the world refused"
+            raise RuntimeError(message)
+
+        with transaction():
+            subject.open = True
+            workspace.selected = 7
+            subject.history.record("select", undo=boom)
+
+        with pytest.raises(RuntimeError, match="the world refused"):
+            await subject.history.undo()
+        assert (subject.open, workspace.selected) == (True, 7)
+        assert subject.history.can_undo, "the entry stays on the stack"
+
+    async def test_an_inverse_may_not_write_a_shared_cell_either(self):
+        subject, workspace, _, _ = self.sharing()
+
+        async def writes() -> None:
+            workspace.filters = ("sneaky",)
+
+        with transaction():
+            workspace.selected = 7
+            subject.history.record("select", undo=writes)
+
+        with pytest.raises(ReactiveWriteError, match="may not write component state"):
+            await subject.history.undo()
+        assert workspace.filters == ()

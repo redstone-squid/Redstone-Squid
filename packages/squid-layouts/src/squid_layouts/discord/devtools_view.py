@@ -12,6 +12,7 @@ catalogue would improve.
 
 import pprint
 from collections.abc import Hashable, Iterable, Sequence
+from typing import Any
 
 import squid_layouts as sl
 
@@ -320,12 +321,18 @@ def _reactivity(mount: sl.discord.Mount) -> list[str]:
     may read another component's state and printing an identity would say nothing.
     """
     components = mount.runtime.components
+    # Deduplicated by identity: several panels usually hold the very same namespace, and
+    # that is the point of one.
+    namespaces = {id(owner): owner for owner, _ in (_pair(topic) for topic in mount.followed) if owner is not None}
     labels: dict[int, str] = {}
     for path, component in components.items():
         for name, cell in sl.runtime.inspect_cells(component).items():
             labels[cell.identity] = f"{path}.{name}"
         for name, node in sl.runtime.inspect_computed(component).items():
             labels[node.identity] = f"{path}.{name}"
+    for namespace in namespaces.values():
+        for name, cell in sl.runtime.inspect_cells(namespace).items():
+            labels[cell.identity] = f"{namespace!r}.{name}"
 
     lines: list[str] = []
     for path, component in components.items():
@@ -339,7 +346,25 @@ def _reactivity(mount: sl.discord.Mount) -> list[str]:
                 continue
             read = ", ".join(labels.get(source, "<external>") for source in node.sources) or "nothing"
             lines.append(f"  {name} v{node.version} <- {read}")
+    for namespace in namespaces.values():
+        lines.append(f"{namespace!r} (shared)")
+        for name, cell in sl.runtime.inspect_cells(namespace).items():
+            marks = " ".join(mark for mark, on in (("opaque", cell.opaque), ("default", not cell.assigned)) if on)
+            lines.append(f"  {name} v{cell.version}{f'  [{marks}]' if marks else ''}")
     return lines
+
+
+def _pair(topic: object) -> tuple[sl.Shared[Any] | None, object]:
+    """A followed topic split into its namespace and cell, or `(None, topic)` for anything else.
+
+    A host may follow topics of its own through the same reactor; those are addresses of
+    whatever it likes, and devtools has nothing to say about them.
+    """
+    match topic:
+        case (sl.Shared() as owner, descriptor):
+            return owner, descriptor
+        case _:
+            return None, topic
 
 
 def _dump_lines(lines: list[str]) -> str:

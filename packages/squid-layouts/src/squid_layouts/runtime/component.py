@@ -38,8 +38,16 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write, untracked
+from squid_layouts.runtime.reactivity import (
+    _CURRENT,
+    _Computed,
+    _State,
+    observe_render,
+    report_undeclared_write,
+    untracked,
+)
 from squid_layouts.runtime.resources import Resource, observe_resources, unique_resources
+from squid_layouts.runtime.shared import _SharedCell
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -119,6 +127,7 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
+from squid_layouts.topics import Topic
 
 type RenderNode = LayoutNode
 type RenderResult = Document | LayoutNode | Sequence[LayoutNode]
@@ -186,6 +195,14 @@ class ComponentTree:
     Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
     never plan it, draw it, or commit it.
     """
+    observations: tuple[Topic, ...] = ()
+    """The bus addresses of every shared cell this render read, deduplicated.
+
+    A frontend reconciles its subscriptions against this so a panel follows exactly what it
+    currently looks at. Over-subscribing is the safe direction: a staged render that is later
+    discarded costs at most one spurious refresh, while a missed subscription is a stale panel
+    until someone clicks it.
+    """
 
 
 class Component:
@@ -209,6 +226,13 @@ class Component:
             for name, descriptor in vars(klass).items()
             if isinstance(descriptor, _State)
         }
+        misplaced = sorted(name for name, descriptor in declared.items() if isinstance(descriptor, _SharedCell))
+        if misplaced:
+            message = (
+                f"{cls.__name__}: sl.cell() declares state on an sl.Shared namespace, not on a "
+                f"component; use sl.state() for {', '.join(misplaced)}"
+            )
+            raise TypeError(message)
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
         cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
@@ -495,9 +519,17 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    with observe_resources() as observed:
+    with observe_render() as observation, observe_resources() as observed:
         nodes = tuple(expand(root, "$", context or {}))
-    return ComponentTree(nodes, components, tuple(assets), document_key, tuple(deferred), unique_resources(observed))
+    return ComponentTree(
+        nodes,
+        components,
+        tuple(assets),
+        document_key,
+        tuple(deferred),
+        unique_resources(observed),
+        observation.addresses(),
+    )
 
 
 def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:

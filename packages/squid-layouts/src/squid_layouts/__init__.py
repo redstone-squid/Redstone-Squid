@@ -193,8 +193,10 @@ from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, h
 from squid_layouts.runtime.reactivity import (
     ActionParticipant,
     ReactiveWriteError,
+    SharedStateConflictError,
     StateDelta,
     UndeclaredStateError,
+    addresses,
     batch,
     computed,
     join_action,
@@ -213,6 +215,7 @@ from squid_layouts.runtime.resources import (
     ResourceState,
     resource,
 )
+from squid_layouts.runtime.shared import Shared, cell
 from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, SceneDocument
 from squid_layouts.semantic import (
     CLOSED,
@@ -546,6 +549,8 @@ __all__ = [
     "Section",
     "SelectionEvent",
     "SemanticNode",
+    "Shared",
+    "SharedStateConflictError",
     "SourceCapabilities",
     "SourceRankedList",
     "Spilled",
@@ -600,6 +605,7 @@ __all__ = [
     "action",
     "action_group",
     "actions",
+    "addresses",
     "article",
     "as_document",
     "aside",
@@ -608,6 +614,7 @@ __all__ = [
     "budget",
     "bullet",
     "bullets",
+    "cell",
     "choice",
     "choices",
     "cluster",
