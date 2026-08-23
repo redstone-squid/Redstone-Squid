@@ -176,6 +176,19 @@ class Reactor:
             unchanged=self._unchanged,
         )
 
+    async def wait_idle(self) -> None:
+        """Wait until every refresh queued before the call has settled.
+
+        A running reactor owns the queue workers. Calling this while it is stopped would
+        otherwise wait forever, so an operator gets an explicit lifecycle error instead.
+        """
+        if not self._running:
+            if self._queued or self._in_flight:
+                message = "cannot wait for a stopped reactor with pending work"
+                raise RuntimeError(message)
+            return
+        await self._queue.join()
+
     @overload
     def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]: ...
 

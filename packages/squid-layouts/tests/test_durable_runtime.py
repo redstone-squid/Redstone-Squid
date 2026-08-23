@@ -39,7 +39,7 @@ class Counter(sl.Component):
 
 
 class HiddenDraft(sl.Component):
-    advanced: bool = sl.state(False)
+    advanced: bool = sl.state(default=False)
 
     def render(self):
         return Text("Draft")
@@ -154,6 +154,20 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
         await result.session.finish()
         assert await store.list_records() == ()
         assert mount.finished
+        tasks.cancel_scope.cancel()
+
+
+async def test_purge_reports_missing_records_while_runtime_is_supervised() -> None:
+    durable = runtime(MemorySnapshotStore(), FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+
+        result = await durable.purge(("missing",))
+
+        assert result[0].record_key == "missing"
+        assert not result[0].deleted
+        assert result[0].reason == "missing or claimed elsewhere"
         tasks.cancel_scope.cancel()
 
 

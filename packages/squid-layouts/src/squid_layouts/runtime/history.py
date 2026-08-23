@@ -62,6 +62,26 @@ class HistoryEntry:
         return self.undo is None or self.redo is not None
 
 
+@dataclass(frozen=True, slots=True)
+class HistoryEntrySnapshot:
+    """Safe diagnostic facts for one history entry."""
+
+    label: str
+    recorded_at: float
+    has_undo: bool
+    has_redo: bool
+
+
+@dataclass(frozen=True, slots=True)
+class HistorySnapshot:
+    """A read-only view of one component-owned history stack."""
+
+    name: str
+    limit: int
+    undo: tuple[HistoryEntrySnapshot, ...]
+    redo: tuple[HistoryEntrySnapshot, ...]
+
+
 class History:
     """One component's undo stack. Declare it with :func:`history`."""
 
@@ -100,6 +120,15 @@ class History:
     def redoable(self) -> tuple[HistoryEntry, ...]:
         """The redo stack, oldest first."""
         return tuple(self._redoable)
+
+    def snapshot(self, name: str) -> HistorySnapshot:
+        """Return diagnostic stack contents without exposing inverse callbacks."""
+        return HistorySnapshot(
+            name,
+            self.limit,
+            tuple(_entry_snapshot(entry) for entry in self._undone),
+            tuple(_entry_snapshot(entry) for entry in self._redoable),
+        )
 
     def record(self, label: TextLike, *, undo: Inverse | None = None, redo: Inverse | None = None) -> None:
         """Enter the action in flight into history, if it commits.
@@ -251,12 +280,29 @@ def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DE
     )
 
 
+def inspect_histories(owner: HistoryOwner) -> tuple[HistorySnapshot, ...]:
+    """Inspect declared history descriptors on ``owner`` without running an inverse."""
+    snapshots: list[HistorySnapshot] = []
+    for klass in reversed(type(owner).__mro__):
+        for name, descriptor in vars(klass).items():
+            if isinstance(descriptor, _HistoryField):
+                snapshots.append(getattr(owner, name).snapshot(name))
+    return tuple(snapshots)
+
+
+def _entry_snapshot(entry: HistoryEntry) -> HistoryEntrySnapshot:
+    return HistoryEntrySnapshot(str(entry.label), entry.recorded_at, entry.undo is not None, entry.redo is not None)
+
+
 __all__ = [
     "History",
     "HistoryEntry",
+    "HistoryEntrySnapshot",
     "HistoryError",
     "HistoryOwner",
+    "HistorySnapshot",
     "Inverse",
     "history",
     "history_actions",
+    "inspect_histories",
 ]

@@ -122,6 +122,8 @@ class Profiler(Protocol):
 
     def snapshot(self) -> RuntimeSnapshot: ...
 
+    def clear(self) -> None: ...
+
 
 @dataclass(slots=True)
 class _MutableSpan:
@@ -319,6 +321,9 @@ class NoOpProfiler:
             (),
             ProfilerHealth(0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         )
+
+    def clear(self) -> None:
+        """Discarding disabled diagnostics is already a no-op."""
 
 
 class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
@@ -740,6 +745,27 @@ class MemoryProfiler:
                 counter_aggregates,
                 health,
             )
+
+    def clear(self) -> None:
+        """Clear retained traces and aggregates while keeping profiler configuration."""
+        with self._lock:
+            self._active.clear()
+            self._recent.clear()
+            self._slow.clear()
+            self._failed.clear()
+            self._deadline_misses.clear()
+            self._lifetime.clear()
+            self._span_lifetime.clear()
+            self._counter_lifetime.clear()
+            self._window.clear()
+            self._overflow_key = None
+            self._span_overflow_key = None
+            self._counter_overflow_key = None
+            self._sampled_out = 0
+            self._dropped_traces = 0
+            self._evicted = 0
+            self._rejected_attributes = 0
+            self._internal_failures = 0
 
     def _new_id(
         self,

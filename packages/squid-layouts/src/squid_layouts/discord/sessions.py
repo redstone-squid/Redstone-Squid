@@ -605,6 +605,10 @@ class SessionRegistry:
         """Return the logical session that owns `mount`, if this registry knows it."""
         return self._by_mount.get(mount)
 
+    def find(self, session_id: str) -> Session | None:
+        """Return a live session by its stable diagnostic identity."""
+        return next((session for session in self._sessions if session.id == session_id), None)
+
     async def close(self, key: Hashable, *, disable: bool = True) -> None:
         """Finish every session under `key`."""
         for session in self.get(key):

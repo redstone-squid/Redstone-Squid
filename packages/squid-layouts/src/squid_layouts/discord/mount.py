@@ -878,6 +878,11 @@ class Mount:
         return tuple(self._follows)
 
     @property
+    def middleware(self) -> tuple[str, ...]:
+        """Qualified action-middleware identities in effective execution order."""
+        return tuple(f"{type(candidate).__module__}.{type(candidate).__qualname__}" for candidate in self._middleware)
+
+    @property
     def generation(self) -> int:
         """The live render generation used to reject stale interactions."""
         return self._generation
@@ -1044,7 +1049,9 @@ class Mount:
         def draw() -> tuple[MountedView, Composition]:
             handlers.clear()
 
-            def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            def wire(
+                node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding
+            ) -> discord.ui.Item[Any]:
                 key = binding.key
                 handlers[key] = binding
                 if isinstance(node, SceneButton):
@@ -1293,7 +1300,9 @@ class Mount:
             generation = self._generation
             busy = busy_key is not None
 
-            def wire(node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding) -> discord.ui.Item[Any]:
+            def wire(
+                node: SceneButton | SceneSelect | SceneEntitySelect, binding: ActionBinding
+            ) -> discord.ui.Item[Any]:
                 if isinstance(node, SceneButton):
                     if busy:
                         node = replace(
