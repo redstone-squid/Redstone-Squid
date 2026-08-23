@@ -20,12 +20,11 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import render_static
+from squid.bot.ui import render_presentation, respond_presentation
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import (
     edit_layout,
     error_layout,
-    no_mentions,
     reply_layout,
     text_layout,
 )
@@ -122,10 +121,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await interaction.followup.send(
-                view=error_layout(t(locale, _("Check the dimensions")), str(error)),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
+            await respond_presentation(
+                interaction,
+                error_layout(t(locale, _("Check the dimensions")), str(error)),
             )
             return
         if door_type is not None:
@@ -218,14 +216,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await edit_layout(
                 workspace_message,
                 text_layout(t(locale, _("Submission expired. Nothing was saved."))),
-                allowed_mentions=no_mentions(),
             )
             return
         if component.value is False:
             await edit_layout(
                 workspace_message,
                 text_layout(t(locale, _("Submission cancelled. Nothing was saved."))),
-                allowed_mentions=no_mentions(),
             )
             return
 
@@ -237,7 +233,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = render_static(
+        preview = render_presentation(
             [
                 sl.primitives.Text(heading),
                 await self.bot.for_build(build).render_node(),
@@ -254,7 +250,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale=locale,
         )
         await asyncio.gather(
-            edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
+            edit_layout(workspace_message, preview),
             self.bot.for_build(build).post_for_voting(),
         )
 

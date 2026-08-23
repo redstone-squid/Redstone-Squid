@@ -14,9 +14,9 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.ui import info_layout, reply_presentation
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
-from squid.bot.utils.components import info_layout, no_mentions
 from squid.bot.utils.permissions import (
     PermissionNodeRequired,
     build_subject,
@@ -81,10 +81,10 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
 
     async def _reply(self, ctx: Context[BotT], title: str, body: str) -> None:
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=info_layout(t(locale, title), body or t(locale, _("Nothing to show."))),
-            ephemeral=personal(ctx),
-            allowed_mentions=no_mentions(),
+        await reply_presentation(
+            ctx,
+            info_layout(t(locale, title), body or t(locale, _("Nothing to show."))),
+            visibility="personal" if personal(ctx) else "public",
         )
 
     # ---- /perm ----------------------------------------------------------

@@ -10,7 +10,7 @@ from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord import V2_TARGET, render_static
-from squid_layouts.discord.navigation import NavigationContext, default_nav
+from squid_layouts.planning.navigation import NavigationContext, default_nav
 from squid_layouts.errors import LayoutDegradedError
 from squid_layouts.planning import (
     SolveNoteCode,
