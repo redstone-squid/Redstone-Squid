@@ -8,7 +8,7 @@ import pytest
 from squid_layouts import Document, zoned_timestamp
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import plan
-from squid_layouts.semantic import Asset, InlineAsset
+from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.sources import Position
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import Localization, Message
