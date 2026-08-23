@@ -3247,6 +3247,66 @@ class TestBusyFeedback:
         final = interaction.followup.edit_message.await_args.kwargs["view"]
         assert self._labels(final) == [("Go", False)]
 
+    async def test_a_blocked_busy_paint_cannot_delay_acknowledgement(self) -> None:
+        release_lock = asyncio.Event()
+        release_handler = asyncio.Event()
+
+        class Idle(Component):
+            def render(self):
+                return sl.actions(
+                    sl.action("Go", self.go, key="go", feedback=sl.Feedback(pending="Working…")), key="panel"
+                )
+
+            async def go(self, event: ActionEvent) -> None:
+                await release_handler.wait()
+
+        mount = Mount(
+            Idle(),
+            access=Everyone(),
+            timeout=None,
+            pending_after=0,
+            acknowledgement_timeout=0.01,
+        )
+        commit_render(mount)
+        interaction = fake_interaction()
+        lock_held = asyncio.Event()
+
+        async def hold_render_lock() -> None:
+            async with mount._render_lock:
+                lock_held.set()
+                await release_lock.wait()
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(hold_render_lock)
+            await lock_held.wait()
+            tasks.start_soon(mount.dispatch, "go", interaction)
+            with anyio.fail_after(0.2):
+                while not interaction.response.defer.await_count:
+                    await asyncio.sleep(0)
+
+            assert interaction.response.edit_message.await_count == 0
+            assert interaction.followup.edit_message.await_count == 0
+            release_lock.set()
+            with anyio.fail_after(0.2):
+                while not interaction.followup.edit_message.await_count:
+                    await asyncio.sleep(0)
+
+            interim = interaction.followup.edit_message.await_args_list[0].kwargs["view"]
+            assert self._labels(interim) == [("Working…", True)]
+            release_handler.set()
+
+        assert interaction.response.defer.await_count == 1
+        assert interaction.followup.edit_message.await_count == 2
+        restored = interaction.followup.edit_message.await_args_list[1].kwargs["view"]
+        assert self._labels(restored) == [("Go", False)]
+
+    def test_acknowledgement_timeout_must_precede_discords_deadline(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match="a mount acknowledgement timeout must be greater than zero and below Discord's 3-second limit",
+        ):
+            Mount(Counter(), access=Everyone(), acknowledgement_timeout=3.5)
+
     async def test_the_pending_label_falls_back_to_chrome(self):
         release = asyncio.Event()
         panel = _GuardedPanel(feedback=sl.Feedback(), run=release.wait)
