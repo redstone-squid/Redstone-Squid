@@ -1,9 +1,12 @@
 """Operational inspection and controls for live Discord layout runtimes."""
 
+import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+
+import anyio
 
 from squid_layouts.discord.durability.runtime import (
     DurableRuntimeSnapshot,
@@ -246,13 +249,41 @@ class DevToolsRuntime:
         return self._success(DevToolsAction.CLOSE_SESSION, session_id, "session closed")
 
     async def wait_idle(self) -> OperationResult:
-        """Wait for all configured refresh and topic queues to settle."""
+        """Wait for all configured refresh and topic queues to reach a stable idle point."""
         self._authorize(DevToolsAction.WAIT_IDLE, None, confirmed=True)
-        if self.reactor is not None:
-            await self.reactor.wait_idle()
-        if self.bus is not None:
-            await self.bus.wait_idle()
+        while True:
+            await self._wait_bus_idle()
+            if self.reactor is not None:
+                await self.reactor.wait_idle()
+
+            if self._queues_idle():
+                await anyio.sleep(0)
+                if self._queues_idle():
+                    break
         return self._success(DevToolsAction.WAIT_IDLE, None, "runtime is idle")
+
+    async def _wait_bus_idle(self) -> None:
+        """Drain an asynchronous bus when the configured implementation owns a queue."""
+        if self.bus is None:
+            return
+        wait_idle = getattr(self.bus, "wait_idle", None)
+        if not callable(wait_idle):
+            return
+        result = wait_idle()
+        if inspect.isawaitable(result):
+            await result
+
+    def _queues_idle(self) -> bool:
+        """Return whether both configured queue owners report no pending work."""
+        if self.bus is not None:
+            snapshot = self.bus.snapshot()
+            if snapshot.queued or snapshot.in_flight:
+                return False
+        if self.reactor is not None:
+            snapshot = self.reactor.snapshot()
+            if snapshot.queued or snapshot.in_flight or snapshot.redeliver:
+                return False
+        return True
 
     async def flush_persistence(self) -> OperationResult:
         """Checkpoint pending durable sessions without resetting application state."""
