@@ -128,7 +128,7 @@ _Cell           value, version; staged through the transaction; read-tracked
   owned by a Shared      -> a write publishes (owner, descriptor) on the bus
 ```
 
-Everything else — immutability, tracking, staging, rollback, `StateChange`, `StateDelta`,
+Everything else — replacement, tracking, staging, rollback, `StateChange`, `StateDelta`,
 the undeclared-write report — is the same code, and the only thing a namespace declares is
 what a write does after it lands.
 
@@ -199,27 +199,30 @@ obvious line in host code rather than a lifetime rule inside the package.
 
 `workspace.filters = (*workspace.filters, tag)`, and other mounts see it.
 
-This section has been rewritten twice and the principle survived both times: **a shared cell
-behaves like component state, whatever that turns out to mean.** The first draft required
-cells to be declared immutable while `sl.state()` proxied, so the same line was a real write
-on one and a silent no-op on the other; the second draft reversed itself and reused the
-proxies for exactly that reason. [41](41-reactivity-cells.md) removed the proxies, so parity
-now points back the other way — and this time it costs nothing, because both sides move
-together rather than one side being asked to carry a rule the other does not.
+This section has been rewritten three times and the principle survived each time: **a
+shared cell behaves like component state, whatever that turns out to mean.** The first draft
+required cells to be declared immutable while `sl.state()` proxied, so the same line was a
+real write on one and a silent no-op on the other; the second reused the proxies for exactly
+that reason; the third followed [41](41-reactivity-cells.md) into a runtime `hash()` check.
+41 §1 now enforces replacement statically, and parity costs nothing because both sides move
+together rather than one being asked to carry a rule the other does not.
 
-So: a cell value is immutable, checked with `hash()` at the write, and `opaque=True` is the
-escape hatch for a collaborator the namespace holds and never mutates. A mapping that has to
-be a cell is an `sl.FrozenMapping`.
+So: a cell value is replaced, never mutated in place, and the type checker holds the line.
+`sl.cell()` carries the same overloads as `sl.state()` — a `dict` default declares
+`Mapping`, a `list` declares `Sequence`, a `set` declares `AbstractSet` — so a concrete
+annotation and every mutating method are type errors, and the stored value is the one
+assigned. `sl.draft(namespace, "field")` works on a namespace as it does on a component.
+`opaque=True` is the escape hatch for a collaborator the namespace holds and never mutates.
 
 **Nothing copies.** The copy-on-read the proxy version needed — materialising a deep copy
 into the overlay so that rollback stayed "drop the overlay" and §5b's guard still compared
-against an untouched committed value — has nothing to do. An immutable value *is* its own
-snapshot: the overlay holds a reference to the committed value and a reference to the staged
-one, and both properties hold by construction.
+against an untouched committed value — has nothing to do. A value nobody mutates *is* its
+own snapshot: the overlay holds a reference to the committed value and a reference to the
+staged one, and both properties hold by construction.
 
-**Mutating during a render is not a case any more.** There is nothing to mutate. A write
-during a render is still wrong for the reason the proxy rule gave — it would publish
-halfway through producing a tree — and `__set__` is where that is caught, not a proxy.
+**Mutating during a render is not a case any more.** Nothing is mutated. A write during a
+render is still wrong for the reason the proxy rule gave — it would publish halfway through
+producing a tree — and `__set__` is where that is caught, not a proxy.
 
 **Equality short-circuit.** Assigning an equal value is a no-op: no publish, no history
 change. "Equal" means `is`, then `==` inside a `try` that treats a raising or non-boolean
@@ -500,7 +503,7 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 | # | Deliverable | Exit criteria |
 |---|---|---|
 | 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. **Shipped.** |
-| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; a mutable cell value refused and an `opaque=` one accepted; an undeclared write raising. |
+| 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write/`del`; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; `sl.cell()` narrowing a builtin default to its read-only ABC under `just typecheck`; `sl.draft` on a namespace; an `opaque=` cell settling by identity; an undeclared write raising. |
 | 2 | `contribute()`, prepare/apply, `SharedStateConflictError`. Staging and read tracking come from 41. | A raising handler leaks no staged value; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces prepares all before applying any; a `@sl.computed` over a shared cell recomputing when another owner writes it. |
 | 3 | Render observation, `topic()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; no follow outlives its mount; a write during a render raising. |
 | 4 | Shared changes in `StateDelta`; blind undo and redo. | One entry undoes local plus multi-namespace shared state in one press; a sibling panel's intervening write does not disable the control and does not fail the press; undo publishes to the sibling; an entry with an external inverse whose inverse raises restores nothing. |
@@ -573,21 +576,20 @@ wait for a consumer.
   explicit precondition either. CAS had a third problem: inside a transaction its `True`
   would mean "valid right now, may still raise at commit", which is not what CAS means
   anywhere else.
-- **Requiring immutable cell declarations *by annotation*.** The previous shape of §4:
-  `list`, `dict` and `set` annotations rejected at class creation. The conclusion was right
-  and [41](41-reactivity-cells.md) adopted it; the mechanism was not, and 41 rejects it for
-  the reasons this plan already found. `__set_name__` does not receive annotations, and
-  reaching `owner.__annotations__` during class creation forces PEP 649 evaluation of names
-  the module may not have defined yet, in a package that bans quoted forward references
-  precisely to rely on that laziness. And the argument it used against freezing reads ("only
-  ever partial: a dataclass whose field is a list sails straight through") applied to itself
-  unchanged. `hash()` at the write is deep where an annotation is shallow, and it is what
-  ships.
-- **Freezing reads, or validating every write.** Still rejected, and these were always the
-  better half of the old §4's case. Coercing `list` → `tuple` on the way out makes the
-  declared type a lie, since there is no way to spell "frozen `T`". An immutability
-  predicate at write time pays a pass over the value on the hot path to reject what the
-  declaration already described.
+- **Rejecting `list`, `dict` and `set` annotations at runtime.** The previous shape of §4.
+  The conclusion was right and the mechanism was not: `__set_name__` does not receive
+  annotations, and reaching `owner.__annotations__` during class creation forces PEP 649
+  evaluation of names the module may not have defined yet, in a package that bans quoted
+  forward references precisely to rely on that laziness. It was also shallow — a dataclass
+  whose field is a list sailed straight through. 41 §1 gets the same rejection from the type
+  checker, where it is deep and reads nothing at runtime.
+- **A runtime `hash()` check at the write.** What 41 shipped first and this plan adopted for a
+  revision. Deep, but nothing in the machinery needs hashability, so it was a lint whose price
+  fell on mappings: there is no frozen-mapping literal, so every mapping write site paid an
+  `sl.FrozenMapping(...)` wrapper. 41's *Rejected alternatives* has the full account.
+- **Freezing reads.** Coercing `list` → `tuple` on the way out or in makes the declared type a
+  lie, since the value changes type between assignment and read, in a subsystem whose magic
+  was the complaint.
 - **Per-cell revisions.** A monotonic counter would make §5b's guard O(1) instead of a
   possibly-deep `==`, and would catch A→B→A. Neither earns it. The equality is the same
   conservative comparison `_Computed.refresh_for` runs on every computed refresh today, and
