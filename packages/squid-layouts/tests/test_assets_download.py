@@ -56,7 +56,8 @@ def test_scene_file_codec_round_trips() -> None:
         "kind": "file",
         "asset_key": "report",
         "name": "report.txt",
-        "media_type": "text/plain",
+            "media_type": "text/plain",
+            "spoiler": False,
     }
 
 

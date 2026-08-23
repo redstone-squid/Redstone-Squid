@@ -49,6 +49,8 @@ class ViolationCode(StrEnum):
     CUSTOM_ID_LENGTH = "custom_id_length"
     CUSTOM_ID_DUPLICATE = "custom_id_duplicate"
     BUTTON_LABEL = "button_label"
+    BUTTON_SHAPE = "button_shape"
+    LINK_URL = "link_url"
     SELECT_PLACEHOLDER = "select_placeholder"
     SELECT_OPTIONS = "select_options"
     OPTION_LABEL = "option_label"
@@ -350,6 +352,8 @@ def audit(
                 _audit_select(item, path, limits, violations)
             case discord.ui.MediaGallery():
                 _audit_gallery(item, path, limits, violations)
+            case discord.ui.Thumbnail():
+                _audit_media_description(item.description, item, path, limits, violations)
             case discord.ui.Section():
                 _audit_section(item, path, limits, violations)
             case discord.ui.ActionRow():
@@ -427,6 +431,26 @@ def _audit_button(button: discord.ui.Button, path: Path, limits: V2Limits, viola
                 ViolationCode.BUTTON_LABEL,
                 f"button label {len(button.label)} > {limits.button_label}",
                 repairable=True,
+                path=path,
+                item=button,
+            )
+        )
+    if button.style is not discord.ButtonStyle.premium and button.label is None and button.emoji is None:
+        violations.append(
+            Violation(
+                ViolationCode.BUTTON_SHAPE,
+                "button needs a label or emoji (not clampable)",
+                repairable=False,
+                path=path,
+                item=button,
+            )
+        )
+    if button.style is discord.ButtonStyle.link and button.url is not None and len(button.url) > limits.link_url:
+        violations.append(
+            Violation(
+                ViolationCode.LINK_URL,
+                f"link URL {len(button.url)} > {limits.link_url} (not clampable)",
+                repairable=False,
                 path=path,
                 item=button,
             )
@@ -513,17 +537,26 @@ def _audit_gallery(gallery: discord.ui.MediaGallery, path: Path, limits: V2Limit
             )
         )
     for media_item in items[: limits.gallery_items]:
-        description = media_item.description
-        if description is not None and len(description) > limits.gallery_item_description:
-            violations.append(
-                Violation(
-                    ViolationCode.GALLERY_ITEM_DESCRIPTION,
-                    f"gallery item description {len(description)} > {limits.gallery_item_description}",
-                    repairable=True,
-                    path=path,
-                    item=gallery,
-                )
+        _audit_media_description(media_item.description, gallery, path, limits, violations)
+
+
+def _audit_media_description(
+    description: str | None,
+    owner: object,
+    path: Path,
+    limits: V2Limits,
+    violations: list[Violation],
+) -> None:
+    if description is not None and len(description) > limits.gallery_item_description:
+        violations.append(
+            Violation(
+                ViolationCode.GALLERY_ITEM_DESCRIPTION,
+                f"media description {len(description)} > {limits.gallery_item_description}",
+                repairable=isinstance(owner, discord.ui.MediaGallery),
+                path=path,
+                item=owner,
             )
+        )
 
 
 def _audit_section(section: discord.ui.Section, path: Path, limits: V2Limits, violations: list[Violation]) -> None:

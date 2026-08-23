@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 import discord
 
 from squid_layouts.discord.conform import conform_modal
+from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.entities import EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import (
@@ -303,6 +304,26 @@ def _form_component(
             message = f"Discord choice field {field.key!r} needs 2-10 options"
             raise LayoutInvariantError(message)
         selected = field.format_prefill(prefill)
+        if any(option.emoji is not None for option in field.options):
+            component = discord.ui.Select(
+                custom_id=field.key,
+                min_values=1 if field.required else 0,
+                max_values=1,
+                required=field.required,
+                options=[
+                    discord.SelectOption(
+                        label=_resolve(option.label, localization),
+                        value=option.key,
+                        description=(
+                            _resolve(option.description, localization) if option.description is not None else None
+                        ),
+                        default=option.key == selected,
+                        emoji=discord_emoji(option.emoji),
+                    )
+                    for option in field.options
+                ],
+            )
+            return component, lambda: component.values[0] if component.values else None
         component = discord.ui.RadioGroup(
             custom_id=field.key,
             required=field.required,
@@ -338,6 +359,7 @@ def _form_component(
                         _resolve(option.description, localization) if option.description is not None else None
                     ),
                     default=option.key in selected,
+                    emoji=discord_emoji(option.emoji),
                 )
                 for option in field.options
             ],

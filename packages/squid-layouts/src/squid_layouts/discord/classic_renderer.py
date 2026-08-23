@@ -22,6 +22,7 @@ import discord
 
 from squid_layouts.actions import ActionBinding
 from squid_layouts.discord.attachments import attachment_assets
+from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.inspection import audit_classic_payload
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import RoutedItem, RoutedSelectItem
@@ -39,6 +40,7 @@ from squid_layouts.scene.model import (
     SceneEntitySelect,
     SceneExtension,
     SceneLink,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneSelect,
@@ -197,13 +199,21 @@ class ClassicRenderer:
     ) -> discord.ui.Item[Any]:
         match control:
             case SceneLink(label=label, url=url):
-                return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
+                return discord.ui.Button(
+                    style=discord.ButtonStyle.link,
+                    label=label,
+                    url=url,
+                    emoji=discord_emoji(control.emoji),
+                    disabled=control.disabled,
+                )
+            case ScenePremiumButton(sku_id=sku_id):
+                return discord.ui.Button(sku_id=sku_id)
             case SceneRoutedButton(label=label, route_id=route_id):
                 return RoutedItem(
                     style=getattr(discord.ButtonStyle, control.style.value),
                     label=label,
                     custom_id=route_id,
-                    emoji=control.emoji,
+                    emoji=discord_emoji(control.emoji),
                     disabled=control.disabled,
                 )
             case SceneRoutedSelect(options=options, route_id=route_id):
@@ -235,4 +245,5 @@ def _option(option: object) -> discord.SelectOption:
         value=option.value,  # type: ignore[attr-defined]
         description=option.description,  # type: ignore[attr-defined]
         default=option.default,  # type: ignore[attr-defined]
+        emoji=discord_emoji(option.emoji),  # type: ignore[attr-defined]
     )

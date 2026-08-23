@@ -69,6 +69,7 @@ class DiscordLimits:
     # Modals.
     modal_title: int = 45
     modal_components: int = 5
+    modal_text: int = 4000
     label_text: int = 45
     label_description: int = 100
     text_input_placeholder: int = 100
