@@ -561,6 +561,9 @@ is the single framework boundary outside the whole user onion.
 
 ## Library binding: discord.py, not Discord alone
 
+For an ownership-first path from existing views and persistent controls into these adapter
+boundaries, see [Migrating an existing discord.py bot](../packages/squid-layouts/docs/migrating.md).
+
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
 `measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
 row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
