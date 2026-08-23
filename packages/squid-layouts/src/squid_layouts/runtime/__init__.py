@@ -53,7 +53,7 @@ from squid_layouts.runtime.resources import (
     ResourceState,
     resource,
 )
-from squid_layouts.runtime.shared import Shared, cell
+from squid_layouts.runtime.shared import Shared
 
 
 def __getattr__(name: str):
@@ -105,7 +105,6 @@ __all__ = [
     "apply_updates",
     "batch",
     "block_writes",
-    "cell",
     "computed",
     "export_state",
     "history",

@@ -222,7 +222,7 @@ from squid_layouts.runtime.resources import (
     ResourceState,
     resource,
 )
-from squid_layouts.runtime.shared import Shared, cell
+from squid_layouts.runtime.shared import Shared
 from squid_layouts.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, SceneDocument
 from squid_layouts.semantic import (
     CLOSED,
@@ -654,7 +654,6 @@ __all__ = [
     "budget",
     "bullet",
     "bullets",
-    "cell",
     "choice",
     "choices",
     "entities",
