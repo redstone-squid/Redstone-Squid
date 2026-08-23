@@ -8,25 +8,21 @@ from typing import Any, Self, override
 
 import anyio
 import discord
-from discord import Webhook
-from discord.abc import Messageable
 from discord.ext import commands
 from discord.ext.commands import Bot
-from squid_reactive import LocalTopicBus
 
 from squid.bootstrap import create_bot_runtime
 
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import SquidCommandTree, set_error_reporter
+from squid.bot.errors import SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.ui import MOUNT_DEFAULTS
-from squid.bot.utils.embeds import RunningMessage
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -56,6 +52,7 @@ from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_layouts.discord import Reactor, SessionRegistry
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
+from squid_reactive import LocalTopicBus
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -212,10 +209,6 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
-        # Progress-message failures are handled from a `Messageable` that does not expose the
-        # client, so the store has to be reachable without one. Registered here rather than in
-        # `__init__` so merely constructing a bot in a test does not install a live service.
-        set_error_reporter(self.services.error_reports)
         self.background_tasks.capture_failures_into(self.services.error_reports)
         await self.tree.set_translator(SquidAppCommandTranslator())
         # Not a cog: every command's permission check reads through the cache this
@@ -284,40 +277,6 @@ class RedstoneSquid(Bot):
         except discord.Forbidden:
             pass
         return None
-
-    def get_running_message(
-        self,
-        ctx: Messageable | Webhook,
-        *,
-        title: str = "Working",
-        description: str = "Getting information...",
-        delete_on_exit: bool = False,
-        locale: str | None = None,
-    ) -> RunningMessage:
-        """
-        Returns a context manager which can be used to display a message that will be updated
-        as the command progresses.
-
-        `title`/`description` are translated into `locale` (resolved via
-        `squid.bot.i18n.resolve_locale`) if given, else sent untranslated.
-
-        Usage:
-            ```python
-            async with bot.get_running_message(ctx, title="Processing") as msg:
-                presentation = info_layout("Processing", "Still working...")
-                await squid_layouts.discord.delivery.handle_for(msg, mode=presentation.mode).write(presentation)
-                # Do some work here
-                finished = info_layout("Processing", "Done!")
-                await squid_layouts.discord.delivery.handle_for(msg, mode=finished.mode).write(finished)
-            ```
-        """
-        return RunningMessage(
-            ctx,
-            title=title,
-            description=description,
-            delete_on_exit=delete_on_exit,
-            locale=locale,
-        )
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
         """A helper function to create a BuildHandler with the bot instance."""
