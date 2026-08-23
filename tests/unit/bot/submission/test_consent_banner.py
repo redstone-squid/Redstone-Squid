@@ -114,8 +114,9 @@ def _make_interaction(accounts: Any) -> Any:
     message = fake_message(message_id=999)
     response = SimpleNamespace(_done=False)
 
-    async def send_message(**_kwargs: Any) -> None:
+    async def send_message(**_kwargs: Any) -> Any:
         response._done = True
+        return SimpleNamespace(resource=None, message_id=999, is_ephemeral=lambda: True)
 
     response.is_done = lambda: response._done
     response.send_message = AsyncMock(side_effect=send_message)
