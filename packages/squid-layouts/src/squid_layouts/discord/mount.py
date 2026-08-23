@@ -2051,6 +2051,11 @@ class Mount:
 
         async def handle() -> None:
             with self._action_transaction(binding.policy):
+                # Before the handler: the entry is the transaction's whole delta either
+                # way, and reserving the history here is what makes a handler's own
+                # `record` the error it is.
+                if binding.record is not None:
+                    binding.record.record(binding.label)
                 await binding.handler(event)
 
         try:
