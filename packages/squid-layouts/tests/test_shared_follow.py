@@ -76,6 +76,26 @@ class Writer(Component):
         raise RuntimeError(message)
 
 
+class Swapper(Component):
+    """A panel that reads one cell or the other, never both.
+
+    `Panel` only ever adds a read, so it cannot express the case where a staged render stops
+    depending on a cell the generation on screen still displays.
+    """
+
+    other: bool = state(default=False)
+
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
+
+    def render(self):
+        text = self.workspace.detail if self.other else str(self.workspace.selected)
+        return [Text(text), Row((Button(label="pick", on_click=self.pick, key="pick"),))]
+
+    async def pick(self, event: PressEvent) -> None:
+        self.workspace.selected = 7
+
+
 def _texts(view: discord.ui.LayoutView) -> str:
     return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
@@ -151,6 +171,54 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     panel.show_detail = False
     await mount.refresh_now()
     assert mount.followed == (address(workspace, "selected"),)
+
+
+async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() -> None:
+    """The unsafe direction: a render that stopped reading a cell may not unfollow it early.
+
+    The message still shows `selected`, so dropping that subscription while the candidate is
+    only staged leaves the panel deaf to every later write -- the bus is not durable, so
+    nothing replays it once a successful render subscribes again.
+    """
+    bus = TopicBus()
+    reactor = Reactor(bus)
+    workspace = Workspace(bus, Member(1))
+    panel = Swapper(workspace)
+    mount = Mount(panel, access=Everyone(), scheduler=reactor)
+    await mount.send(delivered_to(fake_message()))
+    assert mount.followed == (address(workspace, "selected"),)
+
+    panel.other = True
+    candidate = mount._stage()
+    mount._rollback(candidate)
+    assert address(workspace, "selected") in mount.followed
+
+    refreshes = 0
+
+    async def refresh_now(*, links=()) -> None:
+        nonlocal refreshes
+        refreshes += 1
+
+    mount.refresh_now = refresh_now  # pyrefly: ignore
+    with transaction():
+        workspace.selected = 3
+    await drain(reactor, bus)
+    assert refreshes == 1
+
+
+async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
+    """The other half: pruning happens, just at the commit rather than at the stage."""
+    bus = TopicBus()
+    reactor = Reactor(bus)
+    workspace = Workspace(bus, Member(1))
+    panel = Swapper(workspace)
+    mount = Mount(panel, access=Everyone(), scheduler=reactor)
+    await mount.send(delivered_to(fake_message()))
+
+    panel.other = True
+    await mount.refresh_now()
+    assert mount.followed == (address(workspace, "detail"),)
+    assert {topic.topic for topic in bus.snapshot().topics} == {address(workspace, "detail")}
 
 
 async def test_no_follow_outlives_its_mount() -> None:
