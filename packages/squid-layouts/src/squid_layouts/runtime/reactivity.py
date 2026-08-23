@@ -10,11 +10,10 @@ reference points from reader to source, which is what lets a per-message compone
 collected while the state it read lives on.
 """
 
-import copy
 import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Protocol, overload
@@ -741,35 +740,6 @@ def state(
     settles on identity rather than ``==`` and is never persisted.
     """
     return _State(default, factory=factory, persist=persist, opaque=opaque)
-
-
-def draft(owner: ReactiveOwner, name: str) -> AbstractContextManager[Any]:
-    """Mutate a shallow copy of one state field, assigned back as a single write on exit.
-
-    For a mapping, sequence or set that needs more than a one-key replacement. The copy is the
-    author's to change; leaving the block assigns it, so the write stages, bumps the version
-    and short-circuits on equality like any other. Raising inside discards it. A free function
-    rather than a method so that a field may be called ``draft``.
-    """
-    if _state_descriptor(owner, name) is None:
-        message = f"{type(owner).__name__}.{name} is not declared state, so it cannot be drafted"
-        raise TypeError(message)
-    return _drafting(owner, name)
-
-
-@contextmanager
-def _drafting(owner: ReactiveOwner, name: str) -> Iterator[Any]:
-    working = copy.copy(getattr(owner, name))
-    yield working
-    setattr(owner, name, working)
-
-
-def _state_descriptor(owner: ReactiveOwner, name: str) -> _State | None:
-    for klass in type(owner).__mro__:
-        descriptor = vars(klass).get(name)
-        if isinstance(descriptor, _State):
-            return descriptor
-    return None
 
 
 @dataclass(frozen=True, slots=True)

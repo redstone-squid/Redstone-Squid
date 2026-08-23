@@ -336,19 +336,20 @@ class TestStateWithoutAnInitialValue:
 
 class TestMutatedInPlace:
     def test_it_schedules_a_draw_for_a_change_nothing_observed(self):
-        runtime = ComponentRuntime(Panel(Uncopyable()))
+        panel = Panel(Uncopyable())
+        runtime = ComponentRuntime(panel)
         runtime.commit(runtime.render())
         assert runtime.dirty is False
 
-        runtime.root.mutated("service")
+        panel.mutated(panel.service)
 
         assert runtime.dirty is True
 
-    def test_it_rejects_a_field_that_is_not_declared_state(self):
-        """The point of naming the field: the call breaks when the declaration goes away."""
+    def test_it_rejects_an_object_no_opaque_field_holds(self):
+        """The point of passing the object: the call breaks when the declaration goes away."""
         panel = attached(Panel(Uncopyable()))
-        with pytest.raises(TypeError, match=r"Panel\.undeclared is not declared state"):
-            panel.mutated("undeclared")
+        with pytest.raises(TypeError, match="no opaque state on Panel holds"):
+            panel.mutated(Uncopyable())
 
 
 class TestAbstractBases:

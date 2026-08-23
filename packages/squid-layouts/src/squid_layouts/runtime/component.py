@@ -38,7 +38,7 @@ from squid_layouts.primitives.nodes import (
     Variants,
 )
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write
+from squid_layouts.runtime.reactivity import _CURRENT, _Computed, _State, report_undeclared_write, untracked
 from squid_layouts.runtime.resources import Resource, observe_resources, unique_resources
 from squid_layouts.semantic import (
     Action as SemanticAction,
@@ -197,6 +197,8 @@ class Component:
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _state_names: ClassVar[frozenset[str]] = frozenset()
     _state_descriptors: ClassVar[dict[str, _State]] = {}
+    _opaque_state: ClassVar[tuple[tuple[str, _State], ...]] = ()
+    """The `opaque=True` subset of `_state_descriptors`, fixed at class creation for `mutated`."""
     _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
@@ -209,6 +211,7 @@ class Component:
         }
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
+        cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
         cls._computed_descriptors = {
             name: descriptor
             for klass in reversed(cls.__mro__)
@@ -275,18 +278,30 @@ class Component:
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
 
-    def mutated(self, name: str) -> None:
-        """Re-render because declared state changed in place where nothing observed it.
+    def mutated(self, collaborator: object) -> None:
+        """Re-render because an ``opaque=True`` field's value changed in place.
 
-        Assignment is observed already, and a state value is immutable, so the only field
-        whose *contents* can change behind the framework's back is an ``opaque=True`` one --
-        a collaborator the component holds. It schedules the draw; it cannot roll the change
-        back, and naming the field keeps the call tied to the declaration it depends on.
+        Assignment is observed already, and a state value is replaced rather than mutated, so
+        the only field whose *contents* can change behind the framework's back is an opaque
+        one -- a collaborator the component holds by reference. Passing the object rather than
+        a field name keeps the call typed; identity finds the field, since that is how an
+        opaque field settles anyway. It moves the cell's version so a computed that read the
+        field recomputes, and schedules the draw; it cannot roll the change back.
         """
-        if name not in type(self)._state_names:
-            message = f"{type(self).__name__}.{name} is not declared state, so it cannot have changed in place"
+        with untracked():
+            holders = [
+                (name, descriptor)
+                for name, descriptor in type(self)._opaque_state
+                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
+            ]
+        if not holders:
+            message = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
             raise TypeError(message)
-        descriptor = type(self)._state_descriptors[name]
+        if len(holders) > 1:
+            names = ", ".join(name for name, _ in holders)
+            message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
+            raise TypeError(message)
+        _, descriptor = holders[0]
         descriptor.mutated(self)
         self._state_changed(frozenset((descriptor._name,)))
 

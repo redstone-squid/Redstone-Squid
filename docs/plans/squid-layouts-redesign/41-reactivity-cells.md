@@ -120,20 +120,19 @@ enforces whatever that type's own annotations say. A user without a type checker
 guard, which is the contract every typed Python library offers, and the population it
 guards against is measured in *Problem*: two in-place mutations in the tree, both in tests.
 
-**Nested updates use a draft.** `{**m, k: v}` covers a one-key replacement, and every
-in-tree write is one. For more than that, a draft is a shallow copy the author mutates
-freely and which is assigned back on exit, so the write goes through the ordinary `__set__`:
-staged in the transaction, version bumped, equal-value no-op.
+**Nested updates are a local.** `{**m, k: v}` covers a one-key replacement, and every
+in-tree write is one. For more than that, copy into a local, mutate it, assign it back:
 
 ```python
-with sl.draft(self, "channels") as channels:
-    channels["log"] = 1
-    del channels["audit"]
+channels = dict(self.channels)
+channels["log"] = 1
+del channels["audit"]
+self.channels = channels
 ```
 
-Raising inside the block discards the draft. `draft` names the field the way `mutated` does,
-and fails the same way if that name is not declared state. It is a function rather than a
-`Component` method so that a field may itself be called `draft`, as one in the bot already is.
+Typed end to end — the local is a `dict`, the field a `Mapping` — and the last line is the
+ordinary write. A `draft()` context manager was built and deleted: it saved that one line and
+cost a string naming the field so the framework could do the assignment.
 
 **`opaque=True` replaces `copy="ref"`.** A service, a guild, a `_WindowRequest` — a
 collaborator the component holds and does not mutate — is declared for what it is:
@@ -146,6 +145,18 @@ It settles on identity rather than `==`, because `==` on a collaborator is the a
 code, and it is never persisted. The promise sits at the declaration where a reader will
 see it; what it stops meaning is a copying strategy, since no snapshot copies anything any
 more.
+
+A collaborator is the one thing that legitimately changes in place, and `mutated` is how the
+component says so. It takes the object, not a field name: identity finds the field, which is
+how an opaque field settles anyway, so the call is typed and there is no string to drift.
+
+```python
+self.build.door_orientation = event.selected[0]
+self.mutated(self.build)          # version moves, computeds over `build` recompute, draw
+```
+
+It refuses a non-opaque value, because a replaced value is never mutated, and an object two
+opaque fields hold, rather than guess.
 
 ### 2. Reads are tracked
 
@@ -345,7 +356,7 @@ Small, because the counts in *Problem* say it is.
 
 | # | Deliverable | Exit criteria |
 |---|---|---|
-| 1 | `_Cell` with value and version; `state()` overloads narrowing `dict`/`list`/`set` to their read-only ABCs; `draft()`; `opaque=`; delete the proxy subsystem. **Shipped** (first with a runtime `hash()` check and `sl.FrozenMapping`, then amended to static enforcement). | A concrete `list`/`dict`/`set` annotation and a mutating method both type errors, pinned by a typing fixture; a `dict` default stored as-is and shared; a draft assigned back once on exit, discarded on raise, staged inside an action; an `opaque=` field accepting a service; `ReactiveList`/`Dict`/`Set`/`_ReactiveMixin`/`_observe` gone. |
+| 1 | `_Cell` with value and version; `state()` overloads narrowing `dict`/`list`/`set` to their read-only ABCs; `opaque=`; `mutated(obj)`; delete the proxy subsystem. **Shipped** (first with a runtime `hash()` check and `sl.FrozenMapping`, then amended to static enforcement). | A concrete `list`/`dict`/`set` annotation and a mutating method both type errors, pinned by a typing fixture; a `dict` default stored as-is and shared; `mutated(obj)` moving the holding field's version, refusing a non-opaque value and an object held twice; an `opaque=` field accepting a service; `ReactiveList`/`Dict`/`Set`/`_ReactiveMixin`/`_observe` gone. |
 | 2 | Read tracking, `untracked()`; computed without `depends=`; versions, settle, the write epoch. **Shipped.** | A computed never stale; a conditional dependency recomputing nothing when the unread branch's input changes; a diamond recomputing the shared node once; a computed whose value settles unchanged not propagating; a computed nobody reads never evaluated; a dropped reader collected while its source lives. |
 | 3 | Cells stage through the transaction; delete `_Snapshot`, `_plain`, `_restore`, `CopyMode`; undeclared writes always raise and `strict_state` is deleted. **Shipped.** | Rollback by dropping the overlay; read-your-writes; the delta built from the overlay; `export_state`/`restore_state` round-tripping without `_plain`; an undeclared write raising with no transaction flag set *and* leaving the attribute unwritten; a component built mid-action still assigning freely; `block_writes` and `readonly_transaction` unchanged. |
 | 4 | Rewrite 40 §2, §4 and §5 onto `_Cell`. **Shipped, as doc work only:** 40 has no code yet, so unifying `sl.cell()` onto `_Cell` is 40's phase 1 to build, not this plan's to migrate. The runtime half that could be tested here — a computed recomputing when a *different owner* writes state it read — is covered in `tests/test_computed.py`. | 40 §2 and §4 describing one cell type rather than two similar ones; 40's bus publication and §5b value guard unchanged; 40's phase table naming what it still owns. |
@@ -353,7 +364,7 @@ Small, because the counts in *Problem* say it is.
 
 ## Verification
 
-- `tests/test_reactivity.py`: a builtin container stored as assigned; `draft()`; `opaque=`;
+- `tests/test_reactivity.py`: a builtin container stored as assigned; `mutated(obj)`; `opaque=`;
   version bumps only on a real change; the equality short-circuit.
 - `tests/typing_state.py`: the `state()` overloads, pinned with `assert_type` under
   `just typecheck`. Pyrefly does not report an unused ignore, so a negative pin would be silent.
@@ -442,8 +453,12 @@ promoted into the package.
   184 writes of state across the package and bot, against 46 declarations. The wrapper
   taxes the 597 to guard the 184, and `unwrap()` still has to be overloaded per builtin to
   return a read-only view, which is the same three overloads moved from the declaration to
-  every read. The draft context manager is the part of this idea worth keeping, and it
-  stands on its own.
+  every read.
+- **A `draft()` context manager.** `with sl.draft(self, "channels") as c:` — a shallow copy
+  assigned back on exit. Built, then deleted: the only thing it saved over a local variable
+  was the assignment line, and it paid for that with a string naming the field. Every typed
+  spelling — a selector lambda resolved against a recording proxy, a descriptor handle — is
+  longer than the three-line idiom it wraps.
 - **Keeping `depends=` as an optional override.** A second way to express the same fact,
   which can disagree with the first. The tracked set is what the code actually read; a
   declared set that differs from it is either redundant or wrong.
