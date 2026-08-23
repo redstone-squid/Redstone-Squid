@@ -15,7 +15,7 @@ from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursor
 from squid_layouts.planning.dialect import SceneBindings
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import ClassicLimits
-from squid_layouts.planning.measure import (
+from squid_layouts.planning.measurement import (
     MeasuredLayout,
     RCard,
     RContent,

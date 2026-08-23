@@ -2,7 +2,7 @@
 
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.history import (
+from squid_layouts.runtime.histories import (
     History,
     HistoryEntry,
     HistoryEntrySnapshot,

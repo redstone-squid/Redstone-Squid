@@ -29,7 +29,7 @@ from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
 if TYPE_CHECKING:
-    from squid_layouts.runtime.history import History
+    from squid_layouts.runtime.histories import History
 
 
 @dataclass(frozen=True, slots=True)

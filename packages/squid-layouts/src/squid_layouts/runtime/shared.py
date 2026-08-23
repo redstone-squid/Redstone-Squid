@@ -4,7 +4,7 @@ A shared namespace holds what the view owns. It is a class, declared the way a c
 declares its own state, and two panels converge on one because something handed them the
 same object -- there is no store, no registry and no keyed lookup. What a namespace adds
 over an application service is that its writes join the action's transaction and its
-changes reach the bus and :mod:`~squid_layouts.runtime.history` without the author writing
+changes reach the bus and :mod:`~squid_layouts.runtime.histories` without the author writing
 either half.
 
 Anything the application would still want if no one were looking at it belongs to the
