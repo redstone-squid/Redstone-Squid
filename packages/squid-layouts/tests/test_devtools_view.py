@@ -210,7 +210,7 @@ class TestSceneDump:
 
         assert asset is not None
         assert asset.name.endswith(".json")
-        assert isinstance(asset.source, sl.semantic.InlineAsset)
+        assert isinstance(asset.source, sl.document.InlineAsset)
         assert sl.scene.Codec.loads(asset.source.data.decode()) == subject.snapshot().scene
 
     def test_a_mount_with_no_committed_render_has_no_scene(self) -> None:

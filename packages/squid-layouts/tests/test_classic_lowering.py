@@ -2,7 +2,8 @@
 
 from squid_layouts import Tone
 from squid_layouts.planning import plan
-from squid_layouts.semantic import Article, Aside, Asset, Column, Columns, Download, Field, Fields, Figure, Heading, InlineAsset, MediaItem, Note, Paragraph, Table, TableRow
+from squid_layouts.semantic import Article, Aside, Column, Columns, Download, Field, Fields, Figure, Heading, MediaItem, Note, Paragraph, Table, TableRow
+from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.discord import CLASSIC_TARGET
 from squid_layouts.scene.model import SceneClassicMessage
 

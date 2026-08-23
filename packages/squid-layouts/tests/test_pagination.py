@@ -12,7 +12,7 @@ from hypothesis import strategies as st
 
 import squid_layouts as sl
 from squid_layouts import Component, field, fields, paragraph, section, truncate
-from squid_layouts.semantic import DEFAULT_CHROME
+from squid_layouts.chrome import DEFAULT_CHROME
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )

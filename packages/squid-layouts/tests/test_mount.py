@@ -21,7 +21,8 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormField, FormSpec, TextField
 from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionPolicy, ActionProceed, ActionRequest
 from squid_layouts.runtime import Failed, Pending, ReactiveWriteError, Ready, ResourceDelivery, batch, transaction
-from squid_layouts.semantic import Asset, InlineAsset, Paragraph
+from squid_layouts.semantic import Paragraph
+from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.text import Localization, Message
 from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
