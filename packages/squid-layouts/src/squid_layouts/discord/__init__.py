@@ -6,8 +6,8 @@ from squid_layouts.discord.actions import ActionResponder, native, responder, se
 from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, discord_py_adapter_profile
 from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
-from squid_layouts.discord.compose import Composition, compose, render_static
-from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
+from squid_layouts.discord.composition import Composition, compose, render_static
+from squid_layouts.discord.conformance import ELLIPSIS, conform, conform_modal, trim
 from squid_layouts.discord.defaults import MountDefaults, MountOptions
 from squid_layouts.discord.delivery import (
     Abandoned,

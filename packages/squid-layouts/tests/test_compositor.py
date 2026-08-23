@@ -14,7 +14,7 @@ from squid_layouts.discord import (
     compose,
     render_static,
 )
-from squid_layouts.discord.compose import Composition
+from squid_layouts.discord.composition import Composition
 from squid_layouts.primitives import (
     Button,
     Code,

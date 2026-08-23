@@ -73,7 +73,7 @@ def compose(
     profile: OperationRecorder | None = None,
 ):
     """Plan a logical document, then draw the complete classic message it resolves to."""
-    from squid_layouts.discord.compose import Composition, _span
+    from squid_layouts.discord.composition import Composition, _span
 
     with _span(profile, "planner") as planner_span:
         result = plan_document(

@@ -359,7 +359,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         *,
         files: list[discord.File] | None = None,
     ) -> None:
-        from squid_layouts.discord.compose import render_static
+        from squid_layouts.discord.composition import render_static
 
         await ctx.send(
             view=render_static(nodes).layout,

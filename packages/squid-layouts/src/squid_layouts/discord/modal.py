@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 
 import discord
 
-from squid_layouts.discord.conform import conform_modal
+from squid_layouts.discord.conformance import conform_modal
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.entity import EntityType
 from squid_layouts.errors import LayoutInvariantError
