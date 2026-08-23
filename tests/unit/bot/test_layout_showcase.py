@@ -8,9 +8,23 @@ import discord
 import pytest
 from discord.ext import commands
 
-from squid.bot.layout_showcase import LayoutShowcase, LayoutShowcaseCog
-from squid_layouts.discord import Everyone, Mount
-from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction, fake_message
+import squid_layouts as sl
+from squid.bot.layout_showcase import (
+    Appearance,
+    AppearancePanel,
+    LayoutShowcase,
+    LayoutShowcaseCog,
+    PreviewPanel,
+    Session,
+)
+from squid_layouts.discord import Everyone, Mount, Owner, Reactor
+from squid_layouts.discord.testing import (
+    assert_within_limits,
+    commit_render,
+    delivered_to,
+    fake_interaction,
+    fake_message,
+)
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
@@ -140,3 +154,63 @@ async def test_demo_command_and_controls_are_public() -> None:
     assert isinstance(sent["view"], discord.ui.LayoutView)
     demo = next(command for command in cog.__cog_commands__ if command.qualified_name == "layout demo")
     assert demo.checks == []
+
+
+class TestSharedAppearance:
+    """The worked example: two live panels agreeing on view state neither of them owns."""
+
+    def panels(self) -> tuple[sl.TopicBus, Reactor, Appearance, Session, Mount, Mount]:
+        bus = sl.TopicBus()
+        reactor = Reactor(bus)
+        appearance, session = Appearance(bus, 7), Session(bus, 7)
+        writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
+        reader = Mount(PreviewPanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
+        return bus, reactor, appearance, session, writer, reader
+
+    async def test_the_reading_panel_follows_what_it_rendered(self) -> None:
+        _, _, appearance, session, writer, reader = self.panels()
+        await reader.send(delivered_to(fake_message(message_id=2)))
+
+        assert set(reader.followed) == {
+            (appearance, type(appearance)._cells["accent"]),
+            (appearance, type(appearance)._cells["density"]),
+            (session, type(session)._cells["focus"]),
+        }
+        assert writer.followed == ()
+
+    async def test_a_press_on_one_panel_schedules_the_other(self) -> None:
+        bus, reactor, _, _, writer, reader = self.panels()
+        await writer.send(delivered_to(fake_message(message_id=1)))
+        await reader.send(delivered_to(fake_message(message_id=2)))
+
+        await writer.dispatch("controls.density", fake_interaction(user_id=7))
+        await bus.drain()
+
+        assert reader in reactor._queued
+
+    async def test_the_injected_namespace_reaches_a_leaf_and_undo_covers_it(self) -> None:
+        _, _, appearance, _, writer, _ = self.panels()
+        await writer.send(delivered_to(fake_message(message_id=1)))
+
+        await writer.dispatch("controls.density", fake_interaction(user_id=7))
+        assert appearance.density == "compact"
+
+        await writer.dispatch("controls.undo", fake_interaction(user_id=7))
+        assert appearance.density == "comfortable", "one entry restores state the panel does not own"
+
+    async def test_the_session_dies_with_its_panels_and_appearance_does_not(self) -> None:
+        import gc
+        import weakref
+
+        _, _, appearance, session, writer, reader = self.panels()
+        await writer.send(delivered_to(fake_message(message_id=1)))
+        await reader.send(delivered_to(fake_message(message_id=2)))
+        gone, kept = weakref.ref(session), weakref.ref(appearance)
+
+        await writer.finish(disable=False)
+        await reader.finish(disable=False)
+        del session, writer, reader
+        gc.collect()
+
+        assert gone() is None, "co-existence state: nothing was looking at it"
+        assert kept() is appearance, "retention state: the caller still holds it"

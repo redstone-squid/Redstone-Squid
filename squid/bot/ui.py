@@ -324,9 +324,15 @@ async def send_component(
     locale: str | None = None,
     timeout: float = 180,
     visibility: Visibility = "public",
+    reactor: ui.discord.Reactor | None = None,
 ) -> ui.discord.Mount:
-    """Mount a component and send it as the reply to a command."""
-    mount = create_mount(component, access=access, locale=locale, timeout=timeout)
+    """Mount a component and send it as the reply to a command.
+
+    Pass ``reactor`` for a panel that must react to something another mount changes -- a
+    shared namespace, or a bot topic. Without one the mount is refreshed only by its own
+    clicks.
+    """
+    mount = create_mount(component, access=access, locale=locale, timeout=timeout, reactor=reactor)
     await mount.send(destination(ctx, visibility=visibility, locale=locale))
     return mount
 
