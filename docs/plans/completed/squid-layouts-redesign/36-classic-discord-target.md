@@ -30,7 +30,7 @@ callback-store registration belong to the original view and do not travel with i
 
 ## The cost, stated honestly
 
-**There is no in-tree consumer.** `squid/` contains zero `discord.Embed` and zero
+**There is no in-tree consumer.** `../../../../squid` contains zero `discord.Embed` and zero
 `discord.ui.View`; the bot is entirely on V2. Nothing here can be dogfooded, no migration is
 performed by landing it, and its only end-to-end evidence is synthetic tests plus the live
 experiment in [Verification](#verification).
@@ -369,7 +369,7 @@ fields cannot be chosen downstream of semantic lowering, `ActionRow` forces a re
 
 **Shipped 2026-08-22** in twelve commits, `primitives: rename the component boundary node`
 through `docs: document classic target adoption`. User guide:
-[`packages/squid-layouts/docs/classic-messages.md`](../../../packages/squid-layouts/docs/classic-messages.md).
+[`../../../../packages/squid-layouts/docs/classic-messages.md`](../../../../packages/squid-layouts/docs/classic-messages.md).
 
 Six things came out differently from the sketch, each because the tree said so:
 
