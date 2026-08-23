@@ -429,6 +429,31 @@ Inside an action a write stages into the transaction's overlay and becomes visib
 The action reads its own writes; another task reading the same field across an `await` sees the
 committed value until then, and a rollback is dropping the overlay.
 
+### Action history
+
+History is opt-in and component-owned. Declare a bounded stack like state, then pass it to
+state-changing actions; the framework records the whole state delta only when the action commits:
+
+```python
+class Editor(sl.Component):
+    history: sl.runtime.History = sl.runtime.history(limit=20)
+    title: str = sl.state("")
+
+    def render(self):
+        return sl.actions(
+            sl.action("Rename", self.rename, key="rename", record=self.history),
+            sl.runtime.history_actions(self.history),
+            key="editor-actions",
+        )
+
+    async def rename(self, event: sl.PressEvent) -> None:
+        self.title = "New title"
+```
+
+For an action that also changes a database or API, call `self.history.record("Rename", undo=..., redo=...)`
+inside the handler. The framework restores component state; the supplied async callbacks reverse
+external work. A failed action creates no entry, and a new recorded action clears redo history.
+
 ### Shared state
 
 `sl.runtime.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
