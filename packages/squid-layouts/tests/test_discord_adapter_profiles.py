@@ -11,7 +11,7 @@ from squid_layouts.planning.adapter import ADAPTER_RENDER_V2, AdapterProfile
 from squid_layouts.planning.discord import classic_target, components_v2_target
 from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.primitives import Text
-from squid_layouts.scene.model import SceneComponentsV2
+from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
 
 
 class AlternateAdapter(DiscordAdapter):
@@ -78,3 +78,11 @@ def test_discord_py_boundary_names_a_missing_operation_capability() -> None:
 def test_protocol_factories_union_only_applicable_extension_capabilities() -> None:
     assert "extension.discord.item" in components_v2_target(DISCORD_PY_27_ADAPTER).capabilities
     assert "extension.discord.item" not in classic_target(DISCORD_PY_27_ADAPTER).capabilities
+
+
+def test_scene_body_can_be_narrowed_after_a_broad_decode() -> None:
+    scene = plan(Text("hello"), target=Target.v2()).scene
+
+    assert scene.expect_body(SceneComponentsV2) is scene.body
+    with pytest.raises(LayoutInvariantError, match="not SceneClassicMessage"):
+        scene.expect_body(SceneClassicMessage)

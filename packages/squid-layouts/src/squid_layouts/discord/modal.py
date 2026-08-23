@@ -12,6 +12,7 @@ from typing import Any, ClassVar
 
 import discord
 
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.conformance import conform_modal
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.entity import EntityType
@@ -39,6 +40,8 @@ from squid_layouts.forms import (
     ZonedDateTimeField,
 )
 from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.adapter import ADAPTER_MODAL_FORMS, AdapterProfile
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
@@ -438,11 +441,13 @@ def build_modal(
     timeout: float | None = None,
     limits: V2Limits = LIMITS,
     strict: bool = False,
+    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
     """Build a modal from a spec, clamped so `send_modal` can never 50035 on lengths.
 
     ``on_submit`` receives the input values keyed by each field's ``key`` (or label).
     """
+    require_discord_py_capability(adapter, ADAPTER_MODAL_FORMS, "build a modal form")
     modal = _SpecModal(spec, on_submit, timeout)
     interventions = conform_modal(modal, strict=strict, limits=limits)
     if interventions:
@@ -458,8 +463,10 @@ def build_form_modal(
     localization: Localization = NEUTRAL,
     limits: V2Limits = LIMITS,
     strict: bool = False,
+    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
     """Build a Discord modal from a portable form schema."""
+    require_discord_py_capability(adapter, ADAPTER_MODAL_FORMS, "build a modal form")
     adapted = spec.adapt(
         frozenset({"forms.modal", EntityField.capability, FileField.capability, CheckboxGroupField.capability}),
         maximum_fields=limits.modal_components,
