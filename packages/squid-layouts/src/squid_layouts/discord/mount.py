@@ -31,8 +31,8 @@ from squid_layouts.actions import (
     ActionProceed,
     ActionRequest,
     Actor,
-    Feedback,
     EntitySelectionEvent,
+    Feedback,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -50,8 +50,8 @@ from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
 from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import Asset, Document
-from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, SubmitHandler
 from squid_layouts.guards import GuardLedger
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
@@ -1364,9 +1364,7 @@ class Mount:
             return False
         if candidate.assets != self._assets:
             return False
-        if candidate.handlers.keys() != self._handlers.keys():
-            return False
-        return True
+        return candidate.handlers.keys() == self._handlers.keys()
 
     def _suppress(self, candidate: _Candidate, profile: OperationRecorder | None) -> None:
         """Commit a render the reader already has, without an edit and without a new generation.
