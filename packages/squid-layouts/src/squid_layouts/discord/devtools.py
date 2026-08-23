@@ -200,7 +200,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
                 f"queued={reactor.queued} in_flight={reactor.in_flight} redeliver={reactor.redeliver} "
                 f"watched={reactor.watched} "
                 f"scheduled={reactor.scheduled} coalesced={reactor.coalesced} "
-                f"delivered={reactor.delivered} failed={reactor.failed}"
+                f"delivered={reactor.delivered} unchanged={reactor.unchanged} failed={reactor.failed}"
             )
         if self._bus is not None:
             bus = self._bus.snapshot()

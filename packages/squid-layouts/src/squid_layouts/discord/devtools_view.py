@@ -241,7 +241,7 @@ def metrics_text(snapshot: sl.discord.MountSnapshot) -> str:
 def _summary(snapshot: sl.discord.MountSnapshot) -> list[str]:
     entries = [
         f"**Component**\n`{snapshot.component}`",
-        f"**Generation**\n{snapshot.generation} · {_flags(snapshot)}",
+        f"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed",
         f"**Timing**\nage {_duration(snapshot.age)} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}",
         f"**Access**\n{_access_text(snapshot.access)}",
     ]
