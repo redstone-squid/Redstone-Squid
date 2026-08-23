@@ -16,6 +16,7 @@ the legacy object a second writer raises `AdoptionError` instead of being quietl
 
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, overload
+from typing import Never as TypingNever
 from urllib.parse import urlsplit
 
 import discord
@@ -23,10 +24,10 @@ import discord
 from squid_layouts.assets import Asset, StoredAsset
 from squid_layouts.discord.actions import ActionResponder, responder, selected_entities
 from squid_layouts.discord.mount import _CHANNEL_TYPES
-from squid_layouts.entity import EntityKind, EntityRef, EntityType
-from squid_layouts.errors import LayoutError
 from squid_layouts.document import Document
 from squid_layouts.emoji import Emoji, normalize_emoji
+from squid_layouts.entity import EntityKind, EntityRef, EntityType
+from squid_layouts.errors import LayoutError
 from squid_layouts.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
 from squid_layouts.primitives.constraints import Never
 from squid_layouts.primitives.nodes import (
@@ -282,7 +283,7 @@ class _AdoptedView(Component):
             return self._select(item, self._key_for(item, path))
         if isinstance(item, _ENTITY_SELECTS):
             return self._entity_select(item, self._key_for(item, path))
-        self._unsupported(item, location)
+        return self._unsupported(item, location)
 
     def _layout_text(self, item: Item, path: tuple[int, ...]) -> Text:
         if not isinstance(item, discord.ui.TextDisplay):
@@ -300,7 +301,7 @@ class _AdoptedView(Component):
             )
         if isinstance(item, discord.ui.Button):
             return self._layout_button(item, key, path)
-        self._unsupported(item, _layout_path(path), expected="Thumbnail or Button")
+        return self._unsupported(item, _layout_path(path), expected="Thumbnail or Button")
 
     def _layout_row(self, item: discord.ui.ActionRow, path: tuple[int, ...]) -> Node:
         children = tuple(item.children)
@@ -317,7 +318,9 @@ class _AdoptedView(Component):
             buttons.append(self._layout_button(child, self._key_for(child, (*path, index)), (*path, index)))
         return Row(tuple(buttons))
 
-    def _layout_button(self, item: discord.ui.Button[Any], key: str | None, path: tuple[int, ...]) -> Button | LinkButton | PremiumButton:
+    def _layout_button(
+        self, item: discord.ui.Button[Any], key: str | None, path: tuple[int, ...]
+    ) -> Button | LinkButton | PremiumButton:
         emoji = _portable_emoji(item.emoji)
         if item.sku_id is not None:
             return PremiumButton(item.sku_id)
@@ -358,14 +361,7 @@ class _AdoptedView(Component):
 
         def walk(item: Item, path: tuple[int, ...]) -> None:
             self._reject_dynamic(item, path)
-            if isinstance(item, discord.ui.Button) and self._is_callback_button(item):
-                key = self._key_for(item, path)
-                if key in seen:
-                    message = f"two adopted controls share the key {key!r}; pass keys= to tell them apart"
-                    raise AdoptionError(message)
-                seen.add(key)
-                found[key] = item
-            elif isinstance(item, _SELECTS):
+            if (isinstance(item, discord.ui.Button) and self._is_callback_button(item)) or isinstance(item, _SELECTS):
                 key = self._key_for(item, path)
                 if key in seen:
                     message = f"two adopted controls share the key {key!r}; pass keys= to tell them apart"
@@ -393,7 +389,7 @@ class _AdoptedView(Component):
             )
             raise AdoptionError(message)
 
-    def _unsupported(self, item: object, path: str, *, expected: str | None = None) -> None:
+    def _unsupported(self, item: object, path: str, *, expected: str | None = None) -> TypingNever:
         suffix = f", expected {expected}" if expected is not None else ""
         message = f"{path}: {type(item).__name__} has no portable LayoutView translation{suffix}"
         raise AdoptionError(message)
