@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from squid_layouts.interactions import ActionBinding, ActionPolicy
 from squid_layouts.emoji import Emoji
-from squid_layouts.entities import ChannelType, EntityRef, EntityType
+from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.styles import ActionStyle, Color
