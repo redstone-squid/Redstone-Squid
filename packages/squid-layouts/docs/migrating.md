@@ -125,6 +125,64 @@ Router and group middleware form one onion in attachment order. Use middleware f
 authorization, tracing, and rate policy. Routed controls do not inherit a legacy view's
 `interaction_check`, timeout, or error hook; configure those policies on the router.
 
+## Adopt an unsent classic view
+
+Between a router and a full rewrite sits a view you already have. `sl.discord.adopt` takes a
+classic `discord.ui.View` that has **not** been sent and returns a `Component`. Squid reads
+`view.children`, builds its own controls from them, owns the message, and dispatches back into
+the legacy callbacks. Nothing in the callback body changes.
+
+```python
+class Paginator(discord.ui.View):
+    def __init__(self) -> None:
+        super().__init__(timeout=None)
+        self.page = 0
+
+    @discord.ui.button(label="Next", custom_id="next")
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        self.page += 1
+        self.next.disabled = self.page == LAST
+        await interaction.response.edit_message(view=self)   # no HTTP; the mount flushes
+
+
+mount = defaults.mount(sl.discord.adopt(Paginator()), access=sl.discord.Owner(user.id))
+await mount.send(sl.discord.respond_to(interaction))
+```
+
+`await interaction.response.edit_message(view=self)` is the line that makes this worth doing: it
+means "I am done mutating; redraw", performs no request of its own, and lets the mount answer the
+interaction. The view is the model, and the adapter reports its in-place mutations to the runtime
+after every callback returns.
+
+Adoption is for an *unsent* view only. A live view — already sent, and editing its own message —
+stays unsupported, because Squid and the view would both be writing one message and neither could
+prove the result fits. `adopt()` refuses on `view.is_dispatching()`, and every call that would
+make the legacy object a second writer raises `AdoptionError` rather than being swallowed:
+`edit_original_response`, `interaction.message.edit`, and `edit_message` with a different view or
+with a payload the mount owns. A `LayoutView` is refused too — that is content, so either move it
+to the semantic layer or keep it and use `contribute()` on a region.
+
+Three differences to plan for, all of them loud:
+
+- **The mount owns the timeout.** `view.timeout` is ignored, because a mount's timeout interacts
+  with its expiry policy, session lifetime, and disable-on-finish behaviour. An overridden
+  `on_timeout` is refused at `adopt()` unless you pass `discard_timeout=True`; move real cleanup
+  to a mount finish hook.
+- **In-place mutations do not roll back.** A callback that raises reaches the mount's `on_error`
+  with component state restored, but the view keeps whatever it wrote before raising.
+- **Generated custom IDs are positional.** discord.py invents a random `custom_id` when you give
+  none, so an item without an explicit one is identified by position. A view that rebuilds itself
+  with `clear_items()` should pass `keys=` rather than let a reorder move state between controls.
+
+`view.stop()` finishes the mount, an overridden `interaction_check` still guards the press
+alongside the mount's `access`, and an overridden `on_error` still sees its own errors first. A
+modal opened from a callback keeps working: its submit is wrapped in the same proxy and refreshes
+the mount, though it runs outside the dispatch funnel, so it takes no author lock and no
+generation check.
+
+An adopted component composes like any other, which is how a migration finishes — embed it under
+`self.boundary(child, key=...)` and move controls out of the legacy view one at a time.
+
 ## Hand one whole message to a Mount
 
 Use a mount when Squid component state, local actions, forms, history, or reactive refreshes should

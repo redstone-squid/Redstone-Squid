@@ -48,8 +48,9 @@ are not re-derived or accidentally adopted later.
   and callbacks that have not met Discord, so Squid can translate them into its own exact
   primitives, become the sole writer, and leave the legacy object as a model plus handlers.
   Renderer ownership, the property this entry protects, is preserved rather than traded away —
-  Squid constructs every item it draws. `adopt()` raises on `view.message is not None`, which
-  is what makes this a narrowing and not a reversal.
+  Squid constructs every item it draws. `adopt()` raises on `view.is_dispatching()`, which is
+  what makes this a narrowing and not a reversal — `View.message` is a convention bots follow by
+  hand and discord.py never sets, so it is kept only as a secondary signal.
 - **Class-body operational policy** (CascadeUI's `owner_only`, `instance_limit`,
   `instance_scope`, `instance_policy`, `participant_limit` as class attributes) — rejected
   2026-08-23 by [43](43-mount-defaults.md). Every one of those values is an actor, a scope,

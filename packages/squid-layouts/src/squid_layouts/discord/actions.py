@@ -172,6 +172,10 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
     `responder(event).send_modal()`. A hand-rolled `defer()` survives only because
     `Mount.flush` falls back to editing through the followup.
 
+    The one sanctioned driver is `sl.discord.adopt`'s interaction proxy, which exists to put
+    a legacy `interaction.response.edit_message(view=self)` back under mount ownership by
+    performing no HTTP at all.
+
     Raises:
         LookupError: The event came from a frontend other than Discord.
     """
