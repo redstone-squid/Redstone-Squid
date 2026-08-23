@@ -5,6 +5,7 @@ New code that does not need the layout frontend can import this optional layer f
 """
 
 from squid_reactive.resources import (
+    AsyncBinding,
     AtomicResource,
     AtomicResourceStatus,
     Failed,
@@ -15,12 +16,15 @@ from squid_reactive.resources import (
     ResourceNotReadyError,
     ResourceStatus,
     _AtomicResourcePending,
+    observe_async_bindings,
     observe_resources,
     resource,
+    unique_async_bindings,
     unique_resources,
 )
 
 __all__ = [
+    "AsyncBinding",
     "AtomicResource",
     "AtomicResourceStatus",
     "Failed",
@@ -31,7 +35,9 @@ __all__ = [
     "ResourceNotReadyError",
     "ResourceStatus",
     "_AtomicResourcePending",
+    "observe_async_bindings",
     "observe_resources",
     "resource",
+    "unique_async_bindings",
     "unique_resources",
 ]
