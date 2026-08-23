@@ -190,6 +190,7 @@ class _Context:
     search_budget: int = DEFAULT_SEARCH_BUDGET
     states_explored: int = 0
     search_fallback: bool = False
+    panel_depth: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,6 +362,15 @@ def lower_semantics(
     )
 
 
+def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:
+    """Lower children while recording that Discord already has their enclosing container."""
+    context.panel_depth += 1
+    try:
+        return _children(children, path, context)
+    finally:
+        context.panel_depth -= 1
+
+
 def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
@@ -418,7 +428,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
             if _cards(context):
                 return [_region(Card(accent=resolved_accent), _children(children, path, context), context)]
-            return [Panel(tuple(_children(children, path, context)), accent=resolved_accent)]
+            nested = context.panel_depth > 0
+            contents = _panel_children(children, path, context)
+            return contents if nested else [Panel(tuple(contents), accent=resolved_accent)]
         case (
             Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
@@ -440,6 +452,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                         context,
                     )
                 ]
+            nested = context.panel_depth > 0
             contents: list[Node] = []
             title = PrimitiveHeading(
                 resolved_heading,
@@ -450,13 +463,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             # The lead image sits beside the title and nothing else: picking "the body"
             # out of an arbitrary children tuple would be a guess.
             contents.append(PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title)
-            contents.extend(_children(children, path, context))
-            return [Panel(tuple(contents), accent=resolved_accent)]
+            contents.extend(_panel_children(children, path, context))
+            return contents if nested else [Panel(tuple(contents), accent=resolved_accent)]
         case Aside(children=children, tone=tone):
             accent = context.palette.tone(tone)
             if _cards(context):
                 return [_region(Card(accent=accent), _children(children, path, context), context)]
-            return [Panel(tuple(_children(children, path, context)), accent=accent)]
+            nested = context.panel_depth > 0
+            contents = _panel_children(children, path, context)
+            return contents if nested else [Panel(tuple(contents), accent=accent)]
         case Heading(content=content, level=level, importance=importance):
             return [
                 PrimitiveHeading(_resolve(content, context), level=level, overflow=Never(), priority=int(importance))
