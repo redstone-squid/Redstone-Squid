@@ -29,6 +29,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    EntitySelect,
     Extension,
     File,
     Footer,
@@ -52,6 +53,7 @@ from squid_layouts.scene.model import (
     SceneButton,
     SceneComponentsV2,
     SceneExtension,
+    SceneEntitySelect,
     SceneFile,
     SceneGallery,
     SceneGalleryItem,
@@ -117,6 +119,18 @@ class _V2Converter:
                     ),
                     action=self.bindings.action(node),
                     placeholder=node.placeholder,
+                    min_values=node.min_values,
+                    max_values=node.max_values,
+                    disabled=node.disabled,
+                    policy=node.policy,
+                )
+            case EntitySelect():
+                return SceneEntitySelect(
+                    entity_type=node.entity_type,
+                    action=self.bindings.action(node),
+                    placeholder=node.placeholder,
+                    default_values=node.default_values,
+                    channel_types=node.channel_types,
                     min_values=node.min_values,
                     max_values=node.max_values,
                     disabled=node.disabled,
@@ -263,6 +277,18 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                         fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
                     if option.description is not None and len(option.description) > limits.option_description:
                         fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
+            case EntitySelect(
+                placeholder=placeholder,
+                default_values=defaults,
+                min_values=minimum,
+                max_values=maximum,
+            ):
+                if placeholder is not None and len(placeholder) > limits.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
+                if minimum < 0 or maximum < minimum or maximum > limits.select_options:
+                    fail(path, "entity select value bounds are invalid")
+                if len(defaults) > maximum:
+                    fail(path, "entity select has more defaults than max_values")
             case Gallery(urls=urls):
                 if len(urls) > limits.gallery_items:
                     fail(path, f"gallery has {len(urls)} items; use MediaCollection")
