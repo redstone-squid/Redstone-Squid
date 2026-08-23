@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import anyio
 
 from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationOutcome, Profiler, TraceLink
-from squid_layouts.topics import Topic, TopicBus
+from squid_layouts.topics import Address, TopicBus
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
@@ -176,7 +176,7 @@ class Reactor:
             unchanged=self._unchanged,
         )
 
-    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]:
+    def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]:
         """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
 
         Call this before the mount's initial send so a write cannot land between its first
@@ -216,7 +216,7 @@ class Reactor:
 
         mount_ref = weakref.ref(mount, lambda _: unfollow())
 
-        async def refresh(topic: Topic) -> None:
+        async def refresh(topic: Address) -> None:
             if (current := mount_ref()) is None:
                 unfollow()
                 return

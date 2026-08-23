@@ -8,14 +8,13 @@ import weakref
 from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
-from squid.topics import ResourceTopic
 
 
 def follow_resource[TargetT: object](
     bus: sl.TopicBus,
     reactor: sl.discord.Reactor,
     mount: sl.discord.Mount,
-    topic: ResourceTopic,
+    topic: sl.Topic,
     target: TargetT,
     reload: Callable[[TargetT], Awaitable[None]],
 ) -> Callable[[], None]:

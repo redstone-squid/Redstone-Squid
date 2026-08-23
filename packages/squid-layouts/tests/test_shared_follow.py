@@ -11,7 +11,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import Component, PressEvent, Shared, TopicBus, cell, state, transaction
+from squid_layouts import CellAddress, Component, PressEvent, Shared, TopicBus, cell, state, transaction
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
@@ -113,8 +113,8 @@ def _texts(view: discord.ui.LayoutView) -> str:
     return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
 
 
-def address(workspace: Workspace, name: str) -> object:
-    return (workspace, type(workspace)._cells[name])
+def address(workspace: Workspace, name: str) -> CellAddress:
+    return CellAddress(workspace, name)
 
 
 async def drain(reactor: Reactor, bus: TopicBus) -> None:

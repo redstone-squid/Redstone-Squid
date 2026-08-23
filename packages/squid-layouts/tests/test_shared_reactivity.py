@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_layouts import Component, Shared, addresses, cell, computed, state, transaction
+from squid_layouts import CellAddress, Component, Shared, addresses, cell, computed, state, transaction
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
@@ -31,8 +31,8 @@ def preferences(bus: TopicBus) -> Preferences:
     return Preferences(bus, Member(1))
 
 
-def address(preferences: Preferences, name: str) -> object:
-    return (preferences, type(preferences)._cells[name])
+def address(preferences: Preferences, name: str) -> CellAddress:
+    return CellAddress(preferences, name)
 
 
 # --- Render observation -------------------------------------------------------------------
