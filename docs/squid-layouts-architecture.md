@@ -214,8 +214,8 @@ default needs no copy and is shared:
         def title(self) -> str:
             return f"{len(self.results)} results for {self.query}"
 
-`{**self.channels, "log": 1}` replaces one key. For more than that, `sl.draft(self, "channels")`
-hands out a shallow copy to mutate and assigns it back as one write on a clean exit.
+`{**self.channels, "log": 1}` replaces one key. For more than that, copy into a local `dict`,
+mutate it, and assign it back; the last line is the ordinary write.
 
 `computed` records what its body read and recomputes when one of those values moves --
 nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
@@ -278,11 +278,12 @@ holds. Neither rollback nor invalidation reaches that, so say it explicitly:
 
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = event.selected[0]
-        self.mutated("build")
+        self.mutated(self.build)
 
-`mutated` only schedules the draw; the change is still outside the transaction. Naming the
-field is the point — the call fails if that field stops being declared state, so the manual
-signal cannot drift away from the declaration it depends on.
+`mutated` moves the holding field's version and schedules the draw; the change is still
+outside the transaction. It takes the object rather than a field name -- identity finds the
+field, which is how an opaque field settles anyway -- so the call is typed, and it fails if
+no opaque field holds the object, so the manual signal cannot drift from the declaration.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
 must be JSON-safe. `sl.state(opaque=True)` covers the opposite case, a collaborator the
