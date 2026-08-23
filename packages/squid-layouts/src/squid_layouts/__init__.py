@@ -202,7 +202,6 @@ from squid_layouts.runtime.reactivity import (
     join_action,
     on_action_commit,
     state,
-    strict_state,
     transaction,
     untracked,
 )
@@ -675,7 +674,6 @@ __all__ = [
     "stack",
     "state",
     "status",
-    "strict_state",
     "table",
     "table_row",
     "temporal",
