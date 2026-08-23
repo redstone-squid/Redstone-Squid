@@ -14,7 +14,7 @@ import secrets
 import time
 import weakref
 from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -825,6 +825,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._issued = 0
         self._pending: _Candidate | None = None
         self._dirty = False
+        self._settlement_wake: asyncio.Event | None = None
         # Renders committed without a Discord edit because the reader already had them.
         self._suppressed = 0
         self._finished = False
@@ -1451,6 +1452,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
     def _mark_dirty(self) -> None:
         self._dirty = True
+        if self._settlement_wake is not None:
+            self._settlement_wake.set()
 
     def invalidate(self) -> None:
         self.runtime.invalidate()
@@ -1584,54 +1587,96 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         through: deliver.EditHandle | None = None,
         profile: OperationRecorder | None = None,
     ) -> None:
-        """Advance visible resources from their committed pending paint to settled paints."""
+        """Advance explicit async bindings through progress and terminal paints."""
         if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
             return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
-            resources = self._pending_resources(candidate.tree, PendingPolicy.EXPLICIT)
-            if not resources or self.runtime.dirty:
+            bindings = self._pending_resources(candidate.tree, PendingPolicy.EXPLICIT)
+            if not bindings or self.runtime.dirty:
                 return
             if self._handle is None or self._handle.expired():
                 self._dirty = True
                 return
-            if profile is None:
-                await self._settle_resources(resources)
-            else:
-                with profile.span(
-                    "resource_settle.visible",
-                    attributes={"count": len(resources), "pass": pass_index},
-                ):
-                    await self._settle_resources(resources)
-            settled: _Candidate | None = None
+            wake = asyncio.Event()
+            done = asyncio.Event()
+            delivery_open = True
+
+            async def settle() -> None:
+                try:
+                    await self._settle_resources(bindings)
+                finally:
+                    done.set()
+                    wake.set()
+
+            async def reconcile() -> None:
+                nonlocal candidate, delivery_open
+                while True:
+                    await wake.wait()
+                    wake.clear()
+                    while delivery_open and self.runtime.dirty:
+                        presented = await self._present_async_update(candidate, through=through, profile=profile)
+                        if presented is None:
+                            delivery_open = False
+                            break
+                        candidate = presented
+                    if done.is_set():
+                        return
+
+            self._settlement_wake = wake
             try:
-                settled = await self._stage_loaded(profile=profile)
-                if self._same_as_live(settled):
-                    # A resource that loaded to what the pending paint already showed.
-                    self._suppress(settled, profile)
-                    candidate = settled
-                    continue
-                wrote = await self._deliver(settled, through=through, profile=profile)
-            except Exception:
-                if settled is not None:
-                    self._rollback(settled)
-                logger.exception("mount %s could not deliver a settled resource render", self.id)
+                context = (
+                    profile.span(
+                        "resource_settle.visible",
+                        attributes={"count": len(bindings), "pass": pass_index},
+                    )
+                    if profile is not None
+                    else nullcontext()
+                )
+                with context:
+                    async with anyio.create_task_group() as tasks:
+                        tasks.start_soon(settle)
+                        tasks.start_soon(reconcile)
+            finally:
+                self._settlement_wake = None
+            if not delivery_open:
                 return
-            if wrote is None:
-                self._rollback(settled)
-                return
-            if profile is None:
-                self._commit_presented(settled)
-            else:
-                with profile.span("commit"):
-                    self._commit_presented(settled)
-            candidate = settled
         self._dirty = True
         logger.error(
-            "mount %s: visible resources did not settle in %s passes",
+            "mount %s: explicit async bindings did not settle in %s passes",
             self.id,
             _MAX_LOAD_PASSES,
         )
+
+    async def _present_async_update(
+        self,
+        committed: _Candidate,
+        *,
+        through: deliver.EditHandle | None,
+        profile: OperationRecorder | None,
+    ) -> _Candidate | None:
+        """Present the latest coalesced status of async bindings, if it changed the scene."""
+        candidate: _Candidate | None = None
+        try:
+            candidate = await self._stage_loaded(profile=profile)
+            if self._same_as_live(candidate):
+                self._suppress(candidate, profile)
+                return candidate
+            wrote = await self._deliver(candidate, through=through, profile=profile)
+        except Exception:
+            if candidate is not None:
+                self._rollback(candidate)
+            logger.exception("mount %s could not deliver an async binding update", self.id)
+            return None
+        if wrote is None:
+            self._rollback(candidate)
+            return None
+        if profile is None:
+            self._commit_presented(candidate)
+        else:
+            with profile.span("commit"):
+                self._commit_presented(candidate)
+        return candidate
 
     async def _load_all(self, components: Sequence[Component]) -> None:
         """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
