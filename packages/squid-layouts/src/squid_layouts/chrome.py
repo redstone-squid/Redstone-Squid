@@ -61,6 +61,10 @@ class Chrome:
     """What a control with `Feedback` says while its handler runs."""
     updates_paused: TextLike = "Live updates paused — press any control to resume."
     """Status shown before an interaction edit token expires and unattended refreshes pause."""
+    session_expiring: TextLike = "This session is about to expire."
+    """Status shown while an ephemeral session waits for an explicit renewal click."""
+    continue_session: TextLike = "Continue Session"
+    """Framework-owned action that renews an expiring ephemeral session."""
     changed_elsewhere: TextLike = "Someone else changed this while you were working. Try again."
     """Wording for a shared-state conflict: what the action read moved before it committed."""
     previous: TextLike = "Previous"
@@ -120,6 +124,8 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         try_again_in=lambda seconds: resolve_text(chrome.try_again_in(seconds), localization).content,
         working=resolve_text(chrome.working, localization).content,
         updates_paused=resolve_text(chrome.updates_paused, localization).content,
+        session_expiring=resolve_text(chrome.session_expiring, localization).content,
+        continue_session=resolve_text(chrome.continue_session, localization).content,
         changed_elsewhere=resolve_text(chrome.changed_elsewhere, localization).content,
         previous=resolve_text(chrome.previous, localization).content,
         next=resolve_text(chrome.next, localization).content,
