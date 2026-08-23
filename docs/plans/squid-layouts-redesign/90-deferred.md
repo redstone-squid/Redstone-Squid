@@ -24,6 +24,15 @@ are not re-derived or accidentally adopted later.
   reducers, middleware or global singleton; addresses still travel the bus and subscribers
   still re-read; and `Controlled`/`Managed` still owns domain truth, with 40 §3 making a
   namespace an unsuitable home for anything durable.
+  **Revisited 2026-08-23**: the CascadeUI comparison's "steal the scoping/keying ergonomics, but
+  not the singleton store" finding lands as [59](59-shared-pool.md)'s scope vocabulary and
+  [63](63-scoped-slots.md), and neither reopens this. 59 keys a *lifetime owner* the host
+  constructs and holds — there is still no global, no lookup by type, and no way to reach a
+  namespace you were not given; adopting `sessions.py`'s existing scope taxonomy as `ScopeT` makes
+  the keying typed, not ambient. 63 is a store, but a store of application values in a package
+  *below* the UI library with no edge pointing up, which is this entry's own prescription ("add a
+  host-side event bus, not a store in the package") applied to durable data instead of events. The
+  test that keeps both honest: `squid_layouts` gains no import of either capability.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
@@ -77,6 +86,15 @@ are not re-derived or accidentally adopted later.
   host-side helpers *into* `sl.discord` rather than out of it, and a fourth layer would
   re-split what that round deliberately joined. What was worth keeping — that per-open session
   policy is spread across call sites — is 51, landing in `sl.discord` as a value.
+  **Revisited 2026-08-23**: [63](63-scoped-slots.md) adds a package and this entry does not
+  forbid it. What was rejected was a *fourth UI layer above* `sl.discord`, re-splitting what the
+  productization round deliberately joined and re-deriving `MountDefaults`, `sl.watch` and the
+  class-body policy surface under new names. 63 is the opposite direction: durable application
+  data, below the UI library, depending on neither `squid-layouts` nor `squid-reactive`, and
+  answering a question the series has consistently said is *not* the UI library's
+  (`docs/squid-layouts-architecture.md:268`). The distinction this entry turns on is which way the
+  dependency points, so a package that points down is outside its reasoning rather than an
+  exception to it.
 - **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
