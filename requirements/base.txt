@@ -130,6 +130,7 @@ anyio==4.15.1 \
     #   openai
     #   redstone-squid
     #   squid-layouts
+    #   squid-stores
     #   starlette
 async-lru==2.4.0 \
     --hash=sha256:1b46a96419ef91fe11431d58db98d792c9b4250001427191a40faf1031934212 \
