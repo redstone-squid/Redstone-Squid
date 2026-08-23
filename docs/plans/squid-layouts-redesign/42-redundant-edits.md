@@ -153,5 +153,4 @@ REFRESH trace at all, versus a REFRESH trace ending `UNCHANGED`.
 
 ## Status
 
-Designed 2026-08-23 after [39](39-ephemeral-handoff.md) shipped; implementation in progress on
-`local-development`.
+Implemented 2026-08-23 on `local-development`.

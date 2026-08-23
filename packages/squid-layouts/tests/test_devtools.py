@@ -191,6 +191,7 @@ class TestProfiles:
         assert "reactor" in rendered
         assert "topics" in rendered
         assert "queued=1" in rendered
+        assert "unchanged=0" in rendered
 
     async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
         profiler = MemoryProfiler()
