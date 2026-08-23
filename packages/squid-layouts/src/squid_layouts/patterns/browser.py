@@ -103,7 +103,7 @@ class Browser[ItemT](Component):
     async def refresh(self) -> None:
         """Refresh around the visible anchor and wait for settlement."""
         self._request = _WindowRequest()
-        await self.window._settle()
+        await self.window._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
         self._request = _WindowRequest("previous")

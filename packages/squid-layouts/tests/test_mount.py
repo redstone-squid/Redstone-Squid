@@ -2308,8 +2308,10 @@ class TestStateDescriptor:
             def render(self):
                 return Text("")
 
-        with pytest.raises(RuntimeError, match=r"Cyclic\.first reads itself"):
+        # Neither computed reads itself; the pair is the mistake, so the ring is what is named.
+        with pytest.raises(sl.ReactiveCycleError) as raised:
             _ = Cyclic().first
+        assert raised.value.path == ("Cyclic.first", "Cyclic.second", "Cyclic.first")
 
     def test_batch_coalesces_invalidations(self):
         class Pair(Component):

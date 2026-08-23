@@ -102,7 +102,7 @@ class SourceRankedList[EntryT](Component):
     async def refresh(self) -> None:
         """Refresh around the currently visible anchor."""
         self._request = _WindowRequest()
-        await self.loaded._settle()
+        await self.loaded._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
         self._request = _WindowRequest("previous")
