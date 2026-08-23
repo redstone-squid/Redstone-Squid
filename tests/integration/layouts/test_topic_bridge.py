@@ -125,10 +125,13 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
                 while seen_here != [committed] or seen_there != [committed]:
                     await anyio.sleep(0.05)
 
-                with pytest.raises(RuntimeError, match="rollback"):
+                async def rollback() -> None:
                     async with here_pool.acquire() as connection, connection.transaction():
                         await bridge_here.publish_in(connection, rolled_back)
                         raise RuntimeError("rollback")
+
+                with pytest.raises(RuntimeError, match="rollback"):
+                    await rollback()
                 await anyio.sleep(0.1)
             tasks.cancel_scope.cancel()
     finally:
