@@ -83,8 +83,8 @@ the same policy inside `sl.discord`.
 ## Verification
 
 After each of commits 1–5: zero delta against the frozen baseline
-(`packages/squid-layouts/tests`, `tests/unit`, `tests/architecture`, and — run
-explicitly, since it is not in pytest `testpaths` — `tests/integration/layouts`).
+(`../../../../packages/squid-layouts/tests`, `../../../../tests/unit`, `../../../../tests/architecture`, and — run
+explicitly, since it is not in pytest `testpaths` — `../../../../tests/integration/layouts`).
 
 After commit 7: `ruff check` on `__init__.py` for stale `__all__` entries (`F822`),
 the full suite again, and `pyrefly check` diffed against the pre-change baseline.
@@ -97,6 +97,6 @@ not a test to adjust.
 
 ## Docs to update (commit 7 / 8)
 
-- `packages/squid-layouts/README.md`
-- `docs/squid-layouts-architecture.md`
-- `packages/squid-layouts/docs/migrating.md`, `classic-messages.md`, `durable-mounts.md`
+- `../../../../packages/squid-layouts/README.md`
+- `../../../squid-layouts-architecture.md`
+- `../../../../packages/squid-layouts/docs/migrating.md`, `classic-messages.md`, `durable-mounts.md`
