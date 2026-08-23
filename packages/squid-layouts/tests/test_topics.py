@@ -16,6 +16,8 @@ from squid_layouts.topics import Address, CellAddress, KindKeyCodec, Topic, Topi
 
 BUILD = Topic("build", "1")
 """One address reused by the bus contract tests, whose subject is delivery rather than naming."""
+ONE = Topic("one", "1")
+TWO = Topic("two", "1")
 
 
 class Workspace(Shared[int]):
@@ -114,9 +116,9 @@ async def test_different_topics_deliver_concurrently() -> None:
             both_started.set()
         await release.wait()
 
-    bus.subscribe("one", block)
-    bus.subscribe("two", block)
-    bus.publish("one", "two")
+    bus.subscribe(ONE, block)
+    bus.subscribe(TWO, block)
+    bus.publish(ONE, TWO)
 
     task = asyncio.create_task(bus.drain())
     await asyncio.wait_for(both_started.wait(), timeout=1)
@@ -273,18 +275,18 @@ async def test_drain_processes_reentrant_other_topics() -> None:
 
     async def publish_other(topic: Topic) -> None:
         seen.append(topic)
-        bus.publish("two")
+        bus.publish(TWO)
 
     async def record(topic: Topic) -> None:
         seen.append(topic)
 
-    bus.subscribe("one", publish_other)
-    bus.subscribe("two", record)
-    bus.publish("one")
+    bus.subscribe(ONE, publish_other)
+    bus.subscribe(TWO, record)
+    bus.publish(ONE)
 
     await bus.drain()
 
-    assert seen == ["one", "two"]
+    assert seen == [ONE, TWO]
 
 
 @pytest.mark.parametrize("concurrency", [0, -1])

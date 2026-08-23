@@ -8,7 +8,7 @@ from squid_layouts import CellAddress, Component, Shared, addresses, cell, compu
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
-from squid_layouts.topics import TopicBus
+from squid_layouts.topics import Topic, TopicBus
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,7 +155,7 @@ def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
 
 def test_describe_names_the_namespace_scope_and_cell(preferences: Preferences) -> None:
     assert describe(address(preferences, "theme")) == "Preferences(Member(user_id=1)).theme"
-    assert describe(("build", 7)) == "('build', 7)"
+    assert describe(Topic("build", "7")) == "build:7"
 
 
 # --- Publication ----------------------------------------------------------------------------

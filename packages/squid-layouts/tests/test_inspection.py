@@ -229,16 +229,19 @@ class TestReservationAxes:
 
     def test_text_reservation_shrinks_the_text_budget(self):
         target = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"display_text": 1000}))
+        assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_text == LIMITS.total_text - 1000
 
     def test_component_reservation_shrinks_the_component_budget(self):
         target = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"components": 6}))
+        assert isinstance(target.limits, type(LIMITS))
         assert target.limits.total_components == LIMITS.total_components - 6
 
     def test_local_caps_are_untouched(self):
         reserved = sl.discord.Target.v2().reserve(
             sl.discord.ResourceCost({"display_text": 500, "components": 5, "attachments": 2})
         )
+        assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.row_buttons == LIMITS.row_buttons
         assert reserved.limits.section_texts == LIMITS.section_texts
         assert reserved.limits.select_options == LIMITS.select_options
@@ -249,6 +252,7 @@ class TestReservationAxes:
 
     def test_reservation_never_goes_negative(self):
         reserved = sl.discord.Target.v2().reserve(sl.discord.ResourceCost({"display_text": LIMITS.total_text * 2}))
+        assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.total_text == 0
 
     def test_identity_is_preserved(self):

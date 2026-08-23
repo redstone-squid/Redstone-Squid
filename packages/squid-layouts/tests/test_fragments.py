@@ -167,7 +167,10 @@ class TestAttachedFragment:
         # A host replacement carrying the same content must survive removal.
         host.add_item(discord.ui.TextDisplay("body"))
         attached.remove()
-        assert [child.content for child in host.children] == ["header", "body"]
+        assert [child.content for child in host.children if isinstance(child, discord.ui.TextDisplay)] == [
+            "header",
+            "body",
+        ]
 
     def test_files_are_repeatable_and_fresh(self):
         host = _host()

@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
-from squid_layouts import Component, TopicBus
+from squid_layouts import Component, Topic, TopicBus
 from squid_layouts.discord import Everyone, Mount, PauseUpdates, Reactor, RenewEphemeral, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
@@ -139,9 +139,9 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     mount.refresh_now = AsyncMock()  # pyrefly: ignore
-    reactor.follow(mount, ("build", "42"), ("group", "7"), ("index", "recent"))
+    reactor.follow(mount, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
-    bus.publish(("build", "42"), ("group", "7"), ("index", "recent"))
+    bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
     await bus.drain()
 
     assert reactor._queue.qsize() == 1
@@ -157,7 +157,7 @@ async def test_follow_rejects_a_mount_that_already_finished() -> None:
     await mount.finish(disable=False)
 
     with pytest.raises(ValueError, match="finished"):
-        reactor.follow(mount, "build")
+        reactor.follow(mount, Topic("build", "42"))
 
 
 async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() -> None:
@@ -285,7 +285,7 @@ def test_collected_mount_unsubscribes() -> None:
     bus = TopicBus()
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
-    reactor.follow(mount, "build")
+    reactor.follow(mount, Topic("build", "42"))
     reference = weakref.ref(mount)
 
     del mount
@@ -312,9 +312,9 @@ def test_follow_requires_its_bus_and_scheduler() -> None:
     mount = Mount(Empty(), access=Everyone())
 
     with pytest.raises(RuntimeError, match="topic bus"):
-        Reactor().follow(mount, "build")
+        Reactor().follow(mount, Topic("build", "42"))
     with pytest.raises(ValueError, match="scheduler"):
-        Reactor(TopicBus()).follow(mount, "build")
+        Reactor(TopicBus()).follow(mount, Topic("build", "42"))
 
 
 @pytest.mark.parametrize(
