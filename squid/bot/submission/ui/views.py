@@ -616,11 +616,11 @@ class SubmissionFormComponent(sl.Component):
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = cast(Literal["Door", "Skydoor", "Trapdoor"], event.selected[0])
         self.validation_error = None
-        self.mutated("build")
+        self.mutated(self.build)
 
     async def _location_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.miscellaneous_restrictions = list(event.selected)
-        self.mutated("build")
+        self.mutated(self.build)
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
         modal = SubmissionModal(self.build, self.builds, self, locale=self.locale)
@@ -668,7 +668,7 @@ class SubmissionFormComponent(sl.Component):
     async def refresh(self, interaction: discord.Interaction[Any]) -> None:
         # The modal that calls this mutated the Build through its own reference.
         self.validation_error = None
-        self.mutated("build")
+        self.mutated(self.build)
         if self._mount is None:
             return
         await self._mount.flush(interaction)

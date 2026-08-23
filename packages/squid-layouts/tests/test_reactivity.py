@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_layouts import Component, draft, state, transaction
+from squid_layouts import Component, state
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.reactivity import _Cell, _State
 
@@ -59,46 +59,33 @@ class TestReplacement:
         assert cell_of(panel, "channels").version == before + 1
 
 
-class TestDraft:
-    def test_it_assigns_the_mutated_copy_back_once(self):
+class TestMutated:
+    def test_it_moves_the_version_of_the_field_holding_the_object(self):
         panel = Panel(Service())
-        original = panel.channels
-        before = cell_of(panel, "channels").version
-        with draft(panel, "channels") as channels:
-            channels["log"] = 1
-            channels["audit"] = 2
-            assert cell_of(panel, "channels").version == before
-        assert panel.channels == {"log": 1, "audit": 2}
-        assert original == {"log": None}
-        assert cell_of(panel, "channels").version == before + 1
+        before = cell_of(panel, "service").version
+        panel.mutated(panel.service)
+        assert cell_of(panel, "service").version == before + 1
 
-    def test_it_discards_the_copy_on_a_raise(self):
+    def test_a_replaced_value_is_not_a_collaborator(self):
+        """A plain container is replaced, never mutated; identity would find it, so refuse it."""
         panel = Panel(Service())
-        with pytest.raises(RuntimeError), draft(panel, "channels") as channels:
-            channels["log"] = 1
-            raise RuntimeError
-        assert panel.channels == {"log": None}
+        with pytest.raises(TypeError, match="no opaque state"):
+            panel.mutated(panel.channels)
 
-    def test_an_unchanged_copy_is_not_a_write(self):
-        panel = Panel(Service())
-        before = cell_of(panel, "channels").version
-        with draft(panel, "channels"):
-            pass
-        assert cell_of(panel, "channels").version == before
+    def test_an_object_held_twice_must_be_named(self):
+        class Twice(Component):
+            first: Service = state(opaque=True)
+            second: Service = state(opaque=True)
 
-    def test_it_stages_inside_an_action(self):
-        panel = Panel(Service())
-        with pytest.raises(RuntimeError), transaction():
-            with draft(panel, "rows") as rows:
-                rows.append("a")
-            assert panel.rows == ["a"]
-            raise RuntimeError
-        assert panel.rows == []
+            def __init__(self, service: Service) -> None:
+                self.first = self.second = service
 
-    def test_it_names_declared_state_only(self):
-        panel = Panel(Service())
-        with pytest.raises(TypeError, match="not declared state"):
-            draft(panel, "service_name")
+            def render(self):
+                return Text("")
+
+        shared = Service()
+        with pytest.raises(TypeError, match="more than one field"):
+            Twice(shared).mutated(shared)
 
 
 class TestOpaqueFields:
