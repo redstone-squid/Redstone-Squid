@@ -220,6 +220,42 @@ async def test_expiry_none_never_schedules_pre_expiry_chrome() -> None:
     assert reactor._queue.empty()
 
 
+@pytest.mark.parametrize("authority", ["permanent", "unknown_deadline"])
+async def test_expiry_sweep_ignores_authority_without_a_temporary_deadline(authority: str) -> None:
+    now = datetime.now(UTC)
+    reactor = Reactor(clock=lambda: now)
+    if authority == "permanent":
+        mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+        await mount.send(delivered_to(fake_message()))
+    else:
+        interaction = fake_interaction()
+        handle = delivery.handle_from(interaction)
+        assert handle is not None
+        handle.expires_at = None
+        mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=handle))
+
+    reactor._sweep_once()
+
+    assert reactor._queue.empty()
+
+
+async def test_expiry_sweep_queues_several_arms_without_waiting_for_discord() -> None:
+    now = datetime.now(UTC)
+    reactor = Reactor(concurrency=2, clock=lambda: now)
+    mounts = []
+    for _ in range(4):
+        interaction = fake_interaction()
+        interaction.expires_at = now + timedelta(seconds=30)
+        mount = Mount(Empty(), access=Everyone(), scheduler=reactor, timeout=None)
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+        mounts.append(mount)
+
+    reactor._sweep_once()
+
+    assert reactor._queue.qsize() == len(mounts)
+
+
 @pytest.mark.parametrize(
     ("ephemeral", "timeout", "expected"),
     [(False, None, 0), (True, 10, 0), (True, None, 1)],
@@ -257,6 +293,19 @@ def test_collected_mount_unsubscribes() -> None:
 
     assert reference() is None
     assert bus.snapshot().topics == ()
+
+
+async def test_collected_delivered_mount_leaves_the_expiry_watch() -> None:
+    reactor = Reactor()
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+    await mount.send(delivered_to(fake_message()))
+    reference = weakref.ref(mount)
+
+    del mount
+    gc.collect()
+
+    assert reference() is None
+    assert not reactor._watched
 
 
 def test_follow_requires_its_bus_and_scheduler() -> None:
