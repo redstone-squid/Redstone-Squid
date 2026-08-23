@@ -73,6 +73,7 @@ from squid_layouts.semantic import (
     ItemLabel,
     ItemOwnership,
     Items,
+    ConcreteLayoutNode,
     LayoutNode,
     Link,
     List,
@@ -143,7 +144,7 @@ def _node_types(annotation: object) -> Iterator[type]:
 
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
 # it joins `LayoutNode`.
-_NODE_TYPES: tuple[type, ...] = tuple(_node_types(LayoutNode))
+_NODE_TYPES: tuple[type, ...] = tuple(_node_types(ConcreteLayoutNode))
 
 
 def _text(value: TextValue) -> TextLike:
