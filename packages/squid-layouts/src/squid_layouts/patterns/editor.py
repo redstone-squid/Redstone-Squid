@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from squid_layouts.document import Document
 from squid_layouts.factories import actions, heading, paragraph, stack, status
-from squid_layouts.forms import Form, FormIssue, FormLike, FormSpec
+from squid_layouts.forms import Form, FormField, FormIssue, FormLike, FormSpec
 from squid_layouts.patterns._content import ContentLike, display_text, normalize_content, require_key
 from squid_layouts.patterns.commit import CommitPolicy
 from squid_layouts.patterns.shells import ComponentShell, Pattern, PatternControls, PatternEvent
@@ -90,7 +90,11 @@ class EditorSection[StateT, ValueT]:
     ) -> EditorSection[tuple[tuple[str, object], ...], Mapping[str, object]]:
         """Adapt one form schema into an editor section."""
         spec = form.spec() if isinstance(form, Form) else form
-        initial_values = {field.key: spec.prefill.get(field.key, field.default) for field in spec.fields}
+        initial_values = {
+            field.key: spec.prefill.get(field.key, field.default)
+            for field in spec.items
+            if isinstance(field, FormField)
+        }
 
         def load(value: Mapping[str, object]) -> tuple[tuple[str, object], ...]:
             if not isinstance(value, Mapping):
@@ -108,7 +112,9 @@ class EditorSection[StateT, ValueT]:
 
         def default_summary(value: Mapping[str, object]) -> TextLike:
             parts = []
-            for field in spec.fields:
+            for field in spec.items:
+                if not isinstance(field, FormField):
+                    continue
                 formatted = field.format_prefill(value.get(field.key))
                 parts.append(f"{display_text(field.label)}: {_formatted(formatted)}")
             return " · ".join(parts)

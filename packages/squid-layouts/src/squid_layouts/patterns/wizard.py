@@ -248,7 +248,10 @@ class Wizard:
         if step.form is None or answer is None:
             return unanswered
         shown = [
-            text for form_field in step.form.fields if (text := _prefill_text(form_field, answer.get(form_field.key)))
+            text
+            for form_field in step.form.items
+            if isinstance(form_field, FormField)
+            if (text := _prefill_text(form_field, answer.get(form_field.key)))
         ]
         return ", ".join(shown) if shown else unanswered
 
