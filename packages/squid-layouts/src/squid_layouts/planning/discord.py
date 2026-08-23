@@ -6,7 +6,7 @@ from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.classic import CLASSIC_DIALECT
 from squid_layouts.planning.limits import CLASSIC_LIMITS, LIMITS, ClassicLimits, V2Limits
 from squid_layouts.planning.target import TargetProfile
-from squid_layouts.planning.types import ClassicTarget, ComponentsV2Target, DiscordAdapter
+from squid_layouts.target_types import ClassicTarget, ComponentsV2Target, DiscordAdapter
 from squid_layouts.planning.v2 import V2_DIALECT
 from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
 
@@ -50,6 +50,7 @@ def components_v2_target[AdapterT: DiscordAdapter](
     """Build a Components V2 protocol target from an adapter's verified behavior."""
     extensions = adapter.extensions
     extension_capabilities = frozenset(f"extension.{kind}" for kind in extensions)
+    adapter_capabilities = adapter.capabilities | extension_capabilities
     return TargetProfile(
         id="discord.components-v2",
         version=1,
@@ -60,6 +61,7 @@ def components_v2_target[AdapterT: DiscordAdapter](
         mode=ComponentsV2Target,
         adapter=adapter,
         body_type=SceneComponentsV2,
+        selected_adapter_capabilities=adapter_capabilities,
     )
 
 
@@ -78,6 +80,7 @@ def classic_target[AdapterT: DiscordAdapter](
         mode=ClassicTarget,
         adapter=adapter,
         body_type=SceneClassicMessage,
+        selected_adapter_capabilities=adapter.capabilities,
     )
 
 
