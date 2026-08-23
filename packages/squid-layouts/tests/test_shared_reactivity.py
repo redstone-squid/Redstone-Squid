@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from squid_layouts import CellAddress, Component, Shared, addresses, cell, computed, state, transaction
+from squid_layouts import CellAddress, Component, Shared, addresses, computed, state, transaction
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
@@ -17,8 +17,8 @@ class Member:
 
 
 class Preferences(Shared[Member]):
-    theme: str = cell("system")
-    locale: str = cell("en")
+    theme: str = state("system")
+    locale: str = state("en")
 
 
 @pytest.fixture
@@ -147,9 +147,9 @@ def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
         count: int = state(0)
 
     local = Local()
-    with pytest.raises(ValueError, match="read no shared cell"):
+    with pytest.raises(ValueError, match="read no shared state"):
         addresses(lambda: local.count)
-    with pytest.raises(ValueError, match="read no shared cell"):
+    with pytest.raises(ValueError, match="read no shared state"):
         addresses(lambda: 42)
 
 

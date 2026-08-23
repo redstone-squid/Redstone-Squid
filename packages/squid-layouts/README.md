@@ -379,22 +379,24 @@ committed value until then, and a rollback is dropping the overlay.
 ### Shared state
 
 `sl.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
-cells with `sl.cell()`, and hand the same instance to whoever should see the same values:
+state with `sl.state()`, and hand the same instance to whoever should see the same values:
 
 ```python
 class Workspace(sl.Shared[GuildId]):
-    selected: int | None = sl.cell(None)
-    filters: tuple[str, ...] = sl.cell(())
+    selected: int | None = sl.state(None)
+    filters: tuple[str, ...] = sl.state(())
 
 workspace = Workspace(bus, guild.id)
 ```
 
-A cell is `sl.state()` one level out and is literally the same storage, so replacement,
-`opaque=`, staging and rollback are identical. A write publishes the cell's address on the
-`TopicBus`, and every mount whose render read that cell refreshes; a mount subscribes to
-exactly what it rendered, reconciled each time it stages one. The mount that *made* the write
-repaints in the click itself rather than waiting for the bus, so a panel writing shared state
-feels no different from one writing `sl.state()` — and needs no reactor to do it. A cell an action both read and
+It is the same `sl.state()` a component declares, and literally the same storage, so
+replacement, `opaque=`, staging and rollback are identical. What differs is who is told when it
+changes, and that is decided by what holds it rather than by how it is declared: a component's
+state invalidates its one owner, while a namespace's publishes an address on the `TopicBus`.
+Every mount whose render read that field refreshes; a mount subscribes to exactly what it
+rendered, reconciled each time it stages one. The mount that *made* the write repaints in the
+click itself rather than waiting for the bus, so a panel writing shared state feels no
+different from one writing local state — and needs no reactor to do it. A field an action both read and
 wrote carries the value it read as a commit precondition, so a lost update raises
 `sl.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
 no `compare_and_set` to remember. `sl.history` covers shared writes in the same entry as local

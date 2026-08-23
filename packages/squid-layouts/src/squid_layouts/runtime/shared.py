@@ -11,17 +11,14 @@ Anything the application would still want if no one were looking at it belongs t
 application's data layer, not here.
 """
 
-from collections.abc import Callable, Mapping, Sequence
-from collections.abc import Set as AbstractSet
-from typing import Any, ClassVar, overload
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from squid_layouts.runtime.reactivity import (
-    _MISSING,
-    ReactiveOwner,
-    ReactiveWriteError,
+    _Computed,
     _State,
-    rendering,
 )
+from squid_layouts.runtime.resources import _ResourceDescriptor
 from squid_layouts.topics import Address, CellAddress, TopicBus
 
 _RESERVED = frozenset({"bus", "scope"})
@@ -35,75 +32,10 @@ _NO_SCOPE: Any = None
 """The scope of a namespace with nothing to say about itself, i.e. ``Shared[None]``."""
 
 
-class _SharedCell(_State):
-    """One cell on a shared namespace.
-
-    The same descriptor a component uses, with the two differences a namespace makes: a write
-    publishes an address on the bus instead of invalidating one owner, and a write during a
-    render is refused rather than merely unwise.
-    """
-
-    def address(self, instance: ReactiveOwner) -> Any:
-        return CellAddress(instance, self.public_name)
-
-    def __set__(self, instance: ReactiveOwner, value: Any) -> None:
-        if rendering():
-            message = (
-                f"{instance!r}.{self.public_name} was written while a render was reading it. A "
-                f"render turns state into a tree and may not change the state it is reading; "
-                f"write shared cells from an action handler."
-            )
-            raise ReactiveWriteError(message)
-        super().__set__(instance, value)
-
-
-@overload
-def cell[KeyT, ValueT](default: dict[KeyT, ValueT], *, opaque: bool = False) -> Mapping[KeyT, ValueT]: ...
-
-
-@overload
-def cell[ValueT](default: list[ValueT], *, opaque: bool = False) -> Sequence[ValueT]: ...
-
-
-@overload
-def cell[ValueT](default: set[ValueT], *, opaque: bool = False) -> AbstractSet[ValueT]: ...
-
-
-@overload
-def cell[ValueT](default: ValueT, *, opaque: bool = False) -> ValueT: ...
-
-
-@overload
-def cell[KeyT, ValueT](*, factory: Callable[[], dict[KeyT, ValueT]], opaque: bool = False) -> Mapping[KeyT, ValueT]: ...
-
-
-@overload
-def cell[ValueT](*, factory: Callable[[], list[ValueT]], opaque: bool = False) -> Sequence[ValueT]: ...
-
-
-@overload
-def cell[ValueT](*, factory: Callable[[], set[ValueT]], opaque: bool = False) -> AbstractSet[ValueT]: ...
-
-
-@overload
-def cell[ValueT](*, factory: Callable[[], ValueT], opaque: bool = False) -> ValueT: ...
-
-
-def cell(
-    default: Any = _MISSING,
-    *,
-    factory: Callable[[], Any] | None = None,
-    opaque: bool = False,
-) -> Any:
-    """Declare one cell of a shared namespace.
-
-    :func:`~squid_layouts.state` one level out, and literally the same storage: the same
-    declared-type-is-the-real-type signature, the same ``factory=``, the same ``opaque=``,
-    the same replacement rule held by the type checker. What differs is who is told when it
-    changes -- a component's cell invalidates its owner, a namespace's publishes its address
-    on the bus. A namespace is never persisted, so there is no ``persist=``.
-    """
-    return _SharedCell(default, factory=factory, persist=False, opaque=opaque)
+def _check_name(cls: type, name: str) -> None:
+    if name in _RESERVED or name.startswith("_"):
+        message = f"{cls.__name__}.{name}: a namespace reserves {name!r} and every underscored name"
+        raise TypeError(message)
 
 
 class Shared[ScopeT = None]:
@@ -126,27 +58,57 @@ class Shared[ScopeT = None]:
         scope: What this namespace is about, for diagnostics.
     """
 
-    _cells: ClassVar[dict[str, _SharedCell]] = {}
-    """Declared cells by public name."""
-    _slots: ClassVar[dict[str, _SharedCell]] = {}
-    """The same cells by storage name, which is what a commit reports changed."""
+    _cells: ClassVar[dict[str, _State]] = {}
+    """Declared state by public name."""
+    _slots: ClassVar[dict[str, _State]] = {}
+    """The same fields by storage name, which is what a commit reports changed."""
+    _resources: ClassVar[frozenset[str]] = frozenset()
+    """Declared resources by public name. Addressed like cells, but loaded rather than written."""
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
-        declared: dict[str, _SharedCell] = {}
+        declared: dict[str, _State] = {}
+        loaded: set[str] = set()
         for klass in reversed(cls.__mro__):
             for name, descriptor in vars(klass).items():
+                if isinstance(descriptor, _ResourceDescriptor):
+                    _check_name(cls, name)
+                    loaded.add(name)
+                    continue
+                if isinstance(descriptor, _Computed):
+                    _check_name(cls, name)
+                    continue
                 if not isinstance(descriptor, _State):
                     continue
-                if not isinstance(descriptor, _SharedCell):
-                    message = f"{cls.__name__}.{name}: a shared namespace declares sl.cell(), not sl.state()"
-                    raise TypeError(message)
-                if name in _RESERVED or name.startswith("_"):
-                    message = f"{cls.__name__}.{name}: a namespace reserves {name!r} and every underscored name"
+                _check_name(cls, name)
+                if descriptor.persist_declared and descriptor.persist:
+                    message = (
+                        f"{cls.__name__}.{name}: a namespace is never persisted, so persist=True "
+                        f"cannot be honoured. Its lifetime is whoever holds the handle."
+                    )
                     raise TypeError(message)
                 declared[name] = descriptor
         cls._cells = declared
         cls._slots = {descriptor._name: descriptor for descriptor in declared.values()}
+        cls._resources = frozenset(loaded)
+
+    def _state_binding(self, name: str) -> CellAddress:
+        """Address a field declared here, so a write publishes instead of staying local.
+
+        The one hook that makes `sl.state()` on a namespace mean something different from
+        `sl.state()` on a component -- and the reason it no longer has to be spelled
+        differently. A component has no such hook, so its state has no address.
+        """
+        return CellAddress(self, name)
+
+    def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[Any], None]]:
+        """Address a resource declared here, and hand it the bus to announce itself on.
+
+        This is what makes a namespace resource *shared* rather than merely reachable from
+        several places: a component's resource reloads and re-renders its one component,
+        while this one reloads and publishes, so every mount that read it re-reads.
+        """
+        return CellAddress(self, name), self.bus.publish
 
     def __init__(self, bus: TopicBus, scope: ScopeT = _NO_SCOPE) -> None:
         self.bus = bus
@@ -159,8 +121,8 @@ class Shared[ScopeT = None]:
     def __setattr__(self, name: str, value: Any) -> None:
         if name not in type(self)._cells and name not in _RESERVED and not name.startswith("_"):
             message = (
-                f"{type(self).__name__}.{name} is not a declared cell. A namespace holds view state "
-                f"declared with sl.cell(); anything else belongs to whoever constructed it."
+                f"{type(self).__name__}.{name} is not declared state. A namespace holds view state "
+                f"declared with sl.state(); anything else belongs to whoever constructed it."
             )
             raise AttributeError(message)
         object.__setattr__(self, name, value)
@@ -194,4 +156,4 @@ def describe(address: Address) -> str:
             return str(address)
 
 
-__all__ = ["Shared", "cell", "describe"]
+__all__ = ["Shared", "describe"]
