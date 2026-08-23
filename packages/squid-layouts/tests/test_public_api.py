@@ -119,8 +119,8 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.TopicBus
     assert sl.discord.Reactor.follow
-    assert {"Shared", "SharedStateConflictError", "cell", "addresses"} <= set(sl.__all__)
-    assert {"Shared", "SharedStateConflictError", "cell", "addresses"} <= set(sl.runtime.__all__)
+    assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.__all__)
+    assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.runtime.__all__)
 
 
 def test_core_and_html_import_without_discord_dependencies() -> None:

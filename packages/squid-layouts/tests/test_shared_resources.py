@@ -18,9 +18,9 @@ from squid_layouts.runtime.shared import describe
 
 
 class Prefs(sl.Shared[int]):
-    first: str = sl.cell("Ada")
-    last: str = sl.cell("Lovelace")
-    unread: str = sl.cell("not looked at")
+    first: str = sl.state("Ada")
+    last: str = sl.state("Lovelace")
+    unread: str = sl.state("not looked at")
 
     @sl.computed
     def full(self) -> str:
@@ -28,7 +28,7 @@ class Prefs(sl.Shared[int]):
 
 
 class Catalog(sl.Shared[int]):
-    key: str = sl.cell("k1")
+    key: str = sl.state("k1")
 
     def __init__(self, bus: sl.TopicBus, scope: int) -> None:
         super().__init__(bus, scope)
@@ -54,6 +54,17 @@ class Reader(sl.Component):
 
 def texts(view: discord.ui.LayoutView) -> list[str]:
     return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
+
+
+async def mounted(catalog: Catalog, reactor: Reactor, message: object) -> Mount:
+    """Send a reader, and hand the mount back so the caller keeps it alive.
+
+    A reactor holds its mounts weakly, so a test that drops the reference is testing whether
+    the collector ran rather than whether the refresh works.
+    """
+    mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
+    await mount.send(delivered_to(message))
+    return mount
 
 
 async def drain(reactor: Reactor, bus: sl.TopicBus) -> None:
@@ -120,11 +131,10 @@ async def test_one_namespace_resource_loads_once_for_every_mount_holding_it(bus:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
 
-    for message_id in (1, 2):
-        mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
-        await mount.send(delivered_to(fake_message(message_id=message_id)))
+    mounts = [await mounted(catalog, reactor, fake_message(message_id=message_id)) for message_id in (1, 2)]
 
     assert catalog._loads == 1, "the second mount shared the value rather than loading its own"
+    assert len(mounts) == 2
 
 
 async def test_a_namespace_resource_is_followed_by_its_own_address(bus: sl.TopicBus) -> None:
@@ -144,23 +154,20 @@ async def test_an_out_of_band_reload_redraws_every_mount(bus: sl.TopicBus) -> No
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    for message in messages:
-        mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
-        await mount.send(delivered_to(message))
+    mounts = [await mounted(catalog, reactor, message) for message in messages]
 
     await catalog.entries.reload()
     await drain(reactor, bus)
 
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k1#2"], ["k1#2"]]
+    assert all(mount.followed for mount in mounts)
 
 
 async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: sl.TopicBus) -> None:
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    for message in messages:
-        mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
-        await mount.send(delivered_to(message))
+    mounts = [await mounted(catalog, reactor, message) for message in messages]
 
     with sl.transaction():
         catalog.key = "k2"
@@ -168,6 +175,7 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
     await drain(reactor, bus)
 
     assert catalog._loads == 2, "one reload served both mounts"
+    assert all(mount.followed for mount in mounts)
     assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k2#2"], ["k2#2"]]
 
 
@@ -175,14 +183,14 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.TopicBus) -> 
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
-    mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
-    await mount.send(delivered_to(message))
+    mount = await mounted(catalog, reactor, message)
 
     with sl.transaction():
         catalog.entries.replace("installed")
     await drain(reactor, bus)
 
     assert texts(message.edit.await_args.kwargs["view"]) == ["installed"]
+    assert mount.followed
 
 
 async def test_a_rolled_back_replace_publishes_nothing(bus: sl.TopicBus) -> None:
@@ -190,8 +198,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.TopicBus) -> None
     reactor = Reactor(bus)
     catalog = Catalog(bus, 1)
     message = fake_message()
-    mount = Mount(Reader(catalog), access=Everyone(), scheduler=reactor, timeout=None)
-    await mount.send(delivered_to(message))
+    mount = await mounted(catalog, reactor, message)
     edits = message.edit.await_count
 
     with pytest.raises(RuntimeError), sl.transaction():
@@ -202,6 +209,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.TopicBus) -> None
 
     assert catalog.entries.value == "k1#1"
     assert message.edit.await_count == edits
+    assert mount.followed
 
 
 def test_two_namespaces_hold_separate_resources(bus: sl.TopicBus) -> None:

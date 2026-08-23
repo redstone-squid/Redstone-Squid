@@ -15,7 +15,6 @@ from squid_layouts import (
     ReactiveWriteError,
     Shared,
     TopicBus,
-    cell,
     history,
     history_actions,
     state,
@@ -373,12 +372,12 @@ def test_each_instance_owns_its_stack():
 
 
 class Workspace(Shared[str]):
-    selected: int | None = cell(None)
-    filters: tuple[str, ...] = cell(())
+    selected: int | None = state(None)
+    filters: tuple[str, ...] = state(())
 
 
 class Preferences(Shared[str]):
-    theme: str = cell("system")
+    theme: str = state("system")
 
 
 class Sharing(Component):

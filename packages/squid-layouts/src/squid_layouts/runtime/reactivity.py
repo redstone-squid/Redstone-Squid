@@ -758,6 +758,12 @@ class _State:
         self.public_name = ""
         self.opaque = opaque
         self.persist = (not opaque) if persist is None else persist
+        self.persist_declared = persist is not None
+        """Whether the author asked for persistence, as opposed to taking the default.
+
+        An owner that cannot persist anything needs to tell the difference, so it can refuse
+        `persist=True` without refusing every field that merely defaulted to it.
+        """
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = f"__state_{name}"
@@ -774,9 +780,15 @@ class _State:
         return self._factory()
 
     def address(self, instance: ReactiveOwner) -> Any:
-        """What a write to this field publishes under, or `None` for component state."""
-        del instance
-        return None
+        """What a write to this field publishes under, or `None` if nobody outside can see it.
+
+        Asked of the *instance*, not declared at the field: whether state is private to one
+        owner or shared with every mount holding it is what kind of object holds it, and the
+        object already knows. A namespace answers with an address; a component has no hook and
+        so has no address.
+        """
+        binding = getattr(instance, "_state_binding", None)
+        return None if binding is None else binding(self.public_name)
 
     def cell(self, instance: ReactiveOwner) -> _Cell:
         """Return this field's storage on `instance`, empty until something assigns it."""
@@ -809,6 +821,16 @@ class _State:
         return cell.read()
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
+        if rendering() and self.address(instance) is not None:
+            # Only for shared state, and the asymmetry is the point: a render that writes its
+            # own component is merely confused, while one that writes state other mounts are
+            # reading has published a change halfway through building the thing that reads it.
+            message = (
+                f"{instance!r}.{self.public_name} was written while a render was reading it. A "
+                f"render turns state into a tree and may not change the state it is reading; "
+                f"write shared state from an action handler."
+            )
+            raise ReactiveWriteError(message)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
             held = _staged_value(cell)
@@ -1179,7 +1201,7 @@ def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
     found = observation.addresses()
     if not found:
         message = (
-            "addresses() read no shared cell: the callable must read at least one sl.cell() "
+            "addresses() read no shared state: the callable must read at least one sl.state() "
             "off a namespace, directly or through a computed. Component state has no address."
         )
         raise ValueError(message)
