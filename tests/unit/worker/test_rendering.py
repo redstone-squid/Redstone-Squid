@@ -4,6 +4,7 @@ import uuid
 from typing import Any, cast
 
 import pytest
+from squid_reactive import Topic
 
 from squid.artifacts import ArtifactMetadata
 from squid.schematics.application import ClaimedRenderJob
@@ -221,7 +222,7 @@ async def test_a_finished_render_publishes_the_builds_resource_topic() -> None:
 
     await projector.process_batch()
 
-    assert topics.published == [("build", "7")]
+    assert topics.published == [Topic("build", "7")]
 
 
 async def test_a_skipped_render_changes_nothing_to_publish() -> None:
