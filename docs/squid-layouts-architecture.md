@@ -262,7 +262,10 @@ object, by constructor injection or `ContextKey`. That also settles lifetime -- 
 the state, so panels holding it means it dies with the last panel, and a cog or session holding
 it means it survives every panel opening and closing. A mount subscribes to exactly the cells
 its latest render read, reconciled at stage time, and `sl.addresses(lambda: appearance.accent)`
-names an address by hand for a host that wants to follow one itself. Nothing durable belongs
+names an address by hand for a host that wants to follow one itself. A mount repaints its own
+writes inside the interaction that made them -- `Mount.observed` is what it rendered,
+`Mount.followed` what it managed to subscribe to -- so a missing reactor costs live updates
+from *other* mounts and nothing else. Nothing durable belongs
 here; anything the application would still want with nobody looking at it is a service.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
