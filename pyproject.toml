@@ -379,6 +379,7 @@ pythonpath = ["."]
 testpaths = [
     "tests/unit",
     "tests/architecture",
+    "packages/squid-reactive/tests",
     "packages/squid-layouts/tests",
 ]
 xfail_strict = true
@@ -387,6 +388,7 @@ addopts = [
     "--strict-config",
     "-ra",                 # short summary of skips/xfails
     "--cov=squid",
+    "--cov=squid_reactive",
     "--cov=squid_layouts",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings

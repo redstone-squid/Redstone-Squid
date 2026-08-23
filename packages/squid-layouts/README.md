@@ -152,9 +152,9 @@ discarding that content.
 
 ### Live updates across mounts
 
-`TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
-address changed; every subscriber re-reads the application's source of truth. It is not durable,
-and queued topics disappear with the process.
+`TopicBus` is the two-method protocol for a payload-free latency projection. Publishing says only
+that an address changed; every subscriber re-reads the application's source of truth.
+`LocalTopicBus` is the synchronous in-process implementation for tests and single-process hosts.
 
 An address is either a `sl.runtime.Topic(kind, key)` -- a value a host writes, equal by value so two
 publishers agree without sharing a constructor -- or a `sl.runtime.CellAddress`, which is a `Shared` cell's
@@ -194,23 +194,24 @@ resource, never in `on_load`, which runs once and under no consumer.
 for a subscriber that is not a mount:
 
 ```python
-bus = sl.runtime.TopicBus()
+bus = sl.runtime.LocalTopicBus()
 reactor = sl.discord.Reactor(bus)
 mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
 reactor.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
 await mount.send(sl.discord.respond_to(interaction))
 
-# The host visibly owns both long-running coroutines.
+# The host owns the only long-running coroutine.
 async with anyio.create_task_group() as tasks:
-    tasks.start_soon(bus.run)
     tasks.start_soon(reactor.run)
 ```
 
-`publish()` is a synchronous enqueue for the event-loop thread. A distributed application bridges
+`publish()` delivers local subscribers synchronously in registration order. A subscriber that
+raises is reported through the bus's error hook, delivery continues to the rest, and the bus has
+no task that can die. A distributed application bridges
 its own durable change feed, NOTIFY listener, or queue consumer into the local bus. Publish where
 the application already funnels committed changes; do not subscribe a durable projection that
 already has a reconciler, because that would give one message two competing writers. For tests,
-call `publish()`, then `await bus.drain()` and assert without starting background work or sleeping.
+call `publish()` and assert immediately.
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
@@ -274,15 +275,15 @@ silently be missed.
 
 ### Runtime profiling
 
-Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the whole
-live-update chain: `Reactor` inherits its bus's profiler, and a `Mount` inherits its scheduler's
-profiler unless explicitly overridden. Routers are independent ownership roots and accept the
-same collector directly.
+Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the host's
+live-update chain: pass it to `Reactor`, and a `Mount` inherits its scheduler's profiler unless
+explicitly overridden. Routers are independent ownership roots and accept the same collector
+directly.
 
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
-bus = sl.runtime.TopicBus(profiler=profiler)
-reactor = sl.discord.Reactor(bus)
+bus = sl.runtime.LocalTopicBus()
+reactor = sl.discord.Reactor(bus, profiler=profiler)
 
 mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
 router = sl.discord.Router(profiler=profiler)
@@ -559,9 +560,9 @@ outside planning and cannot run in `RouterShell.render()`.
 
 ## Host integration rules
 
-- The base package has no dependencies. Install the `discord` extra for discord.py and anyio. The
-  adapter never starts background work on its own — start `sl.runtime.TopicBus.run()` and
-  `sl.discord.Reactor.run()` under your own supervisor.
+- The base package depends only on the zero-dependency `squid-reactive` kernel. Install the
+  `discord` extra for discord.py and anyio. The adapter never starts background work on its own;
+  start `sl.discord.Reactor.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the
