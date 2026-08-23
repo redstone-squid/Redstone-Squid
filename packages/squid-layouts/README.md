@@ -271,6 +271,32 @@ Inside an action a write stages into the transaction's overlay and becomes visib
 The action reads its own writes; another task reading the same field across an `await` sees the
 committed value until then, and a rollback is dropping the overlay.
 
+### Shared state
+
+`sl.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
+cells with `sl.cell()`, and hand the same instance to whoever should see the same values:
+
+```python
+class Workspace(sl.Shared[GuildId]):
+    selected: int | None = sl.cell(None)
+    filters: tuple[str, ...] = sl.cell(())
+
+workspace = Workspace(bus, guild.id)
+```
+
+A cell is `sl.state()` one level out and is literally the same storage, so replacement,
+`opaque=`, staging and rollback are identical. A write publishes the cell's address on the
+`TopicBus`, and every mount whose render read that cell refreshes; a mount subscribes to
+exactly what it rendered, reconciled each time it stages one. A cell an action both read and
+wrote carries the value it read as a commit precondition, so a lost update raises
+`sl.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
+no `compare_and_set` to remember. `sl.history` covers shared writes in the same entry as local
+ones and restores them blindly.
+
+There is no store: two panels converge because something gave them the same object, so the
+handle is the state and its lifetime is whoever holds it. Keep domain truth in your data layer;
+a namespace is for what only the screen wants.
+
 ### Computed values
 
 `sl.computed` caches a synchronous derived value against whatever state its body read. Nothing
