@@ -153,7 +153,7 @@ def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
     return status.previous
 
 
-class Resource[ValueT]:
+class Resource[ValueT](AsyncBinding):
     """One component-bound async value with synchronous observable state."""
 
     reconcile_while_pending = False
