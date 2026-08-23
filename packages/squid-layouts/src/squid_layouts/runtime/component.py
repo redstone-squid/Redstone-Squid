@@ -134,8 +134,8 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
 from squid_layouts.runtime.topics import Address
 
-type RenderNode = LayoutNode
-type RenderResult = Document | LayoutNode | Sequence[LayoutNode]
+type RenderNode[ModeT = Any] = LayoutNode[ModeT]
+type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
 
 
 class RuntimeOwner(Protocol):
@@ -210,7 +210,7 @@ class ComponentTree:
     """
 
 
-class Component:
+class Component[ModeT = Any]:
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
@@ -273,7 +273,7 @@ class Component:
     def _state_rolled_back(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[ModeT]:
         """Describe the message for the current state. Pure and synchronous."""
         raise NotImplementedError
 
