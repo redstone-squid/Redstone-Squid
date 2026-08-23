@@ -173,7 +173,9 @@ class ClassicRenderer:
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> list[discord.ui.Item[Any]]:
-        selects = sum(isinstance(control, SceneSelect | SceneRoutedSelect | SceneEntitySelect) for control in row.controls)
+        selects = sum(
+            isinstance(control, SceneSelect | SceneRoutedSelect | SceneEntitySelect) for control in row.controls
+        )
         if selects and len(row.controls) > 1:
             message = f"row {index} mixes a select with other controls; a select occupies its whole row"
             raise DrawInvariantError(message)
