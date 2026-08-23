@@ -405,7 +405,7 @@ def _pack(children: Sequence[Item]) -> list[list[int]]:
 class _ProxyResponse:
     """`interaction.response`, with the calls a second writer would make removed."""
 
-    def __init__(self, proxy: "_InteractionProxy") -> None:
+    def __init__(self, proxy: _InteractionProxy) -> None:
         self._proxy = proxy
         self._done = False
 
@@ -474,7 +474,7 @@ class _ProxyResponse:
 class _ProxyFollowup:
     """`interaction.followup`, which legitimately addresses a *different* message."""
 
-    def __init__(self, proxy: "_InteractionProxy") -> None:
+    def __init__(self, proxy: _InteractionProxy) -> None:
         self._proxy = proxy
 
     async def send(self, *args: Any, **kwargs: Any) -> Any:
