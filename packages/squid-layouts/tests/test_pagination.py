@@ -10,6 +10,7 @@ from discord.ui.view import ViewStore
 from hypothesis import given
 from hypothesis import strategies as st
 
+import squid_layouts as sl
 from squid_layouts import (
     DEFAULT_CHROME,
     Component,
@@ -209,7 +210,7 @@ class Catalog(Component):
 
     def render(self):
         keys = (*self.lead, *(str(index) for index in range(36)))
-        return [Items("catalog", tuple(Item(key, f"Item {key}", (Paragraph("detail"),)) for key in keys))]
+        return [Items("catalog", tuple(Item(key, sl.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys))]
 
 
 class TestMountPagination:
@@ -532,7 +533,7 @@ class TestBuildModal:
 
 @given(st.text(min_size=4500, max_size=9000, alphabet=st.characters(blacklist_categories=("Cs",))))
 def test_paginated_documents_fit_on_every_page(body):
-    card_node = section(truncate(paragraph("intro")), fields(field("k", "v")), heading="Title")
+    card_node = section(sl.heading("Title"), truncate(paragraph("intro")), fields(field("k", "v")))
     lowered = lower_semantics(
         [card_node],
         limits=LIMITS,

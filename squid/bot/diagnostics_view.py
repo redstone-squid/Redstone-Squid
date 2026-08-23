@@ -69,7 +69,7 @@ class ErrorReportBrowser(sl.Component):
     def _render_list(self) -> Sequence[sl.LayoutNode]:
         entries = tuple(_list_line(report) for report in self._reports)
         body: sl.TextLike = "\n".join(entries) or L(t"Nothing has failed within the retention window.")
-        nodes: list[sl.LayoutNode] = [sl.section(sl.truncate(sl.paragraph(body)), heading=L(t"Recent errors"))]
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading(L(t"Recent errors")), sl.truncate(sl.paragraph(body)))]
         if self._reports:
             nodes.append(
                 sl.primitives.SelectMenu(
@@ -116,7 +116,7 @@ class ErrorReportBrowser(sl.Component):
         if self._reports:
             controls.append(sl.primitives.Button(label=L(t"Back"), on_click=self._back, key="back"))
         controls.append(self._close_button())
-        return [sl.section(*children), sl.primitives.Row(tuple(controls))]
+        return [sl.stack(*children), sl.primitives.Row(tuple(controls))]
 
     def _close_button(self) -> sl.primitives.Button:
         return sl.primitives.Button(

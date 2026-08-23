@@ -89,11 +89,11 @@ class ConsentPrompt(sl.Component):
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(
+                sl.heading(self._title),
                 # The summary is the card's shock absorber: truncate lets it give up
                 # characters under pressure before a field loses any.
                 sl.truncate(sl.paragraph(self._summary)),
                 bool(card_fields) and sl.fields(*card_fields),
-                heading=self._title,
             ),
             sl.primitives.Row(
                 (

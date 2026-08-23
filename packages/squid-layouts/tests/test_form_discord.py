@@ -199,7 +199,7 @@ class DurationPanel(sl.Component):
         )
 
     def render(self) -> sl.LayoutNode:
-        return sl.form(self.spec, key="duration", label="Duration", on_submit=self.submitted)
+        return sl.form("Duration", self.spec, key="duration", on_submit=self.submitted)
 
     async def submitted(self, event: sl.SubmitEvent) -> None:
         self.events.append(event)

@@ -1178,7 +1178,7 @@ class TestActionPolicy:
 
             def render(self):
                 handler = self.new if self.current else self.old
-                return sl_form(spec, key="rename", on_submit=handler, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", spec, key="rename", on_submit=handler, policy=ActionPolicy.REBASE)
 
             async def old(self, event) -> None:
                 calls.append("old")
@@ -1212,7 +1212,7 @@ class TestActionPolicy:
 
         class Trigger(Component):
             def render(self):
-                return sl_form(spec, key="rename", on_submit=self.submit, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", spec, key="rename", on_submit=self.submit, policy=ActionPolicy.REBASE)
 
             async def submit(self, event) -> None:
                 submitted.append("submit")
@@ -1243,7 +1243,7 @@ class TestActionPolicy:
 
         class Reshaped(Component):
             def render(self):
-                return sl_form(reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
 
             async def old(self, event) -> None:
                 calls.append(dict(event.values))
@@ -3592,7 +3592,7 @@ class TestGuards:
             seen: int = state(0)
 
             def render(self):
-                return sl_form(spec, key="rename", on_submit=submitted, guard=sl.guards.once())
+                return sl_form("Rename", spec, key="rename", on_submit=submitted, guard=sl.guards.once())
 
         mount = Mount(Panel(), access=Everyone(), timeout=None)
         commit_render(mount)

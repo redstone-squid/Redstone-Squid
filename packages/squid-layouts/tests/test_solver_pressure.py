@@ -130,7 +130,7 @@ class TestRegionPagination:
 
     def test_a_section_pages_heterogeneous_children(self) -> None:
         document = sl.paged(
-            sl.section(*(sl.paragraph(f"{index}: " + "x" * 30) for index in range(6)), heading="Report"),
+            sl.section(sl.heading("Report"), *(sl.paragraph(f"{index}: " + "x" * 30) for index in range(6))),
             key="report",
             chars=80,
         )
@@ -145,7 +145,7 @@ class TestRegionPagination:
 
     def test_keep_with_next_moves_a_heading_to_its_content(self) -> None:
         document = sl.paged(
-            sl.section(
+            sl.block(
                 sl.paragraph("a" * 45),
                 sl.keep_with_next(sl.heading("Next")),
                 sl.paragraph("b" * 35),
@@ -162,7 +162,7 @@ class TestRegionPagination:
 
     def test_unbreakable_rejects_an_oversized_group(self) -> None:
         document = sl.paged(
-            sl.section(sl.unbreakable(sl.group(sl.paragraph("a" * 30), sl.paragraph("b" * 30)))),
+            sl.block(sl.unbreakable(sl.group(sl.paragraph("a" * 30), sl.paragraph("b" * 30)))),
             key="atomic",
             chars=50,
         )
@@ -171,7 +171,7 @@ class TestRegionPagination:
             sl.plan(document, target=V2_TARGET)
 
     def test_an_oversized_text_child_splits_losslessly(self) -> None:
-        document = sl.paged(sl.section(sl.paragraph("x" * 120)), key="prose", chars=50)
+        document = sl.paged(sl.block(sl.paragraph("x" * 120)), key="prose", chars=50)
 
         pages = [
             sl.plan(document, target=V2_TARGET, positions={"prose": sl.Position(offset=index)}) for index in range(3)
@@ -183,7 +183,7 @@ class TestRegionPagination:
 
     def test_widows_keep_three_children_on_the_last_page(self) -> None:
         document = sl.paged(
-            sl.section(*(sl.paragraph(str(index) * 20) for index in range(5))),
+            sl.block(*(sl.paragraph(str(index) * 20) for index in range(5))),
             key="widows",
             chars=65,
             widows=3,
@@ -195,7 +195,7 @@ class TestRegionPagination:
 
     def test_a_large_region_is_broken_without_a_size_dependent_heuristic(self) -> None:
         document = sl.paged(
-            sl.section(*(sl.paragraph("x" * 10) for _ in range(100))),
+            sl.block(*(sl.paragraph("x" * 10) for _ in range(100))),
             key="large-region",
             chars=100,
         )

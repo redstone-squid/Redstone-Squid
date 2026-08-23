@@ -87,6 +87,7 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     BestEffort,
+    Block,
     Budgeted,
     Choice,
     ChoiceEvent,
@@ -272,6 +273,7 @@ def nominate_decisions(
             case (
                 Section(children=children)
                 | Article(children=children)
+                | Block(children=children)
                 | Aside(children=children)
                 | Themed(children=children)
                 | Panel(children=children)
@@ -410,10 +412,16 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 context.palette = previous
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
             return _children(children, path, context)
+        case Block(children=children, accent=accent):
+            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            if _cards(context):
+                return [_region(Card(accent=resolved_accent), _children(children, path, context), context)]
+            return [Panel(tuple(_children(children, path, context)), accent=resolved_accent)]
         case (
             Section(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
         ):
+            resolved_heading = _resolve(heading.content, context)
             resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
             if _cards(context):
                 # One semantic region, one card: its heading is the embed title, its accent is
@@ -422,7 +430,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 return [
                     _region(
                         Card(
-                            title=None if heading is None else _resolve(heading, context),
+                            title=Text(resolved_heading, overflow=Never(), priority=int(heading.importance)),
                             thumbnail=None if not thumbnail else CardMedia(thumbnail),
                             accent=resolved_accent,
                         ),
@@ -431,15 +439,15 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                     )
                 ]
             contents: list[Node] = []
-            if heading is not None:
-                title = PrimitiveHeading(_resolve(heading, context), overflow=Never())
-                # The lead image sits beside the title and nothing else: picking "the body"
-                # out of an arbitrary children tuple would be a guess.
-                contents.append(
-                    PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title
-                )
-            elif thumbnail:
-                contents.append(Gallery((thumbnail,)))
+            title = PrimitiveHeading(
+                resolved_heading,
+                level=heading.level,
+                overflow=Never(),
+                priority=int(heading.importance),
+            )
+            # The lead image sits beside the title and nothing else: picking "the body"
+            # out of an arbitrary children tuple would be a guess.
+            contents.append(PrimitiveSection(texts=(title,), accessory=Thumbnail(thumbnail)) if thumbnail else title)
             contents.extend(_children(children, path, context))
             return [Panel(tuple(contents), accent=resolved_accent)]
         case Aside(children=children, tone=tone):
@@ -448,7 +456,9 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 return [_region(Card(accent=accent), _children(children, path, context), context)]
             return [Panel(tuple(_children(children, path, context)), accent=accent)]
         case Heading(content=content, level=level, importance=importance):
-            return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never(), priority=int(importance))]
+            return [
+                PrimitiveHeading(_resolve(content, context), level=level, overflow=Never(), priority=int(importance))
+            ]
         case Paragraph(content=content, importance=importance):
             return [Text(_resolve(content, context), overflow=Never(), priority=int(importance))]
         case Note(content=content, importance=importance):
@@ -1263,7 +1273,8 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     fallback = Choices(
         key=node.key,
         choices=tuple(
-            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available) for choice in node.choices
+            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
+            for choice in node.choices
         ),
         selection=Controlled(tuple(_entity_key(value) for value in previous), choose_fallback),
         minimum=node.minimum,
@@ -1368,7 +1379,7 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
             await open_(event, None)
 
         return [
-            PrimitiveHeading(_resolve(item.label, context), level=3, overflow=Never()),
+            PrimitiveHeading(_resolve(item.label.content, context), level=3, overflow=Never()),
             *_children(item.children, f"{path}.{item.key}", context),
             Row((Button(context.chrome.back, back, f"{node.key}.back"),)),
         ]
@@ -1379,14 +1390,14 @@ def _items(node: Items, path: str, context: _Context) -> list[Node]:
     page_key = f"{node.key}.items"
     visible, page, pages = _page_items(node.items, page_key, context, identity=lambda item: item.key)
     summaries = tuple(
-        f"**{_resolve(item.label, context)}**"
+        f"**{_resolve(item.label.content, context)}**"
         + (f" — {_resolve(item.summary, context)}" if item.summary is not None else "")
         for item in visible
     )
     result: list[Node] = [
         Lines(summaries, overflow=Never()),
         SelectMenu(
-            tuple(Option(_resolve(item.label, context), item.key) for item in visible),
+            tuple(Option(_resolve(item.label.content, context), item.key) for item in visible),
             focus,
             f"{node.key}.focus",
             placeholder="Choose an item",
@@ -1513,7 +1524,7 @@ def _details(node: Details, path: str, context: _Context) -> list[Node]:
                 context.session.disclose(node.key, not context.session.disclosure(node.key, initial=seed).open)
                 event.invalidate()
 
-    result: list[Node] = [Row((Button(_resolve(node.summary, context), toggle, f"{node.key}.toggle"),))]
+    result: list[Node] = [Row((Button(_resolve(node.summary.content, context), toggle, f"{node.key}.toggle"),))]
     if open_:
         result.extend(_children(node.children, path, context))
     return result
@@ -1551,7 +1562,7 @@ def _toggle(node: Toggle, context: _Context) -> list[Node]:
 
 
 def _table_axis(node: Table, path: str, session: PresentationSession) -> StrategyAxis:
-    preferred = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns) <= 4 else "records"
+    preferred = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns.columns) <= 4 else "records"
     return _strategy_axis(
         path=path,
         key=node.key,
@@ -1566,9 +1577,10 @@ def _table_axis(node: Table, path: str, session: PresentationSession) -> Strateg
 
 
 def _table(node: Table, path: str, context: _Context) -> list[Node]:
+    columns = node.columns.columns
     strategy = _select_strategy(_table_axis(node, path, context.session), context)
     if strategy == "tabular":
-        headings = [_resolve(column.heading, context) for column in node.columns]
+        headings = [_resolve(column.heading, context) for column in columns]
         widths = [
             max([len(heading), *(len(_resolve(row.cells[index], context)) for row in node.rows)])
             for index, heading in enumerate(headings)
@@ -1583,7 +1595,7 @@ def _table(node: Table, path: str, context: _Context) -> list[Node]:
     records = tuple(
         "\n".join(
             f"**{_resolve(column.heading, context)}:** {_resolve(cell, context)}"
-            for column, cell in zip(node.columns, row.cells, strict=True)
+            for column, cell in zip(columns, row.cells, strict=True)
         )
         for row in node.rows
     )

@@ -354,7 +354,7 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
     target = TargetProfile("html", 1, frozenset({"forms.inline"}), limits=LIMITS)
     spec = sl.FormSpec("Edit", (sl.TextField(key="name", label="Name"),))
 
-    result = sl.plan(sl.form(spec, key="edit", label="Edit", on_submit=_submitted), target=target)
+    result = sl.plan(sl.form("Edit", spec, key="edit", on_submit=_submitted), target=target)
 
     row = result.scene.components_v2.children[0]
     assert isinstance(row, SceneRow)
@@ -376,7 +376,7 @@ def test_extension_field_without_a_fallback_is_a_planning_error() -> None:
     spec = sl.FormSpec("Native", (NativeOnlyField(key="native", label="Native"),))
 
     with pytest.raises(sl.LayoutInvariantError, match=r"forms\.native-only"):
-        sl.plan(sl.form(spec, key="native", on_submit=_submitted), target=target)
+        sl.plan(sl.form("Open form", spec, key="native", on_submit=_submitted), target=target)
 
 
 def test_extension_field_uses_its_portable_fallback() -> None:
@@ -392,7 +392,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
         ),
     )
 
-    result = sl.plan(sl.form(spec, key="native", on_submit=_submitted), target=target)
+    result = sl.plan(sl.form("Open form", spec, key="native", on_submit=_submitted), target=target)
 
     assert isinstance(result.scene.components_v2.children[0], SceneRow)
 

@@ -150,7 +150,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 for name, value in metadata.items()
                 if name in names
             )
-            return sl.section(sl.fields(*entries), heading=title) if entries else None
+            return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
 
         status_colours: dict[Status | None, int] = {
             Status.PENDING: DISCORD_YELLOW,
@@ -167,6 +167,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         media = await self._get_media_urls()
         extra_media = media[1:]
         return sl.section(
+            sl.heading(format_build_display_title(build, markdown=True, current_version=current_java_version)),
             # The body is the card's shock absorber: truncate lets it give up characters
             # under pressure before a field group, media, or the footer loses any.
             description and sl.truncate(sl.paragraph(description)),
@@ -178,7 +179,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             bool(extra_media) and sl.media(*extra_media, key="media"),
             sl.note(footer),
             *rows,
-            heading=format_build_display_title(build, markdown=True, current_version=current_java_version),
             accent=status_colours.get(build.submission_status, DISCORD_GREEN),
             thumbnail=media[0] if media else None,
         )

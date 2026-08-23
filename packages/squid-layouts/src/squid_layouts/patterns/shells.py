@@ -233,7 +233,7 @@ class _ComponentControls[StateT]:
         async def submitted(event: SubmitEvent) -> None:
             await self.owner._dispatch(event, action_name, submitted=event.values)
 
-        return form(resolved, key=key, label=label, on_submit=submitted, tone=tone, emphasis=emphasis)
+        return form(label, resolved, key=key, on_submit=submitted, tone=tone, emphasis=emphasis)
 
 
 @dataclass(frozen=True, slots=True)
