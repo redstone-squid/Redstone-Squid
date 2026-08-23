@@ -14,8 +14,7 @@ import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
-from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import Opened
+from squid_layouts.discord import Everyone, Opened, SessionKey, SessionRegistry
 from squid_layouts.discord.testing import delivered_to, fake_message
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
