@@ -626,6 +626,7 @@ class Mount:
         self._ephemeral: bool | None = None
         self._lifecycle = MountLifecycle.ACTIVE
         self._unwatch_expiry: Callable[[], None] | None = None
+        self._expiry_arm_requested: deliver.EditHandle | None = None
         self._view: MountedView | None = None
         self._handlers: dict[str, ActionBinding] = {}
         # What each render-declared form key presents right now. Separate from `_handlers`,
@@ -765,6 +766,45 @@ class Mount:
         if self.timeout is None:
             return None
         return max(0.0, self.timeout - (self.clock() - self._active))
+
+    def _queue_expiry_arm(self, handle: deliver.EditHandle) -> None:
+        """Retain the handle identity a scheduler wants rechecked under the render lock."""
+        self._expiry_arm_requested = handle
+
+    def _should_arm_expiry(self, handle: deliver.EditHandle, now: datetime) -> bool:
+        """Whether current delivery and timeout facts permit this handle's policy UI."""
+        policy = self.expiry
+        if (
+            policy is None
+            or self._finished
+            or self._plan is None
+            or handle is not self._handle
+            or handle.permanent
+            or handle.expires_at is None
+            or (isinstance(policy, RenewEphemeral) and self._ephemeral is not True)
+        ):
+            return False
+        remaining = (handle.expires_at - now).total_seconds()
+        timeout = self._remaining_timeout()
+        return remaining <= policy.warning and (timeout is None or timeout > remaining)
+
+    def _apply_expiry_arm(self) -> None:
+        """Apply a queued pause policy only when its delivery facts are still current."""
+        requested = self._expiry_arm_requested
+        self._expiry_arm_requested = None
+        if requested is None:
+            return
+        policy = self.expiry
+        wall_clock = getattr(self.scheduler, "clock", None)
+        now = wall_clock() if callable(wall_clock) else datetime.now(UTC)
+        if not self._should_arm_expiry(requested, now) or requested.expired():
+            return
+        assert policy is not None
+        if isinstance(policy, RenewEphemeral):
+            # The lifecycle generation is added by the next implementation slice.
+            return
+        self.status = self.chrome.updates_paused
+        self.invalidate()
 
     def _note_address(self, message: discord.Message | None) -> None:
         """Remember where this mount's message is, the first time Discord says.
@@ -2087,6 +2127,7 @@ class Mount:
                 if self._finished:
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
                     return
+                self._apply_expiry_arm()
                 if self._handle is None or self._handle.expired():
                     self._dirty = True
                     profile.set_result(TraceResult(TraceOutcome.ABANDONED, presentation=PresentationOutcome.ABANDONED))
@@ -2196,6 +2237,7 @@ class Mount:
         self._follows.clear()
         self._watched.clear()
         self._observed = ()
+        self._expiry_arm_requested = None
         self.runtime.finish()
 
     async def handle_timeout(self) -> None:

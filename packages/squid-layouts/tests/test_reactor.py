@@ -11,7 +11,7 @@ import anyio
 import pytest
 
 from squid_layouts import Component, TopicBus
-from squid_layouts.discord import Everyone, Mount, Reactor, delivery
+from squid_layouts.discord import Everyone, Mount, PauseUpdates, Reactor, RenewEphemeral, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
 
@@ -165,10 +165,11 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
     bus = TopicBus()
-    reactor = Reactor(bus, expiry_margin=60, clock=lambda: now)
-    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
-    reactor.follow(mount, "build")
+    reactor = Reactor(bus, clock=lambda: now)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor, expiry=PauseUpdates(warning=60))
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+
+    assert mount in reactor._watched
 
     reactor._sweep_once()
     await _drain_reactor(reactor)
@@ -192,6 +193,56 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     now += timedelta(seconds=1)
     reactor._sweep_once()
     assert reactor._queue.qsize() == 1
+
+
+async def test_expiry_watch_does_not_require_a_topic_follow_and_stops_on_finish() -> None:
+    reactor = Reactor()
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+
+    await mount.send(delivered_to(fake_message()))
+
+    assert mount in reactor._watched
+    assert mount not in reactor._followed
+    await mount.finish(disable=False)
+    assert mount not in reactor._watched
+
+
+async def test_expiry_none_never_schedules_pre_expiry_chrome() -> None:
+    now = datetime.now(UTC)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=5)
+    reactor = Reactor(clock=lambda: now)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor, expiry=None)
+    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+
+    reactor._sweep_once()
+
+    assert reactor._queue.empty()
+
+
+@pytest.mark.parametrize(
+    ("ephemeral", "timeout", "expected"),
+    [(False, None, 0), (True, 10, 0), (True, None, 1)],
+)
+async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
+    ephemeral: bool, timeout: float | None, expected: int
+) -> None:
+    now = datetime.now(UTC)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=30)
+    reactor = Reactor(clock=lambda: now)
+    mount = Mount(
+        Empty(),
+        access=Everyone(),
+        scheduler=reactor,
+        timeout=timeout,
+        expiry=RenewEphemeral(warning=60),
+    )
+    await mount.send(delivered_to(fake_message(ephemeral=ephemeral), handle=delivery.handle_from(interaction)))
+
+    reactor._sweep_once()
+
+    assert reactor._queue.qsize() == expected
 
 
 def test_collected_mount_unsubscribes() -> None:
@@ -222,7 +273,6 @@ def test_follow_requires_its_bus_and_scheduler() -> None:
     [
         {"concurrency": 0},
         {"sweep_interval": 0},
-        {"expiry_margin": -1},
     ],
 )
 def test_reactor_rejects_invalid_settings(options: dict[str, Any]) -> None:
