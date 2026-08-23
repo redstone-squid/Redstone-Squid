@@ -509,11 +509,15 @@ class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescript
             return self
         bound = instance.__dict__.get(self._name)
         if bound is None:
+            binding = getattr(instance, "_resource_binding", None)
+            address, publish = binding(self.public_name) if binding is not None else (None, None)
             bound = AtomicResource(
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
                 delivery=self.delivery,
+                address=address,
+                publish=publish,
             )
             instance.__dict__[self._name] = bound
         _observe(bound)
