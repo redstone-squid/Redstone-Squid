@@ -4,83 +4,200 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 import squid_layouts as sl
 
-
-def test_root_is_semantic_first() -> None:
-    assert {"Section", "Paragraph", "Note", "Actions", "Component", "plan", "PlanReport", "TopicBus"} <= set(sl.__all__)
-    assert {"ActionKind", "ActionMiddleware", "ActionProceed", "ActionRequest"} <= set(sl.__all__)
-    assert {"section", "paragraph", "note", "actions", "action", "ChildLike"} <= set(sl.__all__)
-    assert {"budget", "paged", "unbreakable", "keep_with_next"} <= set(sl.__all__)
-    assert {"Toggle", "ToggleEvent", "ToggleOwnership", "OFF", "toggle"} <= set(sl.__all__)
-    assert {"Emoji", "FormText", "MultiChoiceField", "UploadedFile"} <= set(sl.__all__)
-    assert {
-        "AmbiguousTimePolicy",
-        "DateTimeField",
-        "NonexistentTimePolicy",
-        "TimeField",
-        "Timestamp",
-        "TimeStyle",
-        "ZonedDateTime",
-        "ZonedDateTimeField",
-        "ZonedTimestamp",
-        "timestamp",
-        "zoned_timestamp",
-    } <= set(sl.__all__)
-    assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
-    assert {"CollectionEditor", "CollectionEntry", "CollectionState", "CollectionChangeHandler"} <= set(sl.__all__)
-    assert "CommitPolicy" in sl.__all__
-    assert {
-        "Editor",
-        "EditorCommitHandler",
-        "EditorSection",
-        "EditorSectionState",
-        "EditorState",
-        "EditorValues",
-    } <= set(sl.__all__)
-    assert {"Browser", "BrowserDetail", "BrowserOpenHandler", "BrowserOverview", "list_source"} <= set(sl.__all__)
-    assert {"Lookup", "LookupPickHandler", "LookupSearch"} <= set(sl.__all__)
-    assert {"Download", "download"} <= set(sl.__all__)
-    assert {"Guard", "GuardVerdict", "GuardLedger", "GuardScope", "ADMIT", "guards"} <= set(sl.__all__)
-    assert "Feedback" in sl.__all__
-    assert "WizardReview" in sl.__all__
-    assert {"Scale", "ScaleField", "ScaleEvent", "ScaleOwnership", "UNRATED", "rating"} <= set(sl.__all__)
-    assert {
-        "AtomicResource",
-        "AtomicResourceState",
-        "Resource",
-        "ResourceDelivery",
-        "ResourceState",
-        "Pending",
-        "Ready",
-        "Failed",
+# ~105 names: the authoring vocabulary. See docs/plans/squid-layouts-redesign/58-public-api-narrowing.md
+# for the promotion rule and the grouped rationale (namespaces, component model, document,
+# semantic factories, factory type aliases, adaptation verbs, text, node union, event types,
+# central nouns) this list encodes.
+ROOT_API = frozenset(
+    {
+        "ActionEvent",
+        "ChildLike",
+        "ChoiceEvent",
+        "Component",
+        "Conditional",
+        "ContextKey",
+        "Document",
+        "DocumentLike",
+        "EntityEvent",
+        "EntitySelectionEvent",
+        "LayoutNode",
+        "NavigateEvent",
+        "OpenEvent",
+        "Palette",
+        "PressEvent",
+        "ScaleEvent",
+        "SelectionEvent",
+        "SubmitEvent",
+        "TextLike",
+        "TextValue",
+        "ToggleEvent",
+        "Tone",
+        "action",
+        "action_group",
+        "actions",
+        "article",
+        "aside",
+        "best_effort",
+        "block",
+        "budget",
+        "bullet",
+        "bullets",
+        "choice",
+        "choices",
+        "cluster",
+        "code",
+        "column",
+        "columns",
+        "computed",
+        "controlled",
+        "destination",
+        "details",
+        "download",
+        "entities",
+        "entity_choice",
+        "errors",
+        "fallback",
+        "field",
+        "fields",
+        "figure",
+        "form",
+        "forms",
+        "group",
+        "guards",
+        "heading",
+        "html",
+        "interactions",
+        "item",
+        "item_label",
+        "items",
+        "keep_with_next",
+        "link",
+        "managed",
+        "md",
+        "measure",
+        "media",
+        "media_item",
+        "navigation",
+        "note",
+        "optional",
+        "paged",
+        "paragraph",
+        "patterns",
+        "plain",
+        "planning",
+        "primitives",
+        "profiling",
+        "progress",
+        "quote",
+        "rating",
+        "raw_md",
         "resource",
-    } <= set(sl.__all__)
-    assert {
-        "CountPrecision",
-        "Direction",
-        "LoadedWindow",
-        "Position",
-        "PositionPolicy",
-        "SourceCapabilities",
-        "Window",
-        "WindowLoader",
-        "WindowSource",
-    } <= set(sl.__all__)
-    for removed in (
-        "Button",
-        "Mount",
-        "HtmlRenderer",
-        "PresentationSession",
-        "SceneCodec",
-        "conform",
-        "render_static",
-    ):
-        with pytest.raises(AttributeError):
-            getattr(sl, removed)
+        "routed_action",
+        "routed_choices",
+        "routing",
+        "runtime",
+        "scene",
+        "section",
+        "semantic",
+        "sources",
+        "spill",
+        "stack",
+        "state",
+        "status",
+        "summary",
+        "table",
+        "table_row",
+        "temporal",
+        "text",
+        "themed",
+        "timestamp",
+        "toggle",
+        "truncate",
+        "unbreakable",
+        "zoned_timestamp",
+    }
+)
+
+ROOT_NAMESPACES = (
+    "errors",
+    "forms",
+    "guards",
+    "html",
+    "interactions",
+    "patterns",
+    "planning",
+    "primitives",
+    "profiling",
+    "routing",
+    "runtime",
+    "scene",
+    "semantic",
+    "sources",
+    "temporal",
+    "text",
+)
+
+RENAMED_SUBMODULES = (
+    "squid_layouts.planning.measurement",
+    "squid_layouts.runtime.histories",
+    "squid_layouts.runtime.topics",
+    "squid_layouts.discord.composition",
+    "squid_layouts.discord.conformance",
+)
+
+SPECIALIST_SAMPLES = {
+    "Wizard": sl.patterns,
+    "WizardState": sl.patterns,
+    "FormSpec": sl.forms,
+    "SemanticNode": sl.semantic,
+    "ActionMiddleware": sl.interactions,
+    "TopicBus": sl.runtime,
+    "ReactiveCycleError": sl.runtime,
+    "Window": sl.sources,
+    "Route": sl.routing,
+    "PlanReport": sl.scene,
+    "Button": sl.primitives,
+    "Renderer": sl.html,
+    "Guard": sl.guards,
+    "LayoutError": sl.errors,
+    "ZonedDateTime": sl.temporal,
+    "Message": sl.text,
+}
+
+
+def test_root_exports_exactly_the_authoring_vocabulary() -> None:
+    assert set(sl.__all__) == ROOT_API
+    assert sl.__all__ == sorted(sl.__all__)
+
+
+def test_root_all_is_fully_resolvable() -> None:
+    assert [n for n in sl.__all__ if not hasattr(sl, n)] == []
+
+
+def test_namespaces_are_modules_not_shadowed_callables() -> None:
+    """`import squid_layouts.entity as e` must not hand back a factory."""
+    for name in ROOT_NAMESPACES:
+        assert isinstance(getattr(sl, name), ModuleType), f"sl.{name} is shadowed"
+
+
+@pytest.mark.parametrize("dotted", RENAMED_SUBMODULES)
+def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> None:
+    import importlib
+
+    mod = importlib.import_module(dotted)
+    assert isinstance(mod, ModuleType)
+
+
+def test_specialists_live_in_namespaces_and_not_at_root() -> None:
+    for name, ns in SPECIALIST_SAMPLES.items():
+        assert name not in sl.__all__ and not hasattr(sl, name)
+        assert name in ns.__all__  # catches the ReactiveCycleError class of bug
 
 
 def test_explicit_namespaces_expose_specialized_apis() -> None:
@@ -122,7 +239,6 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
-    assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.__all__)
     assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.runtime.__all__)
 
 
