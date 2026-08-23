@@ -98,7 +98,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         """Render a standalone Components V2 layout for the build."""
         return render_static([await self.render_node()])
 
-    async def render_presentation(self) -> sl.discord.DiscordPresentation:
+    async def render_presentation(self) -> sl.discord.presentation.DiscordPresentation:
         """Render the complete presentation used by post delivery."""
         return render_presentation([await self.render_node()])
 
