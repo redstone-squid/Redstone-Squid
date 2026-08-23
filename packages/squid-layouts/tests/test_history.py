@@ -14,9 +14,9 @@ from squid_layouts.runtime import (
     ComponentRuntime,
     History,
     HistoryError,
+    LocalTopicBus,
     ReactiveWriteError,
     Shared,
-    TopicBus,
     history,
     history_actions,
     transaction,
@@ -401,8 +401,8 @@ class Sharing(Component):
 class TestSharedState:
     """One entry covers an action's local writes and its shared writes, in both directions."""
 
-    def sharing(self) -> tuple[Sharing, Workspace, Preferences, TopicBus]:
-        bus = TopicBus()
+    def sharing(self) -> tuple[Sharing, Workspace, Preferences, LocalTopicBus]:
+        bus = LocalTopicBus()
         workspace, preferences = Workspace(bus, "here"), Preferences(bus, "here")
         return attached(Sharing(workspace, preferences)), workspace, preferences, bus
 
@@ -452,17 +452,15 @@ class TestSharedState:
         subject, workspace, _, bus = self.sharing()
         seen: list[object] = []
 
-        async def subscriber(topic: object) -> None:
+        def subscriber(topic: object) -> None:
             seen.append(topic)
 
         bus.subscribe(CellAddress(workspace, "selected"), subscriber)
         with transaction():
             subject.select(7)
-        await bus.drain()
         seen.clear()
 
         await subject.history.undo()
-        await bus.drain()
         assert seen == [CellAddress(workspace, "selected")]
 
     async def test_a_failed_external_inverse_restores_nothing(self):

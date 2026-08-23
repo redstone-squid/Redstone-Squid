@@ -1,7 +1,7 @@
 """Operational devtools runtime contracts."""
 
 from collections.abc import Callable
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -70,18 +70,18 @@ async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> 
     assert opened.session.root.finished
 
 
-async def test_wait_idle_drains_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
+async def test_wait_idle_observes_sync_topics_and_clear_profile_resets_bounded_diagnostics() -> None:
     profiler = MemoryProfiler()
-    bus = sl.runtime.TopicBus(profiler=profiler)
-    callback = AsyncMock()
-    bus.subscribe(sl.runtime.Topic("devtools", "test"), callback, label="test subscriber")
+    bus = sl.runtime.LocalTopicBus()
+    callback = Mock()
+    bus.subscribe(sl.runtime.Topic("devtools", "test"), callback)
     bus.publish(sl.runtime.Topic("devtools", "test"))
     with profiler.operation(OperationKind.DISPATCH, name="devtools-test"):
         pass
     runtime = DevToolsRuntime(bus=bus, profiler=profiler)
 
     await runtime.wait_idle()
-    assert callback.await_count == 1
+    callback.assert_called_once_with(sl.runtime.Topic("devtools", "test"))
     topics = runtime.snapshot().topics
     assert topics is not None
     assert topics.queued == 0

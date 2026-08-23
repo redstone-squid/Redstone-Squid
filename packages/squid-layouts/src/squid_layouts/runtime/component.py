@@ -178,6 +178,11 @@ class Component[ModeT = Any](Reactive):
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _reactive_internal_attributes = frozenset({"_runtime", "_parent", "_loaded"})
+    _reactive_require_state = False
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        cls._reactive_require_state = cls.render is not Component.render
+        super().__init_subclass__(**kwargs)
 
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
