@@ -15,6 +15,10 @@ from collections.abc import Hashable, Iterable, Sequence
 from typing import Any
 
 import squid_layouts as sl
+from squid_layouts.discord.durability import DurableRuntimeSnapshot, RecoveryReport
+from squid_layouts.discord.operations import DevToolsRuntime
+from squid_layouts.profiling import RuntimeSnapshot
+from squid_layouts.topics import BusSnapshot
 
 SESSION_SECONDS = 300
 """Short-lived on purpose: an inspector left open is one more mount in its own list."""
@@ -190,6 +194,265 @@ class MountInspector(sl.Component):
         await event.finish()
 
 
+class OperationalInspector(sl.Component):
+    """The process-wide operational dashboard for the development owner."""
+
+    section: str = sl.state("overview")
+    mount_id: str | None = sl.state(None)
+    session_id: str | None = sl.state(None)
+    revision: int = sl.state(0)
+    notice: str | None = sl.state(None)
+    confirming_session: str | None = sl.state(None)
+
+    def __init__(self, runtime: DevToolsRuntime) -> None:
+        self._devtools_runtime = runtime
+
+    def render(self) -> Sequence[sl.LayoutNode]:
+        snapshot = self._devtools_runtime.snapshot()
+        if self.section == "mounts":
+            nodes = self._mounts(snapshot)
+        elif self.section == "sessions":
+            nodes = self._sessions(snapshot)
+        elif self.section == "queues":
+            nodes = self._queues(snapshot)
+        elif self.section == "profile":
+            nodes = self._profile(snapshot)
+        elif self.section == "persistence":
+            nodes = self._persistence(snapshot)
+        else:
+            nodes = self._overview(snapshot)
+        if self.notice is None:
+            return nodes
+        return (sl.status(self.notice, tone=sl.Tone.INFO), *nodes)
+
+    def _overview(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        counts = [
+            f"mounts       {len(snapshot.mounts)}",
+            f"sessions     {len(snapshot.sessions)}",
+            f"reactor     {_reactor_summary(snapshot.reactor)}",
+            f"topics      {_topic_summary(snapshot.topics)}",
+            f"profile     {_profile_summary(snapshot.profiler)}",
+            f"persistence {_durable_summary(snapshot.durable)}",
+        ]
+        return [
+            sl.section(sl.heading("Operational dashboard"), sl.code("\n".join(counts))),
+            self._section_choices(),
+            self._controls(),
+        ]
+
+    def _mounts(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        if self.mount_id is not None:
+            mount = sl.discord.live.find(self.mount_id)
+            if mount is not None:
+                detail = self._devtools_runtime.inspect_mount(self.mount_id)
+                histories = (
+                    "\n".join(
+                        f"{history.name}: undo={len(history.undo)} redo={len(history.redo)} limit={history.limit}"
+                        for history in detail.histories
+                    )
+                    or "(none)"
+                )
+                return [
+                    sl.section(
+                        sl.heading(f"Mount {self.mount_id}"),
+                        sl.bullets(
+                            *_summary(detail.snapshot),
+                            f"**Middleware**\n{_dump(detail.middleware)}",
+                            f"**Observed**\n{_dump(detail.observed)}",
+                            f"**Followed**\n{_dump(detail.followed)}",
+                            f"**History**\n{histories}",
+                        ),
+                    ),
+                    self._controls(back=True),
+                ]
+            notice = f"Mount `{self.mount_id}` is no longer live."
+        else:
+            notice = None
+
+        rows = [
+            f"`{mount.id}` **{mount.component.rsplit('.', 1)[-1]}** · gen {mount.generation} · {_flags(mount)}"
+            for mount in snapshot.mounts
+        ]
+        nodes: list[sl.LayoutNode] = [
+            sl.section(
+                sl.heading("Live mounts"),
+                sl.bullets(*rows, key="mounts", page_size=8) if rows else sl.paragraph("No live mounts."),
+            ),
+        ]
+        if snapshot.mounts:
+            nodes.append(
+                sl.choices(
+                    *(
+                        sl.choice(mount.id, key=mount.id, description=mount.component.rsplit(".", 1)[-1])
+                        for mount in snapshot.mounts[:25]
+                    ),
+                    key="mount",
+                    selection=sl.controlled((), self._open_mount),
+                )
+            )
+        if notice is not None:
+            nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
+        return (*nodes, self._controls(back=True))
+
+    def _sessions(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        if self.session_id is not None:
+            session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
+            if session is not None:
+                confirmation = (
+                    sl.actions(
+                        sl.action("Confirm close", self._confirm_close_session, key="confirm-close"),
+                        sl.action("Cancel", self._cancel_close_session, key="cancel-close"),
+                        key="confirmation",
+                    )
+                    if self.confirming_session == session.id
+                    else sl.actions(
+                        sl.action("Close session", self._request_close_session, key="close-session"),
+                        key="session-actions",
+                    )
+                )
+                return [
+                    sl.section(
+                        sl.heading(f"Session {session.id}"),
+                        sl.bullets(
+                            f"**Id**\n`{session.id}`",
+                            f"**Key**\n`{session.key}`",
+                            f"**Actor**\n{session.actor_id if session.actor_id is not None else 'none'}",
+                            f"**Mounts**\n{_dump(session.mounts)}",
+                        ),
+                    ),
+                    confirmation,
+                    self._controls(back=True),
+                ]
+            notice = f"Session `{self.session_id}` is no longer live."
+        else:
+            notice = None
+
+        rows = [f"`{session.id}` · key `{session.key}` · mounts={len(session.mounts)}" for session in snapshot.sessions]
+        nodes: list[sl.LayoutNode] = [
+            sl.section(
+                sl.heading("Live sessions"),
+                sl.bullets(*rows, key="sessions", page_size=8) if rows else sl.paragraph("No live sessions."),
+            ),
+        ]
+        if snapshot.sessions:
+            nodes.append(
+                sl.choices(
+                    *(
+                        sl.choice(session.id, key=session.id, description=f"mounts={len(session.mounts)}")
+                        for session in snapshot.sessions[:25]
+                    ),
+                    key="session",
+                    selection=sl.controlled((), self._open_session),
+                )
+            )
+        if notice is not None:
+            nodes.insert(0, sl.status(notice, tone=sl.Tone.WARNING))
+        return (*nodes, self._controls(back=True))
+
+    def _queues(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        lines = [
+            f"reactor  {_reactor_summary(snapshot.reactor)}",
+            f"topics   {_topic_summary(snapshot.topics)}",
+        ]
+        if snapshot.topics is not None:
+            lines.extend(
+                f"  {topic.topic} subscribers={topic.subscribers} queued={topic.queued} in_flight={topic.in_flight}"
+                for topic in snapshot.topics.topics
+            )
+        return [sl.section(sl.heading("Queues and subscribers"), sl.code("\n".join(lines))), self._controls(back=True)]
+
+    def _profile(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        health = snapshot.profiler.health
+        lines = [
+            f"process  {snapshot.profiler.process_id}",
+            f"active   {health.active}",
+            f"recent   {health.recent}",
+            f"slow     {health.slow}",
+            f"failed   {health.failed}",
+            f"deadline {health.deadline_misses}",
+        ]
+        return [sl.section(sl.heading("Profiler"), sl.code("\n".join(lines))), self._controls(back=True)]
+
+    def _persistence(self, snapshot: sl.discord.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        durable = snapshot.durable
+        if durable is None:
+            body = "No durable session runtime is configured."
+        else:
+            body = "\n".join(
+                (
+                    f"running  {durable.running}",
+                    f"active   {len(durable.active)}",
+                    f"dirty    {len(durable.dirty)}",
+                    f"recovery {_recovery_summary(durable.last_recovery)}",
+                )
+            )
+        return [sl.section(sl.heading("Persistence"), sl.code(body)), self._controls(back=True)]
+
+    def _section_choices(self) -> sl.LayoutNode:
+        return sl.choices(
+            sl.choice("Mounts", key="mounts"),
+            sl.choice("Sessions", key="sessions"),
+            sl.choice("Queues", key="queues"),
+            sl.choice("Profiler", key="profile"),
+            sl.choice("Persistence", key="persistence"),
+            key="section",
+            selection=sl.controlled((), self._select_section),
+        )
+
+    def _controls(self, *, back: bool = False) -> sl.Actions:
+        controls: list[sl.Action] = []
+        if back:
+            controls.append(sl.action("Back", self._back, key="back"))
+        controls.extend(
+            (
+                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.Emphasis.SUBTLE),
+                sl.action("Close", self._close, key="close", emphasis=sl.Emphasis.SUBTLE),
+            )
+        )
+        return sl.actions(*controls, key="controls")
+
+    async def _select_section(self, event: sl.ChoiceEvent) -> None:
+        self.section = event.selected[0]
+        self.mount_id = None
+        self.session_id = None
+
+    async def _open_mount(self, event: sl.ChoiceEvent) -> None:
+        self.mount_id = event.selected[0]
+
+    async def _open_session(self, event: sl.ChoiceEvent) -> None:
+        self.session_id = event.selected[0]
+
+    async def _request_close_session(self, event: sl.ActionEvent) -> None:
+        self.confirming_session = self.session_id
+
+    async def _cancel_close_session(self, event: sl.ActionEvent) -> None:
+        self.confirming_session = None
+
+    async def _confirm_close_session(self, event: sl.ActionEvent) -> None:
+        if self.session_id is None:
+            return
+        try:
+            await self._devtools_runtime.close_session(self.session_id, confirmed=True)
+            self.notice = f"Session `{self.session_id}` closed."
+            self.session_id = None
+        except Exception as error:
+            self.notice = f"Close failed: {type(error).__name__}: {error}"
+        finally:
+            self.confirming_session = None
+
+    async def _back(self, event: sl.ActionEvent) -> None:
+        self.mount_id = None
+        self.session_id = None
+        self.confirming_session = None
+        self.section = "overview"
+
+    async def _refresh(self, event: sl.ActionEvent) -> None:
+        self.revision += 1
+
+    async def _close(self, event: sl.ActionEvent) -> None:
+        await event.finish()
+
+
 def scene_attachment(snapshot: sl.discord.MountSnapshot) -> sl.Asset | None:
     """The mount's committed scene as the protocol JSON, for reading outside Discord."""
     if snapshot.scene is None:
@@ -300,6 +563,35 @@ def _duration(seconds: float) -> str:
     if total < 3600:
         return f"{total // 60}m{total % 60:02d}s"
     return f"{total // 3600}h{total % 3600 // 60:02d}m"
+
+
+def _reactor_summary(snapshot: sl.discord.ReactorSnapshot | None) -> str:
+    if snapshot is None:
+        return "unconfigured"
+    return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
+
+
+def _topic_summary(snapshot: BusSnapshot | None) -> str:
+    if snapshot is None:
+        return "unconfigured"
+    return f"known={len(snapshot.topics)} queued={snapshot.queued} failed={snapshot.failed}"
+
+
+def _profile_summary(snapshot: RuntimeSnapshot) -> str:
+    health = snapshot.health
+    return f"active={health.active} failed={health.retained_failed}"
+
+
+def _durable_summary(snapshot: DurableRuntimeSnapshot | None) -> str:
+    if snapshot is None:
+        return "unconfigured"
+    return f"running={snapshot.running} active={len(snapshot.active)} dirty={len(snapshot.dirty)}"
+
+
+def _recovery_summary(report: RecoveryReport | None) -> str:
+    if report is None:
+        return "never"
+    return f"restored={len(report.restored)} failed={len(report.failed)}"
 
 
 def _exported_state(mount: sl.discord.Mount) -> dict[str, object]:

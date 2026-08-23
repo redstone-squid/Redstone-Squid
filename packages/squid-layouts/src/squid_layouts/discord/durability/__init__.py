@@ -44,6 +44,7 @@ __all__ = [
     "DurableMountRecord",
     "DurableMountState",
     "DurableOpenResult",
+    "DurableRuntimeSnapshot",
     "DurableSession",
     "DurableSessionCodec",
     "DurableSessionRecord",
@@ -58,6 +59,7 @@ __all__ = [
     "PostgresTopicBridge",
     "PresentationSnapshot",
     "Promoted",
+    "PurgeResult",
     "Reconnected",
     "RecoveredBinding",
     "RecoveryItem",
@@ -580,8 +582,10 @@ from .frontend import (
 from .runtime import (
     DurabilityHealth,
     DurableOpenResult,
+    DurableRuntimeSnapshot,
     DurableSession,
     DurableSessionRuntime,
+    PurgeResult,
     RecoveryItem,
     RecoveryReport,
 )
