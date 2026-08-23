@@ -28,6 +28,7 @@ from squid_layouts.discord.durability import (
 )
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
+from squid_layouts.profiling import PresentationOutcome
 
 
 class Counter(sl.Component):
@@ -35,6 +36,13 @@ class Counter(sl.Component):
 
     def render(self):
         return Text(f"count {self.count}")
+
+
+class HiddenDraft(sl.Component):
+    advanced: bool = sl.state(False)
+
+    def render(self):
+        return Text("Draft")
 
 
 @dataclass(slots=True)
@@ -80,6 +88,11 @@ def components() -> ComponentRegistry:
         "counter",
         version=1,
         restore=lambda context: sl.discord.Mount(Counter(), access=Everyone(), timeout=None),
+    )
+    registry.register(
+        "hidden-draft",
+        version=1,
+        restore=lambda context: sl.discord.Mount(HiddenDraft(), access=Everyone(), timeout=None),
     )
     return registry
 
@@ -141,6 +154,38 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
         await result.session.finish()
         assert await store.list_records() == ()
         assert mount.finished
+        tasks.cancel_scope.cancel()
+
+
+async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() -> None:
+    store = MemorySnapshotStore()
+    durable = runtime(store, FakeFrontend())
+    component = HiddenDraft()
+    mount = sl.discord.Mount(component, access=Everyone(), timeout=None)
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        opened = await durable.open(
+            mount,
+            delivered_to(fake_message(message_id=7)),
+            recipe="hidden-draft",
+            key=SessionKey.user("hidden-draft", 7),
+            actor_id=7,
+        )
+        assert isinstance(opened, Opened)
+        component.advanced = True
+        mount.invalidate()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+
+        with anyio.fail_after(1):
+            while True:
+                stored = await store.load(opened.session.id)
+                assert stored is not None
+                snapshot = DurableSessionCodec.loads(stored.snapshot_payload).mounts[0].snapshot
+                if snapshot.components[0].state.get("advanced") is True:
+                    break
+                await anyio.sleep(0)
         tasks.cancel_scope.cancel()
 
 
