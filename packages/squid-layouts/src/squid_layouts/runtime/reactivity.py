@@ -245,6 +245,13 @@ def settling(node: Any) -> Iterator[None]:
 
 _OBSERVING: ContextVar[bool] = ContextVar("squid_layouts_observing_render", default=False)
 
+_RENDER_OBSERVATION: ContextVar[Observation | None] = ContextVar("squid_layouts_render_observation", default=None)
+"""The `Observation` for the render in progress on this task, set only while `rendering()` is.
+
+A separate var from `_CONSUMER`: a computed evaluated mid-render points `_CONSUMER` at its own
+node, not the render, so the born-set below needs its own line back to the render itself.
+"""
+
 
 def rendering() -> bool:
     """Whether a render is in progress on this task.
@@ -821,16 +828,29 @@ class _State:
         return cell.read()
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
-        if rendering() and self.address(instance) is not None:
-            # Only for shared state, and the asymmetry is the point: a render that writes its
-            # own component is merely confused, while one that writes state other mounts are
-            # reading has published a change halfway through building the thing that reads it.
-            message = (
-                f"{instance!r}.{self.public_name} was written while a render was reading it. A "
-                f"render turns state into a tree and may not change the state it is reading; "
-                f"write shared state from an action handler."
-            )
-            raise ReactiveWriteError(message)
+        if rendering():
+            if self.address(instance) is not None:
+                # Shared state: visible to other mounts mid-render, a correctness problem
+                # beyond this tree, so no exemption applies -- not even to a fresh instance.
+                message = (
+                    f"{instance!r}.{self.public_name} was written while a render was reading it. "
+                    f"A render turns state into a tree and may not change the state it is "
+                    f"reading; write shared state from an action handler."
+                )
+                raise ReactiveWriteError(message)
+            observation = _RENDER_OBSERVATION.get()
+            if observation is None or not observation.exempts(instance):
+                # Component state: nothing publishes it beyond this tree, but a torn read
+                # (write, then read back) still draws a tree no single state ever produced,
+                # silently and finally -- the invalidation the write would schedule never fires.
+                message = (
+                    f"{type(instance).__name__}.{self.public_name} was written while a render "
+                    f"was reading it. A render must produce one tree from the state it reads, "
+                    f"so a write here tears: use sl.state(factory=...) for a lazy-initialized "
+                    f"default, sl.computed for a value derived from state, sl.resource or "
+                    f"on_load for something fetched, and on_mount to react to having been drawn."
+                )
+                raise ReactiveWriteError(message)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
             held = _staged_value(cell)
@@ -1141,6 +1161,30 @@ class Observation:
     """
 
     sources: dict[Any, int] = field(default_factory=dict)
+    born: dict[int, object] = field(default_factory=dict)
+    """Components constructed during this render, by id, while their own render() has not yet
+    run. Assigning declared state in __init__ is construction, not the mutation the write guard
+    exists to catch -- the same rule `_Transaction.protects` applies to an action.
+
+    Held by strong reference for the same reason as `_Transaction.born`: an id must not be
+    recycled onto something else while this render is still using it as a key.
+    """
+
+    def note_born(self, owner: object) -> None:
+        """Exempt `owner`'s writes from the render guard until its own render() runs."""
+        self.born[id(owner)] = owner
+
+    def entering_own_render(self, owner: object) -> None:
+        """`owner`'s own render() is starting: end its construction exemption.
+
+        Scoped to this one instance, not the whole render -- otherwise a child could tear its
+        own tree and be excused for it because some ancestor built it a moment earlier.
+        """
+        self.born.pop(id(owner), None)
+
+    def exempts(self, owner: object) -> bool:
+        """Whether `owner` is still within the construction window this render excuses."""
+        return id(owner) in self.born
 
     def addresses(self) -> tuple[Any, ...]:
         """Every addressed cell this run reached, deduplicated, in read order.
@@ -1181,9 +1225,11 @@ def observe_render() -> Iterator[Observation]:
     observation = Observation()
     consumer = _CONSUMER.set(observation)
     observing = _OBSERVING.set(True)
+    render = _RENDER_OBSERVATION.set(observation)
     try:
         yield observation
     finally:
+        _RENDER_OBSERVATION.reset(render)
         _OBSERVING.reset(observing)
         _CONSUMER.reset(consumer)
 

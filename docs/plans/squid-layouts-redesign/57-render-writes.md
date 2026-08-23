@@ -124,4 +124,12 @@ second read: ['made'] -> calls: 1
 
 ## Status
 
-Designed 2026-08-23. Not implemented.
+Designed 2026-08-23. Implemented 2026-08-23: `_State.__set__` now raises for an unaddressed
+write during a render unless the owner is in the render's `born` set, mirroring
+`_Transaction.born`/`protects`. `Observation` (the render-scoped consumer already returned by
+`observe_render()`) carries `born`, `note_born`, `entering_own_render`, and `exempts`;
+`Component.__new__` notes into it the same way it already notes into `_CURRENT`, and
+`expand()` calls `entering_own_render` immediately before invoking a component's own
+`render()`, so the exemption is scoped to construction as specified rather than to the whole
+render. The package suite passes unchanged (one pre-existing, order-independent failure in
+`test_form_discord.py` reproduces identically on `master`, unrelated to this change).
