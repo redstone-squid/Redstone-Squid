@@ -323,7 +323,7 @@ def _reactivity(mount: sl.discord.Mount) -> list[str]:
     components = mount.runtime.components
     # Deduplicated by identity: several panels usually hold the very same namespace, and
     # that is the point of one.
-    namespaces = {id(owner): owner for owner, _ in (_pair(topic) for topic in mount.followed) if owner is not None}
+    namespaces = {id(owner): owner for owner, _ in (_pair(topic) for topic in mount.observed) if owner is not None}
     labels: dict[int, str] = {}
     for path, component in components.items():
         for name, cell in sl.runtime.inspect_cells(component).items():
@@ -355,10 +355,10 @@ def _reactivity(mount: sl.discord.Mount) -> list[str]:
 
 
 def _pair(topic: object) -> tuple[sl.Shared[Any] | None, object]:
-    """A followed topic split into its namespace and cell, or `(None, topic)` for anything else.
+    """An observed address split into its namespace and cell, or `(None, topic)` otherwise.
 
-    A host may follow topics of its own through the same reactor; those are addresses of
-    whatever it likes, and devtools has nothing to say about them.
+    Read from what the render observed rather than from what it subscribed to, so a mount
+    with no reactor still reports the shared state it is showing.
     """
     match topic:
         case (sl.Shared() as owner, descriptor):

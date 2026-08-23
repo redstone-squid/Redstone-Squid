@@ -448,16 +448,29 @@ are portable core and import no Discord. The reconciliation is not: `Reactor`
 (`discord/reactor.py:155`) and `Mount` (`discord/mount.py:445`) are both Discord-side, and
 so is the code in step 3. Phase 3 lands in two packages and its tests do too.
 
-**The writing mount refreshes through the bus like any other.** A panel that writes a cell
-it also renders is not special-cased into a synchronous invalidation: it is subscribed, so
-the commit's publish reaches it the way it reaches its sibling. The click's own flush finds
-nothing to write and the reactor delivers the repaint a moment later. One mechanism, at the
-cost of one extra edit on the writing panel.
+**A mount notices its own commit; the bus is for everyone else.** This first shipped without
+the distinction — a panel that wrote a cell it also rendered learned about it the way a
+sibling did, after the bus drained. That read as a deliberate one-mechanism trade and was
+not one. `_flush` gates on `_dirty`, which a shared write never set, so the click was
+answered by a deferral and the repaint arrived an edit later; and for an action carrying
+`Feedback` it was worse than slow, because `busy.restore()` fired on the `NO_CHANGE` flush
+and `_repaint` deliberately redraws the *committed* plan. The reader saw "Working…", then
+the **old** scene, then the new one.
 
-**A mount whose scheduler cannot follow says so once.** `Mount` takes a `Scheduler`, and
-only a `Reactor` with a bus can subscribe. A mount without one still renders shared state
-correctly; it simply will not hear about another mount's writes, so it logs that once rather
-than failing the render or going silently stale.
+The fix is not a second notification mechanism. §7's rule forbids a subscriber index — a
+back-reference from cell to reader, which [41](41-reactivity-cells.md) rejected because it
+keeps per-message components alive. Noticing one's own action needs neither: the mount
+registers `sl.on_action_commit` around every handler and intersects `StateDelta.addresses()`
+with what its last render read. Both halves already existed. A sibling still hears through
+the bus, and this mount hears through it too — the second delivery repaints nothing the
+reader can see, so the cost moved from before the update to after it.
+
+**What a mount reads and what it subscribes to are two sets.** `Mount.observed` is what the
+latest staged render read; `Mount.followed` is that minus whatever a scheduler that cannot
+follow topics could not subscribe to. `Mount` takes a `Scheduler`, and only a `Reactor` with
+a bus can subscribe, so a mount without one logs that once — but it still repaints on *its
+own* writes, because that path needs `observed` and not a subscription. Live updates from
+another mount are what a missing reactor costs, and nothing else.
 
 **One constraint, stated rather than sold.** An identity-keyed address cannot be
 serialised, so it cannot be published from another process — `topics.py:107` contemplates
@@ -559,7 +572,7 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 | 0 | Restructure `transaction()` around a fallible commit; add `ActionParticipant`/`join_action`. | Two participants both prepare before either applies; a rejected prepare applies nothing, aborts every participant and restores local state, notifying no owner; a raising hook leaves the action committed and reported. **Shipped.** |
 | 1 | `Shared[ScopeT]`, `sl.cell` over 41's `_Cell`; `__setattr__` reporting; attribute read/write; immediate-outside-an-action behaviour. | Descriptor identity; defaults; two namespaces with same-named cells not colliding; equal-value no-op; reserved names raising at class creation; an unhashable, mutable and absent scope all accepted; `sl.cell()` narrowing a builtin default to its read-only ABC under `just typecheck`; an `opaque=` cell settling by identity; an undeclared write raising. **Shipped.** |
 | 2 | Prepare/apply, `SharedStateConflictError`. Staging and read tracking come from 41; `contribute()` is not built, because 41 §4 removed the reason for it (§5a). | A raising handler leaks no staged value; read-and-write conflicts raise, read-only actions and staged-value reads do not; a later write does not clear the guard; A→B→A does **not** conflict; one action across three namespaces publishes all or none; a `@sl.computed` over a shared cell recomputing when another owner writes it. **Shipped.** |
-| 3 | Render observation, `sl.addresses()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; a cached computed still reports its shared sources; no follow outlives its mount; a write during a render raising. **Shipped.** |
+| 3 | Render observation, `sl.addresses()`, stage-time follow reconciliation, publication on commit. Core and Discord halves. | Two mounts react to one commit, once each; a dropped conditional read stops refreshing; a cached computed still reports its shared sources; no follow outlives its mount; a write during a render raising; a mount repainting in its own interaction for a cell it wrote and renders, with no reactor needed and no stale `Feedback` flash. **Shipped.** |
 | 4 | Shared changes in `StateDelta`; blind undo and redo. | One entry undoes local plus multi-namespace shared state in one press; a sibling panel's intervening write does not disable the control and does not fail the press; undo publishes to the sibling; an entry with an external inverse whose inverse raises restores nothing. **Shipped**, with no code of its own: a shared cell is in the transaction's overlay, so the delta and `StateDelta._apply` already covered it. |
 | 5 | Docs, conflict diagnostics, devtools namespace/cell inspection, the worked example. | Examples cover deep injection, provider shadowing, and both retention shapes from §3; a namespace dropped by its last holder is collected. **Shipped**, as `/layout shared` in the bot's showcase. |
 
@@ -583,7 +596,11 @@ The context key is typed by the namespace class, so `inject(PREFERENCES)` return
 - `packages/squid-layouts/tests/test_shared_follow.py` (new, Discord half; flat, since the
   suite has no `tests/discord/`): two mounts refreshed once each by one commit; a dropped
   conditional read unsubscribing; a discarded staged render leaving no permanent follow; no
-  follow outliving its mount; a scheduler that cannot follow warning once.
+  follow outliving its mount; a scheduler that cannot follow warning once. `TestSelfWrites`
+  covers the writing mount: it edits in its own interaction rather than deferring, does so
+  with no reactor at all, does not repaint for a cell it wrote but does not render, does not
+  flash the stale scene under `Feedback`, and is left clean by a rolled-back action. The
+  first, second and fourth of those fail if `_note_shared_writes` is stubbed out.
 - `packages/squid-layouts/tests/test_history.py`: one entry spanning local and two
   namespaces; a sibling's intervening write leaving `can_undo` true and the press
   succeeding; undo publishing to the sibling mount; guard-free undo → redo → undo; an

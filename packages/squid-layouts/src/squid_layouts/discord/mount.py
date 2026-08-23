@@ -79,7 +79,7 @@ from squid_layouts.profiling import (
 from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
-from squid_layouts.runtime.reactivity import readonly_transaction, transaction
+from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
 from squid_layouts.runtime.resources import Resource, ResourceDelivery
 from squid_layouts.scene.model import (
     PlanMetrics,
@@ -577,9 +577,12 @@ class Mount:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
-        # One unfollow per shared cell the latest staged render read. Reconciled at stage
-        # time rather than after delivery, because a write landing between a render's read
-        # and its subscription is lost and the bus is not durable.
+        # What the latest staged render read, and what it managed to subscribe to. Two
+        # different things: a mount with no reactor still knows what it is looking at, which
+        # is what lets its own writes repaint it even when nobody can deliver a topic to it.
+        # Reconciled at stage time rather than after delivery, because a write landing between
+        # a render's read and its subscription is lost and the bus is not durable.
+        self._observed: tuple[Topic, ...] = ()
         self._follows: dict[Topic, Callable[[], None]] = {}
         self._follow_warned = False
 
@@ -619,11 +622,20 @@ class Mount:
         return self._dirty
 
     @property
+    def observed(self) -> tuple[Topic, ...]:
+        """The shared cell addresses this mount's latest staged render read.
+
+        What it is looking at, whether or not anything can notify it about them.
+        """
+        return self._observed
+
+    @property
     def followed(self) -> tuple[Topic, ...]:
         """The bus addresses this mount is subscribed to, for diagnostics.
 
-        Shared cells its latest staged render read; a host that followed a topic of its own
-        through the reactor holds that subscription itself and is not listed here.
+        `observed`, minus everything a scheduler that cannot follow topics could not
+        subscribe to. A host that followed a topic of its own through the reactor holds that
+        subscription itself and is not listed here.
         """
         return tuple(self._follows)
 
@@ -781,6 +793,7 @@ class Mount:
         assets = composition.assets
         if disabled:
             _disable_all(view)
+        self._observed = tree.observations
         self._reconcile_follows(tree.observations)
         return _Candidate(
             view,
@@ -821,6 +834,32 @@ class Mount:
         for topic in wanted:
             if topic not in self._follows:
                 self._follows[topic] = follower.follow(self, topic)
+
+    @contextmanager
+    def _action_transaction(self, policy: ActionPolicy) -> Iterator[None]:
+        """Run one handler in its transaction, watching for writes this mount renders.
+
+        A shared cell publishes on the bus rather than invalidating a component, so without
+        this the mount that *made* the write learns about it the same way a sibling does --
+        after the bus drains, one edit later, with the click already answered by a deferral.
+        Noticing one's own commit is not a second notification mechanism: there is no
+        subscriber index and no back-reference, only the delta the transaction already built.
+        """
+        if policy is ActionPolicy.PARALLEL_READ:
+            with readonly_transaction():
+                yield
+            return
+        with transaction():
+            on_action_commit(self._note_shared_writes, key=self)
+            yield
+
+    def _note_shared_writes(self, delta: StateDelta) -> None:
+        """Mark this mount dirty if the action changed a shared cell its render read."""
+        if self._dirty or not self._observed:
+            return
+        observed = frozenset(self._observed)
+        if any(address in observed for address in delta.addresses()):
+            self._dirty = True
 
     def _composer(self) -> Callable[..., Composition[Any]]:
         """Which composition this mount's target uses. One of exactly four target-owned choices.
@@ -1613,8 +1652,7 @@ class Mount:
         )
 
         async def handle() -> None:
-            context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
-            with context:
+            with self._action_transaction(binding.policy):
                 await binding.handler(event)
 
         try:
@@ -1731,8 +1769,7 @@ class Mount:
             )
 
             async def handle() -> None:
-                context = readonly_transaction() if binding.policy is ActionPolicy.PARALLEL_READ else transaction()
-                with context:
+                with self._action_transaction(binding.policy):
                     await binding.handler(event)
 
             handled = await self._run_middleware(request, handle, profile.operation)
@@ -2045,6 +2082,7 @@ class Mount:
         for unfollow in tuple(self._follows.values()):
             unfollow()
         self._follows.clear()
+        self._observed = ()
         self.runtime.finish()
 
     async def handle_timeout(self) -> None:

@@ -287,7 +287,9 @@ workspace = Workspace(bus, guild.id)
 A cell is `sl.state()` one level out and is literally the same storage, so replacement,
 `opaque=`, staging and rollback are identical. A write publishes the cell's address on the
 `TopicBus`, and every mount whose render read that cell refreshes; a mount subscribes to
-exactly what it rendered, reconciled each time it stages one. A cell an action both read and
+exactly what it rendered, reconciled each time it stages one. The mount that *made* the write
+repaints in the click itself rather than waiting for the bus, so a panel writing shared state
+feels no different from one writing `sl.state()` — and needs no reactor to do it. A cell an action both read and
 wrote carries the value it read as a commit precondition, so a lost update raises
 `sl.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
 no `compare_and_set` to remember. `sl.history` covers shared writes in the same entry as local
