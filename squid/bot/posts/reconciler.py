@@ -18,6 +18,7 @@ import discord
 import squid_layouts as sl
 from squid.bot.message_adapter import to_message_fact
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
+from squid.bot.ui import send_to
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
 
@@ -107,7 +108,7 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         if channel is None:
             logger.debug("Skipping a post to an unreachable channel %s", want.channel_id)
             return
-        receipt = await sl.discord.delivery.send_to(channel, allowed_mentions=want.allowed_mentions)(want.presentation)
+        receipt = await send_to(channel, allowed_mentions=want.allowed_mentions)(want.presentation)
         message = receipt.message
         if message is None:
             detail = "channel post delivery returned no message"

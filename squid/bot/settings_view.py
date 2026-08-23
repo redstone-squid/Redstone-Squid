@@ -8,8 +8,7 @@ import discord
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.ui import L, create_mount, localization_for
-from squid.bot.utils.components import CardField
+from squid.bot.ui import CardField, L, create_mount, localization_for
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain import PermissionNode

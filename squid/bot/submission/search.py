@@ -32,7 +32,6 @@ from squid.bot.ui import (
     text_layout,
 )
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import edit_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
 from squid.builds.domain import Build
@@ -51,6 +50,11 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+async def _edit(message: discord.Message, presentation: sl.discord.presentation.DiscordPresentation) -> None:
+    """Replace a running command message through its delivery handle."""
+    await sl.discord.delivery.handle_for(message, mode=presentation.mode).write(presentation)
 
 
 class SearchModeChoice(StrEnum):
@@ -240,12 +244,12 @@ class SearchCog[
             try:
                 await self.restrictions.add_alias(restriction, alias)
             except AliasAlreadyAddedError:
-                await edit_layout(
+                await _edit(
                     sent_message,
                     info_layout(t(locale, _("Already added")), t(locale, _("Alias already on this restriction."))),
                 )
             else:
-                await edit_layout(
+                await _edit(
                     sent_message,
                     info_layout(t(locale, _("Success")), t(locale, _("Alias added."))),
                 )
@@ -307,12 +311,12 @@ class SearchCog[
             build = await self.queries.get(build_id)
 
             if build is None:
-                return await edit_layout(
+                return await _edit(
                     sent_message,
                     error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                 )
 
-            await edit_layout(
+            await _edit(
                 sent_message,
                 await self.bot.for_build(build).render_layout(),
             )
@@ -329,7 +333,7 @@ class SearchCog[
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             await self.builds.confirm(build_id)
 
-            await edit_layout(
+            await _edit(
                 sent_message,
                 info_layout(t(locale, _("Success")), t(locale, _("Submission has been confirmed."))),
             )
@@ -349,7 +353,7 @@ class SearchCog[
             # expresses by wanting no posts for a build in this state.
             await self.bot.refresh_posts("build", str(build_id))
 
-            await edit_layout(
+            await _edit(
                 sent_message,
                 info_layout(t(locale, _("Success")), t(locale, _("Submission has been denied."))),
             )

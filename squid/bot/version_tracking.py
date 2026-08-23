@@ -7,9 +7,8 @@ import discord.ext.commands as commands
 from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ext.commands.bot import app_commands
 
-import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import PagedList, reply_presentation, text_layout
+from squid.bot.ui import PagedList, reply_presentation, send_to, text_layout
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
@@ -74,7 +73,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="VersionTrac
         first_line = message.content.split("\n", 1)[0]
         version = await self.version_service.add(first_line)
         locale = await resolve_locale(message, self.bot.services.settings)
-        await sl.discord.delivery.send_to(self.bot.get_channel(channel_id))(  # type: ignore
+        await send_to(self.bot.get_channel(channel_id))(  # type: ignore
             text_layout(t(locale, _("Version added successfully: {version}"), version=version))
         )
 

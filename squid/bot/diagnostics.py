@@ -2,15 +2,13 @@
 
 from typing import TYPE_CHECKING
 
-import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
 import squid_layouts as sl
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import Private, create_mount, destination
-from squid.bot.utils.components import info_layout
+from squid.bot.ui import Private, create_mount, destination, info_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
 from squid.core.i18n import _
@@ -100,13 +98,13 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def _deliver(
         self,
         ctx: Context[BotT],
-        layout: discord.ui.LayoutView,
+        presentation: sl.discord.presentation.DiscordPresentation,
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""
         await deliver_privately(
             ctx,
-            layout,
+            presentation,
             reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
             locale=locale,
         )

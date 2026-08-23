@@ -8,13 +8,11 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog
 
-import squid_layouts as sl
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import text_layout
-from squid.bot.utils.components import error_layout, reply_layout
+from squid.bot.ui import error_layout, respond_presentation, send_to, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import present_poll_form
 from squid.bot.voting.publisher import DiscordPollPublisher
@@ -186,7 +184,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
         locale = await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
-            await sl.discord.delivery.send_to(message.channel)(text_layout(describe_rejection(locale, rejection)))
+            await send_to(message.channel)(text_layout(describe_rejection(locale, rejection)))
 
     @app_commands.command(name="poll")
     @app_commands.guild_only()
@@ -201,7 +199,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if account is None or account.id is None or account.needs_consent_refresh:
             if await ensure_consented_account(interaction, self.bot.services.accounts, locale=locale) is None:
                 return
-            await reply_layout(interaction, text_layout(t(locale, _("Thanks. Run `/poll` again to open the editor."))))
+            await respond_presentation(
+                interaction, text_layout(t(locale, _("Thanks. Run `/poll` again to open the editor.")))
+            )
             return
         allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
             interaction.user
@@ -217,7 +217,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await interaction.response.defer(ephemeral=True)
         locale = await resolve_locale(interaction, self.bot.services.settings)
         if interaction.guild is None or message.guild != interaction.guild:
-            await reply_layout(
+            await respond_presentation(
                 interaction,
                 error_layout(
                     t(locale, _("Cannot vote on this message")),
@@ -239,7 +239,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 target_message=message,
                 published_message=published,
             )
-        await reply_layout(interaction, text_layout(t(locale, _("Deletion vote opened."))))
+        await respond_presentation(interaction, text_layout(t(locale, _("Deletion vote opened."))))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
         """Resolve a voter's account without creating one.
@@ -268,7 +268,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await self._remove_reaction(message, emoji, user)
         locale = await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.HTTPException):
-            await sl.discord.delivery.send_to(message.channel, delete_after=30)(
+            await send_to(message.channel, delete_after=30)(
                 text_layout(
                     t(
                         locale,

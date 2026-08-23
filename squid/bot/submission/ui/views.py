@@ -12,8 +12,7 @@ import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import create_mount, respond_presentation
-from squid.bot.utils.components import DISCORD_BLUE, DISCORD_YELLOW, error_layout
+from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, create_mount, error_layout, respond_presentation
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -425,7 +424,7 @@ class SubmissionFormComponent(sl.Component):
 
 
 def _edit_form(items: Sequence[BuildField[Any]], page: int, locale: str | None) -> sl.forms.FormSpec:
-    fields = []
+    fields: list[sl.forms.FormField[Any]] = []
     for item in items[5 * (page - 1) : 5 * page]:
         field_type = sl.forms.TextAreaField if item.style is discord.TextStyle.paragraph else sl.forms.TextField
         fields.append(
@@ -550,6 +549,9 @@ class BuildEditComponent(sl.Component):
                     accent=DISCORD_BLUE,
                 ),
             )
+        state = self.projection.state
+        if self._seed is None and not isinstance(state, sl.runtime.Ready) and state.previous is None:
+            return (sl.status(t(self.locale, _("Loading build."))),)
         description = (
             t(
                 self.locale,

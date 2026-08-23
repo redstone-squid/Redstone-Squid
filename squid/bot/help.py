@@ -9,9 +9,8 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
 
-import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_presentation
+from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_presentation, send_to
 from squid.config import BuildConfig
 from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
@@ -201,13 +200,15 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await sl.discord.delivery.send_to(self.get_destination())(help_layout(t(locale, _("Help")), desc, footer=footer))
+        await send_to(self.get_destination())(
+            help_layout(t(locale, _("Help")), desc, footer=footer)
+        )
 
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
         locale = await resolve_locale(self.context, self._bot.services.settings)
-        await sl.discord.delivery.send_to(self.get_destination())(
+        await send_to(self.get_destination())(
             help_layout(
                 t(locale, _("Command Help - `{name}`"), name=command.qualified_name),
                 command.help or t(locale, _("No details provided")),
@@ -264,7 +265,7 @@ class Help(commands.MinimalHelpCommand):
             commands=command_details or t(locale, _("None")),
             more_information=t(locale, MORE_INFORMATION),
         )
-        await sl.discord.delivery.send_to(self.get_destination())(help_layout(t(locale, _("Command Help")), desc))
+        await send_to(self.get_destination())(help_layout(t(locale, _("Command Help")), desc))
         return None
 
     # !help <cog>
@@ -281,7 +282,7 @@ class Help(commands.MinimalHelpCommand):
             commands=command_details or t(locale, _("None")),
             more_information=t(locale, MORE_INFORMATION),
         )
-        await sl.discord.delivery.send_to(self.get_destination())(help_layout(t(locale, _("Command Help")), desc))
+        await send_to(self.get_destination())(help_layout(t(locale, _("Command Help")), desc))
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
@@ -296,7 +297,7 @@ class Help(commands.MinimalHelpCommand):
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
         locale = await resolve_locale(self.context, self._bot.services.settings)
-        await sl.discord.delivery.send_to(self.get_destination())(error_layout(t(locale, _("Error.")), error))
+        await send_to(self.get_destination())(error_layout(t(locale, _("Error.")), error))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

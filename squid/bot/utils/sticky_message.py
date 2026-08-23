@@ -10,6 +10,7 @@ import discord
 from discord import TextChannel
 
 import squid_layouts as sl
+from squid.bot.ui import send_to
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ class StickyMessage(abc.ABC):
 
             presentation = await self.render(channel)
             try:
-                receipt = await sl.discord.delivery.send_to(channel)(presentation)
+                receipt = await send_to(channel)(presentation)
                 new_msg = receipt.message
                 if new_msg is None:
                     logger.warning("Sticky delivery returned no message for channel %s", channel.id)

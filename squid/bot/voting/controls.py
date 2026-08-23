@@ -22,7 +22,7 @@ import discord
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.polls import poll_close, poll_refresh, polls
-from squid.bot.utils.components import reply_layout, text_layout
+from squid.bot.ui import respond_presentation, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
 from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
@@ -54,7 +54,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         await _refuse(interaction, locale, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    await reply_layout(interaction, text_layout(t(locale, _("Poll closed."))))
+    await respond_presentation(interaction, text_layout(t(locale, _("Poll closed."))))
 
 
 @polls.route(poll_refresh)
@@ -77,7 +77,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
             _("{count} voter(s) could not be resolved, so their cached weight was kept."),
             count=len(result.unresolved_account_ids),
         )
-    await reply_layout(interaction, text_layout(text))
+    await respond_presentation(interaction, text_layout(text))
 
 
 async def _authorize(
@@ -110,4 +110,4 @@ async def _authorize(
 
 
 async def _refuse(interaction: discord.Interaction[Any], locale: str | None, rejection: VoteRejection) -> None:
-    await reply_layout(interaction, text_layout(describe_rejection(locale, rejection)))
+    await respond_presentation(interaction, text_layout(describe_rejection(locale, rejection)))
