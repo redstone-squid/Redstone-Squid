@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
+from squid_layouts.entities import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette
@@ -33,6 +34,7 @@ from squid_layouts.semantic import (
     UNOPENED,
     UNRATED,
     UNSELECTED,
+    NO_ENTITIES,
     Action,
     ActionDisplay,
     ActionGroup,
@@ -43,6 +45,9 @@ from squid_layouts.semantic import (
     ChoiceEvent,
     ChoiceOwnership,
     Choices,
+    Entities,
+    EntityChoice,
+    EntityOwnership,
     Cluster,
     Code,
     Column,
@@ -585,6 +590,42 @@ def choices(
         selection,
         minimum,
         maximum,
+        flexibility,
+    )
+
+
+def entity_choice(
+    ref: EntityRef,
+    label: TextValue,
+    *,
+    description: TextValue | None = None,
+    available: bool = True,
+) -> EntityChoice:
+    """One enumerated fallback for an entity picker."""
+    return EntityChoice(ref, _text(label), _opt_text(description), available)
+
+
+def entities(
+    *entries: Conditional[EntityChoice],
+    key: str,
+    entity_type: EntityType,
+    selection: EntityOwnership = NO_ENTITIES,
+    minimum: int = 1,
+    maximum: int = 1,
+    channel_types: tuple[ChannelType, ...] = (),
+    placeholder: TextValue | None = None,
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Entities:
+    """Select frontend-resolved entities, optionally with an enumerated fallback."""
+    return Entities(
+        key,
+        entity_type,
+        _collect(entries, (EntityChoice,), "sl.entities()"),
+        selection,
+        minimum,
+        maximum,
+        channel_types,
+        _opt_text(placeholder),
         flexibility,
     )
 
