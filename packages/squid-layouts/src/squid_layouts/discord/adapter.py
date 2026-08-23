@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version
+from typing import Any, cast
 
 import discord
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
@@ -19,7 +20,8 @@ from squid_layouts.planning.adapter import (
     ExtensionAdapter,
     PreparedExtension,
 )
-from squid_layouts.planning.types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_layouts.target_types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_layouts.planning.target import TargetProfile
 
 
 class _DiscordItemExtension:
@@ -93,3 +95,16 @@ def require_discord_py_capability(
             f"but {installed} is installed; supply a custom profile verified for this version"
         )
         raise LayoutInvariantError(message)
+
+
+def require_discord_py_target(
+    target: TargetProfile[Any, Any, Any], capability: str, operation: str
+) -> AdapterProfile[DiscordPyAdapter]:
+    """Extract and verify the discord.py profile bound to a target."""
+    profile = target.adapter
+    if profile is None or not issubclass(profile.family, DiscordPyAdapter):
+        message = f"target {target.id!r} cannot {operation}; it is not bound to a discord.py adapter profile"
+        raise LayoutInvariantError(message)
+    narrowed = cast(AdapterProfile[DiscordPyAdapter], profile)
+    require_discord_py_capability(narrowed, capability, operation)
+    return narrowed

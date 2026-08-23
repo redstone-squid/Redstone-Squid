@@ -42,6 +42,7 @@ from squid_layouts.discord import delivery as deliver
 from squid_layouts.discord import live
 from squid_layouts.discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_layouts.discord.actions import ActionResponder
+from squid_layouts.discord.adapter import require_discord_py_target
 from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.classic import compose as classic_compose
 from squid_layouts.discord.classic_renderer import ClassicRenderer
@@ -57,6 +58,12 @@ from squid_layouts.forms import FormBinding, FormSpec, FormValidationPolicy, Sub
 from squid_layouts.guards import GuardLedger
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
 from squid_layouts.planning.limits import LIMITS, ClassicLimits, DiscordLimits, V2Limits
+from squid_layouts.planning.adapter import (
+    ADAPTER_DISPATCH,
+    ADAPTER_INTERACTION_DELIVERY,
+    ADAPTER_RENDER_CLASSIC,
+    ADAPTER_RENDER_V2,
+)
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavFactory,
@@ -64,6 +71,7 @@ from squid_layouts.planning.navigation import (
     NavigationState,
     default_nav,
 )
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.primitives.nodes import Button, Node, Row
 from squid_layouts.profiling import (
     ActionOutcome,
@@ -688,15 +696,15 @@ class _BusyPaint:
             await self._mount._repaint(None, None, through=deliver.handle_from(self._interaction))
 
 
-class Mount:
+class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
     """Binds a component to a message and owns its whole interaction lifecycle."""
 
     def __init__(
         self,
-        component: Component,
+        component: Component[ModeT],
         *,
         access: AccessPolicy,
-        target: Target = V2_TARGET,
+        target: Target[ModeT, AdapterT, Any] = V2_TARGET,  # type: ignore[assignment]
         chrome: Chrome = DEFAULT_CHROME,
         localization: Localization = NEUTRAL,
         palette: Palette = DEFAULT_PALETTE,
@@ -750,6 +758,10 @@ class Mount:
         """
         self.limits = target.limits if isinstance(target.limits, DiscordLimits) else LIMITS
         self.mode = DiscordMode.CLASSIC if isinstance(self.limits, ClassicLimits) else DiscordMode.COMPONENTS_V2
+        render_capability = ADAPTER_RENDER_CLASSIC if self.mode is DiscordMode.CLASSIC else ADAPTER_RENDER_V2
+        require_discord_py_target(target, render_capability, "mount this message mode")
+        require_discord_py_target(target, ADAPTER_DISPATCH, "dispatch mounted interactions")
+        require_discord_py_target(target, ADAPTER_INTERACTION_DELIVERY, "deliver mounted interactions")
         """Which kind of Discord message this mount owns, for its whole life."""
         self.strict = strict
         self.timeout = timeout
