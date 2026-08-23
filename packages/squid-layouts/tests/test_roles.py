@@ -2,6 +2,7 @@
 
 import asyncio
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock, Mock
 
 import anyio
@@ -12,9 +13,11 @@ import squid_layouts as sl
 from squid_layouts.discord.roles import (
     RoleMutationForbidden,
     RolesUnchanged,
+    RoleTransitionResult,
 )
 from squid_layouts.discord.routing import Router
 from squid_layouts.discord.testing import fake_interaction
+from squid_layouts.primitives.nodes import ActionGroup, RoutedButton, RoutedSelect, Variants
 
 
 class FakeRole:
@@ -31,7 +34,7 @@ class FakeRole:
 def panel_for(
     *,
     cardinality: sl.discord.Cardinality = sl.discord.ANY,
-    feedback=None,
+    feedback: sl.discord.RoleFeedback | None = None,
 ) -> tuple[sl.discord.RolePanel, sl.discord.routing.RouteGroup[discord.Client]]:
     group = sl.discord.routing.RouteGroup("roles")
     panel = sl.discord.RolePanel(
@@ -61,7 +64,7 @@ def interaction_for(
     held: tuple[int, ...] = (),
     manage_roles: bool = True,
     top_position: int = 100,
-) -> tuple[object, object, AsyncMock, AsyncMock]:
+) -> tuple[discord.Interaction[Any], Any, AsyncMock, AsyncMock]:
     actor = Mock(spec=discord.Member)
     actor.id = 42
     member_roles = [roles[role_id] for role_id in held]
@@ -76,9 +79,9 @@ def interaction_for(
         get_role=lambda role_id: roles.get(role_id),
         fetch_member=AsyncMock(return_value=member),
     )
-    interaction = fake_interaction()
-    interaction.user = actor
-    interaction.guild = guild
+    interaction = cast(discord.Interaction[Any], fake_interaction())
+    cast(Any, interaction).user = actor
+    cast(Any, interaction).guild = guild
     return interaction, member, guild.fetch_member, member.edit
 
 
@@ -117,21 +120,25 @@ def test_routes_and_rendering_are_stable_and_unselected() -> None:
 
     rendered = panel.render()
     ladder = rendered[-1]
-    assert isinstance(ladder, sl.discord.roles.Variants)
+    assert isinstance(ladder, Variants)
     preferred, fallback = ladder.variants
-    assert [button.route_id for button in preferred.nodes[0].items] == [
+    preferred_node = preferred.nodes[0]
+    assert isinstance(preferred_node, ActionGroup)
+    buttons = tuple(button for button in preferred_node.items if isinstance(button, RoutedButton))
+    assert [button.route_id for button in buttons] == [
         "roles:toggle:colour:101",
         "roles:toggle:colour:102",
     ]
     select = fallback.nodes[0]
-    assert isinstance(select, sl.discord.roles.RoutedSelect)
+    assert isinstance(select, RoutedSelect)
     assert select.route_id == "roles:set:colour"
     assert select.min_values == 1
     assert select.max_values == 1
     assert all(not option.default for option in select.options)
 
     presentation = sl.discord.render_static(panel)
-    custom_ids = [item.custom_id for item in presentation.view.walk_children() if hasattr(item, "custom_id")]
+    view = cast(discord.ui.LayoutView, presentation.view)
+    custom_ids = [item.custom_id for item in view.walk_children() if hasattr(item, "custom_id")]
     assert custom_ids == ["roles:toggle:colour:101", "roles:toggle:colour:102"]
 
 
@@ -142,23 +149,25 @@ async def test_exactly_one_button_replaces_stale_selection_and_preserves_other_r
         102: FakeRole(102, 11),
         303: FakeRole(303, 12),
     }
-    interaction, member, fetch_member, edit = interaction_for(panel, roles, held=(101, 303))
+    interaction, _member, fetch_member, edit = interaction_for(panel, roles, held=(101, 303))
 
     await panel._handle_toggle(interaction, "colour", 102)
 
     fetch_member.assert_awaited_once_with(42)
     edit.assert_awaited_once()
-    edited_roles = edit.await_args.kwargs["roles"]
+    await_args = edit.await_args
+    assert await_args is not None
+    edited_roles = await_args.kwargs["roles"]
     assert {role.id for role in edited_roles} == {102, 303}
-    assert edit.await_args.kwargs["reason"] == "Self-role panel"
-    assert isinstance(member, SimpleNamespace)
-    assert interaction.followup.send.await_args.args == ("Your roles were updated.",)
+    assert await_args.kwargs["reason"] == "Self-role panel"
+    followup = cast(Any, interaction.followup)
+    assert followup.send.await_args.args == ("Your roles were updated.",)
 
 
 async def test_unchanged_selection_skips_edit_and_custom_feedback_receives_result() -> None:
-    outcomes = []
+    outcomes: list[RoleTransitionResult] = []
 
-    async def feedback(_interaction, result) -> None:
+    async def feedback(_interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
         outcomes.append(result)
 
     panel, _ = panel_for(feedback=feedback)
@@ -189,7 +198,8 @@ async def test_select_rejects_malformed_duplicate_and_out_of_category_values(val
     await panel._handle_set(interaction, values, "colour")
 
     edit.assert_not_awaited()
-    message = interaction.followup.send.await_args.args[0]
+    followup = cast(Any, interaction.followup)
+    message = followup.send.await_args.args[0]
     assert message == "That role selection is not valid."
 
 
@@ -201,7 +211,8 @@ async def test_missing_role_is_typed_and_does_not_write() -> None:
     await panel._handle_toggle(interaction, "colour", 101)
 
     edit.assert_not_awaited()
-    assert interaction.followup.send.await_args.args == ("This role panel is unavailable right now.",)
+    followup = cast(Any, interaction.followup)
+    assert followup.send.await_args.args == ("This role panel is unavailable right now.",)
 
 
 @pytest.mark.parametrize(
@@ -215,11 +226,11 @@ async def test_uneditable_role_is_forbidden_before_edit(role: FakeRole) -> None:
     panel, _ = panel_for()
     roles = {101: role, 102: FakeRole(102, 11)}
     interaction, _member, _fetch_member, edit = interaction_for(panel, roles)
-    interaction.guild.me.top_role.position = 100
+    cast(Any, interaction.guild).me.top_role.position = 100
 
-    outcomes = []
+    outcomes: list[RoleTransitionResult] = []
 
-    async def feedback(_interaction, result) -> None:
+    async def feedback(_interaction: discord.Interaction[Any], result: RoleTransitionResult) -> None:
         outcomes.append(result)
 
     panel.feedback = feedback
@@ -235,7 +246,7 @@ async def test_invalid_cardinality_is_reported_and_different_members_do_not_shar
     roles = {101: FakeRole(101, 10), 102: FakeRole(102, 11)}
     first, _member, _fetch, first_edit = interaction_for(panel, roles)
     second, _member, _fetch, second_edit = interaction_for(panel, roles)
-    second.user.id = 43
+    cast(Any, second.user).id = 43
     entered = asyncio.Event()
     second_entered = asyncio.Event()
     release = asyncio.Event()
@@ -274,4 +285,5 @@ async def test_minimum_prevents_removing_the_last_required_role() -> None:
     await panel._handle_toggle(interaction, "colour", 101)
 
     edit.assert_not_awaited()
-    assert interaction.followup.send.await_args.args == ("That role selection is not valid.",)
+    followup = cast(Any, interaction.followup)
+    assert followup.send.await_args.args == ("That role selection is not valid.",)

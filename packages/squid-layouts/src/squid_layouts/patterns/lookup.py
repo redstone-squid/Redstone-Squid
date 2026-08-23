@@ -96,7 +96,7 @@ class Lookup[ItemT](Component):
         # Read before the branch, not inside it: the request selects the operation on every
         # run, so a run that happens not to consult it still depends on it.
         request = self._request
-        current = self.results.state
+        current = self.results.status
         previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None
         if previous is None or previous.query != query:
             source = self.search(query)
@@ -132,7 +132,7 @@ class Lookup[ItemT](Component):
         self._request = _LookupRequest(self._request.operation, self._request.generation + 1)
 
     def _visible(self) -> _LookupWindow[ItemT] | None:
-        current = self.results.state
+        current = self.results.status
         if isinstance(current, Ready):
             return current.value
         if isinstance(current, Pending | Failed) and current.previous is not None:
@@ -210,7 +210,7 @@ class Lookup[ItemT](Component):
         if self.query is None:
             return stack(heading(chrome.search), *self._picked_nodes(), search_control)
 
-        match self.results.state:
+        match self.results.status:
             case Pending(previous=None):
                 body = (note(self.loading),)
             case Failed(previous=None):

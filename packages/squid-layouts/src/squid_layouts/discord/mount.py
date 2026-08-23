@@ -94,7 +94,7 @@ from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
-from squid_layouts.runtime.resources import Resource, ResourceDelivery
+from squid_layouts.runtime.resources import Resource, PendingPolicy
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
@@ -1545,7 +1545,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     ):
                         await self._load_all(tree.deferred)
                 continue
-            atomic = self._pending_resources(tree, ResourceDelivery.ATOMIC)
+            atomic = self._pending_resources(tree, PendingPolicy.ATOMIC)
             if atomic:
                 if profile is None:
                     await self._settle_resources(atomic)
@@ -1561,8 +1561,10 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree, delivery: ResourceDelivery) -> tuple[Resource[Any], ...]:
-        return tuple(resource for resource in tree.resources if resource.delivery is delivery and resource.pending)
+    def _pending_resources(tree: ComponentTree, pending: PendingPolicy) -> tuple[Resource[Any], ...]:
+        return tuple(
+            resource for resource in tree.resources if resource.pending_policy is pending and resource.pending
+        )
 
     async def _settle_resources(self, resources: Sequence[Resource[Any]]) -> None:
         """Settle one observed resource tier concurrently under this render operation."""
@@ -1585,7 +1587,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             return
         candidate = committed
         for pass_index in range(_MAX_LOAD_PASSES):
-            resources = self._pending_resources(candidate.tree, ResourceDelivery.VISIBLE)
+            resources = self._pending_resources(candidate.tree, PendingPolicy.EXPLICIT)
             if not resources or self.runtime.dirty:
                 return
             if self._handle is None or self._handle.expired():

@@ -98,8 +98,8 @@ async def test_browser_navigation_keeps_previous_window_visible_while_pending() 
 
     browser._request = type(browser._request)("next")
 
-    assert isinstance(browser.window.state, sl.runtime.Pending)
-    assert browser.window.state.previous == sl.runtime.Ready(loaded)
+    assert isinstance(browser.window.status, sl.resources.Pending)
+    assert browser.window.status.previous == sl.resources.Ready(loaded)
     assert "A" in str(browser.render())
     assert "Loading" in str(browser.render())
 

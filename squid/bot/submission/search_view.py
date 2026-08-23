@@ -205,10 +205,10 @@ class SearchResultsView(sl.Component):
         self._browser._detail_value = self._detail(hit)
 
     def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
-        state = self._browser.window.state
-        if isinstance(state, sl.runtime.Ready):
+        state = self._browser.window.status
+        if isinstance(state, sl.resources.Ready):
             return state.value
-        if isinstance(state, sl.runtime.Pending | sl.runtime.Failed) and state.previous is not None:
+        if isinstance(state, sl.resources.Pending | sl.resources.Failed) and state.previous is not None:
             return state.previous.value
         message = "search browser has no visible window"
         raise sl.errors.LayoutInvariantError(message)
