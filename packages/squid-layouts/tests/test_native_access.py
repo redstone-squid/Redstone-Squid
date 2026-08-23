@@ -2,7 +2,9 @@
 
 import pytest
 
-from squid_layouts import ActionPolicy, Component, FormLike, PressEvent, SubmitHandler, TextLike
+from squid_layouts import Component, PressEvent, TextLike
+from squid_layouts.forms import FormLike, SubmitHandler
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.interactions import ActionResponder as ActionResponderProtocol
 from squid_layouts.interactions import Actor, Visibility
 from squid_layouts.discord import Everyone, Mount, native, responder

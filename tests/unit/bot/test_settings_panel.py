@@ -65,7 +65,7 @@ def make_component_panel(
 
 async def test_a_saved_channel_is_kept_without_a_hand_written_invalidate() -> None:
     panel, _ = make_component_panel()
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     assert panel.channel_id("Vote") == 12
 
@@ -83,7 +83,7 @@ async def test_a_channel_saved_before_a_later_failure_is_not_left_applied() -> N
         message = "the rest of the action failed"
         raise RuntimeError(message)
 
-    with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.transaction():
+    with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.runtime.transaction():
         await save_the_channel_then_fail()
 
     assert panel.channel_id("Vote") == 3
@@ -95,7 +95,7 @@ async def test_a_half_loaded_voting_page_is_not_left_applied() -> None:
     loaded_preset = panel._preset
     panel._votes.get_role_weights = AsyncMock(side_effect=RuntimeError("database is down"))
 
-    with pytest.raises(RuntimeError, match="database is down"), sl.transaction():
+    with pytest.raises(RuntimeError, match="database is down"), sl.runtime.transaction():
         await panel.open_voting(VoteKind.GENERIC)
 
     assert panel.kind is VoteKind.BUILD
@@ -105,7 +105,7 @@ async def test_a_half_loaded_voting_page_is_not_left_applied() -> None:
 async def test_a_read_only_action_cannot_change_a_channel() -> None:
     panel, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
-    with pytest.raises(sl.ReactiveWriteError), readonly_transaction():
+    with pytest.raises(sl.runtime.ReactiveWriteError), readonly_transaction():
         await panel.set_channel("Vote", 12)
     assert panel.channel_id("Vote") == 3
 
@@ -119,10 +119,10 @@ async def test_changing_language_relocalizes_the_live_mount(monkeypatch: pytest.
     monkeypatch.setattr(
         settings_view,
         "localization_for",
-        lambda locale: sl.Localization(locale, gettext=lambda message: translations.get(message, message)),
+        lambda locale: sl.text.Localization(locale, gettext=lambda message: translations.get(message, message)),
     )
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.set_locale("fr")
     view = commit_render(mount)
 
@@ -136,11 +136,11 @@ async def test_a_channel_change_can_be_undone() -> None:
     panel, settings = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     assert panel.channel_id("Vote") == 12
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         assert await panel.history.undo() is not None
 
     assert panel.channel_id("Vote") == 3
@@ -152,11 +152,11 @@ async def test_an_undone_channel_change_can_be_redone() -> None:
     panel, settings = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.set_channel("Vote", None)
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.history.undo()
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.history.redo()
 
     assert panel.channel_id("Vote") is None
@@ -172,7 +172,7 @@ async def test_a_failed_action_records_no_history() -> None:
         message = "the rest of the action failed"
         raise RuntimeError(message)
 
-    with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.transaction():
+    with pytest.raises(RuntimeError, match="the rest of the action failed"), sl.runtime.transaction():
         await save_the_channel_then_fail()
 
     assert panel.history.entries == ()
@@ -184,7 +184,7 @@ async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -
     assert mount is not None
 
     assert "Undo" not in _button_labels(commit_render(mount))
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     assert "Undo" in _button_labels(commit_render(mount))
 
@@ -192,7 +192,7 @@ async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -
 async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pytest.MonkeyPatch) -> None:
     panel, settings = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     writes = settings.set_channel.await_count
 
@@ -208,7 +208,7 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
     )
     monkeypatch.setattr(sl.discord, "native", lambda _event: SimpleNamespace())
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel._undo(event)
 
     assert settings.set_channel.await_count == writes
@@ -235,12 +235,12 @@ async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.Mo
     panel, settings = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
-    with sl.transaction():
+    with sl.runtime.transaction():
         await panel._channel_changed(
             cast(
                 Any,
                 SimpleNamespace(
-                    selected=(sl.EntityRef(sl.EntityKind.CHANNEL, 12),),
+                    selected=(sl.semantic.EntityRef(sl.semantic.EntityKind.CHANNEL, 12),),
                     context={},
                 ),
             ),

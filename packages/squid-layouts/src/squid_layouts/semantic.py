@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Any, TYPE_CHECKING, Literal, cast, overload
+from typing import Any, TYPE_CHECKING, Literal, overload
 
 from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
@@ -811,7 +811,7 @@ def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[incon
 def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]: ...
 
 
-def fallback(primary: object, *alternates: object) -> FallbackContent[Any]:
+def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]:
     """Declare complete author-supplied alternate representations, in descending preference.
 
     Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
@@ -820,10 +820,7 @@ def fallback(primary: object, *alternates: object) -> FallbackContent[Any]:
     if not alternates:
         message = "sl.fallback() needs at least one alternate"
         raise ValueError(message)
-    return FallbackContent(
-        cast(LayoutNode[Any], primary),
-        tuple(cast(LayoutNode[Any], alternate) for alternate in alternates),
-    )
+    return FallbackContent(primary, alternates)
 
 
 def best_effort(node: LayoutNode) -> BestEffort:

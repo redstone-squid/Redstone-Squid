@@ -120,7 +120,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.discord.durability.DurableBot
     assert sl.discord.durability.DiscordFrontend
     assert not hasattr(sl.discord.durability, "MountManager")
-    assert sl.TopicBus
+    assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
     assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.__all__)
     assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.runtime.__all__)

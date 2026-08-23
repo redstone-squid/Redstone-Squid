@@ -27,11 +27,11 @@ def _hit_identity(hit: SearchHit) -> str:
 
 
 class _SearchSource:
-    capabilities = sl.SourceCapabilities(
+    capabilities = sl.sources.SourceCapabilities(
         backward=True,
         offsets=True,
         jumpable=True,
-        count=sl.CountPrecision.EXACT,
+        count=sl.sources.CountPrecision.EXACT,
     )
 
     def __init__(self, service: SearchService, request: SearchRequest, initial: SearchPage) -> None:
@@ -43,9 +43,9 @@ class _SearchSource:
     def request_at(self, offset: int) -> SearchRequest:
         return replace(self.base_request, offset=offset)
 
-    def _loaded(self, page: SearchPage, offset: int) -> sl.LoadedWindow[SearchHit]:
-        window = sl.Window(
-            sl.Position(_hit_identity(page.hits[0]) if page.hits else None, offset),
+    def _loaded(self, page: SearchPage, offset: int) -> sl.sources.LoadedWindow[SearchHit]:
+        window = sl.sources.Window(
+            sl.sources.Position(_hit_identity(page.hits[0]) if page.hits else None, offset),
             page.hits,
             has_previous=page.prev is not None,
             has_next=page.next is not None,
@@ -53,24 +53,24 @@ class _SearchSource:
         )
         fingerprint = window_fingerprint(page.hits, _hit_identity)
         self._metadata[(offset, fingerprint)] = page
-        return sl.LoadedWindow(window, fingerprint)
+        return sl.sources.LoadedWindow(window, fingerprint)
 
-    def initial_loaded(self) -> sl.LoadedWindow[SearchHit]:
+    def initial_loaded(self) -> sl.sources.LoadedWindow[SearchHit]:
         assert self._initial is not None
         page = self._initial
         self._initial = None
         return self._loaded(page, self.base_request.offset)
 
-    async def fetch(self, position: sl.Position, extent: int) -> sl.Window[SearchHit]:
+    async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[SearchHit]:
         request = replace(self.base_request, offset=position.offset, page_size=extent)
         page = await self._service.search(request)
         return self._loaded(page, position.offset).window
 
-    def page_for(self, loaded: sl.LoadedWindow[SearchHit]) -> SearchPage:
+    def page_for(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> SearchPage:
         page = self._metadata.get((loaded.position.offset, loaded.fingerprint))
         if page is None:
             message = "search source has no metadata for the loaded window"
-            raise sl.LayoutInvariantError(message)
+            raise sl.errors.LayoutInvariantError(message)
         return page
 
 
@@ -144,7 +144,7 @@ class SearchResultsView(sl.Component):
         self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
-        self._browser = sl.Browser(
+        self._browser = sl.patterns.Browser(
             self._source,
             key="search",
             identity=_hit_identity,
@@ -204,14 +204,14 @@ class SearchResultsView(sl.Component):
         self._browser.opened = hit
         self._browser._detail_value = self._detail(hit)
 
-    def _visible_window(self) -> sl.LoadedWindow[SearchHit]:
+    def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
         state = self._browser.window.state
-        if isinstance(state, sl.Ready):
+        if isinstance(state, sl.runtime.Ready):
             return state.value
-        if isinstance(state, sl.Pending | sl.Failed) and state.previous is not None:
+        if isinstance(state, sl.runtime.Pending | sl.runtime.Failed) and state.previous is not None:
             return state.previous.value
         message = "search browser has no visible window"
-        raise sl.LayoutInvariantError(message)
+        raise sl.errors.LayoutInvariantError(message)
 
     def _detail(self, hit: SearchHit) -> _SearchDetail:
         return _SearchDetail(
@@ -221,7 +221,7 @@ class SearchResultsView(sl.Component):
             render_build=self._render_build,
         )
 
-    def _overview(self, loaded: sl.LoadedWindow[SearchHit]) -> sl.LayoutNode | tuple[()]:
+    def _overview(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> sl.LayoutNode | tuple[()]:
         warnings = self._source.page_for(loaded).warnings
         if not warnings:
             return ()

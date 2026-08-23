@@ -9,21 +9,8 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any, assert_type
 
-from squid_layouts import (
-    AtomicResource,
-    AtomicResourceState,
-    Component,
-    Failed,
-    Pending,
-    Ready,
-    Resource,
-    ResourceDelivery,
-    ResourceState,
-    Shared,
-    addresses,
-    resource,
-    state,
-)
+from squid_layouts import Component, resource, state
+from squid_layouts.runtime import AtomicResource, AtomicResourceState, Failed, Pending, Ready, Resource, ResourceDelivery, ResourceState, Shared, addresses
 from squid_layouts.runtime.topics import TopicBus
 
 bus = TopicBus()

@@ -64,8 +64,8 @@ class TestList:
     def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
         nodes = MountInspector().render()
 
-        assert isinstance(nodes[0], sl.Section)
-        assert isinstance(nodes[-1], sl.Actions)
+        assert isinstance(nodes[0], sl.semantic.Section)
+        assert isinstance(nodes[-1], sl.semantic.Actions)
 
     async def test_it_lists_a_live_mount_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()
@@ -210,7 +210,7 @@ class TestSceneDump:
 
         assert asset is not None
         assert asset.name.endswith(".json")
-        assert isinstance(asset.source, sl.InlineAsset)
+        assert isinstance(asset.source, sl.semantic.InlineAsset)
         assert sl.scene.Codec.loads(asset.source.data.decode()) == subject.snapshot().scene
 
     def test_a_mount_with_no_committed_render_has_no_scene(self) -> None:

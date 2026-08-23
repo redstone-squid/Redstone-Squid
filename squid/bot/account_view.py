@@ -57,7 +57,7 @@ class AccountPanel(sl.Component):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sl.ComponentShell[sl.EditorState] | None = sl.state(None, persist=False, opaque=True)
+    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -141,10 +141,10 @@ class AccountPanel(sl.Component):
         ]
         if self.identities:
             nodes.append(
-                sl.Choices(
+                sl.semantic.Choices(
                     key="identity",
                     choices=tuple(
-                        sl.Choice(
+                        sl.semantic.Choice(
                             str(identity.id),
                             identity_label(identity, self.locale),
                             self.identity_detail(identity),
@@ -261,26 +261,26 @@ class AccountPanel(sl.Component):
             return
         self._profile_editor = self._build_profile_editor()
 
-    def _build_profile_editor(self) -> sl.ComponentShell[sl.EditorState]:
-        profile_section = sl.EditorSection.form(
+    def _build_profile_editor(self) -> sl.patterns.ComponentShell[sl.patterns.EditorState]:
+        profile_section = sl.patterns.EditorSection.form(
             "profile",
             t(self.locale, _("Profile")),
-            sl.FormSpec(
+            sl.forms.FormSpec(
                 t(self.locale, _("Edit profile")),
                 (
-                    sl.TextField(
+                    sl.forms.TextField(
                         key="display_name",
                         label=t(self.locale, _("Display name")),
                         required=False,
                         maximum=MAX_DISPLAY_NAME_LENGTH,
                     ),
-                    sl.TextField(
+                    sl.forms.TextField(
                         key="pronouns",
                         label=t(self.locale, _("Pronouns")),
                         required=False,
                         maximum=MAX_PRONOUNS_LENGTH,
                     ),
-                    sl.TextAreaField(
+                    sl.forms.TextAreaField(
                         key="bio",
                         label=t(self.locale, _("Bio")),
                         required=False,
@@ -289,17 +289,17 @@ class AccountPanel(sl.Component):
                 ),
             ),
         )
-        links = sl.CollectionEditor(
+        links = sl.patterns.CollectionEditor(
             t(self.locale, _("Links")),
-            create=sl.FormSpec(
+            create=sl.forms.FormSpec(
                 t(self.locale, _("Profile link")),
                 (
-                    sl.TextField(
+                    sl.forms.TextField(
                         key="label",
                         label=t(self.locale, _("Label")),
                         maximum=MAX_LINK_LABEL_LENGTH,
                     ),
-                    sl.TextField(
+                    sl.forms.TextField(
                         key="url",
                         label=t(self.locale, _("HTTPS URL")),
                         maximum=MAX_LINK_URL_LENGTH,
@@ -311,23 +311,23 @@ class AccountPanel(sl.Component):
             minimum=0,
             maximum=MAX_PROFILE_LINKS,
         )
-        links_section = sl.EditorSection.pattern(
+        links_section = sl.patterns.EditorSection.pattern(
             "links",
             t(self.locale, _("Links")),
             links,
             load=lambda value: links.initial_from(cast(Iterable[Mapping[str, object]], value)),
             dump=links.values,
             summary=lambda value: t(self.locale, _("{count} links"), count=len(value)),
-            issues=lambda state: (sl.FormError(message) for message in links.errors(state)),
+            issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
         )
-        editor = sl.Editor(
+        editor = sl.patterns.Editor(
             t(self.locale, _("Edit your creator page")),
             (profile_section, links_section),
             preview=self._profile_preview,
             commit_label=t(self.locale, _("Save profile")),
             validate=self._validate_profile_editor,
         )
-        initial: sl.EditorValues = {
+        initial: sl.patterns.EditorValues = {
             "profile": {
                 "display_name": self._profile.display_name,
                 "pronouns": self._profile.pronouns,
@@ -337,14 +337,14 @@ class AccountPanel(sl.Component):
         }
         return editor.component(initial=initial, on_commit=self._profile_committed)
 
-    def _validate_link(self, values: Mapping[str, object]) -> tuple[sl.FormIssue, ...]:
+    def _validate_link(self, values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
         try:
             ProfileLink.parse(str(values["label"]), str(values["url"]))
         except ValidationError as error:
-            return (sl.FormError(error.localized_public_detail(self.locale)),)
+            return (sl.forms.FormError(error.localized_public_detail(self.locale)),)
         return ()
 
-    def _raw_profile_update(self, values: sl.EditorValues) -> ProfileUpdate:
+    def _raw_profile_update(self, values: sl.patterns.EditorValues) -> ProfileUpdate:
         profile = cast(Mapping[str, object], values["profile"])
         links = cast(Iterable[Mapping[str, object]], values["links"])
         return ProfileUpdate(
@@ -354,17 +354,17 @@ class AccountPanel(sl.Component):
             links=tuple(ProfileLink(str(link["label"]), str(link["url"])) for link in links),
         )
 
-    def _profile_update(self, values: sl.EditorValues) -> ProfileUpdate:
+    def _profile_update(self, values: sl.patterns.EditorValues) -> ProfileUpdate:
         return self._raw_profile_update(values).validated()
 
-    def _validate_profile_editor(self, values: sl.EditorValues) -> tuple[sl.FormIssue, ...]:
+    def _validate_profile_editor(self, values: sl.patterns.EditorValues) -> tuple[sl.forms.FormIssue, ...]:
         try:
             self._profile_update(values)
         except ValidationError as error:
-            return (sl.FormError(error.localized_public_detail(self.locale)),)
+            return (sl.forms.FormError(error.localized_public_detail(self.locale)),)
         return ()
 
-    def _profile_preview(self, values: sl.EditorValues) -> sl.LayoutNode:
+    def _profile_preview(self, values: sl.patterns.EditorValues) -> sl.LayoutNode:
         draft = self._raw_profile_update(values).apply(self._profile)
         fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft, self.locale))
         return sl.section(
@@ -376,8 +376,8 @@ class AccountPanel(sl.Component):
 
     async def _profile_committed(
         self,
-        event: sl.PatternEvent[sl.EditorState],
-        values: sl.EditorValues,
+        event: sl.patterns.PatternEvent[sl.patterns.EditorState],
+        values: sl.patterns.EditorValues,
         _changed: frozenset[str],
     ) -> None:
         await self._accounts.update_profile(self._account_id, self._profile_update(values))
