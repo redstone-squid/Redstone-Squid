@@ -2,12 +2,12 @@
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import Any, cast
 
 from squid_layouts.document import Document
 from squid_layouts.factories import actions, heading, paragraph, stack, status
 from squid_layouts.forms import Form, FormIssue, FormLike, FormSpec
-from squid_layouts.frozen import FrozenMapping
 from squid_layouts.patterns._content import ContentLike, display_text, normalize_content, require_key
 from squid_layouts.patterns.commit import CommitPolicy
 from squid_layouts.patterns.shells import ComponentShell, Pattern, PatternControls, PatternEvent
@@ -104,8 +104,7 @@ class EditorSection[StateT, ValueT]:
             return tuple((field_key, value.get(field_key)) for field_key in spec.field_keys)
 
         def dump(state: tuple[tuple[str, object], ...]) -> Mapping[str, object]:
-            # Frozen rather than a proxy: a dumped value is retained as committed state.
-            return FrozenMapping(state)
+            return MappingProxyType(dict(state))
 
         def default_summary(value: Mapping[str, object]) -> TextLike:
             parts = []
@@ -230,11 +229,11 @@ class Editor:
 
     def values(self, state: EditorState) -> EditorValues:
         """Project all current section states to their public values."""
-        return FrozenMapping({slot.key: self._sections[slot.key].dump(slot.state) for slot in state.sections})
+        return MappingProxyType({slot.key: self._sections[slot.key].dump(slot.state) for slot in state.sections})
 
     def committed_values(self, state: EditorState) -> EditorValues:
         """Return the last committed value of every section."""
-        return FrozenMapping({slot.key: slot.committed for slot in state.sections})
+        return MappingProxyType({slot.key: slot.committed for slot in state.sections})
 
     def dirty_sections(self, state: EditorState) -> frozenset[str]:
         """Return sections whose projected value differs from their commit snapshot."""
