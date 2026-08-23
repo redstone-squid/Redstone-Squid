@@ -8,13 +8,15 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog
 
+import squid_layouts as sl
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.utils.components import error_layout, no_mentions, reply_layout, text_layout
+from squid.bot.ui import text_layout
+from squid.bot.utils.components import error_layout, reply_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.bot.voting.poll_wizard import PollModal
+from squid.bot.voting.poll_wizard import present_poll_form
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
@@ -184,10 +186,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
         locale = await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
-            await message.channel.send(
-                view=text_layout(describe_rejection(locale, rejection)),
-                allowed_mentions=no_mentions(),
-            )
+            await sl.discord.delivery.send_to(message.channel)(text_layout(describe_rejection(locale, rejection)))
 
     @app_commands.command(name="poll")
     @app_commands.guild_only()
@@ -207,9 +206,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         allow_network = isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(
             interaction.user
         )
-        await interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
-            PollModal(self.publisher, account.id, allow_network=allow_network)
-        )
+        await present_poll_form(interaction, self.publisher, account.id, allow_network=allow_network)
 
     async def delete_vote_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
         """Open a vote on deleting the message that was right-clicked.
@@ -271,14 +268,14 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await self._remove_reaction(message, emoji, user)
         locale = await resolve_locale(message, self.bot.services.settings)
         with contextlib.suppress(discord.HTTPException):
-            await message.channel.send(
-                t(
-                    locale,
-                    _("{user}, voting stores your Discord user ID. Run `/account consent` first."),
-                    user=user.mention,
-                ),
-                delete_after=30,
-                allowed_mentions=no_mentions(),
+            await sl.discord.delivery.send_to(message.channel, delete_after=30)(
+                text_layout(
+                    t(
+                        locale,
+                        _("{user}, voting stores your Discord user ID. Run `/account consent` first."),
+                        user=user.mention,
+                    )
+                )
             )
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:

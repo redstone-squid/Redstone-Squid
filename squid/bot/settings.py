@@ -6,11 +6,12 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import destination
-from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
+from squid.bot.ui import destination, error_layout, info_layout, reply_presentation
+from squid.bot.utils.components import edit_layout
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -108,7 +109,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                         t(locale, _("Setting updated")),
                         t(locale, _("{setting} has been cleared."), setting=setting),
                     ),
-                    allowed_mentions=no_mentions(),
                 )
                 return
 
@@ -116,7 +116,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                 await edit_layout(
                     sent_message,
                     error_layout(t(locale, _("Error")), t(locale, _("Could not find that channel."))),
-                    allowed_mentions=no_mentions(),
                 )
                 return
 
@@ -127,7 +126,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                     t(locale, _("Settings updated")),
                     t(locale, _("{setting} channel has successfully been set."), setting=setting),
                 ),
-                allowed_mentions=no_mentions(),
+
             )
 
     @settings_hybrid_group.command(name="locale")
@@ -145,9 +144,9 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         locale = await resolve_locale(ctx, self.settings_service)
 
         if language != FOLLOW_DISCORD and language not in SUPPORTED_LOCALES:
-            await ctx.send(
-                view=error_layout(t(locale, _("Error")), t(locale, _("That language is not supported."))),
-                allowed_mentions=no_mentions(),
+            await reply_presentation(
+                ctx,
+                error_layout(t(locale, _("Error")), t(locale, _("That language is not supported."))),
             )
             return
 
@@ -160,7 +159,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                         t(locale, _("Settings updated")),
                         t(locale, _("This server now follows its Discord language.")),
                     ),
-                    allowed_mentions=no_mentions(),
                 )
             return
 
@@ -172,7 +170,6 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
                     t(language, _("Settings updated")),
                     t(language, _("This server's language has been set to {language}."), language=language),
                 ),
-                allowed_mentions=no_mentions(),
             )
 
     @settings_hybrid_group.group(name="voting")
@@ -251,9 +248,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], layout: discord.ui.LayoutView) -> None:
-        """Answer the caller privately, in the layout system the rest of the bot uses."""
-        await ctx.send(view=layout, allowed_mentions=no_mentions(), ephemeral=personal(ctx))
+    async def _reply(self, ctx: Context[BotT], presentation: sl.discord.presentation.DiscordPresentation) -> None:
+        """Answer the caller privately through the presentation delivery boundary."""
+        await reply_presentation(
+            ctx,
+            presentation,
+            visibility="personal" if personal(ctx) else "public",
+        )
 
     def _weight_scope_note(self, guild_id: int, kind: VoteKind, locale: str | None) -> str:
         """Warn when this server's multipliers bind nothing it can see."""

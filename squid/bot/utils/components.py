@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import discord
+import squid_layouts as sl
 
 from squid.bot.ui import (
     DISCORD_BLUE,
@@ -109,11 +110,14 @@ def _message_uses_components_v2(message: discord.Message) -> bool:
 
 async def edit_layout(
     message: discord.Message,
-    layout: discord.ui.LayoutView,
+    layout: sl.discord.presentation.DiscordPresentation | discord.ui.LayoutView,
     *,
     allowed_mentions: discord.AllowedMentions | None = None,
 ) -> discord.Message:
-    """Edit a message with a V2 layout, clearing legacy fields on first conversion."""
+    """Edit a message with a presentation, retaining a boundary for legacy callers."""
+    if isinstance(layout, sl.discord.presentation.DiscordPresentation):
+        await sl.discord.delivery.handle_for(message, mode=layout.mode).write(layout)
+        return message
     if not _message_uses_components_v2(message):
         return await message.edit(
             content=None,
@@ -126,7 +130,7 @@ async def edit_layout(
 
 async def edit_interaction_layout(
     interaction: discord.Interaction[Any],
-    layout: discord.ui.LayoutView,
+    layout: sl.discord.presentation.DiscordPresentation | discord.ui.LayoutView,
     *,
     attachments: Sequence[discord.File | discord.Attachment] | None = None,
 ) -> None:
@@ -140,6 +144,13 @@ async def edit_interaction_layout(
     its update — which is how a callback makes room for a consent prompt — that is the same
     message either way.
     """
+    if isinstance(layout, sl.discord.presentation.DiscordPresentation):
+        handle = sl.discord.delivery.handle_from(interaction)
+        if handle is None:
+            raise RuntimeError("interaction no longer addresses the message being edited")
+        await handle.write(layout, keep_attachments=attachments is None)
+        return
+
     extra: dict[str, Any] = {} if attachments is None else {"attachments": list(attachments)}
     message = interaction.message
     if message is not None and not _message_uses_components_v2(message):
@@ -152,7 +163,7 @@ async def edit_interaction_layout(
 
 async def reply_layout(
     interaction: discord.Interaction[Any],
-    layout: discord.ui.LayoutView,
+    layout: sl.discord.presentation.DiscordPresentation | discord.ui.LayoutView,
     *,
     ephemeral: bool = True,
     wait: bool = False,
@@ -165,6 +176,9 @@ async def reply_layout(
     `wait` costs a round trip to fetch the message back, so it is opt-in and only worth it
     for a view that needs to edit itself later — an expiring panel disabling its controls.
     """
+    if isinstance(layout, sl.discord.presentation.DiscordPresentation):
+        receipt = await sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=wait)(layout)
+        return receipt.message
     if interaction.response.is_done():
         message = await interaction.followup.send(
             view=layout, ephemeral=ephemeral, wait=wait, allowed_mentions=no_mentions()

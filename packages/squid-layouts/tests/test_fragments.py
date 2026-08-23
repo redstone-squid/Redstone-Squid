@@ -133,7 +133,7 @@ class TestPreflight:
 class TestInteractionBoundary:
     def test_routed_controls_are_allowed(self):
         host = _host()
-        routed = sl.discord.rendering.RoutedItem(label="go", custom_id="r:go")
+        routed = sl.discord.renderer.RoutedItem(label="go", custom_id="r:go")
         contribute(_text("body"), to=host, followed_by=(_row(routed),))
         assert routed in list(host.walk_children())
 
