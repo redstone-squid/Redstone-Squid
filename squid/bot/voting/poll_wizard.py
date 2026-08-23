@@ -206,7 +206,7 @@ class PollModal(ErrorHandledModal):
         # turning a second wizard away would turn away the edit. One live wizard per user per
         # guild, and it is always the one they last submitted.
         await interaction.client.mounts.open(
-            component.mount(),
+            component.mount(reactor=getattr(interaction.client, "layout_reactor", None)),
             sl.discord.respond_to(interaction, ephemeral=True, wait=True),
             key=SessionKey.user_guild("poll-wizard", interaction.user.id, interaction.guild.id),
             actor_id=interaction.user.id,
@@ -615,6 +615,12 @@ class PollConfirmationComponent(sl.Component):
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
 
-    def mount(self) -> sl.discord.Mount:
-        self._mount = create_mount(self, access=sl.discord.Owner(self.owner_id), timeout=self._timeout)
+    def mount(self, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            access=sl.discord.Owner(self.owner_id),
+            timeout=self._timeout,
+            reactor=reactor,
+            expiry=sl.discord.RenewEphemeral() if reactor is not None else sl.discord.PauseUpdates(),
+        )
         return self._mount
