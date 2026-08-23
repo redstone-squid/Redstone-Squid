@@ -229,7 +229,7 @@ That guarantee reaches declared state, and only declared state:
 |---|---|---|
 | `sl.state(...)` | yes | yes |
 | `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
-| `sl.state(...)` on an `sl.Shared` | every mount that rendered it, through the bus | yes |
+| `sl.state(...)` on an `sl.runtime.Shared` | every mount that rendered it, through the bus | yes |
 | a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
 
@@ -241,9 +241,9 @@ until then. Rolling back is dropping the overlay.
 ## Shared state across mounts
 
 `sl.state()` is per-component and per-mount. When two live panels must agree on something the
-*view* owns -- a filter, a selection, a theme -- declare an `sl.Shared` namespace instead:
+*view* owns -- a filter, a selection, a theme -- declare an `sl.runtime.Shared` namespace instead:
 
-    class Appearance(sl.Shared[int]):
+    class Appearance(sl.runtime.Shared[int]):
         accent: int = sl.state(DISCORD_BLUE)
         density: str = sl.state("comfortable")
 
@@ -254,14 +254,14 @@ the equality no-op, `opaque=`, staging and rollback all behave identically. Two 
 a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
 one component, and a cell an action both **read and wrote** carries the value it read as a
 commit precondition -- if someone else moved it meanwhile the action raises
-`sl.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
+`sl.runtime.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
 for that, shown through `handle_error` or an `ActionMiddleware`.
 
 There is no store and no lookup: two panels converge because something handed them the same
 object, by constructor injection or `ContextKey`. That also settles lifetime -- the handle *is*
 the state, so panels holding it means it dies with the last panel, and a cog or session holding
 it means it survives every panel opening and closing. A mount subscribes to exactly the cells
-its latest render read, reconciled at stage time, and `sl.addresses(lambda: appearance.accent)`
+its latest render read, reconciled at stage time, and `sl.runtime.addresses(lambda: appearance.accent)`
 names an address by hand for a host that wants to follow one itself. A mount repaints its own
 writes inside the interaction that made them -- `Mount.observed` is what it rendered,
 `Mount.followed` what it managed to subscribe to -- so a missing reactor costs live updates
@@ -279,9 +279,9 @@ here; anything the application would still want with nobody looking at it is a s
 
         def render(self):
             match self.results.state:
-                case sl.Pending(previous=previous): ...
-                case sl.Failed(error=error, previous=previous): ...
-                case sl.Ready(value=results): ...
+                case sl.runtime.Pending(previous=previous): ...
+                case sl.runtime.Failed(error=error, previous=previous): ...
+                case sl.runtime.Ready(value=results): ...
 
 The loader's reads are tracked the way a computed's are, so the state it consults is its
 dependency set and a committed write to any of it re-pends the resource at the next read. A
@@ -398,7 +398,7 @@ which is the one place webhook tokens and response shapes are understood. When n
 live the render waits in `Mount.pending` for the next interaction — `refresh()` has always
 promised the next opportunity rather than the current instant.
 
-Cross-mount refresh uses a payload-free `sl.TopicBus`: a topic is an exact hashable address,
+Cross-mount refresh uses a payload-free `sl.runtime.TopicBus`: a topic is an exact hashable address,
 not state. Subscribers re-read application services before asking their mount to refresh, so the
 data layer remains the only source of truth. Publishes coalesce per topic, reactor scheduling
 coalesces per mount, and different mounts refresh concurrently without one mount rendering over
@@ -413,7 +413,7 @@ reconciliation.
 
 The bus is process-local, so a write made in another process reaches it through a host-owned
 bridge rather than a subscription. `sl.discord.durability.PostgresTopicBridge` is that bridge over
-`LISTEN`/`NOTIFY`: it takes a host `sl.TopicCodec`, publishes an encoded address and never state,
+`LISTEN`/`NOTIFY`: it takes a host `sl.runtime.TopicCodec`, publishes an encoded address and never state,
 drops its own notifications by process origin, and calls `TopicBus.publish` for everything it
 receives — so it composes with the bus contract instead of relaying it, and an address the codec
 cannot name stays local. In this bot the vocabulary is `squid.topics.ResourceTopicCodec`, and the
