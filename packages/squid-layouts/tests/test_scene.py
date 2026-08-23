@@ -160,7 +160,9 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
     from squid_layouts.discord import V2_TARGET
 
     instant = datetime(2026, 8, 22, 16, 30, tzinfo=timezone(timedelta(hours=2)))
-    result = sl.planning.plan(sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated"), target=V2_TARGET)
+    result = sl.planning.plan(
+        sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated"), target=V2_TARGET
+    )
 
     assert result.scene.components_v2.children == (SceneTime("2026-08-22T14:30:00+00:00", "R", "**Updated:** "),)
 

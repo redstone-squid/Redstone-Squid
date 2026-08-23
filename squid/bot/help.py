@@ -200,9 +200,7 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(
-            help_layout(t(locale, _("Help")), desc, footer=footer)
-        )
+        await send_to(self.get_destination())(help_layout(t(locale, _("Help")), desc, footer=footer))
 
     # !help <command>
     @override

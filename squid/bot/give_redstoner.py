@@ -138,9 +138,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         assert message.guild is not None
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
-            await send_to(message.channel)(
-                text_layout(t(locale, _("Could not find the redstoner role.")))
-            )
+            await send_to(message.channel)(text_layout(t(locale, _("Could not find the redstoner role."))))
             return
         await member.add_roles(redstoner_role)
         await send_to(message.channel)(

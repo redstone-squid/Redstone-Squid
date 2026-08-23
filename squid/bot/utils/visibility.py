@@ -74,9 +74,7 @@ async def deliver_privately(
         return receipt.message
 
     try:
-        receipt = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(
-            presentation
-        )
+        receipt = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
     except discord.Forbidden:
         await reply_presentation(
             ctx,

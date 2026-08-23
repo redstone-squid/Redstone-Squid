@@ -18,13 +18,13 @@ from squid_layouts.discord import (
 )
 from squid_layouts.discord import Everyone, Mount, conform
 from squid_layouts.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_layouts.planning.navigation import NavigationContext, default_nav, page_select_nav
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import SolveNoteCode, measure
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.limits import COMPONENTS
 from squid_layouts.planning.measurement import RText, _component_count, split_pages
+from squid_layouts.planning.navigation import NavigationContext, default_nav, page_select_nav
 from squid_layouts.primitives import (
     Button,
     Code,

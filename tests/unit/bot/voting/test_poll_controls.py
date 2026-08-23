@@ -13,9 +13,7 @@ def _custom_ids(presentation: sl.discord.presentation.DiscordPresentation) -> li
     carrying a custom id rather than on their type.
     """
     return [
-        custom_id
-        for child in presentation.layout.walk_children()
-        if (custom_id := getattr(child, "custom_id", None))
+        custom_id for child in presentation.layout.walk_children() if (custom_id := getattr(child, "custom_id", None))
     ]
 
 
