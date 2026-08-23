@@ -15,11 +15,11 @@ from dataclasses import dataclass, field
 from typing import Protocol, overload
 from weakref import WeakValueDictionary
 
-from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink, TraceOutcome, TraceResult
-
 # Imported from the module rather than the `runtime` package: `runtime/__init__` pulls in
 # `shared.py`, which imports this module.
-from squid_layouts.runtime.reactivity import _Cell
+from squid_reactive.core import _Cell
+
+from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink, TraceOutcome, TraceResult
 
 logger = logging.getLogger(__name__)
 
