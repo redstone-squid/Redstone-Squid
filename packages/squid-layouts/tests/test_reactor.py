@@ -14,7 +14,7 @@ from squid_layouts import Component
 from squid_layouts.discord import Everyone, Mount, PauseUpdates, Reactor, RenewEphemeral, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
-from squid_layouts.runtime import Topic, TopicBus
+from squid_layouts.runtime import LocalTopicBus, Topic
 
 
 class Empty(Component):
@@ -136,14 +136,13 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
 
 
 async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     mount.refresh_now = AsyncMock()  # pyrefly: ignore
     reactor.follow(mount, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
     bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
-    await bus.drain()
 
     assert reactor._queue.qsize() == 1
 
@@ -152,7 +151,7 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
 
 
 async def test_follow_rejects_a_mount_that_already_finished() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     await mount.finish(disable=False)
@@ -165,7 +164,7 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     now = datetime.now(UTC)
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus, clock=lambda: now)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor, expiry=PauseUpdates(warning=60))
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
@@ -283,7 +282,7 @@ async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
 
 
 def test_collected_mount_unsubscribes() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     reactor.follow(mount, Topic("build", "42"))
@@ -315,7 +314,7 @@ def test_follow_requires_its_bus_and_scheduler() -> None:
     with pytest.raises(RuntimeError, match="topic bus"):
         Reactor().follow(mount, Topic("build", "42"))
     with pytest.raises(ValueError, match="scheduler"):
-        Reactor(TopicBus()).follow(mount, Topic("build", "42"))
+        Reactor(LocalTopicBus()).follow(mount, Topic("build", "42"))
 
 
 @pytest.mark.parametrize(

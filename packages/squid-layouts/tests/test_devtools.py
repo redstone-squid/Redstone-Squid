@@ -175,10 +175,10 @@ class TestProfiles:
 
     async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
         profiler = MemoryProfiler()
-        bus = sl.runtime.TopicBus(profiler=profiler)
-        reactor = sl.discord.Reactor(bus)
+        bus = sl.runtime.LocalTopicBus()
+        reactor = sl.discord.Reactor(bus, profiler=profiler)
 
-        async def refresh(topic) -> None:
+        def refresh(topic) -> None:
             pass
 
         bus.subscribe(sl.runtime.Topic("build", "devtools"), refresh)

@@ -9,7 +9,7 @@ from squid_layouts.primitives import Boundary, Text
 from squid_layouts.runtime import CellAddress, ReactiveWriteError, Shared, addresses, transaction
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
-from squid_layouts.runtime.topics import Topic, TopicBus
+from squid_layouts.runtime.topics import LocalTopicBus, Topic
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,12 +23,12 @@ class Preferences(Shared[Member]):
 
 
 @pytest.fixture
-def bus() -> TopicBus:
-    return TopicBus()
+def bus() -> LocalTopicBus:
+    return LocalTopicBus()
 
 
 @pytest.fixture
-def preferences(bus: TopicBus) -> Preferences:
+def preferences(bus: LocalTopicBus) -> Preferences:
     return Preferences(bus, Member(1))
 
 
@@ -135,7 +135,7 @@ def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> N
     with pytest.raises(ReactiveWriteError) as excinfo:
         render_component_tree(torn)
     assert "factory=" in str(excinfo.value)
-    assert "sl.computed" in str(excinfo.value)
+    assert "computed" in str(excinfo.value)
     assert torn.n == 0
 
 
@@ -220,10 +220,10 @@ def test_describe_names_the_namespace_scope_and_cell(preferences: Preferences) -
 # --- Publication ----------------------------------------------------------------------------
 
 
-async def test_a_commit_publishes_once_to_every_subscriber(bus: TopicBus, preferences: Preferences) -> None:
+async def test_a_commit_publishes_once_to_every_subscriber(bus: LocalTopicBus, preferences: Preferences) -> None:
     seen: list[object] = []
 
-    async def subscriber(topic: object) -> None:
+    def subscriber(topic: object) -> None:
         seen.append(topic)
 
     for _ in range(2):
@@ -231,14 +231,13 @@ async def test_a_commit_publishes_once_to_every_subscriber(bus: TopicBus, prefer
     with transaction():
         preferences.theme = "dark"
         preferences.theme = "light"
-    await bus.drain()
     assert seen == [address(preferences, "theme")] * 2, "one coalesced delivery per subscriber"
 
 
-async def test_a_rolled_back_action_publishes_nothing(bus: TopicBus, preferences: Preferences) -> None:
+async def test_a_rolled_back_action_publishes_nothing(bus: LocalTopicBus, preferences: Preferences) -> None:
     seen: list[object] = []
 
-    async def subscriber(topic: object) -> None:
+    def subscriber(topic: object) -> None:
         seen.append(topic)
 
     bus.subscribe(address(preferences, "theme"), subscriber)
@@ -246,5 +245,4 @@ async def test_a_rolled_back_action_publishes_nothing(bus: TopicBus, preferences
         preferences.theme = "dark"
         message = "no"
         raise RuntimeError(message)
-    await bus.drain()
     assert seen == []

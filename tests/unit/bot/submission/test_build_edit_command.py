@@ -81,7 +81,7 @@ class StubBuilds:
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     cog.builds = cast(Any, StubBuilds(build))
-    topic_bus = sl.runtime.TopicBus()
+    topic_bus = sl.runtime.LocalTopicBus()
     layout_reactor = sl.discord.Reactor(topic_bus)
     cog.bot = cast(
         Any,

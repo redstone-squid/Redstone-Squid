@@ -159,8 +159,8 @@ async def test_demo_command_and_controls_are_public() -> None:
 class TestSharedAppearance:
     """The worked example: two live panels agreeing on view state neither of them owns."""
 
-    def panels(self) -> tuple[sl.runtime.TopicBus, Reactor, Appearance, Session, Mount, Mount]:
-        bus = sl.runtime.TopicBus()
+    def panels(self) -> tuple[sl.runtime.LocalTopicBus, Reactor, Appearance, Session, Mount, Mount]:
+        bus = sl.runtime.LocalTopicBus()
         reactor = Reactor(bus)
         appearance, session = Appearance(bus, 7), Session(bus, 7)
         writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
@@ -184,7 +184,6 @@ class TestSharedAppearance:
         await reader.send(delivered_to(fake_message(message_id=2)))
 
         await writer.dispatch("controls.density", fake_interaction(user_id=7))
-        await bus.drain()
 
         assert reader in reactor._queued
 
