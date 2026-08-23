@@ -72,6 +72,8 @@ class BuildInfoComponent(sl.Component):
         return self._current()[0]
 
     def _current(self) -> Projection:
+        if self._seed is not None:
+            return self._seed
         state = self.projection.state
         if isinstance(state, sl.Ready):
             return state.value

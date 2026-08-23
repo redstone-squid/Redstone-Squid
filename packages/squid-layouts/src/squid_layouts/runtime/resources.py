@@ -378,6 +378,8 @@ class AtomicResource[ValueT](Resource[ValueT]):
     def state(self) -> AtomicResourceState[ValueT]:
         state = super().state
         if isinstance(state, Pending):
+            if state.previous is not None:
+                return state.previous
             raise _AtomicResourcePending(self)
         return state
 
@@ -394,7 +396,8 @@ class AtomicResource[ValueT](Resource[ValueT]):
         self._invalidate(notify=True)
         state = await self._load()
         if isinstance(state, Pending):
-            raise ResourceNotReadyError(f"atomic resource {self._label!r} did not settle")
+            message = f"atomic resource {self._label!r} did not settle"
+            raise ResourceNotReadyError(message)
         return state
 
 
