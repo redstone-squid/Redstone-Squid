@@ -15,7 +15,7 @@ the legacy object a second writer raises `AdoptionError` instead of being quietl
 """
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, overload
+from typing import Any, cast, overload
 from typing import Never as TypingNever
 from urllib.parse import urlsplit
 
@@ -216,14 +216,21 @@ class _AdoptedView(Component):
         self._keys = keys
         self._assets = tuple(assets)
         self._asset_by_name, self._asset_by_reference = _index_assets(self._assets)
+        self._render_keys: dict[int, str] | None = None
 
     def render(self) -> list[Node] | Document[ComponentsV2Target]:
         if isinstance(self._view, discord.ui.LayoutView):
-            self._layout_key_map()
-            return Document(
-                tuple(self._layout_node(item, (index,)) for index, item in enumerate(self._view.children)),
-                self._assets,
-            )
+            key_map = self._layout_key_map()
+            self._render_keys = {id(item): key for key, item in key_map.items()}
+            try:
+                return Document[ComponentsV2Target](
+                    cast(
+                        Any, tuple(self._layout_node(item, (index,)) for index, item in enumerate(self._view.children))
+                    ),
+                    assets=self._assets,
+                )
+            finally:
+                self._render_keys = None
         children = list(self._view.children)
         keys = self._key_map(children)
         nodes: list[Node] = []
@@ -247,9 +254,12 @@ class _AdoptedView(Component):
         self._reject_dynamic(item, path)
         location = _layout_path(path)
         if isinstance(item, discord.ui.Container):
+            accent = item.accent_colour
+            if isinstance(accent, discord.Colour):
+                accent = accent.value
             return Panel(
                 tuple(self._layout_node(child, (*path, index)) for index, child in enumerate(item.children)),
-                accent=item.accent_colour,
+                accent=accent,
                 spoiler=item.spoiler,
             )
         if isinstance(item, discord.ui.Section):
@@ -278,7 +288,7 @@ class _AdoptedView(Component):
         if isinstance(item, discord.ui.ActionRow):
             return self._layout_row(item, path)
         if isinstance(item, discord.ui.Button):
-            return self._layout_button(item, self._key_for(item, path), path)
+            return self._unsupported(item, location, expected="an ActionRow or Section accessory")
         if isinstance(item, discord.ui.Select):
             return self._select(item, self._key_for(item, path))
         if isinstance(item, _ENTITY_SELECTS):
@@ -287,7 +297,7 @@ class _AdoptedView(Component):
 
     def _layout_text(self, item: Item, path: tuple[int, ...]) -> Text:
         if not isinstance(item, discord.ui.TextDisplay):
-            self._unsupported(item, _layout_path(path), expected="TextDisplay")
+            return self._unsupported(item, _layout_path(path), expected="TextDisplay")
         return Text(item.content, overflow=Never())
 
     def _layout_accessory(self, item: Item, path: tuple[int, ...]) -> Thumbnail | LinkButton | PremiumButton | Button:
@@ -315,7 +325,9 @@ class _AdoptedView(Component):
         for index, child in enumerate(children):
             if not isinstance(child, discord.ui.Button):
                 self._unsupported(child, _layout_path((*path, index)), expected="Button or one Select")
-            buttons.append(self._layout_button(child, self._key_for(child, (*path, index)), (*path, index)))
+            child_path = (*path, index)
+            key = self._key_for(child, child_path) if self._is_callback_button(child) else None
+            buttons.append(self._layout_button(child, key, child_path))
         return Row(tuple(buttons))
 
     def _layout_button(
@@ -343,6 +355,8 @@ class _AdoptedView(Component):
         )
 
     def _key_for(self, item: Item, path: tuple[int, ...]) -> str:
+        if self._render_keys is not None and (key := self._render_keys.get(id(item))) is not None:
+            return key
         if self._keys is not None:
             return _escape_key(self._keys(item))
         custom_id = getattr(item, "custom_id", None)
@@ -451,7 +465,7 @@ class _AdoptedView(Component):
             return custom_id.replace(".", "-")
         return f"adopted-{index}"
 
-    def _node(self, item: Item, key: str) -> Node:
+    def _node(self, item: Item, key: str) -> Node | Button | LinkButton:
         if isinstance(item, discord.ui.DynamicItem):
             message = (
                 f"{type(item).__name__} is a DynamicItem, whose identity is its custom id; that is "
@@ -575,18 +589,18 @@ class _AdoptedView(Component):
         proxy = _InteractionProxy(self, answers, view)
         try:
             try:
-                if _overrides(view, "interaction_check") and not await view.interaction_check(proxy):
+                if _overrides(view, "interaction_check") and not await view.interaction_check(cast(Any, proxy)):
                     # discord.py's contract is that a refusing check has already answered the reader.
                     return
                 if values is not None:
                     # Never the item discord.py dispatched -- Squid built the control that was clicked --
                     # so `values` reaches the legacy select through the same field discord.py fills.
                     item._values = values  # pyrefly: ignore[missing-attribute]
-                await item.callback(proxy)
+                await item.callback(cast(Any, proxy))
             except Exception as error:
                 if not _overrides(view, "on_error"):
                     raise
-                await view.on_error(proxy, error, item)
+                await view.on_error(cast(Any, proxy), error, item)
         finally:
             # In the `finally` on purpose: a check or callback that raised still mutated the view,
             # and `mutated` cannot undo that. Reporting it is what keeps the next render honest.
@@ -608,7 +622,7 @@ class _AdoptedView(Component):
         async def on_submit(interaction: discord.Interaction) -> None:
             proxy = _InteractionProxy(self, ActionResponder(interaction, mount), view)
             try:
-                await submit(proxy)
+                await submit(cast(Any, proxy))
             finally:
                 self.mutated(view)
             if not interaction.response.is_done():
@@ -819,7 +833,12 @@ class _ProxyMessage:
 class _InteractionProxy:
     """What a legacy callback receives instead of `discord.Interaction`."""
 
-    def __init__(self, component: _AdoptedView, answers: ActionResponder, view: discord.ui.View) -> None:
+    def __init__(
+        self,
+        component: _AdoptedView,
+        answers: ActionResponder,
+        view: discord.ui.View | discord.ui.LayoutView,
+    ) -> None:
         self.__dict__["interaction"] = answers.interaction
         self.component = component
         self.responder = answers

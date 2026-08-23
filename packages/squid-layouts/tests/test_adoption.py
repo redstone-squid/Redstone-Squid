@@ -11,7 +11,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.assets import Asset, InlineAsset
+from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.mount import _EntityValues
@@ -166,6 +166,25 @@ def test_layout_view_rejects_missing_and_ambiguous_assets() -> None:
         adopt(layout, assets=(asset, duplicate))
 
     assert adopt(layout, assets=(asset,)).render() is not None
+
+
+def test_layout_view_resolves_http_files_through_stored_asset_metadata() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    layout.add_item(discord.ui.File("https://example.invalid/report.txt"))
+    asset = Asset(
+        "report",
+        "report.txt",
+        "text/plain",
+        StoredAsset("https://example.invalid/report.txt"),
+    )
+
+    document = adopt(layout, assets=(asset,)).render()  # pyrefly: ignore[missing-attribute]
+
+    assert isinstance(document, Document)
+    file = document.children[0]
+    assert file.asset_key == "report"  # pyrefly: ignore[missing-attribute]
+    assert file.name == "report.txt"  # pyrefly: ignore[missing-attribute]
+    assert file.media_type == "text/plain"  # pyrefly: ignore[missing-attribute]
 
 
 def test_layout_view_uses_structural_keys_for_nested_controls() -> None:
