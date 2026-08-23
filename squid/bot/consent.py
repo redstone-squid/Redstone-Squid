@@ -162,7 +162,9 @@ def _registry_of(target: ConsentTarget) -> SessionRegistry:
 def _link_credit_value(preview: LinkPreview, locale: str | None) -> str:
     credit = preview.credit
     if credit is None:
-        return t(locale, _("No build credits **{username}** yet, so nothing is reattributed."), username=preview.username)
+        return t(
+            locale, _("No build credits **{username}** yet, so nothing is reattributed."), username=preview.username
+        )
     builds = ntranslate(
         locale,
         _("{count} build"),
@@ -263,7 +265,9 @@ async def prompt_for_consent(
         timeout=timeout,
     )
     if isinstance(opened, Rejected):
-        await _send(target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))))
+        await _send(
+            target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one.")))
+        )
         return NOT_ASKED
     if not isinstance(opened, Opened):
         return NOT_ASKED

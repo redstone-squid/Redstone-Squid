@@ -18,7 +18,9 @@ routes: sl.discord.routing.RouteGroup[RedstoneSquid] = sl.discord.routing.RouteG
 class TraceRoutes[BotT: discord.Client](sl.discord.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
-    async def dispatch(self, request: sl.discord.routing.RouteRequest[BotT], proceed: sl.discord.routing.RouteProceed) -> None:
+    async def dispatch(
+        self, request: sl.discord.routing.RouteRequest[BotT], proceed: sl.discord.routing.RouteProceed
+    ) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": "discord_route",
             "squid.route.component": request.component.value,
@@ -34,15 +36,15 @@ class TraceRoutes[BotT: discord.Client](sl.discord.routing.Middleware[BotT]):
 
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
     from squid.bot.i18n import resolve_locale, t
-    from squid.bot.utils.components import reply_layout, text_layout
+    from squid.bot.ui import respond_presentation, text_layout
     from squid.core.i18n import _
 
     locale = await resolve_locale(interaction, interaction.client.services.settings)
-    await reply_layout(interaction, text_layout(t(locale, _("This control is no longer available."))))
+    await respond_presentation(interaction, text_layout(t(locale, _("This control is no longer available."))))
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Imported lazily: errors.py -> utils.components -> ui.py would otherwise cycle.
+    # Keep the route hook lazy so importing the router does not import the command UI catalogue.
     from squid.bot.errors import handle_interaction_error
 
     await handle_interaction_error(interaction, error, surface=source)

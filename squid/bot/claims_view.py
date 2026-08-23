@@ -220,4 +220,4 @@ def _claim_entry(claim: AliasClaim, locale: str | None) -> str:
 def _conflict_text(conflict: AliasAlreadyClaimedError, locale: str | None) -> str:
     """Explain the second deliberate approval click."""
     held = t(locale, conflict.message, **conflict.message_params)
-    return f"{held} {t(locale, _("Approving again takes the name from them."))}"
+    return f"{held} {t(locale, _('Approving again takes the name from them.'))}"

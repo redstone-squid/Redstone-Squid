@@ -7,9 +7,8 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import PagedList, info_layout, reply_presentation
+from squid.bot.ui import DISCORD_BLUE, PagedList, info_layout, reply_presentation
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import DISCORD_BLUE
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import _

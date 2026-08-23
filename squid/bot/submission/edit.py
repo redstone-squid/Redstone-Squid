@@ -8,9 +8,8 @@ from discord import app_commands
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ui.views import BuildEditComponent
-from squid.bot.ui import respond_presentation, text_layout
+from squid.bot.ui import error_layout, respond_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import error_layout, reply_layout
 from squid.builds.application import BuildService
 from squid.builds.domain import DoorOrientationLiteral
 from squid.core.i18n import _
@@ -80,7 +79,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         locale = await resolve_locale(interaction, self.bot.services.settings)
         build = await self.builds.get(build_id)
         if build is None:
-            await reply_layout(
+            await respond_presentation(
                 interaction,
                 error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
             )
@@ -114,7 +113,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
-            await reply_layout(
+            await respond_presentation(
                 interaction,
                 error_layout(
                     t(locale, _("Not a field of this build")),

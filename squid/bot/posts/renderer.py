@@ -7,7 +7,6 @@ from typing import Protocol
 import discord
 
 import squid_layouts as sl
-from squid.bot.utils.components import no_mentions
 from squid.posts.domain import ResourceKind, Surface
 
 
@@ -19,7 +18,7 @@ class DesiredPost:
     guild_id: int
     surface: Surface
     presentation: sl.discord.presentation.DiscordPresentation
-    allowed_mentions: discord.AllowedMentions = field(default_factory=no_mentions)
+    allowed_mentions: discord.AllowedMentions = field(default_factory=sl.discord.delivery.no_mentions)
 
 
 class PostRenderer(Protocol):

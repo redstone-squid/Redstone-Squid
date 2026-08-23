@@ -52,10 +52,10 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_layouts.runtime import TopicBus
 from squid_layouts.discord import Reactor, SessionRegistry
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
+from squid_layouts.runtime import TopicBus
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -305,9 +305,11 @@ class RedstoneSquid(Bot):
         Usage:
             ```python
             async with bot.get_running_message(ctx, title="Processing") as msg:
-                await edit_layout(msg, info_layout("Processing", "Still working..."))
+                presentation = info_layout("Processing", "Still working...")
+                await squid_layouts.discord.delivery.handle_for(msg, mode=presentation.mode).write(presentation)
                 # Do some work here
-                await edit_layout(msg, info_layout("Processing", "Done!"))
+                finished = info_layout("Processing", "Done!")
+                await squid_layouts.discord.delivery.handle_for(msg, mode=finished.mode).write(finished)
             ```
         """
         return RunningMessage(

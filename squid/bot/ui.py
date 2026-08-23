@@ -3,15 +3,15 @@
 This module is the bot's front door to the `squid_layouts` package. The package resolves text,
 while this host supplies the gettext catalogue and translatable chrome messages.
 
-The layout helpers keep the exact signatures of their `squid.bot.utils.components`
-predecessors, so call sites migrate by changing an import line.
+The bot owns only localized chrome and audience policy; rendering and delivery stay in
+``squid_layouts``.
 """
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
 from string.templatelib import Template
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import discord
 from discord.ext.commands import Context
@@ -56,6 +56,7 @@ __all__ = [
     "reply_presentation",
     "respond_presentation",
     "send_component",
+    "send_to",
     "text_layout",
     "truncate_display_text",
     "warning_layout",
@@ -175,7 +176,7 @@ async def reply(
     (see `squid.bot.utils.visibility.personal`); `Private(reason)` must never reach a channel
     and falls back to a DM on the prefix side.
     """
-    # Imported lazily: visibility -> utils.components -> this module would otherwise cycle.
+    # Imported lazily to keep the command UI helpers independent from audience policy.
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
@@ -259,14 +260,16 @@ def destination(
     A closed DM under `Private` delivers nothing, which is not the same as delivering without
     a handle, so it is reported as `DeliveryAbandoned` rather than as a `None` message.
     """
-    # Imported lazily: visibility -> utils.components -> this module would otherwise cycle.
+    # Imported lazily to keep the command UI helpers independent from audience policy.
     from squid.bot.utils.visibility import deliver_privately, personal
 
     if isinstance(visibility, Private):
         if ctx.interaction is not None:
             return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(presentation: ui.discord.presentation.DiscordPresentation) -> ui.discord.delivery.DeliveryReceipt:
+        async def privately(
+            presentation: ui.discord.presentation.DiscordPresentation,
+        ) -> ui.discord.delivery.DeliveryReceipt:
             message = await deliver_privately(
                 ctx,
                 presentation,
@@ -283,6 +286,28 @@ def destination(
 
     ephemeral = visibility == "personal" and personal(ctx)
     return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
+
+
+def send_to(
+    channel: discord.abc.Messageable | discord.Member | discord.User | discord.Webhook,
+    *,
+    files: Sequence[discord.File] = (),
+    allowed_mentions: discord.AllowedMentions | None = None,
+    delete_after: float | None = None,
+) -> ui.discord.Destination:
+    """Send a presentation to a Discord messageable through the framework delivery boundary.
+
+    discord.py exposes a family of overloaded ``send`` methods whose precise signatures vary
+    by channel type. The framework intentionally keeps a smaller structural protocol, so this
+    host adapter is the one typed cast between those two surfaces.
+    """
+    channel_protocol = cast(ui.discord.delivery.Messageable, channel)
+    return ui.discord.delivery.send_to(
+        channel_protocol,
+        files=files,
+        allowed_mentions=allowed_mentions,
+        delete_after=delete_after,
+    )
 
 
 def contribute(
@@ -369,7 +394,7 @@ def truncate_display_text(content: str, limit: int) -> str:
 
 
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Imported lazily: errors.py -> utils.components -> this module would otherwise cycle.
+    # Imported lazily to keep error handling independent from the command UI catalogue.
     from squid.bot.errors import handle_interaction_error
 
     await handle_interaction_error(interaction, error, surface=f"component:{source}")

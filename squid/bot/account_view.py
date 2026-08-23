@@ -32,11 +32,7 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import NOT_ASKED, prompt_for_consent
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
-from squid.bot.ui import create_mount
-from squid.bot.utils.components import (
-    DISCORD_BLUE,
-    CardField,
-)
+from squid.bot.ui import DISCORD_BLUE, CardField, create_mount
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 
@@ -57,7 +53,9 @@ class AccountPanel(sl.Component):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(None, persist=False, opaque=True)
+    _profile_editor: sl.patterns.ComponentShell[sl.patterns.EditorState] | None = sl.state(
+        None, persist=False, opaque=True
+    )
 
     def __init__(
         self,

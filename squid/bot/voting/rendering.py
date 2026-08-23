@@ -9,8 +9,6 @@ import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
-import discord
-
 import squid_layouts as sl
 from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
 from squid.bot.voting.controls import poll_controls
@@ -72,7 +70,9 @@ def render_build_review(
     return render_presentation([post])
 
 
-def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sl.discord.presentation.DiscordPresentation:
+def render_delete_log(
+    snapshot: VoteSessionSnapshot, target_content: str
+) -> sl.discord.presentation.DiscordPresentation:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
