@@ -85,20 +85,25 @@ class _Replacement:
     the last one, exactly as repeated writes to a state cell do.
     """
 
-    __slots__ = ("_resource", "value")
+    __slots__ = ("_baseline", "_resource", "value")
 
     def __init__(self, resource: Resource[Any]) -> None:
+        self._baseline: dict[Any, int] | None = None
         self._resource = resource
         self.value: Any = _MISSING
 
     def prepare(self) -> None:
-        """Nothing can fail: the value is already in hand, and installing it cannot raise."""
+        """Settle every source while the action can still roll back."""
+        if not isinstance(self.value, _Missing):
+            self._baseline = {source: source.settle() for source in self._resource.sources}
 
     def apply(self) -> None:
         if not isinstance(self.value, _Missing):
-            self._resource._replace_now(self.value)
+            assert self._baseline is not None
+            self._resource._replace_now(self.value, baseline=self._baseline)
 
     def abort(self) -> None:
+        self._baseline = None
         self.value = _MISSING
 
     def finalize(self) -> None:
@@ -254,13 +259,15 @@ class Resource[ValueT]:
             return
         staged.value = value
 
-    def _replace_now(self, value: ValueT) -> None:
+    def _replace_now(self, value: ValueT, *, baseline: dict[Any, int] | None = None) -> None:
+        if baseline is None:
+            baseline = {source: source.settle() for source in self.sources}
         self._request_token += 1
         self._state = Ready(value)
         self._moved()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
         # as they stand now, and a later change to one of them should still reload.
-        self.sources = {source: source.settle() for source in self.sources}
+        self.sources = baseline
         self._owner.invalidate()
 
     def _staged(self) -> ValueT | _Missing:

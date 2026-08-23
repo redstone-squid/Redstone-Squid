@@ -113,3 +113,32 @@ async def test_a_replacement_rebaselines_its_sources_only_when_it_commits() -> N
 
     bus.publish(topic)
     assert panel.value.pending, "the rolled-back action left the watch intact"
+
+
+async def test_a_replacement_settles_sources_before_the_commit_becomes_irreversible() -> None:
+    class DerivedSource(sl.Component):
+        x = sl.state(0)
+
+        @sl.computed
+        def derived(self) -> int:
+            if self.x == 1:
+                message = "boom"
+                raise RuntimeError(message)
+            return self.x
+
+        @sl.resource
+        async def value(self) -> str:
+            return str(self.derived)
+
+        def render(self):
+            return sl.paragraph("x")
+
+    panel = DerivedSource()
+    await panel.value.reload()
+
+    with pytest.raises(RuntimeError, match="boom"), sl.transaction():
+        panel.x = 1
+        panel.value.replace("authoritative")
+
+    assert panel.x == 0
+    assert panel.value.value == "0"
