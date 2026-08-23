@@ -10,9 +10,11 @@ reference points from reader to source, which is what lets a per-message compone
 collected while the state it read lives on.
 """
 
+import copy
 import logging
-from collections.abc import Callable, Iterator, Mapping
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Set as AbstractSet
+from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, Protocol, overload
@@ -68,32 +70,6 @@ class UndeclaredStateError(RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
 
-class MutableStateError(TypeError):
-    """A state field was assigned a value that cannot be treated as a snapshot."""
-
-
-def _reject(label: str, value: Any, error: TypeError) -> None:
-    message = (
-        f"{label} was assigned {type(value).__name__}, which is mutable. State is replaced, not "
-        f"mutated: use a tuple, a frozenset, or a frozen dataclass. A collaborator this component "
-        f"holds but never mutates is declared sl.state(..., opaque=True). ({error})"
-    )
-    raise MutableStateError(message) from error
-
-
-def _check_value(label: str, value: Any) -> None:
-    """Reject a state value that is not deeply immutable.
-
-    Hashability is the test. It is not a perfect oracle -- a plain mutable object hashes by
-    identity -- but it is *deep*, which is the property that matters: ``(1, [2])`` and a frozen
-    dataclass with a ``list`` field both fail, and those are the cases that actually bite.
-    """
-    try:
-        hash(value)
-    except TypeError as error:
-        _reject(label, value, error)
-
-
 def _equal(left: Any, right: Any) -> bool:
     """Whether a write leaves the field where it already was, conservatively."""
     if left is right:
@@ -105,11 +81,10 @@ def _equal(left: Any, right: Any) -> bool:
 
 
 def _frozen(value: Any) -> Any:
-    """Return a restored snapshot value in the immutable shape it was exported from.
+    """Return a restored snapshot value in the shape it was exported from.
 
-    JSON has one sequence type, so an exported tuple comes back as a list. Nothing else needs
-    a case: a value still unhashable after this could not have been state to begin with, and
-    the assignment says so.
+    JSON has one sequence type, so an exported tuple comes back as a list. A field declared
+    `Sequence` reads either; one declared `tuple[...]` needs the tuple back.
     """
     if isinstance(value, list | tuple):
         return tuple(_frozen(item) for item in value)
@@ -619,8 +594,6 @@ class _State:
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = f"__state_{name}"
         self.public_name = name
-        if not self.opaque and self._default is not _MISSING:
-            _check_value(f"{owner.__name__}.{name}", self._default)
 
     @property
     def has_initial(self) -> bool:
@@ -628,12 +601,9 @@ class _State:
 
     def _initial(self, instance: ReactiveOwner) -> Any:
         if self._factory is None:
-            # No copy: the default is immutable, so every instance may share the one object.
+            # No copy: a state value is replaced, never mutated, so instances may share it.
             return self._default
-        value = self._factory()
-        if not self.opaque:
-            _check_value(f"{type(instance).__name__}.{self.public_name}", value)
-        return value
+        return self._factory()
 
     def cell(self, instance: ReactiveOwner) -> _Cell:
         """Return this field's storage on `instance`, empty until something assigns it."""
@@ -665,11 +635,6 @@ class _State:
         return cell.read()
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
-        if not self.opaque:
-            try:
-                hash(value)
-            except TypeError as error:
-                _reject(f"{type(instance).__name__}.{self.public_name}", value, error)
         cell = instance.__dict__.get(self._name)
         if cell is not None:
             held = _staged_value(cell)
@@ -683,12 +648,66 @@ class _State:
 
 
 @overload
+def state[KeyT, ValueT](
+    default: dict[KeyT, ValueT],
+    *,
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Mapping[KeyT, ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    default: list[ValueT],
+    *,
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Sequence[ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    default: set[ValueT],
+    *,
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> AbstractSet[ValueT]: ...
+
+
+@overload
 def state[ValueT](
     default: ValueT,
     *,
     persist: bool | None = None,
     opaque: bool = False,
 ) -> ValueT: ...
+
+
+@overload
+def state[KeyT, ValueT](
+    *,
+    factory: Callable[[], dict[KeyT, ValueT]],
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Mapping[KeyT, ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    *,
+    factory: Callable[[], list[ValueT]],
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> Sequence[ValueT]: ...
+
+
+@overload
+def state[ValueT](
+    *,
+    factory: Callable[[], set[ValueT]],
+    persist: bool | None = None,
+    opaque: bool = False,
+) -> AbstractSet[ValueT]: ...
 
 
 @overload
@@ -714,11 +733,43 @@ def state(
     """Declare observed component state.
 
     Pass a default or a factory for a field the class owns, or neither for one ``__init__``
-    assigns. Values are immutable and replaced rather than mutated, which every assignment
-    checks. ``opaque=True`` declares a collaborator the component holds and never mutates --
-    a service, a guild, a session -- and skips that check for it.
+    assigns. A value is replaced, never mutated in place: an in-place change moves no version.
+    The type checker holds that line -- a ``dict``, ``list`` or ``set`` default declares the
+    field as ``Mapping``, ``Sequence`` or ``AbstractSet``, so a concrete annotation and every
+    mutating method are type errors. The stored value is the one assigned. ``opaque=True``
+    declares a collaborator the component holds -- a service, a guild, a session -- which
+    settles on identity rather than ``==`` and is never persisted.
     """
     return _State(default, factory=factory, persist=persist, opaque=opaque)
+
+
+def draft(owner: ReactiveOwner, name: str) -> AbstractContextManager[Any]:
+    """Mutate a shallow copy of one state field, assigned back as a single write on exit.
+
+    For a mapping, sequence or set that needs more than a one-key replacement. The copy is the
+    author's to change; leaving the block assigns it, so the write stages, bumps the version
+    and short-circuits on equality like any other. Raising inside discards it. A free function
+    rather than a method so that a field may be called ``draft``.
+    """
+    if _state_descriptor(owner, name) is None:
+        message = f"{type(owner).__name__}.{name} is not declared state, so it cannot be drafted"
+        raise TypeError(message)
+    return _drafting(owner, name)
+
+
+@contextmanager
+def _drafting(owner: ReactiveOwner, name: str) -> Iterator[Any]:
+    working = copy.copy(getattr(owner, name))
+    yield working
+    setattr(owner, name, working)
+
+
+def _state_descriptor(owner: ReactiveOwner, name: str) -> _State | None:
+    for klass in type(owner).__mro__:
+        descriptor = vars(klass).get(name)
+        if isinstance(descriptor, _State):
+            return descriptor
+    return None
 
 
 @dataclass(frozen=True, slots=True)
