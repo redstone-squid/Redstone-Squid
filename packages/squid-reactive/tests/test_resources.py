@@ -88,3 +88,25 @@ async def test_shared_resource_publishes_its_cell_address() -> None:
 
     assert published == [preferences.theme.address]
     unsubscribe()
+
+
+async def test_cancelled_load_attempt_remains_pending_and_retryable() -> None:
+    attempts = 0
+
+    class Retryable(Reactive):
+        @resource
+        async def value(self) -> str:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                await anyio.sleep_forever()
+            return "ready"
+
+    owner = Retryable()
+
+    with anyio.move_on_after(0.01):
+        await owner.value
+
+    assert isinstance(owner.value.status, Pending)
+    assert await owner.value == "ready"
+    assert attempts == 2
