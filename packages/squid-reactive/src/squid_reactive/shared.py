@@ -10,6 +10,7 @@ Anything the application would still want if no one were looking at it belongs t
 application's data layer, not here.
 """
 
+import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
 
@@ -25,6 +26,8 @@ surface is a read, a write and `scope`, and every name past those is the author'
 
 _NO_SCOPE: Any = None
 """The scope of a namespace with nothing to say about itself, i.e. ``Shared[None]``."""
+
+_logger = logging.getLogger(__name__)
 
 
 def _check_name(cls: type, name: str) -> None:
@@ -107,6 +110,7 @@ class Shared[ScopeT = None](Reactive):
     def __init__(self, bus: TopicBus, scope: ScopeT = _NO_SCOPE) -> None:
         self.bus = bus
         self.scope = scope
+        self._commit_listeners: set[Callable[[], None]] = set()
         # Eagerly, so every state field carries its address from birth. Its storage outlives
         # every value it holds and is never replaced, so this is the only place one has to be made.
         for descriptor in type(self)._state_descriptors.values():
@@ -133,9 +137,22 @@ class Shared[ScopeT = None](Reactive):
         """
         slots = type(self)._state_slots
         self.bus.publish(*(slots[name].address(self) for name in names if name in slots))
+        for listener in tuple(self._commit_listeners):
+            try:
+                listener()
+            except Exception:
+                _logger.exception("a shared-state commit listener failed")
 
     def _state_rolled_back(self) -> None:
         """Nothing to undo: a shared write stages, so a rolled-back one was never published."""
+
+    def _add_commit_listener(self, listener: Callable[[], None]) -> None:
+        """Register a synchronous observer called after this namespace commits state."""
+        self._commit_listeners.add(listener)
+
+    def _remove_commit_listener(self, listener: Callable[[], None]) -> None:
+        """Remove a previously registered commit observer."""
+        self._commit_listeners.discard(listener)
 
 
 def describe(address: Address) -> str:
