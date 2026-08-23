@@ -11,7 +11,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import CellAddress, Component, PressEvent, Shared, TopicBus, cell, state, transaction
+from squid_layouts import CellAddress, Component, PressEvent, Shared, TopicBus, state, transaction
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
@@ -24,8 +24,8 @@ class Member:
 
 
 class Workspace(Shared[Member]):
-    selected: int | None = cell(None)
-    detail: str = cell("")
+    selected: int | None = state(None)
+    detail: str = state("")
 
 
 class Panel(Component):

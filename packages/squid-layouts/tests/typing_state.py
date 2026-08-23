@@ -1,4 +1,4 @@
-"""Pins the `state()` and `cell()` overloads under `just typecheck`; nothing here runs.
+"""Pins the `state()` and `state()` overloads under `just typecheck`; nothing here runs.
 
 A `dict`, `list` or `set` default or factory must declare the read-only ABC, which is what
 makes a concrete annotation and every mutating method a type error at the use sites. A
@@ -21,7 +21,6 @@ from squid_layouts import (
     ResourceState,
     Shared,
     addresses,
-    cell,
     resource,
     state,
 )
@@ -40,23 +39,23 @@ assert_type(state(frozenset({"a"})), frozenset[str])
 assert_type(state(0), int)
 assert_type(state(factory=int), int)
 
-assert_type(cell({"a": 1}), Mapping[str, int])
-assert_type(cell(["a"]), Sequence[str])
-assert_type(cell({"a"}), AbstractSet[str])
-assert_type(cell(factory=lambda: {"a": 1}), Mapping[str, int])
-assert_type(cell(factory=lambda: ["a"]), Sequence[str])
-assert_type(cell(factory=lambda: {"a"}), AbstractSet[str])
-assert_type(cell(("a",)), tuple[str])
-assert_type(cell(0), int)
-assert_type(cell(factory=int), int)
+assert_type(state({"a": 1}), Mapping[str, int])
+assert_type(state(["a"]), Sequence[str])
+assert_type(state({"a"}), AbstractSet[str])
+assert_type(state(factory=lambda: {"a": 1}), Mapping[str, int])
+assert_type(state(factory=lambda: ["a"]), Sequence[str])
+assert_type(state(factory=lambda: {"a"}), AbstractSet[str])
+assert_type(state(("a",)), tuple[str])
+assert_type(state(0), int)
+assert_type(state(factory=int), int)
 
 
 class Anonymous(Shared):
-    flag: bool = cell(default=False)
+    flag: bool = state(default=False)
 
 
 class Scoped(Shared[int]):
-    theme: str = cell("system")
+    theme: str = state("system")
 
 
 assert_type(Anonymous(bus).scope, None)

@@ -51,6 +51,10 @@ sl.cell()  on a Component -> BadPanel: sl.cell() declares state on an sl.Shared 
 Three of the four combinations were deliberate. The fourth was an AttributeError from inside
 the machinery.
 
+Both of those messages are gone as of [56](56-one-declaration.md), which collapsed `sl.cell()`
+into `sl.state()`: every difference between them turned out to be a property of the owner. The
+contrast above is kept because it is what made the resource gap visible.
+
 ## Decision
 
 Support it. A namespace resource is a coherent and useful thing -- *load once, every mount

@@ -52,7 +52,6 @@ from squid_layouts.runtime.resources import (
     observe_resources,
     unique_resources,
 )
-from squid_layouts.runtime.shared import _SharedCell
 from squid_layouts.semantic import (
     Action as SemanticAction,
 )
@@ -231,13 +230,6 @@ class Component:
             for name, descriptor in vars(klass).items()
             if isinstance(descriptor, _State)
         }
-        misplaced = sorted(name for name, descriptor in declared.items() if isinstance(descriptor, _SharedCell))
-        if misplaced:
-            message = (
-                f"{cls.__name__}: sl.cell() declares state on an sl.Shared namespace, not on a "
-                f"component; use sl.state() for {', '.join(misplaced)}"
-            )
-            raise TypeError(message)
         cls._state_names = frozenset(declared)
         cls._state_descriptors = declared
         cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)

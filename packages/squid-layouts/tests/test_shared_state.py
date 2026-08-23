@@ -14,11 +14,11 @@ from squid_layouts import (
     Component,
     Shared,
     SharedStateConflictError,
-    cell,
     computed,
     state,
     transaction,
 )
+from squid_layouts.primitives import Text
 from squid_layouts.topics import TopicBus
 
 
@@ -29,18 +29,18 @@ class Member:
 
 
 class Preferences(Shared[Member]):
-    theme: str = cell("system")
-    locale: str = cell("en")
+    theme: str = state("system")
+    locale: str = state("en")
 
 
 class Workspace(Shared[Member]):
-    theme: str = cell("unrelated")
-    selected: int | None = cell(None)
-    filters: tuple[str, ...] = cell(())
+    theme: str = state("unrelated")
+    selected: int | None = state(None)
+    filters: tuple[str, ...] = state(())
 
 
 class Anonymous(Shared):
-    flag: bool = cell(default=False)
+    flag: bool = state(default=False)
 
 
 @pytest.fixture
@@ -97,33 +97,72 @@ def test_a_reserved_name_raises_at_class_creation() -> None:
     with pytest.raises(TypeError, match="reserves 'scope'"):
 
         class Bad(Shared[int]):
-            scope: int = cell(0)  # pyrefly: ignore[bad-override]
+            scope: int = state(0)  # pyrefly: ignore[bad-override]
 
 
 def test_an_underscored_cell_raises_at_class_creation() -> None:
     with pytest.raises(TypeError, match="underscored"):
 
         class Bad(Shared[int]):
-            _hidden: int = cell(0)
+            _hidden: int = state(0)
 
 
-def test_component_state_is_not_a_namespace_cell() -> None:
-    with pytest.raises(TypeError, match=r"sl\.cell"):
+def test_one_declaration_serves_both_owners(bus: TopicBus, here: Member) -> None:
+    """`sl.state()` everywhere: what it means is what holds it, which the class already says."""
+
+    class Namespace(Shared[Member]):
+        value: int = state(0)
+
+    class Panel(Component):
+        value: int = state(0)
+
+        def render(self):
+            return Text(str(self.value))
+
+    namespace = Namespace(bus, here)
+    panel = Panel()
+    namespace.value = 1
+    panel.value = 1
+
+    assert (namespace.value, panel.value) == (1, 1)
+
+
+def test_only_a_namespace_gives_its_state_an_address(bus: TopicBus, here: Member) -> None:
+    """The whole difference, and it is a property of the owner rather than the declaration."""
+
+    class Namespace(Shared[Member]):
+        value: int = state(0)
+
+    class Panel(Component):
+        value: int = state(0)
+
+        def render(self):
+            return Text(str(self.value))
+
+    namespace = Namespace(bus, here)
+    assert type(namespace)._cells["value"].address(namespace) == CellAddress(namespace, "value")
+    assert Panel._state_descriptors["value"].address(Panel()) is None
+
+
+def test_a_namespace_refuses_persistence_it_cannot_honour() -> None:
+    with pytest.raises(TypeError, match="never persisted"):
 
         class Bad(Shared[int]):
-            wrong: int = state(0)
+            wrong: int = state(0, persist=True)
 
 
-def test_a_namespace_cell_is_not_component_state() -> None:
-    with pytest.raises(TypeError, match=r"sl\.Shared"):
+def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: TopicBus, here: Member) -> None:
+    """`persist` defaults to True, so only an explicit ask can be refused."""
 
-        class Bad(Component):
-            wrong: int = cell(0)
+    class Fine(Shared[Member]):
+        value: int = state(0)
+
+    assert Fine(bus, here).value == 0
 
 
 def test_an_undeclared_attribute_cannot_be_written(bus: TopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
-    with pytest.raises(AttributeError, match="not a declared cell"):
+    with pytest.raises(AttributeError, match="not declared state"):
         preferences.undeclared = 1  # pyrefly: ignore[missing-attribute]
 
 
@@ -162,7 +201,7 @@ class Held:
 
 def test_an_opaque_cell_settles_by_identity(bus: TopicBus) -> None:
     class Services(Shared):
-        held: Held = cell(factory=Held, opaque=True)
+        held: Held = state(factory=Held, opaque=True)
 
     services = Services(bus)
     same = services.held
