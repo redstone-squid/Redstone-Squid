@@ -86,6 +86,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
+    assert sl.discord.MountDefaults
     assert sl.discord.SessionRegistry
     assert sl.discord.routers
     assert sl.discord.V2Renderer

@@ -6,6 +6,7 @@ from squid_layouts.discord.actions import ActionResponder, native, responder
 from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
 from squid_layouts.discord.compose import Composition, compose, render_static
 from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
+from squid_layouts.discord.defaults import MountDefaults, MountOptions
 from squid_layouts.discord.delivery import (
     Abandoned,
     Delivered,
@@ -173,7 +174,9 @@ __all__ = [
     "ModalSpec",
     "Mount",
     "MountAddress",
+    "MountDefaults",
     "MountLifecycle",
+    "MountOptions",
     "MountSnapshot",
     "MountedView",
     "NativeItem",
