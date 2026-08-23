@@ -24,7 +24,7 @@ class Projection(sl.Component):
     def __init__(self, read) -> None:
         self._read = read
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def value(self) -> str:
         sl.runtime.watch(resource_topic("build", "42"))
         return self._read()
@@ -32,8 +32,8 @@ class Projection(sl.Component):
     def render(self):
         # An atomic resource is still rendered once while pending: that discovery render is
         # how the mount learns the resource exists, and what it reads is what it follows.
-        match self.value.state:
-            case sl.runtime.Ready(value=value):
+        match self.value.status:
+            case sl.resources.Ready(value=value):
                 return sl.paragraph(value)
             case _:
                 return sl.paragraph("loading")

@@ -12,13 +12,13 @@ from typing import Any, assert_type
 from squid_layouts import Component, resource, state
 from squid_layouts.runtime import (
     AtomicResource,
-    AtomicResourceState,
+    AtomicResourceStatus,
     Failed,
     Pending,
     Ready,
     Resource,
-    ResourceDelivery,
-    ResourceState,
+    PendingPolicy,
+    ResourceStatus,
     Shared,
     addresses,
 )
@@ -63,7 +63,7 @@ assert_type(addresses(lambda: Scoped(bus, 7).theme), tuple[Any, ...])
 
 
 class ResourceTypes(Component):
-    @resource(delivery=ResourceDelivery.ATOMIC)
+    @resource(pending=PendingPolicy.ATOMIC)
     async def atomic(self) -> int:
         return 1
 
@@ -73,9 +73,9 @@ class ResourceTypes(Component):
 
 
 assert_type(ResourceTypes().atomic, AtomicResource[int])
-assert_type(ResourceTypes().atomic.state, AtomicResourceState[int])
+assert_type(ResourceTypes().atomic.status, AtomicResourceStatus[int])
 assert_type(ResourceTypes().visible, Resource[int])
-assert_type(ResourceTypes().visible.state, ResourceState[int])
+assert_type(ResourceTypes().visible.status, ResourceStatus[int])
 assert_type(Ready[int](1), Ready[int])
 assert_type(Failed[int](ValueError()), Failed[int])
 assert_type(Pending[int](), Pending[int])

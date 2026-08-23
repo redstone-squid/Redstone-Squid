@@ -84,7 +84,7 @@ class Browser[ItemT](Component):
 
     @resource
     async def window(self) -> LoadedWindow[ItemT]:
-        current = self.window.state
+        current = self.window.status
         previous = current.previous.value if isinstance(current, Pending | Failed) and current.previous else None
         match self._request:
             case _WindowRequest("previous") if previous is not None:
@@ -118,7 +118,7 @@ class Browser[ItemT](Component):
         self._request = _WindowRequest(self._request.operation, self._request.position)
 
     def _ready(self) -> LoadedWindow[ItemT] | None:
-        current = self.window.state
+        current = self.window.status
         if isinstance(current, Ready):
             return current.value
         if isinstance(current, Pending | Failed) and current.previous is not None:
@@ -165,7 +165,7 @@ class Browser[ItemT](Component):
         await self._adjacent(event, 1)
 
     def render(self) -> RenderResult:
-        match self.window.state:
+        match self.window.status:
             case Pending(previous=None):
                 return self._status(self.loading)
             case Failed(previous=None):

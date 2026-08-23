@@ -1,6 +1,5 @@
 """Reactive async values observed by synchronous component renders."""
 
-import asyncio
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -19,6 +18,7 @@ from squid_reactive.core import (
     join_action,
     settling,
 )
+from squid_reactive.completion import Completion
 
 
 class ResourceOwner(ReactiveOwner, Protocol):
@@ -65,14 +65,14 @@ class Failed[ValueT]:
     previous: Ready[ValueT] | None = None
 
 
-type ResourceState[ValueT] = Pending[ValueT] | Ready[ValueT] | Failed[ValueT]
-type AtomicResourceState[ValueT] = Ready[ValueT] | Failed[ValueT]
+type ResourceStatus[ValueT] = Pending[ValueT] | Ready[ValueT] | Failed[ValueT]
+type AtomicResourceStatus[ValueT] = Ready[ValueT] | Failed[ValueT]
 
 
-class ResourceDelivery(StrEnum):
-    """When a frontend may deliver a render that observes a pending resource."""
+class PendingPolicy(StrEnum):
+    """Whether pending is explicit in the render contract or settled atomically."""
 
-    VISIBLE = "visible"
+    EXPLICIT = "explicit"
     ATOMIC = "atomic"
 
 
@@ -134,10 +134,10 @@ class _Replacement:
         """Installing already invalidated the owner, which is the only watcher there is."""
 
 
-def _previous[ValueT](state: ResourceState[ValueT]) -> Ready[ValueT] | None:
-    if isinstance(state, Ready):
-        return state
-    return state.previous
+def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
+    if isinstance(status, Ready):
+        return status
+    return status.previous
 
 
 class Resource[ValueT]:
@@ -149,14 +149,14 @@ class Resource[ValueT]:
         loader: Callable[[], Awaitable[ValueT]],
         *,
         name: str,
-        delivery: ResourceDelivery,
+        pending_policy: PendingPolicy,
         address: Any = None,
         publish: Callable[[Any], None] | None = None,
     ) -> None:
         self._owner = owner
         self._loader = loader
         self._label = name
-        self.delivery = delivery
+        self.pending_policy = pending_policy
         self.address = address
         """Where this resource's changes are published, or `None` for a component's own.
 
@@ -164,8 +164,8 @@ class Resource[ValueT]:
         be looking, which for a resource means it was declared on a `Shared` namespace.
         """
         self._publish = publish
-        self._state: ResourceState[ValueT] = Pending()
-        self._loading: tuple[int, asyncio.Event] | None = None
+        self._status: ResourceStatus[ValueT] = Pending()
+        self._loading: tuple[int, Completion[ResourceStatus[ValueT]]] | None = None
         self._request_token = 0
         self._rechecking = False
         self.version = 0
@@ -184,7 +184,7 @@ class Resource[ValueT]:
         """
 
     @property
-    def state(self) -> ResourceState[ValueT]:
+    def status(self) -> ResourceStatus[ValueT]:
         """Return the current synchronous state, re-pending it if what it read has moved."""
         staged = self._staged()
         if not isinstance(staged, _Missing):
@@ -193,7 +193,7 @@ class Resource[ValueT]:
             return Ready(staged)
         self._recheck()
         self.track()
-        return self._state
+        return self._status
 
     def track(self) -> None:
         """Record a read of this resource with whatever is consuming reads.
@@ -271,22 +271,22 @@ class Resource[ValueT]:
     @property
     def value(self) -> ValueT:
         """Return the ready value or fail instead of smuggling pending into its type."""
-        state = self.state
-        if isinstance(state, Ready):
-            return state.value
+        status = self.status
+        if isinstance(status, Ready):
+            return status.value
         # Reading the value of a resource whose loader you are inside is a cycle, not bad
         # luck: it cannot become ready while it is waiting on you. Say that, rather than
         # reporting a pending resource and leaving the ring to be worked out.
         path = cycle_path(self)
         if path is not None:
             raise ReactiveCycleError(path)
-        message = f"resource {self._label!r} is {type(state).__name__.lower()}, not ready"
+        message = f"resource {self._label!r} is {type(status).__name__.lower()}, not ready"
         raise ResourceNotReadyError(message)
 
     @property
     def pending(self) -> bool:
         """Whether this resource currently requests settlement."""
-        return isinstance(self.state, Pending)
+        return isinstance(self.status, Pending)
 
     def invalidate(self) -> None:
         """Request a fresh value while retaining the last successful one."""
@@ -294,7 +294,7 @@ class Resource[ValueT]:
 
     def _invalidate(self, *, notify: bool) -> None:
         self._request_token += 1
-        self._state = Pending(_previous(self._state))
+        self._status = Pending(_previous(self._status))
         self._moved()
         if notify:
             self._notify()
@@ -317,7 +317,7 @@ class Resource[ValueT]:
         if baseline is None:
             baseline = {source: source.settle() for source in self.sources}
         self._request_token += 1
-        self._state = Ready(value)
+        self._status = Ready(value)
         self._landed()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
         # as they stand now, and a later change to one of them should still reload.
@@ -345,49 +345,51 @@ class Resource[ValueT]:
 
     async def _awaited(self) -> ValueT:
         self._recheck()
-        if isinstance(self._state, Pending):
+        if isinstance(self._status, Pending):
             await self._load()
         # Tracked after settling, never before: recording the version this resource held
         # while still pending would leave the caller stale against the value it just waited
         # for, and re-pend it the moment anyone looked.
         self.track()
-        state = self._state
-        if isinstance(state, Failed):
-            raise state.error
-        if isinstance(state, Ready):
-            return state.value
+        status = self._status
+        if isinstance(status, Failed):
+            raise status.error
+        if isinstance(status, Ready):
+            return status.value
         message = f"resource {self._label!r} did not settle"
         raise ResourceNotReadyError(message)
 
-    async def reload(self) -> ResourceState[ValueT]:
+    async def reload(self) -> ResourceStatus[ValueT]:
         """Request and settle a fresh value under the caller's task."""
         self._invalidate(notify=True)
         return await self._load()
 
-    async def _load(self) -> ResourceState[ValueT]:
+    async def _load(self) -> ResourceStatus[ValueT]:
         """Settle the current pending generation, sharing an identical in-flight load.
 
-        Reads `_state` rather than `state` throughout, here and below. The public read
+        Reads `_status` rather than `status` throughout, here and below. The public read
         tracks, and tracking from inside the machinery would register whoever is loading
         against the version this resource holds *before* it settles -- leaving them stale
         against the value they are about to receive. Only `_awaited` tracks, and only once
         the value is in hand.
         """
         self._recheck()
-        if not isinstance(self._state, Pending):
-            return self._state
+        if not isinstance(self._status, Pending):
+            return self._status
         # Before the shared wait below, which for a cycle would be this load waiting on
         # itself -- a hang with nothing to report rather than an error naming the ring.
         with settling(self):
             return await self._loaded()
 
-    async def _loaded(self) -> ResourceState[ValueT]:
+    async def _loaded(self) -> ResourceStatus[ValueT]:
         token = self._request_token
         if self._loading is not None and self._loading[0] == token:
             await self._loading[1].wait()
-            return self._state
+            if isinstance(self._status, Pending):
+                return await self._loaded()
+            return self._status
 
-        settled = asyncio.Event()
+        settled: Completion[ResourceStatus[ValueT]] = Completion()
         self._loading = (token, settled)
         self.sources = {}
         consumer = _CONSUMER.set(self)
@@ -396,20 +398,21 @@ class Resource[ValueT]:
                 value = await self._loader()
             except Exception as error:
                 if token == self._request_token:
-                    self._state = Failed(error, _previous(self._state))
+                    self._status = Failed(error, _previous(self._status))
                     self._landed()
                     self._notify()
             else:
                 if token == self._request_token:
-                    self._state = Ready(value)
+                    self._status = Ready(value)
                     self._landed()
                     self._notify()
         finally:
             _CONSUMER.reset(consumer)
             if self._loading is not None and self._loading[0] == token:
                 self._loading = None
-            settled.set()
-        return self._state
+            if not settled.done:
+                settled.resolve(self._status)
+        return self._status
 
 
 class AtomicResource[ValueT](Resource[ValueT]):
@@ -420,13 +423,13 @@ class AtomicResource[ValueT](Resource[ValueT]):
     """
 
     @property
-    def state(self) -> AtomicResourceState[ValueT]:
-        state = super().state
-        if isinstance(state, Pending):
-            if state.previous is not None:
-                return state.previous
+    def status(self) -> AtomicResourceStatus[ValueT]:
+        status = super().status
+        if isinstance(status, Pending):
+            if status.previous is not None:
+                return status.previous
             raise _AtomicResourcePending(self)
-        return state
+        return status
 
     @property
     def pending(self) -> bool:
@@ -435,15 +438,15 @@ class AtomicResource[ValueT](Resource[ValueT]):
         if not isinstance(staged, _Missing):
             return False
         self._recheck()
-        return isinstance(self._state, Pending)
+        return isinstance(self._status, Pending)
 
-    async def reload(self) -> AtomicResourceState[ValueT]:
+    async def reload(self) -> AtomicResourceStatus[ValueT]:
         self._invalidate(notify=True)
-        state = await self._load()
-        if isinstance(state, Pending):
+        status = await self._load()
+        if isinstance(status, Pending):
             message = f"atomic resource {self._label!r} did not settle"
             raise ResourceNotReadyError(message)
-        return state
+        return status
 
 
 class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
@@ -455,10 +458,10 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
         self,
         loader: Callable[[OwnerT], Awaitable[ValueT]],
         *,
-        delivery: ResourceDelivery,
+        pending_policy: PendingPolicy,
     ) -> None:
         self.loader = loader
-        self.delivery = delivery
+        self.pending_policy = pending_policy
         self.public_name = loader.__name__
         self._name = ""
 
@@ -487,7 +490,7 @@ class _ResourceDescriptor[OwnerT: ResourceOwner, ValueT]:
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
-                delivery=self.delivery,
+                pending_policy=self.pending_policy,
                 address=address,
                 publish=publish,
             )
@@ -518,7 +521,7 @@ class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescript
                 instance,
                 lambda: self.loader(instance),
                 name=f"{type(instance).__name__}.{self.public_name}",
-                delivery=self.delivery,
+                pending_policy=self.pending_policy,
                 address=address,
                 publish=publish,
             )
@@ -532,7 +535,7 @@ def resource[OwnerT: ResourceOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
-    delivery: Literal[ResourceDelivery.ATOMIC],
+    pending: Literal[PendingPolicy.ATOMIC],
 ) -> _AtomicResourceDescriptor[OwnerT, ValueT]: ...
 
 
@@ -541,21 +544,21 @@ def resource[OwnerT: ResourceOwner, ValueT](
     loader: Callable[[OwnerT], Awaitable[ValueT]],
     /,
     *,
-    delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
+    pending: PendingPolicy = PendingPolicy.EXPLICIT,
 ) -> _ResourceDescriptor[OwnerT, ValueT]: ...
 
 
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     *,
-    delivery: Literal[ResourceDelivery.ATOMIC],
+    pending: Literal[PendingPolicy.ATOMIC],
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _AtomicResourceDescriptor[OwnerT, ValueT]]: ...
 
 
 @overload
 def resource[OwnerT: ResourceOwner, ValueT](
     *,
-    delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
+    pending: PendingPolicy = PendingPolicy.EXPLICIT,
 ) -> Callable[[Callable[[OwnerT], Awaitable[ValueT]]], _ResourceDescriptor[OwnerT, ValueT]]: ...
 
 
@@ -563,7 +566,7 @@ def resource(
     loader: Callable[[ResourceOwner], Awaitable[Any]] | None = None,
     /,
     *,
-    delivery: ResourceDelivery = ResourceDelivery.VISIBLE,
+    pending: PendingPolicy = PendingPolicy.EXPLICIT,
 ) -> Any:
     """Declare a lazy async value whose current state is available during synchronous render.
 
@@ -574,8 +577,8 @@ def resource(
     def decorate(
         function: Callable[[ResourceOwner], Awaitable[Any]],
     ) -> _ResourceDescriptor[ResourceOwner, Any] | _AtomicResourceDescriptor[ResourceOwner, Any]:
-        descriptor = _AtomicResourceDescriptor if delivery is ResourceDelivery.ATOMIC else _ResourceDescriptor
-        return descriptor(function, delivery=delivery)
+        descriptor = _AtomicResourceDescriptor if pending is PendingPolicy.ATOMIC else _ResourceDescriptor
+        return descriptor(function, pending_policy=pending)
 
     return decorate if loader is None else decorate(loader)
 

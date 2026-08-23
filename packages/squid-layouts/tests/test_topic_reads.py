@@ -18,7 +18,7 @@ from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.delivery import DeliveryReceipt, handle_for
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
-from squid_layouts.runtime import LocalTopicBus, ResourceDelivery, Topic
+from squid_layouts.runtime import LocalTopicBus, PendingPolicy, Topic
 
 BUILD = Topic("build", "1")
 OTHER = Topic("build", "2")
@@ -33,14 +33,14 @@ class Watcher(Component):
         self._load = load
         self._topics = topics
 
-    @resource(delivery=ResourceDelivery.ATOMIC)
+    @resource(pending=PendingPolicy.ATOMIC)
     async def value(self) -> str:
         sl.runtime.watch(*(self._topics if self._topics is not None else (self.topic,)))
         return await self._load()
 
     def render(self):
-        match self.value.state:
-            case sl.runtime.Ready(value=value):
+        match self.value.status:
+            case sl.resources.Ready(value=value):
                 return Text(f"ready:{value}")
             case _:
                 return Text("pending")
@@ -298,7 +298,7 @@ async def test_a_publish_moves_a_resources_sources_so_it_repends() -> None:
     load, loads = counting_loader(["first", "second"])
     panel = Watcher(load)
     await panel.value.reload()
-    assert isinstance(panel.value.state, sl.runtime.Ready)
+    assert isinstance(panel.value.status, sl.resources.Ready)
 
     LocalTopicBus().publish(BUILD)
 

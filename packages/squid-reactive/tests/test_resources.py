@@ -26,7 +26,7 @@ async def test_resource_tracks_state_and_repends_after_a_source_moves() -> None:
     assert await source.value.reload() == Ready("FIRST")
     source.key = "second"
 
-    assert source.value.state == Pending(Ready("FIRST"))
+    assert source.value.status == Pending(Ready("FIRST"))
     assert await source.value.reload() == Ready("SECOND")
 
 
@@ -57,7 +57,7 @@ async def test_publish_during_load_repends_the_result() -> None:
         resume.set()
 
     assert loaded == [Ready("loaded")]
-    assert owner.value.state == Pending(Ready("loaded"))
+    assert owner.value.status == Pending(Ready("loaded"))
 
 
 async def test_resource_replace_joins_the_transaction() -> None:
