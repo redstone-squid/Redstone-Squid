@@ -357,10 +357,13 @@ class TestSelfWrites:
         message.edit = edit
         interaction = fake_interaction()
 
+        async def dispatch() -> None:
+            await mount.dispatch("pick", interaction)
+
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(mount.refresh_now)
             await started.wait()
-            tasks.start_soon(mount.dispatch, "pick", interaction)
+            tasks.start_soon(dispatch)
             while workspace.selected != 7:
                 await asyncio.sleep(0)
             release.set()
@@ -390,11 +393,14 @@ class TestSelfWrites:
         panel.other = True
         interaction = fake_interaction()
 
+        async def dispatch() -> None:
+            await mount.dispatch("detail", interaction)
+
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(mount.refresh_now)
             await started.wait()
             assert address(workspace, "detail") in mount._watched
-            tasks.start_soon(mount.dispatch, "detail", interaction)
+            tasks.start_soon(dispatch)
             while workspace.detail != "new detail":
                 await asyncio.sleep(0)
             release.set()
