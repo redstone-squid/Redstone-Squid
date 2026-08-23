@@ -8,6 +8,7 @@ from squid_layouts import (
     guards,
     html,
     interactions,
+    operations,
     patterns,
     planning,
     primitives,
@@ -107,6 +108,7 @@ from squid_layouts.runtime.reactivity import (
     state,
 )
 from squid_layouts.runtime.resources import resource
+from squid_reactive.operations import operation
 from squid_layouts.semantic import (
     ChoiceEvent,
     EntityEvent,
@@ -210,6 +212,8 @@ __all__ = [
     "media_item",
     "navigation",
     "note",
+    "operation",
+    "operations",
     "optional",
     "paged",
     "paragraph",

@@ -44,10 +44,10 @@ from squid_layouts.primitives.nodes import (
 )
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.resources import (
-    Resource,
+    AsyncBinding,
     _AtomicResourcePending,
-    observe_resources,
-    unique_resources,
+    observe_async_bindings,
+    unique_async_bindings,
 )
 from squid_layouts.runtime.topics import Address
 from squid_layouts.semantic import (
@@ -154,7 +154,7 @@ class ComponentTree:
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
     deferred: tuple[Component, ...] = ()
-    resources: tuple[Resource[Any], ...] = ()
+    async_bindings: tuple[AsyncBinding, ...] = ()
     """Embedded components expansion stopped at, in the order it met them.
 
     Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
@@ -425,7 +425,7 @@ def render_component_tree(
             _CURRENT_CONTEXT.reset(token)
             active.remove(identity)
 
-    with observe_render() as observation, observe_resources() as observed:
+    with observe_render() as observation, observe_async_bindings() as observed:
         try:
             nodes = tuple(expand(root, "$", context or {}))
         except _AtomicResourcePending as pending:
@@ -439,7 +439,7 @@ def render_component_tree(
         tuple(assets),
         document_key,
         tuple(deferred),
-        unique_resources(observed),
+        unique_async_bindings(observed),
         observation.addresses(),
     )
 
