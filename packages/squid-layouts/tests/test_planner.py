@@ -13,7 +13,9 @@ from squid_layouts.sources import Position
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import Localization, Message
 from squid_layouts.discord import V2_LIMITS as LIMITS
-from squid_layouts.discord import V2_TARGET, NativeItem, V2Renderer
+from squid_layouts.discord import V2_TARGET
+from squid_layouts.discord.rendering import V2Renderer
+from squid_layouts.discord.targets import NativeItem
 from squid_layouts.planning import TargetProfile
 from squid_layouts.primitives import (
     ActionGroup,

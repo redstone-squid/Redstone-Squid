@@ -12,7 +12,7 @@ from textwrap import dedent
 import discord
 
 import squid_layouts as sl
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_static
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -27,7 +27,7 @@ def render_build_review(
     card: sl.LayoutNode,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
-) -> discord.ui.LayoutView:
+) -> sl.discord.DiscordPresentation:
     """Compose a build card with the review vote state beneath it.
 
     The card arrives as IR rather than as a built container so the whole post is solved in
@@ -69,10 +69,10 @@ def render_build_review(
         # Not currently reachable — render_node() always returns a Section — kept as a safe
         # fallback for any future card producer that returns something else entirely.
         post = sl.group(card, *state)
-    return render_static([post])
+    return render_presentation([post])
 
 
-def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> discord.ui.LayoutView:
+def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sl.discord.DiscordPresentation:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
@@ -119,7 +119,7 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> dis
 def render_generic_poll(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int] = {},
-) -> discord.ui.LayoutView:
+) -> sl.discord.DiscordPresentation:
     """Render a user-created poll, honouring its visibility setting.
 
     An open poll carries its own close and refresh controls; a closed one has nothing left
@@ -128,7 +128,7 @@ def render_generic_poll(
     nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
     if snapshot.status is not VoteStatus.CLOSED:
         nodes.append(poll_controls())
-    return render_static(nodes)
+    return render_presentation(nodes)
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:

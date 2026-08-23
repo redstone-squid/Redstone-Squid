@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, Opened, SessionKey, SessionRegistry
+from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
+from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.durability import PurgeResult
 from squid_layouts.discord.operations import (
     ActionDisabled,

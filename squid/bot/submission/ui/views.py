@@ -1360,7 +1360,7 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         edit_button: discord.ui.Button[discord.ui.LayoutView] = (
             EphemeralBuildEditButton(build)
             if build.id is None
-            else sl.discord.RoutedItem(
+            else sl.discord.rendering.RoutedItem(
                 label="Edit",
                 style=discord.ButtonStyle.secondary,
                 custom_id=build_edit.id(build_id=build.id),

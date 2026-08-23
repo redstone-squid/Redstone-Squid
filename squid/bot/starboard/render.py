@@ -4,14 +4,14 @@ import discord
 
 import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.ui import render_static
+from squid.bot.ui import render_presentation
 from squid.core.i18n import _
 from squid.starboard.application import EntryState
 
 
 def starboard_layout(
     state: EntryState, message: discord.Message, *, locale: str | None = None
-) -> discord.ui.LayoutView:
+) -> sl.discord.DiscordPresentation:
     """Render one source message as a semantic Components V2 card."""
     config = state.config
     entry = state.entry
@@ -48,4 +48,4 @@ def starboard_layout(
     if entry.raw_count != entry.score:
         score += t(locale, _(" ({count} reactions)"), count=entry.raw_count)
     children.append(sl.primitives.Footer(f"{score} · <#{message.channel.id}>"))
-    return render_static([sl.primitives.Panel(tuple(children), accent=config.colour)], locale=locale)
+    return render_presentation([sl.primitives.Panel(tuple(children), accent=config.colour)], locale=locale)
