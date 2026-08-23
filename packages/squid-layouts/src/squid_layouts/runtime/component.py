@@ -10,22 +10,15 @@ child class can appear in one message without their controls or pagers cross-wir
 root component is attached to a Mount; children reach it through their parent.
 """
 
-import functools
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
-from typing import Any, ClassVar, Protocol, Self
+from typing import Any, Protocol
 
 from squid_reactive.core import (
-    _CURRENT,
     _RENDER_OBSERVATION,
-    _Computed,
-    _State,
-    note_born,
-    note_initialized,
+    Reactive,
     observe_render,
-    report_undeclared_write,
-    untracked,
 )
 
 from squid_layouts.document import Asset, Document
@@ -151,47 +144,6 @@ _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
 )
 _MISSING = object()
 
-# Written by the tree walker, not by authors, so they are never an author's state change.
-_FRAMEWORK_ATTRIBUTES = frozenset({"_runtime", "_parent", "_loaded"})
-
-
-def _is_abstract(cls: type) -> bool:
-    """Whether this class is a base to build on rather than one to instantiate.
-
-    Such a class may declare state only its concrete subclasses can assign, so its constructor
-    is not the place to demand one. Not having implemented render is the test: `ABCMeta` needs
-    no special case, both because it populates `__abstractmethods__` only after
-    `__init_subclass__` has run, and because it already refuses to instantiate the class, so
-    that wrapper can never be the outermost one.
-    """
-    return cls.render is Component.render
-
-
-def _checked_init(
-    original: Callable[..., None],
-    required: tuple[tuple[str, _State], ...],
-) -> Callable[..., None]:
-    """Wrap ``__init__`` so state declared without an initial value must be assigned."""
-
-    @functools.wraps(original)
-    def __init__(self: Component, *args: Any, **kwargs: Any) -> None:
-        try:
-            original(self, *args, **kwargs)
-            # Only the outermost __init__ checks. A subclass calling super().__init__() would
-            # otherwise trip the base's wrapper before it had finished assigning.
-            if type(self).__init__ is not __init__:
-                return
-            missing = sorted(name for name, descriptor in required if not descriptor.is_set(self))
-            if missing:
-                message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
-                raise TypeError(message)
-        finally:
-            if type(self).__init__ is __init__:
-                note_initialized(self)
-
-    return __init__
-
-
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
     """One expanded render and the component identities that produced it."""
@@ -218,53 +170,14 @@ class ComponentTree:
     """
 
 
-class Component[ModeT = Any]:
+class Component[ModeT = Any](Reactive):
     """Base class for mounted, stateful views."""
 
     _runtime: RuntimeOwner | None = None
     _parent: Component | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
-    _state_names: ClassVar[frozenset[str]] = frozenset()
-    _state_descriptors: ClassVar[dict[str, _State]] = {}
-    _opaque_state: ClassVar[tuple[tuple[str, _State], ...]] = ()
-    """The `opaque=True` subset of `_state_descriptors`, fixed at class creation for `mutated`."""
-    _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        declared = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _State)
-        }
-        cls._state_names = frozenset(declared)
-        cls._state_descriptors = declared
-        cls._opaque_state = tuple((name, descriptor) for name, descriptor in declared.items() if descriptor.opaque)
-        cls._computed_descriptors = {
-            name: descriptor
-            for klass in reversed(cls.__mro__)
-            for name, descriptor in vars(klass).items()
-            if isinstance(descriptor, _Computed)
-        }
-        required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
-        # Wrap even an inherited __init__, so construction-time observation exemptions end
-        # at the outermost initializer. Required fields are checked there for the same reason.
-        cls.__init__ = _checked_init(cls.__init__, required if not _is_abstract(cls) else ())
-
-    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
-        # A handler may build components. Noting the ones born mid-action is what lets their
-        # __init__ write freely while a live component's writes stay covered.
-        instance = super().__new__(cls)
-        note_born(instance)
-        return instance
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        # Fast path: one contextvar read when no action is in flight, which is almost always.
-        if _CURRENT.get() is not None and name not in _FRAMEWORK_ATTRIBUTES and name not in type(self)._state_names:
-            report_undeclared_write(self, name)
-        object.__setattr__(self, name, value)
+    _reactive_internal_attributes = frozenset({"_runtime", "_parent", "_loaded"})
 
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
@@ -276,7 +189,7 @@ class Component[ModeT = Any]:
         del names
         self.invalidate()
 
-    def _state_rolled_back(self) -> None:
+    def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
     def render(self) -> RenderResult[ModeT]:
@@ -309,33 +222,6 @@ class Component[ModeT = Any]:
 
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
-
-    def mutated(self, collaborator: object) -> None:
-        """Re-render because an ``opaque=True`` field's value changed in place.
-
-        Assignment is observed already, and a state value is replaced rather than mutated, so
-        the only field whose *contents* can change behind the framework's back is an opaque
-        one -- a collaborator the component holds by reference. Passing the object rather than
-        a field name keeps the call typed; identity finds the field, since that is how an
-        opaque field settles anyway. It moves the cell's version so a computed that read the
-        field recomputes, and schedules the draw; it cannot roll the change back.
-        """
-        with untracked():
-            holders = [
-                (name, descriptor)
-                for name, descriptor in type(self)._opaque_state
-                if descriptor.is_set(self) and descriptor.__get__(self) is collaborator
-            ]
-        if not holders:
-            message = f"no opaque state on {type(self).__name__} holds {collaborator!r}"
-            raise TypeError(message)
-        if len(holders) > 1:
-            names = ", ".join(name for name, _ in holders)
-            message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
-            raise TypeError(message)
-        _, descriptor = holders[0]
-        descriptor.mutated(self)
-        self._state_changed(frozenset((descriptor._name,)))
 
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
