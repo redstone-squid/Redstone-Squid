@@ -14,10 +14,11 @@ application's data layer, not here.
 from collections.abc import Callable
 from typing import Any, ClassVar
 
-from squid_layouts.runtime.reactivity import (
+from squid_reactive.core import (
     _Computed,
     _State,
 )
+
 from squid_layouts.runtime.resources import _ResourceDescriptor
 from squid_layouts.runtime.topics import Address, CellAddress, TopicBus
 
