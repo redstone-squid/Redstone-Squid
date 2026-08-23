@@ -22,9 +22,9 @@ from squid_layouts.runtime import (
     Shared,
     addresses,
 )
-from squid_layouts.runtime.topics import TopicBus
+from squid_layouts.runtime.topics import LocalTopicBus
 
-bus = TopicBus()
+bus = LocalTopicBus()
 
 assert_type(state({"a": 1}), Mapping[str, int])
 assert_type(state(["a"]), Sequence[str])

@@ -16,7 +16,7 @@ from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
 from squid_layouts.profiling import PresentationOutcome
-from squid_layouts.runtime import CellAddress, Shared, TopicBus, transaction
+from squid_layouts.runtime import CellAddress, LocalTopicBus, Shared, transaction
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,16 +118,16 @@ def address(workspace: Workspace, name: str) -> CellAddress:
     return CellAddress(workspace, name)
 
 
-async def drain(reactor: Reactor, bus: TopicBus) -> None:
+async def drain(reactor: Reactor, bus: LocalTopicBus) -> None:
+    del bus
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(reactor.run)
-        await bus.drain()
         await asyncio.wait_for(reactor._queue.join(), timeout=1)
         tasks.cancel_scope.cancel()
 
 
 async def test_two_mounts_react_once_each_to_one_commit() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     mounts = [Mount(Panel(workspace), access=Everyone(), scheduler=reactor) for _ in range(2)]
@@ -153,7 +153,7 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
 
 
 async def test_a_dropped_conditional_read_stops_refreshing() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     panel = Panel(workspace)
@@ -170,7 +170,7 @@ async def test_a_dropped_conditional_read_stops_refreshing() -> None:
 
 async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     """Over-subscribe, never under-subscribe: a failed delivery's follow is dropped next render."""
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     panel = Panel(workspace)
@@ -194,7 +194,7 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
     only staged leaves the panel deaf to every later write -- the bus is not durable, so
     nothing replays it once a successful render subscribes again.
     """
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     panel = Swapper(workspace)
@@ -222,7 +222,7 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
 
 async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
     """The other half: pruning happens, just at the commit rather than at the stage."""
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     panel = Swapper(workspace)
@@ -236,7 +236,7 @@ async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
 
 
 async def test_no_follow_outlives_its_mount() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     mount = Mount(Panel(workspace), access=Everyone(), scheduler=reactor)
@@ -249,7 +249,7 @@ async def test_no_follow_outlives_its_mount() -> None:
 
 
 async def test_a_namespace_dropped_by_its_last_mount_is_collected() -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     reactor = Reactor(bus)
     workspace = Workspace(bus, Member(1))
     gone = weakref.ref(workspace)
@@ -263,20 +263,20 @@ async def test_a_namespace_dropped_by_its_last_mount_is_collected() -> None:
 
 
 async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCaptureFixture) -> None:
-    bus = TopicBus()
+    bus = LocalTopicBus()
     workspace = Workspace(bus, Member(1))
     mount = Mount(Panel(workspace), access=Everyone())
     with caplog.at_level("WARNING"):
         await mount.send(delivered_to(fake_message()))
         await mount.refresh_now()
-    assert sum("cannot follow addresses" in record.message for record in caplog.records) == 1
+    assert sum("scheduler has no topic bus" in record.message for record in caplog.records) == 1
 
 
 class TestSelfWrites:
     """A mount that writes a cell it renders repaints in the click, not one edit later."""
 
     def panel(self, *, feedback: sl.interactions.Feedback | None = None, run=None) -> tuple[Workspace, Writer, Mount]:
-        bus = TopicBus()
+        bus = LocalTopicBus()
         workspace = Workspace(bus, Member(1))
         panel = Writer(workspace, feedback=feedback, run=run)
         return workspace, panel, Mount(panel, access=Everyone(), timeout=None, pending_after=30)
@@ -294,7 +294,7 @@ class TestSelfWrites:
         assert "7" in _texts(interaction.response.edit_message.await_args.kwargs["view"])
 
     async def test_the_reactor_suppresses_the_self_published_render(self) -> None:
-        bus = TopicBus()
+        bus = LocalTopicBus()
         reactor = Reactor(bus)
         workspace = Workspace(bus, Member(1))
         mount = Mount(Writer(workspace), access=Everyone(), scheduler=reactor, timeout=None)
@@ -406,7 +406,7 @@ class TestSelfWrites:
         assert not mount.pending
 
     async def test_a_write_to_an_in_flight_candidates_new_read_keeps_it_dirty(self) -> None:
-        bus = TopicBus()
+        bus = LocalTopicBus()
         workspace = Workspace(bus, Member(1))
         panel = Swapper(workspace)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
@@ -432,7 +432,7 @@ class TestSelfWrites:
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(mount.refresh_now)
             await started.wait()
-            assert address(workspace, "detail") in mount._watched
+            assert address(workspace, "detail") in mount._subscriptions.watched
             tasks.start_soon(dispatch)
             while workspace.detail != "new detail":
                 await asyncio.sleep(0)

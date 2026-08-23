@@ -104,7 +104,9 @@ def test_reconciler_commit_promotes_and_close_releases() -> None:
 
 def test_reconciler_unwinds_a_partial_stage() -> None:
     class BrokenBus(LocalTopicBus):
-        def subscribe(self, address: Address, callback: Callable[[Address], None]) -> Callable[[], None]:
+        def subscribe[AddressT: Address](
+            self, address: AddressT, callback: Callable[[AddressT], None]
+        ) -> Callable[[], None]:
             if address == OTHER:
                 raise RuntimeError("cannot subscribe")
             return super().subscribe(address, callback)

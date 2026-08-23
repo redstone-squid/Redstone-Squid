@@ -5,6 +5,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import cast
 
 import anyio
 
@@ -190,7 +191,12 @@ class DevToolsRuntime:
         sessions = (
             () if self.sessions is None else tuple(_session_inspection(session) for session in self.sessions.active())
         )
-        topics = None if self.bus is None else self.bus.snapshot()
+        snapshot_topics = (
+            None
+            if self.bus is None
+            else cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
+        )
+        topics = snapshot_topics() if callable(snapshot_topics) else None
         return OperationalSnapshot(
             sessions,
             tuple(mount.snapshot() for mount in mounts()),
@@ -276,8 +282,9 @@ class DevToolsRuntime:
     def _queues_idle(self) -> bool:
         """Return whether both configured queue owners report no pending work."""
         if self.bus is not None:
-            snapshot = self.bus.snapshot()
-            if snapshot.queued or snapshot.in_flight:
+            snapshot_topics = cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
+            snapshot = snapshot_topics() if callable(snapshot_topics) else None
+            if snapshot is not None and (snapshot.queued or snapshot.in_flight):
                 return False
         if self.reactor is not None:
             snapshot = self.reactor.snapshot()

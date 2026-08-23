@@ -121,9 +121,9 @@ _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactive_transacti
 class _Cell:
     """One state field's storage: an immutable value, and the version that dates it.
 
-    `address` is what an addressed cell publishes under: a ``CellAddress`` for a shared cell
-    from :mod:`squid_layouts.runtime.shared`, or a ``Topic`` for the valueless cell behind
-    ``sl.watch()``. A component's cell has none, and the two behaviours an address adds --
+    `address` is what an addressed cell publishes under: a ``CellAddress`` for shared state,
+    or a ``Topic`` for the valueless cell behind :func:`squid_reactive.watch`. A local owner's
+    cell has none, and the two behaviours an address adds --
     the commit precondition below, and being followed by a render -- both key off its
     presence rather than off a second cell type.
     """
@@ -202,9 +202,9 @@ class _Consumer(Protocol):
     sources: dict[Any, int]
 
 
-_CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_layouts_consumer", default=None)
+_CONSUMER: ContextVar[_Consumer | None] = ContextVar("squid_reactive_consumer", default=None)
 
-_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_layouts_settling", default=())
+_SETTLING: ContextVar[tuple[Any, ...]] = ContextVar("squid_reactive_settling", default=())
 """The derived nodes currently producing a value on this task, outermost first.
 
 Task-local rather than global: two independent values settled concurrently each copy the
@@ -563,9 +563,9 @@ class _Transaction:
         past it the action has happened, and a later error is a failure to *report* it, not
         a reason to undo it.
 
-        Commit hooks run last for that reason. A recorder's effect reaches outside the
-        transaction -- `sl.history` pushes an entry -- and an entry describing an action
-        that a later failure rolled back would be worse than a missing one.
+        Commit hooks run last for that reason. A recorder's effect can reach outside the
+        transaction, and a record describing an action that a later failure rolled back
+        would be worse than a missing one.
         """
         # Before publication, because the guard compares against the value another action
         # left in the cell, and publishing would overwrite it with this action's own.
@@ -622,7 +622,7 @@ def report_undeclared_write(owner: object, name: str) -> None:
     message = (
         f"{label} was assigned inside a transaction but is not declared state: it would not be "
         f"rolled back if the action failed, and it would not trigger a re-render. "
-        f"Declare it with sl.state()."
+        f"Declare it with state()."
     )
     raise UndeclaredStateError(message)
 
@@ -861,8 +861,8 @@ class _State:
                 message = (
                     f"{type(instance).__name__}.{self.public_name} was written while a render "
                     f"was reading it. A render must produce one tree from the state it reads, "
-                    f"so a write here tears: use sl.state(factory=...) for a lazy-initialized "
-                    f"default, sl.computed for a value derived from state, sl.resource or "
+                    f"so a write here tears: use state(factory=...) for a lazy-initialized "
+                    f"default, computed for a value derived from state, a resource or "
                     f"on_load for something fetched, and on_mount to react to having been drawn."
                 )
                 raise ReactiveWriteError(message)
@@ -1172,7 +1172,7 @@ class Observation:
     A plain :class:`_Consumer`: the same tracked read a computed records is what a render
     records, and the context the read happens in is the only difference between them. For a
     shared cell that is the whole story -- there is no separate ``watch()`` to forget to
-    call. ``sl.watch()`` exists only for a named topic, which has no value to read.
+    call. :func:`squid_reactive.watch` exists only for a named topic, which has no value to read.
     """
 
     sources: dict[Any, int] = field(default_factory=dict)
@@ -1259,7 +1259,7 @@ def observe_reads() -> Iterator[Observation]:
 def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
     """The bus addresses of the shared cells `read` touches, for following them by hand.
 
-    ``sl.addresses(lambda: preferences.theme)`` names a cell the way the rest of the package
+    ``addresses(lambda: preferences.theme)`` names a cell the way the rest of the package
     does -- by reading it -- so the thunk is ordinary typed code with no class name repeated
     and no string to drift. Reading a computed yields the shared cells behind it. Raises if
     the thunk reaches no shared cell at all, so a typo cannot quietly follow nothing.
@@ -1269,7 +1269,7 @@ def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
     found = observation.addresses()
     if not found:
         message = (
-            "addresses() read no shared state: the callable must read at least one sl.state() "
+            "addresses() read no shared state: the callable must read at least one state() "
             "off a namespace, directly or through a computed. Component state has no address."
         )
         raise ValueError(message)
@@ -1312,6 +1312,7 @@ class Reactive:
     _opaque_state: ClassVar[tuple[tuple[str, _State], ...]] = ()
     _computed_descriptors: ClassVar[dict[str, _Computed]] = {}
     _reactive_internal_attributes: ClassVar[frozenset[str]] = frozenset()
+    _reactive_require_state: ClassVar[bool] = True
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -1331,7 +1332,7 @@ class Reactive:
             if isinstance(descriptor, _Computed)
         }
         required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
-        cls.__init__ = _checked_init(cls.__init__, required)
+        cls.__init__ = _checked_init(cls.__init__, required if cls._reactive_require_state else ())
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         instance = super().__new__(cls)

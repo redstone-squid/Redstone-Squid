@@ -11,6 +11,7 @@ from typing import Any, Literal, Protocol, overload
 from squid_reactive.core import (
     _CONSUMER,
     ReactiveCycleError,
+    ReactiveOwner,
     _bump_epoch,
     action_participant,
     cycle_path,
@@ -20,7 +21,7 @@ from squid_reactive.core import (
 )
 
 
-class ResourceOwner(Protocol):
+class ResourceOwner(ReactiveOwner, Protocol):
     """The behaviour a bound resource needs from whatever declared it."""
 
     __dict__: dict[str, Any]
@@ -160,7 +161,7 @@ class Resource[ValueT]:
         """Where this resource's changes are published, or `None` for a component's own.
 
         Mirrors `_Cell.address`: present exactly when something other than the owner might
-        be looking, which for a resource means it was declared on an `sl.Shared` namespace.
+        be looking, which for a resource means it was declared on a `Shared` namespace.
         """
         self._publish = publish
         self._state: ResourceState[ValueT] = Pending()
@@ -241,7 +242,7 @@ class Resource[ValueT]:
         """Date this resource's state anew, and tell settled readers to look again.
 
         The epoch half matters as much as the version: a computed that reads this resource
-        short-circuits on the epoch, so without it a `sl.computed` would never re-derive.
+        short-circuits on the epoch, so without it a computed value would never re-derive.
         """
         self.version += 1
         _bump_epoch()

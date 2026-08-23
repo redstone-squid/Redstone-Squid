@@ -67,7 +67,7 @@ async def test_a_publish_two_links_up_repends_the_dependent() -> None:
     assert panel.node.value == "card(v1)"
 
     panel.source = "v2"
-    sl.runtime.TopicBus().publish(TOPIC)
+    sl.runtime.LocalTopicBus().publish(TOPIC)
 
     # `node` never read the topic; it read `build`, which did. Asking `node` whether it moved
     # re-checks `build`, which re-checks the topic.
@@ -176,7 +176,7 @@ async def test_a_chain_settles_in_one_send_and_draws_once() -> None:
 
 
 async def test_a_publish_redraws_the_whole_chain_without_a_torn_paint() -> None:
-    bus = sl.runtime.TopicBus()
+    bus = sl.runtime.LocalTopicBus()
     reactor = sl.discord.Reactor(bus)
     panel = Chain()
     message: Any = fake_message()

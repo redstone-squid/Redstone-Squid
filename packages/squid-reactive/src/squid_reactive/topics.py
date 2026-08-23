@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Protocol, overload, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 from weakref import WeakValueDictionary
 
 from squid_reactive.core import _Cell
@@ -90,13 +90,13 @@ class KindKeyCodec:
         self.separator = separator
 
     def encode(self, topic: Topic) -> str | None:
-        if self.separator in topic.kind:
+        if not topic.kind or not topic.key or self.separator in topic.kind:
             return None
         return f"{topic.kind}{self.separator}{topic.key}"
 
     def decode(self, text: str) -> Topic | None:
         kind, found, key = text.partition(self.separator)
-        return Topic(kind, key) if found and kind else None
+        return Topic(kind, key) if found and kind and key else None
 
 
 @runtime_checkable
@@ -108,7 +108,9 @@ class TopicBus(Protocol):
     durability, and bridges are deliberately outside this protocol.
     """
 
-    def subscribe(self, address: Address, callback: Subscriber) -> Callable[[], None]: ...
+    def subscribe[AddressT: Address](
+        self, address: AddressT, callback: Callable[[AddressT], None]
+    ) -> Callable[[], None]: ...
 
     def publish(self, *addresses: Address) -> None: ...
 
@@ -138,7 +140,7 @@ class BusSnapshot:
 
 @dataclass(slots=True)
 class _Subscription:
-    callback: Subscriber
+    callback: Callable[[Any], None]
     active: bool = True
 
 
@@ -165,13 +167,9 @@ class LocalTopicBus:
         self._on_subscriber_error = on_subscriber_error
         self._addresses: dict[Address, _AddressState] = {}
 
-    @overload
-    def subscribe(self, address: Topic, callback: Callable[[Topic], None]) -> Callable[[], None]: ...
-
-    @overload
-    def subscribe(self, address: CellAddress, callback: Callable[[CellAddress], None]) -> Callable[[], None]: ...
-
-    def subscribe(self, address: Address, callback: Subscriber) -> Callable[[], None]:
+    def subscribe[AddressT: Address](
+        self, address: AddressT, callback: Callable[[AddressT], None]
+    ) -> Callable[[], None]:
         state = self._addresses.setdefault(address, _AddressState([]))
         subscription = _Subscription(callback)
         state.subscriptions.append(subscription)
@@ -221,7 +219,7 @@ class LocalTopicBus:
             failed=sum(topic.failed for topic in topics),
         )
 
-    def _report(self, address: Address, callback: Subscriber, error: Exception) -> None:
+    def _report(self, address: Address, callback: Callable[[Any], None], error: Exception) -> None:
         try:
             self._on_subscriber_error(address, callback, error)
         except Exception:
@@ -269,10 +267,11 @@ class SubscriptionReconciler:
         acquired: list[Address] = []
         bus = self.bus
         try:
-            for address in () if bus is None else wanted:
-                if address not in self._follows:
-                    self._follows[address] = bus.subscribe(address, self.callback)
-                    acquired.append(address)
+            if bus is not None:
+                for address in wanted:
+                    if address not in self._follows:
+                        self._follows[address] = bus.subscribe(address, self.callback)
+                        acquired.append(address)
         except BaseException:
             for address in reversed(acquired):
                 self._follows.pop(address)()

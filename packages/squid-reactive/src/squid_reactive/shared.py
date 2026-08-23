@@ -89,8 +89,8 @@ class Shared[ScopeT = None](Reactive):
     def _state_binding(self, name: str) -> CellAddress:
         """Address a field declared here, so a write publishes instead of staying local.
 
-        The one hook that makes `sl.state()` on a namespace mean something different from
-        `sl.state()` on a component -- and the reason it no longer has to be spelled
+        The one hook that makes `state()` on a namespace mean something different from
+        `state()` on a local owner -- and the reason it does not have to be spelled
         differently. A component has no such hook, so its state has no address.
         """
         return CellAddress(self, name)
@@ -116,7 +116,7 @@ class Shared[ScopeT = None](Reactive):
         if name not in type(self)._state_descriptors and name not in _RESERVED and not name.startswith("_"):
             message = (
                 f"{type(self).__name__}.{name} is not declared state. A namespace holds view state "
-                f"declared with sl.state(); anything else belongs to whoever constructed it."
+                f"declared with state(); anything else belongs to whoever constructed it."
             )
             raise AttributeError(message)
         super().__setattr__(name, value)
