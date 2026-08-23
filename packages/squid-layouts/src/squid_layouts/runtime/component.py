@@ -144,6 +144,7 @@ _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
 )
 _MISSING = object()
 
+
 @dataclass(frozen=True, slots=True)
 class ComponentTree:
     """One expanded render and the component identities that produced it."""
