@@ -400,10 +400,10 @@ promised the next opportunity rather than the current instant.
 
 Cross-mount refresh uses a payload-free `sl.runtime.TopicBus`: a topic is an exact hashable address,
 not state. Subscribers re-read application services before asking their mount to refresh, so the
-data layer remains the only source of truth. Publishes coalesce per topic, reactor scheduling
-coalesces per mount, and different mounts refresh concurrently without one mount rendering over
-itself. The host supervises `TopicBus.run()` and `Reactor.run()` explicitly. `TopicBus.drain()` is
-the deterministic no-background-task seam for subscriber tests.
+data layer remains the only source of truth. `LocalTopicBus` delivers synchronously and isolates
+subscriber failures through a reporting hook; Reactor scheduling coalesces per mount, and different
+mounts refresh concurrently without one mount rendering over itself. The host supervises
+`Reactor.run()` explicitly. Subscriber tests publish and assert immediately.
 
 Publish from the existing committed-change funnel or durable change-feed drain. Never attach the
 bus to a message already owned by a durable reconciliation loop: that creates a second writer. In
