@@ -577,12 +577,14 @@ class Mount:
         self._hooks_fired = False
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
-        # What the latest staged render read, and what it managed to subscribe to. Two
-        # different things: a mount with no reactor still knows what it is looking at, which
-        # is what lets its own writes repaint it even when nobody can deliver a topic to it.
-        # Reconciled at stage time rather than after delivery, because a write landing between
-        # a render's read and its subscription is lost and the bus is not durable.
+        # What the committed generation read, what it plus every render staged since read,
+        # and what this mount managed to subscribe to. Three different things: a mount with no
+        # reactor still knows what it is looking at, which is what lets its own writes repaint
+        # it even when nobody can deliver a topic to it. A follow is acquired at stage time,
+        # because a write landing between a render's read and its subscription is lost and the
+        # bus is not durable -- but only a delivered render may retire one.
         self._observed: tuple[Topic, ...] = ()
+        self._watched: dict[Topic, None] = {}
         self._follows: dict[Topic, Callable[[], None]] = {}
         self._follow_warned = False
 
@@ -623,9 +625,11 @@ class Mount:
 
     @property
     def observed(self) -> tuple[Topic, ...]:
-        """The shared cell addresses this mount's latest staged render read.
+        """The shared cell addresses the generation on screen read.
 
-        What it is looking at, whether or not anything can notify it about them.
+        What the reader is looking at, whether or not anything can notify this mount about
+        them. A render staged since is not here until it is delivered; `followed` may
+        already cover it, because a subscription is acquired early and retired late.
         """
         return self._observed
 
@@ -793,8 +797,7 @@ class Mount:
         assets = composition.assets
         if disabled:
             _disable_all(view)
-        self._observed = tree.observations
-        self._reconcile_follows(tree.observations)
+        self._ensure_follows(tree.observations)
         return _Candidate(
             view,
             composition,
@@ -807,18 +810,21 @@ class Mount:
             composition.plan.session_updates,
         )
 
-    def _reconcile_follows(self, observed: Sequence[Topic]) -> None:
-        """Follow exactly the shared cells this render read, dropping the ones it stopped reading.
+    def _ensure_follows(self, observed: Sequence[Topic]) -> None:
+        """Acquire whatever a staged render newly reads, and retire nothing.
 
-        Over-subscribe, never under-subscribe: a staged render that is later discarded leaves a
-        subscription the next successful render removes, and the worst case is one spurious
-        refresh. A read that a conditional branch dropped stops refreshing on the next render.
+        Over-subscribe, never under-subscribe. Staging is the only moment early enough to
+        close the read-to-subscribe race, and it is far too early to drop anything: the
+        candidate may never be delivered, and the generation still on screen displays cells
+        this render stopped reading. `_prune_follows` is the other half, and delivery is what
+        earns it.
         """
-        if self._finished or (not observed and not self._follows):
+        if self._finished or not observed:
             return
+        self._watched.update(dict.fromkeys(observed))
         follower = self.scheduler
         if not isinstance(follower, TopicFollower):
-            if observed and not self._follow_warned:
+            if not self._follow_warned:
                 self._follow_warned = True
                 logger.warning(
                     "mount %s renders shared state but its scheduler cannot follow topics, "
@@ -826,14 +832,27 @@ class Mount:
                     self.id,
                 )
             return
+        for topic in observed:
+            if topic not in self._follows:
+                self._follows[topic] = follower.follow(self, topic)
+
+    def _prune_follows(self, observed: Sequence[Topic]) -> None:
+        """Publish a delivered render's reads and drop the follows nothing visible needs.
+
+        The mirror of `_ensure_follows`: what a candidate provisionally acquired becomes this
+        mount's own only here, and a subscription the previous generation depended on is
+        retired only once its generation is off screen. A read that a conditional branch
+        dropped therefore stops refreshing when that branch reaches Discord, not before.
+        """
+        if self._finished:
+            return
         wanted = dict.fromkeys(observed)
+        self._observed = tuple(wanted)
+        self._watched = wanted
         for topic, unfollow in tuple(self._follows.items()):
             if topic not in wanted:
                 del self._follows[topic]
                 unfollow()
-        for topic in wanted:
-            if topic not in self._follows:
-                self._follows[topic] = follower.follow(self, topic)
 
     @contextmanager
     def _action_transaction(self, policy: ActionPolicy) -> Iterator[None]:
@@ -935,6 +954,7 @@ class Mount:
         self._handlers = candidate.handlers
         self._form_bindings = candidate.form_bindings
         self._generation = candidate.generation
+        self._prune_follows(candidate.tree.observations)
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
         self._assets = candidate.assets
         self._plan = candidate.composition.plan
@@ -2082,6 +2102,7 @@ class Mount:
         for unfollow in tuple(self._follows.values()):
             unfollow()
         self._follows.clear()
+        self._watched.clear()
         self._observed = ()
         self.runtime.finish()
 
