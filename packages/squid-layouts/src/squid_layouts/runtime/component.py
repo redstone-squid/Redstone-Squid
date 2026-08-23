@@ -43,6 +43,8 @@ from squid_layouts.runtime.reactivity import (
     _RENDER_OBSERVATION,
     _Computed,
     _State,
+    note_born,
+    note_initialized,
     observe_render,
     report_undeclared_write,
     untracked,
@@ -172,15 +174,19 @@ def _checked_init(
 
     @functools.wraps(original)
     def __init__(self: Component, *args: Any, **kwargs: Any) -> None:
-        original(self, *args, **kwargs)
-        # Only the outermost __init__ checks. A subclass calling super().__init__() would
-        # otherwise trip the base's wrapper before it had finished assigning.
-        if type(self).__init__ is not __init__:
-            return
-        missing = sorted(name for name, descriptor in required if not descriptor.is_set(self))
-        if missing:
-            message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
-            raise TypeError(message)
+        try:
+            original(self, *args, **kwargs)
+            # Only the outermost __init__ checks. A subclass calling super().__init__() would
+            # otherwise trip the base's wrapper before it had finished assigning.
+            if type(self).__init__ is not __init__:
+                return
+            missing = sorted(name for name, descriptor in required if not descriptor.is_set(self))
+            if missing:
+                message = f"{type(self).__name__}.__init__ left declared state unassigned: {', '.join(missing)}"
+                raise TypeError(message)
+        finally:
+            if type(self).__init__ is __init__:
+                note_initialized(self)
 
     return __init__
 
@@ -242,10 +248,9 @@ class Component[ModeT = Any]:
             if isinstance(descriptor, _Computed)
         }
         required = tuple((name, descriptor) for name, descriptor in declared.items() if not descriptor.has_initial)
-        if required and not _is_abstract(cls):
-            # Wrap even an inherited __init__, so adding a required field to a subclass that
-            # defines no constructor of its own is still checked.
-            cls.__init__ = _checked_init(cls.__init__, required)
+        # Wrap even an inherited __init__, so construction-time observation exemptions end
+        # at the outermost initializer. Required fields are checked there for the same reason.
+        cls.__init__ = _checked_init(cls.__init__, required if not _is_abstract(cls) else ())
 
     def __new__(cls, *args: Any, **kwargs: Any) -> Self:
         # A handler may build components. Noting the ones born mid-action is what lets their
