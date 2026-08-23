@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol, overload
 
-from squid_layouts.runtime.reactivity import _CONSUMER, declared_cells
+from squid_layouts.runtime.reactivity import _CONSUMER, action_participant, declared_cells, join_action
 
 
 class ResourceOwner(Protocol):
@@ -60,6 +60,42 @@ _CURRENT_RESOURCES: ContextVar[list[Resource[Any]] | None] = ContextVar(
 )
 
 
+class _Missing:
+    """A staged replacement of `None` is a value; the absence of one is not."""
+
+    __slots__ = ()
+
+
+_MISSING = _Missing()
+
+
+class _Replacement:
+    """One resource's replaced value, held until the action that made it commits.
+
+    Keyed by the resource itself, so repeated `replace` calls in one action collapse into
+    the last one, exactly as repeated writes to a state cell do.
+    """
+
+    __slots__ = ("_resource", "value")
+
+    def __init__(self, resource: Resource[Any]) -> None:
+        self._resource = resource
+        self.value: Any = _MISSING
+
+    def prepare(self) -> None:
+        """Nothing can fail: the value is already in hand, and installing it cannot raise."""
+
+    def apply(self) -> None:
+        if not isinstance(self.value, _Missing):
+            self._resource._replace_now(self.value)
+
+    def abort(self) -> None:
+        self.value = _MISSING
+
+    def finalize(self) -> None:
+        """Installing already invalidated the owner, which is the only watcher there is."""
+
+
 def _previous[ValueT](state: ResourceState[ValueT]) -> Ready[ValueT] | None:
     if isinstance(state, Ready):
         return state
@@ -94,6 +130,11 @@ class Resource[ValueT]:
     @property
     def state(self) -> ResourceState[ValueT]:
         """Return the current synchronous state, re-pending it if what it read has moved."""
+        staged = self._staged()
+        if not isinstance(staged, _Missing):
+            # This action already declared the value authoritative, so nothing it reads next
+            # should re-pend it -- and `_recheck` would empty the sources `apply` re-baselines.
+            return Ready(staged)
         self._recheck()
         return self._state
 
@@ -131,13 +172,31 @@ class Resource[ValueT]:
             self._owner.invalidate()
 
     def replace(self, value: ValueT) -> None:
-        """Install an authoritative value and supersede every in-flight request."""
+        """Install an authoritative value and supersede every in-flight request.
+
+        Inside an action this stages like any other write: the action reads back what it
+        replaced, nobody else sees it until the commit lands, and a rollback drops it. A
+        resource is the application's value, so it may not be the one thing that survives a
+        handler that failed.
+        """
+        staged = join_action(self, lambda: _Replacement(self))
+        if staged is None:
+            self._replace_now(value)
+            return
+        staged.value = value
+
+    def _replace_now(self, value: ValueT) -> None:
         self._request_token += 1
         self._state = Ready(value)
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
         # as they stand now, and a later change to one of them should still reload.
         self.sources = {source: source.settle() for source in self.sources}
         self._owner.invalidate()
+
+    def _staged(self) -> ValueT | _Missing:
+        """This action's replacement for this resource, if it made one."""
+        staged = action_participant(self)
+        return staged.value if isinstance(staged, _Replacement) else _MISSING
 
     async def reload(self) -> ResourceState[ValueT]:
         """Request and settle a fresh value under the caller's task."""

@@ -644,6 +644,16 @@ def join_action[ParticipantT: ActionParticipant](
     return current.enlist(key, factory)
 
 
+def action_participant(key: object) -> ActionParticipant | None:
+    """`key`'s participant in the action in flight, without enlisting one.
+
+    The read half of :func:`join_action`, for a subsystem that has to answer "what did this
+    action stage" on a path where staging itself would be wrong -- a read, or a render.
+    """
+    current = _CURRENT.get()
+    return None if current is None else current.participants.get(key)
+
+
 def has_action_hook(key: object) -> bool:
     """Whether `key` already registered a commit hook for the action in flight."""
     current = _CURRENT.get()
