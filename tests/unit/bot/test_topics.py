@@ -9,18 +9,34 @@ import anyio
 
 import squid_layouts as sl
 from squid.bot.app import RedstoneSquid
-from squid.bot.topics import follow_resource
 from squid.topics import resource_topic
 from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import delivered_to, fake_message
 
 
 class Projection(sl.Component):
-    def __init__(self, value: str) -> None:
-        self.value = value
+    """A panel that re-reads its source whenever the build topic is published.
+
+    The whole binding is the `sl.watch` line: no subscription to register, no reload closure
+    to pass, and no priming call before the send.
+    """
+
+    def __init__(self, read) -> None:
+        self._read = read
+
+    @sl.resource(delivery=sl.ResourceDelivery.ATOMIC)
+    async def value(self) -> str:
+        sl.watch(resource_topic("build", "42"))
+        return self._read()
 
     def render(self):
-        return sl.paragraph(self.value)
+        # An atomic resource is still rendered once while pending: that discovery render is
+        # how the mount learns the resource exists, and what it reads is what it follows.
+        match self.value.state:
+            case sl.Ready(value=value):
+                return sl.paragraph(value)
+            case _:
+                return sl.paragraph("loading")
 
 
 async def _drain_reactor(reactor: sl.discord.Reactor) -> None:
@@ -34,17 +50,13 @@ async def test_one_resource_publish_refreshes_two_panels_without_second_post_wri
     bus = sl.TopicBus()
     reactor = sl.discord.Reactor(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
-    panels = [Projection("before"), Projection("before")]
     source = "before"
+    panels = [Projection(lambda: source), Projection(lambda: source)]
 
     for panel, message in zip(panels, messages, strict=True):
         mount = sl.discord.Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
-
-        async def reload(current: Projection) -> None:
-            current.value = source
-
-        follow_resource(bus, reactor, mount, resource_topic("build", "42"), panel, reload)
         await mount.send(delivered_to(message))
+        assert mount.followed == (resource_topic("build", "42"),), "following is what the render read"
 
     posts = SimpleNamespace(pending_generation=AsyncMock(return_value=7))
     reconciler = SimpleNamespace(reconcile=AsyncMock())
