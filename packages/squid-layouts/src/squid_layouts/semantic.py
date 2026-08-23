@@ -307,6 +307,7 @@ class MediaItem:
     key: str
     url: str
     description: TextLike | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,6 +366,7 @@ class Download:
     asset: Asset
     description: TextLike | None = None
     emphasis: Emphasis = Emphasis.NORMAL
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)

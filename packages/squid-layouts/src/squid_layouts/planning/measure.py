@@ -571,10 +571,10 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
                     Row(tuple(items[start : start + limits.row_buttons]))
                     for start in range(0, len(items), limits.row_buttons)
                 ]
-            case MediaCollection(urls=urls):
+            case MediaCollection(items=items):
                 return [
-                    Gallery(tuple(urls[start : start + limits.gallery_items]))
-                    for start in range(0, len(urls), limits.gallery_items)
+                    Gallery(tuple(items[start : start + limits.gallery_items]))
+                    for start in range(0, len(items), limits.gallery_items)
                 ]
             case (
                 Panel(children=children)
@@ -851,16 +851,16 @@ class _Builder:
                 return RGroup(realized)
             case Break(children=children):
                 return RGroup(self.realize_children(children))
-            case Gallery(urls=urls):
-                if len(urls) > 10:
+            case Gallery(items=items):
+                if len(items) > 10:
                     self.notes.append(
                         _note(
                             SolveNoteCode.CLAMP_GALLERY_ITEMS,
-                            f"gallery holds {len(urls)} items; keeping 10",
+                            f"gallery holds {len(items)} items; keeping 10",
                             SolveNoteSeverity.CLAMP,
                         )
                     )
-                    node = Gallery(urls=urls[:10])
+                    node = Gallery(items=items[:10])
                 return node
             case Row(items=items):
                 self.charge(sum(item.text_cost for item in items if isinstance(item, RawItem)))
@@ -1334,7 +1334,7 @@ def _prune(children: list[Realized]) -> list[Realized]:
                 # alone as a top-level component, so an emptied section drops whole.
                 if kept_texts:
                     pruned.append(RSection(texts=kept_texts, accessory=accessory))
-            case Gallery(urls=()) | Row(items=()):
+            case Gallery(items=()) | Row(items=()):
                 continue
             case _:
                 pruned.append(child)
