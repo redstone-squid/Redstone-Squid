@@ -7,12 +7,13 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Protocol
+from typing import Protocol, Unpack, overload
 from uuid import uuid4
 
 import discord
 
-from squid_layouts.discord.access import Owner
+from squid_layouts.discord.access import AccessPolicy, Owner
+from squid_layouts.discord.defaults import MountDefaults, MountOptions
 from squid_layouts.discord.delivery import Abandoned, Delivered, Destination
 from squid_layouts.discord.mount import Mount
 from squid_layouts.runtime.component import Component
@@ -440,13 +441,15 @@ def _resolve_victims(selected: tuple[SessionSummary, ...], occupants: tuple[Sess
 class SessionRegistry:
     """The live logical sessions owned by this process."""
 
-    def __init__(self) -> None:
+    def __init__(self, defaults: MountDefaults = MountDefaults()) -> None:  # noqa: B008  # frozen value
+        self.defaults = defaults
         self._by_key: dict[Hashable, list[Session]] = {}
         self._by_mount: dict[Mount, Session] = {}
         self._sessions: list[Session] = []
         self._locks: dict[Hashable, asyncio.Lock] = {}
         self._waiting: dict[Hashable, int] = {}
 
+    @overload
     async def open(
         self,
         mount: Mount,
@@ -458,6 +461,37 @@ class SessionRegistry:
         durable: bool = False,
         local: bool = True,
         summary: SessionSummary | None = None,
+    ) -> OpenResult: ...
+
+    @overload
+    async def open(
+        self,
+        mount: Component,
+        destination: Destination,
+        *,
+        access: AccessPolicy,
+        key: Hashable | None = None,
+        policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+        actor_id: int | None = None,
+        durable: bool = False,
+        local: bool = True,
+        summary: SessionSummary | None = None,
+        **mount_options: Unpack[MountOptions],
+    ) -> OpenResult: ...
+
+    async def open(
+        self,
+        mount: Mount | Component,
+        destination: Destination,
+        *,
+        access: AccessPolicy | None = None,
+        key: Hashable | None = None,
+        policy: SessionPolicy = DEFAULT_SESSION_POLICY,
+        actor_id: int | None = None,
+        durable: bool = False,
+        local: bool = True,
+        summary: SessionSummary | None = None,
+        **mount_options: Unpack[MountOptions],
     ) -> OpenResult:
         """Admit, deliver, and register one new root session.
 
@@ -465,6 +499,15 @@ class SessionRegistry:
         session may pass its immutable ``summary`` instead to retain the original identity
         and opening time.
         """
+        if isinstance(mount, Component):
+            if access is None:
+                message = "access is required when opening a component"
+                raise TypeError(message)
+            mount = self.defaults.mount(mount, access=access, **mount_options)
+        elif access is not None or mount_options:
+            message = "mount construction options are only valid when opening a component"
+            raise TypeError(message)
+
         if key is None:
             return await self._open_locked(
                 mount,
@@ -702,16 +745,17 @@ async def open_personal(
     *,
     key: Hashable,
     policy: SessionPolicy = DEFAULT_SESSION_POLICY,
-    **mount_options: Any,
+    **mount_options: Unpack[MountOptions],
 ) -> OpenResult:
     """Open the common owner-only, ephemeral interaction session path."""
-    mount = Mount(component, access=Owner(interaction.user.id), **mount_options)
     from squid_layouts.discord.delivery import respond_to
 
     return await sessions.open(
-        mount,
+        component,
         respond_to(interaction, ephemeral=True),
+        access=Owner(interaction.user.id),
         key=key,
         policy=policy,
         actor_id=interaction.user.id,
+        **mount_options,
     )

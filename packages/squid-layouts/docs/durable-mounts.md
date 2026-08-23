@@ -20,12 +20,13 @@ from squid_layouts.discord.durability import (
 
 
 components = ComponentRegistry()
+defaults = sl.discord.MountDefaults()
 
 
 def restore_review(context: RestoreContext) -> sl.discord.Mount:
     if context.actor_id is None:
         raise SnapshotError("review sessions require an owner")
-    return sl.discord.Mount(
+    return defaults.mount(
         ReviewPanel(review_service),
         access=sl.discord.Owner(context.actor_id),
         timeout=None,
@@ -33,7 +34,7 @@ def restore_review(context: RestoreContext) -> sl.discord.Mount:
 
 
 components.register("review", version=1, restore=restore_review)
-sessions = sl.discord.SessionRegistry()
+sessions = sl.discord.SessionRegistry(defaults)
 runtime = DurableSessionRuntime(
     sessions=sessions,
     components=components,
