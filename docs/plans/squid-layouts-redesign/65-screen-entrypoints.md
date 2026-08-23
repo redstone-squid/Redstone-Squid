@@ -56,3 +56,8 @@ a runtime facade remain deferred until real call sites establish one common poli
 - Screen/session package tests, the bot consent-banner tests, Pyrefly, and `git diff --check` pass
   or introduce no findings beyond the recorded baseline.
 
+## Status
+
+Shipped 2026-08-24. `SessionRegistry.open` accepts only mounts, `open_personal` is removed, and
+`Screen.respond` owns the interaction happy path. The consent banner is the first production
+caller; Context and custom-destination consent openings remain explicit.

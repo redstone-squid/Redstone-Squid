@@ -4,13 +4,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Unpack, cast
+from typing import Any, Unpack, cast
 
 import discord
 
 from squid_layouts.discord.access import AccessPolicy, Owner
 from squid_layouts.discord.defaults import MountOptions
-from squid_layouts.discord.delivery import Destination
+from squid_layouts.discord.delivery import Destination, respond_to
 from squid_layouts.discord.mount import Mount
 from squid_layouts.discord.sessions import (
     DEFAULT_SESSION_POLICY,
@@ -96,6 +96,27 @@ class Screen:
             key=self.key(opener),
             policy=self.policy,
             actor_id=opener.user_id,
+        )
+
+    async def respond(
+        self,
+        sessions: SessionRegistry,
+        component: Component,
+        interaction: discord.Interaction[Any],
+        *,
+        parent: Mount | None = None,
+        ephemeral: bool = True,
+        wait: bool = False,
+        **overrides: Unpack[MountOptions],
+    ) -> OpenResult:
+        """Open this screen as an interaction response."""
+        return await self.open(
+            sessions,
+            component,
+            respond_to(interaction, ephemeral=ephemeral, wait=wait),
+            opener=Opener.of(interaction),
+            parent=parent,
+            **overrides,
         )
 
     @staticmethod

@@ -19,7 +19,6 @@ from squid.bot.ui import (
 )
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord.screens import Opener
 from squid_layouts.discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
@@ -84,11 +83,11 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         timeout=120,
     )
     registry = interaction.client.mounts
-    opened = await CONSENT_SCREEN.open(
+    opened = await CONSENT_SCREEN.respond(
         registry,
         component,
-        sl.discord.respond_to(interaction, ephemeral=True, wait=True),
-        opener=Opener.of(interaction),
+        interaction,
+        wait=True,
         localization=localization_for(locale),
     )
     if isinstance(opened, Rejected):

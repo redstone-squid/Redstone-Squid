@@ -366,6 +366,11 @@ cardinality, while `SessionPolicy` composes a limit, collision selection, and re
 protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
 explain a collision.
 
+`Screen` holds reusable key scope, admission, access, and mount policy for a logical application
+screen. Use `screen.respond(sessions, component, interaction)` when one interaction supplies both
+delivery and opener identity; use `screen.open(...)` with an explicit `Destination` and `Opener`
+for other transports.
+
 Stateful drafts that must survive restarts open through `DurableSessionRuntime`, which coordinates
 fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
 See [Durable sessions](docs/durable-mounts.md) for the imperative and `DurableBot` startup paths.
