@@ -186,10 +186,21 @@ Every process that takes part runs the bridge, including one that only publishes
 exactly as durable as the bus: NOTIFY reaches whoever is listening at commit time, so a restart
 or a dropped connection costs latency, not correctness -- keep the reconciler or poll that already
 makes the projection converge. A reconnect calls the optional `on_resync()` for hosts that want to
-republish their coarse topics; payloads must stay under 8000 bytes; and because the notification
-leaves on the bridge's own connection, publish *after* your write commits, or send `payload()`
-yourself with `SELECT pg_notify($1, $2)` inside the transaction, which PostgreSQL holds until
-commit.
+republish their coarse topics; payloads must stay under 8000 bytes.
+
+`publish()` is immediate on this process and queues a remote notification. When the change belongs
+inside an application-owned PostgreSQL transaction, use `publish_in()` instead:
+
+```python
+async with connection.transaction():
+    await save_change(connection)
+    await bridge.publish_in(connection, sl.Topic("build", "123"))
+```
+
+`publish_in()` does not commit the transaction. PostgreSQL holds its notification until commit,
+then the bridge listener publishes it locally and in other processes. The bridge must be running
+before calling it; unlike `publish()`, it rejects topics that cannot be encoded or fit under the
+NOTIFY payload limit.
 
 Every delivered mount using a reactor is observed for edit-authority expiry, even when it follows
 no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
