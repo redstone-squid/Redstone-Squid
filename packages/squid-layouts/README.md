@@ -55,16 +55,21 @@ and action rows, from the same semantic document.
 `sl.discord.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
 message carries content the engine cannot see — `sl.discord.measure(view)` and `sl.discord.cost(item)`
 produce one without hand-counting. It always creates a renderer-owned view;
-adopting an arbitrary existing `discord.py` view is intentionally unsupported.
+adopting a *live* `discord.py` view — one already sent, which will edit its own message — is
+intentionally unsupported, because two writers on one message make measurement unsound.
 
-There are three ways to adopt the package, and they can be mixed in one bot:
+There are four ways to adopt the package, and they can be mixed in one bot:
 
 1. **A new screen.** Use `sl.discord.Mount` for one command while everything else stays as it is.
 2. **A region of an existing V2 screen.** `sl.discord.contribute(document, to=view, followed_by=...)`
    measures the host, plans into what is left, and places the result — the host keeps sending,
    editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
    routed controls only, since no mount exists to wire a component-local callback.
-3. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
+3. **An unsent classic view.** `sl.discord.adopt(view)` turns a never-sent `discord.ui.View`
+   into a `Component`: Squid builds its own controls from `view.children`, owns the message,
+   and dispatches to the legacy callbacks unchanged. The mount owns the timeout, and anything
+   that would make the legacy object a second writer raises `AdoptionError`.
+4. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
 
 See [Migrating an existing discord.py bot](docs/migrating.md) for an incremental path covering
 V2 and classic contributions, persistent routes, mounts, sessions, forms, and durability.
