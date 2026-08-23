@@ -371,7 +371,7 @@ from squid_layouts.text import (
     plain,
     raw_md,
 )
-from squid_layouts.topics import (
+from squid_layouts.runtime.topics import (
     Address,
     BusSnapshot,
     CellAddress,

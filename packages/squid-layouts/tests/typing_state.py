@@ -24,7 +24,7 @@ from squid_layouts import (
     resource,
     state,
 )
-from squid_layouts.topics import TopicBus
+from squid_layouts.runtime.topics import TopicBus
 
 bus = TopicBus()
 

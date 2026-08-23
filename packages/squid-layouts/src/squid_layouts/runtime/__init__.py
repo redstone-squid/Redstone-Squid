@@ -63,6 +63,18 @@ from squid_layouts.runtime.resources import (
     resource,
 )
 from squid_layouts.runtime.shared import Shared
+from squid_layouts.runtime.topics import (
+    Address,
+    BusSnapshot,
+    CellAddress,
+    KindKeyCodec,
+    Subscriber,
+    Topic,
+    TopicBus,
+    TopicCodec,
+    TopicSnapshot,
+    watch,
+)
 
 
 def __getattr__(name: str):
@@ -76,8 +88,11 @@ def __getattr__(name: str):
 __all__ = [
     "ActionParticipant",
     "ActivePagers",
+    "Address",
     "AtomicResource",
     "AtomicResourceState",
+    "BusSnapshot",
+    "CellAddress",
     "CellReport",
     "Component",
     "ComponentRuntime",
@@ -92,6 +107,7 @@ __all__ = [
     "HistoryEntrySnapshot",
     "HistoryError",
     "HistorySnapshot",
+    "KindKeyCodec",
     "Observation",
     "Pending",
     "PresentationSession",
@@ -109,8 +125,13 @@ __all__ = [
     "StateDelta",
     "StrategyState",
     "StrategyUpdate",
+    "Subscriber",
     "ToggleState",
     "ToggleUpdate",
+    "Topic",
+    "TopicBus",
+    "TopicCodec",
+    "TopicSnapshot",
     "UndeclaredStateError",
     "addresses",
     "apply_updates",
@@ -130,4 +151,5 @@ __all__ = [
     "state",
     "transaction",
     "untracked",
+    "watch",
 ]

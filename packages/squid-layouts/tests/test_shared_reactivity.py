@@ -8,7 +8,7 @@ from squid_layouts import CellAddress, Component, Shared, addresses, computed, s
 from squid_layouts.primitives import Text
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.shared import describe
-from squid_layouts.topics import Topic, TopicBus
+from squid_layouts.runtime.topics import Topic, TopicBus
 
 
 @dataclass(frozen=True, slots=True)

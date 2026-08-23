@@ -28,7 +28,7 @@ from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
 from squid_layouts.profiling import OperationKind, Profiler, RuntimeTrace
 from squid_layouts.semantic import LayoutNode
-from squid_layouts.topics import TopicBus
+from squid_layouts.runtime.topics import TopicBus
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
