@@ -11,14 +11,25 @@ import discord
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.assets import Asset, InlineAsset
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.mount import _EntityValues
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts.assets import Asset, InlineAsset
 from squid_layouts.document import Document
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
-from squid_layouts.primitives import ActionStyle, Button, EntitySelect, Gallery, LinkButton, Panel, Row, Section, SelectMenu, Text
+from squid_layouts.primitives import (
+    ActionStyle,
+    Button,
+    EntitySelect,
+    Gallery,
+    LinkButton,
+    Panel,
+    Row,
+    Section,
+    SelectMenu,
+    Text,
+)
 
 
 class Paginator(discord.ui.View):
@@ -49,6 +60,13 @@ class Paginator(discord.ui.View):
 
 def _mounted(view: discord.ui.View, **options: Any) -> tuple[Mount, list[BaseException]]:
     """A committed mount around `view`, plus the list its error hook appends to."""
+    errors: list[BaseException] = []
+    mount = Mount(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
+    commit_render(mount)
+    return mount, errors
+
+
+def _mounted_layout(view: discord.ui.LayoutView, **options: Any) -> tuple[Mount, list[BaseException]]:
     errors: list[BaseException] = []
     mount = Mount(adopt(view, **options), access=Everyone(), timeout=None, on_error=_record(errors))
     commit_render(mount)
@@ -178,6 +196,32 @@ def test_layout_view_rejects_duplicate_keys_across_nested_branches() -> None:
 
     with pytest.raises(AdoptionError, match="share the key"):
         adopt(layout)
+
+
+async def test_layout_view_dispatches_original_callback_and_reconstructs_the_tree() -> None:
+    layout = discord.ui.LayoutView(timeout=None)
+    text = discord.ui.TextDisplay("before")
+    button = discord.ui.Button(label="Run", custom_id="run")
+
+    async def callback(interaction: discord.Interaction) -> None:
+        text.content = "after"
+        button.disabled = True
+        await interaction.response.edit_message(view=layout)
+
+    button.callback = callback
+    layout.add_item(discord.ui.Container(text, discord.ui.ActionRow(button)))
+    mount, errors = _mounted_layout(layout)
+    interaction = fake_interaction()
+
+    await mount.dispatch("run", interaction)
+
+    assert not errors
+    assert text.content == "after"
+    response = interaction.response.edit_message
+    assert response.await_count == 1
+    drawn = response.await_args.kwargs["view"]
+    assert [item.content for item in drawn.walk_children() if isinstance(item, discord.ui.TextDisplay)] == ["after"]
+    assert [item.disabled for item in drawn.walk_children() if isinstance(item, discord.ui.Button)] == [True]
 
 
 async def test_an_overridden_on_timeout_refuses_unless_discarded() -> None:
