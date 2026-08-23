@@ -1,6 +1,7 @@
 """Public interactive showcase for the squid-layouts engine."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Iterable, Sequence
+from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING, Literal
 
@@ -17,27 +18,23 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-type DemoSection = Literal["tour", "pagination", "adaptation", "degradation", "composition", "localization"]
+type DemoSection = Literal[
+    "pagination",
+    "adaptation",
+    "degradation",
+    "data",
+    "ownership",
+    "forms",
+    "composition",
+    "localization",
+]
 
 _ACCENTS = (DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW)
 
 _SOURCE_EXAMPLES = {
-    "tour": """class Counter(sl.Component):
-    count: int = sl.state(0)
-
-    def render(self):
-        # Assigning declared state invalidates the owning mount.
-        return sl.section(
-            sl.heading("Counter"),
-            sl.paragraph(L("Count: {count}", count=self.count)),
-            sl.actions(sl.action("+1", self.increment, key="add"), key="counter"),
-        )
-
-    async def increment(self, event: sl.PressEvent) -> None:
-        self.count += 1""",
     "pagination": """lines = sl.primitives.Lines(
     entries,
-    join="\\n\\n",
+    join="\n\n",
     overflow=sl.primitives.Paginate(
         key="samples",          # independent cursor identity
         footer=page_footer,     # measured as part of each page
@@ -69,6 +66,45 @@ return sl.actions(*actions, key="showcase-actions")""",
     # Never sacrifice this audit promise.
     sl.primitives.Footer(audit_note, overflow=sl.primitives.Never()),
 ))""",
+    "data": """return sl.section(
+    sl.heading("Typed data"),
+
+    # A quantity, a proportion, and an instant -- not three pre-formatted strings.
+    sl.measure(len(rows), "Loaded samples", unit="rows"),
+    sl.progress(clicks, label="Clicks toward ten", maximum=10),
+
+    # One node; Discord draws it in each reader's own timezone.
+    sl.timestamp(opened_at, style=sl.semantic.TimeStyle.RELATIVE),
+
+    # AUTO, so the planner may fall back to records when a row will not fit.
+    sl.table(columns, *rows, key="capability-table"),
+)""",
+    "ownership": """# The session owns this one, under its key. No component state backs it.
+sl.toggle("Session-owned", key="ownership.managed")
+
+# The component owns this one: self.subscribed wins every render, and the
+# handler is the only path to a new value -- so it may refuse one.
+sl.toggle(
+    "Component-owned",
+    key="ownership.controlled",
+    on=sl.controlled(self.subscribed, self._set_subscribed),
+)
+
+sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate))""",
+    "forms": """class FeedbackForm(sl.forms.Form):
+    exhibit = sl.forms.ChoiceField(label="Which exhibit", options=EXHIBITS)
+    headline = sl.forms.TextField(label="Headline", minimum=4, maximum=80)
+    score = sl.forms.ScaleField(label="Score", minimum=1, maximum=5)
+
+    def validate(self):
+        # Runs only once every field has parsed, so these are typed values.
+        if self.score <= 2 and not self.detail:
+            return (sl.forms.FieldError("detail", "A low score needs a reason."),)
+        return ()
+
+# A schema, not a Discord modal. RETRY re-presents it with the errors
+# and everything already typed; **prefill seeds it from state.
+return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback")""",
     "composition": """class Dashboard(sl.Component):
     def __init__(self):
         self.left = Counter("Left")
@@ -127,18 +163,65 @@ class DemoCounter(sl.Component):
         self.count += 1
 
 
-class LayoutShowcase(sl.Component):
-    """One mounted tour of reactivity, planning, pagination, and composition."""
+_FEEDBACK_EXHIBITS = (
+    sl.forms.ChoiceOption("pagination", L(t"Budget pagination"), "pagination"),
+    sl.forms.ChoiceOption("adaptation", L(t"Structural adaptation"), "adaptation"),
+    sl.forms.ChoiceOption("degradation", L(t"Graceful degradation"), "degradation"),
+    sl.forms.ChoiceOption("data", L(t"Typed data"), "data"),
+    sl.forms.ChoiceOption("ownership", L(t"Value ownership"), "ownership"),
+)
 
-    section: str = sl.state("tour")
+
+class FeedbackForm(sl.forms.Form):
+    """A typed schema, presented however the dispatching frontend can present it."""
+
+    title = L(t"Tell us about an exhibit")
+
+    exhibit = sl.forms.ChoiceField(label=L(t"Which exhibit"), options=_FEEDBACK_EXHIBITS)
+    headline = sl.forms.TextField(label=L(t"Headline"), minimum=4, maximum=80)
+    detail = sl.forms.TextAreaField(label=L(t"What stood out"), required=False, maximum=400)
+    score = sl.forms.ScaleField(
+        label=L(t"Score"),
+        minimum=1,
+        maximum=5,
+        labels={1: L(t"Confusing"), 5: L(t"Clear")},
+    )
+
+    def __init__(self, on_recorded: Callable[[FeedbackForm, sl.SubmitEvent], Awaitable[None]], /, **prefill: object):
+        super().__init__(**prefill)
+        self._on_recorded = on_recorded
+
+    def validate(self) -> Iterable[sl.forms.FormIssue]:
+        # Cross-field validation runs only once every field has parsed, so these are the typed
+        # values rather than the strings the reader typed.
+        if self.score is not None and self.score <= 2 and not self.detail:
+            return (sl.forms.FieldError("detail", L(t"A low score needs a sentence saying why.")),)
+        return ()
+
+    async def on_submit(self, event: sl.SubmitEvent) -> None:
+        # The submitted values are already bound to this instance, so the handler reads them as
+        # declared attributes instead of unpacking `event.values` by key.
+        await self._on_recorded(self, event)
+
+
+class LayoutShowcase(sl.Component):
+    """One mounted tour of planning, pagination, ownership, forms, and composition."""
+
+    section: str = sl.state("pagination")
     accent_index: int = sl.state(0)
     clicks: int = sl.state(0)
+    rating: int | None = sl.state(None)
+    subscribed: bool = sl.state(default=False)
+    feedback_exhibit: str = sl.state("")
+    feedback_headline: str = sl.state("")
+    feedback_score: int = sl.state(0)
     display_locale: str = sl.state("en", persist=False)
 
     def __init__(self, *, section: DemoSection, entries: int, locale: str | None) -> None:
         self.section = section
         self.entries = tuple(self._entry(index) for index in range(1, entries + 1))
         self.display_locale = locale or "en"
+        self.opened_at = datetime.now(UTC)
         self.left = DemoCounter(L(t"Left child"))
         self.right = DemoCounter(L(t"Right child"))
 
@@ -181,49 +264,23 @@ class LayoutShowcase(sl.Component):
 
     def _render_section(self) -> Sequence[sl.LayoutNode]:
         match self.section:
-            case "pagination":
-                exhibit = self._pagination()
             case "adaptation":
                 exhibit = self._adaptation()
             case "degradation":
                 exhibit = self._degradation()
+            case "data":
+                exhibit = self._data()
+            case "ownership":
+                exhibit = self._ownership()
+            case "forms":
+                exhibit = self._forms()
             case "composition":
                 exhibit = self._composition()
             case "localization":
                 exhibit = self._localization()
             case _:
-                exhibit = self._tour()
+                exhibit = self._pagination()
         return (*exhibit, self._source_example())
-
-    def _tour(self) -> Sequence[sl.LayoutNode]:
-        return (
-            sl.section(
-                sl.heading(L(t"What this message is doing")),
-                # The body is the card's shock absorber: truncate lets it give up characters
-                # under pressure before a field or the footer loses any.
-                sl.truncate(
-                    sl.paragraph(
-                        L(
-                            "The component renders semantic intent. The planner fits it to Discord's real "
-                            "limits, the renderer draws Components V2, and the mount turns state changes into "
-                            "safe edits."
-                        )
-                    )
-                ),
-                sl.fields(
-                    sl.field(L(t"Reactivity"), L(t"Change state; the view rebuilds.")),
-                    sl.field(
-                        L(t"Pagination"),
-                        L(t"Pages are measured from content, footer, and controls together."),
-                    ),
-                    sl.field(
-                        L(t"Composition"),
-                        L(t"Keyed child components keep state and handlers independent."),
-                    ),
-                ),
-                sl.note(L(t"Use the selector above to switch exhibits in place.")),
-            ),
-        )
 
     def _pagination(self) -> Sequence[sl.primitives.Node]:
         return (
@@ -234,7 +291,8 @@ class LayoutShowcase(sl.Component):
                         L(
                             "There is no fixed entries-per-page value here. The solver fills the available "
                             "Discord text budget and includes the measured footer and navigation controls."
-                        )
+                        ),
+                        overflow=sl.primitives.Never(),
                     ),
                     sl.primitives.Lines(
                         self.entries,
@@ -254,13 +312,11 @@ class LayoutShowcase(sl.Component):
         return (
             sl.section(
                 sl.heading(L(t"Structural adaptation")),
-                sl.truncate(
-                    sl.paragraph(
-                        L(
-                            "This declares 36 actions, not buttons or menus. The planner preserves all 36 as "
-                            "two pickers of 25 and 11 options because that is the best legal Discord "
-                            "representation."
-                        )
+                sl.paragraph(
+                    L(
+                        "This declares 36 actions, not buttons or menus. The planner preserves all 36 as "
+                        "two pickers of 25 and 11 options because that is the best legal Discord "
+                        "representation."
                     )
                 ),
                 accent=DISCORD_YELLOW,
@@ -281,6 +337,14 @@ class LayoutShowcase(sl.Component):
             sl.primitives.Panel(
                 (
                     sl.primitives.Heading(L(t"Deliberate degradation")),
+                    sl.primitives.Text(
+                        L(
+                            "Three overflow policies in one card. Only the block below is allowed to lose "
+                            "characters; the audit lines stay whole or say how many were dropped, and the "
+                            "footer keeps its promise whatever the budget costs."
+                        ),
+                        overflow=sl.primitives.Never(),
+                    ),
                     sl.primitives.Text(long_explanation, overflow=sl.primitives.Truncate()),
                     sl.primitives.Lines(audit_lines, overflow=sl.primitives.Spill()),
                     sl.primitives.Footer(
@@ -292,16 +356,117 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
+    def _data(self) -> Sequence[sl.LayoutNode]:
+        return (
+            sl.section(
+                sl.heading(L(t"Typed data, not pre-formatted strings")),
+                sl.paragraph(
+                    L(
+                        "A quantity, a proportion, and an instant are declared as what they are and "
+                        "formatted once, at the end. That is why the one timestamp node below reaches "
+                        "every reader in their own timezone without this component knowing any of them."
+                    )
+                ),
+                sl.measure(len(self.entries), L(t"Loaded samples"), unit="rows"),
+                sl.progress(self.clicks, label=L(t"Reactive clicks toward ten"), maximum=10),
+                sl.timestamp(self.opened_at, style=sl.semantic.TimeStyle.RELATIVE, label=L(t"Showcase opened")),
+                accent=DISCORD_BLUE,
+            ),
+            sl.table(
+                sl.columns(
+                    sl.column(L(t"Exhibit")),
+                    sl.column(L(t"Declares")),
+                    sl.column(L(t"Adapts by")),
+                ),
+                sl.table_row(L(t"Pagination"), L(t"One long list"), L(t"Measured pages"), key="row.pagination"),
+                sl.table_row(L(t"Adaptation"), L(t"36 actions"), L(t"Pickers of 25 and 11"), key="row.adaptation"),
+                sl.table_row(L(t"Degradation"), L(t"An overflow policy"), L(t"Truncate, spill, never"), key="row.deg"),
+                sl.table_row(L(t"Ownership"), L(t"Who holds a value"), L(t"Session or component"), key="row.ownership"),
+                sl.table_row(L(t"Forms"), L(t"A typed schema"), L(t"Modal, page, or prompt"), key="row.forms"),
+                key="capability-table",
+            ),
+        )
+
+    def _ownership(self) -> Sequence[sl.LayoutNode]:
+        return (
+            sl.section(
+                sl.heading(L(t"Who owns a control's value")),
+                sl.paragraph(
+                    L(
+                        "Every stateful control names its owner. A managed value lives in the presentation "
+                        "session under the control's key, so the first toggle below keeps its state with no "
+                        "component state behind it at all. A controlled value is authoritative on every "
+                        "render: the component decides what the reader sees, and its handler is the only "
+                        "path to a new one, which is what lets a handler refuse the change."
+                    )
+                ),
+                sl.fields(
+                    sl.field(L(t"Component-owned rating"), self._rating_text()),
+                    sl.field(
+                        L(t"Component-owned toggle"),
+                        L(t"Following") if self.subscribed else L(t"Not following"),
+                    ),
+                    sl.field(L(t"Session-owned toggle"), L(t"Held under its key; this component never reads it.")),
+                ),
+                accent=DISCORD_GREEN,
+            ),
+            sl.toggle(
+                L(t"Session-owned toggle"),
+                key="ownership.managed",
+                on_label=L(t"Session says on"),
+                off_label=L(t"Session says off"),
+            ),
+            sl.toggle(
+                L(t"Component-owned toggle"),
+                key="ownership.controlled",
+                on=sl.controlled(self.subscribed, self._set_subscribed),
+                tone=sl.Tone.SUCCESS,
+            ),
+            sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate)),
+        )
+
+    def _forms(self) -> Sequence[sl.LayoutNode]:
+        prefill: dict[str, object] = {}
+        if self.feedback_exhibit:
+            prefill["exhibit"] = self.feedback_exhibit
+        if self.feedback_headline:
+            prefill["headline"] = self.feedback_headline
+        if self.feedback_score:
+            prefill["score"] = self.feedback_score
+        return (
+            sl.section(
+                sl.heading(L(t"Portable typed forms")),
+                sl.paragraph(
+                    L(
+                        "This is a schema of typed fields, not a Discord modal. Each field parses itself, "
+                        "cross-field validation runs only once they all have, and a failure re-presents the "
+                        "form carrying both the errors and everything already typed."
+                    )
+                ),
+                sl.fields(
+                    sl.field(L(t"Last headline"), self.feedback_headline or L(t"nothing submitted yet")),
+                    sl.field(L(t"Exhibit"), self.feedback_exhibit or "--"),
+                    sl.field(L(t"Score"), str(self.feedback_score) if self.feedback_score else "--"),
+                ),
+                sl.note(L(t"Reopening the form prefills it from that same state.")),
+                accent=DISCORD_GREEN,
+            ),
+            sl.form(
+                L(t"Open the feedback form"),
+                FeedbackForm(self._record_feedback, **prefill),
+                key="feedback",
+                tone=sl.Tone.SUCCESS,
+            ),
+        )
+
     def _composition(self) -> Sequence[sl.LayoutNode]:
         return (
             sl.section(
                 sl.heading(L(t"Keyed component composition")),
-                sl.truncate(
-                    sl.paragraph(
-                        L(
-                            "These are two instances of the same child class. Boundaries namespace their state, "
-                            "actions, and lifecycle paths, so clicking one cannot cross-wire the other."
-                        )
+                sl.paragraph(
+                    L(
+                        "These are two instances of the same child class. Boundaries namespace their state, "
+                        "actions, and lifecycle paths, so clicking one cannot cross-wire the other."
                     )
                 ),
             ),
@@ -337,13 +502,12 @@ class LayoutShowcase(sl.Component):
                 sl.semantic.Paragraph(
                     L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")
                 ),
-                sl.semantic.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
+                sl.semantic.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["pagination"]), language="python"),
             ),
         )
 
     def _sections(self) -> tuple[tuple[str, sl.TextLike, sl.TextLike], ...]:
         return (
-            ("tour", L(t"Guided tour"), L(t"Architecture and reactive state")),
             (
                 "pagination",
                 L(t"Budget pagination"),
@@ -358,6 +522,21 @@ class LayoutShowcase(sl.Component):
                 "degradation",
                 L(t"Graceful degradation"),
                 L(t"Explicit truncate, spill, and preservation policies"),
+            ),
+            (
+                "data",
+                L(t"Typed data"),
+                L(t"Quantities and instants formatted once, at the end"),
+            ),
+            (
+                "ownership",
+                L(t"Value ownership"),
+                L(t"Session-owned and component-owned controls"),
+            ),
+            (
+                "forms",
+                L(t"Portable forms"),
+                L(t"Typed fields, cross-field validation, and prefill"),
             ),
             (
                 "composition",
@@ -375,6 +554,9 @@ class LayoutShowcase(sl.Component):
         detail = " ".join(["adaptive layout sample"] * (1 + index % 4))
         return f"**#{index:03d}** · {detail}"
 
+    def _rating_text(self) -> sl.TextLike:
+        return L(t"Unrated") if self.rating is None else "\N{BLACK STAR}" * self.rating
+
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self.entries)
         return L(t"Measured page {page} of {pages} · {total} samples")
@@ -387,6 +569,18 @@ class LayoutShowcase(sl.Component):
 
     async def _click(self, event: sl.PressEvent) -> None:
         self.clicks += 1
+
+    async def _rate(self, event: sl.ScaleEvent) -> None:
+        self.rating = event.value
+
+    async def _set_subscribed(self, event: sl.ToggleEvent) -> None:
+        self.subscribed = event.value
+
+    async def _record_feedback(self, form: FeedbackForm, event: sl.SubmitEvent) -> None:
+        self.feedback_exhibit = form.exhibit or ""
+        self.feedback_headline = form.headline or ""
+        self.feedback_score = form.score or 0
+        await event.notice(L(t"Recorded; the panel behind the form is already showing it."))
 
     async def _switch_language(self, event: sl.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
@@ -546,7 +740,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def demo(
         self,
         ctx: Context[BotT],
-        section: DemoSection = "tour",
+        section: DemoSection = "pagination",
         entries: app_commands.Range[int, 20, 200] = 100,
     ) -> None:
         """Open an interactive showcase of squid-layouts."""
