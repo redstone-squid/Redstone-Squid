@@ -15,7 +15,7 @@ from discord.utils import escape_markdown
 
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.operations import run_command_operation
+from squid.bot.operations import managed_result
 from squid.bot.submission.build_info import BuildInfoComponent
 from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
 from squid.bot.submission.edit import BuildEditCommands
@@ -46,6 +46,7 @@ from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid_layouts.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -234,21 +235,19 @@ class SearchCog[
         restriction=app_commands.locale_str(_("The restriction to add another name for.")),
         alias=app_commands.locale_str(_("The additional name.")),
     )
-    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str):
+    @managed_result
+    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str) -> RenderResult:
         """Add another name for a restriction."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
-        async def add_alias(_progress, _receipt):
-            try:
-                await self.restrictions.add_alias(restriction, alias)
-            except AliasAlreadyAddedError:
-                return info_node(
-                    t(locale, _("Already added")),
-                    t(locale, _("Alias already on this restriction.")),
-                )
-            return info_node(t(locale, _("Success")), t(locale, _("Alias added.")))
-
-        await run_command_operation(ctx, add_alias, locale=locale, reports=self.bot.services.error_reports)
+        try:
+            await self.restrictions.add_alias(restriction, alias)
+        except AliasAlreadyAddedError:
+            return info_node(
+                t(locale, _("Already added")),
+                t(locale, _("Alias already on this restriction.")),
+            )
+        return info_node(t(locale, _("Success")), t(locale, _("Alias added.")))
 
     @BuildCommandGroup.build_hybrid_group.command(name="queue")  # type: ignore
     async def get_pending_submissions(self, ctx: Context[BotT]):
@@ -271,8 +270,8 @@ class SearchCog[
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to see.")))
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         if ctx.interaction:
+            locale = await resolve_locale(ctx, self.bot.services.settings)
             interaction = ctx.interaction
             await interaction.response.defer()
             build = await self.queries.get(build_id)
@@ -304,50 +303,48 @@ class SearchCog[
             await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
             return
 
-        async def load_build(_progress, _receipt):
-            build = await self.queries.get(build_id)
+        await self._view_build_prefix(ctx, build_id)
 
-            if build is None:
-                return error_node(t(locale, _("Error")), t(locale, _("No build with that ID.")))
+    @managed_result
+    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+        """Render a prefix-command build view through a managed result mount."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        build = await self.queries.get(build_id)
 
-            return await self.bot.for_build(build).render_node()
+        if build is None:
+            return error_node(t(locale, _("Error")), t(locale, _("No build with that ID.")))
 
-        await run_command_operation(ctx, load_build, locale=locale, reports=self.bot.services.error_reports)
-        return
+        return await self.bot.for_build(build).render_node()
 
     @autocompletes(build_id="builds_pending")
     @BuildCommandGroup.build_hybrid_group.command(name="approve")  # type: ignore
     @requires(BUILD_SUBMISSION_APPROVE)
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to confirm.")))
-    async def confirm_build(self, ctx: Context[BotT], build_id: int):
+    @managed_result
+    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> RenderResult:
         """Mark a submission as confirmed and publish it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
-        async def confirm(_progress, _receipt):
-            await self.builds.confirm(build_id)
-            return info_node(t(locale, _("Success")), t(locale, _("Submission has been confirmed.")))
-
-        await run_command_operation(ctx, confirm, locale=locale, reports=self.bot.services.error_reports)
+        await self.builds.confirm(build_id)
+        return info_node(t(locale, _("Success")), t(locale, _("Submission has been confirmed.")))
 
     @autocompletes(build_id="builds_pending")
     @BuildCommandGroup.build_hybrid_group.command(name="reject")  # type: ignore
     @requires(BUILD_SUBMISSION_REJECT)
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to deny.")))
-    async def deny_build(self, ctx: Context[BotT], build_id: int):
+    @managed_result
+    async def deny_build(self, ctx: Context[BotT], build_id: int) -> RenderResult:
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
-        async def deny(_progress, _receipt):
-            await self.builds.deny(build_id)
+        await self.builds.deny(build_id)
 
-            # Denying removes the card rather than editing it, which the renderer
-            # expresses by wanting no posts for a build in this state.
-            await self.bot.refresh_posts("build", str(build_id))
-            return info_node(t(locale, _("Success")), t(locale, _("Submission has been denied.")))
-
-        await run_command_operation(ctx, deny, locale=locale, reports=self.bot.services.error_reports)
+        # Denying removes the card rather than editing it, which the renderer
+        # expresses by wanting no posts for a build in this state.
+        await self.bot.refresh_posts("build", str(build_id))
+        return info_node(t(locale, _("Success")), t(locale, _("Submission has been denied.")))
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="debug")  # type: ignore
