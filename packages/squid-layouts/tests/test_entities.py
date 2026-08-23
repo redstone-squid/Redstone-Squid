@@ -39,7 +39,9 @@ def test_entity_select_costs_an_action_row_and_control() -> None:
 
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:
-    plan = sl.planning.plan(sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=sl.discord.V2_TARGET)
+    plan = sl.planning.plan(
+        sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=sl.discord.V2_TARGET
+    )
 
     assert isinstance(plan.scene.components_v2.children[0], SceneEntitySelect)
 

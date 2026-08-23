@@ -19,10 +19,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from squid_layouts.interactions import ActionBinding
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.cursors import CursorCoordinator
 from squid_layouts.planning.limits import DiscordLimits
 from squid_layouts.planning.measurement import MeasuredLayout, Realized
@@ -98,7 +98,9 @@ class SceneBindings:
         )
         return key
 
-    def control(self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
+    def control(
+        self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
+    ) -> SceneNode:
         """Convert one leaf every target draws the same way."""
         match node:
             case Thumbnail(url=url, description=description, spoiler=spoiler):

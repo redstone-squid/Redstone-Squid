@@ -8,8 +8,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, Mount
-from squid_layouts.discord.modal import EntityField, EntityType, FileField, build_form_modal
-from squid_layouts.discord.modal import CheckboxGroupField
+from squid_layouts.discord.modal import CheckboxGroupField, EntityField, EntityType, FileField, build_form_modal
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.forms import FormText
 
@@ -226,7 +225,9 @@ def test_file_field_rejects_more_than_ten_uploads() -> None:
 class DurationPanel(sl.Component):
     seconds: int = sl.state(0)
 
-    def __init__(self, *, validation_policy: sl.forms.FormValidationPolicy = sl.forms.FormValidationPolicy.RETRY) -> None:
+    def __init__(
+        self, *, validation_policy: sl.forms.FormValidationPolicy = sl.forms.FormValidationPolicy.RETRY
+    ) -> None:
         self.events: list[sl.SubmitEvent] = []
         self.spec = sl.forms.FormSpec(
             "Duration",

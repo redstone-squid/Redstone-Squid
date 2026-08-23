@@ -3,10 +3,9 @@
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.discord import V2_TARGET
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import plan
-from squid_layouts.sources import Position
-from squid_layouts.discord import V2_TARGET
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.scene.model import (
     SceneGallery,
@@ -36,6 +35,7 @@ from squid_layouts.semantic import (
     Table,
     TableRow,
 )
+from squid_layouts.sources import Position
 
 
 async def _change(_event) -> None: ...
@@ -102,7 +102,10 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)))
     items = Items(
         "catalog",
-        tuple(Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph(f"Detail {index}"),)) for index in range(36)),
+        tuple(
+            Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph(f"Detail {index}"),))
+            for index in range(36)
+        ),
     )
     navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
 
@@ -125,7 +128,9 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
     session = PresentationSession()
-    original = tuple(Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36))
+    original = tuple(
+        Item(str(index), sl.semantic.ItemLabel(f"Item {index}"), (Paragraph("detail"),)) for index in range(36)
+    )
     first = plan(Items("catalog", original), target=V2_TARGET, session=session)
     apply_updates(session, first.session_updates)
     session.move_cursor("catalog.items", Position(offset=1))

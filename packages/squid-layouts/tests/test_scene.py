@@ -6,10 +6,10 @@ from datetime import UTC, datetime, timedelta, timezone
 import jsonschema
 import pytest
 
-from squid_layouts.interactions import ActionPolicy
 from squid_layouts.document import Asset, Document, InlineAsset, as_document
 from squid_layouts.emoji import Emoji
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.primitives.nodes import Text
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.codec import SceneCodec, SceneCodecError
@@ -160,7 +160,9 @@ def test_timestamp_plans_as_a_typed_utc_scene_instant() -> None:
     from squid_layouts.discord import V2_TARGET
 
     instant = datetime(2026, 8, 22, 16, 30, tzinfo=timezone(timedelta(hours=2)))
-    result = sl.planning.plan(sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated"), target=V2_TARGET)
+    result = sl.planning.plan(
+        sl.timestamp(instant, style=sl.semantic.TimeStyle.RELATIVE, label="Updated"), target=V2_TARGET
+    )
 
     assert result.scene.components_v2.children == (SceneTime("2026-08-22T14:30:00+00:00", "R", "**Updated:** "),)
 

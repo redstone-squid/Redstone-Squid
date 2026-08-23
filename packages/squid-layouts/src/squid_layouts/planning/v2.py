@@ -81,7 +81,9 @@ from squid_layouts.sources import Position
 class _V2Converter:
     bindings: SceneBindings
 
-    def accessory(self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
+    def accessory(
+        self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
+    ) -> SceneNode:
         return self.bindings.control(node, path)
 
     def node(self, node: Realized, path: str) -> SceneNode:
