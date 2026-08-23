@@ -15,6 +15,7 @@ from squid_layouts import Component, PressEvent, Shared, TopicBus, cell, state, 
 from squid_layouts.discord import Everyone, Mount, Reactor
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Row, Text
+from squid_layouts.profiling import PresentationOutcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -291,6 +292,36 @@ class TestSelfWrites:
         assert interaction.response.defer.await_count == 0
         assert "7" in _texts(interaction.response.edit_message.await_args.kwargs["view"])
 
+    async def test_the_reactor_suppresses_the_self_published_render(self) -> None:
+        bus = TopicBus()
+        reactor = Reactor(bus)
+        workspace = Workspace(bus, Member(1))
+        mount = Mount(Writer(workspace), access=Everyone(), scheduler=reactor, timeout=None)
+        message: Any = fake_message()
+        await mount.send(delivered_to(message))
+        interaction = fake_interaction()
+
+        await mount.dispatch("pick", interaction)
+        await drain(reactor, bus)
+
+        interaction.response.edit_message.assert_awaited_once()
+        message.edit.assert_not_awaited()
+        assert reactor.snapshot().unchanged == 1
+        assert mount.snapshot().suppressed == 1
+
+    async def test_a_suppressed_refresh_keeps_the_live_generation_dispatchable(self) -> None:
+        workspace, _, mount = self.panel()
+        await mount.send(delivered_to(fake_message()))
+        generation = mount.generation
+
+        outcome = await mount.refresh_now()
+        interaction = fake_interaction()
+        await mount.dispatch("aside", interaction, generation=generation)
+
+        assert outcome is PresentationOutcome.UNCHANGED
+        assert mount.generation == generation
+        assert workspace.detail == "unrendered"
+
     async def test_it_works_without_a_reactor_to_deliver_the_topic(self) -> None:
         """The observed set is what the render read; subscribing is a separate, optional thing."""
         _, _, mount = self.panel()
@@ -355,6 +386,7 @@ class TestSelfWrites:
             return message
 
         message.edit = edit
+        workspace.selected = 3
         interaction = fake_interaction()
 
         async def dispatch() -> None:
