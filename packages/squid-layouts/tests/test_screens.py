@@ -82,7 +82,8 @@ async def test_screen_applies_options_overrides_and_access() -> None:
 
 async def test_screen_attaches_to_a_live_parent_session() -> None:
     registry = SessionRegistry()
-    root = await registry.open(Panel(), to_message(), access=Owner(7), timeout=None)
+    root_mount = registry.defaults.mount(Panel(), access=Owner(7), timeout=None)
+    root = await registry.open(root_mount, to_message())
     assert isinstance(root, Opened)
     screen = Screen("child", options={"timeout": None})
 
