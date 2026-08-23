@@ -217,7 +217,7 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
 
 
 async def test_a_large_guild_still_fits_one_message() -> None:
-    """Five paged channel pickers used to cost 30 of the 40 components a message has."""
+    """Five native channel pickers cost ten V2 components regardless of guild size."""
     panel, _ = make_component_panel(channels={index: f"channel-{index}" for index in range(1, 200)})
     await panel.open_server()
     mount = panel._mount
@@ -225,28 +225,28 @@ async def test_a_large_guild_still_fits_one_message() -> None:
 
     view = commit_render(mount)
 
-    footers = [
-        item.content
-        for item in view.walk_children()
-        if isinstance(item, discord.ui.TextDisplay) and item.content.startswith("-# Page ")
-    ]
     assert len(list(view.walk_children())) <= 40
-    assert len(footers) == 1  # one paged channel picker, not five
+    assert len([item for item in view.walk_children() if isinstance(item, discord.ui.ChannelSelect)]) == 5
 
 
-async def test_the_channel_picker_follows_the_setting_picker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The one visible picker writes whichever setting the setting picker last named."""
+async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=True))
     monkeypatch.setattr(sl.discord, "native", lambda _event: SimpleNamespace())
     panel, settings = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
     with sl.transaction():
-        await panel._editing_changed(cast(Any, SimpleNamespace(selected=("Builds",))))
-    with sl.transaction():
-        await panel._channel_changed(cast(Any, SimpleNamespace(selected=("12",), context={})))
+        await panel._channel_changed(
+            cast(
+                Any,
+                SimpleNamespace(
+                    selected=(sl.EntityRef(sl.EntityKind.CHANNEL, 12),),
+                    context={},
+                ),
+            ),
+            "Builds",
+        )
 
-    assert panel.editing == "Builds"
     assert panel.channel_id("Builds") == 12
     assert panel.channel_id("Vote") == 3
     assert settings.set_channel.await_args_list[-1].args == (GUILD_ID, "Builds", 12)
