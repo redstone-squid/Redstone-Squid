@@ -172,6 +172,18 @@ def _lower(
     lowered: list[Node] = []
     for node in nodes:
         match node:
+            case PremiumButton() if "actions.discord.premium" not in target.capabilities:
+                message = "premium buttons require an explicit Variants fallback on this target"
+                raise LayoutInvariantError(message)
+            case Row(items=items) | ActionGroup(items=items) if (
+                "actions.discord.premium" not in target.capabilities
+                and any(isinstance(item, PremiumButton) for item in items)
+            ):
+                message = "premium buttons require an explicit Variants fallback on this target"
+                raise LayoutInvariantError(message)
+            case Section(accessory=PremiumButton()) if "actions.discord.premium" not in target.capabilities:
+                message = "premium buttons require an explicit Variants fallback on this target"
+                raise LayoutInvariantError(message)
             case ActionGroup(items=items):
                 lowered.extend(
                     Row(tuple(items[start : start + limits.row_buttons]))
