@@ -152,9 +152,10 @@ def fake_interaction(
         user=SimpleNamespace(id=user_id),
         message=message,
         response=response,
-        followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock(), delete_message=AsyncMock()),
         original_response=AsyncMock(return_value=message),
         edit_original_response=AsyncMock(return_value=message),
+        delete_original_response=AsyncMock(),
         expires_at=datetime.now(UTC) + timedelta(minutes=15),
         is_expired=lambda: expired,
     )
@@ -178,6 +179,7 @@ def fake_message(
     )
     message.edit = AsyncMock()
     message.edit.return_value = message
+    message.delete = AsyncMock()
     return message
 
 
