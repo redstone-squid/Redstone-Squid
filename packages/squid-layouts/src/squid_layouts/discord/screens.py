@@ -1,9 +1,10 @@
 """Reusable per-open policy for Discord screens."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Unpack
+from types import MappingProxyType
+from typing import Unpack, cast
 
 import discord
 
@@ -55,7 +56,11 @@ class Screen:
     scope: Scope = Scope.USER
     policy: SessionPolicy = DEFAULT_SESSION_POLICY
     access: Callable[[Opener], AccessPolicy] = _owner
-    options: MountOptions = field(default_factory=dict)
+    options: Mapping[str, object] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Snapshot mount options into a read-only mapping."""
+        object.__setattr__(self, "options", MappingProxyType(dict(self.options)))
 
     def key(self, opener: Opener) -> SessionKey:
         """Derive this screen's session key from an opener."""
@@ -80,7 +85,7 @@ class Screen:
         **overrides: Unpack[MountOptions],
     ) -> OpenResult:
         """Construct and open or attach a mount using this screen's policy."""
-        options: MountOptions = {**self.options, **overrides}
+        options = cast(MountOptions, {**self.options, **overrides})
         mount = sessions.defaults.mount(component, access=self.access(opener), **options)
         parent_session = None if parent is None else sessions.session_for(parent)
         if parent_session is not None:
