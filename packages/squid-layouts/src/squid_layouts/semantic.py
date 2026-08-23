@@ -777,19 +777,19 @@ def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> Op
 
 
 @overload
-def fallback[FirstT, SecondT](
+def fallback[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
     primary: LayoutNode[FirstT], alternate: LayoutNode[SecondT]
 ) -> FallbackContent[FirstT | SecondT]: ...
 
 
 @overload
-def fallback[FirstT, SecondT, ThirdT](
+def fallback[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
     primary: LayoutNode[FirstT], first: LayoutNode[SecondT], second: LayoutNode[ThirdT]
 ) -> FallbackContent[FirstT | SecondT | ThirdT]: ...
 
 
 @overload
-def fallback[FirstT, SecondT, ThirdT, FourthT](
+def fallback[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
     primary: LayoutNode[FirstT],
     first: LayoutNode[SecondT],
     second: LayoutNode[ThirdT],
@@ -798,7 +798,7 @@ def fallback[FirstT, SecondT, ThirdT, FourthT](
 
 
 @overload
-def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](
+def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
     primary: LayoutNode[FirstT],
     first: LayoutNode[SecondT],
     second: LayoutNode[ThirdT],
