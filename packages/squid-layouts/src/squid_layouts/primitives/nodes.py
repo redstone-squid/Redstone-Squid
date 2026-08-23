@@ -11,7 +11,15 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from squid_layouts.actions import ActionBinding, ActionPolicy, Feedback, PressHandler, SelectionHandler
+from squid_layouts.actions import (
+    ActionBinding,
+    ActionPolicy,
+    EntitySelectionHandler,
+    Feedback,
+    PressHandler,
+    SelectionHandler,
+)
+from squid_layouts.entities import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
 from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
@@ -178,6 +186,30 @@ class SelectMenu:
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class EntitySelect:
+    """A frontend-resolved entity picker; occupies its own row."""
+
+    entity_type: EntityType
+    on_select: EntitySelectionHandler
+    key: str
+    placeholder: TextLike | None = None
+    default_values: tuple[EntityRef, ...] = ()
+    channel_types: tuple[ChannelType, ...] = ()
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+    policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+    def __post_init__(self) -> None:
+        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
+            message = "channel_types is only valid for channel entity selects"
+            raise ValueError(message)
+        if any(not supports_entity(self.entity_type, value.kind) for value in self.default_values):
+            message = f"default value is incompatible with {self.entity_type.value} entity select"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -494,6 +526,7 @@ type Node = (
     | Row
     | ActionGroup
     | SelectMenu
+    | EntitySelect
     | RoutedSelect
     | RoutedButton
     | Thumbnail

@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_layouts.entities import EntityRef
 from squid_layouts.text import TextLike
 
 if TYPE_CHECKING:
@@ -145,6 +146,13 @@ class SelectionEvent(ActionEvent):
 
 
 @dataclass(frozen=True, slots=True)
+class EntitySelectionEvent(ActionEvent):
+    """An entity selection submitted portable concrete references."""
+
+    values: tuple[EntityRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class SubmitEvent(ActionEvent):
     """A portable form was submitted."""
 
@@ -192,6 +200,7 @@ class ActionMiddleware(ABC):
 type ActionHandler = Callable[[ActionEvent], Awaitable[None]]
 type PressHandler = Callable[[PressEvent], Awaitable[None]]
 type SelectionHandler = Callable[[SelectionEvent], Awaitable[None]]
+type EntitySelectionHandler = Callable[[EntitySelectionEvent], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)

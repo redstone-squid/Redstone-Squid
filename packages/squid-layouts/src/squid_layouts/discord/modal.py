@@ -8,13 +8,13 @@ crash — a `default` joined from user data fails at `send_modal` time with HTTP
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any, ClassVar
 
 import discord
 
 from squid_layouts.discord.conform import conform_modal
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.entities import EntityType
 from squid_layouts.forms import (
     BoolField,
     ChoiceField,
@@ -42,15 +42,6 @@ logger = logging.getLogger(__name__)
 
 type SubmitHandler = Callable[[discord.Interaction, dict[str, str]], Awaitable[None]]
 type FormSubmitHandler = Callable[[discord.Interaction, dict[str, object]], Awaitable[None]]
-
-
-class EntityType(StrEnum):
-    """Discord entity picker families available inside a modal."""
-
-    USER = "user"
-    ROLE = "role"
-    CHANNEL = "channel"
-    MENTIONABLE = "mentionable"
 
 
 @dataclass(frozen=True, slots=True)

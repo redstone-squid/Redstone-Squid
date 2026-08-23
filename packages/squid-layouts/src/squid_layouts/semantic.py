@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
+from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
@@ -114,6 +115,7 @@ so a node cannot be half-controlled and the mode is readable at the call site.
 
 
 type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
+type EntityOwnership = Ownership[tuple[EntityRef, ...], EntityEvent]
 type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
 type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
 type ToggleOwnership = Ownership[bool, ToggleEvent]
@@ -122,6 +124,7 @@ type NavOwnership = Ownership[str | None, NavigateEvent]
 
 # The engine-managed default of each stateful node, named for the state it seeds.
 UNSELECTED: ChoiceOwnership = Managed(())
+NO_ENTITIES: EntityOwnership = Managed(())
 UNOPENED: ItemOwnership = Managed(None)
 CLOSED: DisclosureOwnership = Managed(initial=False)
 OFF: ToggleOwnership = Managed(initial=False)
@@ -469,6 +472,21 @@ class ChoiceEvent(ActionEvent):
     removed: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class EntityEvent(ActionEvent):
+    selected: tuple[EntityRef, ...] = ()
+    added: tuple[EntityRef, ...] = ()
+    removed: tuple[EntityRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EntityChoice:
+    ref: EntityRef
+    label: TextLike
+    description: TextLike | None = None
+    available: bool = True
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OpenEvent[ValueT](ActionEvent):
     """The reader asked to open something: one of N entries, or one disclosure."""
@@ -498,6 +516,29 @@ class Choices:
     minimum: int = 1
     maximum: int = 1
     flexibility: Flexibility = Flexibility.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Entities:
+    """A picker over frontend-resolved entities with an optional enumerated fallback."""
+
+    key: str
+    entity_type: EntityType
+    choices: tuple[EntityChoice, ...] = ()
+    selection: EntityOwnership = NO_ENTITIES
+    minimum: int = 1
+    maximum: int = 1
+    channel_types: tuple[ChannelType, ...] = ()
+    placeholder: TextLike | None = None
+    flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
+            message = "channel_types is only valid for channel entity pickers"
+            raise ValueError(message)
+        if any(not supports_entity(self.entity_type, choice.ref.kind) for choice in self.choices):
+            message = f"fallback choice is incompatible with {self.entity_type.value} entity picker"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -675,6 +716,7 @@ type SemanticNode = (
     | FormTrigger
     | Actions
     | Choices
+    | Entities
     | RoutedChoices
     | Items
     | Navigation
