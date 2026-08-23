@@ -15,12 +15,6 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
-from squid_reactive.core import (
-    _RENDER_OBSERVATION,
-    Reactive,
-    observe_render,
-)
-
 from squid_layouts.document import Asset, Document
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives.constraints import Paginate
@@ -130,6 +124,11 @@ from squid_layouts.semantic import (
     Truncated as SemanticTruncated,
 )
 from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
+from squid_reactive.core import (
+    _RENDER_OBSERVATION,
+    Reactive,
+    observe_render,
+)
 
 type RenderNode[ModeT = Any] = LayoutNode[ModeT]
 type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
