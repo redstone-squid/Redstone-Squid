@@ -707,6 +707,22 @@ class Mount:
             if self._handle is not None and self._handle.permanent and not handle.permanent:
                 return
             self._handle = handle
+            if handle.permanent:
+                self._ephemeral = False
+            if self._lifecycle is MountLifecycle.RENEWAL_ARMED:
+                candidate: _Candidate | None = None
+                try:
+                    candidate = await self._stage_loaded()
+                    wrote = await self._deliver(candidate, through=handle)
+                except Exception:
+                    if candidate is not None:
+                        self._rollback(candidate)
+                    raise
+                if wrote is None:
+                    self._rollback(candidate)
+                    return
+                self._commit_presented(candidate)
+                await self._settle_visible(candidate, through=handle)
 
     @property
     def pending(self) -> bool:
