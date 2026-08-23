@@ -386,13 +386,15 @@ class _DispatchProfile:
     acknowledgement: DetachedSpanRecorder
     action: ActionOutcome = ActionOutcome.NOT_RUN
     presentation: PresentationOutcome = PresentationOutcome.NOT_REQUIRED
+    acknowledged: bool = False
     finished: bool = False
 
     def decide_generation(self, active: int, *, rebased: bool = False) -> None:
         self.generation = GenerationDecision(self.generation.submitted, active, rebased)
 
     def acknowledge(self, source: str) -> None:
-        if self.interaction.response.is_done():
+        if not self.acknowledged and self.interaction.response.is_done():
+            self.acknowledged = True
             self.acknowledgement.set_attribute("source", source)
             self.acknowledgement.finish()
 
@@ -525,6 +527,9 @@ class Mount:
                 NAV_FACTORY_CONTEXT: self.nav,
             },
         )
+        if not 0 < acknowledgement_timeout < 3:
+            message = "a mount acknowledgement timeout must be greater than zero and below Discord's 3-second limit"
+            raise ValueError(message)
         self.acknowledgement_timeout = acknowledgement_timeout
         self.pending_after = pending_after
         """How long an action carrying `Feedback` may run before its interim paint appears."""
@@ -1621,26 +1626,25 @@ class Mount:
         rebased: bool,
         profile: _DispatchProfile,
     ) -> None:
-        # One watchdog, two stages: an action carrying `Feedback` paints "working" at the
-        # threshold, and that edit *is* the acknowledgement, so the deferral below never
-        # fires for it. An action without feedback keeps the single-stage behaviour.
+        # Painting feedback may wait behind arbitrary visible-resource work under the render
+        # lock. The acknowledgement deadline is independent so only Discord can delay it.
         busy = None if binding.feedback is None else _BusyPaint(self, key, binding.feedback, interaction)
 
-        async def watchdog() -> None:
-            remaining = self.acknowledgement_timeout
-            if busy is not None:
-                threshold = min(self.pending_after, remaining)
-                await anyio.sleep(threshold)
-                await busy.show(profile)
-                remaining -= threshold
-            await anyio.sleep(max(0.0, remaining))
+        async def acknowledge_by_deadline() -> None:
+            await anyio.sleep(self.acknowledgement_timeout)
             deferred = await self._acknowledge(interaction, profile=profile, source="watchdog")
             if deferred:
                 profile.operation.mark_deadline_missed()
 
+        async def paint_when_slow() -> None:
+            await anyio.sleep(min(self.pending_after, self.acknowledgement_timeout))
+            await busy.show(profile)  # type: ignore[union-attr]
+
         with _unwrapped():
             async with anyio.create_task_group() as tasks:
-                tasks.start_soon(watchdog)
+                tasks.start_soon(acknowledge_by_deadline)
+                if busy is not None:
+                    tasks.start_soon(paint_when_slow)
                 await self._invoke_and_flush(
                     binding,
                     key,
