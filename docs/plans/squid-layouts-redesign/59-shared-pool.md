@@ -31,8 +31,8 @@ pool itself is released.
 ```python
 preferences = sl.SharedPool(Preferences, bus)
 
-mine = preferences.get(user.id)
-same = preferences.get(user.id)
+mine = preferences.get(UserScope(user.id))
+same = preferences.get(UserScope(user.id))
 assert mine is same
 ```
 
@@ -48,6 +48,45 @@ cog       -> extension lifetime
 session   -> session lifetime
 request   -> request lifetime
 ```
+
+## Scope vocabulary
+
+A pool keys on `ScopeT`, and today nothing says what a scope *is*. `Shared[ScopeT]`'s scope is a
+diagnostic label — not hashable, not validated, nothing reads it but `__repr__` and `describe`
+(`packages/squid-reactive/src/squid_reactive/shared.py`) — so hosts reach for a bare `int`, as
+`squid/bot/layout_showcase.py:565` does with `Shared[int]` holding a user id. Nothing then
+distinguishes a user id from a guild id, and the pool would inherit that.
+
+The repo already has the vocabulary this wants, one layer over: `UserScope`, `GuildScope`,
+`UserGuildScope`, `GlobalScope` and `CustomScope` in
+`packages/squid-layouts/src/squid_layouts/discord/sessions.py:24-58`, frozen, hashable, and
+already the taxonomy CascadeUI is credited for. It is used for *session* keying only. **Adopt it
+as the conventional `ScopeT`.** One scope taxonomy, not two.
+
+Nothing moves between packages to make this true. `SharedPool[ScopeT: Hashable, …]` is generic,
+`SessionScope` members are already hashable, and `squid-reactive` stays dependency-free and
+Discord-free — the Discord layer supplies a concrete scope, the portable core never learns what
+it means.
+
+The ergonomics come from the class statement, not from lookup methods:
+
+```python
+class Preferences(sl.Shared[UserGuildScope]):
+    theme: str = sl.state("dark")
+
+preferences = sl.SharedPool(Preferences, bus)     # ScopeT inferred from the base
+prefs = preferences.get(sl.discord.scopes.user_guild(interaction))
+```
+
+`sl.discord.scopes` is the small new surface this plan adds beside the pool: free functions
+`user`, `guild`, `user_guild` and `global_` reading a scope off a `discord.Interaction` or a
+`commands.Context`, so hosts stop extracting ids by hand. `guild` and `user_guild` raise a named
+error outside a guild rather than inventing a scope; the error names the function, because the
+mistake it catches is a DM-reachable command that assumed a guild.
+
+`sl.discord.scopes.of(key)` also derives the scope from an existing `SessionKey`, which is what a
+panel already holding its session key wants — the point of sharing the taxonomy is that this needs
+no conversion.
 
 ## Public API
 
@@ -133,7 +172,17 @@ asyncio tasks cannot interleave its miss and insertion path.
 - No weak mode, TTL, LRU, size limit, or background eviction.
 - No async factories or resource loading.
 - No persistence, serialization, reducers, or application-database semantics.
-- No `user()`, `guild()`, or `user_guild()` convenience methods.
+- No `user()`, `guild()`, or `user_guild()` convenience methods **on the pool**. A pool is
+  single-scope-typed, so once the namespace declares `Shared[UserGuildScope]` the scope kind is
+  already fixed by the class statement and `pool.user(id)` would be a second spelling for it —
+  one that also silently type-checks against the wrong pool. The scope constructors live in
+  `sl.discord.scopes` instead, where they are the only spelling.
+- No `pool.at(interaction)`, resolving the scope from the declared `ScopeT` through a
+  `classmethod of(source)` protocol. It is the nicest spelling on offer and is **not rejected,
+  only gated**: it needs `spikes/59/` to show Pyrefly infers `ScopeT` through a generic
+  classmethod-bearing protocol, and the series already has one Pyrefly-driven rejection of a
+  construction of exactly this shape ([90](90-deferred.md)'s `Unpack`-on-a-TypeVar entry).
+  Ship the free functions; promote `at()` if the spike passes.
 - No automatic pool on a bot, registry, mount, or session.
 - No guarantee that separately constructed handles with equal diagnostic scopes converge.
 
@@ -156,9 +205,22 @@ production demand rather than being inferred from the existence of keyed lookup.
   clear `TypeError`, while direct `Shared(bus, unhashable_scope)` still works.
 - Typing fixtures infer concrete handle and scope types, reject the wrong scope type, and type a
   custom factory without `Any` leakage.
+- `Shared[UserGuildScope]` infers `SharedPool[UserGuildScope, Preferences]`, and a `UserScope`
+  passed to that pool is a type error rather than a runtime miss.
+- `sl.discord.scopes` builds each scope from an interaction and from a `commands.Context`;
+  `guild`/`user_guild` raise the named error in a DM; `of(SessionKey)` returns the key's own scope.
+- `squid/bot/layout_showcase.py:565` migrates off its hand-rolled `setdefault` cache and its
+  `Shared[int]` declaration, which is the worked example the docs carry.
 - Run the focused shared-pool/shared-state tests, public API tests, `just typecheck`, and
   `git diff --check`.
 
 ## Status
 
-Designed. Independent of plans 60–62.
+Designed, not implemented. Independent of plans 60–62.
+
+Amended 2026-08-23 with the scope vocabulary above, folding in the CascadeUI comparison's
+"steal the scoping/keying ergonomics" finding. It arrived as a proposed sibling plan and was
+merged here instead: a pool without a scope vocabulary and a scope vocabulary without a pool
+are each half of one unbuilt decision, and 59 had not shipped, so there was nothing to amend
+*around*. It reopens nothing in [90](90-deferred.md) — there is still no store, no keyed global,
+and no singleton; what is keyed is a lifetime owner the host constructs and holds.
