@@ -4,9 +4,9 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
 from squid_layouts.actions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
-from squid_layouts.entities import EntityRef
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import Chrome
+from squid_layouts.entities import EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
@@ -34,11 +34,11 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
-    EntitySelect,
     Card,
     CardField,
     CardFooter,
     CardMedia,
+    EntitySelect,
     Fidelity,
     Footer,
     FormButton,
@@ -89,16 +89,17 @@ from squid_layouts.semantic import (
     Aside,
     BestEffort,
     Budgeted,
+    Choice,
     ChoiceEvent,
     Choices,
-    Entities,
-    EntityEvent,
     Cluster,
     Code,
     Controlled,
     Details,
     Download,
     Emphasis,
+    Entities,
+    EntityEvent,
     FallbackContent,
     Field,
     Fields,

@@ -52,8 +52,8 @@ from squid_layouts.primitives.nodes import (
 from squid_layouts.scene.model import (
     SceneButton,
     SceneComponentsV2,
-    SceneExtension,
     SceneEntitySelect,
+    SceneExtension,
     SceneFile,
     SceneGallery,
     SceneGalleryItem,
