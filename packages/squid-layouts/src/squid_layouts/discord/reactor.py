@@ -6,7 +6,7 @@ import time
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import anyio
@@ -67,7 +67,6 @@ class Reactor:
             a standalone out-of-band refresh scheduler.
         concurrency: Maximum number of different mounts refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
-        expiry_margin: How far ahead of token expiry to show paused-update chrome.
         clock: UTC wall clock used to compare interaction-token deadlines.
         profiler: Runtime profiler. Defaults to the bus profiler when a bus is supplied.
         max_causal_links: Maximum distinct trigger links retained per coalesced refresh.
@@ -80,7 +79,6 @@ class Reactor:
         *,
         concurrency: int = 4,
         sweep_interval: float = 10.0,
-        expiry_margin: float = 60.0,
         clock: Callable[[], datetime] = _utc_now,
         profiler: Profiler | None = None,
         max_causal_links: int = 8,
@@ -92,9 +90,6 @@ class Reactor:
         if sweep_interval <= 0:
             message = "reactor sweep interval must be positive"
             raise ValueError(message)
-        if expiry_margin < 0:
-            message = "reactor expiry margin cannot be negative"
-            raise ValueError(message)
         if max_causal_links < 0:
             message = "reactor causal link limit cannot be negative"
             raise ValueError(message)
@@ -102,7 +97,6 @@ class Reactor:
         self.profiler = profiler if profiler is not None else bus.profiler if bus is not None else _NOOP_PROFILER
         self.concurrency = concurrency
         self.sweep_interval = sweep_interval
-        self.expiry_margin = timedelta(seconds=expiry_margin)
         self.clock = clock
         self.max_causal_links = max_causal_links
         self._monotonic = monotonic
@@ -131,14 +125,16 @@ class Reactor:
             raise ValueError(message)
         self._watched.add(mount)
         active = True
+        mount_ref = weakref.ref(mount)
 
         def unwatch() -> None:
             nonlocal active
             if not active:
                 return
             active = False
-            self._watched.discard(mount)
-            self._warned_handles.pop(mount, None)
+            if (current := mount_ref()) is not None:
+                self._watched.discard(current)
+                self._warned_handles.pop(current, None)
 
         return unwatch
 
@@ -209,7 +205,6 @@ class Reactor:
                 count = self._followed.get(current, 0)
                 if count <= 1:
                     self._followed.pop(current, None)
-                    self._warned_handles.pop(current, None)
                 else:
                     self._followed[current] = count - 1
 
@@ -306,17 +301,13 @@ class Reactor:
     def _sweep_once(self) -> None:
         """Schedule the final honest refresh for handles approaching expiry."""
         now = self.clock()
-        for mount in tuple(self._followed):
+        for mount in tuple(self._watched):
             handle = mount.handle
-            if mount.finished or handle is None or handle.permanent or handle.expires_at is None:
-                self._warned_handles.pop(mount, None)
-                continue
-            if handle.expires_at - now > self.expiry_margin:
+            if handle is None or not mount._should_arm_expiry(handle, now):
                 self._warned_handles.pop(mount, None)
                 continue
             if self._warned_handles.get(mount) is handle:
                 continue
             self._warned_handles[mount] = handle
-            mount.status = mount.chrome.updates_paused
-            mount.invalidate()
+            mount._queue_expiry_arm(handle)
             self.schedule(mount)
