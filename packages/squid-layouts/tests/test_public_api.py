@@ -48,9 +48,17 @@ def test_root_is_semantic_first() -> None:
     assert "Feedback" in sl.__all__
     assert "WizardReview" in sl.__all__
     assert {"Scale", "ScaleField", "ScaleEvent", "ScaleOwnership", "UNRATED", "rating"} <= set(sl.__all__)
-    assert {"Resource", "ResourceDelivery", "ResourceState", "Pending", "Ready", "Failed", "resource"} <= set(
-        sl.__all__
-    )
+    assert {
+        "AtomicResource",
+        "AtomicResourceState",
+        "Resource",
+        "ResourceDelivery",
+        "ResourceState",
+        "Pending",
+        "Ready",
+        "Failed",
+        "resource",
+    } <= set(sl.__all__)
     assert {
         "CountPrecision",
         "Direction",
