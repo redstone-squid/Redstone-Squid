@@ -76,11 +76,7 @@ SCENE_SCHEMA: dict[str, Any] = {
     },
     "required": ["protocol", "target", "target_version", "body", "assets", "pagers"],
     "$defs": {
-        "body": {
-            "oneOf": [
-                {"$ref": f"#/$defs/{kind}"} for kind in (SceneComponentsV2.KIND, SceneClassicMessage.KIND)
-            ]
-        },
+        "body": {"oneOf": [{"$ref": f"#/$defs/{kind}"} for kind in (SceneComponentsV2.KIND, SceneClassicMessage.KIND)]},
         "components_v2": _node(
             SceneComponentsV2.KIND,
             {"children": {"type": "array", "items": {"$ref": "#/$defs/node"}}},

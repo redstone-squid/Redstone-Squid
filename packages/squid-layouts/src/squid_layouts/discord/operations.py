@@ -192,9 +192,7 @@ class DevToolsRuntime:
             () if self.sessions is None else tuple(_session_inspection(session) for session in self.sessions.active())
         )
         snapshot_topics = (
-            None
-            if self.bus is None
-            else cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
+            None if self.bus is None else cast(Callable[[], BusSnapshot] | None, getattr(self.bus, "snapshot", None))
         )
         topics = snapshot_topics() if callable(snapshot_topics) else None
         return OperationalSnapshot(
