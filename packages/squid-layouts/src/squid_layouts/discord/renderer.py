@@ -10,7 +10,7 @@ import discord
 from squid_layouts.interactions import ActionBinding
 from squid_layouts.assets import Asset, StoredAsset
 from squid_layouts.discord.attachments import attachment_assets
-from squid_layouts.discord.conform import LimitViolationError, conform
+from squid_layouts.discord.conformance import LimitViolationError, conform
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.errors import DrawInvariantError

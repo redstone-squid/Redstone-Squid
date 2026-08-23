@@ -112,7 +112,7 @@ from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import ResolvedText, TextLike, md
 
 if TYPE_CHECKING:
-    from squid_layouts.runtime.history import History
+    from squid_layouts.runtime.histories import History
 
 type TextValue = TextLike | Template
 """Author text: trusted Markdown, already-resolved text, or a t-string to interpolate."""

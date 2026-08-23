@@ -34,7 +34,7 @@ from squid_layouts.planning.frontier import (
 )
 from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, DiscordLimits
-from squid_layouts.planning.measure import (
+from squid_layouts.planning.measurement import (
     MeasuredLayout,
     SolveNote,
     SolveNoteCode,

@@ -12,7 +12,7 @@ from squid_layouts.text import TextLike
 if TYPE_CHECKING:
     from squid_layouts.forms import FormIssue, FormLike, SubmitHandler
     from squid_layouts.guards import Guard
-    from squid_layouts.runtime.history import History
+    from squid_layouts.runtime.histories import History
 
 
 class ActionPolicy(StrEnum):

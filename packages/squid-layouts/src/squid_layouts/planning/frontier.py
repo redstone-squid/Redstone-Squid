@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
 from squid_layouts.planning.limits import COMPONENTS, V2Limits
-from squid_layouts.planning.measure import (
+from squid_layouts.planning.measurement import (
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,

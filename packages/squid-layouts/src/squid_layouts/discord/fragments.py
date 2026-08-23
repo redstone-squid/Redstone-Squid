@@ -20,7 +20,7 @@ import discord
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.attachments import files_for
-from squid_layouts.discord.compose import compose
+from squid_layouts.discord.composition import compose
 from squid_layouts.discord.inspection import DiscordReservation, audit, cost, measure
 from squid_layouts.discord.target import V2_TARGET, Target
 from squid_layouts.document import DocumentLike

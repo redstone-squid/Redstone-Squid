@@ -15,7 +15,7 @@ from squid_layouts.discord.mount import MountSnapshot
 from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
 from squid_layouts.discord.sessions import Session, SessionRegistry
 from squid_layouts.profiling import NoOpProfiler, Profiler, RuntimeSnapshot
-from squid_layouts.runtime.history import HistorySnapshot, inspect_histories
+from squid_layouts.runtime.histories import HistorySnapshot, inspect_histories
 from squid_layouts.runtime.topics import Address, BusSnapshot, CellAddress, Topic, TopicBus
 
 

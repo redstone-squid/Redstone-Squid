@@ -45,7 +45,7 @@ from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.classic import compose as classic_compose
 from squid_layouts.discord.classic_renderer import ClassicRenderer
-from squid_layouts.discord.compose import Composition, compose
+from squid_layouts.discord.composition import Composition, compose
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation
 from squid_layouts.discord.renderer import V2Renderer
