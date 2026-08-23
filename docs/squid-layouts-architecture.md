@@ -229,6 +229,7 @@ That guarantee reaches declared state, and only declared state:
 |---|---|---|
 | `sl.state(...)` | yes | yes |
 | `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
+| `sl.cell(...)` on an `sl.Shared` | every mount that rendered it, through the bus | yes |
 | a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
 
@@ -236,6 +237,33 @@ A write inside an action **stages**: it lands in the transaction's overlay and b
 when the action commits. The action reads its own writes, and so do the computeds downstream
 of them; another task reading the same component across an `await` sees the committed value
 until then. Rolling back is dropping the overlay.
+
+## Shared state across mounts
+
+`sl.state()` is per-component and per-mount. When two live panels must agree on something the
+*view* owns -- a filter, a selection, a theme -- declare an `sl.Shared` namespace instead:
+
+    class Appearance(sl.Shared[int]):
+        accent: int = sl.cell(DISCORD_BLUE)
+        density: str = sl.cell("comfortable")
+
+    appearance = Appearance(bot.topic_bus, user.id)
+
+`sl.cell()` is `sl.state()` one level out and is literally the same storage, so replacement,
+the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
+a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
+one component, and a cell an action both **read and wrote** carries the value it read as a
+commit precondition -- if someone else moved it meanwhile the action raises
+`sl.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
+for that, shown through `handle_error` or an `ActionMiddleware`.
+
+There is no store and no lookup: two panels converge because something handed them the same
+object, by constructor injection or `ContextKey`. That also settles lifetime -- the handle *is*
+the state, so panels holding it means it dies with the last panel, and a cog or session holding
+it means it survives every panel opening and closing. A mount subscribes to exactly the cells
+its latest render read, reconciled at stage time, and `sl.addresses(lambda: appearance.accent)`
+names an address by hand for a host that wants to follow one itself. Nothing durable belongs
+here; anything the application would still want with nobody looking at it is a service.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
