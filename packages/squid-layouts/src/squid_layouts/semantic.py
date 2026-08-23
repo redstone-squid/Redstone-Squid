@@ -156,6 +156,14 @@ class Themed:
 
 
 @dataclass(frozen=True, slots=True)
+class Block:
+    """An untitled semantic region with an exact or inherited accent."""
+
+    children: tuple[LayoutNode, ...]
+    accent: Accent = INHERIT
+
+
+@dataclass(frozen=True, slots=True)
 class Section:
     """A titled block of related content.
 
@@ -165,12 +173,11 @@ class Section:
     *means* something — advisory, warning, failed — belongs on `Aside` or `Status` via
     `Tone`, which the active palette maps without discarding the semantic meaning.
 
-    ``thumbnail`` is a lead image shown beside the heading. With no heading there is
-    nothing to sit beside, so it lowers to a leading single-image gallery instead.
+    ``thumbnail`` is a lead image shown beside the required heading.
     """
 
+    heading: Heading
     children: tuple[LayoutNode, ...]
-    heading: TextLike | None = None
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
@@ -179,8 +186,8 @@ class Section:
 class Article:
     """A self-contained block that stands on its own; see `Section` for the extras."""
 
+    heading: Heading
     children: tuple[LayoutNode, ...]
-    heading: TextLike | None = None
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
@@ -244,7 +251,11 @@ class Fields:
 class Column:
     key: str
     heading: TextLike
-    importance: Importance = Importance.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Columns:
+    columns: tuple[Column, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,11 +266,20 @@ class TableRow:
 
 @dataclass(frozen=True, slots=True)
 class Table:
-    columns: tuple[Column, ...]
+    columns: Columns
     rows: tuple[TableRow, ...]
     key: str
     display: TableDisplay = TableDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.columns.columns:
+            message = "Table needs at least one column"
+            raise ValueError(message)
+        width = len(self.columns.columns)
+        if row := next((row for row in self.rows if len(row.cells) != width), None):
+            message = f"Table row {row.key!r} has {len(row.cells)} cells for {width} columns"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,9 +324,14 @@ class Media:
 
 
 @dataclass(frozen=True, slots=True)
+class Summary:
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
 class Details:
     key: str
-    summary: TextLike
+    summary: Summary
     children: tuple[LayoutNode, ...]
     open: DisclosureOwnership = CLOSED
 
@@ -555,9 +580,14 @@ class RoutedChoices:
 
 
 @dataclass(frozen=True, slots=True)
+class ItemLabel:
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
 class Item:
     key: str
-    label: TextLike
+    label: ItemLabel
     children: tuple[LayoutNode, ...]
     summary: TextLike | None = None
 
@@ -692,6 +722,7 @@ type SemanticNode = (
     | Stack
     | Cluster
     | Themed
+    | Block
     | Section
     | Article
     | Aside

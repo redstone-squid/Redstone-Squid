@@ -92,8 +92,8 @@ class _SearchDetail(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         detail = self._build_node or sl.section(
+            sl.heading(_detail_title(self.hit)),
             sl.truncate(sl.paragraph(_detail_text(self.hit, self.locale))),
-            heading=_detail_title(self.hit),
             accent=DISCORD_GREEN,
         )
         build_id = _build_id(self.hit)
@@ -231,8 +231,8 @@ class SearchResultsView(sl.Component):
         if self.closed:
             return (
                 sl.section(
+                    sl.heading(t(self.locale, _("Search closed"))),
                     sl.truncate(sl.paragraph(t(self.locale, _("This search is closed.")))),
-                    heading=t(self.locale, _("Search closed")),
                 ),
             )
         return (

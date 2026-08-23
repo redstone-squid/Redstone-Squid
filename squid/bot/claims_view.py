@@ -250,8 +250,8 @@ class ClaimReviewComponent(sl.Component):
             # rather than sl.status's fixed tone palette.
             return (
                 sl.section(
+                    sl.heading(L(t"Claims closed")),
                     sl.paragraph(L(t"This review queue is closed.")),
-                    heading=L(t"Claims closed"),
                     accent=DISCORD_BLUE,
                 ),
             )

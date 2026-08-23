@@ -70,6 +70,7 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     BestEffort as SemanticBestEffort,
 )
+from squid_layouts.semantic import Block as SemanticBlock
 from squid_layouts.semantic import Budgeted as SemanticBudgeted
 from squid_layouts.semantic import (
     Choices as SemanticChoices,
@@ -440,6 +441,7 @@ def render_component_tree(
                     | SemanticStack(children=children)
                     | SemanticCluster(children=children)
                     | SemanticThemed(children=children)
+                    | SemanticBlock(children=children)
                     | SemanticSection(children=children)
                     | SemanticArticle(children=children)
                     | SemanticAside(children=children)
@@ -587,6 +589,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
             case (
                 SemanticSection(children=children)
                 | SemanticArticle(children=children)
+                | SemanticBlock(children=children)
                 | SemanticAside(children=children)
             ):
                 return replace(node, children=tuple(rewrite(child) for child in children))

@@ -202,9 +202,9 @@ class Lookup[ItemT](Component):
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         search_form = FormSpec(chrome.search, (TextField(key="query", label=chrome.search),))
         search_control = form(
+            chrome.search,
             search_form,
             key=f"{self.key}.search",
-            label=chrome.search,
             on_submit=self._searched,
         )
         if self.query is None:

@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 
+import squid_layouts as sl
 from squid_layouts import ActionPolicy, FormLike, SubmitHandler, TextLike, plan
 from squid_layouts.actions import Actor, SelectionEvent, Visibility
 from squid_layouts.discord import V2_TARGET
@@ -65,8 +66,8 @@ def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None
 
 
 ENTRIES = (
-    Item("one", "One", (Paragraph("first detail"),), "first"),
-    Item("two", "Two", (Paragraph("second detail"),), "second"),
+    Item("one", sl.ItemLabel("One"), (Paragraph("first detail"),), "first"),
+    Item("two", sl.ItemLabel("Two"), (Paragraph("second detail"),), "second"),
 )
 
 
@@ -125,7 +126,7 @@ def _disclosed(result) -> bool:
 
 async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it() -> None:
     session = PresentationSession()
-    document = Details("debug", "Debug details", (Paragraph("hidden body"),), Managed(initial=True))
+    document = Details("debug", sl.Summary("Debug details"), (Paragraph("hidden body"),), Managed(initial=True))
 
     assert _disclosed(plan(document, target=V2_TARGET, session=session))
 
@@ -138,7 +139,9 @@ async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_
     session = PresentationSession()
     session.disclose("debug", open_=True)
     seen, record = _recorder()
-    document = Details("debug", "Debug details", (Paragraph("hidden body"),), Controlled(value=False, on_change=record))
+    document = Details(
+        "debug", sl.Summary("Debug details"), (Paragraph("hidden body"),), Controlled(value=False, on_change=record)
+    )
 
     result = plan(document, target=V2_TARGET, session=session)
     await _fire(result, "debug.toggle", _select(()))

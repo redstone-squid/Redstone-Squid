@@ -171,9 +171,9 @@ class SettingsPanel(sl.Component):
         )
         children: list[sl.LayoutNode] = [
             sl.section(
+                sl.heading(L(t"Server settings")),
                 description and sl.truncate(sl.paragraph(description)),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._server_fields())),
-                heading=L(t"Server settings"),
             )
         ]
         if self._capabilities.edit_server:
@@ -234,9 +234,9 @@ class SettingsPanel(sl.Component):
         scope_note = self._scope_note()
         children: list[sl.LayoutNode] = [
             sl.section(
+                sl.heading(L("Voting — {kind}", kind=L(KIND_LABELS[self.kind]))),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
                 scope_note and sl.note(scope_note),
-                heading=L("Voting — {kind}", kind=L(KIND_LABELS[self.kind])),
             ),
             sl.Choices(
                 key="vote-kind",

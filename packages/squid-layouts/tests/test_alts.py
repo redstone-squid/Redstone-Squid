@@ -152,7 +152,7 @@ class TestConstrainedShapes:
 
     def test_field_fallbacks_normalize_instead_of_raising(self):
         # A caller-supplied fallback that came out longer than its primary is skipped, not fatal.
-        node = sl.section(sl.fields(sl.field("Creators", "a, b", fallbacks=("a and 3 others",))), heading="T")
+        node = sl.section(sl.heading("T"), sl.fields(sl.field("Creators", "a, b", fallbacks=("a and 3 others",))))
         view = _static_view([node])
         assert any("a, b" in text for text in _texts(view))
 
@@ -161,8 +161,10 @@ class TestCardFieldLadders:
     def test_url_field_degrades_meaningfully(self):
         urls = [f"https://example.invalid/video-{index}" for index in range(150)]
         node = sl.section(
+            sl.heading("Build"),
             sl.truncate(sl.paragraph("d" * 3500)),
             sl.section(
+                sl.heading("Resources"),
                 sl.fields(
                     sl.field(
                         "Videos",
@@ -170,9 +172,7 @@ class TestCardFieldLadders:
                         fallbacks=(f"{len(urls)} links — first: {urls[0]}", f"{len(urls)} links"),
                     ),
                 ),
-                heading="Resources",
             ),
-            heading="Build",
         )
         view = _static_view([node])
         text = "\n".join(_texts(view))
