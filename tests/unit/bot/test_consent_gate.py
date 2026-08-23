@@ -13,10 +13,10 @@ from whenever import Instant
 import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
-from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
+from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
 from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
 from squid_layouts.discord.sessions import Opened
-from squid_layouts.discord.testing import delivered_to, fake_message
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123
@@ -216,3 +216,94 @@ def _stub_prompt(monkeypatch: pytest.MonkeyPatch, *, agree: bool) -> None:
         return AccountConsent.grant_current() if agree else None
 
     monkeypatch.setattr("squid.bot.consent.prompt_for_consent", prompt)
+
+
+class _Gate(sl.Component):
+    """A panel that asks for consent and keeps answering presses while the notice is up."""
+
+    presses: int = sl.state(default=0)
+    granted: bool = sl.state(default=False)
+
+    def render(self) -> Any:
+        return [
+            sl.primitives.Text(f"{self.presses}"),
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button("ask", self._ask, "ask"),
+                    sl.primitives.Button("count", self._count, "count"),
+                )
+            ),
+        ]
+
+    async def _ask(self, event: sl.PressEvent) -> None:
+        await request_consent(
+            sl.discord.native(event),
+            user_id=USER_ID,
+            on_answer=self._answered,
+            parent=sl.discord.responder(event).mount,
+        )
+
+    async def _count(self, event: sl.PressEvent) -> None:
+        del event
+        self.presses += 1
+
+    async def _answered(self, _prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+        self.granted = consent is not None
+
+
+def _clicked(registry: SessionRegistry, *, message_id: int) -> Any:
+    """An interaction whose client carries the registry the prompt opens through."""
+    interaction = fake_interaction(USER_ID, message_id=message_id)
+    interaction.client = SimpleNamespace(mounts=registry)
+    return interaction
+
+
+def _prompt_of(registry: SessionRegistry, panel: sl.discord.Mount) -> sl.discord.Mount | None:
+    """The notice attached to `panel`'s session, which is where `parent=` puts it."""
+    session = registry.session_for(panel)
+    assert session is not None
+    return next((mount for mount in session.mounts if mount is not panel), None)
+
+
+async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None:
+    """The defect this closed: the answer was awaited inside the press that asked for it.
+
+    A handler runs in the mount's transaction and, under the default EXCLUSIVE policy, in its
+    dispatch lock, so awaiting the reader held both for as long as they took to answer -- up
+    to the prompt's full 120 s. `request_consent` returns once the notice is on screen, so the
+    press ends and the panel goes on working.
+    """
+    registry = SessionRegistry()
+    panel = _Gate()
+    mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
+    assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
+    commit_render(mount)
+
+    # Bounded well under the prompt's 120 s: a press that still waited would hang here rather
+    # than fail, and a test that only passes once the prompt times out proves nothing.
+    with anyio.fail_after(5):
+        await mount.dispatch("ask", _clicked(registry, message_id=1))
+        assert _prompt_of(registry, mount) is not None
+
+        commit_render(mount)
+        await mount.dispatch("count", _clicked(registry, message_id=2))
+
+    assert panel.presses == 1
+
+
+async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
+    """The work the press was about runs from the prompt's own press, not from the panel's."""
+    registry = SessionRegistry()
+    panel = _Gate()
+    mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
+    assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
+    commit_render(mount)
+    await mount.dispatch("ask", _clicked(registry, message_id=1))
+
+    prompt = _prompt_of(registry, mount)
+    assert prompt is not None
+    commit_render(prompt)
+    await prompt.dispatch("accept", _clicked(registry, message_id=3))
+
+    assert panel.granted
+    assert prompt.finished
