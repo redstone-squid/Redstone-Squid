@@ -1,5 +1,7 @@
 """Session identity, structured outcomes, cardinality, and attachment lifetime."""
 
+import inspect
+from dataclasses import fields
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -10,6 +12,7 @@ import squid_layouts as sl
 from squid_layouts.discord import (
     Abandoned,
     Everyone,
+    MountDefaults,
     Opened,
     Owner,
     ProtectCrossUserAttachments,
@@ -86,6 +89,38 @@ def test_session_keys_use_typed_frozen_scopes() -> None:
     assert SessionKey.global_("status").scope == sl.discord.GlobalScope()
     assert SessionKey.custom("edit", (7, 99)).scope == sl.discord.CustomScope((7, 99))
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
+
+
+def test_mount_defaults_fields_track_mount_keyword_options() -> None:
+    mount_keywords = {
+        name
+        for name, parameter in inspect.signature(sl.discord.Mount.__init__).parameters.items()
+        if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    }
+
+    assert {field.name for field in fields(MountDefaults)} == mount_keywords - {"access"}
+
+
+def test_mount_defaults_apply_overrides_without_mutating_the_defaults() -> None:
+    defaults = MountDefaults(timeout=30, strict=True)
+
+    mount = defaults.mount(Panel(), access=Everyone(), timeout=None)
+
+    assert mount.timeout is None
+    assert mount.strict is True
+    assert defaults.timeout == 30
+
+
+async def test_registry_opens_components_through_its_mount_defaults() -> None:
+    on_error = AsyncMock()
+    registry = SessionRegistry(MountDefaults(timeout=30, on_error=on_error))
+
+    result = await registry.open(Panel(), to_message(), access=Owner(7), timeout=None)
+
+    assert isinstance(result, Opened)
+    assert result.session.root.timeout is None
+    assert result.session.root.on_error is on_error
+    assert result.session.root.access == Owner(7)
 
 
 async def test_any_hashable_key_can_name_a_session() -> None:
@@ -376,7 +411,8 @@ class TestRacesAndCleanup:
 
 
 async def test_open_personal_owns_access_audience_and_registration() -> None:
-    registry = SessionRegistry()
+    on_error = AsyncMock()
+    registry = SessionRegistry(MountDefaults(on_error=on_error))
     interaction = fake_interaction(user_id=7)
 
     result = await open_personal(registry, Panel(), interaction, key=SessionKey.user("panel", 7), timeout=None)
@@ -384,6 +420,7 @@ async def test_open_personal_owns_access_audience_and_registration() -> None:
     assert isinstance(result, Opened)
     assert result.session.participants == frozenset({7})
     assert result.session.root.access == Owner(7)
+    assert result.session.root.on_error is on_error
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
