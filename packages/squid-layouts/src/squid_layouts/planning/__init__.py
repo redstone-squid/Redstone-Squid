@@ -1,5 +1,6 @@
 """Portable planning, adaptation, and layout measurement APIs."""
 
+from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.measure import (
     LayoutOverflowError,
@@ -19,10 +20,27 @@ from squid_layouts.planning.search import (
     iter_assignments,
 )
 from squid_layouts.planning.target import PreparedExtension, ResourceCost, TargetProfile
+from squid_layouts.planning.types import (
+    ClassicTarget,
+    ComponentsV2Target,
+    DiscordAdapter,
+    DiscordPy27Adapter,
+    DiscordPyAdapter,
+    DiscordTarget,
+    Renderable,
+    TargetRequirements,
+)
 from squid_layouts.sources import POSITION_POLICY, Position, PositionPolicy
 
 __all__ = [
+    "AdapterProfile",
+    "ClassicTarget",
+    "ComponentsV2Target",
     "DEFAULT_SEARCH_BUDGET",
+    "DiscordAdapter",
+    "DiscordPy27Adapter",
+    "DiscordPyAdapter",
+    "DiscordTarget",
     "POSITION_POLICY",
     "LayoutOverflowError",
     "MeasuredLayout",
@@ -31,6 +49,7 @@ __all__ = [
     "PositionPolicy",
     "PreparedExtension",
     "ResourceCost",
+    "Renderable",
     "SolveNote",
     "SolveNoteCode",
     "SolveNoteSeverity",
@@ -38,6 +57,7 @@ __all__ = [
     "StrategyAxis",
     "StrategyCandidate",
     "TargetProfile",
+    "TargetRequirements",
     "choose_strategy",
     "iter_assignments",
     "measure",
