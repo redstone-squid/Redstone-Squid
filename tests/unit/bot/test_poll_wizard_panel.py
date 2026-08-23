@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.voting.poll_wizard import PollConfirmationComponent, PollDraft
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.voting import GENERIC_OPTIONS
@@ -16,6 +17,15 @@ def make_wizard() -> PollConfirmationComponent:
     publisher = SimpleNamespace(create_and_publish=None, may_create_network=None)
     draft = PollDraft(question="Best door?", options_text="One\nTwo")
     return PollConfirmationComponent(cast(Any, publisher), OWNER_ID, 42, draft, GENERIC_OPTIONS)
+
+
+def test_scheduler_backed_wizard_renews_its_private_session() -> None:
+    reactor = sl.discord.Reactor()
+
+    mount = make_wizard().mount(reactor=reactor)
+
+    assert mount.scheduler is reactor
+    assert isinstance(mount.expiry, sl.discord.RenewEphemeral)
 
 
 async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> None:

@@ -24,6 +24,7 @@ DISCORD_YELLOW = 0xFAA61A
 DISCORD_GREEN = 0x43B581
 DISCORD_BLUE = 0x5865F2
 DISCORD_GREY = 0x4F545C
+_DEFAULT_EXPIRY = ui.discord.PauseUpdates()
 
 __all__ = [
     "CHROME",
@@ -305,6 +306,7 @@ def create_mount(
     chrome: ui.Chrome | None = None,
     timeout: float = 180,
     reactor: ui.discord.Reactor | None = None,
+    expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
     return ui.discord.Mount(
@@ -315,6 +317,7 @@ def create_mount(
         timeout=timeout,
         on_error=_component_error_hook,
         scheduler=reactor,
+        expiry=expiry,
     )
 
 
