@@ -19,15 +19,16 @@ from squid_layouts.runtime.presentation import (
 )
 from squid_layouts.runtime.reactivity import export_state, restore_state
 from squid_layouts.sources import Direction, Position
-
-from .postgres import PostgresSnapshotStore, PostgresTopicBridge, TopicBridgeSnapshot
-from .stores import (
+from squid_stores import (
     AdmissionToken,
     ClaimToken,
     DurableSessionStore,
     MemorySnapshotStore,
+    PostgresSnapshotStore,
+    PostgresTopicBridge,
     SQLiteSnapshotStore,
     StoredSessionRecord,
+    TopicBridgeSnapshot,
 )
 
 __all__ = [

@@ -28,6 +28,7 @@ from squid_layouts.discord.sessions import (
     SessionRegistry,
     SessionSummary,
 )
+from squid_stores import ClaimToken, DurableSessionStore, StoredSessionRecord
 
 from . import ComponentRegistry, MountLocator, RestoreContext, SnapshotError
 from .frontend import (
@@ -47,7 +48,6 @@ from .session_records import (
     encode_session_key,
     encode_session_scope,
 )
-from .stores import ClaimToken, DurableSessionStore, StoredSessionRecord
 
 logger = logging.getLogger(__name__)
 

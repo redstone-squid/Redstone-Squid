@@ -294,9 +294,10 @@ def test_package_metadata_keeps_version_and_adapter_extra() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
     assert project["version"] == "0.1.0"
-    assert project["dependencies"] == []
+    assert project["dependencies"] == ["squid-reactive", "squid-stores"]
     assert set(project["optional-dependencies"]["discord"]) == {
         "discord-py>=2.7,<3",
         "anyio>=4.14,<5",
         "packaging>=24,<27",
     }
+    assert project["optional-dependencies"]["postgres"] == ["squid-stores[postgres]"]
