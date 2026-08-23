@@ -191,11 +191,15 @@ own the whole message. Access is always explicit and visibility remains a destin
 ```python
 defaults = sl.discord.MountDefaults(chrome=BOT_CHROME, on_error=component_error)
 sessions = sl.discord.SessionRegistry(defaults=defaults)
+mount = defaults.mount(
+    SettingsPanel(settings),
+    access=sl.discord.Owner(interaction.user.id),
+    timeout=300,
+)
 
 result = await sessions.open(
-    SettingsPanel(settings),
+    mount,
     sl.discord.respond_to(interaction, ephemeral=True, wait=True),
-    access=sl.discord.Owner(interaction.user.id),
     key=sl.discord.SessionKey.user_guild(
         "settings",
         interaction.user.id,
@@ -203,23 +207,18 @@ result = await sessions.open(
     ),
     policy=sl.discord.SessionPolicy(collision=sl.discord.Reject()),
     actor_id=interaction.user.id,
-    timeout=300,
 )
 
 if isinstance(result, sl.discord.Rejected):
     await interaction.followup.send("You already have settings open.", ephemeral=True)
 ```
 
-`MountDefaults` holds host-wide construction policy. Per-open overrides win, while `access=` stays
-required because it identifies the actor for this particular mount. `SessionRegistry.open` admits,
-delivers, and registers atomically and returns `Opened`, `Rejected`, or `Abandoned`; do not race an
-open with a separate `registry.get()` preflight. `SessionPolicy` owns cardinality, collision choice,
-and replacement protection. The component-opening path above is covered by
-`tests/test_sessions.py`.
-
-If application code needs the mount before delivery—for example, to install a finish hook or attach
-it beneath an existing session—construct it with `defaults.mount(component, access=...)` and pass
-the resulting mount to `open` or `Session.attach`.
+`MountDefaults` holds host-wide construction policy. Per-mount overrides win, while `access=` stays
+required because it identifies the actor allowed to use this particular mount. `SessionRegistry.open`
+accepts a constructed mount, admits, delivers, and registers it atomically, and returns `Opened`,
+`Rejected`, or `Abandoned`; do not race an open with a separate `registry.get()` preflight.
+`SessionPolicy` owns cardinality, collision choice, and replacement protection. Attach an additional
+mount beneath an existing session with `Session.attach`.
 
 ## Replace mounted modals with forms
 

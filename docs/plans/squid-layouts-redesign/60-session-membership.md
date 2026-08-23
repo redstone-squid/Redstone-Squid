@@ -28,8 +28,9 @@ Make membership a serialized operation on `Session`, governed by an immutable
 `ParticipantPolicy` separate from `SessionPolicy`:
 
 ```python
+mount = sessions.defaults.mount(Lobby(...), access=Owner(interaction.user.id))
 opened = await sessions.open(
-    Lobby(...),
+    mount,
     destination,
     key=SessionKey.guild("game", guild.id),
     participant_policy=ParticipantPolicy(limit=10),
@@ -91,8 +92,7 @@ type LeaveResult = Left | NotParticipant | ParticipantSessionFinished
 `ParticipantPolicy.limit` must be positive or `None`; `None` means unbounded. There is no minimum
 in v1. A session may be empty, its opener may leave, and becoming empty does not finish it.
 
-`SessionRegistry.open`, its bare-component overloads, `Screen.open`, and
-`DurableSessionRuntime.open` accept:
+`SessionRegistry.open`, `Screen.open`, and `DurableSessionRuntime.open` accept:
 
 ```python
 participant_policy: ParticipantPolicy = ParticipantPolicy()

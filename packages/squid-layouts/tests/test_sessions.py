@@ -2,14 +2,14 @@
 
 import inspect
 from dataclasses import fields
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import anyio
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, MountDefaults, Owner, SessionKey, SessionRegistry
+from squid_layouts.discord import Everyone, MountDefaults, SessionKey, SessionRegistry
 from squid_layouts.discord.delivery import Abandoned
 from squid_layouts.discord.sessions import (
     Opened,
@@ -21,9 +21,8 @@ from squid_layouts.discord.sessions import (
     Replace,
     SessionPolicy,
     Unprotected,
-    open_personal,
 )
-from squid_layouts.discord.testing import fake_interaction, fake_message
+from squid_layouts.discord.testing import fake_message
 from squid_layouts.primitives import Button, Heading, Row
 
 
@@ -107,16 +106,11 @@ def test_mount_defaults_apply_overrides_without_mutating_the_defaults() -> None:
     assert defaults.timeout == 30
 
 
-async def test_registry_opens_components_through_its_mount_defaults() -> None:
-    on_error = AsyncMock()
-    registry = SessionRegistry(MountDefaults(timeout=30, on_error=on_error))
+async def test_registry_requires_a_constructed_mount() -> None:
+    registry = SessionRegistry()
 
-    result = await registry.open(Panel(), to_message(), access=Owner(7), timeout=None)
-
-    assert isinstance(result, Opened)
-    assert result.session.root.timeout is None
-    assert result.session.root.on_error is on_error
-    assert result.session.root.access == Owner(7)
+    with pytest.raises(TypeError, match="requires a Mount; use MountDefaults.mount or Screen.open"):
+        await registry.open(cast(Any, Panel()), to_message())
 
 
 async def test_any_hashable_key_can_name_a_session() -> None:
@@ -404,20 +398,6 @@ class TestRacesAndCleanup:
 
         assert keyed.session.root.finished and keyless.session.root.finished
         assert tuple(registry.active()) == ()
-
-
-async def test_open_personal_owns_access_audience_and_registration() -> None:
-    on_error = AsyncMock()
-    registry = SessionRegistry(MountDefaults(on_error=on_error))
-    interaction = fake_interaction(user_id=7)
-
-    result = await open_personal(registry, Panel(), interaction, key=SessionKey.user("panel", 7), timeout=None)
-
-    assert isinstance(result, Opened)
-    assert result.session.participants == frozenset({7})
-    assert result.session.root.access == Owner(7)
-    assert result.session.root.on_error is on_error
-    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
 async def _note(order: list[str], label: str) -> None:
