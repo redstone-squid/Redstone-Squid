@@ -348,6 +348,9 @@ class RolePanel(Component):
         feedback: RoleFeedback | None = None,
         audit_reason: str = "Self-role panel",
     ) -> None:
+        if not isinstance(routes, RouteGroup):
+            message = "RolePanel.routes must be a RouteGroup"
+            raise TypeError(message)
         self.routes = routes
         self.title = title
         self.categories = tuple(categories)
@@ -396,7 +399,8 @@ class RolePanel(Component):
             message = "RolePanel route identities overlap"
             raise ValueError(message)
         for category in self.categories:
-            candidates[0].id(category=category.key, role_id=category.roles[0].role_id)
+            for role in category.roles:
+                candidates[0].id(category=category.key, role_id=role.role_id)
             candidates[1].id(category=category.key)
         for router in routes._routers:
             for route in candidates:
