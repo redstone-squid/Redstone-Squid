@@ -14,7 +14,7 @@ import discord
 
 from squid_layouts.discord.conform import conform_modal
 from squid_layouts.discord.emoji import discord_emoji
-from squid_layouts.entities import EntityType
+from squid_layouts.entity import EntityType
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import (
     BoolField,

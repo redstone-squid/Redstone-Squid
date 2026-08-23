@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
-from squid_layouts.entities import ChannelType, EntityRef, EntityType, supports_entity
+from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.guards import Guard
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone

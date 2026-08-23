@@ -20,7 +20,7 @@ from squid_layouts.interactions import (
     SelectionHandler,
 )
 from squid_layouts.emoji import EmojiLike, normalize_emoji
-from squid_layouts.entities import ChannelType, EntityRef, EntityType, supports_entity
+from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormBinding
 from squid_layouts.guards import Guard
 from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Truncate

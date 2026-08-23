@@ -8,7 +8,7 @@ from typing import Any, cast
 
 from squid_layouts.interactions import ActionPolicy
 from squid_layouts.emoji import Emoji
-from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
+from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.model import (
     SceneAsset,
