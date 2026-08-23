@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any, cast
 
-from squid_layouts.actions import ActionPolicy
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.emoji import Emoji
 from squid_layouts.entities import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.primitives.styles import ActionStyle

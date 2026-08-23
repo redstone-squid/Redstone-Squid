@@ -11,7 +11,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from squid_layouts.actions import (
+from squid_layouts.interactions import (
     ActionBinding,
     ActionPolicy,
     EntitySelectionHandler,

@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Literal
 
-from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.entities import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormSpec, SubmitHandler

@@ -20,7 +20,7 @@ from typing import Any
 
 import discord
 
-from squid_layouts.actions import ActionBinding
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.discord.attachments import attachment_assets
 from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.inspection import audit_classic_payload

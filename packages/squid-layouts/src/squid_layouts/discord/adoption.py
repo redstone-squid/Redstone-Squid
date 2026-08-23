@@ -19,7 +19,7 @@ from typing import Any
 
 import discord
 
-from squid_layouts.actions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
+from squid_layouts.interactions import EntitySelectionEvent, PressEvent, SelectionEvent, Visibility
 from squid_layouts.discord.actions import ActionResponder, responder, selected_entities
 from squid_layouts.discord.mount import _CHANNEL_TYPES
 from squid_layouts.entities import EntityKind, EntityRef, EntityType

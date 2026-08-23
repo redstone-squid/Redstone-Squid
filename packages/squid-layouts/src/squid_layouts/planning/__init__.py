@@ -2,6 +2,14 @@
 
 from squid_layouts.planning.adapter import AdapterProfile
 from squid_layouts.planning.cache import PlanCache
+from squid_layouts.planning.discord import (
+    CLASSIC_PROTOCOL_CAPABILITIES,
+    V2_PROTOCOL_CAPABILITIES,
+    classic_target,
+    components_v2_target,
+    dynamic_classic_target,
+    dynamic_components_v2_target,
+)
 from squid_layouts.planning.measure import (
     LayoutOverflowError,
     MeasuredLayout,
@@ -34,6 +42,7 @@ from squid_layouts.sources import POSITION_POLICY, Position, PositionPolicy
 
 __all__ = [
     "AdapterProfile",
+    "CLASSIC_PROTOCOL_CAPABILITIES",
     "ClassicTarget",
     "ComponentsV2Target",
     "DEFAULT_SEARCH_BUDGET",
@@ -58,7 +67,12 @@ __all__ = [
     "StrategyCandidate",
     "TargetProfile",
     "TargetRequirements",
+    "V2_PROTOCOL_CAPABILITIES",
     "choose_strategy",
+    "classic_target",
+    "components_v2_target",
+    "dynamic_classic_target",
+    "dynamic_components_v2_target",
     "iter_assignments",
     "measure",
     "plan",
