@@ -5,7 +5,7 @@ import pytest
 
 import squid_layouts as sl
 from squid_layouts.discord import V2_TARGET, Everyone, Mount, delivery
-from squid_layouts.discord.rendering import V2Renderer
+from squid_layouts.discord.renderer import V2Renderer
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.scene import Codec

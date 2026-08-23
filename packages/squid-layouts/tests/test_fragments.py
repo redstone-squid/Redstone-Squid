@@ -138,7 +138,7 @@ class TestInteractionBoundary:
         assert routed in list(host.walk_children())
 
     def test_a_dispatchable_native_item_is_refused(self):
-        native = sl.discord.targets.NativeItem(
+        native = sl.discord.target.NativeItem(
             lambda: _row(discord.ui.Button(label="local", custom_id="local")),
             fallback=sl.primitives.Text("fallback"),
         )
@@ -146,7 +146,7 @@ class TestInteractionBoundary:
             fragment([native], alongside=_host())
 
     def test_a_native_display_item_is_fine(self):
-        native = sl.discord.targets.NativeItem(
+        native = sl.discord.target.NativeItem(
             lambda: discord.ui.TextDisplay("native"),
             fallback=sl.primitives.Text("fallback"),
         )
