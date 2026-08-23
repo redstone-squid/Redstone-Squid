@@ -15,7 +15,7 @@ from squid_layouts.discord.reactor import Reactor
 from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
-from squid_layouts.factories import code, paragraph, section
+from squid_layouts.factories import code, heading, paragraph, section
 from squid_layouts.profiling import (
     CounterAggregate,
     NoOpProfiler,
@@ -113,14 +113,14 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         """Show the retained plan report, grouped by severity."""
         snapshot = await self._snapshot_or_refuse(ctx, mount_id)
         if snapshot is not None:
-            await self._send(ctx, [section(code(plan_text(snapshot)), heading=f"Plan for mount {mount_id}")])
+            await self._send(ctx, [section(heading(f"Plan for mount {mount_id}"), code(plan_text(snapshot)))])
 
     @ui_group.command(name="metrics")
     async def dump_metrics(self, ctx: Context[BotT], mount_id: str) -> None:
         """Show planner search and cache metrics for a mount."""
         snapshot = await self._snapshot_or_refuse(ctx, mount_id)
         if snapshot is not None:
-            await self._send(ctx, [section(code(metrics_text(snapshot)), heading=f"Metrics for mount {mount_id}")])
+            await self._send(ctx, [section(heading(f"Metrics for mount {mount_id}"), code(metrics_text(snapshot)))])
 
     @ui_group.command(name="profile")
     async def profile_mount(self, ctx: Context[BotT], mount_id: str) -> None:
@@ -143,7 +143,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             if not ordered
             else "\n\n".join(_trace_text(trace) for trace in ordered)
         )
-        await self._send(ctx, [section(code(body), heading=f"Profile for mount {mount_id}")])
+        await self._send(ctx, [section(heading(f"Profile for mount {mount_id}"), code(body))])
 
     @dev_group.command(name="routes")
     async def list_routes(self, ctx: Context[BotT]) -> None:
@@ -163,7 +163,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
                 if route.middleware:
                     lines.append(f"         middleware: {' -> '.join(route.middleware)}")
         body = "No routers are installed on this client." if not lines else "\n".join(lines)
-        await self._send(ctx, [section(code(body), heading="Routed controls")])
+        await self._send(ctx, [section(heading("Routed controls"), code(body))])
 
     @dev_group.group(name="profile", invoke_without_command=True)
     async def profile_group(self, ctx: Context[BotT]) -> None:
@@ -187,7 +187,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         )
         if counters:
             body += "\n" + "\n".join(map(_counter_text, counters))
-        await self._send(ctx, [section(code(body), heading="Action profiles")])
+        await self._send(ctx, [section(heading("Action profiles"), code(body))])
 
     @profile_group.command(name="queues")
     async def profile_queues(self, ctx: Context[BotT]) -> None:
@@ -231,7 +231,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             if aggregate.key.operation in queue_operations
         )
         body = "No queue diagnostics are configured or observed." if not lines else "\n".join(lines)
-        await self._send(ctx, [section(code(body), heading="Queue profiles")])
+        await self._send(ctx, [section(heading("Queue profiles"), code(body))])
 
     @profile_group.command(name="export")
     async def profile_export(self, ctx: Context[BotT]) -> None:
@@ -258,7 +258,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         return mount.snapshot()
 
     async def _refuse(self, ctx: Context[BotT], message: str) -> None:
-        await self._send(ctx, [section(paragraph(message), heading="No such mount")])
+        await self._send(ctx, [section(heading("No such mount"), paragraph(message))])
 
     async def _send(
         self,

@@ -5,6 +5,7 @@ from squid_layouts import (
     Aside,
     Asset,
     Column,
+    Columns,
     Download,
     Field,
     Fields,
@@ -60,8 +61,8 @@ class TestRegions:
     def test_an_article_becomes_one_card_carrying_every_slot_it_names(self) -> None:
         body = message(
             Article(
+                Heading("Door"),
                 (Paragraph("body"), Fields((Field("w", "Width", "2"),))),
-                heading="Door",
                 thumbnail="https://example.invalid/t.png",
             )
         )
@@ -79,7 +80,7 @@ class TestRegions:
 
     def test_two_adjacent_regions_stay_two_cards(self) -> None:
         """Merging them would change the author's grouping rather than express it."""
-        body = message([Article((Paragraph("one"),), heading="A"), Article((Paragraph("two"),), heading="B")])
+        body = message([Article(Heading("A"), (Paragraph("one"),)), Article(Heading("B"), (Paragraph("two"),))])
 
         assert [embed.title for embed in body.embeds] == ["A", "B"]
 
@@ -131,7 +132,7 @@ class TestTables:
     def test_a_table_stays_an_aligned_code_block_while_it_fits(self) -> None:
         body = message(
             Table(
-                (Column("a", "Name"), Column("b", "Size")),
+                Columns((Column("a", "Name"), Column("b", "Size"))),
                 (TableRow("r", ("door", "2x2")),),
                 key="t",
             )

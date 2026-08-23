@@ -28,9 +28,9 @@ _SOURCE_EXAMPLES = {
     def render(self):
         # Assigning declared state invalidates the owning mount.
         return sl.section(
+            sl.heading("Counter"),
             sl.paragraph(L("Count: {count}", count=self.count)),
             sl.actions(sl.action("+1", self.increment, key="add"), key="counter"),
-            heading="Counter",
         )
 
     async def increment(self, event: sl.PressEvent) -> None:
@@ -45,7 +45,7 @@ _SOURCE_EXAMPLES = {
 )
 
 # No page size: the solver fills Discord's actual text budget.
-return sl.section(lines, heading="Measured pagination")""",
+return sl.section(sl.heading("Measured pagination"), lines)""",
     "adaptation": """actions = tuple(
     sl.action(
         L("Action {number}", number=number),
@@ -198,6 +198,7 @@ class LayoutShowcase(sl.Component):
     def _tour(self) -> Sequence[sl.LayoutNode]:
         return (
             sl.section(
+                sl.heading(L(t"What this message is doing")),
                 # The body is the card's shock absorber: truncate lets it give up characters
                 # under pressure before a field or the footer loses any.
                 sl.truncate(
@@ -221,7 +222,6 @@ class LayoutShowcase(sl.Component):
                     ),
                 ),
                 sl.note(L(t"Use the selector above to switch exhibits in place.")),
-                heading=L(t"What this message is doing"),
             ),
         )
 
@@ -253,6 +253,7 @@ class LayoutShowcase(sl.Component):
         )
         return (
             sl.section(
+                sl.heading(L(t"Structural adaptation")),
                 sl.truncate(
                     sl.paragraph(
                         L(
@@ -262,7 +263,6 @@ class LayoutShowcase(sl.Component):
                         )
                     )
                 ),
-                heading=L(t"Structural adaptation"),
                 accent=DISCORD_YELLOW,
             ),
             sl.Actions(actions, key="showcase-actions"),
@@ -295,6 +295,7 @@ class LayoutShowcase(sl.Component):
     def _composition(self) -> Sequence[sl.LayoutNode]:
         return (
             sl.section(
+                sl.heading(L(t"Keyed component composition")),
                 sl.truncate(
                     sl.paragraph(
                         L(
@@ -303,7 +304,6 @@ class LayoutShowcase(sl.Component):
                         )
                     )
                 ),
-                heading=L(t"Keyed component composition"),
             ),
             self.boundary(self.left, key="left"),
             self.boundary(self.right, key="right"),
@@ -313,6 +313,7 @@ class LayoutShowcase(sl.Component):
         unsafe = "*operator input* @everyone [not a link](https://example.com)"
         return (
             sl.section(
+                sl.heading(L(t"Deferred localization and safe Markdown")),
                 sl.paragraph(
                     L(t"Messages retain their catalogue key and interpolation values until this mount plans a frame.")
                 ),
@@ -321,7 +322,6 @@ class LayoutShowcase(sl.Component):
                     sl.field(L(t"Escaped interpolation"), L(t"Rendered safely: {unsafe}")),
                 ),
                 sl.note(L(t"Switching language invalidates this same mount; no component is rebuilt or replaced.")),
-                heading=L(t"Deferred localization and safe Markdown"),
                 accent=DISCORD_BLUE,
             ),
             sl.actions(
@@ -332,11 +332,11 @@ class LayoutShowcase(sl.Component):
 
     def _source_example(self) -> sl.Section:
         return sl.Section(
+            sl.Heading(L(t"Declaration source")),
             (
                 sl.Paragraph(L(t"This is the author-facing declaration; planning chooses the legal Discord shape.")),
                 sl.Code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["tour"]), language="python"),
             ),
-            heading=L(t"Declaration source"),
         )
 
     def _sections(self) -> tuple[tuple[str, sl.TextLike, sl.TextLike], ...]:

@@ -6,6 +6,7 @@ from time import perf_counter
 from squid_layouts import (
     Action,
     Actions,
+    Heading,
     List,
     ListItem,
     Localization,
@@ -48,7 +49,7 @@ async def _next(_event) -> None: ...
 
 def test_palette_is_part_of_plan_cache_identity() -> None:
     cache = PlanCache()
-    document = Section((Paragraph("brand"),))
+    document = Section(Heading("Brand"), (Paragraph("brand"),))
 
     first = plan(document, target=V2_TARGET, palette=Palette(brand=0x111111), cache=cache)
     second = plan(document, target=V2_TARGET, palette=Palette(brand=0x222222), cache=cache)

@@ -901,8 +901,8 @@ class TestProfiling:
 class TestDrawing:
     def test_a_sessionless_document_may_carry_a_routed_control(self) -> None:
         document = sl.section(
+            sl.heading("Poll"),
             sl.actions(sl.routed_action("Close poll", POLL_CLOSE.id(), key="close", tone=sl.Tone.DANGER), key="c"),
-            heading="Poll",
         )
 
         view = _static_view([document])
@@ -943,7 +943,7 @@ class TestDrawing:
             render_static([document])
 
     def test_a_routed_scene_round_trips_through_the_codec(self) -> None:
-        document = sl.section(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
+        document = sl.block(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
 
         scene = sl.plan(document, target=sl.discord.V2_TARGET).scene
         payload = sl.scene.Codec.dumps(scene)

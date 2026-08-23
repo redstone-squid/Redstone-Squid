@@ -410,7 +410,7 @@ def _fields(fields: Sequence[CardField]) -> tuple[ui.Field, ...]:
 def _groups(sections: Sequence[CardSection]) -> tuple[ui.Section, ...]:
     # A nested section per group: each field steps its own Condense ladder independently
     # rather than a whole group stepping in lockstep — finer-grained, not a regression.
-    return tuple(ui.section(ui.fields(*_fields(s.fields)), heading=s.title) for s in sections if s.fields)
+    return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
 
 
 def card_layout(
@@ -427,6 +427,7 @@ def card_layout(
     """Create a standalone V2 card."""
     extra_media = media[1:]
     node = ui.section(
+        ui.heading(title),
         # The body is the card's shock absorber: truncate lets it give up characters under
         # pressure before a field or the footer loses any.
         description and ui.truncate(ui.paragraph(description)),
@@ -436,7 +437,6 @@ def card_layout(
         *_groups(sections),
         bool(extra_media) and ui.media(*extra_media, key="media"),
         footer and ui.note(footer),
-        heading=title,
         accent=accent_colour,
         thumbnail=media[0] if media else None,
     )
@@ -451,7 +451,7 @@ def text_layout(
     # on an overlong message. This is the bot's most-used reply path, so it clips.
     node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
-        node = ui.section(node, accent=accent_colour)
+        node = ui.block(node, accent=accent_colour)
     return render_static([node], locale=locale)
 
 
@@ -520,9 +520,9 @@ def link_layout(
 ) -> discord.ui.LayoutView:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
+        ui.heading(title),
         description and ui.truncate(ui.paragraph(description)),
         ui.actions(ui.link(label, url, key="open-link"), key="link"),
-        heading=title,
         accent=DISCORD_GREEN,
     )
     return render_static([node], locale=locale)

@@ -485,7 +485,7 @@ class PollConfirmationComponent(sl.Component):
         nodes: list[sl.LayoutNode] = [
             # `preview` already opens with its own "## question" line, so this renders a
             # double "##". Pre-existing, and fixing rendering is out of scope here.
-            sl.section(sl.fields(*fields), heading=preview),
+            sl.section(sl.heading(preview), sl.fields(*fields)),
             sl.Choices(
                 key="visibility",
                 choices=tuple(

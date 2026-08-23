@@ -16,9 +16,9 @@ class Counter(sl.Component):
 
     def render(self):
         return sl.section(
+            sl.heading("Counter"),
             t"Count: {self.count}",
             sl.actions(sl.action("+1", self.increment, key="increment"), key="counter-actions"),
-            heading="Counter",
         )
 
     async def increment(self, event: sl.PressEvent) -> None:

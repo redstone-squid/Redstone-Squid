@@ -65,7 +65,7 @@ class MountInspector(sl.Component):
         else:
             body = sl.paragraph("Nothing is mounted. Open a panel and run this again.")
 
-        nodes: list[sl.LayoutNode] = [sl.section(body, heading=f"Live mounts — {len(snapshots)}")]
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading(f"Live mounts — {len(snapshots)}"), body)]
         if missing:
             nodes.insert(0, sl.status(f"Mount `{self.focus}` is no longer live.", tone=sl.Tone.WARNING))
         if snapshots:
@@ -116,51 +116,51 @@ class MountInspector(sl.Component):
         if snapshot.handler_keys:
             children.append(
                 sl.section(
+                    sl.heading("Handlers"),
                     sl.note(f"generation {snapshot.generation}"),
                     sl.code("\n".join(snapshot.handler_keys)),
-                    heading="Handlers",
                 )
             )
         children.extend(self._plan_section(snapshot))
         children.append(
             sl.section(
+                sl.heading("Component state"),
                 sl.note("persisted fields only"),
                 sl.code(_dump(_exported_state(mount))),
-                heading="Component state",
             )
         )
         children.append(
             sl.section(
+                sl.heading("Reactivity"),
                 sl.note("cell versions and what each computed last read"),
                 sl.code(_dump_lines(_reactivity(mount))),
-                heading="Reactivity",
             )
         )
         children.append(
             sl.section(
+                sl.heading("Presentation"),
                 sl.note("cursors, selections, disclosures, strategies"),
                 sl.code(_dump(_presentation(mount.presentation))),
-                heading="Presentation",
             )
         )
         return [
-            sl.section(*children, heading=f"Mount {snapshot.id}"),
+            sl.section(sl.heading(f"Mount {snapshot.id}"), *children),
             self._controls(back=True),
         ]
 
     def _plan_section(self, snapshot: sl.discord.MountSnapshot) -> Iterable[sl.LayoutNode]:
         if snapshot.report is None or snapshot.metrics is None:
-            yield sl.section(sl.note("nothing has been committed yet"), heading="Plan")
+            yield sl.section(sl.heading("Plan"), sl.note("nothing has been committed yet"))
             return
         metrics = snapshot.metrics
         yield sl.section(
+            sl.heading("Plan"),
             sl.note(
                 f"{metrics.states_explored} states explored · "
                 f"cache {'hit' if metrics.cache_hit else 'miss'}"
                 f"{' · search fell back' if metrics.search_fallback else ''}"
             ),
             sl.code(plan_text(snapshot)),
-            heading="Plan",
         )
 
     # --- Controls -----------------------------------------------------------------------
