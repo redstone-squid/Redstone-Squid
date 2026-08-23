@@ -103,6 +103,53 @@ Semantic tones resolve through the palette. `sl.themed(palette, *children)` scop
 subtree, so a component may select a palette from reactive state while the final scene still contains
 only exact colours. Discord buttons retain Discord's platform-owned style colours.
 
+### Discord component parity
+
+Discord modals may interleave static text and fields in declaration order. Native checkbox groups
+remain Discord-specific and declare their portable fallback explicitly:
+
+```python
+choices = (
+    sl.ChoiceOption("alerts", "Alerts", "alerts", emoji="🔔"),
+    sl.ChoiceOption("reports", "Reports", "reports"),
+)
+field = sl.discord.CheckboxGroupField(
+    key="subscriptions",
+    label="Subscriptions",
+    options=choices,
+    required=False,
+    fallback=sl.MultiChoiceField(options=choices, required=False),
+)
+form = sl.FormSpec(
+    "Preferences",
+    (sl.FormText("Choose every update you want to receive."), field),
+)
+```
+
+The exact primitive API exposes Discord-only controls and complete media metadata. A premium
+button must have a positive SKU and no interactive or link fields; link and interactive buttons
+may omit their label when they have an emoji. Custom emoji use `sl.Emoji(name, id, animated=...)`.
+
+```python
+from squid_layouts import Emoji
+from squid_layouts.primitives import Gallery, GalleryItem, LinkButton, PremiumButton, Row
+
+document = (
+    Row(
+        (
+            PremiumButton(sku_id=123456789),
+            LinkButton(None, "https://example.com", emoji=Emoji("docs", 987654321), disabled=True),
+        )
+    ),
+    Gallery((GalleryItem("https://example.com/preview.png", "Build preview", spoiler=True),)),
+)
+```
+
+Premium controls are supported by both Discord message targets. Other targets require a
+`Variants` rung with an explicit fallback. Components V2 preserves media descriptions and spoiler
+state; classic Discord and other targets reject V2-only media structures rather than silently
+discarding that content.
+
 ### Live updates across mounts
 
 `TopicBus` is a payload-free, process-local latency projection. Publishing says only that an
