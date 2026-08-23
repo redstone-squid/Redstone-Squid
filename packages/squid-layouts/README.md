@@ -169,7 +169,7 @@ class BuildPanel(sl.Component):
     def __init__(self, build_id: str) -> None:
         self.build_id = build_id
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def build(self) -> Build:
         sl.runtime.watch(sl.runtime.Topic("build", self.build_id))
         return await queries.get_build(self.build_id)
@@ -182,7 +182,7 @@ class BuildPanel(sl.Component):
 follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
 the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
 unsubscribed -- and the initial load is just the resource's first settle. Prefer
-`ResourceDelivery.ATOMIC` for live data: the default `VISIBLE` would flash a pending paint on
+`PendingPolicy.ATOMIC` for live data: the default `EXPLICIT` would flash a pending paint on
 every external change.
 
 Because the topic carries a version, a publish landing *during* the load is not lost: it moves
@@ -518,14 +518,14 @@ class VotingPanel(sl.Component):
         return await votes.configuration(self.kind)
 
     def render(self):
-        match self.configuration.state:
-            case sl.runtime.Pending(previous=None):
+        match self.configuration.status:
+            case sl.resources.Pending(previous=None):
                 return sl.note("Loading…")
-            case sl.runtime.Pending(previous=sl.runtime.Ready(value=config)):
+            case sl.resources.Pending(previous=sl.resources.Ready(value=config)):
                 return refreshing_panel(config)
-            case sl.runtime.Failed(error=error, previous=previous):
+            case sl.resources.Failed(error=error, previous=previous):
                 return failed_panel(error, previous)
-            case sl.runtime.Ready(value=config):
+            case sl.resources.Ready(value=config):
                 return voting_panel(config)
 ```
 
@@ -535,10 +535,10 @@ will not subscribe to it. Hidden branches remain lazy:
 only resources observed during rendering are loaded. `Pending` and `Failed` retain the last `Ready`
 value when available, while request tokens prevent stale completions from publishing.
 
-Visible delivery is the default: Discord commits the pending render, settles observed sibling
+Explicit pending is the default: Discord commits the pending render, settles observed sibling
 resources concurrently, then edits to the settled render. Use
-`@sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)` when pending should remain an internal state and
-the first delivery must already be settled. Its `.state` is typed as `Ready[T] | Failed[T]`:
+`@sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)` when pending should remain internal and
+the first delivery must already be settled. Its `.status` is typed as `Ready[T] | Failed[T]`:
 refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
 by the mount. Both policies use the same internal state machine and neither starts detached
 background work.
@@ -546,6 +546,38 @@ background work.
 `await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
 new value without immediately loading it, and `replace(value)` publishes an authoritative local
 result. Resource state is runtime-only and is not included in durable component snapshots.
+
+### One-shot operations
+
+`sl.operation` is a component-bound effect that runs once under the mount's caller-owned task.
+Progress is explicit, reactive current state; it is not an event stream:
+
+```python
+class PublishVote(sl.Component):
+    @sl.operation(initial=PublishProgress.CREATING)
+    async def publication(
+        self,
+        progress: sl.operations.Progress[PublishProgress],
+    ) -> VoteId:
+        progress.set(PublishProgress.PUBLISHING)
+        return await votes.publish()
+
+    def render(self):
+        match self.publication.status:
+            case sl.operations.Pending(progress=progress):
+                return pending_vote(progress)
+            case sl.operations.Succeeded(value=vote_id):
+                return published_vote(vote_id)
+            case sl.operations.Failed(error=error, progress=progress):
+                return failed_vote(error, progress)
+            case sl.operations.Cancelled(progress=progress):
+                return cancelled_vote(progress)
+```
+
+Unlike a resource, an operation has no `reload`, `invalidate`, or `replace`: success, failure,
+and cancellation are terminal. Mounts coalesce progress invalidations through their ordinary
+stage/deliver/commit path while the operation runs. Resources remain repeatable and intentionally
+have no cancelled status; cancelling one load attempt leaves it pending and retryable.
 
 ### Async cursor sources
 

@@ -278,20 +278,25 @@ here; anything the application would still want with nobody looking at it is a s
             return await index.search(self.query)
 
         def render(self):
-            match self.results.state:
-                case sl.runtime.Pending(previous=previous): ...
-                case sl.runtime.Failed(error=error, previous=previous): ...
-                case sl.runtime.Ready(value=results): ...
+            match self.results.status:
+                case sl.resources.Pending(previous=previous): ...
+                case sl.resources.Failed(error=error, previous=previous): ...
+                case sl.resources.Ready(value=results): ...
 
 The loader's reads are tracked the way a computed's are, so the state it consults is its
 dependency set and a committed write to any of it re-pends the resource at the next read. A
 resource whose loader has not run -- one holding a `.replace(value)` result -- presumes it
 reads every field its component declares, and narrows to the truth after its first real load.
-Render observation keeps hidden resources lazy. The default visible delivery commits the
-`Pending` branch before settling it; `ResourceDelivery.ATOMIC` settles the same state machine before
+Render observation keeps hidden resources lazy. The default explicit policy commits the
+`Pending` branch before settling it; `PendingPolicy.ATOMIC` settles the same state machine before
 delivery. Siblings settle concurrently under the frontend's task group, and newly revealed resources
 are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
 `.replace(value)` publishes an authoritative local result.
+
+`sl.operation` shares resource discovery, caller-owned completion, and mount settlement, but
+models a one-shot effect instead of repeatable data. Its explicit progress capability updates a
+`Pending` status, and `Succeeded`, `Failed`, or `Cancelled` is terminal. Components render those
+statuses with a `match`; there is no hidden state slot and no detached operation task.
 
 A plain attribute assigned during a transaction is therefore uncovered, and the framework
 refuses it: `UndeclaredStateError`, or `ReactiveWriteError` in a read-only action. It raises

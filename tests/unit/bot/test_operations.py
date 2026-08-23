@@ -46,3 +46,15 @@ async def test_command_operation_renders_and_rethrows_failure_once() -> None:
 
     assert "Something went wrong" in str(message.edit.await_args.kwargs["view"].to_components())
     assert is_error_presented(error)
+
+
+async def test_command_operation_suppresses_a_terminal_scene_equal_to_its_initial_scene() -> None:
+    message = fake_message()
+    target, _send = _target(message)
+
+    async def adopt_external_card(_progress, _receipt):
+        return info_node("Working", "Getting information...")
+
+    await run_command_operation(target, adopt_external_card)
+
+    message.edit.assert_not_awaited()
