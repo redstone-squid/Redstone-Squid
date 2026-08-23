@@ -32,7 +32,6 @@ from squid_layouts.runtime.reactivity import (
     on_action_commit,
     restore_state,
     state,
-    strict_state,
     transaction,
     untracked,
 )
@@ -99,7 +98,6 @@ __all__ = [
     "resource",
     "restore_state",
     "state",
-    "strict_state",
     "transaction",
     "untracked",
 ]
