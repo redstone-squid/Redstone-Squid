@@ -20,7 +20,7 @@ from squid_layouts.runtime.presentation import (
 from squid_layouts.runtime.reactivity import export_state, restore_state
 from squid_layouts.sources import Direction, Position
 
-from .postgres import PostgresSnapshotStore
+from .postgres import PostgresSnapshotStore, PostgresTopicBridge, TopicBridgeSnapshot
 from .stores import (
     AdmissionToken,
     ClaimToken,
@@ -55,6 +55,7 @@ __all__ = [
     "MountSnapshot",
     "NotDurable",
     "PostgresSnapshotStore",
+    "PostgresTopicBridge",
     "PresentationSnapshot",
     "Promoted",
     "Reconnected",
@@ -67,6 +68,7 @@ __all__ = [
     "SnapshotError",
     "StoredSessionRecord",
     "TargetRegistry",
+    "TopicBridgeSnapshot",
     "Unreachable",
     "encode_session_scope",
 ]

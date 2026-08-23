@@ -127,6 +127,39 @@ call `publish()`, then `await bus.drain()` and assert without starting backgroun
 Expiry and idle-time tests can inject UTC and monotonic clocks through `Reactor(clock=...)` and
 `Mount(clock=...)`; production callers normally keep their defaults.
 
+When the change happens in another process -- a worker that finished a render, a second shard --
+the host bridges it in. `PostgresTopicBridge` is that bridge for a deployment that already runs
+PostgreSQL: it publishes through the bus rather than relaying it, so nothing loops, and the
+payload is an encoded *address*, never state.
+
+```python
+class ResourceCodec:  # the host owns its vocabulary, so it owns the wire form
+    def encode(self, topic: sl.Topic) -> str | None:
+        match topic:
+            case ("build", str() as key):
+                return f"build:{key}"
+            case _:
+                return None  # an address this codec cannot name stays process-local
+
+    def decode(self, text: str) -> sl.Topic | None:
+        kind, separator, key = text.partition(":")
+        return (kind, key) if separator and kind == "build" else None
+
+
+bridge = sl.discord.durability.PostgresTopicBridge(pool, bus, ResourceCodec())
+tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
+bridge.publish(("build", "123"))  # local subscribers now, other processes shortly after
+```
+
+Every process that takes part runs the bridge, including one that only publishes. Delivery is
+exactly as durable as the bus: NOTIFY reaches whoever is listening at commit time, so a restart
+or a dropped connection costs latency, not correctness -- keep the reconciler or poll that already
+makes the projection converge. A reconnect calls the optional `on_resync()` for hosts that want to
+republish their coarse topics; payloads must stay under 8000 bytes; and because the notification
+leaves on the bridge's own connection, publish *after* your write commits, or send `payload()`
+yourself with `SELECT pg_notify($1, $2)` inside the transaction, which PostgreSQL holds until
+commit.
+
 Every delivered mount using a reactor is observed for edit-authority expiry, even when it follows
 no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
 ephemeral panel can opt into an explicit, non-mutating handoff instead:

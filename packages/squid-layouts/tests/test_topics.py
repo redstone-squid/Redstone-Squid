@@ -1,10 +1,15 @@
-"""Contract tests for the portable payload-free topic bus."""
+"""Contract tests for the portable payload-free topic bus and its Postgres bridge."""
 
 import asyncio
 import logging
+from collections.abc import Callable
+from functools import partial
+from typing import Any, cast
 
+import anyio
 import pytest
 
+from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.topics import Topic, TopicBus
 
@@ -290,3 +295,234 @@ def test_unsubscribe_forgets_an_idle_topic() -> None:
     unsubscribe()
 
     assert bus.snapshot().topics == ()
+
+
+class ResourceCodec:
+    """A two-part ``kind:key`` vocabulary; anything else stays process-local."""
+
+    def encode(self, topic: Topic) -> str | None:
+        match topic:
+            case (str() as kind, str() as key):
+                return f"{kind}:{key}"
+            case _:
+                return None
+
+    def decode(self, text: str) -> Topic | None:
+        kind, separator, key = text.partition(":")
+        return (kind, key) if separator else None
+
+
+class FakeConnection:
+    def __init__(self, server: FakePostgres) -> None:
+        self.server = server
+        self.terminations: list[Callable[..., None]] = []
+
+    async def add_listener(self, channel: str, callback: Callable[..., None]) -> None:
+        self.server.listeners.append((channel, callback))
+
+    def add_termination_listener(self, callback: Callable[..., None]) -> None:
+        self.terminations.append(callback)
+
+
+class _Acquire:
+    def __init__(self, server: FakePostgres) -> None:
+        self.server = server
+
+    async def __aenter__(self) -> FakeConnection:
+        connection = FakeConnection(self.server)
+        self.server.connections.append(connection)
+        return connection
+
+    async def __aexit__(self, *exception: object) -> None:
+        return None
+
+
+class FakePostgres:
+    """One in-memory NOTIFY channel, delivered to every listener including the sender."""
+
+    def __init__(self) -> None:
+        self.listeners: list[tuple[str, Callable[..., None]]] = []
+        self.connections: list[FakeConnection] = []
+        self.sent: list[tuple[str, str]] = []
+
+    def notify(self, channel: str, payload: str) -> None:
+        self.sent.append((channel, payload))
+        for listening, callback in tuple(self.listeners):
+            if listening == channel:
+                callback(None, 1, channel, payload)
+
+    def terminate(self) -> None:
+        """Drop every connection the way a restarted server would."""
+        self.listeners.clear()
+        dropped, self.connections = self.connections, []
+        for connection in dropped:
+            for callback in connection.terminations:
+                callback(connection)
+
+    async def execute(self, query: str, *arguments: str) -> None:
+        assert "pg_notify" in query
+        channel, payload = arguments
+        self.notify(channel, payload)
+
+    def acquire(self) -> _Acquire:
+        return _Acquire(self)
+
+
+def _bridge(server: FakePostgres, bus: TopicBus, **options: Any) -> PostgresTopicBridge:
+    return PostgresTopicBridge(cast(Any, server), bus, ResourceCodec(), **options)
+
+
+async def _until(predicate: Callable[[], bool]) -> None:
+    with anyio.fail_after(2):
+        while not predicate():
+            await anyio.sleep(0)
+
+
+async def _flush(bridge: PostgresTopicBridge) -> None:
+    """Wait until every queued notification has left this bridge."""
+    with anyio.fail_after(2):
+        await bridge._queue.join()
+
+
+async def test_two_processes_see_each_others_publish_exactly_once() -> None:
+    server = FakePostgres()
+    here, there = TopicBus(), TopicBus()
+    seen_here: list[Topic] = []
+    seen_there: list[Topic] = []
+
+    async def record(into: list[Topic], topic: Topic) -> None:
+        into.append(topic)
+
+    here.subscribe(("build", "42"), partial(record, seen_here))
+    there.subscribe(("build", "42"), partial(record, seen_there))
+    bridge_here = _bridge(server, here)
+    bridge_there = _bridge(server, there)
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(bridge_here.run)
+        tasks.start_soon(bridge_there.run)
+        await _until(lambda: len(server.listeners) == 2)
+        bridge_here.publish(("build", "42"))
+        await _flush(bridge_here)
+        tasks.cancel_scope.cancel()
+
+    await here.drain()
+    await there.drain()
+    assert seen_here == [("build", "42")]
+    assert seen_there == [("build", "42")]
+    assert bridge_there.snapshot().received == 1
+    assert bridge_here.snapshot().ignored == 1
+
+
+async def test_a_bridge_ignores_its_own_notification() -> None:
+    server = FakePostgres()
+    bus = TopicBus()
+    deliveries = 0
+
+    async def count(topic: Topic) -> None:
+        nonlocal deliveries
+        deliveries += 1
+
+    bus.subscribe(("build", "42"), count)
+    bridge = _bridge(server, bus)
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(bridge.run)
+        await _until(lambda: len(server.listeners) == 1)
+        bridge.publish(("build", "42"))
+        await _flush(bridge)
+        # A relayed self-publish would queue a second delivery behind the first, so the
+        # queue depth is what separates "ignored" from "coalesced".
+        await bus.drain()
+        tasks.cancel_scope.cancel()
+
+    assert deliveries == 1
+    assert bus.snapshot().queued == 0
+    assert bridge.snapshot().ignored == 1
+
+
+async def test_an_unencodable_topic_is_published_locally_only() -> None:
+    server = FakePostgres()
+    bus = TopicBus()
+    seen: list[Topic] = []
+
+    async def record(topic: Topic) -> None:
+        seen.append(topic)
+
+    cell = object()
+    bus.subscribe(cell, record)
+    bridge = _bridge(server, bus)
+
+    bridge.publish(cell)
+    await bus.drain()
+
+    assert seen == [cell]
+    assert server.sent == []
+    assert bridge.snapshot().local_only == 1
+
+
+async def test_an_oversized_payload_stays_local() -> None:
+    server = FakePostgres()
+    bridge = _bridge(server, TopicBus())
+
+    bridge.publish(("build", "x" * 8000))
+
+    assert server.sent == []
+    assert bridge.snapshot().local_only == 1
+
+
+async def test_reconnect_republishes_through_on_resync() -> None:
+    server = FakePostgres()
+    resyncs = 0
+
+    async def on_resync() -> None:
+        nonlocal resyncs
+        resyncs += 1
+
+    bridge = _bridge(server, TopicBus(), on_resync=on_resync, reconnect_seconds=0.0)
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(bridge.run)
+        await _until(lambda: resyncs == 1)
+        server.terminate()
+        await _until(lambda: resyncs == 2)
+        tasks.cancel_scope.cancel()
+
+    assert len(server.listeners) == 1
+
+
+async def test_drain_terminates_with_a_bridge_attached() -> None:
+    server = FakePostgres()
+    bus = TopicBus()
+    seen: list[Topic] = []
+
+    async def record(topic: Topic) -> None:
+        seen.append(topic)
+
+    bus.subscribe(("build", "42"), record)
+    bridge = _bridge(server, bus)
+
+    bridge.publish(("build", "42"))
+    await bus.drain()
+
+    assert seen == [("build", "42")]
+
+
+async def test_a_malformed_payload_is_counted_rather_than_published() -> None:
+    server = FakePostgres()
+    bus = TopicBus()
+    bridge = _bridge(server, bus)
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(bridge.run)
+        await _until(lambda: len(server.listeners) == 1)
+        server.notify(bridge.channel, "no-separator-here")
+        tasks.cancel_scope.cancel()
+
+    assert bridge.snapshot().undecodable == 1
+    assert bus.snapshot().queued == 0
+
+
+def test_an_origin_cannot_shadow_the_payload_separator() -> None:
+    with pytest.raises(ValueError, match="origin"):
+        _bridge(FakePostgres(), TopicBus(), origin="a:b")
