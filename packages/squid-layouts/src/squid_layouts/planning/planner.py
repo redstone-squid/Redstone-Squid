@@ -370,23 +370,38 @@ def _fallback_profile(occurrences: Sequence[FallbackAxis], selected: Mapping[str
     for occurrence in occurrences:
         rung = selected.get(occurrence.path, 0)
         if rung:
-            profile = profile.with_effect(DegradationEffect(priority=0, path=occurrence.path, semantic_steps=rung))
+            effect = (
+                DegradationEffect(priority=occurrence.priority, path=occurrence.path, dropped_nodes=1)
+                if occurrence.optional
+                else DegradationEffect(priority=occurrence.priority, path=occurrence.path, semantic_steps=rung)
+            )
+            profile = profile.with_effect(effect)
     return profile
 
 
 def _fallback_notes(occurrences: Sequence[FallbackAxis], selected: Mapping[str, int]) -> list[SolveNote]:
-    return [
-        # A semantic fallback branch is the author naming a *lesser* representation, so it
-        # stays loss. A primitive ladder rung only says "another shape"; fidelity says whether
-        # that shape costs anything.
-        SolveNote(
-            SolveNoteCode.SEMANTIC_FALLBACK,
-            f"{occurrence.path} stepped to variant {step + 2} of {occurrence.branches} "
-            "(priority 0) under layout pressure",
-        )
-        for occurrence in occurrences
-        for step in range(selected.get(occurrence.path, 0))
-    ]
+    notes: list[SolveNote] = []
+    for occurrence in occurrences:
+        for step in range(selected.get(occurrence.path, 0)):
+            if occurrence.optional:
+                notes.append(
+                    SolveNote(
+                        SolveNoteCode.OPTIONAL_DROPPED,
+                        f"{occurrence.path} omitted optional region "
+                        f"(priority {occurrence.priority}) under layout pressure",
+                    )
+                )
+            else:
+                # A semantic fallback branch is the author naming a lesser representation,
+                # so it stays loss even though the primitive shape may be exact.
+                notes.append(
+                    SolveNote(
+                        SolveNoteCode.SEMANTIC_FALLBACK,
+                        f"{occurrence.path} stepped to variant {step + 2} of {occurrence.branches} "
+                        f"(priority {occurrence.priority}) under layout pressure",
+                    )
+                )
+    return notes
 
 
 def _search(search: _Search, *, search_budget: int) -> _Candidate:

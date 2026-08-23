@@ -19,7 +19,6 @@ from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, StrategyAxis, S
 from squid_layouts.primitives.constraints import (
     Alt,
     Condense,
-    Drop,
     Never,
     Overflow,
     Paginate,
@@ -192,12 +191,14 @@ class _Context:
 
 @dataclass(frozen=True, slots=True)
 class FallbackAxis:
-    """One `FallbackContent` occurrence and how many branches it can offer."""
+    """One semantic loss decision and the branches it can offer."""
 
     path: str
     branches: int
     branch_paths: tuple[str, ...]
     """One stable path per branch; decisions inside a branch are named under it."""
+    priority: int = 0
+    optional: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,7 +234,6 @@ def nominate_decisions(
             case (
                 Truncated(node=child)
                 | Spilled(node=child)
-                | OptionalContent(node=child)
                 | BestEffort(node=child)
                 | Budgeted(node=child)
                 | Unbreakable(node=child)
@@ -241,6 +241,10 @@ def nominate_decisions(
                 | Paged(node=child)
             ):
                 walk(child, path)
+            case OptionalContent(node=child, importance=importance):
+                occurrences.append(FallbackAxis(path, 2, _branch_paths(path, 2), int(importance), optional=True))
+                if _fallback_rung(path, 2, selected_rungs) == 0:
+                    walk(child, f"{path}.primary")
             case FallbackContent(primary=primary, alternates=alternates):
                 branches = (primary, *alternates)
                 rung = _fallback_rung(path, len(branches), selected_rungs)
@@ -360,7 +364,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
         case Spilled(node=child):
             return [_with_overflow(item, Spill()) for item in _node(child, path, context)]
         case OptionalContent(node=child):
-            return [_with_overflow(item, Drop()) for item in _node(child, path, context)]
+            return _node(child, f"{path}.primary", context) if _fallback_rung(path, 2, context.fallbacks) == 0 else []
         case BestEffort(node=child):
             policy: Overflow = Spill() if isinstance(child, List | Fields) else Truncate()
             return [_with_best_effort(_with_overflow(item, policy)) for item in _node(child, path, context)]
@@ -443,15 +447,18 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             if _cards(context):
                 return [_region(Card(accent=accent), _children(children, path, context), context)]
             return [Panel(tuple(_children(children, path, context)), accent=accent)]
-        case Heading(content=content, level=level):
-            return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never())]
-        case Paragraph(content=content):
-            return [Text(_resolve(content, context), overflow=Never())]
-        case Note(content=content):
-            return [Footer(_resolve(content, context), overflow=Never())]
+        case Heading(content=content, level=level, importance=importance):
+            return [PrimitiveHeading(_resolve(content, context), level=level, overflow=Never(), priority=int(importance))]
+        case Paragraph(content=content, importance=importance):
+            return [Text(_resolve(content, context), overflow=Never(), priority=int(importance))]
+        case Note(content=content, importance=importance):
+            return [Footer(_resolve(content, context), overflow=Never(), priority=int(importance))]
         case List(items=items, key=key, ordered=ordered, page_size=page_size):
             marker = (lambda index: f"{index + 1}.") if ordered else (lambda _index: "•")
-            lines = tuple(f"{marker(index)} {_resolve(item.content, context)}" for index, item in enumerate(items))
+            lines = tuple(
+                Alt(f"{marker(index)} {_resolve(item.content, context)}", priority=int(item.importance))
+                for index, item in enumerate(items)
+            )
             return [Lines(lines, overflow=Paginate(key=key, per=page_size))]
         case Fields(fields=fields):
             if "layout.embed_fields" in context.capabilities:
@@ -688,14 +695,14 @@ def _as_fragment(node: Node, open_card: _Fragment | None) -> _Fragment | None:
         # A trailing note is what the footer slot is for. One anywhere else stays subtle
         # description text, because an embed has exactly one footer.
         if open_card is not None and open_card.footer is None:
-            return _Fragment(footer=CardFooter(node.content))
+            return _Fragment(footer=CardFooter(Text(node.content, overflow=node.overflow, priority=node.priority)))
         return _Fragment(children=(node,))
     if isinstance(node, PrimitiveHeading):
         # "Suitable" means it can actually be a title: it has to come before any body text,
         # or the description would read as though it began mid-sentence.
         leading = open_card is None or (open_card.title is None and not open_card.children)
         if leading:
-            return _Fragment(title=Text(node.content, overflow=node.overflow))
+            return _Fragment(title=Text(node.content, overflow=node.overflow, priority=node.priority))
         return _Fragment(children=(node,))
     if isinstance(node, Text | PrimitiveCode | Lines | Time | ZonedTime):
         return _Fragment(children=(node,))
@@ -750,7 +757,13 @@ def _close(card: _Fragment, context: _Context) -> Node:
     # one of them but reformats the block, so the solver is told which is which rather than
     # inferring loss from a rung number.
     lines = Lines(
-        tuple(f"**{_slot_text(field.name)}:** {_slot_text(field.value)}" for field in card.fields),
+        tuple(
+            Alt(
+                f"**{_slot_text(field.name)}:** {_slot_text(field.value)}",
+                priority=card_text(field.value).priority,
+            )
+            for field in card.fields
+        ),
         overflow=Condense(),
     )
     reformatted = replace(plain, fields=(), children=(*plain.children, lines))
@@ -811,7 +824,12 @@ def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
         # author-written rungs before anything is trimmed mid-string.
         rungs = [rung for fallback in field.fallbacks if len(rung := _resolve(fallback, context)) <= len(value)]
         policy: Overflow = alts(*rungs) if rungs else Never()
-        entries.append(CardField(name=_resolve(field.label, context), value=Text(value, overflow=policy)))
+        entries.append(
+            CardField(
+                name=_resolve(field.label, context),
+                value=Text(value, overflow=policy, priority=int(field.importance)),
+            )
+        )
     return entries
 
 
@@ -886,7 +904,7 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
         if len(rung) <= ceiling:
             kept.append(rung)
             ceiling = len(rung)
-    return Alt(primary, tuple(kept)) if kept else primary
+    return Alt(primary, tuple(kept), priority=int(field.importance))
 
 
 def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:

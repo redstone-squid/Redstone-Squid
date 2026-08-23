@@ -113,6 +113,7 @@ class SolveNoteCode(StrEnum):
     BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
     VARIANT_STEP = "adaptation.variant_step"
     SEMANTIC_FALLBACK = "degradation.semantic_fallback"
+    OPTIONAL_DROPPED = "degradation.optional_dropped"
     VARIANT_REFORMATTED = "degradation.variant_reformatted"
     VARIANT_LOSSY = "degradation.variant_lossy"
     PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
