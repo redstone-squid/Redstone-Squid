@@ -409,21 +409,21 @@ class TestLobby:
         registry, panel = await self.opened()
 
         assert next(iter(registry.active())).members == frozenset({7})
-        assert "Lobby (1/4)" in _texts(commit_render(panel._mount))
+        assert "### Players — 1/4" in _texts(commit_render(panel._mount))
 
     async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
         registry, panel = await self.opened()
 
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert next(iter(registry.active())).members == frozenset({7, 8})
-        assert "Lobby (2/4)" in _texts(commit_render(panel._mount))
+        assert "### Players — 2/4" in _texts(commit_render(panel._mount))
 
     async def test_the_lobby_fills_and_then_refuses(self) -> None:
         registry, panel = await self.opened(capacity=2)
 
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
-        await panel._mount.dispatch("join", fake_interaction(user_id=9))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=9))
 
         assert next(iter(registry.active())).members == frozenset({7, 8})
 
@@ -432,7 +432,7 @@ class TestLobby:
         session = next(iter(registry.active()))
 
         await panel._mount.dispatch("leave", fake_interaction(user_id=7))
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert session.members == frozenset()
         assert not session.root.finished
@@ -444,7 +444,7 @@ class TestLobby:
         await panel._mount.dispatch("start", fake_interaction(user_id=8))
         assert panel.started_with is None
 
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
         await panel._mount.dispatch("start", fake_interaction(user_id=8))
 
         assert panel.started_with == 2
@@ -455,8 +455,8 @@ class TestLobby:
         registry, here = await self.opened()
         _, elsewhere = await self.opened(registry=registry, guild_id=6, host_id=9)
 
-        await elsewhere._mount.dispatch("join", fake_interaction(user_id=8))
-        await here._mount.dispatch("join", fake_interaction(user_id=8))
+        await elsewhere._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await here._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert registry.sessions_for_member(8) == (registry.sessions_for_member(8)[0],)
         assert 8 in elsewhere._session().members
