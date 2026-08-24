@@ -14,10 +14,15 @@ from squid_layouts.discord.delivery import Destination, respond_to
 from squid_layouts.discord.mount import Mount
 from squid_layouts.discord.sessions import (
     DEFAULT_SESSION_POLICY,
+    GlobalScope,
+    GuildScope,
     OpenResult,
     SessionKey,
     SessionPolicy,
     SessionRegistry,
+    SessionScope,
+    UserGuildScope,
+    UserScope,
 )
 from squid_layouts.runtime.component import Component
 
@@ -34,6 +39,28 @@ class Opener:
         """Build an opener from a Discord interaction."""
         return cls(interaction.user.id, interaction.guild_id)
 
+    def user(self) -> UserScope:
+        """This opener's user, as a keyable scope."""
+        return UserScope(self.user_id)
+
+    def guild(self) -> GuildScope:
+        """This opener's guild, as a keyable scope. Raises in a DM."""
+        return GuildScope(self._require_guild("guild"))
+
+    def user_guild(self) -> UserGuildScope:
+        """This opener's user within its guild, as a keyable scope. Raises in a DM."""
+        return UserGuildScope(self.user_id, self._require_guild("user_guild"))
+
+    def global_(self) -> GlobalScope:
+        """The process-global scope, which every opener reaches."""
+        return GlobalScope()
+
+    def _require_guild(self, kind: str) -> int:
+        if self.guild_id is None:
+            message = f"{kind} scopes require an opener with a guild"
+            raise TypeError(message)
+        return self.guild_id
+
 
 class Scope(StrEnum):
     """Session-key scope derivable from an :class:`Opener`."""
@@ -42,6 +69,26 @@ class Scope(StrEnum):
     GUILD = "guild"
     USER_GUILD = "user_guild"
     GLOBAL = "global"
+
+    def of(self, opener: Opener) -> SessionScope:
+        """Build this kind of scope as a value, for a kind chosen at runtime.
+
+        `Screen` declares its scope as a member and resolves it here, so this returns the union.
+        A caller that knows the kind statically should ask the opener instead --
+        `opener.user_guild()` is a `UserGuildScope`, which is what lets a `Shared[UserGuildScope]`
+        pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
+        build the same values, and those are the values a `SessionKey` already carries, so a panel
+        holding its session key reaches a pool through `key.scope` with nothing to convert.
+        """
+        match self:
+            case Scope.USER:
+                return opener.user()
+            case Scope.GUILD:
+                return opener.guild()
+            case Scope.USER_GUILD:
+                return opener.user_guild()
+            case Scope.GLOBAL:
+                return opener.global_()
 
 
 def _owner(opener: Opener) -> AccessPolicy:
@@ -64,15 +111,7 @@ class Screen:
 
     def key(self, opener: Opener) -> SessionKey:
         """Derive this screen's session key from an opener."""
-        match self.scope:
-            case Scope.USER:
-                return SessionKey.user(self.name, opener.user_id)
-            case Scope.GUILD:
-                return SessionKey.guild(self.name, self._require_guild(opener))
-            case Scope.USER_GUILD:
-                return SessionKey.user_guild(self.name, opener.user_id, self._require_guild(opener))
-            case Scope.GLOBAL:
-                return SessionKey.global_(self.name)
+        return SessionKey(self.name, self.scope.of(opener))
 
     async def open(
         self,
@@ -118,10 +157,3 @@ class Screen:
             parent=parent,
             **overrides,
         )
-
-    @staticmethod
-    def _require_guild(opener: Opener) -> int:
-        if opener.guild_id is None:
-            message = "guild-scoped screens require an opener with a guild"
-            raise TypeError(message)
-        return opener.guild_id
