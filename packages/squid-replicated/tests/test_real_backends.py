@@ -50,3 +50,45 @@ def test_export_import_round_trip_is_idempotent(factory) -> None:
     target.apply(target.prepare_remote(update))
 
     assert target.snapshot() == "hello"
+
+
+@pytest.mark.parametrize(
+    ("factory", "operation"),
+    [
+        (LoroTextEngine, LoroTextOperation),
+        (PycrdtTextEngine, PycrdtTextOperation),
+    ],
+)
+def test_stale_same_replica_branch_is_rejected_before_id_collision(factory, operation) -> None:
+    engine = factory()
+    base = engine.version()
+    first = engine.branch()
+    second = engine.branch()
+    first.apply(operation("insert", 0, "A"))
+    second.apply(operation("insert", 0, "B"))
+    engine.apply(first.prepare(base))
+
+    with pytest.raises(RuntimeError, match="changed after this branch was staged"):
+        second.prepare(base)
+
+    assert engine.snapshot() == "A"
+
+
+def test_loro_actions_reuse_one_peer_identity() -> None:
+    engine = LoroTextEngine()
+    for index in range(100):
+        branch = engine.branch()
+        branch.apply(LoroTextOperation("insert", index, "x"))
+        engine.apply(branch.prepare(engine.version()))
+
+    assert len(engine.doc.oplog_vv.to_spans().inner()) == 1
+
+
+def test_pycrdt_actions_keep_the_state_vector_bounded() -> None:
+    engine = PycrdtTextEngine()
+    for index in range(100):
+        branch = engine.branch()
+        branch.apply(PycrdtTextOperation("insert", index, "x"))
+        engine.apply(branch.prepare(engine.version()))
+
+    assert len(engine.version()) < 20
