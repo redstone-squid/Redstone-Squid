@@ -142,3 +142,42 @@ async def test_resource_generations_are_causal_without_profiler_retention() -> N
     assert {event.generation_id for event in events} == {events[0].generation_id}
     assert events[0].cause == action.causal_ref()
     assert events[0].root_action_id == str(action.root_action_id)
+
+
+async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads() -> None:
+    """A superseded loader keeps running, and what it reads on the way out is not a dependency."""
+    released = asyncio.Event()
+
+    class Mixer(Reactive):
+        abandoned = state(0)
+        live = state(0)
+
+        def __init__(self) -> None:
+            self.attempt = 0
+
+        def invalidate(self) -> None:
+            pass
+
+        @resource
+        async def value(self) -> str:
+            self.attempt += 1
+            if self.attempt == 1:
+                # Reads its cell only after the generation that replaces it has finished.
+                await released.wait()
+                return f"stale-{self.abandoned}"
+            return f"live-{self.live}"
+
+    owner = Mixer()
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(owner.value._load)
+        await asyncio.sleep(0)
+        owner.value.invalidate()
+        tasks.start_soon(owner.value._load)
+        await asyncio.sleep(0)
+        released.set()
+
+    assert owner.value.status == Ready("live-0")
+    owner.abandoned = 99
+    assert owner.value.status == Ready("live-0"), "a cell only the abandoned load read is not a dependency"
+    owner.live = 5
+    assert owner.value.status == Pending(Ready("live-0")), "a cell the live load read still is one"
