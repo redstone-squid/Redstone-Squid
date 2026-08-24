@@ -3,7 +3,9 @@
 from squid_reactive.operations import (
     Cancelled,
     Failed,
-    Operation,
+    OperationContext,
+    OperationDefinition,
+    OperationExecution,
     OperationStatus,
     Pending,
     Progress,
@@ -13,7 +15,9 @@ from squid_reactive.operations import (
 __all__ = [
     "Cancelled",
     "Failed",
-    "Operation",
+    "OperationContext",
+    "OperationDefinition",
+    "OperationExecution",
     "OperationStatus",
     "Pending",
     "Progress",

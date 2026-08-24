@@ -1,6 +1,8 @@
 """Component-owned history derived from immutable committed action lineage."""
 
 import time
+import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Protocol
@@ -55,6 +57,34 @@ class HistoryOwner(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class CompensationSpec:
+    """A repeatable external compensator with a stable idempotency key."""
+
+    operation: Callable[[str], Awaitable[None]]
+    idempotency_key: Callable[[ActionCommit], str]
+
+
+class CompensationStatus(Enum):
+    """Truthful terminal and in-flight saga states."""
+
+    REVERTING = "reverting"
+    REVERTED = "reverted"
+    FAILED = "failed"
+    CONFLICT = "conflict"
+    NEEDS_RECONCILIATION = "needs_reconciliation"
+
+
+@dataclass(slots=True)
+class CompensationExecution:
+    """One compensation attempt. Reaching a terminal status ends the execution."""
+
+    execution_id: uuid.UUID
+    idempotency_key: str
+    status: CompensationStatus = CompensationStatus.REVERTING
+    error: Exception | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class UndoPlan:
     """An atomic set of version-conditional physical inverses."""
 
@@ -78,6 +108,9 @@ class HistoryEntry:
     last_result: HistoryResult | None = None
     undo_action_id: object | None = None
     redo_plan: UndoPlan | None = None
+    compensation: CompensationSpec | None = None
+    original_commit: ActionCommit | None = None
+    compensation_execution: CompensationExecution | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +164,7 @@ class History:
         self.limit = limit
         self._undone: list[HistoryEntry] = []
         self._redoable: list[HistoryEntry] = []
+        self._completed_compensations: set[str] = set()
 
     @property
     def can_undo(self) -> bool:
@@ -164,13 +198,21 @@ class History:
             tuple(_entry_snapshot(entry) for entry in self._redoable),
         )
 
-    def record(self, label: TextLike) -> None:
+    def record(self, label: TextLike, *, compensate: CompensationSpec | None = None) -> None:
         """Retain the whole successful action once, using its committed patch lineage."""
 
         def committed(commit: ActionCommit, aftermath: object) -> None:
             if commit.context.kind in {ActionKind.UNDO, ActionKind.REDO}:
                 return
-            self._push(HistoryEntry(label, commit.context.action_id, UndoPlan.from_commit(commit)))
+            self._push(
+                HistoryEntry(
+                    label,
+                    commit.context.action_id,
+                    UndoPlan.from_commit(commit),
+                    compensation=compensate,
+                    original_commit=commit,
+                )
+            )
 
         self._reserve(committed)
 
@@ -179,6 +221,11 @@ class History:
         entry = self._select(self._undone, action_id)
         if entry is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
+        if entry.compensation is not None:
+            return await self._compensate(entry)
+        return self._undo_state(entry)
+
+    def _undo_state(self, entry: HistoryEntry, *, retain_redo: bool = True) -> UndoResult:
         entry.state = HistoryEntryState.REVERSING
         context = ActionContext.create(
             f"Undo {entry.label}", kind=ActionKind.UNDO, reverses_action_id=entry.original_action_id
@@ -194,7 +241,8 @@ class History:
                     result = HistoryResult(HistoryResultStatus.APPLIED, entry, commit.context.action_id)
                     entry.last_result = result
                     self._remove_identity(self._undone, entry)
-                    self._redoable.append(entry)
+                    if retain_redo:
+                        self._redoable.append(entry)
                     self._owner.invalidate()
 
                 on_action_commit(committed, key=self)
@@ -206,6 +254,42 @@ class History:
             return result
         assert entry.last_result is not None
         return entry.last_result
+
+    async def _compensate(self, entry: HistoryEntry) -> UndoResult:
+        assert entry.compensation is not None and entry.original_commit is not None
+        key = entry.compensation.idempotency_key(entry.original_commit)
+        execution = CompensationExecution(uuid.uuid7(), key)
+        entry.compensation_execution = execution
+        entry.state = HistoryEntryState.REVERSING
+        self._owner.invalidate()
+        if key not in self._completed_compensations:
+            try:
+                await entry.compensation.operation(key)
+            except Exception as error:
+                execution.status = CompensationStatus.FAILED
+                execution.error = error
+                entry.state = HistoryEntryState.FAILED
+                result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
+                entry.last_result = result
+                self._owner.invalidate()
+                return result
+            self._completed_compensations.add(key)
+        result = self._undo_state(entry, retain_redo=False)
+        if result.status is HistoryResultStatus.CONFLICT:
+            execution.status = CompensationStatus.NEEDS_RECONCILIATION
+            entry.state = HistoryEntryState.NEEDS_RECONCILIATION
+            result = HistoryResult(
+                HistoryResultStatus.NEEDS_RECONCILIATION,
+                entry,
+                result.action_id,
+                result.conflict,
+                result.error,
+            )
+            entry.last_result = result
+        else:
+            execution.status = CompensationStatus.REVERTED
+        self._owner.invalidate()
+        return result
 
     async def redo(self) -> RedoResult:
         """Reapply the inverse of the actual committed undo using its fresh lineage."""
@@ -341,6 +425,9 @@ def _entry_snapshot(entry: HistoryEntry) -> HistoryEntrySnapshot:
 
 
 __all__ = [
+    "CompensationExecution",
+    "CompensationSpec",
+    "CompensationStatus",
     "History",
     "HistoryEntry",
     "HistoryEntrySnapshot",
