@@ -1,6 +1,7 @@
 """Optional immutable-snapshot replicated state for Squid actions."""
 
 from squid_replicated.document import (
+    PreparedReplicatedInverse,
     ReplicatedChangeToken,
     ReplicatedClosedError,
     ReplicatedCounter,
@@ -16,6 +17,7 @@ __all__ = [
     "FakeEngine",
     "FakeSnapshot",
     "FakeVersion",
+    "PreparedReplicatedInverse",
     "ReplicatedChangeToken",
     "ReplicatedClosedError",
     "ReplicatedCounter",
