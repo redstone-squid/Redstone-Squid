@@ -24,6 +24,7 @@ from squid_layouts.runtime.reactivity import (
 )
 from squid_layouts.semantic import ActionGroup
 from squid_layouts.text import TextLike
+from squid_reactive.actions import ConflictDetail, ParticipantChange
 
 
 class HistoryError(RuntimeError):
@@ -89,11 +90,12 @@ class UndoPlan:
     """An atomic set of version-conditional physical inverses."""
 
     cells: tuple[ConditionalCellPatch, ...]
+    participants: tuple[ParticipantChange, ...] = ()
 
     @classmethod
     def from_commit(cls, commit: ActionCommit) -> UndoPlan:
         patches: CellPatchSet = commit.patches
-        return cls(patches.inverse())
+        return cls(patches.inverse(), commit.participant_changes)
 
 
 @dataclass(slots=True)
@@ -232,7 +234,17 @@ class History:
         )
         try:
             with transaction(action_context=context):
+                planned: list[tuple[object, object]] = []
+                for change in entry.undo_plan.participants:
+                    inverse = change.token.plan_inverse()
+                    if isinstance(inverse, ConflictDetail):
+                        raise ReactiveConflictError(  # noqa: TRY301
+                            inverse, f"{change.participant_id} cannot be inverted safely"
+                        )
+                    planned.append((change.token, inverse))
                 apply_conditional_patches(entry.undo_plan.cells)
+                for token, inverse in planned:
+                    token.stage_inverse(inverse)
 
                 def committed(commit: ActionCommit, aftermath: object) -> None:
                     entry.undo_action_id = commit.context.action_id
