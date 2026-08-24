@@ -22,7 +22,7 @@ from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRen
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.ui import MOUNT_DEFAULTS
+from squid.bot.ui import MOUNT_DEFAULTS, install_mount_defaults
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -49,7 +49,7 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_layouts.discord import Reactor, SessionRegistry
+from squid_layouts.discord import ChallengeRunner, DialogPresenter, Reactor, SessionRegistry
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
 from squid_reactive import LocalTopicBus
@@ -168,6 +168,15 @@ class RedstoneSquid(Bot):
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         self.mounts = SessionRegistry(defaults=MOUNT_DEFAULTS.replace(scheduler=self.layout_reactor))
+        # A guard that challenges a press asks in a child panel and resumes the press once
+        # the reader agrees. The resumption must not run in the answering press's
+        # transaction, so it goes through this runner's queue rather than a spawned task.
+        self.layout_challenges = ChallengeRunner()
+        presenter = DialogPresenter(self.mounts, self.layout_challenges)
+        self.mounts.defaults = self.mounts.defaults.replace(challenge=presenter)
+        # And again for the panels that never touch the registry: `create_mount` reads the
+        # module default, and a guard that challenges is a programmer error without one.
+        install_mount_defaults(MOUNT_DEFAULTS.replace(challenge=presenter))
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -216,6 +225,7 @@ class RedstoneSquid(Bot):
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
         self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
+        self.background_tasks.start(self.layout_challenges.run(), name="layout-challenges")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:
