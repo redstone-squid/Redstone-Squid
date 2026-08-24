@@ -8,6 +8,7 @@ from squid_layouts.discord import (
     access,
     actions,
     adapter,
+    challenges,
     classic,
     classic_renderer,
     conformance,
@@ -47,6 +48,7 @@ from squid_layouts.discord.adoption import (
     AdoptionError,
     adopt,
 )
+from squid_layouts.discord.challenges import ChallengeRunner, DialogPresenter
 from squid_layouts.discord.composition import (
     Composition,
     compose,
@@ -75,6 +77,9 @@ from squid_layouts.discord.managed import (
     run_managed_result,
 )
 from squid_layouts.discord.mount import (
+    ChallengePresenter,
+    ChallengeRequest,
+    ChallengeSupervisor,
     Mount,
     PauseUpdates,
     RenewEphemeral,
@@ -140,8 +145,13 @@ __all__ = [
     "AccessPolicy",
     "AdoptionError",
     "Cardinality",
+    "ChallengePresenter",
+    "ChallengeRequest",
+    "ChallengeRunner",
+    "ChallengeSupervisor",
     "Composition",
     "Destination",
+    "DialogPresenter",
     "DiscordMode",
     "DiscordModeError",
     "DiscordPresentation",
@@ -184,6 +194,7 @@ __all__ = [
     "actions",
     "adapter",
     "adopt",
+    "challenges",
     "classic",
     "classic_renderer",
     "compose",
