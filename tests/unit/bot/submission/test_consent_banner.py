@@ -16,8 +16,8 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid_layouts.discord import SessionRegistry
 from squid_layouts.discord.testing import fake_message
+from tests.helpers.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
 USER_ID = 42
@@ -126,12 +126,11 @@ def _make_interaction(accounts: Any) -> Any:
         guild_id=None,
         guild_locale=None,
         locale="en-US",
-        client=SimpleNamespace(
+        client=make_layout_bot(
             services=SimpleNamespace(
                 settings=SimpleNamespace(),
                 accounts=accounts,
             ),
-            mounts=SessionRegistry(),
         ),
         response=response,
         followup=SimpleNamespace(send=AsyncMock(return_value=message)),

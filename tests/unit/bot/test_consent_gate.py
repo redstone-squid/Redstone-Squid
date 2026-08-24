@@ -17,6 +17,7 @@ from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_co
 from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
 from squid_layouts.discord.sessions import Opened
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from tests.helpers.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123
@@ -46,7 +47,7 @@ def make_context() -> Any:
             author=SimpleNamespace(id=USER_ID),
             interaction=None,
             send=AsyncMock(return_value=fake_message(message_id=1)),
-            bot=SimpleNamespace(mounts=SessionRegistry()),
+            bot=make_layout_bot(),
         ),
     )
 
@@ -251,10 +252,10 @@ class _Gate(sl.Component):
         self.granted = consent is not None
 
 
-def _clicked(registry: SessionRegistry, *, message_id: int) -> Any:
-    """An interaction whose client carries the registry the prompt opens through."""
+def _clicked(client: Any, *, message_id: int) -> Any:
+    """An interaction whose client carries the host the prompt opens through."""
     interaction = fake_interaction(USER_ID, message_id=message_id)
-    interaction.client = SimpleNamespace(mounts=registry)
+    interaction.client = client
     return interaction
 
 
@@ -273,7 +274,8 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     to the prompt's full 120 s. `request_consent` returns once the notice is on screen, so the
     press ends and the panel goes on working.
     """
-    registry = SessionRegistry()
+    bot = make_layout_bot()
+    registry = bot.mounts
     panel = _Gate()
     mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
     assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
@@ -282,28 +284,29 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     # Bounded well under the prompt's 120 s: a press that still waited would hang here rather
     # than fail, and a test that only passes once the prompt times out proves nothing.
     with anyio.fail_after(5):
-        await mount.dispatch("ask", _clicked(registry, message_id=1))
+        await mount.dispatch("ask", _clicked(bot, message_id=1))
         assert _prompt_of(registry, mount) is not None
 
         commit_render(mount)
-        await mount.dispatch("count", _clicked(registry, message_id=2))
+        await mount.dispatch("count", _clicked(bot, message_id=2))
 
     assert panel.presses == 1
 
 
 async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     """The work the press was about runs from the prompt's own press, not from the panel's."""
-    registry = SessionRegistry()
+    bot = make_layout_bot()
+    registry = bot.mounts
     panel = _Gate()
     mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
     assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
     commit_render(mount)
-    await mount.dispatch("ask", _clicked(registry, message_id=1))
+    await mount.dispatch("ask", _clicked(bot, message_id=1))
 
     prompt = _prompt_of(registry, mount)
     assert prompt is not None
     commit_render(prompt)
-    await prompt.dispatch("accept", _clicked(registry, message_id=3))
+    await prompt.dispatch("accept", _clicked(bot, message_id=3))
 
     assert panel.granted
     assert prompt.finished

@@ -54,10 +54,13 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
+| Runtime for one discord.py client | sl.discord.install(client, defaults=..., bus=...) | LayoutHost: registry, reactor, challenge runner |
+| That runtime, from an interaction or context | sl.discord.LayoutHost.of(source) | the installed host, or `LayoutHostMissing` |
 | Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
 | Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
 | Per-open policy for one screen | sl.discord.Screen(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
 | Static Components V2 message | sl.discord.render_static(document) | DiscordPresentation |
+| One node as a detached item | sl.discord.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
 | Static classic message | sl.discord.classic.render_static(document) | DiscordPresentation |
 | Region in a host-owned classic message | sl.discord.classic.contribute(document, to=...) | AttachedClassicContribution |
 | Discord message plus diagnostics | sl.discord.compose(document) | Composition |
@@ -65,6 +68,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
 | Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
+| Mount onto a message the bot owns | sl.discord.edit_to(message) | Destination writing that message |
 
 sl.discord.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
 `V2Renderer`, then strictly audit the result. `sl.discord.classic.compose` is its counterpart
@@ -81,7 +85,10 @@ every opening of it: `scope` picks the key an opening collides on, `policy` deci
 when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
 user may be in, and `access` builds the mount's access policy from the opener. `Screen.open` and
 `Screen.respond` construct the mount and hand it to the `SessionRegistry`, which still owns
-lifetime -- a screen owns the policy, not the sessions. The two are separate values because a
+lifetime -- a screen owns the policy, not the sessions. Either accepts the registry itself or
+anything an installed `LayoutHost` can be found from, and `Screen.respond` defaults it to the
+interaction's own client, so a caller holding neither does not dispatch over the two invocation
+surfaces to find one. The two are separate values because a
 component is not intrinsically a session policy: the same component can be opened under more than
 one screen, or under none at all.
 

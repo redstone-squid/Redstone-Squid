@@ -13,6 +13,7 @@ from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.voting.domain import VoteKind
 from squid_layouts.discord.testing import commit_render
 from squid_layouts.runtime.reactivity import readonly_transaction
+from tests.helpers.discord import make_layout_bot
 
 GUILD_ID = 7
 EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)
@@ -59,7 +60,7 @@ def make_component_panel(
         author_id=1,
         capabilities=EVERYTHING,
     )
-    panel.mount()
+    panel.mount(source=make_layout_bot())
     return panel, settings
 
 

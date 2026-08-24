@@ -543,9 +543,13 @@ class SettingsPanel(sl.Component):
             return None
         return L(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
         """Create the production mount with author lock and shared error handling."""
         self._mount = create_mount(
-            self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=SESSION_SECONDS
+            self,
+            source=source,
+            access=sl.discord.Owner(self._author_id),
+            locale=self.locale,
+            timeout=SESSION_SECONDS,
         )
         return self._mount

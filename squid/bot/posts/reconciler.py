@@ -18,9 +18,9 @@ import discord
 import squid_layouts as sl
 from squid.bot.message_adapter import to_message_fact
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
-from squid.bot.ui import send_to
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
+from squid_layouts.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -138,8 +138,7 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         message = await self._fetch(post)
         if message is None:
             return False
-        handle = sl.discord.delivery.handle_for(message)
-        await handle.write(want.presentation)
+        await sl.discord.edit_to(message)(want.presentation)
         await self.bot.services.posts.mark_rendered(post.message_id, generation)
         return True
 

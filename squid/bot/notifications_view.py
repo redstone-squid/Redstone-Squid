@@ -207,8 +207,14 @@ class NotificationPanel(sl.Component):
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
 
-    def mount(self) -> sl.discord.Mount:
-        return create_mount(self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=SESSION_SECONDS)
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+        return create_mount(
+            self,
+            source=source,
+            access=sl.discord.Owner(self._author_id),
+            locale=self.locale,
+            timeout=SESSION_SECONDS,
+        )
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:

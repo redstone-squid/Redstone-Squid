@@ -22,6 +22,7 @@ from squid_layouts.discord import Mount, Owner
 from squid_layouts.discord.mount import MountedView
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.sources import Position
+from tests.helpers.discord import make_layout_bot
 
 
 def make_report(
@@ -52,6 +53,7 @@ def make_context(
     slash: bool = False,
     in_guild: bool = True,
     dm_raises: Exception | None = None,
+    bot: Any = None,
 ) -> Any:
     """A context stub exposing only what the cog's delivery path touches."""
     author_send = AsyncMock(side_effect=dm_raises, return_value=AsyncMock(spec=discord.Message))
@@ -63,6 +65,7 @@ def make_context(
         response=SimpleNamespace(is_done=lambda: False),
     )
     return SimpleNamespace(
+        bot=bot if bot is not None else make_layout_bot(),
         interaction=interaction if slash else None,
         guild=SimpleNamespace(id=5, preferred_locale="en-US") if in_guild else None,
         author=SimpleNamespace(id=1, send=author_send),
@@ -77,12 +80,12 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
         clear_all=AsyncMock(return_value=3),
     )
     settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    bot = SimpleNamespace(services=SimpleNamespace(error_reports=error_reports, settings=settings))
+    bot = make_layout_bot(services=SimpleNamespace(error_reports=error_reports, settings=settings))
     return Diagnostics(cast("squid.bot.app.RedstoneSquid", bot))
 
 
 def mount_browser(browser: ErrorReportBrowser) -> tuple[Mount, discord.ui.LayoutView]:
-    mount = create_mount(browser, access=Owner(1), chrome=browser.chrome())
+    mount = create_mount(browser, source=make_layout_bot(), access=Owner(1), chrome=browser.chrome())
     return mount, commit_render(mount)
 
 
@@ -225,7 +228,7 @@ async def test_prefix_invocation_does_not_post_a_traceback_in_the_channel() -> N
     """`Context.send` drops `ephemeral` without an interaction, so the report goes to DMs."""
     report = make_report()
     cog = make_cog(report=report)
-    ctx = make_context()
+    ctx = make_context(bot=cog.bot)
 
     await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
 
@@ -237,7 +240,9 @@ async def test_prefix_invocation_does_not_post_a_traceback_in_the_channel() -> N
 
 async def test_a_closed_dm_is_reported_rather_than_worked_around() -> None:
     cog = make_cog(report=make_report())
-    ctx = make_context(dm_raises=discord.Forbidden(cast(Any, SimpleNamespace(status=403, reason="")), "no dms"))
+    ctx = make_context(
+        bot=cog.bot, dm_raises=discord.Forbidden(cast(Any, SimpleNamespace(status=403, reason="")), "no dms")
+    )
 
     await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
 
@@ -247,7 +252,7 @@ async def test_a_closed_dm_is_reported_rather_than_worked_around() -> None:
 
 async def test_slash_invocation_stays_ephemeral_in_the_channel() -> None:
     cog = make_cog(report=make_report())
-    ctx = make_context(slash=True)
+    ctx = make_context(bot=cog.bot, slash=True)
 
     await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
 
@@ -258,7 +263,7 @@ async def test_slash_invocation_stays_ephemeral_in_the_channel() -> None:
 @pytest.mark.parametrize("in_guild", [True, False])
 async def test_recent_delivers_the_view_privately(in_guild: bool) -> None:
     cog = make_cog(reports=(make_report(),))
-    ctx = make_context(in_guild=in_guild)
+    ctx = make_context(bot=cog.bot, in_guild=in_guild)
 
     await Diagnostics.recent_errors.callback(cog, cast(Context[Any], ctx), work_lost=False)  # type: ignore[arg-type]
 

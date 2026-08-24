@@ -27,6 +27,7 @@ from squid_layouts.discord.testing import (
     fake_interaction,
     fake_message,
 )
+from tests.helpers.discord import make_layout_bot
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
@@ -300,14 +301,14 @@ async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_res
 
 async def test_demo_command_and_controls_are_public() -> None:
     settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    cog = LayoutShowcaseCog(
-        cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus()))
-    )
+    bot = make_layout_bot(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus())
+    cog = LayoutShowcaseCog(cast(Any, bot))
     ctx = cast(
         commands.Context[Any],
         cast(
             Any,
             SimpleNamespace(
+                bot=bot,
                 interaction=None,
                 guild=None,
                 author=SimpleNamespace(id=7),
@@ -408,10 +409,11 @@ class TestLobby:
         guild_id: int = 5,
         host_id: int = 7,
     ) -> tuple[SessionRegistry, Lobby]:
-        registry = SessionRegistry() if registry is None else registry
+        bot = make_layout_bot()
+        registry = bot.mounts if registry is None else registry
         panel = Lobby(registry, host_id=host_id)
         result = await registry.open(
-            panel.mount(),
+            panel.mount(source=bot),
             delivered_to(fake_message(message_id=1)),
             key=SessionKey.guild("showcase-lobby", guild_id),
             actor_id=host_id,
