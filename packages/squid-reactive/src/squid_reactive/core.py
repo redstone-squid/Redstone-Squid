@@ -112,6 +112,10 @@ class ReactiveWriteError(RuntimeError):
     """A state mutation was attempted inside a read-only action."""
 
 
+class ActionValidationError(ValueError):
+    """An admitted action failed application validation before publication."""
+
+
 class UndeclaredStateError(RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
@@ -963,6 +967,8 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
         return RollbackReason.CANCELLED
     if isinstance(error, ReactiveConflictError):
         return RollbackReason.CONFLICT
+    if isinstance(error, ActionValidationError):
+        return RollbackReason.VALIDATION_FAILED
     if during_commit:
         return RollbackReason.PARTICIPANT_PREPARE_FAILED
     return RollbackReason.HANDLER_EXCEPTION
