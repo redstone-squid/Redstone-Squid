@@ -1706,7 +1706,9 @@ def _grid_matrix(node: Grid, context: _Context) -> PrimitiveCode:
         for column in range(node.columns)
     ]
     row_label_width = len(str((len(node.cells) + node.columns - 1) // node.columns))
-    lines = [" " * (row_label_width + 2) + "  ".join(name.ljust(widths[index]) for index, name in enumerate(column_names))]
+    lines = [
+        " " * (row_label_width + 2) + "  ".join(name.ljust(widths[index]) for index, name in enumerate(column_names))
+    ]
     for start in range(0, len(labels), node.columns):
         row = labels[start : start + node.columns]
         lines.append(

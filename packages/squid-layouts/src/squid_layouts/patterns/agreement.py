@@ -126,9 +126,7 @@ class Agreement(Component):
             await event.acknowledge()
             return
         selected = {*self.approved, actor_id}
-        approved = tuple(
-            participant.actor_id for participant in self.participants if participant.actor_id in selected
-        )
+        approved = tuple(participant.actor_id for participant in self.participants if participant.actor_id in selected)
         self.approved = approved
         if len(approved) >= self.required:
             self.resolved = True
