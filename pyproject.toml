@@ -33,6 +33,7 @@ dependencies = [
     "beartype>=0.19.0",
     "rapidfuzz>=3.13.0",
     "squid-layouts[discord]",
+    "squid-replicated",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
     "advanced-alchemy>=1.11.0",
@@ -122,6 +123,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 squid-layouts = { workspace = true }
 squid-reactive = { workspace = true }
+squid-replicated = { workspace = true }
 squid-stores = { workspace = true }
 
 [tool.uv]
