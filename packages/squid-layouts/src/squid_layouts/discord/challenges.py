@@ -124,9 +124,9 @@ class DialogPresenter:
         """Open the dialog through the interaction that asked, and return."""
         resolver: ChallengeResolver = _Resolver(request, self.supervisor)
         await self.screen.open(
-            self.sessions,
             request.challenge.ask(resolver),
             respond_to(request.interaction, ephemeral=True, wait=True),
+            sessions=self.sessions,
             opener=Opener.of(request.interaction),
             parent=request.mount,
             # Locale is a fact about the reader, not about the host, so the question is asked
