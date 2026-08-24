@@ -49,6 +49,46 @@ The current Loro API also has a stack-oriented `UndoManager`, and current pycrdt
 origins, stack items, and binary `IdSet` codecs. These observations come from executed integration
 spikes, not feature-list inference.
 
+### Measured spike cost
+
+`benchmarks/plan68_backends.py` is a focused, non-pytest harness over synthetic text documents on
+CPython 3.14.6/Linux x86-64. Values below are medians in microseconds; they are evidence about the
+adapter shapes, not a production service-level objective. The repeated-character seed compresses
+well in Loro, so exported byte size is deliberately not compared between engines.
+
+| Backend | Text bytes | Stage + prepare | Apply | Snapshot | Import into fresh engine | Plan inverse | Token bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Loro 1.13.2 | 1,000 | 247 | 49 | 1 | 985 | 612 | 27 |
+| Loro 1.13.2 | 10,000 | 395 | 65 | 2 | 1,036 | 1,216 | 27 |
+| Loro 1.13.2 | 50,000 | 737 | 70 | 14 | 1,276 | 987 | 27 |
+| pycrdt 0.14.2 | 1,000 | 212 | 14 | 5 | 86 | 212 | 17 |
+| pycrdt 0.14.2 | 10,000 | 200 | 11 | 9 | 110 | 246 | 17 |
+| pycrdt 0.14.2 | 50,000 | 514 | 13 | 14 | 156 | 395 | 17 |
+
+The fake shipped adapter has separate Hypothesis models for three-replica delivery permutations and
+semantic inverse preservation. Those models do not upgrade either text spike into a production adapter.
+
+### Twelve-criterion gate record
+
+| Criterion | Loro | pycrdt | Evidence or missing proof |
+| --- | --- | --- | --- |
+| Python 3.14 wheels | pass | pass | Locked extras install and the focused spike runs on CPython 3.14. |
+| Staging leaves canonical state untouched | pass | pass | Shared engine-level test asserts the empty canonical snapshot before apply. |
+| One token groups several containers | fail | fail | Text-only adapters expose one container. |
+| Target a retained non-latest action | pass | pass | The first insertion is inverted after a later insertion. |
+| Preserve unrelated remote edits | fail | fail | Later local text is covered; a two-replica remote edit is not. |
+| Unsupported inverse returns typed conflict | fail | fail | Experimental adapters can still raise backend exceptions. |
+| Token encode/reload | pass | pass | Both token codecs are exercised in the inverse test. |
+| Duplicate and reordered import | partial | partial | Duplicate import is covered; reordered concurrent import is not. |
+| Three-replica convergence model | fail | fail | Only the fake adapter runs this model. |
+| Representative performance and compaction | partial | partial | Synthetic timing exists above; real workload and compaction retention do not. |
+| Cancellation/disposal ownership | fail | fail | Engines are not integrated into `ReplicatedScope`. |
+| No backend types in reactive values | pass | pass | Both snapshot APIs return `str`. |
+
+The failing rows are a deliberate gate result, not deferred test cleanup. Generalized collaborative text
+remains experimental and unsupported until a later ADR can change every required row to pass or explicitly
+narrow the supported data types further.
+
 ## Production gate result
 
 No general CRDT backend is selected yet. Both adapters remain experimental extras because only text has
