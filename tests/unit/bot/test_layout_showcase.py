@@ -70,6 +70,7 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         ("adaptation", 'return sl.actions(*actions, key="showcase-actions")'),
         ("degradation", "overflow=sl.primitives.Spill()"),
         ("data", 'sl.table(columns, *rows, key="capability-table")'),
+        ("grid", 'return sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid)'),
         ("ownership", "on=sl.controlled(self.subscribed, self._set_subscribed)"),
         ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
@@ -117,6 +118,21 @@ def test_data_exhibit_formats_typed_nodes_rather_than_strings() -> None:
     assert "Adapts by" in content, "the table kept its tabular shape"
     assert "Pickers of 25 and 11" in content, "with every declared row"
     assert_within_limits(view)
+
+
+async def test_grid_exhibit_keeps_spatial_rows_and_stable_selection_keys() -> None:
+    component = LayoutShowcase(section="grid", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    view = commit_render(mount)
+    numbered = [button for button in _buttons(view) if button.label and button.label.isdecimal()]
+
+    assert [button.label for button in numbered] == [str(index) for index in range(1, 13)]
+    assert numbered[5].disabled
+    assert numbered[10].disabled
+
+    await mount.dispatch("showcase-grid.cell-0", fake_interaction())
+
+    assert component.grid_pick == "Selected cell-0."
 
 
 async def test_ownership_exhibit_separates_session_owned_and_component_owned_values() -> None:
