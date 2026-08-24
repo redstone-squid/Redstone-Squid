@@ -136,6 +136,18 @@ are not re-derived or accidentally adopted later.
   the first attempt lacked: weak versus strong targets, so an undo conflicts on what the author
   said matters and stays blind on what it does not. `StateDelta` is gone; see
   [the Plan 68 migration guide](../../plan68-migration.md).
+- **Serializable actions by default** — validating every shared cell an action read, not just the
+  ones it also wrote, closes write skew and is what a textbook would do. Rejected as the *default*
+  and shipped as `strong_read()` instead, after being tried both ways: Plan 68 made it the default
+  and it was narrowed back on 2026-08-24. The reason is the shape of real handlers here — they read
+  a namespace to decide whether a press is allowed and then write something unrelated, so full
+  validation aborts actions that succeed harmlessly, and an abort is not free once the handler has
+  done external work. Compare-and-set on a cell the action read *and* wrote stays automatic, because
+  there the read is load-bearing by construction. `relaxed_read()` survives the narrowing with a
+  smaller job: it opts a read back out from inside a `strong_read()`. Two notes for anyone revisiting.
+  Version-over-equality lineage came in with the strict default and is orthogonal — keep it; A→B→A
+  must conflict. And on the web, where concurrent actions are ordinary rather than exotic, the
+  default probably does invert; that is a porting note, not a reason to invert it here.
 
 ## Deferred until a real consumer exists
 

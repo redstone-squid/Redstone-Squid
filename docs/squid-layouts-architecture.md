@@ -273,8 +273,15 @@ and prepares all participants under the runtime commit gate. Installing patches 
 applying the prepared participants is the commit point. Reactive notifications, participant
 finalizers, ledger sinks, and aftermath hooks run after the gate and cannot veto that truth. An
 apply-phase exception is an adapter integrity defect and is reported as such, never disguised as
-a safe rollback. `relaxed_read()` opts out of validation; `untracked()` independently opts out of
-dependency capture.
+a safe rollback.
+
+A read is **strong** -- it becomes a commit precondition -- when the action also writes that cell,
+or when it was taken inside `strong_read()`. Read-and-write is compare-and-set and needs no opt-in.
+Read-only reads are not validated by default: handlers routinely consult shared state to decide
+something and then write something unrelated, and aborting those costs more than the write skew it
+prevents. An action that does branch on shared state it will not write says so with
+`strong_read()`, which makes it serializable over what it read. `relaxed_read()` is the way back
+out of a strong read; `untracked()` independently opts out of dependency capture.
 
 History consumes the immutable commit event. Physical inverses require the committed slot version;
 semantic participants plan their own inverses. Undo and redo are fresh actions, and redo is based on
@@ -296,8 +303,9 @@ partial success remains inspectable. The complete pipeline and examples are in
 State on a namespace is `sl.state()` one level out and is literally the same storage, so replacement,
 the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
 a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
-one component, and every strongly read shared cell carries its version as a commit precondition
-when the action publishes anything. If someone else moves it meanwhile -- including A→B→A -- the
+one component, and a strongly read shared cell -- one the action also writes, or reads inside
+`strong_read()` -- carries its version as a commit precondition when the action publishes anything.
+If someone else moves it meanwhile -- including A→B→A -- the
 action raises `sl.runtime.ReactiveConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
 for that, shown through `handle_error` or an `ActionMiddleware`.
 
