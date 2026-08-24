@@ -13,6 +13,7 @@ from discord.ext.commands import Context
 import squid_layouts as sl
 from squid_layouts.discord import delivery
 from squid_layouts.discord.devtools_view import OperationalInspector, metrics_text, plan_text, scene_attachment
+from squid_layouts.discord.durability import RecoveryReport
 from squid_layouts.discord.live import find
 from squid_layouts.discord.mount import MountSnapshot, owned_mount
 from squid_layouts.discord.operations import (
@@ -22,13 +23,14 @@ from squid_layouts.discord.operations import (
     RuntimeUnavailable,
     TargetNotFound,
 )
-from squid_layouts.discord.reactor import Reactor
+from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
 from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
-from squid_layouts.profiling import AttributeValue, OperationKind, Profiler, RuntimeTrace
-from squid_layouts.runtime.topics import TopicBus
+from squid_layouts.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
+from squid_layouts.runtime.histories import HistorySnapshot
+from squid_layouts.runtime.topics import BusSnapshot, TopicBus
 from squid_layouts.semantic import LayoutNode
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
@@ -130,7 +132,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         ]
         if snapshot.topics is not None:
             lines.extend(
-                f"  {topic.topic} subscribers={topic.subscribers} labels={','.join(topic.labels) or '-'} "
+                f"  {topic.topic} subscribers={topic.subscribers} "
                 f"queued={topic.queued} in_flight={topic.in_flight} delivered={topic.delivered} failed={topic.failed}"
                 for topic in snapshot.topics.topics
             )
@@ -402,7 +404,7 @@ def _json_default(value: object) -> object:
     return repr(value)
 
 
-def _history_text(history: object) -> str:
+def _history_text(history: HistorySnapshot) -> str:
     name = getattr(history, "name", "history")
     undo = getattr(history, "undo", ())
     redo = getattr(history, "redo", ())
@@ -410,19 +412,19 @@ def _history_text(history: object) -> str:
     return f"{name}: undo={len(undo)} redo={len(redo)}\n" + "\n".join(entries or ["(empty)"])
 
 
-def _reactor_text(snapshot: object) -> str:
+def _reactor_text(snapshot: ReactorSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
 
 
-def _topics_text(snapshot: object) -> str:
+def _topics_text(snapshot: BusSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"known={len(snapshot.topics)} queued={snapshot.queued} failed={snapshot.failed}"
 
 
-def _recovery_text(report: object) -> str:
+def _recovery_text(report: RecoveryReport | None) -> str:
     if report is None:
         return "never"
     return f"restored={len(report.restored)} failed={len(report.failed)}"
@@ -485,7 +487,7 @@ def _milliseconds(seconds: float | None) -> str:
     return "??" if seconds is None else f"{seconds * 1000:.1f}ms"
 
 
-def _histogram_count(aggregate: object) -> int:
+def _histogram_count(aggregate: OperationAggregate) -> int:
     histogram = aggregate.window if aggregate.window.observations else aggregate.lifetime
     return histogram.observations
 
