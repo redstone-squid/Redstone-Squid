@@ -108,6 +108,18 @@ class Screen:
     Separate from `policy`, which governs how many sessions may occupy the key rather than
     how many users may join one of them.
     """
+    quota: int | None = None
+    """The most sessions in this screen's domain one user may be a member of at once.
+
+    The dual of `capacity`: that caps users per session, this caps sessions per user. It
+    binds at opening as well as at joining, because the opener joins by opening.
+    """
+    domain: str | None = None
+    """The membership family `quota` counts within; the screen's `name` unless overridden.
+
+    Set it when several screens share one family -- a lobby and the match it becomes are one
+    "game" for the purpose of "one game at a time".
+    """
     access: Callable[[Opener], AccessPolicy] = _owner
     options: Mapping[str, object] = field(default_factory=dict)
 
@@ -142,6 +154,8 @@ class Screen:
             policy=self.policy,
             actor_id=opener.user_id,
             capacity=self.capacity,
+            quota=self.quota,
+            domain=self.domain,
         )
 
     async def respond(
