@@ -21,6 +21,8 @@ from squid_layouts.runtime.reactivity import (
     ActionParticipant,
     CellPatchSet,
     ConditionalCellPatch,
+    FrameworkIntegrityError,
+    FreshActionError,
     ReactiveConflictError,
     TransactionView,
     apply_conditional_patches,
@@ -564,6 +566,14 @@ class History:
             entry.last_result = result
             self._owner.invalidate()
             return result
+        except FrameworkIntegrityError, FreshActionError:
+            raise
+        except Exception as error:
+            entry.state = HistoryEntryState.FAILED
+            result = HistoryResult(HistoryResultStatus.FAILED, entry, context.action_id, error=error)
+            entry.last_result = result
+            self._owner.invalidate()
+            return result
         assert entry.last_result is not None
         return entry.last_result
 
@@ -666,7 +676,7 @@ class History:
             compensates_action_id=original.action_id,
         )
         result = self._undo_state(entry, retain_redo=False, action_context=compensation_context)
-        if result.status is HistoryResultStatus.CONFLICT:
+        if result.status in {HistoryResultStatus.CONFLICT, HistoryResultStatus.FAILED}:
             execution.transition(CompensationStatus.NEEDS_RECONCILIATION)
             entry.state = HistoryEntryState.NEEDS_RECONCILIATION
             try:
@@ -750,6 +760,14 @@ class History:
         except ReactiveConflictError as error:
             entry.state = HistoryEntryState.CONFLICTED
             result = HistoryResult(HistoryResultStatus.CONFLICT, entry, context.action_id, error.detail, error)
+            entry.last_result = result
+            self._owner.invalidate()
+            return result
+        except FrameworkIntegrityError, FreshActionError:
+            raise
+        except Exception as error:
+            entry.state = HistoryEntryState.FAILED
+            result = HistoryResult(HistoryResultStatus.FAILED, entry, context.action_id, error=error)
             entry.last_result = result
             self._owner.invalidate()
             return result
