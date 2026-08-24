@@ -10,6 +10,7 @@ from squid_replicated.document import (
 )
 from squid_replicated.engine import ReplicatedEngine, StagedReplica
 from squid_replicated.fake import FakeEngine, FakeSnapshot, FakeVersion
+from squid_replicated.transport import ReplicatedUpdate
 
 __all__ = [
     "FakeEngine",
@@ -22,5 +23,6 @@ __all__ = [
     "ReplicatedEngine",
     "ReplicatedScope",
     "ReplicatedSet",
+    "ReplicatedUpdate",
     "StagedReplica",
 ]

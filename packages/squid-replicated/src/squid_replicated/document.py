@@ -1,12 +1,16 @@
 """Reactive replicated documents integrated as Squid action participants."""
 
 import weakref
+from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 from squid_reactive.actions import (
     ActionContext,
     ActionKind,
+    ActorRef,
+    CausalRef,
     ChangeSummary,
     ConflictDetail,
     ParticipantChange,
@@ -26,6 +30,10 @@ from squid_replicated.fake import (
     FakeVersion,
     PreparedFakeUpdate,
 )
+from squid_replicated.transport import ReplicatedUpdate
+
+_DEDUP_LIMIT = 10_000
+_PENDING_UPDATE_LIMIT = 1_000
 
 
 class ReplicatedClosedError(RuntimeError):
@@ -81,10 +89,17 @@ class ReplicatedChangeToken:
 
 
 class _ReplicationParticipant:
-    def __init__(self, document: ReplicatedDocument, *, remote: PreparedFakeUpdate | None = None) -> None:
+    def __init__(
+        self,
+        document: ReplicatedDocument,
+        *,
+        remote: PreparedFakeUpdate | None = None,
+        remote_update_id: str | None = None,
+    ) -> None:
         self.document = document
         self.branch = document.engine.branch()
         self.remote = remote
+        self.remote_update_id = remote_update_id
 
     def prepare(self, view: TransactionView) -> PreparedFakeUpdate:
         if self.remote is not None:
@@ -112,6 +127,8 @@ class _ReplicationParticipant:
 
     def finalize(self, prepared: PreparedFakeUpdate) -> None:
         self.document._notify()
+        if self.remote_update_id is None and prepared.operations:
+            self.document._publish_update(prepared)
 
 
 class ReplicatedDocument:
@@ -123,6 +140,10 @@ class ReplicatedDocument:
         self.closed = False
         self._version_cell = _Cell(engine.snapshot(), address=f"replicated:{document_id}")
         self._listeners: set[Any] = set()
+        self._update_listeners: set[Callable[[ReplicatedUpdate], None]] = set()
+        self._pending_updates: deque[ReplicatedUpdate] = deque(maxlen=_PENDING_UPDATE_LIMIT)
+        self._seen_updates: deque[str] = deque(maxlen=_DEDUP_LIMIT)
+        self._seen_update_ids: set[str] = set()
 
     @property
     def identity(self) -> str:
@@ -146,17 +167,48 @@ class ReplicatedDocument:
 
     def export_since(self, version: FakeVersion | None = None) -> bytes:
         self._ensure_open()
-        return self.engine.export_since(version)
+        update = ReplicatedUpdate.create(
+            document_id=self.document_id,
+            backend_id=self.engine.backend_id,
+            source_replica_id=self.engine.replica_id,
+            payload=self.engine.export_since(version),
+            origin_action_id=None,
+        )
+        return update.encode()
 
     def import_update(self, update: bytes) -> None:
         self._ensure_open()
-        prepared = self.engine.prepare_remote(update)
-        context = ActionContext.create(f"Import {self.document_id}", kind=ActionKind.REMOTE)
+        envelope = ReplicatedUpdate.decode(update)
+        if envelope.document_id != self.document_id:
+            message = f"replicated update targets {envelope.document_id!r}, not {self.document_id!r}"
+            raise ValueError(message)
+        if envelope.backend_id != self.engine.backend_id:
+            message = f"replicated update uses backend {envelope.backend_id!r}, not {self.engine.backend_id!r}"
+            raise ValueError(message)
+        update_id = str(envelope.update_id)
+        if update_id in self._seen_update_ids:
+            return
+        prepared = self.engine.prepare_remote(envelope.payload)
+        cause = (
+            None if envelope.origin_action_id is None else CausalRef("remote_action", str(envelope.origin_action_id))
+        )
+        context = ActionContext.create(
+            f"Import {self.document_id}",
+            kind=ActionKind.REMOTE,
+            cause=cause,
+            root_action_id=envelope.origin_action_id,
+            actor=ActorRef("replica", envelope.source_replica_id),
+            metadata={"document_id": self.document_id, "update_id": update_id},
+        )
         with transaction(action_context=context):
-            joined = join_action(self, lambda: _ReplicationParticipant(self, remote=prepared))
+            joined = join_action(
+                self,
+                lambda: _ReplicationParticipant(self, remote=prepared, remote_update_id=update_id),
+            )
             assert joined is not None
+        self._remember_update(update_id)
 
-    def subscribe(self, callback) -> callable:
+    def subscribe(self, callback: Callable[[FakeSnapshot], None]) -> Callable[[], None]:
         self._listeners.add(callback)
 
         def unsubscribe() -> None:
@@ -164,9 +216,30 @@ class ReplicatedDocument:
 
         return unsubscribe
 
+    def subscribe_updates(self, callback: Callable[[ReplicatedUpdate], None]) -> Callable[[], None]:
+        """Receive committed local updates until the returned function or document closes it."""
+        self._ensure_open()
+        self._update_listeners.add(callback)
+
+        def unsubscribe() -> None:
+            self._update_listeners.discard(callback)
+
+        return unsubscribe
+
+    def drain_updates(self) -> tuple[ReplicatedUpdate, ...]:
+        """Take committed outbound updates retained for an application-owned transport."""
+        self._ensure_open()
+        updates = tuple(self._pending_updates)
+        self._pending_updates.clear()
+        return updates
+
     def close(self) -> None:
         self.closed = True
         self._listeners.clear()
+        self._update_listeners.clear()
+        self._pending_updates.clear()
+        self._seen_updates.clear()
+        self._seen_update_ids.clear()
 
     def _participant(self) -> _ReplicationParticipant:
         self._ensure_open()
@@ -179,6 +252,28 @@ class ReplicatedDocument:
     def _notify(self) -> None:
         for callback in tuple(self._listeners):
             callback(self.snapshot())
+
+    def _publish_update(self, prepared: PreparedFakeUpdate) -> None:
+        from squid_reactive import current_action
+
+        context = current_action()
+        update = ReplicatedUpdate.create(
+            document_id=self.document_id,
+            backend_id=self.engine.backend_id,
+            source_replica_id=self.engine.replica_id,
+            payload=self.engine.encode_update(prepared.operations),
+            origin_action_id=None if context is None else context.action_id,
+        )
+        self._pending_updates.append(update)
+        for callback in tuple(self._update_listeners):
+            callback(update)
+
+    def _remember_update(self, update_id: str) -> None:
+        if len(self._seen_updates) == self._seen_updates.maxlen:
+            expired = self._seen_updates.popleft()
+            self._seen_update_ids.discard(expired)
+        self._seen_updates.append(update_id)
+        self._seen_update_ids.add(update_id)
 
     def _ensure_open(self) -> None:
         if self.closed:
