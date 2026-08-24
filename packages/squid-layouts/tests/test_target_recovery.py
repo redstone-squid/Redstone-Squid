@@ -8,7 +8,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Target
 from squid_layouts.discord.adapter import discord_py_adapter_profile
-from squid_layouts.discord.durability import DEFAULT_TARGETS, ComponentRegistry, SnapshotCodec
+from squid_layouts.discord.durability import DEFAULT_TARGETS, ComponentRegistry, MountStateCodec
 from squid_layouts.discord.targets import TargetRegistry
 from squid_layouts.discord.testing import commit_classic_render, commit_render
 from squid_layouts.errors import LayoutInvariantError
@@ -76,25 +76,25 @@ class TestSnapshot:
     def test_the_target_survives_the_canonical_codec(self, target) -> None:
         _components, snapshot = captured(target)
 
-        restored = SnapshotCodec.loads(SnapshotCodec.dumps(snapshot))
+        restored = MountStateCodec.loads(MountStateCodec.dumps(snapshot))
 
         assert restored == snapshot
 
     def test_the_former_protocol_two_shape_is_refused(self) -> None:
         _components, snapshot = captured(V2_TARGET)
-        payload = SnapshotCodec.dumps(snapshot).replace('"protocol":1', '"protocol":2', 1)
+        payload = MountStateCodec.dumps(snapshot).replace('"protocol":1', '"protocol":2', 1)
 
-        with pytest.raises(sl.discord.durability.SnapshotError, match="unsupported mount snapshot protocol 2"):
-            SnapshotCodec.loads(payload)
+        with pytest.raises(sl.discord.durability.MountStateError, match="unsupported mount state protocol 2"):
+            MountStateCodec.loads(payload)
 
     def test_the_former_protocol_one_shape_without_adapter_capabilities_is_refused(self) -> None:
         _components, snapshot = captured(V2_TARGET)
-        raw = json.loads(SnapshotCodec.dumps(snapshot))
+        raw = json.loads(MountStateCodec.dumps(snapshot))
         raw["target"].pop("adapter_capabilities")
         payload = json.dumps(raw)
 
-        with pytest.raises(sl.discord.durability.SnapshotError, match="adapter_capabilities"):
-            SnapshotCodec.loads(payload)
+        with pytest.raises(sl.discord.durability.MountStateError, match="adapter_capabilities"):
+            MountStateCodec.loads(payload)
 
 
 class TestRecovery:

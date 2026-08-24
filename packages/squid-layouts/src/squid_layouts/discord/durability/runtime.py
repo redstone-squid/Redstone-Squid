@@ -31,7 +31,7 @@ from squid_layouts.discord.sessions import (
 )
 from squid_stores import ClaimToken, DurableSessionStore, StoredSessionRecord
 
-from . import ComponentRegistry, MountLocator, RestoreContext, SnapshotError
+from . import ComponentRegistry, MountLocator, MountStateError, RestoreContext
 from .frontend import (
     DurableFrontend,
     Missing,
@@ -42,9 +42,9 @@ from .frontend import (
     Unreachable,
 )
 from .session_records import (
-    DurableMountState,
     DurableSessionCodec,
     DurableSessionRecord,
+    SessionMountRecord,
     decode_session_key,
     encode_session_key,
     encode_session_scope,
@@ -304,7 +304,7 @@ class DurableSessionRuntime:
         self._require_running()
         if not self.components.has(recipe):
             message = f"durable component {recipe!r} is not registered"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         scope = encode_session_scope(key)
         reservation = await self.store.reserve(scope, self.owner, self.lease_seconds)
         if reservation is None:
@@ -338,7 +338,7 @@ class DurableSessionRuntime:
                     opened_at=summary.opened_at.timestamp(),
                     expires_at=expires_at,
                     mounts=(
-                        DurableMountState(
+                        SessionMountRecord(
                             "root",
                             self.components.capture(mount, recipe),
                             promoted.locator,
@@ -363,7 +363,7 @@ class DurableSessionRuntime:
                 )
                 if token is None:
                     message = "durable admission was lost before the first snapshot committed"
-                    raise SnapshotError(message)
+                    raise MountStateError(message)
                 consumed = True
                 assert isinstance(newcomer, DurableSession)
                 self._bind(
@@ -464,7 +464,7 @@ class DurableSessionRuntime:
                         record.expires_at,
                         state.parent_id,
                     )
-                    restored = self.components.restore(state.snapshot, context)
+                    restored = self.components.restore(state.state, context)
                     by_id[state.id] = restored
                     mounts.append(restored)
                 remaining = tuple(record.mounts)
@@ -513,12 +513,12 @@ class DurableSessionRuntime:
                     token,
                     expires_at=record.expires_at,
                     mount_ids={by_id[state.id]: state.id for state in remaining},
-                    recipes={by_id[state.id]: state.snapshot.component_key for state in remaining},
+                    recipes={by_id[state.id]: state.state.component_key for state in remaining},
                     locators={by_id[state.id]: state.locator for state in remaining},
                 )
                 report.restored.append(_item_from_record(record, "restored"))
                 self._request_checkpoint(record.id)
-            except SnapshotError as error:
+            except MountStateError as error:
                 await self.store.release(token)
                 await _finish_mounts(mounts)
                 report.incompatible.append(_with_reason(item, error))
@@ -558,7 +558,7 @@ class DurableSessionRuntime:
         self._require_running()
         if not self.components.has(recipe):
             message = f"durable component {recipe!r} is not registered"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         async with session._lifecycle_lock:
             if session._closed or session.root.finished:
                 return Rejected((session.summary,), RejectionReason.SESSION_FINISHED)
@@ -663,7 +663,7 @@ class DurableSessionRuntime:
     def _capture(self, active: _ActiveSession) -> DurableSessionRecord:
         session = active.session
         mounts = tuple(
-            DurableMountState(
+            SessionMountRecord(
                 active.mount_ids[mount],
                 self.components.capture(mount, active.recipes[mount]),
                 active.locators[mount],
@@ -712,7 +712,7 @@ class DurableSessionRuntime:
         active = None if record_id is None else self._active.get(record_id)
         if active is None:
             message = "durable session no longer owns its record"
-            raise SnapshotError(message)
+            raise MountStateError(message)
         return active
 
     def _require_running(self) -> None:
@@ -724,7 +724,7 @@ class DurableSessionRuntime:
 def _dumps_summary(summary: SessionSummary) -> str:
     if not isinstance(summary.key, SessionKey):
         message = "durable session summaries require a SessionKey"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     raw = {
         "id": summary.id,
         "opened_at": summary.opened_at.timestamp(),
@@ -741,10 +741,10 @@ def _loads_summary(payload: str, *, local: bool) -> SessionSummary:
     try:
         raw = json.loads(payload)
     except json.JSONDecodeError as error:
-        raise SnapshotError(str(error)) from error
+        raise MountStateError(str(error)) from error
     if not isinstance(raw, dict):
         message = "durable session summary must be an object"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     try:
         opened_timestamp = _finite_timestamp(raw["opened_at"])
         opened_at = datetime.fromtimestamp(opened_timestamp, UTC)
@@ -757,14 +757,14 @@ def _loads_summary(payload: str, *, local: bool) -> SessionSummary:
         attachment_actors = _summary_ids(raw.get("attachment_actors", ()))
     except (KeyError, TypeError, ValueError, OverflowError) as error:
         message = "durable session summary is malformed"
-        raise SnapshotError(message) from error
+        raise MountStateError(message) from error
     if actor_id is not None and (not isinstance(actor_id, int) or isinstance(actor_id, bool)):
         message = "durable session summary actor_id is malformed"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     record_id = raw.get("id")
     if not isinstance(record_id, str) or not record_id:
         message = "durable session summary id is malformed"
-        raise SnapshotError(message)
+        raise MountStateError(message)
     return SessionSummary(
         record_id,
         opened_at,
@@ -795,7 +795,7 @@ def _summary_ids(value: object) -> frozenset[int]:
 def _item_from_stored(record: StoredSessionRecord, reason: str) -> RecoveryItem:
     try:
         summary = _loads_summary(record.summary_payload, local=False)
-    except SnapshotError:
+    except MountStateError:
         return RecoveryItem(record.key, None, (), reason)
     return RecoveryItem(record.key, summary.key if isinstance(summary.key, SessionKey) else None, (), reason)
 
@@ -809,7 +809,7 @@ def _with_reason(item: RecoveryItem, error: Exception) -> RecoveryItem:
     return RecoveryItem(item.record_key, item.session_key, item.locators, reason)
 
 
-def _descendants(states: dict[str, DurableMountState], roots: set[str]) -> set[str]:
+def _descendants(states: dict[str, SessionMountRecord], roots: set[str]) -> set[str]:
     descendants = set(roots)
     changed = True
     while changed:
@@ -832,10 +832,10 @@ async def _finish_mounts(mounts: Sequence[Mount]) -> None:
 def _validate_summary_record(summary: SessionSummary, record: DurableSessionRecord) -> None:
     if summary.id != record.id or summary.key != record.key or summary.members != record.members:
         message = "stored session summary does not match its snapshot record"
-        raise SnapshotError(message)
+        raise MountStateError(message)
 
 
 def _require_reconnected(result: Reconnected | Missing | Unreachable) -> None:
     if not isinstance(result, Reconnected):
         message = "frontend did not reconnect the recoverable session graph"
-        raise SnapshotError(message)
+        raise MountStateError(message)

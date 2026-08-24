@@ -13,8 +13,8 @@ from squid_layouts.discord.durability import (
     ComponentRegistry,
     DurableSessionStore,
     MemorySnapshotStore,
-    SnapshotCodec,
-    SnapshotError,
+    MountStateCodec,
+    MountStateError,
     SQLiteSnapshotStore,
 )
 from squid_layouts.discord.testing import commit_render
@@ -170,8 +170,8 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     mount.presentation.move_cursor("child.items", Position(offset=2))
 
     snapshot = _registry().capture(mount, "counter")
-    encoded = SnapshotCodec.dumps(snapshot)
-    restored = _registry().restore(SnapshotCodec.loads(encoded), access=Everyone(), timeout=None)
+    encoded = MountStateCodec.dumps(snapshot)
+    restored = _registry().restore(MountStateCodec.loads(encoded), access=Everyone(), timeout=None)
     commit_render(restored)
     restored_root = restored.component
 
@@ -180,7 +180,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert restored_root.child.entries[-1] == "entry 6"
     assert restored.presentation.cursor("child.items").position.offset == 2
     assert "transient" not in next(component.state for component in snapshot.components if component.path == "$")
-    assert encoded == SnapshotCodec.dumps(SnapshotCodec.loads(encoded))
+    assert encoded == MountStateCodec.dumps(MountStateCodec.loads(encoded))
 
 
 def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
@@ -195,7 +195,7 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
     mount = Mount(Invalid(), access=Everyone(), timeout=None)
     commit_render(mount)
 
-    with pytest.raises(SnapshotError, match="not JSON serializable"):
+    with pytest.raises(MountStateError, match="not JSON serializable"):
         registry.capture(mount, "invalid")
 
 
@@ -204,7 +204,7 @@ def test_version_mismatch_requires_a_sequential_migration() -> None:
     commit_render(mount)
     snapshot = _registry().capture(mount, "counter")
 
-    with pytest.raises(SnapshotError, match="no migration"):
+    with pytest.raises(MountStateError, match="no migration"):
         _registry(version=2).restore(snapshot, access=Everyone())
 
     migrated = _registry(
@@ -220,5 +220,5 @@ def test_migration_must_advance_exactly_one_version() -> None:
     snapshot = _registry().capture(mount, "counter")
     registry = _registry(version=2, migrations={1: lambda current: replace(current, component_version=3)})
 
-    with pytest.raises(SnapshotError, match="must produce version 2"):
+    with pytest.raises(MountStateError, match="must produce version 2"):
         registry.restore(snapshot, access=Everyone())
