@@ -13,6 +13,7 @@ from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
 from squid_layouts.discord.delivery import DeliveryReceipt
 from squid_layouts.discord.durability import (
     ComponentRegistry,
+    DurabilityHealth,
     DurableSession,
     DurableSessionCodec,
     DurableSessionRuntime,
@@ -26,10 +27,18 @@ from squid_layouts.discord.durability import (
     SnapshotError,
     Unreachable,
 )
-from squid_layouts.discord.sessions import Opened, Rejected, RejectionReason, SessionPolicy, Unprotected
+from squid_layouts.discord.sessions import (
+    MembershipStatus,
+    Opened,
+    Rejected,
+    RejectionReason,
+    SessionPolicy,
+    Unprotected,
+)
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
 from squid_layouts.profiling import PresentationOutcome
+from squid_stores import StoredSessionRecord
 
 
 class Counter(sl.Component):
@@ -492,4 +501,205 @@ async def test_unreachable_record_is_retained_and_released() -> None:
         probe = await store.claim(record_id, "later-runtime", 1.0)
         assert probe is not None
         assert await store.release(probe)
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
+    store = MemorySnapshotStore()
+    key = SessionKey.guild("counter", 5)
+
+    async with anyio.create_task_group() as tasks:
+        first = runtime(store, FakeFrontend())
+        await tasks.start(first.run)
+        mount = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
+        opened = await first.open(
+            mount,
+            delivered_to(fake_message(message_id=99)),
+            recipe="counter",
+            key=key,
+            actor_id=7,
+            capacity=3,
+        )
+        assert isinstance(opened, Opened)
+
+        assert (await opened.session.join(8)).status is MembershipStatus.JOINED
+
+        # Checkpointed by the join itself, with no maintenance sweep in between.
+        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        assert record.members == frozenset({7, 8})
+        assert record.capacity == 3
+        assert record.protocol == 2
+        tasks.cancel_scope.cancel()
+
+    async with anyio.create_task_group() as tasks:
+        second = runtime(store, FakeFrontend())
+        report = await tasks.start(second.run)
+
+        assert len(report.restored) == 1
+        recovered = next(iter(second.sessions.active()))
+        assert recovered.members == frozenset({7, 8})
+        assert recovered.capacity == 3
+        assert recovered.remaining_capacity == 1
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_recovered_attachment_actor_is_attributed_but_not_a_member() -> None:
+    store = MemorySnapshotStore()
+    key = SessionKey.guild("counter", 5)
+
+    async with anyio.create_task_group() as tasks:
+        first = runtime(store, FakeFrontend())
+        await tasks.start(first.run)
+        mount = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
+        opened = await first.open(
+            mount, delivered_to(fake_message(message_id=99)), recipe="counter", key=key, actor_id=7
+        )
+        assert isinstance(opened, Opened)
+        child = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
+        await opened.session.attach(child, delivered_to(fake_message(message_id=100)), recipe="counter", actor_id=8)
+        tasks.cancel_scope.cancel()
+
+    async with anyio.create_task_group() as tasks:
+        second = runtime(store, FakeFrontend())
+        report = await tasks.start(second.run)
+
+        assert len(report.restored) == 1
+        recovered = next(iter(second.sessions.active()))
+        assert recovered.members == frozenset({7})
+        assert recovered.participants == frozenset({7, 8})
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_membership_checkpoint_that_loses_the_claim_finishes_without_deadlocking() -> None:
+    store = MemorySnapshotStore()
+    durable = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        _, opened = await open_counter(durable)
+        assert isinstance(opened, Opened)
+        # The claim is gone, so the checkpoint the join triggers loses it — and losing it
+        # finishes the session, which needs the lifecycle lock the join has released.
+        store.save = _fenced_out  # type: ignore[method-assign]
+
+        with anyio.fail_after(1):
+            result = await opened.session.join(8)
+
+        assert result.status is MembershipStatus.JOINED
+        assert opened.session.root.finished
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_failed_membership_checkpoint_leaves_the_session_dirty_and_usable() -> None:
+    store = MemorySnapshotStore()
+    durable = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        _, opened = await open_counter(durable)
+        assert isinstance(opened, Opened)
+        session = opened.session
+        assert isinstance(session, DurableSession)
+
+        broken = store.save
+        store.save = _raising  # type: ignore[method-assign]
+        try:
+            result = await session.join(8)
+        finally:
+            store.save = broken  # type: ignore[method-assign]
+
+        assert result.status is MembershipStatus.JOINED
+        assert session.members == frozenset({7, 8})
+        assert session.health is DurabilityHealth.CHECKPOINT_PENDING
+
+        await durable.flush()
+        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        assert record.members == frozenset({7, 8})
+        assert session.health is DurabilityHealth.HEALTHY
+        tasks.cancel_scope.cancel()
+
+
+async def _raising(*args: object, **kwargs: object) -> bool:
+    message = "store is unavailable"
+    raise RuntimeError(message)
+
+
+async def _fenced_out(*args: object, **kwargs: object) -> bool:
+    return False
+
+
+async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member() -> None:
+    store = MemorySnapshotStore()
+    key = SessionKey.guild("counter", 5)
+
+    async with anyio.create_task_group() as tasks:
+        first = runtime(store, FakeFrontend())
+        await tasks.start(first.run)
+        mount = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
+        opened = await first.open(
+            mount,
+            delivered_to(fake_message(message_id=99)),
+            recipe="counter",
+            key=key,
+            actor_id=7,
+            capacity=2,
+        )
+        assert isinstance(opened, Opened)
+        tasks.cancel_scope.cancel()
+
+    # Rewrite the stored pair as a record and summary from before membership existed.
+    stored = (await store.list_records())[0]
+    snapshot = json.loads(stored.snapshot_payload)
+    snapshot["protocol"] = 1
+    del snapshot["members"], snapshot["capacity"]
+    summary = json.loads(stored.summary_payload)
+    del summary["members"]
+    store._records[stored.key] = StoredSessionRecord(
+        stored.key, stored.scope, json.dumps(summary), json.dumps(snapshot)
+    )
+
+    record = DurableSessionCodec.loads(json.dumps(snapshot))
+    assert record.protocol == 1
+    assert record.members == frozenset({7})
+    assert record.capacity is None
+
+    async with anyio.create_task_group() as tasks:
+        second = runtime(store, FakeFrontend())
+        report = await tasks.start(second.run)
+
+        assert len(report.restored) == 1
+        recovered = next(iter(second.sessions.active()))
+        assert recovered.members == frozenset({7})
+        assert recovered.capacity is None
+
+        # Recovery requests a checkpoint, which rewrites the record at the current protocol.
+        await second.flush()
+        upgraded = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        assert upgraded.protocol == 2
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
+    store = MemorySnapshotStore()
+
+    async with anyio.create_task_group() as tasks:
+        first = runtime(store, FakeFrontend())
+        await tasks.start(first.run)
+        _, opened = await open_counter(first)
+        assert isinstance(opened, Opened)
+        tasks.cancel_scope.cancel()
+
+    stored = (await store.list_records())[0]
+    summary = json.loads(stored.summary_payload)
+    summary["members"] = [7, 8]
+    store._records[stored.key] = StoredSessionRecord(
+        stored.key, stored.scope, json.dumps(summary), stored.snapshot_payload
+    )
+
+    async with anyio.create_task_group() as tasks:
+        second = runtime(store, FakeFrontend())
+        report = await tasks.start(second.run)
+
+        assert len(report.incompatible) == 1
+        assert "does not match" in report.incompatible[0].reason
         tasks.cancel_scope.cancel()

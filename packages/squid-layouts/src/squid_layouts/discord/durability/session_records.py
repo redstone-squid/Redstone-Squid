@@ -40,12 +40,19 @@ class DurableSessionRecord:
     opened_at: float
     expires_at: float | None
     mounts: tuple[DurableMountState, ...]
+    members: frozenset[int] = frozenset()
+    capacity: int | None = None
 
 
 class DurableSessionCodec:
-    """Canonical JSON codec for durable session record protocol 1."""
+    """Canonical JSON codec for durable session records.
 
-    protocol = 1
+    Protocol 2 adds explicit membership. Protocol 1 records predate it and decode with an
+    unbounded capacity and the stored opener as their only member, which is what they meant.
+    """
+
+    protocol = 2
+    supported = (1, 2)
 
     @classmethod
     def dumps(cls, record: DurableSessionRecord) -> str:
@@ -57,6 +64,8 @@ class DurableSessionCodec:
             "actor_id": record.actor_id,
             "opened_at": record.opened_at,
             "expires_at": record.expires_at,
+            "members": sorted(record.members),
+            "capacity": record.capacity,
             "mounts": [
                 {
                     "id": mount.id,
@@ -82,7 +91,7 @@ class DurableSessionCodec:
             raise SnapshotError(str(error)) from error
         item = _object(raw, "durable session record")
         protocol = _integer(item, "protocol")
-        if protocol != cls.protocol:
+        if protocol not in cls.supported:
             message = f"unsupported durable session record protocol {protocol}"
             raise SnapshotError(message)
         raw_mounts = item.get("mounts")
@@ -127,6 +136,7 @@ class DurableSessionCodec:
         ):
             message = "session expires_at must be a number or null"
             raise SnapshotError(message)
+        legacy_members = () if actor_id is None else (actor_id,)
         record = DurableSessionRecord(
             protocol=protocol,
             id=_string(item, "id"),
@@ -135,15 +145,19 @@ class DurableSessionCodec:
             opened_at=opened_at,
             expires_at=None if expires_at is None else float(expires_at),
             mounts=tuple(mounts),
+            members=_member_ids(item.get("members", legacy_members)),
+            capacity=_capacity(item.get("capacity")),
         )
         cls._validate(record)
         return record
 
     @classmethod
     def _validate(cls, record: DurableSessionRecord) -> None:
-        if record.protocol != cls.protocol:
+        if record.protocol not in cls.supported:
             message = f"unsupported durable session record protocol {record.protocol}"
             raise SnapshotError(message)
+        _member_ids(sorted(record.members))
+        _capacity(record.capacity)
         if not record.id or not record.mounts:
             message = "durable sessions require a non-empty id and at least one mount"
             raise SnapshotError(message)
@@ -265,6 +279,24 @@ def _string(raw: dict[str, Any], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str):
         message = f"{key} must be a string"
+        raise SnapshotError(message)
+    return value
+
+
+def _member_ids(value: object) -> frozenset[int]:
+    if not isinstance(value, list | tuple) or not all(
+        isinstance(item, int) and not isinstance(item, bool) and item > 0 for item in value
+    ):
+        message = "durable session members must be an array of positive integers"
+        raise SnapshotError(message)
+    return frozenset(value)
+
+
+def _capacity(value: object) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        message = "durable session capacity must be a positive integer or null"
         raise SnapshotError(message)
     return value
 

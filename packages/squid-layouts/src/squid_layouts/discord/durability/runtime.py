@@ -19,6 +19,7 @@ from squid_layouts.discord.delivery import Abandoned, Delivered, Destination
 from squid_layouts.discord.mount import Mount
 from squid_layouts.discord.sessions import (
     DEFAULT_SESSION_POLICY,
+    MembershipResult,
     Opened,
     Rejected,
     RejectionReason,
@@ -134,6 +135,9 @@ class _ActiveSession:
     recipes: dict[Mount, str]
     locators: dict[Mount, MountLocator]
     health: DurabilityHealth = DurabilityHealth.HEALTHY
+    # Capture and save together, so a slower writer cannot land its older snapshot after a
+    # newer one. Membership makes this ordinary: joins are far more frequent than attaches.
+    writes: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 class _NotDurableOpen(Exception):
@@ -168,6 +172,34 @@ class DurableSession(Session):
         if runtime is None:
             return Rejected((self.summary,), RejectionReason.SESSION_FINISHED)
         return await runtime._attach(self, mount, destination, recipe=recipe, actor_id=actor_id, parent=parent)
+
+    async def join(
+        self,
+        user_id: int,
+        *,
+        when: Callable[[frozenset[int]], bool] | None = None,
+        expect: frozenset[int] | None = None,
+    ) -> MembershipResult:
+        """Admit `user_id` and checkpoint the new membership."""
+        return await self._durably(await super().join(user_id, when=when, expect=expect))
+
+    async def leave(self, user_id: int, *, expect: frozenset[int] | None = None) -> MembershipResult:
+        """Remove `user_id` and checkpoint the new membership."""
+        return await self._durably(await super().leave(user_id, expect=expect))
+
+    async def _durably(self, result: MembershipResult) -> MembershipResult:
+        """Persist a committed membership change, outside the session lifecycle lock.
+
+        Held inside it, a checkpoint that loses the claim would re-enter `finish` and
+        deadlock on the lock the operation still owns — so this follows `_attach`, which
+        mutates under the lock and persists after releasing it. A failed checkpoint leaves
+        the record dirty at `CHECKPOINT_PENDING` for the maintenance sweep to retry; a
+        caller needing read-your-write durability awaits `DurableSessionRuntime.flush`.
+        """
+        runtime = self._durable_runtime
+        if result.committed and runtime is not None:
+            await runtime._checkpoint_membership(self)
+        return result
 
 
 type DurableOpenResult = Opened[DurableSession] | Rejected | Abandoned | NotDurable
@@ -266,6 +298,7 @@ class DurableSessionRuntime:
         policy: SessionPolicy = DEFAULT_SESSION_POLICY,
         actor_id: int | None = None,
         expires_at: float | None = None,
+        capacity: int | None = None,
     ) -> DurableOpenResult:
         """Reserve, deliver, persist, and register one durable session atomically."""
         self._require_running()
@@ -313,6 +346,8 @@ class DurableSessionRuntime:
                             actor_id,
                         ),
                     ),
+                    members=newcomer.members,
+                    capacity=capacity,
                 )
                 # The newcomer's own summary, not the pre-session one built above: that one
                 # predates the Session and so carries no participants, and nothing forces a
@@ -351,6 +386,7 @@ class DurableSessionRuntime:
                     remote_occupants=remote,
                     before_registration=persist,
                     session_type=DurableSession,
+                    capacity=capacity,
                 )
             except _NotDurableOpen:
                 assert not_durable is not None
@@ -469,6 +505,8 @@ class DurableSessionRuntime:
                     summary=summary,
                     attachments=attachments,
                     session_type=DurableSession,
+                    members=record.members,
+                    capacity=record.capacity,
                 )
                 self._bind(
                     session,
@@ -498,6 +536,14 @@ class DurableSessionRuntime:
         if record_id is None or (active := self._active.get(record_id)) is None:
             return DurabilityHealth.CLAIM_LOST
         return active.health
+
+    async def _checkpoint_membership(self, session: DurableSession) -> None:
+        """Persist a membership change immediately rather than waiting for maintenance."""
+        record_id = self._by_session.get(session)
+        active = None if record_id is None else self._active.get(record_id)
+        if active is None:
+            return
+        await self._checkpoint(active)
 
     async def _attach(
         self,
@@ -596,12 +642,13 @@ class DurableSessionRuntime:
 
     async def _checkpoint(self, active: _ActiveSession) -> bool:
         try:
-            record = self._capture(active)
-            saved = await self.store.save(
-                active.token,
-                _dumps_summary(active.session.summary),
-                DurableSessionCodec.dumps(record),
-            )
+            async with active.writes:
+                record = self._capture(active)
+                saved = await self.store.save(
+                    active.token,
+                    _dumps_summary(active.session.summary),
+                    DurableSessionCodec.dumps(record),
+                )
             if not saved:
                 await self._lose_claim(active.token.key)
                 return False
@@ -633,6 +680,8 @@ class DurableSessionRuntime:
             session.opened_at.timestamp(),
             active.expires_at,
             mounts,
+            members=session.members,
+            capacity=session.capacity,
         )
 
     async def _finish_record(self, record_id: str) -> None:
@@ -781,7 +830,7 @@ async def _finish_mounts(mounts: Sequence[Mount]) -> None:
 
 
 def _validate_summary_record(summary: SessionSummary, record: DurableSessionRecord) -> None:
-    if summary.id != record.id or summary.key != record.key:
+    if summary.id != record.id or summary.key != record.key or summary.members != record.members:
         message = "stored session summary does not match its snapshot record"
         raise SnapshotError(message)
 
