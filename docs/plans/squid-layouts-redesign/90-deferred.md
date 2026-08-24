@@ -118,6 +118,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   package, and lands inside `sl.discord` rather than above it. The half it leaves alone is the half
   this entry and [65](../completed/squid-layouts-redesign/65-screen-entrypoints.md) both hold back —
   named audience policy, which stays in the host's `Visibility`/`Private` vocabulary.
+  70 landed on 2026-08-25 as `sl.discord.install`/`LayoutHost`; the policy half is still deferred.
 - **Context-manager render DSL** *(still rejected)* — (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** *(still rejected — the 3.10 backport; actual PyPI publication is a separate, still-unmade call, not a rejection)* — irrelevant to this repo (3.14 target).
