@@ -20,11 +20,11 @@ from squid_layouts.discord.durability import (
     MemorySnapshotStore,
     Missing,
     MountLocator,
+    MountStateError,
     NotDurable,
     Promoted,
     Reconnected,
     RecoveredBinding,
-    SnapshotError,
     Unreachable,
 )
 from squid_layouts.discord.sessions import (
@@ -256,7 +256,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
             while True:
                 stored = await store.load(opened.session.id)
                 assert stored is not None
-                snapshot = DurableSessionCodec.loads(stored.snapshot_payload).mounts[0].snapshot
+                snapshot = DurableSessionCodec.loads(stored.snapshot_payload).mounts[0].state
                 if snapshot.components[0].state.get("advanced") is True:
                     break
                 await anyio.sleep(0)
@@ -312,12 +312,12 @@ async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
         grandchild["id"] = "grandchild"
         grandchild["parent_id"] = raw["mounts"][1]["id"]
         raw["mounts"].insert(1, grandchild)
-        with pytest.raises(SnapshotError, match="parents must precede"):
+        with pytest.raises(MountStateError, match="parents must precede"):
             DurableSessionCodec.loads(json.dumps(raw))
 
         raw["mounts"].pop(1)
         raw["opened_at"] = float("nan")
-        with pytest.raises(SnapshotError, match="must be a number"):
+        with pytest.raises(MountStateError, match="must be a number"):
             DurableSessionCodec.loads(json.dumps(raw))
         tasks.cancel_scope.cancel()
 
