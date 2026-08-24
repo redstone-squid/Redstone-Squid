@@ -1,10 +1,17 @@
 """Commit-ledger history and version-conditional undo/redo."""
 
+import uuid
+from datetime import UTC, datetime
+
+import anyio
 import pytest
 
 from squid_layouts import Component, state
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import (
+    CompensationIntent,
+    CompensationRecordCodec,
+    CompensationRetryPolicy,
     CompensationSpec,
     CompensationStatus,
     ComponentRuntime,
@@ -13,6 +20,7 @@ from squid_layouts.runtime import (
     HistoryError,
     HistoryResultStatus,
     LocalTopicBus,
+    MemoryCompensationOutbox,
     Shared,
     UndoStrategy,
     history,
@@ -20,6 +28,8 @@ from squid_layouts.runtime import (
     transaction,
 )
 from squid_layouts.semantic import Action
+from squid_reactive import ActionLedger, add_action_outcome_sink
+from squid_reactive.operations import OperationContext
 
 
 class Workspace(Shared[str]):
@@ -344,3 +354,99 @@ async def test_external_success_then_local_conflict_needs_reconciliation_without
     assert retry.status is HistoryResultStatus.NEEDS_RECONCILIATION
     assert len(calls) == 1
     assert subject.page == 8
+
+
+async def test_compensation_intent_and_local_inverse_are_causal_actions() -> None:
+    subject, _ = panel()
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+
+    async def compensate(key: str) -> None:
+        pass
+
+    try:
+        with transaction():
+            subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "page"))
+            subject.page = 4
+        original = ledger.outcomes[-1]
+
+        result = await subject.history.undo()
+    finally:
+        ledger.close()
+
+    assert result.applied
+    descendants = [outcome for outcome in ledger.outcomes if outcome.root_action_id == original.root_action_id]
+    assert [outcome.kind for outcome in descendants] == ["action", "compensation", "compensation"]
+    assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
+
+
+async def test_compensation_cancellation_is_retained_and_propagated() -> None:
+    subject, _ = panel()
+    started = anyio.Event()
+
+    async def compensate(key: str) -> None:
+        started.set()
+        await anyio.sleep_forever()
+
+    with transaction():
+        subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "cancel"))
+        subject.page = 4
+
+    async def run() -> None:
+        await subject.history.undo()
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(run)
+        await started.wait()
+        tasks.cancel_scope.cancel()
+
+    execution = subject.history.entries[0].compensation_execution
+    assert execution is not None and execution.status is CompensationStatus.CANCELLED
+    assert subject.page == 4
+
+
+async def test_compensation_retry_policy_stops_new_external_attempts() -> None:
+    subject, _ = panel()
+    calls = 0
+
+    async def compensate(key: str) -> None:
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("unavailable")
+
+    with transaction():
+        subject.history.record(
+            "page",
+            compensate=CompensationSpec(
+                compensate,
+                lambda commit: "bounded",
+                CompensationRetryPolicy(max_attempts=1),
+            ),
+        )
+        subject.page = 4
+
+    assert (await subject.history.undo()).status is HistoryResultStatus.FAILED
+    assert (await subject.history.undo()).status is HistoryResultStatus.FAILED
+    assert calls == 1
+
+
+async def test_compensation_record_round_trips_and_recovers_after_restart() -> None:
+    outbox = MemoryCompensationOutbox()
+    root = uuid.uuid7()
+    context = OperationContext(uuid.uuid7(), None, root, "delete channel")
+    original = uuid.uuid7()
+    intent = CompensationIntent(context, original, "undo:channel", datetime.now(UTC))
+    first = await outbox.claim(intent, CompensationRetryPolicy(max_attempts=3))
+    assert first.dispatch and first.attempts == 1
+    await outbox.update(intent, CompensationStatus.FAILED)
+    codec = CompensationRecordCodec()
+
+    restored = MemoryCompensationOutbox(records=(codec.decode(codec.encode(outbox.records[0])),))
+    retry_context = OperationContext(uuid.uuid7(), context.causal_ref(), root, context.name)
+    retry_intent = CompensationIntent(retry_context, original, intent.idempotency_key, datetime.now(UTC))
+    retry = await restored.claim(retry_intent, CompensationRetryPolicy(max_attempts=3))
+
+    assert retry.dispatch and retry.attempts == 2
+    await restored.update(retry_intent, CompensationStatus.EXTERNAL_SUCCEEDED)
+    after_success = await restored.claim(retry_intent, CompensationRetryPolicy(max_attempts=3))
+    assert not after_success.dispatch

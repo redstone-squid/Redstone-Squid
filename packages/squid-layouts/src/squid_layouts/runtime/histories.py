@@ -1,9 +1,13 @@
 """Component-owned history derived from immutable committed action lineage."""
 
+import asyncio
+import json
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections import OrderedDict
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Protocol
 
@@ -25,7 +29,14 @@ from squid_layouts.runtime.reactivity import (
 )
 from squid_layouts.semantic import ActionGroup
 from squid_layouts.text import TextLike
-from squid_reactive.actions import ConflictDetail, ParticipantChange, current_action
+from squid_reactive.actions import (
+    CausalRef,
+    ConflictDetail,
+    ExceptionSummary,
+    ParticipantChange,
+    current_action,
+)
+from squid_reactive.operations import OperationContext
 
 
 class HistoryError(RuntimeError):
@@ -71,14 +82,29 @@ class CompensationSpec:
 
     operation: Callable[[str], Awaitable[None]]
     idempotency_key: Callable[[ActionCommit], str]
+    retry: CompensationRetryPolicy = field(default_factory=lambda: CompensationRetryPolicy())
+
+
+@dataclass(frozen=True, slots=True)
+class CompensationRetryPolicy:
+    """Explicit retry limit for separately requested compensation executions."""
+
+    max_attempts: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.max_attempts is not None and self.max_attempts < 1:
+            message = "compensation max_attempts must be positive or None"
+            raise ValueError(message)
 
 
 class CompensationStatus(Enum):
     """Truthful terminal and in-flight saga states."""
 
     REVERTING = "reverting"
+    EXTERNAL_SUCCEEDED = "external_succeeded"
     REVERTED = "reverted"
     FAILED = "failed"
+    CANCELLED = "cancelled"
     CONFLICT = "conflict"
     NEEDS_RECONCILIATION = "needs_reconciliation"
 
@@ -87,10 +113,163 @@ class CompensationStatus(Enum):
 class CompensationExecution:
     """One compensation attempt. Reaching a terminal status ends the execution."""
 
-    execution_id: uuid.UUID
+    context: OperationContext
     idempotency_key: str
     status: CompensationStatus = CompensationStatus.REVERTING
     error: Exception | None = None
+
+    @property
+    def execution_id(self) -> uuid.UUID:
+        return self.context.execution_id
+
+
+@dataclass(frozen=True, slots=True)
+class CompensationIntent:
+    """Portable intent for one causally identified compensation attempt."""
+
+    context: OperationContext
+    original_action_id: uuid.UUID
+    idempotency_key: str
+    started_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class CompensationRecord:
+    """Portable latest state of one idempotent compensation saga."""
+
+    intent: CompensationIntent
+    status: CompensationStatus
+    attempts: int
+    updated_at: datetime
+    error: ExceptionSummary | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CompensationClaim:
+    """An outbox decision to dispatch or skip an already completed external effect."""
+
+    dispatch: bool
+    attempts: int
+    status: CompensationStatus
+
+
+class CompensationOutbox(Protocol):
+    """Application-owned persistence and deduplication for compensation intents."""
+
+    async def claim(self, intent: CompensationIntent, retry: CompensationRetryPolicy) -> CompensationClaim: ...
+
+    async def update(
+        self,
+        intent: CompensationIntent,
+        status: CompensationStatus,
+        error: ExceptionSummary | None = None,
+    ) -> None: ...
+
+
+class MemoryCompensationOutbox:
+    """Bounded reference outbox; :meth:`restore` replaces it after a simulated restart."""
+
+    def __init__(self, *, limit: int = 100, records: Iterable[CompensationRecord] = ()) -> None:
+        if limit < 1:
+            message = "a compensation outbox needs room for at least one record"
+            raise ValueError(message)
+        self.limit = limit
+        self._records: OrderedDict[str, CompensationRecord] = OrderedDict()
+        for record in records:
+            self._put(record)
+
+    @property
+    def records(self) -> tuple[CompensationRecord, ...]:
+        return tuple(self._records.values())
+
+    async def claim(self, intent: CompensationIntent, retry: CompensationRetryPolicy) -> CompensationClaim:
+        existing = self._records.get(intent.idempotency_key)
+        if existing is not None and existing.status in {
+            CompensationStatus.EXTERNAL_SUCCEEDED,
+            CompensationStatus.REVERTED,
+            CompensationStatus.NEEDS_RECONCILIATION,
+        }:
+            return CompensationClaim(dispatch=False, attempts=existing.attempts, status=existing.status)
+        attempts = 1 if existing is None else existing.attempts + 1
+        if retry.max_attempts is not None and attempts > retry.max_attempts:
+            return CompensationClaim(
+                dispatch=False,
+                attempts=existing.attempts if existing is not None else 0,
+                status=CompensationStatus.FAILED,
+            )
+        self._put(CompensationRecord(intent, CompensationStatus.REVERTING, attempts, datetime.now(UTC)))
+        return CompensationClaim(dispatch=True, attempts=attempts, status=CompensationStatus.REVERTING)
+
+    async def update(
+        self,
+        intent: CompensationIntent,
+        status: CompensationStatus,
+        error: ExceptionSummary | None = None,
+    ) -> None:
+        existing = self._records.get(intent.idempotency_key)
+        attempts = 1 if existing is None else existing.attempts
+        self._put(CompensationRecord(intent, status, attempts, datetime.now(UTC), error))
+
+    def _put(self, record: CompensationRecord) -> None:
+        self._records.pop(record.intent.idempotency_key, None)
+        self._records[record.intent.idempotency_key] = record
+        while len(self._records) > self.limit:
+            self._records.popitem(last=False)
+
+
+class CompensationRecordCodec:
+    """JSON schema 1 codec for application-owned durable compensation records."""
+
+    schema_version = 1
+
+    def encode(self, record: CompensationRecord) -> bytes:
+        context = record.intent.context
+        payload = {
+            "schema": self.schema_version,
+            "execution_id": str(context.execution_id),
+            "cause": None
+            if context.cause is None
+            else {"kind": context.cause.kind, "identity": context.cause.identity},
+            "root_action_id": None if context.root_action_id is None else str(context.root_action_id),
+            "name": context.name,
+            "original_action_id": str(record.intent.original_action_id),
+            "idempotency_key": record.intent.idempotency_key,
+            "started_at": record.intent.started_at.isoformat(),
+            "status": record.status.value,
+            "attempts": record.attempts,
+            "updated_at": record.updated_at.isoformat(),
+            "error": None
+            if record.error is None
+            else {"type_name": record.error.type_name, "message": record.error.message},
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+
+    def decode(self, data: bytes) -> CompensationRecord:
+        payload = json.loads(data)
+        if payload.get("schema") != self.schema_version:
+            message = f"unsupported compensation record schema {payload.get('schema')!r}"
+            raise ValueError(message)
+        cause = payload["cause"]
+        context = OperationContext(
+            uuid.UUID(payload["execution_id"]),
+            None if cause is None else CausalRef(cause["kind"], cause["identity"]),
+            None if payload["root_action_id"] is None else uuid.UUID(payload["root_action_id"]),
+            payload["name"],
+        )
+        intent = CompensationIntent(
+            context,
+            uuid.UUID(payload["original_action_id"]),
+            payload["idempotency_key"],
+            datetime.fromisoformat(payload["started_at"]),
+        )
+        error = payload["error"]
+        return CompensationRecord(
+            intent,
+            CompensationStatus(payload["status"]),
+            payload["attempts"],
+            datetime.fromisoformat(payload["updated_at"]),
+            None if error is None else ExceptionSummary(error["type_name"], error["message"]),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +346,13 @@ class HistorySnapshot:
 class History:
     """One component's bounded commit-derived undo stack."""
 
-    def __init__(self, owner: HistoryOwner, *, limit: int = 20) -> None:
+    def __init__(
+        self,
+        owner: HistoryOwner,
+        *,
+        limit: int = 20,
+        compensation_outbox: CompensationOutbox | None = None,
+    ) -> None:
         if limit < 1:
             message = "a history needs room for at least one entry"
             raise ValueError(message)
@@ -175,7 +360,7 @@ class History:
         self.limit = limit
         self._undone: list[HistoryEntry] = []
         self._redoable: list[HistoryEntry] = []
-        self._completed_compensations: set[str] = set()
+        self._compensation_outbox = compensation_outbox or MemoryCompensationOutbox(limit=limit)
 
     @property
     def can_undo(self) -> bool:
@@ -243,10 +428,16 @@ class History:
             return await self._compensate(entry)
         return self._undo_state(entry)
 
-    def _undo_state(self, entry: HistoryEntry, *, retain_redo: bool = True) -> UndoResult:
+    def _undo_state(
+        self,
+        entry: HistoryEntry,
+        *,
+        retain_redo: bool = True,
+        action_context: ActionContext | None = None,
+    ) -> UndoResult:
         entry.state = HistoryEntryState.REVERSING
         cause = current_action()
-        context = ActionContext.create(
+        context = action_context or ActionContext.create(
             f"Undo {entry.label}",
             kind=ActionKind.UNDO,
             cause=None if cause is None else cause.causal_ref(),
@@ -299,26 +490,73 @@ class History:
     async def _compensate(self, entry: HistoryEntry) -> UndoResult:
         assert entry.compensation is not None and entry.original_commit is not None
         key = entry.compensation.idempotency_key(entry.original_commit)
-        execution = CompensationExecution(uuid.uuid7(), key)
+        original = entry.original_commit.context
+        operation_context = OperationContext(
+            uuid.uuid7(),
+            original.causal_ref(),
+            original.root_action_id,
+            f"Compensate {entry.label}",
+        )
+        execution = CompensationExecution(operation_context, key)
+        intent = CompensationIntent(operation_context, original.action_id, key, datetime.now(UTC))
         entry.compensation_execution = execution
         entry.state = HistoryEntryState.REVERSING
         self._owner.invalidate()
-        if key not in self._completed_compensations:
+        intent_context = ActionContext.create(
+            f"Begin compensation for {entry.label}",
+            kind=ActionKind.COMPENSATION,
+            cause=operation_context.causal_ref(),
+            root_action_id=original.root_action_id,
+            compensates_action_id=original.action_id,
+        )
+        with fresh_action_transaction(action_context=intent_context):
+            pass
+        claim = await self._compensation_outbox.claim(intent, entry.compensation.retry)
+        if not claim.dispatch and claim.status is CompensationStatus.FAILED:
+            error = RuntimeError("compensation retry limit exhausted")
+            execution.status = CompensationStatus.FAILED
+            execution.error = error
+            entry.state = HistoryEntryState.FAILED
+            result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
+            entry.last_result = result
+            self._owner.invalidate()
+            return result
+        if claim.dispatch:
             try:
                 await entry.compensation.operation(key)
+            except asyncio.CancelledError as error:
+                execution.status = CompensationStatus.CANCELLED
+                entry.state = HistoryEntryState.FAILED
+                await self._compensation_outbox.update(
+                    intent, CompensationStatus.CANCELLED, ExceptionSummary.capture(error)
+                )
+                self._owner.invalidate()
+                raise
             except Exception as error:
                 execution.status = CompensationStatus.FAILED
                 execution.error = error
                 entry.state = HistoryEntryState.FAILED
+                await self._compensation_outbox.update(
+                    intent, CompensationStatus.FAILED, ExceptionSummary.capture(error)
+                )
                 result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
                 entry.last_result = result
                 self._owner.invalidate()
                 return result
-            self._completed_compensations.add(key)
-        result = self._undo_state(entry, retain_redo=False)
+            execution.status = CompensationStatus.EXTERNAL_SUCCEEDED
+            await self._compensation_outbox.update(intent, CompensationStatus.EXTERNAL_SUCCEEDED)
+        compensation_context = ActionContext.create(
+            f"Apply compensation for {entry.label}",
+            kind=ActionKind.COMPENSATION,
+            cause=operation_context.causal_ref(),
+            root_action_id=original.root_action_id,
+            compensates_action_id=original.action_id,
+        )
+        result = self._undo_state(entry, retain_redo=False, action_context=compensation_context)
         if result.status is HistoryResultStatus.CONFLICT:
             execution.status = CompensationStatus.NEEDS_RECONCILIATION
             entry.state = HistoryEntryState.NEEDS_RECONCILIATION
+            await self._compensation_outbox.update(intent, CompensationStatus.NEEDS_RECONCILIATION)
             result = HistoryResult(
                 HistoryResultStatus.NEEDS_RECONCILIATION,
                 entry,
@@ -329,6 +567,7 @@ class History:
             entry.last_result = result
         else:
             execution.status = CompensationStatus.REVERTED
+            await self._compensation_outbox.update(intent, CompensationStatus.REVERTED)
         self._owner.invalidate()
         return result
 
@@ -416,8 +655,9 @@ class History:
 
 
 class _HistoryField:
-    def __init__(self, limit: int) -> None:
+    def __init__(self, limit: int, compensation_outbox: CompensationOutbox | None) -> None:
         self._limit = limit
+        self._compensation_outbox = compensation_outbox
         self._slot = ""
 
     def __set_name__(self, owner: type, name: str) -> None:
@@ -428,14 +668,14 @@ class _HistoryField:
             return self  # type: ignore[bad-return]
         stack = instance.__dict__.get(self._slot)  # type: ignore[missing-attribute]
         if stack is None:
-            stack = History(instance, limit=self._limit)
+            stack = History(instance, limit=self._limit, compensation_outbox=self._compensation_outbox)
             instance.__dict__[self._slot] = stack  # type: ignore[missing-attribute]
         return stack
 
 
-def history(*, limit: int = 20) -> History:
+def history(*, limit: int = 20, compensation_outbox: CompensationOutbox | None = None) -> History:
     """Declare an undo stack whose owner lifetime ends the retained inverse plans."""
-    return _HistoryField(limit)  # type: ignore[bad-return]
+    return _HistoryField(limit, compensation_outbox)  # type: ignore[bad-return]
 
 
 def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DEFAULT_CHROME) -> ActionGroup:
@@ -474,7 +714,13 @@ def _entry_snapshot(entry: HistoryEntry) -> HistoryEntrySnapshot:
 
 
 __all__ = [
+    "CompensationClaim",
     "CompensationExecution",
+    "CompensationIntent",
+    "CompensationOutbox",
+    "CompensationRecord",
+    "CompensationRecordCodec",
+    "CompensationRetryPolicy",
     "CompensationSpec",
     "CompensationStatus",
     "History",
@@ -486,6 +732,7 @@ __all__ = [
     "HistoryResult",
     "HistoryResultStatus",
     "HistorySnapshot",
+    "MemoryCompensationOutbox",
     "RedoResult",
     "UndoPlan",
     "UndoResult",
