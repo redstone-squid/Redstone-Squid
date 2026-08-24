@@ -239,7 +239,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
-    assert {"Shared", "SharedPool", "SharedFactory", "SharedStateConflictError", "state", "addresses"} <= set(
+    assert {"Shared", "SharedPool", "SharedFactory", "ReactiveConflictError", "state", "addresses"} <= set(
         sl.runtime.__all__
     )
     for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
