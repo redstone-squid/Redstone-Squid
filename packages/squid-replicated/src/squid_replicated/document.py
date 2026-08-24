@@ -116,6 +116,8 @@ class ReplicatedChangeToken:
                 inverse.append(
                     document.engine.operation("remove", operation.path, operation.value, (operation.identity,))
                 )
+            elif operation.kind == "remove":
+                inverse.append(document.engine.operation("add", operation.path, operation.value))
             else:
                 return ConflictDetail(f"replicated:{operation.path}", 0, 0)
         return PreparedReplicatedInverse(tuple(inverse), self.token_epoch)
