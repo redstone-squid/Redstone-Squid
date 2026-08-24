@@ -579,8 +579,14 @@ def emit_outcome(outcome: ActionOutcome) -> None:
                 snapshot = ActionOutcomeSnapshot.from_outcome(outcome, registration.policy)
                 snapshots[registration.policy] = snapshot
             sink.accept(snapshot)
-        except Exception:
+        except Exception as error:
             _log.exception("an action outcome sink failed")
+            emit_aftermath_failure(
+                outcome,
+                "outcome_sink",
+                type(sink).__qualname__,
+                error,
+            )
     _sinks[:] = live
 
 
