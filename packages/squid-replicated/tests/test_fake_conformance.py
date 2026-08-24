@@ -444,3 +444,26 @@ async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> Non
     assert model.selected is False
     assert local.counter("votes").value == 3
     assert local.set("tags").value == frozenset({"theirs"})
+
+
+async def test_replicated_redo_and_second_undo_follow_fresh_semantic_tokens() -> None:
+    local = ReplicatedScope("a").open("project")
+    remote = ReplicatedScope("b").open("project")
+    history = History(HistoryOwner())
+    with transaction():
+        history.record("vote and tag")
+        local.counter("votes").increment(2)
+        local.set("tags").add("mine")
+    remote.import_update(local.export_since())
+    with transaction():
+        remote.counter("votes").increment(3)
+        remote.set("tags").add("theirs")
+    local.import_update(remote.export_since())
+
+    undone = await history.undo()
+    redone = await history.redo()
+    undone_again = await history.undo()
+
+    assert undone.applied and redone.applied and undone_again.applied
+    assert local.counter("votes").value == 3
+    assert local.set("tags").value == frozenset({"theirs"})
