@@ -485,9 +485,21 @@ wrote carries the value it read as a commit precondition, so a lost update raise
 no `compare_and_set` to remember. `sl.runtime.history` covers shared writes in the same entry as local
 ones and restores them blindly.
 
-There is no store: two panels converge because something gave them the same object, so the
-handle is the state and its lifetime is whoever holds it. Keep domain truth in your data layer;
-a namespace is for what only the screen wants.
+There is no global store and no lookup by type: two panels converge because something gave them
+the same object, so the handle is the state and its lifetime is whoever holds it. When what a host
+holds is one handle per scope, `sl.runtime.SharedPool` is that lifetime written down instead of a
+`setdefault` cache around every namespace:
+
+```python
+workspaces = sl.runtime.SharedPool(Workspace, bus)
+workspace = workspaces.get(guild.id)
+```
+
+`get` is get-or-create and synchronous; `get_existing`, `drop`, `clear` and `active` are the rest of
+it. Put the pool where the lifetime is — on the bot for the process, on a cog for the extension, on
+a session for that session. `squid_stores.PersistedPool` is the hydrating variant, `await load(scope)`
+for a namespace that should survive a restart. Keep domain truth in your data layer; a namespace is
+for what only the screen wants.
 
 ### Computed values
 
