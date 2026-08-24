@@ -521,9 +521,9 @@ def action(
     control is offered at all. A cooldown wants both.
 
     ``record`` opens the entry for this press, under ``label``, before the handler runs: an
-    action whose whole delta is component state needs no `History.record` of its own. One
-    that touched the world still calls it, for the ``undo=`` only the handler can write --
-    and doing so under ``record=`` raises `HistoryError` rather than making two entries.
+    action whose whole commit is transactional state needs no `History.record` of its own.
+    A world-changing action records one explicit `CompensationSpec`; doing so under
+    ``record=`` raises `HistoryError` rather than making two entries.
     """
     if record is not None and policy is ActionPolicy.PARALLEL_READ:
         message = "a parallel-read action changes nothing, so it has nothing to record"
