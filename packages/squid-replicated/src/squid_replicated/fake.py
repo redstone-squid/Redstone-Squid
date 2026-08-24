@@ -166,6 +166,10 @@ class FakeEngine:
         )
         return self._encode_envelope("update", operations)
 
+    def encode_update(self, operations: tuple[FakeOperation, ...]) -> bytes:
+        """Encode exactly one committed participant change for outbound transport."""
+        return self._encode_envelope("update", operations)
+
     def _decode_envelope(self, data: bytes, *, kind: str) -> tuple[FakeOperation, ...]:
         if len(data) > _MAX_UPDATE_BYTES:
             message = "replicated update exceeds the maximum encoded size"
