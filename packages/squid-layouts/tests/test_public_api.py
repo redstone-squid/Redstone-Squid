@@ -160,6 +160,8 @@ RENAMED_SUBMODULES = (
 )
 
 SPECIALIST_SAMPLES = {
+    "Agreement": sl.patterns,
+    "AgreementParticipant": sl.patterns,
     "Wizard": sl.patterns,
     "WizardState": sl.patterns,
     "FormSpec": sl.forms,
