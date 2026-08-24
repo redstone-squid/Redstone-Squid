@@ -228,7 +228,7 @@ class ActionOutcomeSnapshot:
         policy = DEFAULT_REDACTION if policy is None else policy
         context = outcome.context
         common = (
-            context.actor,
+            context.actor if policy.include_actor else None,
             tuple(sorted(context.metadata.items())) if policy.include_metadata else (),
             None if context.reverses_action_id is None else str(context.reverses_action_id),
             None if context.reapplies_action_id is None else str(context.reapplies_action_id),
@@ -272,6 +272,7 @@ class ActionOutcomeSnapshot:
 class RedactionPolicy:
     """Explicit portable-outcome policy for metadata and exception messages."""
 
+    include_actor: bool = True
     include_metadata: bool = False
     include_exception_messages: bool = False
 
@@ -332,6 +333,7 @@ class ActionOutcomeCodec:
     """Schema-versioned count-only JSON codec for portable outcome snapshots."""
 
     schema_version = 1
+    max_encoded_bytes = 1_048_576
 
     def encode(self, outcome: ActionOutcomeSnapshot) -> bytes:
         payload = {
@@ -374,7 +376,25 @@ class ActionOutcomeCodec:
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
     def decode(self, data: bytes) -> ActionOutcomeSnapshot:
+        if len(data) > self.max_encoded_bytes:
+            message = "action outcome exceeds the maximum encoded size"
+            raise ValueError(message)
+        try:
+            return self._decode(data)
+        except (KeyError, TypeError, AttributeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            message = "action outcome has a corrupt schema"
+            raise ValueError(message) from error
+        except ValueError as error:
+            if str(error).startswith("unsupported action outcome schema"):
+                raise
+            message = "action outcome has a corrupt schema"
+            raise ValueError(message) from error
+
+    def _decode(self, data: bytes) -> ActionOutcomeSnapshot:
         payload = json.loads(data)
+        if not isinstance(payload, dict):
+            message = "action outcome has a corrupt schema"
+            raise TypeError(message)
         if payload.get("schema") != self.schema_version:
             message = f"unsupported action outcome schema {payload.get('schema')!r}"
             raise ValueError(message)
@@ -414,6 +434,42 @@ class ActionOutcomeSink(Protocol):
     def accept(self, outcome: CausalEventSnapshot) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class DurableOutcomePolicy:
+    """The privacy, storage, and retention declaration for an encoded outcome sink."""
+
+    redaction: RedactionPolicy = DEFAULT_REDACTION
+    value_serialization: str = "summaries-only"
+    actor_privacy: str = "application-controlled"
+    encryption: str = "host-responsibility"
+    retention: str = "host-defined"
+
+
+class DurableOutcomeSink:
+    """Encode committed/rolled-back outcomes for a host store. Calling :meth:`close` unregisters it."""
+
+    def __init__(
+        self,
+        append: Callable[[bytes], None],
+        *,
+        policy: DurableOutcomePolicy | None = None,
+        codec: ActionOutcomeCodec | None = None,
+    ) -> None:
+        self.append = append
+        self.policy = DurableOutcomePolicy() if policy is None else policy
+        self.codec = codec or ActionOutcomeCodec()
+        self.closed = False
+        add_action_outcome_sink(self, policy=self.policy.redaction)
+
+    def accept(self, outcome: CausalEventSnapshot) -> None:
+        if isinstance(outcome, ActionOutcomeSnapshot):
+            self.append(self.codec.encode(outcome))
+
+    def close(self) -> None:
+        self.closed = True
+        remove_action_outcome_sink(self)
+
+
 class ActionLedger:
     """A bounded diagnostic ledger. Calling :meth:`close` ends its sink registration."""
 
@@ -440,7 +496,15 @@ class ActionLedger:
 
 _RUNTIME_ID = uuid.uuid4()
 _sequence = 0
-_sinks: list[weakref.ReferenceType[ActionOutcomeSink]] = []
+
+
+@dataclass(frozen=True, slots=True)
+class _SinkRegistration:
+    reference: weakref.ReferenceType[ActionOutcomeSink]
+    policy: RedactionPolicy
+
+
+_sinks: list[_SinkRegistration] = []
 _CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactive_action", default=None)
 _CURRENT_CAUSALITY: ContextVar[tuple[CausalRef, ActionId | None] | None] = ContextVar(
     "squid_reactive_causality", default=None
@@ -486,32 +550,48 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
         _CURRENT_CAUSALITY.reset(token)
 
 
-def add_action_outcome_sink(sink: ActionOutcomeSink) -> None:
-    if not any(reference() is sink for reference in _sinks):
-        _sinks.append(weakref.ref(sink))
+def add_action_outcome_sink(sink: ActionOutcomeSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
+    if not any(registration.reference() is sink for registration in _sinks):
+        _sinks.append(_SinkRegistration(weakref.ref(sink), policy))
 
 
 def remove_action_outcome_sink(sink: ActionOutcomeSink) -> None:
     _sinks[:] = [
-        reference for reference in _sinks if (registered := reference()) is not None and registered is not sink
+        registration
+        for registration in _sinks
+        if (registered := registration.reference()) is not None and registered is not sink
     ]
 
 
 def emit_outcome(outcome: ActionOutcome) -> None:
     if not _sinks:
         return
-    snapshot = ActionOutcomeSnapshot.from_outcome(outcome)
-    emit_causal_event(snapshot)
+    live: list[_SinkRegistration] = []
+    snapshots: dict[RedactionPolicy, ActionOutcomeSnapshot] = {}
+    for registration in _sinks:
+        sink = registration.reference()
+        if sink is None:
+            continue
+        live.append(registration)
+        try:
+            snapshot = snapshots.get(registration.policy)
+            if snapshot is None:
+                snapshot = ActionOutcomeSnapshot.from_outcome(outcome, registration.policy)
+                snapshots[registration.policy] = snapshot
+            sink.accept(snapshot)
+        except Exception:
+            _log.exception("an action outcome sink failed")
+    _sinks[:] = live
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
     """Fan out one bounded diagnostic node without allowing a sink to veto runtime work."""
-    live: list[weakref.ReferenceType[ActionOutcomeSink]] = []
-    for reference in _sinks:
-        sink = reference()
+    live: list[_SinkRegistration] = []
+    for registration in _sinks:
+        sink = registration.reference()
         if sink is None:
             continue
-        live.append(reference)
+        live.append(registration)
         try:
             sink.accept(snapshot)
         except Exception:

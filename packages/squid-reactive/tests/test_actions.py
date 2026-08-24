@@ -19,6 +19,8 @@ from squid_reactive import (
     ActionRollback,
     ActorRef,
     AftermathFailureSnapshot,
+    DurableOutcomePolicy,
+    DurableOutcomeSink,
     LocalTopicBus,
     Reactive,
     ReactiveConflictError,
@@ -327,6 +329,10 @@ def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
     assert codec.decode(codec.encode(ledger.outcomes[0])) == ledger.outcomes[0]
     with pytest.raises(ValueError, match="unsupported"):
         codec.decode(b'{"schema":2}')
+    with pytest.raises(ValueError, match="corrupt"):
+        codec.decode(b"not-json")
+    with pytest.raises(ValueError, match="maximum encoded size"):
+        codec.decode(b" " * 1_048_577)
 
 
 def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -> None:
@@ -354,3 +360,50 @@ def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -
     )
     assert dict(opted_in.metadata) == {"tenant": "safe", "token": "secret"}
     assert opted_in.exception is not None and opted_in.exception.message == "private failure message"
+
+
+def test_each_outcome_sink_receives_its_declared_redaction_projection() -> None:
+    default = ActionLedger()
+    privileged = ActionLedger()
+    add_action_outcome_sink(default)
+    add_action_outcome_sink(
+        privileged,
+        policy=RedactionPolicy(include_actor=False, include_metadata=True, include_exception_messages=True),
+    )
+    context = ActionContext.create("sensitive", actor=ActorRef("user", "42"), metadata={"tenant": "safe"})
+    try:
+        with pytest.raises(RuntimeError), transaction(action_context=context):
+            raise RuntimeError("failure detail")
+    finally:
+        default.close()
+        privileged.close()
+
+    assert default.outcomes[0].actor == ActorRef("user", "42")
+    assert default.outcomes[0].metadata == ()
+    assert default.outcomes[0].exception is not None
+    assert default.outcomes[0].exception.message == "[redacted]"
+    assert privileged.outcomes[0].actor is None
+    assert dict(privileged.outcomes[0].metadata) == {"tenant": "safe"}
+    assert privileged.outcomes[0].exception is not None
+    assert privileged.outcomes[0].exception.message == "failure detail"
+
+
+def test_durable_sink_encodes_outcomes_and_declares_host_policy() -> None:
+    encoded: list[bytes] = []
+    policy = DurableOutcomePolicy(
+        redaction=RedactionPolicy(include_actor=False),
+        actor_privacy="omitted",
+        encryption="AES-256 at rest",
+        retention="30 days",
+    )
+    sink = DurableOutcomeSink(encoded.append, policy=policy)
+    try:
+        with transaction(action_context=ActionContext.create(actor=ActorRef("user", "42"))):
+            pass
+    finally:
+        sink.close()
+
+    snapshot = sink.codec.decode(encoded[0])
+    assert snapshot.actor is None
+    assert sink.policy.retention == "30 days"
+    assert sink.policy.value_serialization == "summaries-only"
