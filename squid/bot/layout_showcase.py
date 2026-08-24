@@ -809,6 +809,7 @@ _JOIN_NOTICES = {
     sl.discord.sessions.MembershipStatus.JOINED: L(t"You are in."),
     sl.discord.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
     sl.discord.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
+    sl.discord.sessions.MembershipStatus.QUOTA_REACHED: L(t"You are already in a lobby on another server."),
     sl.discord.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
     sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
     sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
@@ -892,6 +893,9 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             key=SessionKey.guild("showcase-lobby", ctx.guild.id),
             actor_id=ctx.author.id,
             capacity=4,
+            # The dual of `capacity`: four players per lobby, and one lobby per player, so a
+            # reader cannot hold a seat in two servers at once.
+            quota=1,
         )
 
 
