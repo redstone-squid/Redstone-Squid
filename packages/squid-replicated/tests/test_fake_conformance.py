@@ -1,9 +1,10 @@
 """Replicated SPI conformance against the deterministic fake backend."""
 
 import contextvars
+import json
 
 import pytest
-from squid_replicated import ReplicatedClosedError, ReplicatedScope
+from squid_replicated import ReplicatedChangeToken, ReplicatedClosedError, ReplicatedScope
 
 from squid_layouts.runtime import History
 from squid_reactive import ActionCommit, Reactive, ReactiveConflictError, on_action_commit, state, transaction
@@ -79,6 +80,22 @@ def test_duplicate_and_reordered_delivery_converges() -> None:
     assert first.set("tags").value == frozenset({"red", "blue"})
 
 
+def test_three_replicas_converge_for_every_delivery_order() -> None:
+    replicas = [ReplicatedScope(name).open("project") for name in ("a", "b", "c")]
+    for index, replica in enumerate(replicas, start=1):
+        with transaction():
+            replica.counter("votes").increment(index)
+            replica.set("tags").add(f"tag-{index}")
+    updates = [replica.export_since() for replica in replicas]
+
+    for replica, order in zip(replicas, ((2, 1, 0), (0, 2, 1), (1, 0, 2)), strict=True):
+        for index in order:
+            replica.import_update(updates[index])
+
+    assert len({replica.snapshot() for replica in replicas}) == 1
+    assert replicas[0].counter("votes").value == 6
+
+
 def test_remote_import_invalidates_and_has_remote_action_outcome() -> None:
     source = ReplicatedScope("a").open("project")
     target = ReplicatedScope("b").open("project")
@@ -132,6 +149,49 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
 
     assert local.counter("votes").value == 3
     assert local.set("tags").value == frozenset({"theirs"})
+
+
+def test_action_token_reloads_against_a_recreated_document() -> None:
+    source = ReplicatedScope("a").open("project")
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        source.counter("votes").increment(2)
+    token = commits[0].participant_changes[0].token
+    encoded = token.encode()
+    update = source.export_since()
+
+    restored = ReplicatedScope("restored").open("project")
+    restored.import_update(update)
+    reloaded = ReplicatedChangeToken.decode(restored, encoded)
+    inverse = reloaded.plan_inverse()
+    assert not hasattr(inverse, "target_id")
+    with transaction():
+        reloaded.stage_inverse(inverse)
+
+    assert restored.counter("votes").value == 0
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"not-json",
+        json.dumps({"backend": "wrong", "schema": 1, "kind": "update", "operations": []}).encode(),
+        json.dumps({"backend": "squid-fake-v1", "schema": 2, "kind": "update", "operations": []}).encode(),
+    ],
+)
+def test_corrupted_wrong_backend_and_wrong_schema_updates_are_rejected(payload: bytes) -> None:
+    document = ReplicatedScope("a").open("project")
+
+    with pytest.raises(ValueError):
+        document.import_update(payload)
+
+
+def test_oversized_updates_are_rejected_before_decoding() -> None:
+    document = ReplicatedScope("a").open("project")
+
+    with pytest.raises(ValueError, match="maximum encoded size"):
+        document.import_update(b" " * 1_048_577)
 
 
 def test_scope_disposal_prevents_late_import_and_mutation() -> None:

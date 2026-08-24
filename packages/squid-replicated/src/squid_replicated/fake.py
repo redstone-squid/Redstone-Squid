@@ -2,6 +2,10 @@
 
 import json
 from dataclasses import dataclass
+from typing import Any
+
+_MAX_UPDATE_BYTES = 1_048_576
+_MAX_OPERATIONS = 10_000
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -144,28 +148,75 @@ class FakeEngine:
         return FakeChange(prepared.operations)
 
     def prepare_remote(self, update: bytes) -> PreparedFakeUpdate:
-        payload = json.loads(update)
-        if payload.get("backend") != self.backend_id or payload.get("schema") != 1:
-            message = "replicated update has the wrong backend or schema"
-            raise ValueError(message)
-        operations = tuple(
-            FakeOperation(
-                OperationId.decode(item["id"]),
-                item["kind"],
-                item["path"],
-                item["value"],
-                tuple(OperationId.decode(tag) for tag in item.get("tags", ())),
-            )
-            for item in payload["operations"]
-        )
+        operations = self._decode_envelope(update, kind="update")
         return PreparedFakeUpdate(None, operations)
+
+    def encode_token(self, operations: tuple[FakeOperation, ...]) -> bytes:
+        """Encode one action's opaque change token for durable history tests."""
+        return self._encode_envelope("history-token", operations)
+
+    def decode_token(self, token: bytes) -> tuple[FakeOperation, ...]:
+        """Decode a schema-checked action token without applying it."""
+        return self._decode_envelope(token, kind="history-token")
 
     def export_since(self, version: object | None = None) -> bytes:
         known = version.operations if isinstance(version, FakeVersion) else frozenset()
-        operations = [operation for identity, operation in sorted(self._operations.items()) if identity not in known]
+        operations = tuple(
+            operation for identity, operation in sorted(self._operations.items()) if identity not in known
+        )
+        return self._encode_envelope("update", operations)
+
+    def _decode_envelope(self, data: bytes, *, kind: str) -> tuple[FakeOperation, ...]:
+        if len(data) > _MAX_UPDATE_BYTES:
+            message = "replicated update exceeds the maximum encoded size"
+            raise ValueError(message)
+        payload: Any = json.loads(data)
+        if not isinstance(payload, dict):
+            message = "replicated update must be an object"
+            raise TypeError(message)
+        if payload.get("backend") != self.backend_id or payload.get("schema") != 1 or payload.get("kind") != kind:
+            message = "replicated update has the wrong backend or schema"
+            raise ValueError(message)
+        encoded = payload.get("operations")
+        if not isinstance(encoded, list) or len(encoded) > _MAX_OPERATIONS:
+            message = "replicated update has an invalid operation collection"
+            raise ValueError(message)
+        operations: list[FakeOperation] = []
+        identities: dict[OperationId, FakeOperation] = {}
+        for item in encoded:
+            if not isinstance(item, dict):
+                message = "replicated operation must be an object"
+                raise TypeError(message)
+            operation = self._decode_operation(item)
+            existing = identities.get(operation.identity) or self._operations.get(operation.identity)
+            if existing is not None and existing != operation:
+                message = f"replicated operation identity {operation.identity.encode()!r} was reused"
+                raise ValueError(message)
+            identities[operation.identity] = operation
+            operations.append(operation)
+        return tuple(operations)
+
+    def _decode_operation(self, item: dict[str, Any]) -> FakeOperation:
+        identity = OperationId.decode(item["id"])
+        kind = item["kind"]
+        path = item["path"]
+        value = item["value"]
+        tags = item.get("tags", ())
+        if kind not in {"increment", "add", "remove"} or not isinstance(path, str) or not isinstance(tags, list):
+            message = "replicated operation has invalid fields"
+            raise ValueError(message)
+        if (kind == "increment" and not isinstance(value, int)) or (
+            kind in {"add", "remove"} and not isinstance(value, str)
+        ):
+            message = "replicated operation value does not match its kind"
+            raise ValueError(message)
+        return FakeOperation(identity, kind, path, value, tuple(OperationId.decode(tag) for tag in tags))
+
+    def _encode_envelope(self, kind: str, operations: tuple[FakeOperation, ...]) -> bytes:
         payload = {
             "backend": self.backend_id,
             "schema": 1,
+            "kind": kind,
             "operations": [
                 {
                     "id": operation.identity.encode(),
