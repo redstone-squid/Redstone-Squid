@@ -35,6 +35,7 @@ from squid_reactive import (
     on_action_rollback,
     readonly_transaction,
     relaxed_read,
+    remove_action_outcome_sink,
     state,
     transaction,
 )
@@ -227,6 +228,44 @@ def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
     assert failure.cause.identity == ledger.outcomes[0].action_id
     assert failure.exception.type_name == "RuntimeError"
     assert failure.exception.message == "[redacted]"
+
+
+def test_sink_and_participant_finalize_failures_are_causal_diagnostic_nodes() -> None:
+    class FailingSink:
+        def accept(self, outcome) -> None:
+            raise RuntimeError("sink secret")
+
+    class FinalizeFailure:
+        def prepare(self, view) -> None:
+            return None
+
+        def describe_change(self, prepared: None) -> None:
+            return None
+
+        def apply(self, prepared: None) -> None:
+            pass
+
+        def abort(self, prepared: None, cause: BaseException) -> None:
+            pass
+
+        def finalize(self, prepared: None) -> None:
+            raise RuntimeError("finalize secret")
+
+    failing = FailingSink()
+    ledger = ActionLedger()
+    add_action_outcome_sink(failing)
+    add_action_outcome_sink(ledger)
+    try:
+        with transaction():
+            join_action(object(), FinalizeFailure)
+    finally:
+        ledger.close()
+        remove_action_outcome_sink(failing)
+
+    failures = [event for event in ledger.events if isinstance(event, AftermathFailureSnapshot)]
+    assert {failure.stage for failure in failures} == {"outcome_sink", "participant_finalize"}
+    assert all(failure.exception.message == "[redacted]" for failure in failures)
+    assert len(ledger.outcomes) == 1
 
 
 def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
