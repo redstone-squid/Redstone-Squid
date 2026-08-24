@@ -834,6 +834,7 @@ class _Transaction:
         except BaseException as error:
             self.abort(error, prepared)
             raise
+        self.prepared_participants = tuple(prepared)
         changes = tuple(
             change for participant, value in prepared if (change := participant.describe_change(value)) is not None
         )
@@ -848,7 +849,6 @@ class _Transaction:
             changes,
         )
         self.commit_record = commit
-        self.prepared_participants = tuple(prepared)
         _checkpoint("commit.before_publication")
         self.publish()
         _checkpoint("commit.after_cell_publication")
@@ -899,13 +899,16 @@ class _Transaction:
     def abort(
         self,
         cause: BaseException,
-        prepared: Sequence[tuple[ActionParticipant[Any], Any]] = (),
+        prepared: Sequence[tuple[ActionParticipant[Any], Any]] | None = None,
     ) -> tuple[ExceptionSummary, ...]:
         if self.aborted:
             return tuple(self.cleanup_errors)
         self.aborted = True
         _checkpoint("rollback.before_abort")
-        values = {id(participant): value for participant, value in prepared}
+        values = {
+            id(participant): value
+            for participant, value in (self.prepared_participants if prepared is None else prepared)
+        }
         failures: list[ExceptionSummary] = []
         for participant in reversed(tuple(self.participants.values())):
             try:
