@@ -101,7 +101,7 @@ from squid_layouts.runtime.reactivity import (
     readonly_transaction,
     transaction,
 )
-from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy
+from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy, abandon_superseded_loads
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
@@ -1696,13 +1696,21 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         )
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
-        """Settle one observed resource tier concurrently under this render operation."""
-        if len(resources) == 1:
-            await resources[0]._load()
-            return
-        async with anyio.create_task_group() as tasks:
-            for resource in resources:
-                tasks.start_soon(resource._load)
+        """Settle one observed resource tier concurrently under this render operation.
+
+        Both discovery paths funnel through here -- `_stage_loaded`'s atomic tier and
+        `_settle_visible`'s progress passes -- so one installation covers both policies.
+        `squid_reactive` owns the supersession, this owns the cancellation, and only
+        resources take it: an operation execution shares `AsyncBinding` but is never
+        implicitly restarted, and the scope lives inside `Resource._loaded`.
+        """
+        with abandon_superseded_loads(anyio.CancelScope):
+            if len(resources) == 1:
+                await resources[0]._load()
+                return
+            async with anyio.create_task_group() as tasks:
+                for resource in resources:
+                    tasks.start_soon(resource._load)
 
     async def _settle_visible(
         self,
@@ -2526,7 +2534,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             await anyio.sleep(min(self.pending_after, self.acknowledgement_timeout))
             await busy.show(profile)  # type: ignore[union-attr]
 
-        with _unwrapped():
+        # A handler is the other place loads start -- `Resource.reload`, or a pattern's
+        # `refresh` -- and two fast presses supersede each other the same way a settle pass does.
+        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(acknowledge_by_deadline)
                 if busy is not None:
@@ -2629,7 +2639,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             if deferred:
                 profile.operation.mark_deadline_missed()
 
-        with _unwrapped():
+        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(watchdog)
                 await self._invoke_submit_and_flush(

@@ -2905,6 +2905,33 @@ class AtomicResourcePanel(Component):
                 return Text(f"ready:{value}")
 
 
+class CheckpointedResourcePanel(Component):
+    """A panel whose first load parks at a checkpoint, so it can be superseded mid-settle."""
+
+    def __init__(self) -> None:
+        self.attempts = 0
+        self.finished: list[int] = []
+        self.entered = asyncio.Event()
+        self.released = asyncio.Event()
+
+    @resource(pending=PendingPolicy.ATOMIC)
+    async def value(self) -> str:
+        self.attempts += 1
+        attempt = self.attempts
+        if attempt == 1:
+            self.entered.set()
+            await self.released.wait()
+        self.finished.append(attempt)
+        return f"attempt-{attempt}"
+
+    def render(self):
+        match self.value.status:
+            case Failed(error=error):
+                return Text(f"failed:{error}")
+            case Ready(value=value):
+                return Text(f"ready:{value}")
+
+
 class OperationPanel(Component):
     def __init__(self) -> None:
         self.publication = self._publication.start()
@@ -3208,6 +3235,25 @@ class TestResourceLoading:
         assert not mount.pending
         assert mount._view is not None
         assert "ready:loaded" in str(mount._view.to_components())
+
+    async def test_a_load_superseded_mid_settle_is_abandoned(self) -> None:
+        """The mount supplies the cancellation `abandon_superseded_loads` asks for."""
+        panel = CheckpointedResourcePanel()
+        message: Any = fake_message()
+        destination = _Destination(message)
+        mount = Mount(panel, access=Everyone(), timeout=None)
+
+        # Deadlined because the regression is a hang, not a wrong answer: without the mount
+        # installing a scope, nothing releases the first loader and `send` never returns.
+        with anyio.fail_after(5):
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(mount.send, destination)
+                await panel.entered.wait()
+                panel.value.invalidate()
+
+        assert "ready:attempt-2" in str(destination.calls[0][0].to_components())
+        assert panel.finished == [2], "the superseded loader stopped instead of running on"
+        assert not panel.released.is_set(), "nothing had to release it, which is the point"
 
 
 class Leaf(Component):
