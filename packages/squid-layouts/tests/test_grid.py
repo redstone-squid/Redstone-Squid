@@ -8,6 +8,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.runtime import PresentationSession, apply_updates
+from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.presentation import StrategyUpdate
 from squid_layouts.scene import SceneButton, SceneRow, SceneSelect, SceneText
 
@@ -169,3 +170,21 @@ def test_grid_authoring_rejects_empty_duplicate_and_nonpositive_shapes() -> None
         sl.discord.button_grid(*_cells(1), key="board", columns=0, on_pick=_pick)
     with pytest.raises(ValueError, match="key must not be empty"):
         sl.discord.button_grid(*_cells(1), key="", columns=1, on_pick=_pick)
+
+
+def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
+    class Child(sl.Component):
+        def render(self):
+            return sl.grid(*_cells(2), key="board", columns=2, on_pick=_pick)
+
+    class Parent(sl.Component):
+        def __init__(self) -> None:
+            self.child = Child()
+
+        def render(self):
+            return self.boundary(self.child, key="child")
+
+    tree = render_component_tree(Parent())
+    grid = cast(sl.semantic.Grid, tree.nodes[0])
+
+    assert grid.key == "child.board"
