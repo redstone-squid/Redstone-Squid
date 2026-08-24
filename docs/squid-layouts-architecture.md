@@ -267,6 +267,21 @@ when the action commits. The action reads its own writes, and so do the computed
 of them; another task reading the same component across an `await` sees the committed value
 until then. Rolling back is dropping the overlay.
 
+Every transaction has a stable `ActionContext` and exactly one terminal outcome. A publishing
+transaction validates every strong shared/replicated read by version, freezes its cell patches,
+and prepares all participants under the runtime commit gate. Installing patches and synchronously
+applying the prepared participants is the commit point. Reactive notifications, participant
+finalizers, ledger sinks, and aftermath hooks run after the gate and cannot veto that truth. An
+apply-phase exception is an adapter integrity defect and is reported as such, never disguised as
+a safe rollback. `relaxed_read()` opts out of validation; `untracked()` independently opts out of
+dependency capture.
+
+History consumes the immutable commit event. Physical inverses require the committed slot version;
+semantic participants plan their own inverses. Undo and redo are fresh actions, and redo is based on
+the actual undo commit. External effects use an idempotent compensation execution whose failure or
+partial success remains inspectable. The complete pipeline and examples are in
+[`docs/action-ledger.md`](action-ledger.md).
+
 ## Shared state across mounts
 
 `sl.state()` is per-component and per-mount. When two live panels must agree on something the
@@ -350,10 +365,11 @@ delivery. Siblings settle concurrently under the frontend's task group, and newl
 are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
 `.replace(value)` publishes an authoritative local result.
 
-`sl.operation` shares resource discovery, caller-owned completion, and mount settlement, but
-models a one-shot effect instead of repeatable data. Its explicit progress capability updates a
-`Pending` status, and `Succeeded`, `Failed`, or `Cancelled` is terminal. Components render those
-statuses with a `match`; there is no hidden state slot and no detached operation task.
+`sl.operation` declares a repeatable definition. `.start()` creates a fresh execution ID and one-shot
+status machine, causally linked to the current action when present. Its explicit progress capability
+updates `Pending`, and `Succeeded`, `Failed`, or `Cancelled` is terminal for that execution. Components
+store and render an execution with a `match`; retries start another execution, and there is no detached
+operation task.
 
 A plain attribute assigned during a transaction is therefore uncovered, and the framework
 refuses it: `UndeclaredStateError`, or `ReactiveWriteError` in a read-only action. It raises
