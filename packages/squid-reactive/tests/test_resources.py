@@ -17,7 +17,7 @@ from squid_reactive import (
     transaction,
     watch,
 )
-from squid_reactive.resources import Pending, Ready, resource
+from squid_reactive.resources import Pending, Ready, abandon_superseded_loads, resource
 
 
 class Source(Reactive):
@@ -181,3 +181,115 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
     assert owner.value.status == Ready("live-0"), "a cell only the abandoned load read is not a dependency"
     owner.live = 5
     assert owner.value.status == Pending(Ready("live-0")), "a cell the live load read still is one"
+
+
+class _Checkpointed(Reactive):
+    """A loader whose first attempt parks at a checkpoint until something releases it."""
+
+    def __init__(self) -> None:
+        self.attempts = 0
+        self.finished: list[int] = []
+        self.released = asyncio.Event()
+
+    def invalidate(self) -> None:
+        pass
+
+    @resource
+    async def value(self) -> str:
+        self.attempts += 1
+        attempt = self.attempts
+        if attempt == 1:
+            await self.released.wait()
+        self.finished.append(attempt)
+        return f"attempt-{attempt}"
+
+
+def _generation_statuses(ledger: ActionLedger) -> list[str]:
+    return [event.status for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
+
+
+async def test_an_installed_scope_abandons_a_superseded_load() -> None:
+    """Cancellation supplied by the host stops the loader instead of discarding its result."""
+    owner = _Checkpointed()
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    try:
+        with abandon_superseded_loads(anyio.CancelScope):
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(owner.value._load)
+                await asyncio.sleep(0)
+                owner.value.invalidate()
+                tasks.start_soon(owner.value._load)
+    finally:
+        ledger.close()
+
+    assert owner.value.status == Ready("attempt-2")
+    assert owner.attempts == 2
+    assert owner.finished == [2], "the superseded loader never resumed past its checkpoint"
+    assert not owner.released.is_set(), "nothing had to release it, which is the point"
+    statuses = _generation_statuses(ledger)
+    assert statuses.count("abandoned") == 1
+    assert "superseded" not in statuses
+    assert statuses[-1] == "ready"
+
+
+async def test_a_superseded_load_runs_to_completion_without_an_installed_scope() -> None:
+    """The dependency-free default: nothing stops the loader, only its result is dropped."""
+    owner = _Checkpointed()
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    try:
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(owner.value._load)
+            await asyncio.sleep(0)
+            owner.value.invalidate()
+            tasks.start_soon(owner.value._load)
+            await asyncio.sleep(0)
+            owner.released.set()
+    finally:
+        ledger.close()
+
+    assert owner.value.status == Ready("attempt-2")
+    assert owner.finished == [2, 1], "the abandoned loader ran on and finished after the live one"
+    statuses = _generation_statuses(ledger)
+    assert statuses.count("superseded") == 1
+    assert "abandoned" not in statuses
+
+
+async def test_replacing_a_resource_abandons_the_load_it_supersedes() -> None:
+    """`replace` bumps the generation too, so an authoritative value stops the request it beat."""
+    owner = _Checkpointed()
+
+    with abandon_superseded_loads(anyio.CancelScope):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(owner.value._load)
+            await asyncio.sleep(0)
+            owner.value.replace("authoritative")
+
+    assert owner.value.status == Ready("authoritative")
+    assert owner.finished == []
+
+
+async def test_an_installed_scope_does_not_swallow_a_cancellation_from_outside() -> None:
+    """The scope answers for its own generation; a caller's deadline stays the caller's."""
+    attempts = 0
+
+    class Retryable(Reactive):
+        @resource
+        async def value(self) -> str:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                await anyio.sleep_forever()
+            return "ready"
+
+    owner = Retryable()
+
+    with abandon_superseded_loads(anyio.CancelScope):
+        with anyio.move_on_after(0.01):
+            await owner.value
+
+        assert isinstance(owner.value.status, Pending)
+        assert await owner.value == "ready"
+
+    assert attempts == 2
