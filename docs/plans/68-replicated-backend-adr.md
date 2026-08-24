@@ -26,7 +26,10 @@ installs cell patches, applies prepared participants, and then crosses the commi
 finalization, ledger sinks, and aftermath hooks occur after publication and cannot veto it.
 
 `untracked()` controls dependency capture. `relaxed_read()` independently opts a shared read out of
-commit validation. Ordinary history retains committed conditional patch plans; undo and redo are new
+commit validation. **Amended 2026-08-24**: "every strong addressed read" above shipped meaning every
+addressed read, and was narrowed the same day to a cell the action also writes or one read inside
+`strong_read()`. Read-only validation is opt-in, not the default; nothing else in this ADR changes,
+because replicated conflict detection reads the same precondition set either way. Ordinary history retains committed conditional patch plans; undo and redo are new
 actions, and redo is derived from the actual undo commit. External effects use idempotent compensation
 executions and may end in `NEEDS_RECONCILIATION`.
 
