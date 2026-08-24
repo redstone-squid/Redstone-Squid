@@ -1515,6 +1515,7 @@ class TestActionMiddleware:
                 ActionPolicy.REBASE,
                 submitted,
                 active,
+                requests[0].context,
                 rebased=True,
             )
         ]
