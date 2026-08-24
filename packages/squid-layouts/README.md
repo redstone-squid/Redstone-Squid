@@ -443,7 +443,7 @@ committed value until then, and a rollback is dropping the overlay.
 ### Action history
 
 History is opt-in and component-owned. Declare a bounded stack like state, then pass it to
-state-changing actions; the framework records the whole state delta only when the action commits:
+state-changing actions; the framework retains the whole immutable commit only when the action commits:
 
 ```python
 class Editor(sl.Component):
@@ -461,9 +461,12 @@ class Editor(sl.Component):
         self.title = "New title"
 ```
 
-For an action that also changes a database or API, call `self.history.record("Rename", undo=..., redo=...)`
-inside the handler. The framework restores component state; the supplied async callbacks reverse
-external work. A failed action creates no entry, and a new recorded action clears redo history.
+Undo and redo are new actions. Each ordinary state inverse requires the exact version written by the
+action; a later write to the same slot returns a typed conflict without changing anything, while later
+work elsewhere is preserved. Redo is derived from the committed undo and therefore uses its fresh
+versions. For an external effect, record a `CompensationSpec` whose operation receives an idempotency
+key. Compensation failure and external-success/local-conflict are visible as `FAILED` and
+`NEEDS_RECONCILIATION`; neither is described as rollback.
 
 ### Shared state
 
@@ -485,11 +488,17 @@ state invalidates its one owner, while a namespace's publishes an address on the
 Every mount whose render read that field refreshes; a mount subscribes to exactly what it
 rendered, reconciled each time it stages one. The mount that *made* the write repaints in the
 click itself rather than waiting for the bus, so a panel writing shared state feels no
-different from one writing local state — and needs no reactor to do it. A field an action both read and
-wrote carries the value it read as a commit precondition, so a lost update raises
-`sl.runtime.SharedStateConflictError` rather than overwriting — derived from what the handler did, with
-no `compare_and_set` to remember. `sl.runtime.history` covers shared writes in the same entry as local
-ones and restores them blindly.
+different from one writing local state — and needs no reactor to do it. Every shared value an action
+strongly reads is guarded by its version when that action publishes anything, so write skew and
+A→B→A lineage changes raise `sl.runtime.ReactiveConflictError` rather than overwriting. Use
+`relaxed_read()` only when a read deliberately need not remain valid at commit; `untracked()` controls
+reactive subscription and is independent. History covers shared and local writes in one atomic,
+version-conditional inverse.
+
+Collaborative/offline data is a separate optional `squid-replicated` package. `state()` and `Shared`
+remain transactional registers. Replicated handles expose immutable snapshots and semantic mutation
+methods, route local and remote changes through the same runtime commit gate, and never expose mutable
+backend containers.
 
 There is no global store and no lookup by type: two panels converge because something gave them
 the same object, so the handle is the state and its lifetime is whoever holds it. When what a host

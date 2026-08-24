@@ -281,9 +281,9 @@ until then. Rolling back is dropping the overlay.
 State on a namespace is `sl.state()` one level out and is literally the same storage, so replacement,
 the equality no-op, `opaque=`, staging and rollback all behave identically. Two differences:
 a write publishes the cell's `(handle, descriptor)` address on the bus instead of invalidating
-one component, and a cell an action both **read and wrote** carries the value it read as a
-commit precondition -- if someone else moved it meanwhile the action raises
-`sl.runtime.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
+one component, and every strongly read shared cell carries its version as a commit precondition
+when the action publishes anything. If someone else moves it meanwhile -- including A→B→A -- the
+action raises `sl.runtime.ReactiveConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
 for that, shown through `handle_error` or an `ActionMiddleware`.
 
 There is no global store and no lookup by type: two panels converge because something handed
