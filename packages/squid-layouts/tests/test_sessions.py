@@ -377,6 +377,31 @@ class TestMembership:
         assert opened.session.capacity is None
         assert opened.session.remaining_capacity is None
 
+    async def test_a_root_component_finds_its_session_on_its_first_render(self) -> None:
+        registry = SessionRegistry()
+        seen: list[frozenset[int] | None] = []
+
+        class Roster(sl.Component):
+            def render(self):
+                session = registry.session_for(mount)
+                seen.append(None if session is None else session.members)
+                return Heading("Roster")
+
+        mount = sl.discord.Mount(Roster(), access=Everyone(), timeout=None)
+        opened = await registry.open(mount, to_message(), key=KEY, actor_id=7)
+
+        assert isinstance(opened, Opened)
+        assert seen == [frozenset({7})]
+
+    async def test_an_abandoned_delivery_leaves_no_mount_indexed(self) -> None:
+        registry = SessionRegistry()
+        mount = a_mount()
+
+        result = await registry.open(mount, abandoning(), key=KEY, actor_id=7)
+
+        assert isinstance(result, Abandoned)
+        assert registry.session_for(mount) is None
+
     async def test_an_actorless_session_starts_empty(self) -> None:
         registry = SessionRegistry()
         opened = await registry.open(a_mount(), to_message(), key=KEY)
