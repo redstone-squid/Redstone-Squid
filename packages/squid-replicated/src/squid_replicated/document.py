@@ -39,6 +39,20 @@ class ReplicatedChangeToken:
     document: weakref.ReferenceType[ReplicatedDocument]
     operations: tuple[FakeOperation, ...]
 
+    def encode(self) -> bytes:
+        """Encode this token for durable history while its document remains available."""
+        document = self.document()
+        if document is None or document.closed:
+            message = "replicated history token no longer has a live document"
+            raise ReplicatedClosedError(message)
+        return document.engine.encode_token(self.operations)
+
+    @classmethod
+    def decode(cls, document: ReplicatedDocument, token: bytes) -> ReplicatedChangeToken:
+        """Reload an encoded token against the current instance of its document."""
+        document._ensure_open()
+        return cls(weakref.ref(document), document.engine.decode_token(token))
+
     def plan_inverse(self) -> tuple[FakeOperation, ...] | ConflictDetail:
         document = self.document()
         if document is None or document.closed:
