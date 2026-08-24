@@ -59,6 +59,11 @@ The accepted performance and backend decisions are
 [the replicated backend ADR](68-replicated-backend-adr.md). The latter is the required explicit
 deferral: neither experimental text adapter met the production gate, so Squid does not claim it did.
 
+Post-completion research subsequently closed the dependency direction without weakening that gate. The
+[conclusive backend report](68-replicated-backend-report.md) selects Loro for generalized adapter hardening,
+retains pycrdt as a text-oriented conformance oracle, and keeps both experimental until the documented
+correctness and lifecycle requirements pass.
+
 ## Validation policy
 
 Do not run the repository-wide pytest suite on the development box. Run focused files with

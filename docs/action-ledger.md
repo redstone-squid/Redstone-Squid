@@ -143,9 +143,10 @@ The deterministic test harness drives that checkpoint in tests; production recei
 the envelope before entering the same synchronous commit gate.
 
 The Loro 1.13.2 and pycrdt 0.14.2 extras are conformance spikes. Both selectively reverse a non-latest
-text insertion while preserving a later insertion and reload their action token, but neither is a
-production selection. Rich types, compaction, representative performance, and transport ownership
-remain gated by [the backend ADR](plans/68-replicated-backend-adr.md).
+text insertion while preserving later local and remote insertions, converge under reordered delivery,
+and reload their action token. Neither adapter is production-ready. The
+[conclusive backend report](plans/68-replicated-backend-report.md) selects Loro for generalized backend
+hardening and records the remaining register-conflict, compaction, staging-cost, and ownership gates.
 
 The collaborative-text spike targets an action token, not “the latest local edit”:
 

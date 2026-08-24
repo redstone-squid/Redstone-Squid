@@ -9,9 +9,10 @@ It proves operation identity, idempotent delivery, convergence, semantic inverse
 ordinary/replicated atomicity; it is not a networking or durable-storage product.
 
 The `loro` and `pycrdt` extras contain experimental text SPI adapters pinned to the versions audited
-in `docs/plans/68-replicated-backend-adr.md`. Neither is selected as the general production backend:
-the current conformance evidence covers text and action-addressable inverse tokens, but not the full
-type, compaction, restart, ownership, security, and representative-workload gate.
+in `docs/plans/68-replicated-backend-report.md`. Loro is the selected generalized-backend hardening
+direction; neither adapter is production-ready. The current conformance evidence covers remote text,
+action-addressable inverse tokens, reordered delivery, restart, and multi-container grouping, while
+register conflicts, compaction, ownership, security, and representative workloads remain gated.
 
 ```python
 from squid_replicated import ReplicatedScope
