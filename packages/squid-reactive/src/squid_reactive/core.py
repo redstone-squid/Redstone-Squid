@@ -182,6 +182,15 @@ def _frozen(value: Any) -> Any:
 
 _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactive_transaction", default=None)
 _RELAXED_READS: ContextVar[int] = ContextVar("squid_reactive_relaxed_reads", default=0)
+_INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
+    "squid_reactive_deterministic_interleaver", default=None
+)
+
+
+def _checkpoint(name: str) -> None:
+    interleaver = _INTERLEAVER.get()
+    if interleaver is not None:
+        interleaver(name)
 
 
 def _current_task() -> object | None:
@@ -681,7 +690,9 @@ class _Transaction:
         Blind writes remain last-commit-wins. Every strong read guards a transaction that
         publishes either cell or participant state, including reads of cells it did not write.
         """
+        _checkpoint("commit.before_validation")
         if not (self.writes or self.participants):
+            _checkpoint("commit.after_validation")
             return
         required = dict(self.observed)
         required.update(self.preconditions)
@@ -694,6 +705,7 @@ class _Transaction:
                 f"{version}, found {cell.version}. Nothing was published."
             )
             raise ReactiveConflictError(detail, message)
+        _checkpoint("commit.after_validation")
 
     def target_id(self, cell: _Cell) -> str:
         return f"slot:{cell.identity}"
@@ -797,7 +809,9 @@ class _Transaction:
         prepared: list[tuple[ActionParticipant[Any], Any]] = []
         try:
             for participant in self.participants.values():
-                prepared.append((participant, participant.prepare(view)))  # noqa: PERF401
+                _checkpoint("commit.before_participant_prepare")
+                prepared.append((participant, participant.prepare(view)))
+                _checkpoint("commit.after_participant_prepare")
         except BaseException as error:
             self.abort(error, prepared)
             raise
@@ -815,7 +829,9 @@ class _Transaction:
         )
         self.commit_record = commit
         self.prepared_participants = tuple(prepared)
+        _checkpoint("commit.before_publication")
         self.publish()
+        _checkpoint("commit.after_cell_publication")
         # Cell installation begins the infallible publication phase. An adapter that raises
         # from apply has violated the participant contract; rolling cells back could not undo
         # a participant that applied only partly, so preserve the committed diagnostic truth.
@@ -823,6 +839,7 @@ class _Transaction:
         try:
             for participant, value in prepared:
                 participant.apply(value)
+                _checkpoint("commit.after_participant_apply")
         except BaseException:
             _log.critical("an infallible transaction participant apply failed", exc_info=True)
             raise
@@ -832,6 +849,7 @@ class _Transaction:
     def finalize_commit(self) -> None:
         """Notify reactive consumers after the commit gate, isolating aftermath failures."""
         assert self.commit_record is not None
+        _checkpoint("aftermath.before_notification")
         for owner in self.changed.values():
             try:
                 owner._state_changed(frozenset(self.changed_names[id(owner)]))
@@ -844,6 +862,7 @@ class _Transaction:
                     error,
                 )
         for participant, value in self.prepared_participants:
+            _checkpoint("aftermath.before_participant_finalize")
             try:
                 participant.finalize(value)
             except Exception as error:
@@ -863,6 +882,7 @@ class _Transaction:
         if self.aborted:
             return tuple(self.cleanup_errors)
         self.aborted = True
+        _checkpoint("rollback.before_abort")
         values = {id(participant): value for participant, value in prepared}
         failures: list[ExceptionSummary] = []
         for participant in reversed(tuple(self.participants.values())):
@@ -945,6 +965,7 @@ def _notify_hooks(
     aftermath = Aftermath(outcome)
     with aftermath_callback():
         for _, callback in hooks:
+            _checkpoint("aftermath.before_hook")
             try:
                 result = callback(outcome, aftermath)
                 if inspect.isawaitable(result):
@@ -1011,6 +1032,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
     with action_scope(context):
         token = _CURRENT.set(current)
         try:
+            _checkpoint("transaction.enter_body")
             yield
         except BaseException as error:
             _CURRENT.reset(token)
@@ -1019,6 +1041,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
             raise
         _CURRENT.reset(token)
         try:
+            _checkpoint("transaction.close_staging")
             with _COMMIT_GATE:
                 commit = current.commit()
         except BaseException as error:
@@ -1035,6 +1058,7 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
             else:
                 _emit_rollback(current, error, during_commit=True)
             raise
+        _checkpoint("commit.gate_released")
         current.finalize_commit()
         current.closed = True
         _emit_commit(current, commit)
@@ -1084,6 +1108,7 @@ def readonly_transaction() -> Iterator[None]:
     with action_scope(context):
         token = _CURRENT.set(current)
         try:
+            _checkpoint("transaction.enter_body")
             yield
         except BaseException as error:
             _CURRENT.reset(token)
@@ -1092,12 +1117,14 @@ def readonly_transaction() -> Iterator[None]:
             raise
         _CURRENT.reset(token)
         try:
+            _checkpoint("transaction.close_staging")
             with _COMMIT_GATE:
                 commit = current.commit()
         except BaseException as error:
             current.closed = True
             _emit_rollback(current, error, during_commit=True)
             raise
+        _checkpoint("commit.gate_released")
         current.finalize_commit()
         current.closed = True
         _emit_commit(current, commit)

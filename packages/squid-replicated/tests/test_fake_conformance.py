@@ -7,8 +7,18 @@ import pytest
 from squid_replicated import ReplicatedChangeToken, ReplicatedClosedError, ReplicatedScope
 
 from squid_layouts.runtime import History
-from squid_reactive import ActionCommit, Reactive, ReactiveConflictError, on_action_commit, state, transaction
+from squid_reactive import (
+    ActionCommit,
+    ActionLedger,
+    Reactive,
+    ReactiveConflictError,
+    add_action_outcome_sink,
+    on_action_commit,
+    state,
+    transaction,
+)
 from squid_reactive.core import _CURRENT
+from squid_reactive.testing import InterleavingHarness
 
 
 class LocalModel(Reactive):
@@ -104,10 +114,34 @@ def test_remote_import_invalidates_and_has_remote_action_outcome() -> None:
     updates = source.export_since()
     snapshots = []
     target.subscribe(snapshots.append)
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
 
-    target.import_update(updates)
+    try:
+        target.import_update(updates)
+    finally:
+        ledger.close()
 
     assert snapshots[-1].counter("votes") == 1
+    assert ledger.outcomes[-1].kind == "remote"
+
+
+def test_scheduler_places_remote_import_before_local_validation() -> None:
+    source = ReplicatedScope("a").open("project")
+    target = ReplicatedScope("b").open("project")
+    model = LocalModel()
+    with transaction():
+        source.counter("votes").increment(1)
+    update = source.export_since()
+    schedule = InterleavingHarness()
+    schedule.at("transaction.close_staging", lambda: target.import_update(update))
+
+    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction():
+        assert target.counter("votes").value == 0
+        model.selected = True
+
+    assert target.counter("votes").value == 1
+    assert model.selected is False
 
 
 def test_superseded_replicated_read_rejects_local_publication() -> None:
