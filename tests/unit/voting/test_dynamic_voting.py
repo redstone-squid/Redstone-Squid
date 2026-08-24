@@ -113,9 +113,7 @@ def test_generic_poll_presentation_uses_host_owned_tallies() -> None:
     presentation = render_generic_poll(snapshot, {42: 420})
     assert presentation.view is not None
     text = "\n".join(
-        child.content
-        for child in presentation.view.walk_children()
-        if isinstance(child, discord.ui.TextDisplay)
+        child.content for child in presentation.view.walk_children() if isinstance(child, discord.ui.TextDisplay)
     )
     assert "2 weighted" in text
     assert "— 1" in text
@@ -131,9 +129,7 @@ def test_hidden_poll_presentation_omits_every_tally_value() -> None:
     presentation = render_generic_poll(snapshot)
     assert presentation.view is not None
     text = "\n".join(
-        child.content
-        for child in presentation.view.walk_children()
-        if isinstance(child, discord.ui.TextDisplay)
+        child.content for child in presentation.view.walk_children() if isinstance(child, discord.ui.TextDisplay)
     )
     assert "weighted" not in text
     assert "%" not in text

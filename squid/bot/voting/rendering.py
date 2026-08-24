@@ -196,11 +196,7 @@ def _generic_poll_nodes(
         nodes.append(sl.status(sl.md(t"Poll closed ??{outcome}"), emphasis=sl.semantic.Emphasis.STRONG))
     else:
         nodes.append(
-            sl.note(
-                sl.md(
-                    t"Closes {sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}."
-                )
-            )
+            sl.note(sl.md(t"Closes {sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}."))
         )
     return nodes
 
