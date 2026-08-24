@@ -302,6 +302,7 @@ def form(
     tone: Tone = Tone.NEUTRAL,
     emphasis: Emphasis = Emphasis.NORMAL,
     guard: Guard | None = None,
+    record: History | None = None,
 ) -> FormTrigger:
     """A content control that presents a portable form.
 
@@ -309,7 +310,11 @@ def form(
     already-admitted press and is not checked again.
     """
     resolved, handler, default_policy = bind_form(spec, on_submit)
-    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis, guard)
+    selected_policy = policy or default_policy
+    if record is not None and selected_policy is ActionPolicy.PARALLEL_READ:
+        message = "a parallel-read form submission changes nothing, so it has nothing to record"
+        raise ValueError(message)
+    return FormTrigger(key, _text(label), resolved, handler, selected_policy, tone, emphasis, guard, record)
 
 
 def item(label: ItemLabel, *children: ChildLike, key: str, summary: TextValue | None = None) -> Item:
