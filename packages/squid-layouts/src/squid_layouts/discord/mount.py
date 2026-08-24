@@ -2721,12 +2721,13 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """Compose the frozen mount middleware in first-listed, outermost order."""
 
         handled = False
+        action_attributes = {"action_id": str(request.context.action_id)}
 
         async def invoke(index: int) -> None:
             nonlocal handled
             if index == len(self._middleware):
                 handled = True
-                with operation.span("handler"):
+                with operation.span("handler", attributes=action_attributes):
                     await endpoint()
                 return
 
@@ -2747,7 +2748,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             try:
                 middleware = self._middleware[index]
                 provenance = f"{type(middleware).__module__}.{type(middleware).__qualname__}"
-                with operation.span(f"middleware:{provenance}"):
+                with operation.span(f"middleware:{provenance}", attributes=action_attributes):
                     await middleware.dispatch(request, proceed)
             finally:
                 active = False
