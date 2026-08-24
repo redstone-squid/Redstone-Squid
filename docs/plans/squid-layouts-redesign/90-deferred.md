@@ -25,7 +25,7 @@ are not re-derived or accidentally adopted later.
   still re-read; and `Controlled`/`Managed` still owns domain truth, with 40 §3 making a
   namespace an unsuitable home for anything durable.
   **Revisited 2026-08-23**: the CascadeUI comparison's "steal the scoping/keying ergonomics, but
-  not the singleton store" finding lands as [59](59-shared-pool.md)'s scope vocabulary and
+  not the singleton store" finding lands as [59](../completed/squid-layouts-redesign/59-shared-pool.md)'s scope vocabulary and
   [63](../completed/squid-layouts-redesign/63-stores-package.md), and neither reopens this. 59 keys a *lifetime owner* the host
   constructs and holds — there is still no global, no lookup by type, and no way to reach a
   namespace you were not given; adopting `sessions.py`'s existing scope taxonomy as `ScopeT` makes
@@ -182,11 +182,11 @@ are not re-derived or accidentally adopted later.
   `Agreement` component state. The participant *lifecycle* model is now
   [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
-  **Closed 2026-08-24**: [60](60-session-membership.md) shipped `join`/`leave`, per-session
+  **Closed 2026-08-24**: [60](../completed/squid-layouts-redesign/60-session-membership.md) shipped `join`/`leave`, per-session
   capacity, durable membership and the cross-session quota 34 §B.4 asked for, with
   `/layout lobby` as the worked example this entry required. The quota was very nearly
   deferred a third time on "no consumer needs it" — the same reasoning this entry had already
-  been reopened twice under. [59](59-shared-pool.md) is the counter-precedent: it shipped a
+  been reopened twice under. [59](../completed/squid-layouts-redesign/59-shared-pool.md) is the counter-precedent: it shipped a
   pool that added no capability, purely so hosts stopped re-deriving one. Batteries a library
   user expects are part of the product, and this series' bar for *speculation* is not a bar
   for *completeness*.
