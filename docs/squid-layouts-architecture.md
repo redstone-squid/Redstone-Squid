@@ -469,8 +469,9 @@ Four primitives carry the whole model, and each owes one thing:
 
 The obligations are what make the rest follow. A loader may run zero times, once, or many
 times -- a hidden resource never loads, a moved dependency re-pends one that did, and a
-superseded load is discarded -- so an irreversible effect inside a loader is programmer error,
-not a supported pattern. Supersession is not failure: `Failed` is reserved for a loader that
+superseded load is discarded, or stopped outright where a host installs
+`abandon_superseded_loads` as `sl.discord` does -- so an irreversible effect inside a loader is
+programmer error, not a supported pattern. Supersession is not failure: `Failed` is reserved for a loader that
 raised. That is why effects belong in an operation, which the runtime never re-arms on its own;
 retrying is the author starting another execution.
 

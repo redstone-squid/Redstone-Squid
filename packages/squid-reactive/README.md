@@ -35,7 +35,10 @@ The package is layered:
   synchronous `TopicBus` protocol, `LocalTopicBus`, and committed/staged subscription
   reconciliation.
 - `squid_reactive.resources` is an optional import for tracked asynchronous values. It uses
-  only the standard library and runs loads in the caller's task.
+  only the standard library and runs loads in the caller's task. Cancellation is the host's:
+  `abandon_superseded_loads` installs a `LoadScope` factory -- `anyio.CancelScope` satisfies the
+  protocol as it stands -- and a superseded generation is then stopped rather than run to
+  completion. Uninstalled, it runs on and only its result is discarded.
 - `squid_reactive.operations` separates repeatable definitions from causally identified one-shot
   executions; every retry receives a fresh execution ID and terminal status.
 
