@@ -495,6 +495,8 @@ class Recorder:
     name: str
     fail: str = ""
     """Which call raises, if any."""
+    applied: str = ""
+    """What `apply` was handed, if it ran."""
 
     def _step(self, step: str) -> None:
         self.log.append(f"{self.name}.{step}")
@@ -502,10 +504,14 @@ class Recorder:
             message = f"{self.name} rejected the action"
             raise RuntimeError(message)
 
-    def prepare(self) -> None:
+    def prepare(self) -> str:
         self._step("prepare")
+        return f"{self.name}.prepared"
 
-    def apply(self) -> None:
+    def apply(self, prepared: str) -> None:
+        # Recorded, so the ordering tests also prove each participant is handed back its
+        # own prepared value rather than another's.
+        self.applied = prepared
         self._step("apply")
 
     def abort(self) -> None:
@@ -534,8 +540,8 @@ class TestActionParticipants:
     def test_every_participant_prepares_before_any_applies(self):
         log: list[str] = []
         with transaction():
-            join_action(object(), lambda: Recorder(log, "a"))
-            join_action(object(), lambda: Recorder(log, "b"))
+            first = join_action(object(), lambda: Recorder(log, "a"))
+            second = join_action(object(), lambda: Recorder(log, "b"))
         assert log == [
             "a.prepare",
             "b.prepare",
@@ -544,6 +550,30 @@ class TestActionParticipants:
             "a.finalize",
             "b.finalize",
         ]
+        assert first is not None and second is not None
+        # Held across the whole prepare pass and handed back to its own author, so a
+        # participant never has to find its prepared work on itself.
+        assert (first.applied, second.applied) == ("a.prepared", "b.prepared")
+
+    def test_a_participant_that_stages_nothing_still_applies(self):
+        """`prepare` may return `None`; `apply` is total either way."""
+        log: list[str] = []
+
+        class Silent:
+            def prepare(self) -> None:
+                log.append("prepare")
+
+            def apply(self, prepared: None) -> None:
+                assert prepared is None
+                log.append("apply")
+
+            def abort(self) -> None: ...
+
+            def finalize(self) -> None: ...
+
+        with transaction():
+            join_action(object(), Silent)
+        assert log == ["prepare", "apply"]
 
     def test_a_rejected_prepare_applies_nothing_and_rolls_state_back(self):
         log: list[str] = []
@@ -671,7 +701,7 @@ class TestPrePublicationRollback:
                 message = "rejected"
                 raise RuntimeError(message)
 
-            def apply(self) -> None: ...
+            def apply(self, prepared: None) -> None: ...
 
             def abort(self) -> None: ...
 

@@ -33,23 +33,27 @@ class ReactiveOwner(Protocol):
     def _state_rolled_back(self) -> None: ...
 
 
-class ActionParticipant(Protocol):
+class ActionParticipant[PreparedT](Protocol):
     """A subsystem that publishes its own writes when the action in flight commits.
 
     The split is the whole point. Everything that can fail happens in `prepare`, before
     any participant has made anything visible, so the transaction can still roll the
     action back as though it never ran. Register with :func:`join_action`.
+
+    `prepare` hands what it built to `apply` as a value, rather than leaving it in a field
+    `apply` has to trust. That is what makes "everything fallible happened in prepare" a
+    fact of the signatures instead of an assertion inside a body.
     """
 
-    def prepare(self) -> None:
-        """Validate the staged writes without publishing any of them.
+    def prepare(self) -> PreparedT:
+        """Validate the staged writes and return what `apply` needs, publishing none of them.
 
         Raise to abort the action: every participant is aborted, component state is
         restored, and the error reaches whoever called the handler.
         """
 
-    def apply(self) -> None:
-        """Publish the prepared writes. Synchronous, and past the point of failure."""
+    def apply(self, prepared: PreparedT) -> None:
+        """Publish what `prepare` returned. Synchronous, and past the point of failure."""
 
     def abort(self) -> None:
         """Discard the staged writes. Called once, on rollback or a failed prepare."""
@@ -420,7 +424,7 @@ class _Transaction:
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
     hooks: list[tuple[object | None, Callable[[StateDelta], None]]] = field(default_factory=list)
-    participants: dict[object, ActionParticipant] = field(default_factory=dict)
+    participants: dict[object, ActionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
     """Whether `publish` has put the staged values into the cells.
 
@@ -521,7 +525,9 @@ class _Transaction:
             # tells it to look again.
             _bump_epoch()
 
-    def enlist[ParticipantT: ActionParticipant](self, key: object, factory: Callable[[], ParticipantT]) -> ParticipantT:
+    def enlist[ParticipantT: ActionParticipant[Any]](
+        self, key: object, factory: Callable[[], ParticipantT]
+    ) -> ParticipantT:
         """Return this action's participant for `key`, creating it on first use.
 
         The guards run on every call, not just the first: a participant enlisted before a
@@ -574,12 +580,11 @@ class _Transaction:
         # actually left. Nothing awaits between here and `published`, so no other task can
         # observe the window, and a failed prepare still rolls the whole action back.
         self.publish()
-        for participant in self.participants.values():
-            participant.prepare()
+        prepared = [(participant, participant.prepare()) for participant in self.participants.values()]
         delta = self.delta() if self.hooks else None
         self.published = True
-        for participant in self.participants.values():
-            participant.apply()
+        for participant, staged in prepared:
+            participant.apply(staged)
         for owner in self.changed.values():
             owner._state_changed(frozenset(self.changed_names[id(owner)]))
         for participant in self.participants.values():
@@ -707,7 +712,7 @@ def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | No
     current.hooks.append((key, callback))
 
 
-def join_action[ParticipantT: ActionParticipant](
+def join_action[ParticipantT: ActionParticipant[Any]](
     key: object, factory: Callable[[], ParticipantT]
 ) -> ParticipantT | None:
     """Take part in the action in flight, staging writes instead of publishing them.
@@ -723,7 +728,7 @@ def join_action[ParticipantT: ActionParticipant](
     return current.enlist(key, factory)
 
 
-def action_participant(key: object) -> ActionParticipant | None:
+def action_participant(key: object) -> ActionParticipant[Any] | None:
     """`key`'s participant in the action in flight, without enlisting one.
 
     The read half of :func:`join_action`, for a subsystem that has to answer "what did this
