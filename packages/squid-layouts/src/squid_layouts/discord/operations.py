@@ -81,6 +81,9 @@ class SessionInspection:
     opened_at: datetime
     participants: tuple[int, ...]
     mounts: tuple[str, ...]
+    members: tuple[int, ...] = ()
+    capacity: int | None = None
+    remaining_capacity: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,6 +368,9 @@ def _session_inspection(session: Session) -> SessionInspection:
         summary.opened_at,
         tuple(sorted(summary.participants)),
         tuple(mount.id for mount in session.mounts),
+        tuple(sorted(summary.members)),
+        summary.capacity,
+        summary.remaining_capacity,
     )
 
 
