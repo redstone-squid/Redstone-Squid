@@ -28,7 +28,7 @@ from squid_layouts.runtime import (
     transaction,
 )
 from squid_layouts.semantic import Action
-from squid_reactive import ActionLedger, add_action_outcome_sink
+from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_outcome_sink, join_action, on_action_commit
 from squid_reactive.operations import OperationContext
 
 
@@ -378,6 +378,8 @@ async def test_compensation_intent_and_local_inverse_are_causal_actions() -> Non
     descendants = [outcome for outcome in ledger.outcomes if outcome.root_action_id == original.root_action_id]
     assert [outcome.kind for outcome in descendants] == ["action", "compensation", "compensation"]
     assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
+    operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
+    assert [event.status for event in operation_events] == ["reverting", "external_succeeded", "reverted"]
 
 
 async def test_compensation_cancellation_is_retained_and_propagated() -> None:
@@ -450,3 +452,30 @@ async def test_compensation_record_round_trips_and_recovers_after_restart() -> N
     await restored.update(retry_intent, CompensationStatus.EXTERNAL_SUCCEEDED)
     after_success = await restored.claim(retry_intent, CompensationRetryPolicy(max_attempts=3))
     assert not after_success.dispatch
+
+
+def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
+    outbox = MemoryCompensationOutbox()
+    root = uuid.uuid7()
+    context = OperationContext(uuid.uuid7(), None, root, "delete channel")
+    intent = CompensationIntent(context, uuid.uuid7(), "undo:channel", datetime.now(UTC))
+    visible_at_commit: list[tuple] = []
+
+    with transaction():
+        joined = join_action(outbox, lambda: outbox.participant(intent))
+        assert joined is not None
+        on_action_commit(lambda commit, aftermath: visible_at_commit.append(outbox.records))
+
+    assert visible_at_commit[0][0].intent == intent
+    assert visible_at_commit[0][0].attempts == 0
+
+
+def test_compensation_codec_rejects_unknown_corrupt_and_oversized_records() -> None:
+    codec = CompensationRecordCodec()
+
+    with pytest.raises(ValueError, match="unsupported"):
+        codec.decode(b'{"schema":2}')
+    with pytest.raises(ValueError, match="corrupt"):
+        codec.decode(b"not-json")
+    with pytest.raises(ValueError, match="maximum encoded size"):
+        codec.decode(b" " * 65_537)

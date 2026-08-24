@@ -18,23 +18,29 @@ from squid_layouts.runtime.reactivity import (
     ActionCommit,
     ActionContext,
     ActionKind,
+    ActionParticipant,
     CellPatchSet,
     ConditionalCellPatch,
     ReactiveConflictError,
+    TransactionView,
     apply_conditional_patches,
     apply_local_overwrite_patches,
     fresh_action_transaction,
     has_action_hook,
+    join_action,
     on_action_commit,
 )
 from squid_layouts.semantic import ActionGroup
 from squid_layouts.text import TextLike
 from squid_reactive.actions import (
+    DEFAULT_REDACTION,
     CausalRef,
     ConflictDetail,
     ExceptionSummary,
+    OperationEventSnapshot,
     ParticipantChange,
     current_action,
+    emit_causal_event,
 )
 from squid_reactive.operations import OperationContext
 
@@ -122,6 +128,23 @@ class CompensationExecution:
     def execution_id(self) -> uuid.UUID:
         return self.context.execution_id
 
+    def transition(self, status: CompensationStatus, error: Exception | None = None) -> None:
+        """Record an inspectable transition without changing any transactional domain state."""
+        self.status = status
+        self.error = error
+        summary = None if error is None else DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+        emit_causal_event(
+            OperationEventSnapshot(
+                str(self.context.execution_id),
+                None if self.context.root_action_id is None else str(self.context.root_action_id),
+                self.context.cause,
+                self.context.name,
+                status.value,
+                datetime.now(UTC),
+                summary,
+            )
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class CompensationIntent:
@@ -164,6 +187,12 @@ class CompensationOutbox(Protocol):
         status: CompensationStatus,
         error: ExceptionSummary | None = None,
     ) -> None: ...
+
+
+class TransactionalCompensationOutbox(CompensationOutbox, Protocol):
+    """An outbox that can atomically retain first intent through the Squid commit gate."""
+
+    def participant(self, intent: CompensationIntent) -> ActionParticipant[CompensationRecord | None]: ...
 
 
 class MemoryCompensationOutbox:
@@ -210,6 +239,10 @@ class MemoryCompensationOutbox:
         attempts = 1 if existing is None else existing.attempts
         self._put(CompensationRecord(intent, status, attempts, datetime.now(UTC), error))
 
+    def participant(self, intent: CompensationIntent) -> _CompensationIntentParticipant:
+        """Stage first-seen intent persistence in the same local commit as its action record."""
+        return _CompensationIntentParticipant(self, intent)
+
     def _put(self, record: CompensationRecord) -> None:
         self._records.pop(record.intent.idempotency_key, None)
         self._records[record.intent.idempotency_key] = record
@@ -217,10 +250,37 @@ class MemoryCompensationOutbox:
             self._records.popitem(last=False)
 
 
+class _CompensationIntentParticipant:
+    """Reference participant that installs a first compensation intent at the commit point."""
+
+    def __init__(self, outbox: MemoryCompensationOutbox, intent: CompensationIntent) -> None:
+        self.outbox = outbox
+        self.intent = intent
+
+    def prepare(self, view: TransactionView) -> CompensationRecord | None:
+        if self.intent.idempotency_key in self.outbox._records:
+            return None
+        return CompensationRecord(self.intent, CompensationStatus.REVERTING, 0, datetime.now(UTC))
+
+    def apply(self, prepared: CompensationRecord | None) -> None:
+        if prepared is not None:
+            self.outbox._put(prepared)
+
+    def describe_change(self, prepared: CompensationRecord | None) -> None:
+        return None
+
+    def abort(self, prepared: CompensationRecord | None, cause: BaseException) -> None:
+        return None
+
+    def finalize(self, prepared: CompensationRecord | None) -> None:
+        return None
+
+
 class CompensationRecordCodec:
     """JSON schema 1 codec for application-owned durable compensation records."""
 
     schema_version = 1
+    max_encoded_bytes = 65_536
 
     def encode(self, record: CompensationRecord) -> bytes:
         context = record.intent.context
@@ -245,7 +305,25 @@ class CompensationRecordCodec:
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
     def decode(self, data: bytes) -> CompensationRecord:
+        if len(data) > self.max_encoded_bytes:
+            message = "compensation record exceeds the maximum encoded size"
+            raise ValueError(message)
+        try:
+            return self._decode(data)
+        except (KeyError, TypeError, AttributeError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            message = "compensation record has a corrupt schema"
+            raise ValueError(message) from error
+        except ValueError as error:
+            if str(error).startswith("unsupported compensation record schema"):
+                raise
+            message = "compensation record has a corrupt schema"
+            raise ValueError(message) from error
+
+    def _decode(self, data: bytes) -> CompensationRecord:
         payload = json.loads(data)
+        if not isinstance(payload, dict):
+            message = "compensation record has a corrupt schema"
+            raise TypeError(message)
         if payload.get("schema") != self.schema_version:
             message = f"unsupported compensation record schema {payload.get('schema')!r}"
             raise ValueError(message)
@@ -498,6 +576,7 @@ class History:
             f"Compensate {entry.label}",
         )
         execution = CompensationExecution(operation_context, key)
+        execution.transition(CompensationStatus.REVERTING)
         intent = CompensationIntent(operation_context, original.action_id, key, datetime.now(UTC))
         entry.compensation_execution = execution
         entry.state = HistoryEntryState.REVERSING
@@ -510,12 +589,17 @@ class History:
             compensates_action_id=original.action_id,
         )
         with fresh_action_transaction(action_context=intent_context):
-            pass
+            participant = getattr(self._compensation_outbox, "participant", None)
+            if participant is not None:
+                joined = join_action(
+                    (self._compensation_outbox, key),
+                    lambda: participant(intent),
+                )
+                assert joined is not None
         claim = await self._compensation_outbox.claim(intent, entry.compensation.retry)
         if not claim.dispatch and claim.status is CompensationStatus.FAILED:
             error = RuntimeError("compensation retry limit exhausted")
-            execution.status = CompensationStatus.FAILED
-            execution.error = error
+            execution.transition(CompensationStatus.FAILED, error)
             entry.state = HistoryEntryState.FAILED
             result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
             entry.last_result = result
@@ -525,7 +609,7 @@ class History:
             try:
                 await entry.compensation.operation(key)
             except asyncio.CancelledError as error:
-                execution.status = CompensationStatus.CANCELLED
+                execution.transition(CompensationStatus.CANCELLED)
                 entry.state = HistoryEntryState.FAILED
                 await self._compensation_outbox.update(
                     intent, CompensationStatus.CANCELLED, ExceptionSummary.capture(error)
@@ -533,8 +617,7 @@ class History:
                 self._owner.invalidate()
                 raise
             except Exception as error:
-                execution.status = CompensationStatus.FAILED
-                execution.error = error
+                execution.transition(CompensationStatus.FAILED, error)
                 entry.state = HistoryEntryState.FAILED
                 await self._compensation_outbox.update(
                     intent, CompensationStatus.FAILED, ExceptionSummary.capture(error)
@@ -543,7 +626,7 @@ class History:
                 entry.last_result = result
                 self._owner.invalidate()
                 return result
-            execution.status = CompensationStatus.EXTERNAL_SUCCEEDED
+            execution.transition(CompensationStatus.EXTERNAL_SUCCEEDED)
             await self._compensation_outbox.update(intent, CompensationStatus.EXTERNAL_SUCCEEDED)
         compensation_context = ActionContext.create(
             f"Apply compensation for {entry.label}",
@@ -554,7 +637,7 @@ class History:
         )
         result = self._undo_state(entry, retain_redo=False, action_context=compensation_context)
         if result.status is HistoryResultStatus.CONFLICT:
-            execution.status = CompensationStatus.NEEDS_RECONCILIATION
+            execution.transition(CompensationStatus.NEEDS_RECONCILIATION)
             entry.state = HistoryEntryState.NEEDS_RECONCILIATION
             await self._compensation_outbox.update(intent, CompensationStatus.NEEDS_RECONCILIATION)
             result = HistoryResult(
@@ -566,7 +649,7 @@ class History:
             )
             entry.last_result = result
         else:
-            execution.status = CompensationStatus.REVERTED
+            execution.transition(CompensationStatus.REVERTED)
             await self._compensation_outbox.update(intent, CompensationStatus.REVERTED)
         self._owner.invalidate()
         return result
@@ -734,6 +817,7 @@ __all__ = [
     "HistorySnapshot",
     "MemoryCompensationOutbox",
     "RedoResult",
+    "TransactionalCompensationOutbox",
     "UndoPlan",
     "UndoResult",
     "UndoStrategy",
