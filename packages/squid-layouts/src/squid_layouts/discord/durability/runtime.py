@@ -681,7 +681,7 @@ def _dumps_summary(summary: SessionSummary) -> str:
         "opened_at": summary.opened_at.timestamp(),
         "key": encode_session_key(summary.key),
         "actor_id": summary.actor_id,
-        "participants": sorted(summary.participants),
+        "members": sorted(summary.members),
         "attachment_actors": sorted(summary.attachment_actors),
         "durable": True,
     }
@@ -701,7 +701,10 @@ def _loads_summary(payload: str, *, local: bool) -> SessionSummary:
         opened_at = datetime.fromtimestamp(opened_timestamp, UTC)
         key = decode_session_key(raw["key"])
         actor_id = raw.get("actor_id")
-        participants = _summary_ids(raw.get("participants", ()))
+        # A payload written before membership existed has no "members" key at all, and its
+        # opener is the only member it can have had.
+        legacy_members = () if actor_id is None else (actor_id,)
+        members = _summary_ids(raw.get("members", legacy_members))
         attachment_actors = _summary_ids(raw.get("attachment_actors", ()))
     except (KeyError, TypeError, ValueError, OverflowError) as error:
         message = "durable session summary is malformed"
@@ -720,7 +723,7 @@ def _loads_summary(payload: str, *, local: bool) -> SessionSummary:
         actor_id,
         durable=True,
         local=local,
-        participants=participants,
+        members=members,
         attachment_actors=attachment_actors,
     )
 

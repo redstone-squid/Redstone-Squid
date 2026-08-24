@@ -168,7 +168,7 @@ async def test_initial_summary_records_the_opener_as_a_participant() -> None:
 
         assert isinstance(result, Opened)
         records = await store.list_records()
-        assert json.loads(records[0].summary_payload)["participants"] == [7]
+        assert json.loads(records[0].summary_payload)["members"] == [7]
         tasks.cancel_scope.cancel()
 
 

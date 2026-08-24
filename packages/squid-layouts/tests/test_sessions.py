@@ -12,6 +12,7 @@ import squid_layouts as sl
 from squid_layouts.discord import Everyone, MountDefaults, SessionKey, SessionRegistry
 from squid_layouts.discord.delivery import Abandoned
 from squid_layouts.discord.sessions import (
+    MembershipStatus,
     Opened,
     OpeningRequest,
     ProtectCrossUserAttachments,
@@ -364,6 +365,175 @@ class TestAttachments:
 
         assert sibling.finished and opened.session.root.finished
         assert registry.get(KEY) == ()
+
+
+class TestMembership:
+    async def test_the_opener_is_the_only_initial_member(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        assert opened.session.members == frozenset({7})
+        assert opened.session.capacity is None
+        assert opened.session.remaining_capacity is None
+
+    async def test_an_actorless_session_starts_empty(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY)
+        assert isinstance(opened, Opened)
+
+        assert opened.session.members == frozenset()
+        assert opened.session.participants == frozenset()
+
+    async def test_an_attachment_actor_is_attributed_but_never_a_member(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        await opened.session.attach(a_mount(), to_message(), actor_id=8)
+
+        assert opened.session.members == frozenset({7})
+        assert opened.session.participants == frozenset({7, 8})
+
+    async def test_join_admits_below_capacity_and_reports_the_remaining_slots(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=3)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(8)
+
+        assert result.status is MembershipStatus.JOINED
+        assert result.committed
+        assert result.members == frozenset({7, 8})
+        assert result.remaining_capacity == 1
+
+    async def test_rejoining_at_capacity_stays_idempotent(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=1)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(7)
+
+        assert result.status is MembershipStatus.ALREADY_MEMBER
+        assert not result.committed
+        assert opened.session.members == frozenset({7})
+
+    async def test_join_at_capacity_refuses_without_mutating(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=1)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(8)
+
+        assert result.status is MembershipStatus.AT_CAPACITY
+        assert result.remaining_capacity == 0
+        assert opened.session.members == frozenset({7})
+
+    async def test_a_declining_rule_refuses_without_mutating(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.join(8, when=lambda members: len(members) < 1)
+
+        assert result.status is MembershipStatus.REFUSED
+        assert opened.session.members == frozenset({7})
+
+    async def test_leave_permits_the_opener_and_the_final_member(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.leave(7)
+
+        assert result.status is MembershipStatus.LEFT
+        assert opened.session.members == frozenset()
+        assert not opened.session.root.finished
+        assert registry.get(KEY) == (opened.session,)
+
+    async def test_leaving_a_non_member_is_idempotent(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        result = await opened.session.leave(8)
+
+        assert result.status is MembershipStatus.NOT_MEMBER
+        assert opened.session.members == frozenset({7})
+
+    async def test_membership_operations_on_a_finished_session_do_nothing(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+        await opened.session.finish()
+
+        joined = await opened.session.join(8)
+        left = await opened.session.leave(7)
+
+        assert joined.status is MembershipStatus.SESSION_FINISHED
+        assert left.status is MembershipStatus.SESSION_FINISHED
+        assert opened.session.members == frozenset({7})
+
+    async def test_a_stale_expectation_conflicts_and_a_retry_converges(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+        stale = opened.session.members
+        await opened.session.join(8)
+
+        conflicted = await opened.session.join(9, expect=stale)
+        retried = await opened.session.join(9, expect=opened.session.members)
+
+        assert conflicted.status is MembershipStatus.CONFLICT
+        assert conflicted.members == frozenset({7, 8})
+        assert retried.status is MembershipStatus.JOINED
+
+    async def test_concurrent_joins_admit_exactly_one_into_the_final_slot(self) -> None:
+        """A non-durable join never awaits inside the lock, so this guards a refactor.
+
+        The durable path checkpoints and therefore does await; its race test is the one
+        that exercises real contention.
+        """
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7, capacity=2)
+        assert isinstance(opened, Opened)
+        results: list[MembershipStatus] = []
+
+        async def contend(user_id: int) -> None:
+            results.append((await opened.session.join(user_id)).status)
+
+        async with anyio.create_task_group() as tasks:
+            for user_id in (8, 9, 10):
+                tasks.start_soon(contend, user_id)
+
+        assert results.count(MembershipStatus.JOINED) == 1
+        assert results.count(MembershipStatus.AT_CAPACITY) == 2
+        assert len(opened.session.members) == 2
+
+    async def test_a_member_protects_the_session_from_the_opener_reopening(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(first, Opened)
+        await first.session.join(8)
+
+        protected = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        unprotected = await registry.open(
+            a_mount(), to_message(), key=KEY, actor_id=7, policy=SessionPolicy(protect=Unprotected())
+        )
+
+        assert protected == Rejected((first.session.summary,), RejectionReason.PROTECTED)
+        assert isinstance(unprotected, Opened)
+
+    async def test_capacity_and_member_ids_are_validated(self) -> None:
+        registry = SessionRegistry()
+        opened = await registry.open(a_mount(), to_message(), key=KEY, actor_id=7)
+        assert isinstance(opened, Opened)
+
+        with pytest.raises(ValueError, match="positive"):
+            await registry.open(a_mount(), to_message(), capacity=0)
+        for bad in (True, 0, -1):
+            with pytest.raises(ValueError, match="positive integers"):
+                await opened.session.join(cast(int, bad))
 
 
 class TestRacesAndCleanup:
