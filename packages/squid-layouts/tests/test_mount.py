@@ -1247,6 +1247,45 @@ class TestActionPolicy:
 
         assert calls == ["new"]
 
+    async def test_submit_declaratively_records_the_whole_action(self):
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+        class Editor(Component):
+            history: sl.runtime.History = sl.runtime.history()
+            name: str = state("old")
+
+            def render(self):
+                return sl_form(
+                    "Rename",
+                    spec,
+                    key="rename",
+                    on_submit=self.rename,
+                    record=self.history,
+                )
+
+            async def rename(self, event) -> None:
+                self.name = event.values["name"]
+
+        editor = Editor()
+        mount = Mount(editor, access=Everyone(), timeout=None)
+        commit_render(mount)
+        binding = mount._form_bindings["rename"]
+
+        await mount.dispatch_submit(
+            "rename",
+            fake_interaction(),
+            spec,
+            {"name": "new"},
+            binding.on_submit,
+            policy=binding.policy,
+            label=binding.label,
+            record=binding.record,
+        )
+        result = await editor.history.undo()
+
+        assert result.applied
+        assert editor.name == "old"
+
     async def test_rebase_submit_never_resolves_the_button_that_opens_the_form(self):
         """`_handlers` holds the presenting button under the very same key."""
         submitted: list[str] = []

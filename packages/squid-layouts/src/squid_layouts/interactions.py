@@ -86,6 +86,8 @@ class ActionResponder(Protocol):
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None: ...
 
     def invalidate(self) -> None: ...
@@ -125,9 +127,18 @@ class ActionEvent:
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None:
         """Present a portable form through the dispatching frontend."""
-        await self.responder.present_form(form, key=key, on_submit=on_submit, policy=policy)
+        await self.responder.present_form(
+            form,
+            key=key,
+            on_submit=on_submit,
+            policy=policy,
+            label=label,
+            record=record,
+        )
 
     def invalidate(self) -> None:
         """Request a redraw after presentation-only state changes."""
