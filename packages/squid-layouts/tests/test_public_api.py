@@ -117,6 +117,7 @@ ROOT_API = frozenset(
         "summary",
         "table",
         "table_row",
+        "tally",
         "temporal",
         "text",
         "themed",
@@ -174,6 +175,7 @@ SPECIALIST_SAMPLES = {
     "LayoutError": sl.errors,
     "ZonedDateTime": sl.temporal,
     "RosterPlacement": sl.patterns,
+    "TallyOption": sl.patterns,
     "Message": sl.text,
 }
 

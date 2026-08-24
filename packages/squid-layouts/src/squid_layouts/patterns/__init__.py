@@ -47,6 +47,7 @@ from squid_layouts.patterns.shells import (
 )
 from squid_layouts.patterns.source_ranked import SourceRankedList
 from squid_layouts.patterns.tabs import Tab, Tabs, TabsState
+from squid_layouts.patterns.tally import TallyOption
 from squid_layouts.patterns.wizard import (
     REVIEW_STEP,
     Wizard,
@@ -110,6 +111,7 @@ __all__ = [
     "Tab",
     "Tabs",
     "TabsState",
+    "TallyOption",
     "Wizard",
     "WizardAnswer",
     "WizardAnswers",
