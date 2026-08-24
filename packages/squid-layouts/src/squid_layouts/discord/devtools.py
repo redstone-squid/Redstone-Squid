@@ -32,6 +32,7 @@ from squid_layouts.profiling import AttributeValue, OperationAggregate, Operatio
 from squid_layouts.runtime.histories import HistorySnapshot
 from squid_layouts.runtime.topics import BusSnapshot, TopicBus
 from squid_layouts.semantic import LayoutNode
+from squid_reactive.actions import ActionLedger, ActionOutcomeSnapshot, add_action_outcome_sink
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
@@ -55,6 +56,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         reactor: Reactor | None = None,
         bus: TopicBus | None = None,
         runtime: DevToolsRuntime | None = None,
+        action_ledger: ActionLedger | None = None,
     ) -> None:
         self._check = check
         self._runtime = runtime or DevToolsRuntime(
@@ -67,6 +69,15 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         self._reactor = self._runtime.reactor
         self._bus = self._runtime.bus
         self._profiler = self._runtime.profiler
+        self._action_ledger = action_ledger or ActionLedger(limit=200)
+        self._owns_action_ledger = action_ledger is None
+        if self._owns_action_ledger:
+            add_action_outcome_sink(self._action_ledger)
+
+    def cog_unload(self) -> None:
+        """Close the DevTools-owned action ledger when Discord unloads this cog."""
+        if self._owns_action_ledger:
+            self._action_ledger.close()
 
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
     async def cog_check(self, ctx: Context[BotT]) -> bool:
@@ -209,6 +220,13 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             else "\n".join(_timeline_text(trace, snapshot.started_at) for trace in ordered)
         )
         await self._send(ctx, [section(sl.heading("Dispatch timeline"), code(body))])
+
+    @ui_group.command(name="actions")
+    async def inspect_actions(self, ctx: Context[BotT], limit: int = 20) -> None:
+        """Show causal action outcomes independently of profiler retention."""
+        outcomes = self._action_ledger.outcomes[-max(1, limit) :]
+        body = "No retained action outcomes." if not outcomes else "\n".join(_action_text(item) for item in outcomes)
+        await self._send(ctx, [section(sl.heading("Action outcomes"), code(body))])
 
     @ui_group.command(name="persistence")
     async def inspect_persistence(self, ctx: Context[BotT]) -> None:
@@ -408,8 +426,17 @@ def _history_text(history: HistorySnapshot) -> str:
     name = getattr(history, "name", "history")
     undo = getattr(history, "undo", ())
     redo = getattr(history, "redo", ())
-    entries = [f"{entry.label} ({'undo' if entry.has_undo else 'state-only'})" for entry in (*undo, *redo)]
+    entries = [f"{entry.label} [{entry.state}] action={entry.action_id}" for entry in (*undo, *redo)]
     return f"{name}: undo={len(undo)} redo={len(redo)}\n" + "\n".join(entries or ["(empty)"])
+
+
+def _action_text(outcome: ActionOutcomeSnapshot) -> str:
+    cause = "root" if outcome.cause is None else f"{outcome.cause.kind}:{outcome.cause.identity}"
+    detail = outcome.terminal if outcome.reason is None else f"{outcome.terminal}:{outcome.reason}"
+    return (
+        f"{outcome.action_id} {outcome.kind} {outcome.name} {detail} cause={cause} "
+        f"cells={outcome.changes.cells} participants={outcome.changes.participants}"
+    )
 
 
 def _reactor_text(snapshot: ReactorSnapshot | None) -> str:

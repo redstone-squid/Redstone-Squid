@@ -1,5 +1,6 @@
 """Action identity, immutable outcomes, and bounded diagnostic retention."""
 
+import json
 import logging
 import time
 import uuid
@@ -236,6 +237,52 @@ class ActionOutcomeSnapshot:
             None,
             outcome.reason.value,
             outcome.staged_summary,
+        )
+
+
+class ActionOutcomeCodec:
+    """Schema-versioned count-only JSON codec for portable outcome snapshots."""
+
+    schema_version = 1
+
+    def encode(self, outcome: ActionOutcomeSnapshot) -> bytes:
+        payload = {
+            "schema": self.schema_version,
+            "action_id": outcome.action_id,
+            "root_action_id": outcome.root_action_id,
+            "cause": None
+            if outcome.cause is None
+            else {"kind": outcome.cause.kind, "identity": outcome.cause.identity},
+            "kind": outcome.kind,
+            "name": outcome.name,
+            "terminal": outcome.terminal,
+            "timestamp": outcome.timestamp.isoformat(),
+            "sequence": None
+            if outcome.sequence is None
+            else {"runtime_id": str(outcome.sequence.runtime_id), "value": outcome.sequence.value},
+            "reason": outcome.reason,
+            "changes": {"cells": outcome.changes.cells, "participants": outcome.changes.participants},
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+
+    def decode(self, data: bytes) -> ActionOutcomeSnapshot:
+        payload = json.loads(data)
+        if payload.get("schema") != self.schema_version:
+            message = f"unsupported action outcome schema {payload.get('schema')!r}"
+            raise ValueError(message)
+        cause = payload["cause"]
+        sequence = payload["sequence"]
+        return ActionOutcomeSnapshot(
+            payload["action_id"],
+            payload["root_action_id"],
+            None if cause is None else CausalRef(cause["kind"], cause["identity"]),
+            payload["kind"],
+            payload["name"],
+            payload["terminal"],
+            datetime.fromisoformat(payload["timestamp"]),
+            None if sequence is None else CommitSequence(uuid.UUID(sequence["runtime_id"]), sequence["value"]),
+            payload["reason"],
+            ChangeSummary(payload["changes"]["cells"], payload["changes"]["participants"]),
         )
 
 
