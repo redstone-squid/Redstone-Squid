@@ -232,6 +232,74 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
     assert local.set("tags").value == frozenset({"theirs"})
 
 
+async def test_undoing_one_removal_leaves_a_concurrent_removal_of_the_same_tag_standing() -> None:
+    local = ReplicatedScope("a").open("project")
+    remote = ReplicatedScope("b").open("project")
+    with transaction():
+        local.set("tags").add("shared")
+    remote.import_update(local.export_since())
+    history = History(HistoryOwner())
+    with transaction():
+        history.record("drop the tag")
+        local.set("tags").discard("shared")
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        remote.set("tags").discard("shared")
+    local.import_update(remote.export_since())
+
+    result = await history.undo()
+
+    assert result.applied
+    assert local.set("tags").value == frozenset()
+
+    token = commits[0].participant_changes[0].token
+    inverse = token.plan_inverse()
+    assert isinstance(inverse, PreparedReplicatedInverse)
+    with transaction():
+        token.stage_inverse(inverse)
+    local.import_update(remote.export_since())
+
+    assert local.set("tags").value == frozenset({"shared"})
+
+
+async def test_undoing_a_discard_of_an_absent_value_adds_nothing() -> None:
+    document = ReplicatedScope("a").open("project")
+    history = History(HistoryOwner())
+    with transaction():
+        history.record("drop a value that was never there")
+        document.set("tags").discard("absent")
+
+    result = await history.undo()
+
+    assert result.applied
+    assert document.set("tags").value == frozenset()
+
+
+async def test_undo_and_redo_of_a_discard_round_trip() -> None:
+    document = ReplicatedScope("a").open("project")
+    tags = document.set("tags")
+    with transaction():
+        tags.add("mine")
+    history = History(HistoryOwner())
+    with transaction():
+        history.record("drop the tag")
+        tags.discard("mine")
+    assert tags.value == frozenset()
+
+    undone = await history.undo()
+    assert undone.applied
+    assert tags.value == frozenset({"mine"})
+
+    redone = await history.redo()
+    assert redone.applied
+    assert tags.value == frozenset()
+
+    undone_again = await history.undo()
+    assert undone_again.applied
+    assert tags.value == frozenset({"mine"})
+
+
 def test_action_token_reloads_against_a_recreated_document() -> None:
     source = ReplicatedScope("a").open("project")
     commits: list[ActionCommit] = []

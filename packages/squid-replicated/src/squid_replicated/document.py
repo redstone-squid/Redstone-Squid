@@ -117,7 +117,15 @@ class ReplicatedChangeToken:
                     document.engine.operation("remove", operation.path, operation.value, (operation.identity,))
                 )
             elif operation.kind == "remove":
-                inverse.append(document.engine.operation("add", operation.path, operation.value))
+                # Reversing this removal by name, not by re-adding: a fresh add would outlive a
+                # concurrent replica's removal of the same tags and resurrect the value against it.
+                inverse.append(
+                    document.engine.operation(
+                        "restore", operation.path, operation.value, operation.tags, operation.identity
+                    )
+                )
+            elif operation.kind == "restore":
+                inverse.append(document.engine.operation("remove", operation.path, operation.value, operation.tags))
             else:
                 return ConflictDetail(f"replicated:{operation.path}", 0, 0)
         return PreparedReplicatedInverse(tuple(inverse), self.token_epoch)
