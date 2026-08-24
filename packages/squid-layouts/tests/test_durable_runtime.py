@@ -703,3 +703,48 @@ async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
         assert len(report.incompatible) == 1
         assert "does not match" in report.incompatible[0].reason
         tasks.cancel_scope.cancel()
+
+
+async def test_a_durable_quota_survives_recovery() -> None:
+    store = MemorySessionStore()
+    key = SessionKey.guild("game", 5)
+
+    async with anyio.create_task_group() as tasks:
+        first = runtime(store, FakeFrontend())
+        await tasks.start(first.run)
+        opened = await first.open(
+            sl.discord.Mount(Counter(), access=Everyone(), timeout=None),
+            delivered_to(fake_message(message_id=99)),
+            recipe="counter",
+            key=key,
+            actor_id=7,
+            quota=1,
+            domain="game",
+        )
+        assert isinstance(opened, Opened)
+        record = DurableSessionCodec.loads((await store.list_records())[0].snapshot_payload)
+        assert record.quota == 1
+        assert record.domain == "game"
+        tasks.cancel_scope.cancel()
+
+    async with anyio.create_task_group() as tasks:
+        second = runtime(store, FakeFrontend())
+        report = await tasks.start(second.run)
+
+        assert len(report.restored) == 1
+        recovered = next(iter(second.sessions.active()))
+        assert recovered.quota == 1
+        assert recovered.domain == "game"
+        # The recovered session counts, so the same user cannot open a second game.
+        blocked = await second.open(
+            sl.discord.Mount(Counter(), access=Everyone(), timeout=None),
+            delivered_to(fake_message(message_id=100)),
+            recipe="counter",
+            key=SessionKey.guild("game", 6),
+            actor_id=7,
+            quota=1,
+            domain="game",
+        )
+        assert isinstance(blocked, Rejected)
+        assert blocked.reason is RejectionReason.QUOTA_REACHED
+        tasks.cancel_scope.cancel()
