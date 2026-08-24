@@ -161,6 +161,18 @@ This is not acceptable at Squid's participant boundary. The Loro adapter must is
 only `type(error) is BaseException` from the binding, while re-raising cancellation and process-control
 exceptions. The workaround should be removed once the Python binding exposes conventional exception types.
 
+### Invalidation and transport do not decide the backend
+
+Both bindings expose document/container observation surfaces, but path-granular reactive invalidation would
+couple Squid dependencies to backend event-path semantics before the immutable snapshot API is stable. The
+production hardening target therefore starts with one reactive version per replicated document. Container or
+path granularity is a later measured optimization and is not a reason to leak either backend's mutable values.
+
+Neither engine supplies Squid's transport, authentication, ownership, or durable outbox. The existing
+`ReplicatedUpdate` envelope remains the boundary: decode and route outside the gate, apply inside the gate,
+and publish outbound bytes after commit through an application-owned transport/outbox. No first application
+requirement discovered in this research justifies selecting a library-specific network provider.
+
 ## Staging identity and performance
 
 The original adapters used `fork()` or a new `Doc` with a fresh peer/client identity for every Squid action.
