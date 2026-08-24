@@ -31,7 +31,15 @@ from squid_layouts.runtime import (
     transaction,
 )
 from squid_layouts.semantic import Action
-from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_outcome_sink, join_action, on_action_commit
+from squid_reactive import (
+    ActionLedger,
+    ChangeSummary,
+    OperationEventSnapshot,
+    ParticipantChange,
+    add_action_outcome_sink,
+    join_action,
+    on_action_commit,
+)
 from squid_reactive.operations import OperationContext
 
 
@@ -302,6 +310,40 @@ def test_limit_snapshot_and_controls_follow_retained_entries() -> None:
     assert snapshot.undo[-1].state == "ready"
     undo, redo = controls(subject.history)
     assert (undo.available, redo.available) == (True, False)
+
+
+async def test_participant_planning_failure_returns_failed_without_partial_inverse() -> None:
+    class BadToken:
+        def plan_inverse(self):
+            raise RuntimeError("backend unavailable")
+
+    class Participant:
+        def prepare(self, view) -> None:
+            return None
+
+        def describe_change(self, prepared: None) -> ParticipantChange:
+            return ParticipantChange("bad", BadToken(), ChangeSummary(participants=1))
+
+        def apply(self, prepared: None) -> None:
+            pass
+
+        def abort(self, prepared: None, cause: BaseException) -> None:
+            pass
+
+        def finalize(self, prepared: None) -> None:
+            pass
+
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 4
+        join_action(object(), Participant)
+
+    result = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.FAILED
+    assert subject.page == 4
+    assert isinstance(result.error, RuntimeError)
 
 
 def test_retained_history_does_not_pin_its_component_owner_graph() -> None:

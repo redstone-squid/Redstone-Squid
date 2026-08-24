@@ -116,6 +116,14 @@ class ActionValidationError(ValueError):
     """An admitted action failed application validation before publication."""
 
 
+class FrameworkIntegrityError(RuntimeError):
+    """An infallible publication adapter failed after the local commit point."""
+
+
+class FreshActionError(RuntimeError):
+    """A distinct action was requested after its admitting transaction staged work."""
+
+
 class UndeclaredStateError(RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
@@ -1074,6 +1082,8 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
                     tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
                 )
                 emit_outcome(integrity_commit)
+                message = f"an infallible transaction adapter failed after the commit point: {error}"
+                raise FrameworkIntegrityError(message) from error
             else:
                 _emit_rollback(current, error, during_commit=True)
             raise
@@ -1095,7 +1105,7 @@ def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]
     outer = _CURRENT.get()
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
         message = "a fresh action cannot start after the admitting transaction staged changes"
-        raise RuntimeError(message)
+        raise FreshActionError(message)
     token = _CURRENT.set(None)
     try:
         with transaction(action_context=action_context):
