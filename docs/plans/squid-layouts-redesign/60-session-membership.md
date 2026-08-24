@@ -3,29 +3,27 @@
 ## Problem
 
 `SessionPolicy` controls how many logical sessions may occupy one `SessionKey`. It does not
-control how many users may participate in one session. Games, lobbies, collaborative editors,
-and review rooms therefore have no framework operation for admission:
+control how many users may participate in one session:
 
 ```text
 SessionPolicy      = how many sessions may occupy this key?
 ParticipantPolicy  = how many users may join this session?
 ```
 
-`Session.participants` already appears in summaries and replacement protection, but today it is
-initialized only from the root `actor_id` and never changes. Attachment actors are tracked
-separately. Durable summaries serialize the participant set, then recovered `Session`
-construction resets it from `actor_id`; that dormant mismatch becomes a real data-loss bug as
-soon as membership can change.
+Games, lobbies, collaborative editors, and review rooms therefore have no framework operation
+for admission. Applications can keep their own participant set in component state, but then
+admission races with concurrent clicks, replacement protection cannot see it, inspection reports
+the wrong users, and durable recovery can lose the set.
 
-Applications can keep their own set in component state, but then admission races with concurrent
-clicks, replacement protection cannot see it, devtools report the wrong users, and a recovered
-durable lobby forgets its members. Membership belongs to the logical session, not to any one
-mount in its tree.
+The last problem already exists in a latent form. `Session.participants` is serialized in durable
+summaries and is used by replacement protection, but recovered `Session` construction currently
+rebuilds it from only the root `actor_id`. Membership belongs to the logical session, not to one
+mount or component tree, so it needs a first-class session operation and durable representation.
 
 ## Decision
 
-Make membership a serialized operation on `Session`, governed by an immutable
-`ParticipantPolicy` separate from `SessionPolicy`:
+Make membership a serialized operation on `Session`, with capacity nested inside the existing
+opening policy:
 
 ```python
 mount = sessions.defaults.mount(Lobby(...), access=Owner(interaction.user.id))
@@ -33,7 +31,7 @@ opened = await sessions.open(
     mount,
     destination,
     key=SessionKey.guild("game", guild.id),
-    participant_policy=ParticipantPolicy(limit=10),
+    policy=SessionPolicy(participants=ParticipantPolicy(limit=10)),
     actor_id=interaction.user.id,
 )
 
@@ -41,9 +39,14 @@ result = await opened.session.join(other_user_id)
 left = await opened.session.leave(other_user_id)
 ```
 
-Normal admission outcomes are typed values rather than exceptions. Operational failures—store
-loss, programming errors, and Discord delivery failures—remain exceptions or existing open
-results rather than being disguised as capacity decisions.
+Keeping participant capacity inside `SessionPolicy` gives `SessionRegistry`, `Screen`, and
+`DurableSessionRuntime` one opening-policy path. It avoids a parallel `participant_policy`
+argument and ensures the policy is carried consistently through ordinary opening, replacement,
+durable admission, and recovery.
+
+Membership operations are caller-authorized and capacity-only. The framework does not decide
+whether a user was invited, banned, paid, assigned to a team, or otherwise allowed to join. The
+caller performs that authorization before invoking `join()` or `leave()`.
 
 ## Public API
 
@@ -54,55 +57,40 @@ results rather than being disguised as capacity decisions.
 class ParticipantPolicy:
     limit: int | None = None
 
+class JoinStatus(StrEnum):
+    JOINED = "joined"
+    ALREADY_JOINED = "already_joined"
+    LIMIT_REACHED = "limit_reached"
+    SESSION_FINISHED = "session_finished"
+
 @dataclass(frozen=True, slots=True)
-class Joined:
+class JoinResult:
     user_id: int
+    status: JoinStatus
     participants: frozenset[int]
+    remaining_capacity: int | None
+
+class LeaveStatus(StrEnum):
+    LEFT = "left"
+    NOT_PARTICIPANT = "not_participant"
+    SESSION_FINISHED = "session_finished"
 
 @dataclass(frozen=True, slots=True)
-class AlreadyJoined:
+class LeaveResult:
     user_id: int
+    status: LeaveStatus
     participants: frozenset[int]
-
-@dataclass(frozen=True, slots=True)
-class ParticipantLimitReached:
-    user_id: int
-    limit: int
-    participants: frozenset[int]
-
-@dataclass(frozen=True, slots=True)
-class ParticipantSessionFinished:
-    user_id: int
-
-type JoinResult = Joined | AlreadyJoined | ParticipantLimitReached | ParticipantSessionFinished
-
-@dataclass(frozen=True, slots=True)
-class Left:
-    user_id: int
-    participants: frozenset[int]
-
-@dataclass(frozen=True, slots=True)
-class NotParticipant:
-    user_id: int
-    participants: frozenset[int]
-
-type LeaveResult = Left | NotParticipant | ParticipantSessionFinished
+    remaining_capacity: int | None
 ```
 
-`ParticipantPolicy.limit` must be positive or `None`; `None` means unbounded. There is no minimum
-in v1. A session may be empty, its opener may leave, and becoming empty does not finish it.
+The two compact result types keep branch-specific typing without adding a public dataclass for
+every normal outcome. `JOINED` and `LEFT` mean the membership change has been committed. A
+capacity or lifecycle decision is represented by a result; persistence, fencing, programming,
+and delivery failures remain exceptions or existing open results.
 
-`SessionRegistry.open`, `Screen.open`, and `DurableSessionRuntime.open` accept:
-
-```python
-participant_policy: ParticipantPolicy = ParticipantPolicy()
-```
-
-`Screen` gains a `participant_policy` field because it is reusable per-screen opening policy;
-this is an extension of the shipped value, not a second `SessionSpec` abstraction. A per-call
-override follows the same precedence as other `Screen.open` overrides only if the existing typed
-options surface can express it cleanly; otherwise the screen field is fixed and callers needing a
-different policy call `SessionRegistry.open` directly.
+`ParticipantPolicy.limit` must be positive or `None`; `None` means unbounded. User IDs supplied
+to membership operations and as the initial `actor_id` must be positive Discord IDs, and `bool`
+is not accepted as an integer ID.
 
 `Session` exposes:
 
@@ -126,110 +114,135 @@ async def leave(self, user_id: int) -> LeaveResult: ...
 ```
 
 `remaining_capacity` is `None` for an unbounded session and otherwise
-`max(limit - len(participants), 0)`. Public integer inputs reject `bool` and non-positive Discord
-IDs with `ValueError`; this matches session identity being Discord-user membership rather than an
-arbitrary application key.
+`max(limit - len(participants), 0)`. Result objects contain immutable snapshots so callers can
+render the outcome they received even if another operation changes the live session afterward.
+
+No additional participant-policy field is added to `Screen`; its existing `policy` field carries
+the nested `ParticipantPolicy`. `SessionRegistry.open`, `Screen.open`, and
+`DurableSessionRuntime.open` continue to accept one `SessionPolicy`.
 
 ## Membership semantics
 
-The root `actor_id`, when present, is the initial participant. Because a finite limit is always
-positive, opening can always admit that one user. `actor_id=None` starts empty.
+The opener is the initial participant when `actor_id` is present. An actorless session starts
+empty. This is a semantic default, not an authorization decision; it simply makes the opener's
+session presence explicit. A positive finite participant limit can therefore always admit its
+opener.
 
-Attachment actors remain operational attribution and do **not** join automatically. Opening a
-child screen, inspecting a session, or pressing one of its controls is not evidence that the user
-accepted membership. Applications call `join()` at the domain event that actually means “join.”
+Attachment actors remain operational attribution and do not join automatically. Opening a child
+screen, inspecting a session, or pressing one of its controls is not evidence that the user
+accepted membership. Applications call `join()` at the domain event that actually means “join”.
 
-`join(user_id)` under the session lifecycle lock performs, in order:
+`join(user_id)` runs under the session lifecycle lock:
 
-1. Return `ParticipantSessionFinished` if the session is closed, finishing, or its root is
-   finished.
-2. Return `AlreadyJoined` if the user is present; this succeeds idempotently even when the session
-   is currently at capacity.
-3. Return `ParticipantLimitReached` if adding one would exceed the finite limit.
-4. Persist the candidate membership when the session is durable.
-5. Publish the new immutable set and return `Joined`.
+1. Return `SESSION_FINISHED` if the session is closed, finishing, or its durable claim is gone.
+2. Return `ALREADY_JOINED` if the user is already present. This remains idempotent at capacity.
+3. Return `LIMIT_REACHED` if adding the user would exceed the finite limit.
+4. Stage and persist the candidate set for a durable session.
+5. Publish the new immutable set and return `JOINED`.
 
-`leave(user_id)` uses the same lock, returns `ParticipantSessionFinished` for a dead session,
-`NotParticipant` when absent, and otherwise persists then publishes the set without that user.
-Neither operation finishes mounts, changes access policy, or sends a Discord response.
+`leave(user_id)` uses the same lock. It returns `SESSION_FINISHED` for a dead session,
+`NOT_PARTICIPANT` when absent, and otherwise persists and publishes the set without that user.
 
-The participant policy is capacity only. It does not answer who is allowed to join. The caller,
-route middleware, or application service owns invitation, ban, guild, payment, and game-state
-authorization before invoking `join()`.
+Leaving the opener or the final participant is allowed. An empty session remains alive; the
+application decides when a lobby or game is finished. Membership changes do not alter mount
+access, finish mounts, or transfer membership between sessions.
 
-`ProtectCrossUserAttachments` already consults both `SessionSummary.participants` and
-`attachment_actors`; no new replacement policy is needed. Once joins are real, an opener cannot
-replace a session while a different explicit participant remains in it. `Unprotected` continues
-to opt out.
+`ProtectCrossUserAttachments` continues to consult both explicit participants and attachment
+actors. Once joins are real, an opener cannot replace a session while a different explicit
+participant remains in it. `Unprotected` continues to opt out.
 
 ## Durability
 
-Membership and capacity are part of the durable logical-session record, not component state.
+Membership and participant capacity are facts of the durable logical-session record, not
+component state.
 
-- `SessionSummary` gains `participant_limit`; `participants` remains the immutable current set.
-- `DurableSessionRecord` and its codec carry `participant_limit` and `participants`.
-- The durable session record protocol increments. The decoder accepts protocol 1 records as
-  `participant_limit=None` with participants derived from the stored root actor, then writes the
-  current protocol on the next checkpoint.
-- The separately stored summary payload also carries `participant_limit`; its existing missing
-  `participants` compatibility remains an empty/default decode only for genuinely old records.
-- Recovery initializes `Session._participants` from the decoded summary/record, never by
-  recomputing it from `actor_id` when durable membership is available.
-- Summary and record validation requires matching ids, keys, participant policy, and participant
-  sets so a torn store cannot quietly recover contradictory membership.
+- `SessionSummary` carries `participant_limit` and the current immutable participant set.
+- `DurableSessionRecord` carries the same values alongside the mount graph.
+- The durable record protocol advances to version 2.
+- Protocol 1 records decode with an unbounded participant policy and membership derived from the
+  stored root actor.
+- Legacy summary payloads without the new participant-policy field are treated as old records;
+  their participant set is derived from `actor_id`, including the historical empty set written
+  during initial durable opening.
+- Current summaries and records carry the exact set and limit. Recovery validates that their IDs,
+  keys, participant policies, and participant sets agree.
+- The separately stored summary remains the remote-admission projection; the full record remains
+  the recovery snapshot. Both must agree before a session is registered.
+- The next successful checkpoint writes the current protocol and exact membership for a legacy
+  record.
 
-A durable join or leave is successful only after a fenced checkpoint stores the candidate set.
-The operation stages the new set while holding the lifecycle lock; on checkpoint failure it keeps
-the old in-memory set, updates durability health through the existing runtime path, and raises a
-new `ParticipantPersistenceError`. Thus `Joined` and `Left` mean the membership will survive an
-immediate process loss. Remote admission inspection sees the updated summary after the same
-checkpoint.
+The active durable runtime owns the session under its distributed lease. A membership operation
+stages its candidate set while holding the lifecycle lock and performs an immediate fenced
+checkpoint before returning `JOINED` or `LEFT`. A checkpoint/fence failure restores the old
+in-memory set and raises `ParticipantPersistenceError`.
 
-The active durable runtime already owns the session under a distributed lease, so the local
-lifecycle lock is the only in-process admission lock required. A lost fence makes persistence
-fail rather than allowing two processes to admit independently.
+Checkpoint writes for one durable session are serialized so a maintenance checkpoint cannot
+overwrite a newer membership snapshot. Claim-loss handling must not recursively finish a session
+while the membership operation holds the lifecycle lock; teardown is deferred until that lock is
+released.
+
+The initial durable summary must be written from the constructed session's actual summary rather
+than from a pre-session summary, so the opener's initial membership is persisted correctly.
 
 ## Inspection and operations
 
-`SessionSummary`, `SessionInspection`, and devtools show the participant count, finite/unbounded
-limit, and remaining capacity. Existing participant lists now mean explicit membership rather
-than merely echoing the opener. No devtools join/kick operation is added in v1; operational
-mutation needs an authorization and audit design of its own.
+`SessionInspection`, summaries, and devtools show:
+
+- the explicit participant IDs or count;
+- the finite or unbounded participant limit; and
+- remaining capacity.
+
+Existing participant lists now mean explicit membership rather than merely echoing the opener.
+No devtools join/kick operation is added; operational mutation needs its own authorization and
+audit design.
 
 ## Not included
 
-- No invitation, role, team, ready-state, owner, or ban model.
+- No invitation, role, team, ready-state, owner, ban, or participant metadata model.
+- No framework-level authorization callback.
 - No minimum participant count or automatic finish when empty.
 - No automatic join from attachment, access, or interaction activity.
 - No participant-specific mount access changes.
 - No waiting queue when capacity is full.
 - No transfer of membership between sessions.
-- No participant metadata; applications keep game-specific data in their own durable component or
-  application store.
+- No database schema migration; only versioned durable JSON payloads change.
 
 ## Verification
 
-- The root actor is the sole initial participant; an actorless session starts empty and attachment
-  actors never join implicitly.
-- Join succeeds below capacity, is idempotent when already joined, and returns the typed full result
-  at capacity.
-- Leave succeeds, is idempotent when absent, permits the opener and final participant to leave, and
-  never finishes the session.
-- Join/leave after or during finish return `ParticipantSessionFinished` without mutation.
+- The opener is the sole initial participant; an actorless session starts empty; attachment actors
+  never join implicitly.
+- Join succeeds below capacity, is idempotent when present, and returns the typed full result at
+  capacity.
+- Leave succeeds, is idempotent when absent, permits the opener and final participant to leave,
+  and never finishes the session.
+- Join/leave after or during finish return `SESSION_FINISHED` without mutation.
 - Concurrent joins for the final slot admit exactly one user under the lifecycle lock.
-- Participant summaries immediately affect `ProtectCrossUserAttachments`; `Unprotected` still
-  permits replacement.
+- Participant membership affects `ProtectCrossUserAttachments`; `Unprotected` still permits
+  replacement.
 - Unbounded and finite capacity properties report correctly.
 - Durable join/leave checkpoint before returning, survive recovery, and roll back in memory when
   persistence or fencing fails.
-- Protocol 1 durable records recover with unbounded policy and their root actor as the participant;
-  current records round-trip the exact set and limit.
+- Protocol 1 records recover with unbounded policy and root-actor membership; current records
+  round-trip the exact set and limit.
 - A recovered attachment actor remains attribution but is not promoted to membership.
 - Inspection and devtools snapshots report the same membership and capacity as the live session.
-- Focused session, durability codec/runtime, operations, Screen, public API, and typing tests pass;
-  then run `just typecheck` and `git diff --check`.
+- A test-only lobby fixture exercises caller-authorized admission without adding bot UX.
+- Focused session, screen, durability codec/runtime, operations, public API, and typing tests
+  pass; then run `just typecheck` and `git diff --check`.
+
+## Implementation sequence
+
+Each commit is independently valid and reviewable:
+
+1. `sessions: model participant membership` — nested policy, membership state, result types,
+   lifecycle semantics, and ordinary-session tests.
+2. `durability: persist participant membership` — protocol 2 records, legacy decoding, atomic
+   fenced membership checkpoints, rollback, and recovery tests.
+3. `operations: inspect participant capacity` — inspection/devtools fields and public API tests.
+4. `docs: revise session membership plan` — this decision record and status update.
 
 ## Status
 
-Designed. Depends on no other new plan; plan 61 may use it for future lobby-like role workflows
-but does not require it.
+Revised 2026-08-24. Designed; implementation not started. The first implementation must include
+the framework lobby fixture and the durable recovery/race tests above before this plan is marked
+complete.
