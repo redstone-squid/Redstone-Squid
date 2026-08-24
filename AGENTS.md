@@ -14,6 +14,12 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 - Do not `from __future__ import annotations` and do not quote forward references in type hints — Python 3.14 defers annotation evaluation by default (PEP 649/749), so plain unquoted names work everywhere.
 - Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
+- **Lifetime in docstrings**: a type that defines a terminating verb (`close`, `detach`,
+  `finish`, `cancel`, `discard`, `run`) or hands out expiring authority states what ends it,
+  in one clause, in its first paragraph. Everything else states nothing — a frozen value has
+  no lifetime to describe. The trigger is a method the class defines, not how it is spelled.
+  See `docs/squid-layouts-architecture.md` for the verb table and the naming rules
+  `tests/architecture/test_naming.py` enforces.
 
 ### Concurrency
 - **Task lifetime and cancellation go through anyio** — `anyio.create_task_group()`,
