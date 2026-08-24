@@ -33,7 +33,7 @@ and action rows, from the same semantic document.
 ## The layers
 
 1. **Semantic documents** describe author intent with `Section`, `Paragraph`, `List`,
-   `Fields`, `Table`, `Media`, `Details`, `Actions`, `Choices`, `Items`, and `Navigation`.
+   `Fields`, `Table`, `Roster`, `Media`, `Details`, `Actions`, `Choices`, `Items`, `Navigation`, and `Grid`.
    Authors may express a display preference and flexibility, but never an exact Discord shape.
    The lowercase factories (`sl.section`, `sl.actions`, `sl.field`, …) are the recommended
    authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
@@ -102,6 +102,67 @@ Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.pla
 Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
 subtree, so a component may select a palette from reactive state while the final scene still contains
 only exact colours. Discord buttons retain Discord's platform-owned style colours.
+
+### Host-owned ledgers and selectable grids
+
+Roster and tally declarations render domain data without taking ownership of it:
+
+```python
+placement = sl.patterns.place_roster(
+    tuple(sl.patterns.RosterEntry(str(member.id), member.name, member.team) for member in members),
+    (
+        sl.patterns.RosterSlot("builders", "Builders", capacity=4),
+        sl.patterns.RosterSlot("reviewers", "Reviewers", capacity=2),
+    ),
+    overflow=sl.patterns.RosterOverflow.WAITLIST,
+)
+roster = sl.roster(placement, key="teams", on_join=move_member)
+
+tally = sl.tally(
+    tuple(sl.patterns.TallyOption(option.key, option.label, counts[option.key]) for option in options),
+    key="poll",
+    on_vote=cast_vote,
+)
+```
+
+Grid cells are variadic, matching the other collection factories. The semantic factory
+preserves one callback contract while adapting its Discord shape:
+
+```python
+board = sl.grid(
+    sl.patterns.GridCell("a1", "A1"),
+    sl.patterns.GridCell("b1", "B1", available=False),
+    sl.patterns.GridCell("a2", "A2", tone=sl.Tone.SUCCESS),
+    sl.patterns.GridCell("b2", "B2"),
+    key="board",
+    columns=2,
+    on_pick=pick_cell,  # SelectionEvent.values contains the stable cell key
+)
+```
+
+Use `sl.discord.button_grid(*cells, ...)` only when exact button rows are part of the
+contract and exceeding Discord's row or message budget should be an error. Use
+`sl.semantic.TableDisplay.MATRIX` for a non-interactive dense matrix.
+
+`sl.patterns.Agreement` is a mounted, actor-keyed component. Its approval state ends with the
+mount and is never a substitute for a durable host ledger:
+
+```python
+participants = tuple(
+    sl.patterns.AgreementParticipant(str(member.id), member.name) for member in reviewers
+)
+agreement = sl.patterns.Agreement(
+    "Approve this release?",
+    participants,
+    require="all",
+    on_resolve=release,
+)
+mount = sl.discord.Mount(
+    agreement,
+    access=sl.discord.Users({member.id for member in reviewers}),
+    timeout=900,
+)
+```
 
 ### Discord component parity
 

@@ -2,8 +2,8 @@
 
 ## Status
 
-Implementation in progress. Refreshed on 2026-08-24 against the shipped semantic
-planner, routed controls, localized chrome, narrowed public API, and session membership.
+Implemented on 2026-08-24. Refreshed against the shipped semantic planner, routed
+controls, localized chrome, narrowed public API, and session membership before implementation.
 This supersedes the original survey sketch; the four capabilities remain in scope, but
 their APIs now follow the architecture that landed after the sketch was written.
 
@@ -27,7 +27,7 @@ their APIs now follow the architecture that landed after the sketch was written.
 ## Module boundaries
 
 - `patterns/roster.py`: immutable roster declarations, allocation, and verdicts.
-- `patterns/tally.py`: immutable tally declarations and factory helpers.
+- `patterns/tally.py`: the immutable tally declaration; `factories.py` owns the root factory.
 - `patterns/agreement.py`: the actor-keyed mounted component.
 - `semantic.py` / `factories.py`: the `Roster` and `Grid` semantic nodes and their root
   factories, because their lowering depends on active target capabilities or chrome.
@@ -141,11 +141,11 @@ Grid has three deliberately separate surfaces.
 1. `TableDisplay.MATRIX` renders a dense code-block matrix through the existing Table
    strategy axis. An explicit display is authoritative; `AUTO` continues to choose between
    tabular and records.
-2. `sl.discord.button_grid(cells, *, key, columns, on_pick)` returns exact `Row` primitives.
+2. `sl.discord.button_grid(*cells, key, columns, on_pick)` returns exact `Row` primitives.
    It validates non-empty unique keys and positive columns at authoring time. Planning
    enforces the target's five-button row width and total component/row budgets. It never
    degrades or changes interaction shape.
-3. `sl.grid(cells, *, key, columns, on_pick, flexibility=...)` creates semantic `Grid`.
+3. `sl.grid(*cells, key, columns, on_pick, flexibility=...)` creates semantic `Grid`.
    Its strategy axis is `buttons → coordinate → paged_select`: exact rows when they fit;
    a text matrix plus one select of available coordinates; then a paged select when more
    than 25 available cells remain. Every rung emits the same `SelectionEvent` cell key.
@@ -173,8 +173,8 @@ class AgreementParticipant:
     display: TextLike
 
 class Agreement(Component):
-    approved: tuple[str, ...] = state(())
-    resolved: bool = state(False)
+    approved: tuple[str, ...] = state((), persist=False)
+    resolved: bool = state(default=False, persist=False)
 
     def __init__(
         self,
@@ -205,11 +205,11 @@ semantic lowering; Agreement consumes them from `CHROME_CONTEXT` during componen
 
 ## Landing and verification
 
-1. Roster model + semantic lowering + lobby consumer.
-2. Tally factory + generic poll consumer.
-3. Table matrix + semantic and exact grids + showcase.
-4. Agreement component.
-5. Public API, README, architecture, and completion/deferred records.
+1. Roster model + semantic lowering + lobby consumer — shipped in `6e210e01`.
+2. Tally factory + generic poll consumer — shipped in `39161c5a`.
+3. Table matrix + semantic and exact variadic grids + showcase — shipped in `f3305aa5`.
+4. Agreement component — shipped in `733f7493`.
+5. Public API, README, architecture, and completion/deferred records — shipped with this status update.
 
 Each slice gets focused tests and a reviewable commit. Final validation runs all new tests
 together, affected bot tests, `git diff --check`, changed-file Ruff, and project Pyrefly

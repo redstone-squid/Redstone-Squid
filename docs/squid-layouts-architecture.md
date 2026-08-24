@@ -89,8 +89,8 @@ one screen, or under none at all.
 
 The package root is semantic-first. Structural nodes are `Group`, `Stack`, `Cluster`,
 `Section`, `Article`, and `Aside`; content includes `Heading`, `Paragraph`, `List`, `Fields`,
-`Table`, `Quote`, `Code`, `Media`, `Details`, and measures; interactions are `Actions`,
-`Choices`, `Items`, and `Navigation`. These say what the information means and preserve
+`Table`, `Roster`, `Quote`, `Code`, `Media`, `Details`, and measures; interactions are `Actions`,
+`Choices`, `Items`, `Navigation`, and `Grid`. These say what the information means and preserve
 stable string keys, not which Discord widget must appear.
 
 Author them through the lowercase factories — `sl.section(sl.heading(...), *children)`,
@@ -120,6 +120,19 @@ grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 1
 author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
 windows. Cross-page multi-selection is rejected because a page-local Discord select cannot
 honestly express that domain operation without an explicit grouping or commit model.
+
+Host-owned ledgers remain values outside the renderer. `place_roster` is a pure, stable
+allocator over immutable declarations; `sl.roster` renders its result with active localized
+chrome. `sl.tally` similarly renders host-computed counts and composes existing Progress and
+Choices semantics instead of storing votes. Mounted tally controls adapt between buttons and
+selects, while routed tally controls use one `RoutedChoices` route for all option keys.
+
+Spatial data has three explicit contracts. `sl.semantic.TableDisplay.MATRIX` is an authoritative dense
+code-block representation. `sl.discord.button_grid(*cells, ...)` returns exact Discord rows
+and fails planning when that chosen shape exceeds Discord limits. `sl.grid(*cells, ...)` is
+semantic: its sticky `discord.grid` strategy moves from button rows to a coordinate matrix and
+select, then to a paged select. Every rung submits the same stable cell key in a
+`SelectionEvent`; unavailable cells remain visible but cannot be selected.
 
 Strategy ranking is lexicographic rather than scalar: representation stability by
 `Flexibility`, author display preference, pager count, transition distance, then stable path
@@ -209,6 +222,13 @@ stored cursors and are clamped by the same policy as planner-owned lists. The cu
   window's membership, group exclusions are applied during the merge, validation gates Apply, and an
   Apply edge dispatches only when the committed set changes. Panels with at most five options expose
   a form alternate to the planner.
+
+`Agreement` deliberately sits beside the pure pattern catalogue rather than inside it. Its
+transition is actor-keyed, so it is a mounted component with two explicitly non-persistent
+state cells (`approved` and `resolved`). Participant display names are host data, actor identity
+comes from the event, and `ActionPolicy.EXCLUSIVE` serializes approval and withdrawal. Discord
+hosts should mount it under `sl.discord.Users(...)`; the component repeats membership validation
+as a frontend-neutral safety boundary and calls its resolution hook once at the threshold.
 
 `SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
 visible resource owns one immutable `LoadedWindow`; `WindowLoader` owns source-position ordering. Its
