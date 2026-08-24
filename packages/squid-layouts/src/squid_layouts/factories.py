@@ -16,13 +16,14 @@ Factories deliberately do not flatten a list argument: ``*`` already says it, sa
 call site, and keeps a stray dict or generator from being silently absorbed.
 """
 
-from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts._roster import RosterPlacement
+from squid_layouts._tally import TallyOption
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
@@ -112,7 +113,7 @@ from squid_layouts.semantic import (
     ZonedTimestamp,
 )
 from squid_layouts.temporal import ZonedDateTime
-from squid_layouts.text import ResolvedText, TextLike, md
+from squid_layouts.text import Message, ResolvedText, TextLike, md
 
 if TYPE_CHECKING:
     from squid_layouts.runtime.histories import History
@@ -497,6 +498,67 @@ def roster(
     return Roster(key, placement, on_join, routes, locked, show_waitlist)
 
 
+def _tally_label(option: TallyOption) -> Message:
+    prefix = "{emoji} " if option.emoji is not None else ""
+    label = "**{label}**" if option.mine else "{label}"
+    return Message(
+        f"{prefix}{label} — {{count}}",
+        {"emoji": option.emoji, "label": option.label, "count": option.count},
+    )
+
+
+def tally(
+    options: Sequence[TallyOption],
+    *,
+    key: str,
+    on_vote: Callable[[SelectionEvent], Awaitable[None]] | None = None,
+    route_id: str | None = None,
+    total: int | None = None,
+    show_bars: bool = True,
+) -> Stack:
+    """Render host-owned counts with optional mounted or routed selection."""
+    if not options:
+        message = "sl.tally() needs at least one option"
+        raise ValueError(message)
+    keys = {option.key for option in options}
+    if len(keys) != len(options):
+        message = "tally option keys must be unique"
+        raise ValueError(message)
+    if on_vote is not None and route_id is not None:
+        message = "sl.tally() takes on_vote or route_id, not both"
+        raise ValueError(message)
+    resolved_total = sum(option.count for option in options) if total is None else total
+    if resolved_total < 0 or any(option.count > resolved_total for option in options):
+        message = "tally total must be non-negative and at least every option count"
+        raise ValueError(message)
+
+    bars: tuple[LayoutNode, ...] = (
+        tuple(progress(option.count, label=option.label, maximum=max(1, resolved_total)) for option in options)
+        if show_bars
+        else ()
+    )
+    entries = tuple(choice(_tally_label(option), key=option.key) for option in options)
+    if on_vote is not None:
+
+        async def vote(event: ChoiceEvent) -> None:
+            if event.selected:
+                await on_vote(SelectionEvent(event.actor, event.responder, event.locale, event.context, event.selected))
+
+        control: LayoutNode = choices(
+            *entries,
+            key=key,
+            selection=controlled(tuple(option.key for option in options if option.mine), vote),
+        )
+    elif route_id is not None:
+        control = routed_choices(*entries, route_id=route_id, key=key)
+    else:
+        control = bullets(
+            *(bullet(_tally_label(option), key=option.key) for option in options),
+            key=f"{key}.options",
+        )
+    return stack(*bars, control)
+
+
 def media_item(url: str, *, key: str = "", description: TextValue | None = None) -> MediaItem:
     """One image of a `media` collection."""
     return MediaItem(key, url, _opt_text(description))
@@ -830,6 +892,7 @@ __all__ = [
     "summary",
     "table",
     "table_row",
+    "tally",
     "themed",
     "timestamp",
     "toggle",
