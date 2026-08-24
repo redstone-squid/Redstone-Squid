@@ -1161,25 +1161,29 @@ class Lobby(sl.Component):
         session = self._session()
         if session is None:
             return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))
-        roster = "\n".join(f"- <@{user_id}>" for user_id in sorted(session.members)) or "_empty_"
+        placement = sl.patterns.place_roster(
+            tuple(
+                sl.patterns.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)
+            ),
+            (sl.patterns.RosterSlot("players", L(t"Players"), session.capacity),),
+        )
         status = (
             L("Started with {count} players.", count=self.started_with)
             if self.started_with is not None
             else L("{remaining} seats left.", remaining=session.remaining_capacity)
         )
         return sl.section(
-            sl.heading(L("Lobby ({count}/{capacity})", count=len(session.members), capacity=session.capacity)),
-            sl.paragraph(roster),
+            sl.heading(L(t"Lobby")),
+            sl.roster(placement, key="lobby-roster", on_join=self._join),
             sl.paragraph(status),
             sl.actions(
-                sl.action(L(t"Join"), self._join, key="join"),
                 sl.action(L(t"Leave"), self._leave, key="leave"),
                 sl.action(L(t"Start"), self._start, key="start"),
                 key="lobby",
             ),
         )
 
-    async def _join(self, event: sl.PressEvent) -> None:
+    async def _join(self, event: sl.SelectionEvent) -> None:
         session = self._session()
         if session is None:
             return

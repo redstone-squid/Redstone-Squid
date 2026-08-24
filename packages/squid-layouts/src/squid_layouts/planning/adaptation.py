@@ -129,6 +129,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Progress,
     Quote,
+    Roster,
     RoutedAction,
     RoutedChoices,
     Section,
@@ -595,6 +596,8 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _navigation(node, path, context)
         case Table():
             return _table(node, path, context)
+        case Roster():
+            return _roster(node, context)
         case Panel(children=children, accent=accent):
             # The exact primitive, not a semantic region: it stays a Container and the classic
             # dialect refuses it by name. Quietly turning an author's `Panel` into an embed
@@ -1637,6 +1640,66 @@ def _table(node: Table, path: str, context: _Context) -> list[Node]:
         for row in node.rows
     )
     return [Lines(records, join="\n\n", overflow=Paginate(key=node.key))]
+
+
+def _roster(node: Roster, context: _Context) -> list[Node]:
+    lowered: list[Node] = []
+    for group in node.placement.groups:
+        slot = group.slot
+        count = _resolve(context.chrome.slot_count(len(group.members), slot.capacity), context)
+        lowered.append(PrimitiveHeading(f"{_resolve(slot.label, context)} — {count}", level=3, overflow=Never()))
+        if group.members:
+            lowered.append(
+                Lines(tuple(f"- {_resolve(member.display, context)}" for member in group.members), overflow=Spill())
+            )
+        full = slot.capacity is not None and len(group.members) >= slot.capacity
+        available = not node.locked and not (full and node.placement.rejects_overflow)
+        if full and node.placement.rejects_overflow:
+            lowered.append(Text(_resolve(context.chrome.full, context), overflow=Never()))
+        if node.on_join is not None:
+
+            async def join(event: PressEvent, slot_key: str = slot.key) -> None:
+                await node.on_join(
+                    SelectionEvent(event.actor, event.responder, event.locale, event.context, (slot_key,))
+                )
+
+            lowered.append(
+                Row(
+                    (
+                        Button(
+                            _resolve(slot.label, context),
+                            join,
+                            f"{node.key}.{slot.key}",
+                            style=_button_style(slot.tone, Emphasis.NORMAL),
+                            disabled=not available,
+                        ),
+                    )
+                )
+            )
+        elif node.routes is not None:
+            lowered.append(
+                Row(
+                    (
+                        RoutedButton(
+                            _resolve(slot.label, context),
+                            node.routes[slot.key],
+                            style=_button_style(slot.tone, Emphasis.NORMAL),
+                            disabled=not available,
+                        ),
+                    )
+                )
+            )
+    if node.show_waitlist and node.placement.waitlist:
+        lowered.extend(
+            (
+                PrimitiveHeading(_resolve(context.chrome.waitlist, context), level=3, overflow=Never()),
+                Lines(
+                    tuple(f"- {_resolve(entry.display, context)}" for entry in node.placement.waitlist),
+                    overflow=Spill(),
+                ),
+            )
+        )
+    return lowered
 
 
 def _media_axis(node: Media, path: str, session: PresentationSession) -> StrategyAxis:

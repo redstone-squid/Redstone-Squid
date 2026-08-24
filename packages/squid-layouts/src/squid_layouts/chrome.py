@@ -45,6 +45,14 @@ def _default_try_again_in(seconds: float) -> TextLike:
     return f"Try again in {whole} second{'' if whole == 1 else 's'}."
 
 
+def _default_slot_count(count: int, capacity: int | None) -> TextLike:
+    return str(count) if capacity is None else f"{count}/{capacity}"
+
+
+def _default_approved_count(count: int, total: int) -> TextLike:
+    return f"Approved: {count}/{total}"
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
@@ -107,6 +115,12 @@ class Chrome:
     """Placeholder on the jump select a seekable paginator can offer."""
     page_option: Callable[[int], TextLike] = _default_page_option
     """One entry of that select; called with a 1-based page number."""
+    waitlist: TextLike = "Waitlist"
+    full: TextLike = "Full"
+    slot_count: Callable[[int, int | None], TextLike] = _default_slot_count
+    approve: TextLike = "Approve"
+    withdraw: TextLike = "Withdraw"
+    approved_count: Callable[[int, int], TextLike] = _default_approved_count
 
 
 DEFAULT_CHROME = Chrome()
@@ -165,6 +179,12 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         ),
         jump_to_page=resolve_text(chrome.jump_to_page, localization).content,
         page_option=lambda page: resolve_text(chrome.page_option(page), localization).content,
+        waitlist=resolve_text(chrome.waitlist, localization).content,
+        full=resolve_text(chrome.full, localization).content,
+        slot_count=lambda count, capacity: resolve_text(chrome.slot_count(count, capacity), localization).content,
+        approve=resolve_text(chrome.approve, localization).content,
+        withdraw=resolve_text(chrome.withdraw, localization).content,
+        approved_count=lambda count, total: resolve_text(chrome.approved_count(count, total), localization).content,
     )
 
 
