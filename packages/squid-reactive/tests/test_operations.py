@@ -8,11 +8,14 @@ from squid_reactive import (
     ActionLedger,
     OperationEventSnapshot,
     Reactive,
+    ResourceEventSnapshot,
     action_scope,
     add_action_outcome_sink,
     state,
+    transaction,
 )
 from squid_reactive.operations import Cancelled, Failed, Pending, Progress, Succeeded, operation
+from squid_reactive.resources import resource
 
 
 class Owner:
@@ -165,3 +168,44 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
     outcome = ledger.outcomes[0]
     assert outcome.cause == execution.context.causal_ref()
     assert outcome.root_action_id == str(outcome.action_id)
+
+
+async def test_action_operation_response_and_resource_generation_form_one_graph() -> None:
+    class GraphOwner(Reactive):
+        value: int = state(0)
+
+        def invalidate(self) -> None:
+            pass
+
+        @operation(initial=None)
+        async def fetch(self, progress: Progress[None]) -> int:
+            return 42
+
+        @resource
+        async def rendered(self) -> str:
+            return str(self.value)
+
+    owner = GraphOwner()
+    root = ActionContext.create("click")
+    ledger = ActionLedger(limit=20)
+    add_action_outcome_sink(ledger)
+    try:
+        with transaction(action_context=root):
+            execution = owner.fetch.start()
+        result = await execution
+        with execution.start_action("publish response") as response:
+            owner.value = result
+            owner.rendered.invalidate()
+        assert await owner.rendered == "42"
+    finally:
+        ledger.close()
+
+    operation_event = next(event for event in ledger.events if isinstance(event, OperationEventSnapshot))
+    resource_event = next(event for event in ledger.events if isinstance(event, ResourceEventSnapshot))
+    response_outcome = next(outcome for outcome in ledger.outcomes if outcome.name == "publish response")
+    assert operation_event.cause == root.causal_ref()
+    assert response_outcome.cause == execution.context.causal_ref()
+    assert resource_event.cause is not None and resource_event.cause.identity == str(response.action_id)
+    assert {operation_event.root_action_id, response_outcome.root_action_id, resource_event.root_action_id} == {
+        str(root.action_id)
+    }
