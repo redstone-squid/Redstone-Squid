@@ -75,7 +75,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   a root under `Reject()` and as an attached child two lines apart). A class attribute would
   couple portable components to Discord session vocabulary, and 34 already declines to copy
   class-variable policy. The ergonomics go into a `MountDefaults` value instead.
-- **A separate application-layer package** *(still rejected as a package — a fourth layer above `sl.discord`; individual pieces landed elsewhere, see below)* — (`squid-ui`: a `UIRuntime` composition root, a
+- **A separate application-layer package** *(still rejected as a package — a fourth layer above `sl.discord`; individual pieces landed elsewhere, including the reachability half in plan 70, see below)* — (`squid-ui`: a `UIRuntime` composition root, a
   `Screen` recipe, `Projection` objects for cross-screen reactivity, named policy presets
   like `private_panel`) — proposed externally 2026-08-23 and rejected as a *package*, though
   one of its three ideas survived as [51](51-screens.md). Recorded because the proposal was
@@ -105,6 +105,19 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   rather than addition: 1,414 lines of it already exist inside `discord/durability/` and already
   import nothing from `squid_layouts`, so the package boundary is being drawn where the dependency
   graph already put one.
+  **Revisited 2026-08-25**: [70](70-discord-py-interop.md) takes the *reachability* half of the
+  `UIRuntime` idea and this entry does not cover it. The rejection's central claim was that
+  `UIRuntime` is "[43](../completed/squid-layouts-redesign/43-mount-defaults.md)'s `MountDefaults`
+  plus a host facade", which holds for construction and fails for lookup: a `MountDefaults` is a
+  value, and a value cannot be found from a `discord.Interaction`. The bot proved the gap the
+  expensive way — `squid/bot/ui.py` carries a process-global `install_mount_defaults` with a
+  `global` statement, written because `create_mount`'s 21 call sites hold no bot and a challenge
+  presenter needs one. A client-keyed lookup is what that global is a bad substitute for, and the
+  package already has the pattern in `routing._INSTALLED`/`routers(client)`. What this entry
+  actually protects is untouched: 70 adds no policy surface, no presets, no `Projection`, no
+  package, and lands inside `sl.discord` rather than above it. The half it leaves alone is the half
+  this entry and [65](../completed/squid-layouts-redesign/65-screen-entrypoints.md) both hold back —
+  named audience policy, which stays in the host's `Visibility`/`Private` vocabulary.
 - **Context-manager render DSL** *(still rejected)* — (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** *(still rejected — the 3.10 backport; actual PyPI publication is a separate, still-unmade call, not a rejection)* — irrelevant to this repo (3.14 target).
