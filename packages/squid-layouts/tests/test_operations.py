@@ -110,6 +110,7 @@ class _IdleQueue:
 
 class _IdleReactor:
     def __init__(self) -> None:
+        self.profiler = MemoryProfiler()
         self.queued = 0
         self.in_flight = 0
         self.redeliver = 0
