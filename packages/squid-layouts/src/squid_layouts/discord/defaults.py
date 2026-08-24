@@ -8,6 +8,7 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome
 from squid_layouts.discord.access import AccessPolicy
 from squid_layouts.discord.mount import (
     DEFAULT_EXPIRY,
+    ChallengePresenter,
     ErrorHook,
     ExpiryPolicy,
     Mount,
@@ -38,6 +39,7 @@ class MountOptions(TypedDict, total=False):
     scheduler: Scheduler | None
     expiry: ExpiryPolicy | None
     nav: NavFactory | None
+    challenge: ChallengePresenter | None
     acknowledgement_timeout: float
     pending_after: float
     clock: Callable[[], float]
@@ -63,6 +65,7 @@ class MountDefaults:
     scheduler: Scheduler | None = None
     expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
     nav: NavFactory | None = None
+    challenge: ChallengePresenter | None = None
     acknowledgement_timeout: float = 2.5
     pending_after: float = 1.0
     clock: Callable[[], float] = _monotonic
@@ -91,6 +94,7 @@ class MountDefaults:
             scheduler=configured.scheduler,
             expiry=configured.expiry,
             nav=configured.nav,
+            challenge=configured.challenge,
             acknowledgement_timeout=configured.acknowledgement_timeout,
             pending_after=configured.pending_after,
             clock=configured.clock,
