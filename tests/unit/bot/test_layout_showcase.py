@@ -74,6 +74,9 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
         ("localization", 'mount.localize(localization_for("zh-CN"))'),
+        ("history", "case sl.runtime.HistoryResultStatus.CONFLICT:"),
+        ("replication", 'document.counter("votes").increment(2)'),
+        ("effects", '@sl.operation(initial="queued")'),
     ],
 )
 def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_marker: str) -> None:
@@ -197,6 +200,86 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
 
     assert component.left.count == 1
     assert component.right.count == 0
+
+
+async def test_history_exhibit_preserves_a_sibling_write_and_presents_rollback_aftermath() -> None:
+    component = LayoutShowcase(section="history", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("history.rename", fake_interaction())
+    assert component.project_name == "Action Ledger"
+    assert component.outcome_result.startswith("COMMITTED · local sequence")
+
+    await mount.dispatch("history.sibling", fake_interaction())
+    await mount.dispatch("history.undo", fake_interaction())
+
+    assert component.project_name == "Squid after a sibling edit"
+    assert component.history_result.startswith("Undo: CONFLICT; no state changed")
+    assert component.action_history.entries[0].state is sl.runtime.HistoryEntryState.CONFLICTED
+
+    await mount.dispatch("history.rollback", fake_interaction())
+
+    assert component.project_name == "Squid after a sibling edit", "the staged rollback value never published"
+    assert component.outcome_result.startswith("ROLLED BACK · handler_exception")
+    assert component.outcome_result.endswith("recovery is a fresh action")
+
+    await mount.dispatch("history.drop", fake_interaction())
+    assert component.action_history.entries == ()
+    assert component.project_name == "Squid after a sibling edit", "dropping history is not a forced restore"
+
+
+async def test_replication_exhibit_selectively_undoes_only_the_local_contribution() -> None:
+    component = LayoutShowcase(section="replication", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("replication.local", fake_interaction())
+    assert component.local_document.counter("votes").value == 2
+    assert component.local_document.set("reviewers").value == frozenset({"mine"})
+
+    await mount.dispatch("replication.peer", fake_interaction())
+    assert component.local_document.counter("votes").value == 5
+    assert component.local_document.set("reviewers").value == frozenset({"mine", "peer"})
+    assert component.peer_document.snapshot() == component.local_document.snapshot()
+
+    await mount.dispatch("replication.undo", fake_interaction())
+
+    assert component.local_document.counter("votes").value == 3
+    assert component.local_document.set("reviewers").value == frozenset({"peer"})
+    assert component.replication_result.startswith("Selective undo: APPLIED as action")
+
+
+async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_result() -> None:
+    component = LayoutShowcase(section="effects", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("effects.publish", fake_interaction())
+    first_execution = component.publication
+    assert first_execution is not None
+    assert isinstance(first_execution.status, sl.operations.Succeeded)
+
+    await mount.dispatch("effects.accept", fake_interaction())
+    assert component.published_revision == 41
+
+    await mount.dispatch("effects.publish", fake_interaction())
+    assert component.publication is not None
+    assert component.publication.context.execution_id != first_execution.context.execution_id
+
+    await mount.dispatch("effects.create", fake_interaction())
+    await mount.dispatch("effects.fail", fake_interaction())
+    await mount.dispatch("effects.undo", fake_interaction())
+
+    assert component.channel_service.exists is True
+    assert component.channel_present is True
+    assert component.compensation_result.startswith("Compensation: FAILED")
+
+    await mount.dispatch("effects.undo", fake_interaction())
+
+    assert component.channel_service.exists is False
+    assert component.channel_present is False
+    assert component.compensation_result.startswith("Compensation: APPLIED as action")
 
 
 async def test_demo_command_and_controls_are_public() -> None:
