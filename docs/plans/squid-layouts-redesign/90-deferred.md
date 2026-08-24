@@ -4,9 +4,18 @@ Findings from the 2026-08-21 audit (full package + nine consumers + CascadeUI
 comparison) that we consciously decided **not** to act on, with the reasoning — so they
 are not re-derived or accidentally adopted later.
 
-## Rejected
+Grouped by current status, not by original date, so the entries you'd actually reopen
+today aren't buried under ones already settled elsewhere. Each bullet carries a
+`*(status)*` tag:
 
-- **Redux-style global store** (CascadeUI's cross-view model: dispatch → middleware →
+- **still rejected** — the decision stands, unqualified, as of today.
+- **still deferred** — waiting on a real consumer/condition that hasn't shown up yet.
+- **no longer live** — resolved, shipped, overturned, closed, or promoted to an active
+  plan elsewhere. Kept for the reasoning trail, not because it's something to revisit.
+
+## Still rejected
+
+- **Redux-style global store** *(still rejected)* — (CascadeUI's cross-view model: dispatch → middleware →
   reducers → subscribers). The local `Component + state() + computed + transaction`
   model is simpler and fits the frontend-neutral tree. Cross-view updates already have a
   path: shared services + `Reactor.schedule`/`Mount.refresh`. If a real many-views-one-
@@ -40,15 +49,7 @@ are not re-derived or accidentally adopted later.
   module this note's "scope vocabulary" referred to; the taxonomy it adopts is now reached through
   `screens.py`'s existing `Opener`/`Scope`, which strengthens rather than weakens the point, since
   no new surface was added at all.
-- **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
-  reattachment, pruning). The durability layer has **zero production consumers** in
-  `squid/` (verified by grep). Building storage backends for an unused subsystem is
-  inventory. Revisit only when a view actually needs to survive restarts; the
-  `LeaseSnapshotStore` boundary is ready when that day comes.
-  **Revisited 2026-08-22**: superseded by the productization standard — the consumer is
-  the library user. [27](27-snapshot-stores.md) fills the boundary without moving it;
-  the bot itself still, correctly, has no consumer.
-- **`compose(into=view)` / adopting existing discord.py views** — re-confirmed: renderer
+- **`compose(into=view)` / adopting existing discord.py views** *(still rejected — live-view adoption; the unsent-view case was accepted separately, see below)* — re-confirmed: renderer
   ownership is what keeps budget measurement sound. Incremental interop is CascadeUI's
   advantage by design choice, not an oversight here.
   **Revisited 2026-08-22**: this bundled two operations, and only one of them is unsafe.
@@ -67,14 +68,14 @@ are not re-derived or accidentally adopted later.
   Squid constructs every item it draws. `adopt()` raises on `view.is_dispatching()`, which is
   what makes this a narrowing and not a reversal — `View.message` is a convention bots follow by
   hand and discord.py never sets, so it is kept only as a secondary signal.
-- **Class-body operational policy** (CascadeUI's `owner_only`, `instance_limit`,
+- **Class-body operational policy** *(still rejected)* — (CascadeUI's `owner_only`, `instance_limit`,
   `instance_scope`, `instance_policy`, `participant_limit` as class attributes) — rejected
   2026-08-23 by [43](43-mount-defaults.md). Every one of those values is an actor, a scope,
   or a host decision the same component is opened with differently (`ConsentPrompt` opens as
   a root under `Reject()` and as an attached child two lines apart). A class attribute would
   couple portable components to Discord session vocabulary, and 34 already declines to copy
   class-variable policy. The ergonomics go into a `MountDefaults` value instead.
-- **A separate application-layer package** (`squid-ui`: a `UIRuntime` composition root, a
+- **A separate application-layer package** *(still rejected as a package — a fourth layer above `sl.discord`; individual pieces landed elsewhere, see below)* — (`squid-ui`: a `UIRuntime` composition root, a
   `Screen` recipe, `Projection` objects for cross-screen reactivity, named policy presets
   like `private_panel`) — proposed externally 2026-08-23 and rejected as a *package*, though
   one of its three ideas survived as [51](51-screens.md). Recorded because the proposal was
@@ -104,15 +105,15 @@ are not re-derived or accidentally adopted later.
   rather than addition: 1,414 lines of it already exist inside `discord/durability/` and already
   import nothing from `squid_layouts`, so the package boundary is being drawn where the dependency
   graph already put one.
-- **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
+- **Context-manager render DSL** *(still rejected)* — (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
-- **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
+- **Python 3.10 backport / PyPI packaging** *(still rejected — the 3.10 backport; actual PyPI publication is a separate, still-unmade call, not a rejection)* — irrelevant to this repo (3.14 target).
   Publishing squid-layouts is a product decision to make explicitly, not design debt.
   **2026-08-22**: the productization decision was made — plans [24](24-session-registry-move.md)
   through [28](28-history.md) build for the library user rather than waiting on bot
   consumers. Actual PyPI publication remains a separate, still-unmade call; the 3.10
   backport stays rejected.
-- **A generic `action.status` (`Idle | Pending | Failed`) in the reactive layer** — proposed
+- **A generic `action.status` (`Idle | Pending | Failed`) in the reactive layer** *(still rejected)* — proposed
   2026-08-24 by an external review, on the correct observation that `sl.Feedback` is fixed
   policy: `_BusyPaint.show` relabels the pressed control and disables the panel, and label text
   plus `restore_on_error` are the only knobs. The need for author-controlled pending UI is real;
@@ -127,16 +128,7 @@ are not re-derived or accidentally adopted later.
   with no external effect — cannot move into an operation, and there `Feedback`'s fixed paint is
   correct. Transactional state cannot be a loading indicator: `self.saving = True` stages and is
   invisible until commit, by which point it means nothing.
-- **Blind history restore, revisited and reversed.** Plan 28 chose deliberately: a restore is a
-  write with no prior read, so it carries no precondition and cannot conflict. The tests said why
-  — "a sibling panel setting the same filter is the motivating case, not an error case", and "the
-  local half is not held hostage by the shared one" — resting on `Shared` holding view state, so a
-  sibling losing its filter to an undo is not data loss. A version check was proposed and reverted
-  on 2026-08-24 for exactly that reason, then adopted days later by Plan 68, which had the piece
-  the first attempt lacked: weak versus strong targets, so an undo conflicts on what the author
-  said matters and stays blind on what it does not. `StateDelta` is gone; see
-  [the Plan 68 migration guide](../../plan68-migration.md).
-- **Serializable actions by default** — validating every shared cell an action read, not just the
+- **Serializable actions by default** *(still rejected — this is the live default: opt in with `strong_read()`)* — validating every shared cell an action read, not just the
   ones it also wrote, closes write skew and is what a textbook would do. Rejected as the *default*
   and shipped as `strong_read()` instead, after being tried both ways: Plan 68 made it the default
   and it was narrowed back on 2026-08-24. The reason is the shape of real handlers here — they read
@@ -148,16 +140,124 @@ are not re-derived or accidentally adopted later.
   Version-over-equality lineage came in with the strict default and is orthogonal — keep it; A→B→A
   must conflict. And on the web, where concurrent actions are ordinary rather than exotic, the
   default probably does invert; that is a porting note, not a reason to invert it here.
+- **A closed suffix taxonomy that encodes lifetime in nouns** *(still rejected)* — (plan 67, 2026-08-24) — designed
+  as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
+  `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
+  `State` outlive the process) and rejected on measurement. The public surface across `sl`,
+  `sl.discord`, its twenty sub-namespaces, `squid_reactive` and `squid_stores` has **93
+  distinct class-name suffixes, 60 of them used exactly once**; only 15 recur three times or
+  more. A closed table would have to reject `Component`, `Mount`, `Screen`, `Destination`,
+  `Composition`, `Target` and `Work`, or grow until it was not a table. Record the numbers,
+  not just the conclusion, or this gets re-proposed.
+- **Collapsing suffixes to one word per lifetime class** *(still rejected)* — the follow-on idea, worse.
+  `TopicBus` → `TopicOwner` and `PersistedPool` → `PersistedOwner` destroy the information
+  that a bus delivers and a pool canonicalises, to encode a fact a single method signature
+  already carries. Lifetime belongs on verbs; nouns owe one-meaning-per-word instead.
+- **`-er` agent-noun consistency** *(still rejected — taste, not a rule violation)* — `ChallengeRunner` and `ChallengeSupervisor` own tasks
+  while `ErrorRenderer` and `ChallengePresenter` own nothing, so the suffix says nothing
+  about ownership. Real, but it violates no rule and renaming would be taste.
+- **A generation object replacing `Resource._request_token`** *(still rejected — the rename; the bug the review incidentally surfaced was fixed separately, see the 2026-08-24 note)* — proposed by an external review
+  so a loader would hold permission to complete *its* generation rather than comparing a
+  counter. The comparison is three lines at `resources.py:401-421`, correct and commented.
+  Churn.
+  **Revisited 2026-08-24**: the rename stays rejected and `_request_token` is unchanged, but the
+  rejection was tested against a proposal that was purely a spelling, so it never asked what else
+  a generation owns. One thing did belong to it: the tracked read set. `_CONSUMER` pointed at the
+  `Resource`, and `Resource.sources` is a single dict, so a superseded loader — which does not
+  stop, and resumes with its own `_CONSUMER` still set — went on recording into the live
+  generation's dependency set. The live value ended up subscribed to state it never read, and
+  `Observation.addresses()` could broadcast an address it did not depend on. Fixed by a private
+  `_Load` per generation that the winner publishes onto the resource, with a regression test that
+  fails without it. The lesson is narrower than "reopen rejections": a rejection is only as wide
+  as the proposal it was argued against.
+- **`_Candidate` typestate classes** *(still rejected)* — (`StagedCandidate.presented() -> PresentedCandidate`) —
+  same review. The half worth having is one `settled` flag, shipped; the other half is already
+  enforced a layer down, because `_draw` stages subscriptions and the reconciler refuses a
+  second staged set. Three classes to restate what one guard states is emulating Rust syntax
+  rather than its principle.
+- **An `adopt()` capture/into-component wrapper** *(still rejected)* — the review proposed making adoption an
+  explicit move. Plan 53 already enforces unsent-only with a second-writer-refusing proxy, and
+  the review itself concedes `adopt()` is pleasantly simple.
+- **A universal `Lifetime`/`Owner`/`Borrow`/`Lease` framework** *(still rejected)* — Python will not enforce it
+  strongly enough to justify making every call unpleasant. Make invalid ownership transitions
+  difficult and resource death explicit; do not emulate the syntax.
 
-## Deferred until a real consumer exists
+## Still deferred (waiting on a real consumer)
 
-- **Portable permission facts on `ActionEvent`** — plan 02 gives the typed Discord
+- **Portable permission facts on `ActionEvent`** *(still deferred)* — plan 02 gives the typed Discord
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
   **Revisited 2026-08-22**: partially superseded by [31](31-action-ergonomics.md) — the
   portable admission surface is `Guard`/`GuardVerdict`; frontend facts still enter through
   plan 02's native access (`requires_role` lives in `sl.discord.guards`).
-- **Ephemeral session handoff** (Cascade-style: arm a refresh control before token
+- **Multi-message rendering — the *spanning* half** *(still deferred; the branching half already shipped, see below)* —
+  one logical UI spanning several messages, deferred until a consumer exists (the audit
+  found none; search and leaderboards fit one message with plan 06). When it comes, the
+  shape is decided: Discord's message sequence is append-only, so content cannot reflow
+  between slots — growth in slot 1 means rewriting every later slot with no batch edit, no
+  cross-message atomicity, and controls migrating between messages. Build *fixed
+  author-declared partitions*, each independently budgeted, as a coordinator over
+  per-message mounts (sharing services/session, routing invalidation) — never a
+  multi-handle `Mount`, which would smear message identity through planner, generations,
+  dispatch, and durability. `EditHandle`/`Destination` being per-message is what makes the
+  coordinator cheap; keep `on_load`, context, and session policy free of any
+  root-component-equals-session assumption so it stays that way.
+  (*Branching* — a click spawns an additional message — was bundled with this originally
+  and is not deferred: it shipped as the consent pattern, `account_view.py` mounting
+  `prompt_for_consent` as its own ephemeral message, with `open(..., parent=)` from plan 12
+  as the lifecycle piece and `sl.discord.responder(event).mount` already handing a handler
+  its own mount for `parent=` to use.)
+- **Statically checking a route handler's parameters against its route** *(still deferred — blocked on a pyrefly limitation, not on a missing consumer)* — (plan 16 stage 2)
+  — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
+  `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
+  inferred from whatever was written, so `biuld_id: int` typechecks fine. The only
+  construction that would check it is a `Route[ParamsTypedDict]` plus PEP 692
+  `**params: Unpack[TD]` in a `Protocol.__call__`. **Pyrefly 1.2 rejects `Unpack` on a
+  TypeVar** — "`Unpack` in \*\*kwargs annotation must be used only with a `TypedDict`" —
+  including when the TypeVar is bound to a TypedDict base, so the protocol cannot even be
+  spelled. The concrete-TypedDict form (`squid/settings/application/ports.py`) is the
+  supported case and is not what this needs. It would also reintroduce the drift `Route`
+  exists to eliminate, with parameter names and types living in two places, and three of
+  five routes carry no parameters at all. Registration-time `inspect.signature` checking
+  is the substitute, and it is stricter than Flask's, which waits for the first request.
+  Revisit only if pyrefly gains generic `Unpack` support.
+- **`ActionKey`/`WireId`/`RouteId` newtypes** *(still deferred)* — a logical action key, a per-generation control
+  id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
+  in-tree defect motivating it, and the routing module docstring already states it in prose.
+  Revisit if a mix-up ever ships.
+- **Abandoning a superseded resource load** *(still deferred)* — proposed 2026-08-24 alongside the generation fix,
+  so a load whose token has been bumped is cancelled rather than run to completion. No orphan
+  motivates it: every `_load` is awaited by whoever started it, and the mount's settle pass runs
+  its task group to completion before the next pass, so a superseded load is wasted work rather
+  than a leak — and since the resource contract makes a loader safe to run zero, one or many
+  times, wasted work is all it can be. Cancellation also has to live in `squid-layouts`, because
+  `squid-reactive` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. Revisit
+  when a loader is expensive enough that the waste shows up, or when a port makes concurrent
+  supersession ordinary rather than rare.
+
+## No longer live (resolved, shipped, overturned, closed, or promoted elsewhere)
+
+- **Persistence batteries** *(resolved — built by plan 27)* — (SQLite/Postgres `SnapshotStore` implementations,
+  reattachment, pruning). The durability layer has **zero production consumers** in
+  `squid/` (verified by grep). Building storage backends for an unused subsystem is
+  inventory. Revisit only when a view actually needs to survive restarts; the
+  `LeaseSnapshotStore` boundary is ready when that day comes.
+  **Revisited 2026-08-22**: superseded by the productization standard — the consumer is
+  the library user. [27](27-snapshot-stores.md) fills the boundary without moving it;
+  the bot itself still, correctly, has no consumer. 27 shipped both `SQLiteSnapshotStore`
+  and an optional-extra `PostgresSnapshotStore`, plus the reachability sweep in
+  `MountManager.recover` — the storage backends this entry withheld now exist; only a bot
+  consumer is still absent, by design.
+- **Blind history restore, revisited and reversed** *(overturned — see Plan 68 / the migration guide)* — Plan 28 chose deliberately: a restore is a
+  write with no prior read, so it carries no precondition and cannot conflict. The tests said why
+  — "a sibling panel setting the same filter is the motivating case, not an error case", and "the
+  local half is not held hostage by the shared one" — resting on `Shared` holding view state, so a
+  sibling losing its filter to an undo is not data loss. A version check was proposed and reverted
+  on 2026-08-24 for exactly that reason, then adopted days later by Plan 68, which had the piece
+  the first attempt lacked: weak versus strong targets, so an undo conflicts on what the author
+  said matters and stays blind on what it does not. `StateDelta` is gone; see
+  [the Plan 68 migration guide](../../plan68-migration.md).
+- **Ephemeral session handoff** *(resolved — shipped as plan 39)* — (Cascade-style: arm a refresh control before token
   expiry, rebuild the session from the fresh interaction). Mostly retired: plan 07's
   `EditHandle` renews on every click, so an ephemeral panel in use stays writable
   indefinitely. What remains is an ephemeral view that needs a *background* refresh after
@@ -168,11 +268,11 @@ are not re-derived or accidentally adopted later.
   this entry's condition is met — and the answer is the paused-chrome banner plus
   click-to-resume, not a handoff control: every control already renews on click, so
   arming a special one adds nothing. The handoff *mechanism* stays rejected.
-  **Reopened 2026-08-22**: [39](39-ephemeral-handoff.md) identifies the missing UX contract:
+  **Reopened 2026-08-22, then closed**: [39](39-ephemeral-handoff.md) identifies the missing UX contract:
   existing controls mutate application state, while a dedicated renewal action does not.
   The accepted design keeps Cascade's protected pre-expiry screen but renews Squid's same
-  mount and message in place instead of reconstructing a view and spawning a successor.
-- **Participant tracking / shared sessions** — plan 12 shipped instance policies and
+  mount and message in place instead of reconstructing a view and spawning a successor — shipped.
+- **Participant tracking / shared sessions** *(closed — shipped as plan 60)* — plan 12 shipped instance policies and
   widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
   state) waits for a feature that needs it. No consumer needs even the set form today: the
   one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
@@ -190,7 +290,7 @@ are not re-derived or accidentally adopted later.
   pool that added no capability, purely so hosts stopped re-deriving one. Batteries a library
   user expects are part of the product, and this series' bar for *speculation* is not a bar
   for *completeness*.
-- **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
+- **`squid_layouts.patterns` library** *(mostly delivered — see 18, 19, and the 29–32 survey batches; batch D of 32 is still in progress)* — (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
@@ -198,8 +298,9 @@ are not re-derived or accidentally adopted later.
   MultiChoicePanel; Tabs/Menu/RankedList were also migrated under 19's two-shell rule.
   **Revisited 2026-08-22**: continued by the survey batches
   [29](29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
-  table/list browser this entry originally named (30's `Browser`).
-- **Grid / matrix interaction** (added 2026-08-21) — content grids are a `Table`
+  table/list browser this entry originally named (30's `Browser`). Batch D (roster, tally,
+  grid, `Agreement`) in [32](32-demand-driven.md) is the one piece not yet landed.
+- **Grid / matrix interaction** *(promoted — designed and being built as batch D of plan 32, in progress, not this entry's concern anymore)* — (added 2026-08-21) — content grids are a `Table`
   display strategy (`MATRIX`), not a new node; interactive grids start as an
   `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
   non-degradability free. The degradation ladder (button grid → text grid +
@@ -207,91 +308,22 @@ are not re-derived or accidentally adopted later.
   a real consumer.
   **Revisited 2026-08-22**: promoted by [32](32-demand-driven.md); the recorded three-tier
   shape is adopted unchanged.
-- **`sl.resource` descriptor** — resolved 2026-08-22 by [33](33-resources.md). Explicit
+- **`sl.resource` descriptor** *(resolved — shipped as plan 33)* — resolved 2026-08-22 by [33](33-resources.md). Explicit
   `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
   resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
   the optimistic set the motivating `SettingsPanel` case required. Visible and awaited
   loading share one `Pending | Ready | Failed` state machine and differ only in whether the
   mount commits the pending discovery render before settling it.
-- **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
+- **Portable form protocol** *(resolved — superseded by plan 18)* — (replacing the Discord-native modal boundary) — long-noted
   in the architecture doc's gaps; superseded by plan [18](18-forms.md) (2026-08-21).
-- **Multi-message rendering** (one logical UI spanning several messages). Two features
-  hiding in one thought, with opposite verdicts. *Branching* — a click spawns an
-  additional message — is not deferred: it ships today as the consent pattern
-  (`account_view.py` mounts `prompt_for_consent` as its own ephemeral message), and its
-  missing piece was lifecycle, which plan 12's registry shipped as `open(..., parent=)`. The
-  spawn-child-from-`ActionEvent` helper it also proposed resolves to none needed:
-  `sl.discord.responder(event).mount` already hands a handler its own mount, which is all
-  `parent=` takes. *Spanning* — one root component rendered
-  across N messages — is deferred until a consumer exists (the audit found none; search
-  and leaderboards fit one message with plan 06). When it comes, the shape is decided:
-  Discord's message sequence is append-only, so content cannot reflow between slots —
-  growth in slot 1 means rewriting every later slot with no batch edit, no cross-message
-  atomicity, and controls migrating between messages. Build *fixed author-declared
-  partitions*, each independently budgeted, as a coordinator over per-message mounts
-  (sharing services/session, routing invalidation) — never a multi-handle `Mount`, which
-  would smear message identity through planner, generations, dispatch, and durability.
-  `EditHandle`/`Destination` being per-message is what makes the coordinator cheap; keep
-  `on_load`, context, and session policy free of any root-component-equals-session
-  assumption so it stays that way.
-- **Cross-page multi-select** — resolved 2026-08-21: the grouping/commit model the
+- **Cross-page multi-select** *(resolved — shipped as plan 19's `MultiChoicePanel`; one narrow sub-rejection still stands)* — resolved 2026-08-21: the grouping/commit model the
   rejection demanded turned out to be Form's submission model, and plan
   [19](19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
   per-window merge, gated Apply). The rejection of engine-side `Managed` merging
   stands.
   **Revisited 2026-08-22**: [30](30-structures.md)'s immediate commit changes when the
   pattern commits, not who merges; the `Managed`-merging rejection stands.
-- **Statically checking a route handler's parameters against its route** (plan 16 stage 2)
-  — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
-  `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
-  inferred from whatever was written, so `biuld_id: int` typechecks fine. The only
-  construction that would check it is a `Route[ParamsTypedDict]` plus PEP 692
-  `**params: Unpack[TD]` in a `Protocol.__call__`. **Pyrefly 1.2 rejects `Unpack` on a
-  TypeVar** — "`Unpack` in \*\*kwargs annotation must be used only with a `TypedDict`" —
-  including when the TypeVar is bound to a TypedDict base, so the protocol cannot even be
-  spelled. The concrete-TypedDict form (`squid/settings/application/ports.py`) is the
-  supported case and is not what this needs. It would also reintroduce the drift `Route`
-  exists to eliminate, with parameter names and types living in two places, and three of
-  five routes carry no parameters at all. Registration-time `inspect.signature` checking
-  is the substitute, and it is stricter than Flask's, which waits for the first request.
-  Revisit only if pyrefly gains generic `Unpack` support.
-
-- **A closed suffix taxonomy that encodes lifetime in nouns** (plan 67, 2026-08-24) — designed
-  as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
-  `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
-  `State` outlive the process) and rejected on measurement. The public surface across `sl`,
-  `sl.discord`, its twenty sub-namespaces, `squid_reactive` and `squid_stores` has **93
-  distinct class-name suffixes, 60 of them used exactly once**; only 15 recur three times or
-  more. A closed table would have to reject `Component`, `Mount`, `Screen`, `Destination`,
-  `Composition`, `Target` and `Work`, or grow until it was not a table. Record the numbers,
-  not just the conclusion, or this gets re-proposed.
-- **Collapsing suffixes to one word per lifetime class** — the follow-on idea, worse.
-  `TopicBus` → `TopicOwner` and `PersistedPool` → `PersistedOwner` destroy the information
-  that a bus delivers and a pool canonicalises, to encode a fact a single method signature
-  already carries. Lifetime belongs on verbs; nouns owe one-meaning-per-word instead.
-- **`-er` agent-noun consistency** — `ChallengeRunner` and `ChallengeSupervisor` own tasks
-  while `ErrorRenderer` and `ChallengePresenter` own nothing, so the suffix says nothing
-  about ownership. Real, but it violates no rule and renaming would be taste.
-- **A generation object replacing `Resource._request_token`** — proposed by an external review
-  so a loader would hold permission to complete *its* generation rather than comparing a
-  counter. The comparison is three lines at `resources.py:401-421`, correct and commented.
-  Churn.
-  **Revisited 2026-08-24**: the rename stays rejected and `_request_token` is unchanged, but the
-  rejection was tested against a proposal that was purely a spelling, so it never asked what else
-  a generation owns. One thing did belong to it: the tracked read set. `_CONSUMER` pointed at the
-  `Resource`, and `Resource.sources` is a single dict, so a superseded loader — which does not
-  stop, and resumes with its own `_CONSUMER` still set — went on recording into the live
-  generation's dependency set. The live value ended up subscribed to state it never read, and
-  `Observation.addresses()` could broadcast an address it did not depend on. Fixed by a private
-  `_Load` per generation that the winner publishes onto the resource, with a regression test that
-  fails without it. The lesson is narrower than "reopen rejections": a rejection is only as wide
-  as the proposal it was argued against.
-- **`_Candidate` typestate classes** (`StagedCandidate.presented() -> PresentedCandidate`) —
-  same review. The half worth having is one `settled` flag, shipped; the other half is already
-  enforced a layer down, because `_draw` stages subscriptions and the reconciler refuses a
-  second staged set. Three classes to restate what one guard states is emulating Rust syntax
-  rather than its principle.
-- **A `CompensableEffect` saga interface** for external side effects — plan 28's History
+- **A `CompensableEffect` saga interface** for external side effects *(overturned — shipped by Plan 68)* — plan 28's History
   already separates a transactional `StateDelta` from an author-supplied external inverse, and
   gives the tiers. Nothing to add until a consumer needs compensation ordering.
   **Overturned 2026-08-24** by Plan 68, both halves, for reasons this entry did not weigh. The
@@ -303,22 +335,3 @@ are not re-derived or accidentally adopted later.
   Plan 68 shipped `on_action_rollback` for the notification and, having found the consumer this
   entry was waiting for, the ordering half too: `CompensationOutbox` with idempotency keys,
   restart recovery and reconciliation. See [the Plan 68 completion audit](../68-completion-audit.md).
-- **An `adopt()` capture/into-component wrapper** — the review proposed making adoption an
-  explicit move. Plan 53 already enforces unsent-only with a second-writer-refusing proxy, and
-  the review itself concedes `adopt()` is pleasantly simple.
-- **A universal `Lifetime`/`Owner`/`Borrow`/`Lease` framework** — Python will not enforce it
-  strongly enough to justify making every call unpleasant. Make invalid ownership transitions
-  difficult and resource death explicit; do not emulate the syntax.
-- **`ActionKey`/`WireId`/`RouteId` newtypes** — a logical action key, a per-generation control
-  id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
-  in-tree defect motivating it, and the routing module docstring already states it in prose.
-  Revisit if a mix-up ever ships.
-- **Abandoning a superseded resource load** — proposed 2026-08-24 alongside the generation fix,
-  so a load whose token has been bumped is cancelled rather than run to completion. No orphan
-  motivates it: every `_load` is awaited by whoever started it, and the mount's settle pass runs
-  its task group to completion before the next pass, so a superseded load is wasted work rather
-  than a leak — and since the resource contract makes a loader safe to run zero, one or many
-  times, wasted work is all it can be. Cancellation also has to live in `squid-layouts`, because
-  `squid-reactive` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. Revisit
-  when a loader is expensive enough that the waste shows up, or when a port makes concurrent
-  supersession ordinary rather than rare.
