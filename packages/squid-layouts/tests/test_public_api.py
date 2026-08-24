@@ -239,7 +239,9 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.runtime.TopicBus
     assert sl.discord.Reactor.follow
-    assert {"Shared", "SharedStateConflictError", "state", "addresses"} <= set(sl.runtime.__all__)
+    assert {"Shared", "SharedPool", "SharedFactory", "SharedStateConflictError", "state", "addresses"} <= set(
+        sl.runtime.__all__
+    )
     for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
         assert removed not in sl.discord.__all__ and not hasattr(sl.discord, removed)
 
@@ -264,6 +266,7 @@ import squid_layouts.runtime
 import squid_layouts.runtime.shared
 import squid_layouts.runtime.topics
 assert squid_layouts.runtime.shared.Shared
+assert squid_layouts.runtime.shared.SharedPool
 assert "discord" not in sys.modules
 assert "anyio" not in sys.modules
 """
