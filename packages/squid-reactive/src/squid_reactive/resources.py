@@ -165,6 +165,24 @@ class _Replacement:
         """Installing already invalidated the owner, which is the only watcher there is."""
 
 
+class _Load:
+    """One generation's private notebook: what it has read, and how to wake its joiners.
+
+    The reads are held here rather than on the resource because a superseded loader does not
+    stop. It resumes inside its own task with its own `_CONSUMER` still pointing here, and
+    goes on recording -- so a single dict on the resource would collect the reads of every
+    generation that ever started, and the live value would end up subscribed to state it
+    never looked at. Only the generation that still holds the token publishes what it read.
+    """
+
+    __slots__ = ("completion", "sources", "token")
+
+    def __init__(self, token: int, completion: Completion[Any]) -> None:
+        self.token = token
+        self.completion = completion
+        self.sources: dict[Any, int] = {}
+
+
 def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
     if isinstance(status, Ready):
         return status
@@ -199,7 +217,7 @@ class Resource[ValueT](AsyncBinding):
         """
         self._publish = publish
         self._status: ResourceStatus[ValueT] = Pending()
-        self._loading: tuple[int, Completion[ResourceStatus[ValueT]]] | None = None
+        self._loading: _Load | None = None
         self._request_token = 0
         self._generation_id = uuid.uuid7()
         causality = current_causality()
@@ -421,18 +439,22 @@ class Resource[ValueT](AsyncBinding):
 
     async def _loaded(self) -> ResourceStatus[ValueT]:
         token = self._request_token
-        if self._loading is not None and self._loading[0] == token:
-            await self._loading[1].wait()
+        if self._loading is not None and self._loading.token == token:
+            await self._loading.completion.wait()
             if isinstance(self._status, Pending):
                 return await self._loaded()
             return self._status
 
         settled: Completion[ResourceStatus[ValueT]] = Completion()
-        self._loading = (token, settled)
+        load = _Load(token, settled)
+        self._loading = load
         generation = (self._generation_id, self._generation_cause, self._generation_root)
         self._emit_generation("started", generation)
+        # Emptied here as well as tracked into `load`, because `_recheck` reads this one and
+        # must stay inert while a load is in flight: re-pending mid-load would supersede the
+        # very generation that is about to answer.
         self.sources = {}
-        consumer = _CONSUMER.set(self)
+        consumer = _CONSUMER.set(load)
         try:
             try:
                 value = await self._loader()
@@ -441,6 +463,7 @@ class Resource[ValueT](AsyncBinding):
                 raise
             except Exception as error:
                 if token == self._request_token:
+                    self.sources = load.sources
                     self._status = Failed(error, _previous(self._status))
                     self._landed()
                     self._notify()
@@ -449,6 +472,7 @@ class Resource[ValueT](AsyncBinding):
                     self._emit_generation("superseded", generation)
             else:
                 if token == self._request_token:
+                    self.sources = load.sources
                     self._status = Ready(value)
                     self._landed()
                     self._notify()
@@ -457,7 +481,7 @@ class Resource[ValueT](AsyncBinding):
                     self._emit_generation("superseded", generation)
         finally:
             _CONSUMER.reset(consumer)
-            if self._loading is not None and self._loading[0] == token:
+            if self._loading is load:
                 self._loading = None
             if not settled.done:
                 settled.resolve(self._status)
