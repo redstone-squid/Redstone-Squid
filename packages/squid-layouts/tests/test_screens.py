@@ -1,5 +1,6 @@
 """Reusable per-open Discord screen policy."""
 
+from collections.abc import Callable
 from typing import cast
 from unittest.mock import AsyncMock
 
@@ -43,6 +44,32 @@ def test_screen_key_uses_its_declared_scope(scope: Scope, opener: Opener, expect
 def test_guild_screen_key_requires_a_guild(scope: Scope) -> None:
     with pytest.raises(TypeError, match="require an opener with a guild"):
         Screen("panel", scope=scope).key(Opener(7))
+
+
+@pytest.mark.parametrize(
+    ("build", "expected"),
+    [
+        (Opener.user, sl.discord.sessions.UserScope(7)),
+        (Opener.guild, sl.discord.sessions.GuildScope(42)),
+        (Opener.user_guild, sl.discord.sessions.UserGuildScope(7, 42)),
+        (Opener.global_, sl.discord.sessions.GlobalScope()),
+    ],
+)
+def test_an_opener_builds_each_scope_as_a_value(build: Callable[[Opener], object], expected: object) -> None:
+    assert build(Opener(7, 42)) == expected
+
+
+@pytest.mark.parametrize("build", [Opener.guild, Opener.user_guild])
+def test_a_guild_scope_requires_an_opener_with_a_guild(build: Callable[[Opener], object]) -> None:
+    with pytest.raises(TypeError, match="require an opener with a guild"):
+        build(Opener(7))
+
+
+def test_a_session_key_carries_the_scope_a_pool_would_key_on() -> None:
+    """The point of one taxonomy: a panel holding its key needs no conversion to reach a pool."""
+    key = Screen("panel", scope=Scope.USER_GUILD).key(Opener(7, 42))
+
+    assert key.scope == Opener(7, 42).user_guild()
 
 
 def test_opener_reads_discord_identity() -> None:
