@@ -362,12 +362,12 @@ class TestDurableMode:
         locator = MountLocator("discord", {"channel_id": 5, "message_id": 99, "mode": "components_v2"})
         record = sl.discord.durability.DurableMountRecord(
             protocol=1,
-            snapshot=sl.discord.durability.MountSnapshot(
-                protocol=sl.discord.durability.SnapshotCodec.protocol,
+            state=sl.discord.durability.MountState(
+                protocol=sl.discord.durability.MountStateCodec.protocol,
                 component_key="panel",
                 component_version=1,
                 components=(),
-                presentation=sl.discord.durability.PresentationSnapshot({}, {}, {}, {}),
+                presentation=sl.discord.durability.PresentationState({}, {}, {}, {}),
                 target_fingerprint=sl.discord.V2_TARGET.fingerprint,
             ),
             locator=locator,
