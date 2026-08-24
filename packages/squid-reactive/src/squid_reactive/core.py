@@ -19,7 +19,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, ClassVar, Protocol, Self, overload
 
@@ -584,6 +584,9 @@ class _Transaction:
     write_block: str | None = None
     """Why state may not be written right now, while the transaction itself stays open."""
     aborted: bool = False
+    cleanup_errors: list[ExceptionSummary] = field(default_factory=list)
+    prepared_participants: tuple[tuple[ActionParticipant[Any], Any], ...] = ()
+    commit_record: ActionCommit | None = None
 
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
@@ -635,11 +638,10 @@ class _Transaction:
             self.observed[cell] = cell.version
 
     def check_preconditions(self) -> None:
-        """Reject the action if a cell it both read and wrote no longer holds what it read.
+        """Reject a publishing action if any strong input or explicit precondition moved.
 
-        Compare-and-set, derived from what the handler did rather than declared beside it.
-        A cell that was only written carries no precondition, and last commit wins; a cell
-        that was only read carries none either, because nothing was lost by looking.
+        Blind writes remain last-commit-wins. Every strong read guards a transaction that
+        publishes either cell or participant state, including reads of cells it did not write.
         """
         if not (self.writes or self.participants):
             return
@@ -777,22 +779,34 @@ class _Transaction:
             self.patches(),
             changes,
         )
+        self.commit_record = commit
+        self.prepared_participants = tuple(prepared)
         self.publish()
+        # Cell installation begins the infallible publication phase. An adapter that raises
+        # from apply has violated the participant contract; rolling cells back could not undo
+        # a participant that applied only partly, so preserve the committed diagnostic truth.
+        self.published = True
         try:
             for participant, value in prepared:
                 participant.apply(value)
         except BaseException:
             _log.critical("an infallible transaction participant apply failed", exc_info=True)
             raise
-        self.published = True
+
+        return commit
+
+    def finalize_commit(self) -> None:
+        """Notify reactive consumers after the commit gate, isolating aftermath failures."""
         for owner in self.changed.values():
-            owner._state_changed(frozenset(self.changed_names[id(owner)]))
-        for participant, value in prepared:
+            try:
+                owner._state_changed(frozenset(self.changed_names[id(owner)]))
+            except Exception:
+                _log.exception("a reactive owner failed to process its committed state")
+        for participant, value in self.prepared_participants:
             try:
                 participant.finalize(value)
             except Exception:
                 _log.exception("a transaction participant failed to finalize")
-        return commit
 
     def abort(
         self,
@@ -800,7 +814,7 @@ class _Transaction:
         prepared: Sequence[tuple[ActionParticipant[Any], Any]] = (),
     ) -> tuple[ExceptionSummary, ...]:
         if self.aborted:
-            return ()
+            return tuple(self.cleanup_errors)
         self.aborted = True
         values = {id(participant): value for participant, value in prepared}
         failures: list[ExceptionSummary] = []
@@ -808,7 +822,9 @@ class _Transaction:
             try:
                 participant.abort(values.get(id(participant)), cause)
             except Exception as error:
-                failures.append(ExceptionSummary.capture(error))
+                summary = ExceptionSummary.capture(error)
+                failures.append(summary)
+                self.cleanup_errors.append(summary)
                 _log.exception("a transaction participant failed to abort")
         self.restore()
         return tuple(failures)
@@ -947,21 +963,16 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
             if current.published:
                 # Publication is the commit point. An apply failure is an adapter integrity
                 # defect, not a user rollback; retain the commit truth and fail loudly.
-                _emit_commit(
-                    current,
-                    ActionCommit(
-                        current.context,
-                        next_commit_sequence(),
-                        datetime.now(UTC),
-                        elapsed(current.context),
-                        current.reads(),
-                        current.patches(),
-                        tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
-                    ),
+                assert current.commit_record is not None
+                integrity_commit = replace(
+                    current.commit_record,
+                    tags=frozenset({RollbackReason.FRAMEWORK_INTEGRITY_FAILURE.value}),
                 )
+                emit_outcome(integrity_commit)
             else:
                 _emit_rollback(current, error, during_commit=True)
             raise
+        current.finalize_commit()
         current.closed = True
         _emit_commit(current, commit)
 
@@ -996,34 +1007,32 @@ def batch() -> Iterator[None]:
 
 @contextmanager
 def readonly_transaction() -> Iterator[None]:
-    """Roll back and reject any state mutation within the block."""
+    """Run an identified read-only action and reject any state mutation."""
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
-    current = _Transaction(
-        readonly=True, owner_task=_current_task(), context=current_action() or ActionContext.create()
-    )
-    token = _CURRENT.set(current)
-    try:
-        yield
-    except BaseException:
+    context = current_action() or ActionContext.create("read-only action")
+    current = _Transaction(readonly=True, owner_task=_current_task(), context=context)
+    with action_scope(context):
+        token = _CURRENT.set(current)
+        try:
+            yield
+        except BaseException as error:
+            _CURRENT.reset(token)
+            current.closed = True
+            _emit_rollback(current, error, during_commit=False)
+            raise
         _CURRENT.reset(token)
-        current.abort(Exception("read-only transaction rolled back"))
+        try:
+            with _COMMIT_GATE:
+                commit = current.commit()
+        except BaseException as error:
+            current.closed = True
+            _emit_rollback(current, error, during_commit=True)
+            raise
+        current.finalize_commit()
         current.closed = True
-        raise
-    # Reset before committing, not after: the commit notifies owners, and a notification
-    # that writes state must not be recorded by the transaction reporting on it.
-    _CURRENT.reset(token)
-    try:
-        with _COMMIT_GATE:
-            current.commit()
-    except BaseException:
-        # A commit that failed before publication is an action that did not happen.
-        if not current.published:
-            current.abort(Exception("read-only transaction commit failed"))
-        raise
-    finally:
-        current.closed = True
+        _emit_commit(current, commit)
 
 
 def on_action_commit(callback: Callable[[ActionCommit, Aftermath], None], *, key: object | None = None) -> None:
