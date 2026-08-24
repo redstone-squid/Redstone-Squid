@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable, Hashable, Iterator, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum, StrEnum
@@ -89,6 +89,7 @@ class RejectionReason(Enum):
     PROTECTED = "protected"
     SESSION_FINISHED = "session_finished"
     ADMISSION_BUSY = "admission_busy"
+    QUOTA_REACHED = "quota_reached"
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +259,7 @@ class MembershipStatus(StrEnum):
     LEFT = "left"
     NOT_MEMBER = "not_member"
     AT_CAPACITY = "at_capacity"
+    QUOTA_REACHED = "quota_reached"
     REFUSED = "refused"
     CONFLICT = "conflict"
     SESSION_FINISHED = "session_finished"
@@ -276,6 +278,13 @@ class MembershipResult:
     def committed(self) -> bool:
         """Whether this operation changed the membership set."""
         return self.status in (MembershipStatus.JOINED, MembershipStatus.LEFT)
+
+
+@dataclass(frozen=True, slots=True)
+class _MemberScope:
+    """The lock identity one user's membership operations serialize on."""
+
+    user_id: int
 
 
 def _require_user_id(user_id: int) -> int:
@@ -316,9 +325,18 @@ class Session:
         summary: SessionSummary | None = None,
         members: frozenset[int] | None = None,
         capacity: int | None = None,
+        quota: int | None = None,
+        domain: str | None = None,
     ) -> None:
         if capacity is not None and capacity <= 0:
             message = "session capacity must be positive or None"
+            raise ValueError(message)
+        if quota is not None and quota <= 0:
+            message = "session quota must be positive or None"
+            raise ValueError(message)
+        domain = domain or (key.name if isinstance(key, SessionKey) else None)
+        if quota is not None and domain is None:
+            message = "a session quota needs a membership domain; pass domain= or key a SessionKey"
             raise ValueError(message)
         self.key = key
         self.root = root
@@ -330,6 +348,8 @@ class Session:
             members = frozenset() if actor_id is None else frozenset({_require_user_id(actor_id)})
         self._members = members
         self._capacity = capacity
+        self._quota = quota
+        self._domain = domain
         self._summary = summary or SessionSummary(
             id=str(uuid4()),
             opened_at=datetime.now(UTC),
@@ -366,6 +386,16 @@ class Session:
     def remaining_capacity(self) -> int | None:
         """Free member slots, or `None` when this session is unbounded."""
         return None if self._capacity is None else max(self._capacity - len(self._members), 0)
+
+    @property
+    def quota(self) -> int | None:
+        """The most sessions in this domain one member may hold, or `None` for no limit."""
+        return self._quota
+
+    @property
+    def domain(self) -> str | None:
+        """The membership family this session belongs to; `key.name` unless overridden."""
+        return self._domain
 
     def has_member(self, user_id: int) -> bool:
         """Whether `user_id` is an explicit member of this session."""
@@ -468,13 +498,18 @@ class Session:
         the async decision, then commit with `expect=` and retry on `CONFLICT`.
         """
         _require_user_id(user_id)
-        async with self._lifecycle_lock:
+        # Outside the lifecycle lock and before it, because a quota spans sessions: this one
+        # cannot answer for the others. Every path that admits a member takes it first, so
+        # one user's concurrent joins serialize while unrelated users never contend.
+        async with self._registry._member_lock(user_id), self._lifecycle_lock:
             if (dead := self._membership_refusal(user_id, expect)) is not None:
                 return dead
             if user_id in self._members:
                 return self._membership(user_id, MembershipStatus.ALREADY_MEMBER)
             if (remaining := self.remaining_capacity) is not None and remaining <= 0:
                 return self._membership(user_id, MembershipStatus.AT_CAPACITY)
+            if self._quota_reached(user_id):
+                return self._membership(user_id, MembershipStatus.QUOTA_REACHED)
             if when is not None and not when(self._members):
                 return self._membership(user_id, MembershipStatus.REFUSED)
             self._members = self._members | {user_id}
@@ -502,6 +537,19 @@ class Session:
         if expect is not None and expect != self._members:
             return self._membership(user_id, MembershipStatus.CONFLICT)
         return None
+
+    def _quota_reached(self, user_id: int) -> bool:
+        """Whether admitting `user_id` here would exceed this domain's per-user quota.
+
+        Counted by scanning the registry's live sessions rather than from a maintained index:
+        a scan cannot go stale when a session finishes, loses its claim, or is recovered, and
+        the population is small. `user_id` is never a member of this session yet, so this one
+        is not among those counted.
+        """
+        if self._quota is None:
+            return False
+        held = self._registry.sessions_for_member(user_id, domain=self._domain)
+        return len(held) >= self._quota
 
     def _membership(self, user_id: int, status: MembershipStatus) -> MembershipResult:
         return MembershipResult(user_id, status, self._members, self.remaining_capacity)
@@ -610,6 +658,8 @@ class SessionRegistry:
         local: bool = True,
         summary: SessionSummary | None = None,
         capacity: int | None = None,
+        quota: int | None = None,
+        domain: str | None = None,
     ) -> OpenResult:
         """Admit, deliver, and register one new root session.
 
@@ -633,6 +683,8 @@ class SessionRegistry:
                 local=local,
                 summary=summary,
                 capacity=capacity,
+                quota=quota,
+                domain=domain,
                 remote_occupants=(),
                 before_registration=None,
                 session_type=Session,
@@ -648,6 +700,8 @@ class SessionRegistry:
                 local=local,
                 summary=summary,
                 capacity=capacity,
+                quota=quota,
+                domain=domain,
                 remote_occupants=(),
                 before_registration=None,
                 session_type=Session,
@@ -666,6 +720,8 @@ class SessionRegistry:
         before_registration: BeforeRegistration,
         session_type: type[SessionT],
         capacity: int | None = None,
+        quota: int | None = None,
+        domain: str | None = None,
     ) -> Opened[SessionT] | Rejected | Abandoned:
         """Open under the registry lock with a caller-owned external commit boundary.
 
@@ -683,6 +739,8 @@ class SessionRegistry:
                 local=True,
                 summary=summary,
                 capacity=capacity,
+                quota=quota,
+                domain=domain,
                 remote_occupants=remote_occupants,
                 before_registration=before_registration,
                 session_type=session_type,
@@ -699,6 +757,8 @@ class SessionRegistry:
         session_type: type[SessionT],
         members: frozenset[int] | None = None,
         capacity: int | None = None,
+        quota: int | None = None,
+        domain: str | None = None,
     ) -> SessionT:
         """Register a frontend-reconnected session without delivering its mounts again."""
         session = session_type(
@@ -711,6 +771,8 @@ class SessionRegistry:
             summary=summary,
             members=members,
             capacity=capacity,
+            quota=quota,
+            domain=domain,
         )
         self._sessions.append(session)
         self._by_key.setdefault(key, []).append(session)
@@ -726,6 +788,23 @@ class SessionRegistry:
     def session_for(self, mount: Mount) -> Session | None:
         """Return the logical session that owns `mount`, if this registry knows it."""
         return self._by_mount.get(mount)
+
+    def sessions_for_member(self, user_id: int, *, domain: str | None = None) -> tuple[Session, ...]:
+        """Every live session `user_id` is an explicit member of, oldest first.
+
+        Restrict to one membership family with `domain`. This answers "what is this user in
+        right now?" for quotas, for a "you are already in a game" affordance, and for
+        devtools.
+        """
+        return tuple(
+            session
+            for session in self._sessions
+            if user_id in session.members and (domain is None or session.domain == domain)
+        )
+
+    def _member_lock(self, user_id: int) -> AbstractAsyncContextManager[None]:
+        """Serialize one user's admissions across every session in this registry."""
+        return self._lock_for(_MemberScope(user_id))
 
     def find(self, session_id: str) -> Session | None:
         """Return a live session by its stable diagnostic identity."""
@@ -760,6 +839,8 @@ class SessionRegistry:
         local: bool,
         summary: SessionSummary | None,
         capacity: int | None,
+        quota: int | None,
+        domain: str | None,
         remote_occupants: tuple[SessionSummary, ...],
         before_registration: BeforeRegistration | None,
         session_type: type[Session],
@@ -778,6 +859,8 @@ class SessionRegistry:
             local=local,
             summary=summary,
             capacity=capacity,
+            quota=quota,
+            domain=domain,
         )
         victims: tuple[Session, ...] = ()
         selected: tuple[SessionSummary, ...] = ()
@@ -801,6 +884,11 @@ class SessionRegistry:
                 if not await policy.protect.allows(request, victim):
                     return Rejected(summaries, RejectionReason.PROTECTED)
 
+        # Advisory: the authoritative check is under the member lock below, but refusing
+        # here means a doomed open costs no Discord message.
+        if actor_id is not None and newcomer._quota_reached(actor_id):
+            return Rejected(summaries, RejectionReason.QUOTA_REACHED)
+
         # Indexed before delivery, because delivery renders: a root component that draws
         # session facts would otherwise find no session on its own first paint and never be
         # asked to draw again. An abandoned delivery takes the entry back out.
@@ -810,17 +898,28 @@ class SessionRegistry:
             self._unindex_mount(newcomer, mount)
             return result
 
-        if before_registration is not None:
-            try:
-                await before_registration(newcomer, result, selected)
-            except BaseException:
-                await newcomer.finish()
-                raise
+        # The opener joins by opening, so a quota has to bind here too — otherwise it is
+        # evaded by opening a second session rather than joining one. Held from before the
+        # external commit through registration, so the count and the append are one step.
+        async with AsyncExitStack() as commit:
+            if actor_id is not None:
+                await commit.enter_async_context(self._member_lock(actor_id))
+                if newcomer._quota_reached(actor_id):
+                    self._unindex_mount(newcomer, mount)
+                    await mount.finish()
+                    return Rejected(summaries, RejectionReason.QUOTA_REACHED)
 
-        self._sessions.append(newcomer)
-        if key is not None:
-            self._by_key.setdefault(key, []).append(newcomer)
-        newcomer._activate()
+            if before_registration is not None:
+                try:
+                    await before_registration(newcomer, result, selected)
+                except BaseException:
+                    await newcomer.finish()
+                    raise
+
+            self._sessions.append(newcomer)
+            if key is not None:
+                self._by_key.setdefault(key, []).append(newcomer)
+            newcomer._activate()
         for victim in victims:
             await victim.finish()
         return Opened(newcomer)
