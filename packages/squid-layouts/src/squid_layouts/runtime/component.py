@@ -78,6 +78,7 @@ from squid_layouts.semantic import (
     Navigation as SemanticNavigation,
 )
 from squid_layouts.semantic import Paged as SemanticPaged
+from squid_layouts.semantic import Roster as SemanticRoster
 from squid_layouts.semantic import (
     Table as SemanticTable,
 )
@@ -365,6 +366,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticChoices(key=key)
                 | SemanticNavigation(key=key)
                 | SemanticTable(key=key)
+                | SemanticRoster(key=key)
                 | SemanticMedia(key=key)
                 | SemanticFormTrigger(key=key)
                 | SemanticToggle(key=key)

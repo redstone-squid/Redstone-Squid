@@ -101,6 +101,7 @@ ROOT_API = frozenset(
         "raw_md",
         "resource",
         "resources",
+        "roster",
         "routed_action",
         "routed_choices",
         "routing",
@@ -172,6 +173,7 @@ SPECIALIST_SAMPLES = {
     "Guard": sl.guards,
     "LayoutError": sl.errors,
     "ZonedDateTime": sl.temporal,
+    "RosterPlacement": sl.patterns,
     "Message": sl.text,
 }
 

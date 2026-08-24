@@ -26,6 +26,15 @@ from squid_layouts.patterns.multichoice import (
     MultiChoiceState,
 )
 from squid_layouts.patterns.ranked import RankedEntry, RankedList, RankedListState
+from squid_layouts.patterns.roster import (
+    RosterEntry,
+    RosterGroup,
+    RosterOverflow,
+    RosterPlacement,
+    RosterSlot,
+    RosterStatus,
+    place_roster,
+)
 from squid_layouts.patterns.shells import (
     ComponentShell,
     Pattern,
@@ -89,6 +98,12 @@ __all__ = [
     "RankedEntry",
     "RankedList",
     "RankedListState",
+    "RosterEntry",
+    "RosterGroup",
+    "RosterOverflow",
+    "RosterPlacement",
+    "RosterSlot",
+    "RosterStatus",
     "RouteBuilder",
     "RouterShell",
     "SourceRankedList",
@@ -103,4 +118,5 @@ __all__ = [
     "WizardState",
     "WizardStep",
     "confirm",
+    "place_roster",
 ]

@@ -22,11 +22,12 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
+from squid_layouts._roster import RosterPlacement
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.semantic import (
     CLOSED,
@@ -90,6 +91,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Progress,
     Quote,
+    Roster,
     RoutedAction,
     RoutedChoices,
     ScaleEvent,
@@ -482,6 +484,19 @@ def table(
     )
 
 
+def roster(
+    placement: RosterPlacement,
+    *,
+    key: str,
+    on_join: Callable[[SelectionEvent], Awaitable[None]] | None = None,
+    routes: Mapping[str, str] | None = None,
+    locked: bool = False,
+    show_waitlist: bool = True,
+) -> Roster:
+    """Render one host-owned roster allocation with active localized chrome."""
+    return Roster(key, placement, on_join, routes, locked, show_waitlist)
+
+
 def media_item(url: str, *, key: str = "", description: TextValue | None = None) -> MediaItem:
     """One image of a `media` collection."""
     return MediaItem(key, url, _opt_text(description))
@@ -806,6 +821,7 @@ __all__ = [
     "progress",
     "quote",
     "rating",
+    "roster",
     "routed_action",
     "routed_choices",
     "section",
