@@ -787,8 +787,13 @@ class SessionRegistry:
                 if not await policy.protect.allows(request, victim):
                     return Rejected(summaries, RejectionReason.PROTECTED)
 
+        # Indexed before delivery, because delivery renders: a root component that draws
+        # session facts would otherwise find no session on its own first paint and never be
+        # asked to draw again. An abandoned delivery takes the entry back out.
+        self._index_mount(newcomer, mount)
         result = await mount.send(destination)
         if isinstance(result, Abandoned):
+            self._unindex_mount(newcomer, mount)
             return result
 
         if before_registration is not None:
