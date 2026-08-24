@@ -102,6 +102,12 @@ class Screen:
     name: str
     scope: Scope = Scope.USER
     policy: SessionPolicy = DEFAULT_SESSION_POLICY
+    capacity: int | None = None
+    """The most members one opening of this screen admits; `None` is unbounded.
+
+    Separate from `policy`, which governs how many sessions may occupy the key rather than
+    how many users may join one of them.
+    """
     access: Callable[[Opener], AccessPolicy] = _owner
     options: Mapping[str, object] = field(default_factory=dict)
 
@@ -135,6 +141,7 @@ class Screen:
             key=self.key(opener),
             policy=self.policy,
             actor_id=opener.user_id,
+            capacity=self.capacity,
         )
 
     async def respond(

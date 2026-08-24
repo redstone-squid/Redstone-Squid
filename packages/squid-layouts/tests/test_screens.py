@@ -177,3 +177,14 @@ async def test_screen_opens_a_root_when_parent_has_no_live_session() -> None:
 
     assert isinstance(opened, Opened)
     assert opened.session.key == screen.key(Opener(7))
+
+
+async def test_a_screen_carries_its_capacity_into_the_session() -> None:
+    sessions = SessionRegistry()
+    screen = Screen("lobby", scope=Scope.GUILD, capacity=4, access=lambda opener: Everyone())
+
+    opened = await screen.open(sessions, Panel(), to_message(), opener=Opener(7, guild_id=5))
+
+    assert isinstance(opened, Opened)
+    assert opened.session.capacity == 4
+    assert opened.session.remaining_capacity == 3
