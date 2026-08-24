@@ -51,6 +51,7 @@ from squid_reactive.core import (
     relaxed_read,
     restore_state,
     state,
+    strong_read,
     transaction,
     untracked,
 )
@@ -104,6 +105,7 @@ __all__ = [
     "relaxed_read",
     "restore_state",
     "state",
+    "strong_read",
     "transaction",
     "untracked",
 ]

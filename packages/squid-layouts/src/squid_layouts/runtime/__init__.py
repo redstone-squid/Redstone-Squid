@@ -83,6 +83,7 @@ from squid_layouts.runtime.reactivity import (
     relaxed_read,
     restore_state,
     state,
+    strong_read,
     transaction,
     untracked,
 )
@@ -227,6 +228,7 @@ __all__ = [
     "resource",
     "restore_state",
     "state",
+    "strong_read",
     "transaction",
     "untracked",
     "watch",

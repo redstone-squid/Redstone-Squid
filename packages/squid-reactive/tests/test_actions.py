@@ -30,6 +30,7 @@ from squid_reactive import (
     Shared,
     add_action_outcome_sink,
     apply_conditional_patches,
+    computed,
     join_action,
     on_action_commit,
     on_action_rollback,
@@ -37,6 +38,7 @@ from squid_reactive import (
     relaxed_read,
     remove_action_outcome_sink,
     state,
+    strong_read,
     transaction,
 )
 from squid_reactive.core import _CURRENT
@@ -120,11 +122,25 @@ def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
     assert seen == [("handler_exception", "system")]
 
 
-def test_full_strong_read_set_rejects_write_skew() -> None:
+def test_write_skew_is_allowed_by_default() -> None:
+    """Reading a shared cell the action does not write costs it nothing by default."""
+    preferences = Preferences(LocalTopicBus(), 1)
+
+    with transaction():
+        assert preferences.theme == "system"
+        preferences.locale = "fr"
+        _outside_write(preferences, "theme", "dark")
+
+    assert preferences.locale == "fr"
+    assert preferences.theme == "dark"
+
+
+def test_strong_read_rejects_write_skew() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
 
     with pytest.raises(ReactiveConflictError), transaction():
-        assert preferences.theme == "system"
+        with strong_read():
+            assert preferences.theme == "system"
         preferences.locale = "fr"
         _outside_write(preferences, "theme", "dark")
 
@@ -132,12 +148,22 @@ def test_full_strong_read_set_rejects_write_skew() -> None:
     assert preferences.theme == "dark"
 
 
-def test_a_b_a_lineage_change_conflicts_even_when_value_matches() -> None:
+def test_a_read_the_action_also_writes_conflicts_without_opting_in() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
 
     with pytest.raises(ReactiveConflictError), transaction():
-        seen = preferences.theme
-        preferences.locale = seen
+        preferences.theme = preferences.theme + "-dim"
+        _outside_write(preferences, "theme", "dark")
+
+    assert preferences.theme == "dark"
+
+
+def test_a_b_a_lineage_change_conflicts_even_when_value_matches() -> None:
+    """Lineage, not equality: the cell holds what it held, but not the same version of it."""
+    preferences = Preferences(LocalTopicBus(), 1)
+
+    with pytest.raises(ReactiveConflictError), transaction():
+        preferences.theme = preferences.theme + "-dim"
         _outside_write(preferences, "theme", "dark")
         _outside_write(preferences, "theme", "system")
 
@@ -183,16 +209,51 @@ def test_retained_patch_uses_weak_slot_authority() -> None:
         apply_conditional_patches(inverse)
 
 
-def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
+def test_relaxed_read_opts_back_out_of_a_strong_read() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
 
-    with transaction():
+    with transaction(), strong_read():
         with relaxed_read():
             assert preferences.theme == "system"
         preferences.locale = "fr"
         _outside_write(preferences, "theme", "dark")
 
     assert preferences.locale == "fr"
+
+
+def test_relaxed_read_drops_the_precondition_on_a_cell_the_action_also_writes() -> None:
+    preferences = Preferences(LocalTopicBus(), 1)
+
+    with transaction():
+        with relaxed_read():
+            seen = preferences.theme
+        preferences.theme = seen + "-dim"
+        _outside_write(preferences, "theme", "dark")
+
+    assert preferences.theme == "system-dim"
+
+
+def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
+    """It drops the precondition, not the dependency: the computed still recomputes."""
+    preferences = Preferences(LocalTopicBus(), 1)
+    runs = 0
+
+    class Banner(Reactive):
+        @computed
+        def caption(self) -> str:
+            nonlocal runs
+            runs += 1
+            with relaxed_read():
+                return preferences.theme.upper()
+
+    banner = Banner()
+    assert banner.caption == "SYSTEM"
+    assert runs == 1
+
+    preferences.theme = "dark"
+
+    assert banner.caption == "DARK"
+    assert runs == 2
 
 
 def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) -> None:
@@ -459,3 +520,30 @@ def test_durable_sink_encodes_outcomes_and_declares_host_policy() -> None:
     assert snapshot.actor is None
     assert sink.policy.retention == "30 days"
     assert sink.policy.value_serialization == "summaries-only"
+
+
+def test_a_strong_read_guards_its_own_version_not_an_earlier_unguarded_one() -> None:
+    """The unguarded read was disclaimed by not being guarded, so it is not the precondition."""
+    preferences = Preferences(LocalTopicBus(), 1)
+
+    with transaction():
+        assert preferences.theme == "system"
+        _outside_write(preferences, "theme", "dark")
+        with strong_read():
+            assert preferences.theme == "dark"
+        preferences.locale = "fr"
+
+    assert preferences.locale == "fr"
+
+
+def test_the_first_strong_read_is_the_one_the_commit_requires() -> None:
+    preferences = Preferences(LocalTopicBus(), 1)
+
+    with pytest.raises(ReactiveConflictError), transaction():
+        with strong_read():
+            assert preferences.theme == "system"
+            _outside_write(preferences, "theme", "dark")
+            assert preferences.theme == "dark"
+        preferences.locale = "fr"
+
+    assert preferences.locale == "en"

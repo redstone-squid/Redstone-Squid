@@ -25,6 +25,7 @@ from squid_reactive import (
     add_action_outcome_sink,
     on_action_commit,
     state,
+    strong_read,
     transaction,
 )
 from squid_reactive.core import _CURRENT
@@ -182,7 +183,7 @@ def test_scheduler_places_remote_import_before_local_validation() -> None:
     schedule = InterleavingHarness()
     schedule.at("transaction.close_staging", lambda: target.import_update(update))
 
-    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction():
+    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction(), strong_read():
         assert target.counter("votes").value == 0
         model.selected = True
 
@@ -198,7 +199,7 @@ def test_superseded_replicated_read_rejects_local_publication() -> None:
         source.counter("votes").increment(1)
     update = source.export_since()
 
-    with pytest.raises(ReactiveConflictError), transaction():
+    with pytest.raises(ReactiveConflictError), transaction(), strong_read():
         assert target.counter("votes").value == 0
         model.selected = True
         _outside(target.import_update, update)

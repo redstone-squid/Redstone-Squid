@@ -26,6 +26,9 @@ means the adversarial, restart, retention, or performance claim has a direct tes
 - [x] Failed handlers and participant preparation publish no staged reactive or fake-replicated state.
 - [x] Normal success, handler exception, cancellation, OCC conflict, and prepare failure emit one terminal action outcome.
 - [x] Publishing actions validate every strong addressed read by version; A→B→A conflicts.
+  **Amended 2026-08-24**: strong narrowed from every addressed read to a cell the action also
+  writes or one read inside `strong_read()`. The evidence stands -- the covering tests opted in
+  rather than being deleted -- and version-over-equality lineage is unchanged.
 - [x] Undo and redo are new actions and redo is based on the actual committed undo.
 - [x] Mixed state-only inverses prepare in one runtime transaction and conflict without partial publication.
 - [x] Local and fake-remote imports pass through the same runtime commit gate.

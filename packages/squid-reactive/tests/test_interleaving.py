@@ -13,6 +13,7 @@ from squid_reactive import (
     join_action,
     on_action_commit,
     state,
+    strong_read,
     transaction,
 )
 from squid_reactive.testing import InterleavingHarness
@@ -28,7 +29,7 @@ def test_scheduler_reproduces_read_a_write_b_write_skew() -> None:
     schedule = InterleavingHarness()
     schedule.at("commit.before_validation", lambda: setattr(model, "source", "B"))
 
-    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction():
+    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction(), strong_read():
         model.result = model.source.lower()
 
     assert model.source == "B"
@@ -45,7 +46,7 @@ def test_scheduler_reproduces_a_b_a_lineage_change() -> None:
         model.source = "A"
 
     schedule.at("transaction.close_staging", move_twice)
-    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction():
+    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction(), strong_read():
         assert model.source == "A"
         model.result = "derived"
 
