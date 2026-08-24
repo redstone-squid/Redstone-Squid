@@ -567,6 +567,14 @@ class _Candidate:
     assets: tuple[Asset, ...]
     # Presentation writes this render earned; a failed delivery simply drops them.
     session_updates: tuple[SessionUpdate, ...]
+    settled: bool = False
+    """Whether this candidate has already been committed or rolled back.
+
+    Every path that draws a candidate owes it exactly one of those two endings. Which
+    candidate is outstanding is already unambiguous -- `_draw` stages subscriptions, and
+    the reconciler refuses a second staged set -- so what is left to get wrong is settling
+    the same one twice, and that is what this refuses.
+    """
 
     @property
     def presentation(self) -> DiscordPresentation:
@@ -1434,12 +1442,24 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         self._commit_render(candidate)
         self._commit_delivery(candidate)
 
+    def _settle(self, candidate: _Candidate, ending: str) -> None:
+        """Record that `candidate` has reached its one ending, refusing a second.
+
+        The discipline `_Subscriptions.commit`/`discard` already keeps for the reactive
+        half, kept here for the visible half.
+        """
+        if candidate.settled:
+            message = f"mount {self.id}: candidate generation {candidate.generation} already settled, cannot {ending}"
+            raise LayoutInvariantError(message)
+        candidate.settled = True
+
     def _commit_render(self, candidate: _Candidate) -> None:
         """Commit the candidate's application runtime; what the reader sees is untouched.
 
         `session_updates` apply here too: planning's clamps describe the scene that is on
         screen, and a suppressed candidate is on screen by definition.
         """
+        self._settle(candidate, "commit")
         apply_updates(self.presentation, candidate.session_updates)
         self._subscriptions.commit()
         self.runtime.commit(candidate.tree, rendered_revision=candidate.revision)
@@ -1533,6 +1553,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         Nothing to unwind: planning only read the session, so dropping the candidate drops
         its presentation writes with it.
         """
+        self._settle(candidate, "roll back")
         candidate.view.stop()
         self._subscriptions.discard()
         self._dirty = True
