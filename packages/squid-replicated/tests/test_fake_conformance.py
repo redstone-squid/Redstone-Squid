@@ -5,12 +5,19 @@ import json
 import uuid
 
 import pytest
-from squid_replicated import ReplicatedChangeToken, ReplicatedClosedError, ReplicatedScope, ReplicatedUpdate
+from squid_replicated import (
+    PreparedReplicatedInverse,
+    ReplicatedChangeToken,
+    ReplicatedClosedError,
+    ReplicatedScope,
+    ReplicatedUpdate,
+)
 
 from squid_layouts.runtime import History
 from squid_reactive import (
     ActionCommit,
     ActionLedger,
+    ConflictDetail,
     Reactive,
     ReactiveConflictError,
     add_action_outcome_sink,
@@ -214,7 +221,7 @@ def test_action_token_selectively_inverts_counter_and_add_after_remote_work() ->
 
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
-    assert not hasattr(inverse, "target_id")
+    assert isinstance(inverse, PreparedReplicatedInverse)
     with transaction():
         token.stage_inverse(inverse)
 
@@ -236,11 +243,62 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
     restored.import_update(update)
     reloaded = ReplicatedChangeToken.decode(restored, encoded)
     inverse = reloaded.plan_inverse()
-    assert isinstance(inverse, tuple)
+    assert isinstance(inverse, PreparedReplicatedInverse)
     with transaction():
         reloaded.stage_inverse(inverse)
 
     assert restored.counter("votes").value == 0
+
+
+def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> None:
+    document = ReplicatedScope("a").open("project")
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        document.counter("votes").increment(2)
+    token = commits[0].participant_changes[0].token
+
+    document.expire_history_tokens()
+    conflict = token.plan_inverse()
+
+    assert isinstance(conflict, ConflictDetail)
+    assert conflict.target_id == "replicated:project:expired"
+    assert document.counter("votes").value == 2
+
+
+def test_prepared_inverse_cannot_cross_a_compaction_epoch() -> None:
+    document = ReplicatedScope("a").open("project")
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        document.counter("votes").increment(2)
+    token = commits[0].participant_changes[0].token
+    inverse = token.plan_inverse()
+    assert isinstance(inverse, PreparedReplicatedInverse)
+    document.expire_history_tokens()
+
+    with pytest.raises(ReactiveConflictError, match="expired"), transaction():
+        token.stage_inverse(inverse)
+
+    assert document.counter("votes").value == 2
+
+
+def test_durable_history_token_rejects_wrong_document_and_schema() -> None:
+    source = ReplicatedScope("a").open("source")
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        source.counter("votes").increment(1)
+    encoded = commits[0].participant_changes[0].token.encode()
+
+    target = ReplicatedScope("b").open("target")
+    with pytest.raises(ValueError, match="wrong backend or document"):
+        ReplicatedChangeToken.decode(target, encoded)
+
+    payload = json.loads(encoded)
+    payload["schema"] = 2
+    with pytest.raises(ValueError, match="unsupported or corrupt"):
+        ReplicatedChangeToken.decode(source, json.dumps(payload).encode())
 
 
 @pytest.mark.parametrize(
