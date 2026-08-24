@@ -11,6 +11,7 @@ members = [
     "redstone-squid",
     "squid-layouts",
     "squid-reactive",
+    "squid-replicated",
     "squid-stores",
 ]
 
@@ -3209,6 +3210,17 @@ provides-extras = ["discord", "postgres"]
 name = "squid-reactive"
 version = "0.1.0"
 source = { editable = "packages/squid-reactive" }
+
+[[package]]
+name = "squid-replicated"
+version = "0.1.0"
+source = { editable = "packages/squid-replicated" }
+dependencies = [
+    { name = "squid-reactive" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "squid-reactive", editable = "packages/squid-reactive" }]
 
 [[package]]
 name = "squid-stores"
