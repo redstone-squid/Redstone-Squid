@@ -37,6 +37,7 @@ type DemoSection = Literal[
     "adaptation",
     "degradation",
     "data",
+    "grid",
     "ownership",
     "forms",
     "composition",
@@ -96,6 +97,18 @@ return sl.actions(*actions, key="showcase-actions")""",
     # AUTO, so the planner may fall back to records when a row will not fit.
     sl.table(columns, *rows, key="capability-table"),
 )""",
+    "grid": """cells = tuple(
+    sl.patterns.GridCell(
+        f"cell-{index}",
+        str(index + 1),
+        available=index not in blocked,
+    )
+    for index in range(12)
+)
+
+# Cells are variadic. Buttons preserve the board while it fits; larger shapes
+# lower to coordinate or paged selects with the same SelectionEvent keys.
+return sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid)""",
     "ownership": """# The session owns this one, under its key. No component state backs it.
 sl.toggle("Session-owned", key="ownership.managed")
 
@@ -305,6 +318,7 @@ class LayoutShowcase(sl.Component):
     section: str = sl.state("pagination")
     accent_index: int = sl.state(0)
     clicks: int = sl.state(0)
+    grid_pick: str = sl.state("No position selected.")
     rating: int | None = sl.state(None)
     subscribed: bool = sl.state(default=False)
     feedback_exhibit: str = sl.state("")
@@ -389,6 +403,8 @@ class LayoutShowcase(sl.Component):
                 exhibit = self._degradation()
             case "data":
                 exhibit = self._data()
+            case "grid":
+                exhibit = self._grid()
             case "ownership":
                 exhibit = self._ownership()
             case "forms":
@@ -548,6 +564,33 @@ class LayoutShowcase(sl.Component):
                 tone=sl.Tone.SUCCESS,
             ),
             sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate)),
+        )
+
+    def _grid(self) -> Sequence[sl.LayoutNode]:
+        blocked = {5, 10}
+        cells = tuple(
+            sl.patterns.GridCell(
+                f"cell-{index}",
+                str(index + 1),
+                available=index not in blocked,
+                tone=sl.Tone.INFO if index % 2 == 0 else sl.Tone.NEUTRAL,
+            )
+            for index in range(12)
+        )
+        return (
+            sl.section(
+                sl.heading(L(t"Selectable grid")),
+                sl.paragraph(
+                    L(
+                        "The component declares cells, stable keys, and four columns. This shape fits as a "
+                        "button board; wider or larger boards retain the same callback through coordinate "
+                        "and paged-select representations."
+                    )
+                ),
+                sl.status(self.grid_pick),
+                accent=DISCORD_BLUE,
+            ),
+            sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid),
         )
 
     def _forms(self) -> Sequence[sl.LayoutNode]:
@@ -779,6 +822,11 @@ class LayoutShowcase(sl.Component):
                 L(t"Quantities and instants formatted once, at the end"),
             ),
             (
+                "grid",
+                L(t"Selectable grid"),
+                L(t"One stable interaction across spatial fallbacks"),
+            ),
+            (
                 "ownership",
                 L(t"Value ownership"),
                 L(t"Session-owned and component-owned controls"),
@@ -834,6 +882,9 @@ class LayoutShowcase(sl.Component):
 
     async def _click(self, event: sl.PressEvent) -> None:
         self.clicks += 1
+
+    async def _pick_grid(self, event: sl.SelectionEvent) -> None:
+        self.grid_pick = f"Selected {event.values[0]}."
 
     async def _rate(self, event: sl.ScaleEvent) -> None:
         self.rating = event.value
