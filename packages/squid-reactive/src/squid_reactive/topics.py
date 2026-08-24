@@ -45,7 +45,7 @@ type SubscriberErrorHandler = Callable[[Address, Subscriber, Exception], None]
 
 
 class _TopicCell(_Cell):
-    __slots__ = ("__weakref__",)
+    __slots__ = ()
 
 
 _TOPIC_CELLS: WeakValueDictionary[Topic, _TopicCell] = WeakValueDictionary()
