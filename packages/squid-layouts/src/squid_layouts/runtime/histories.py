@@ -18,6 +18,7 @@ from squid_layouts.runtime.reactivity import (
     ConditionalCellPatch,
     ReactiveConflictError,
     apply_conditional_patches,
+    apply_local_overwrite_patches,
     fresh_action_transaction,
     has_action_hook,
     on_action_commit,
@@ -51,6 +52,13 @@ class HistoryResultStatus(Enum):
     CONFLICT = "conflict"
     FAILED = "failed"
     NEEDS_RECONCILIATION = "needs_reconciliation"
+
+
+class UndoStrategy(Enum):
+    """How retained register patches may be applied."""
+
+    CONDITIONAL = "conditional"
+    LOCAL_OVERWRITE = "local_overwrite"
 
 
 class HistoryOwner(Protocol):
@@ -113,6 +121,7 @@ class HistoryEntry:
     compensation: CompensationSpec | None = None
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
+    strategy: UndoStrategy = UndoStrategy.CONDITIONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,7 +209,13 @@ class History:
             tuple(_entry_snapshot(entry) for entry in self._redoable),
         )
 
-    def record(self, label: TextLike, *, compensate: CompensationSpec | None = None) -> None:
+    def record(
+        self,
+        label: TextLike,
+        *,
+        compensate: CompensationSpec | None = None,
+        strategy: UndoStrategy = UndoStrategy.CONDITIONAL,
+    ) -> None:
         """Retain the whole successful action once, using its committed patch lineage."""
 
         def committed(commit: ActionCommit, aftermath: object) -> None:
@@ -213,6 +228,7 @@ class History:
                     UndoPlan.from_commit(commit),
                     compensation=compensate,
                     original_commit=commit,
+                    strategy=strategy,
                 )
             )
 
@@ -240,6 +256,11 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[object, object]] = []
+                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE and entry.undo_plan.participants:
+                    detail = ConflictDetail("participant", 0, 0)
+                    raise ReactiveConflictError(  # noqa: TRY301
+                        detail, "local overwrite policy cannot target transaction participants"
+                    )
                 for change in entry.undo_plan.participants:
                     inverse = change.token.plan_inverse()
                     if isinstance(inverse, ConflictDetail):
@@ -247,7 +268,10 @@ class History:
                             inverse, f"{change.participant_id} cannot be inverted safely"
                         )
                     planned.append((change.token, inverse))
-                apply_conditional_patches(entry.undo_plan.cells)
+                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE:
+                    apply_local_overwrite_patches(entry.undo_plan.cells)
+                else:
+                    apply_conditional_patches(entry.undo_plan.cells)
                 for token, inverse in planned:
                     token.stage_inverse(inverse)
 
@@ -324,7 +348,10 @@ class History:
         )
         try:
             with fresh_action_transaction(action_context=context):
-                apply_conditional_patches(entry.redo_plan.cells)
+                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE:
+                    apply_local_overwrite_patches(entry.redo_plan.cells)
+                else:
+                    apply_conditional_patches(entry.redo_plan.cells)
 
                 def committed(commit: ActionCommit, aftermath: object) -> None:
                     entry.undo_plan = UndoPlan.from_commit(commit)
@@ -462,6 +489,7 @@ __all__ = [
     "RedoResult",
     "UndoPlan",
     "UndoResult",
+    "UndoStrategy",
     "history",
     "history_actions",
     "inspect_histories",
