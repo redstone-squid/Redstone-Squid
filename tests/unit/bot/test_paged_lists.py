@@ -10,6 +10,7 @@ from discord.ext import commands
 from squid.bot.submission.records import RecordCog
 from squid.bot.version_tracking import VersionTracker
 from squid_layouts.discord.testing import fake_message
+from tests.helpers.discord import make_layout_bot
 
 
 def _context() -> commands.Context[Any]:
@@ -18,6 +19,7 @@ def _context() -> commands.Context[Any]:
         cast(
             Any,
             SimpleNamespace(
+                bot=make_layout_bot(),
                 send=AsyncMock(return_value=fake_message(message_id=1)),
                 guild=None,
                 interaction=None,
@@ -113,7 +115,13 @@ async def test_a_clean_diagnostic_still_says_so() -> None:
 async def test_a_staff_diagnostic_stays_out_of_the_channel_on_the_slash_path() -> None:
     cog = _records_cog([_gap(1)])
     ctx = _context()
-    cast(Any, ctx).interaction = SimpleNamespace(guild_locale=None, locale=None)
+    cast(Any, ctx).interaction = SimpleNamespace(
+        guild_locale=None,
+        locale=None,
+        expires_at=None,
+        is_expired=lambda: False,
+        response=SimpleNamespace(is_done=lambda: False),
+    )
 
     await RecordCog.gaps.callback(cog, ctx)  # type: ignore[arg-type]
 

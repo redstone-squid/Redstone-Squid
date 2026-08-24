@@ -463,9 +463,10 @@ class AccountPanel(sl.Component):
             )
         return None
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            source=source,
             access=sl.discord.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,

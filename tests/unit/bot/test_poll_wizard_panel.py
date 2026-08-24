@@ -8,6 +8,7 @@ import discord
 import squid_layouts as sl
 from squid.bot.voting.poll_wizard import PollConfirmationComponent, PollDraft
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from tests.helpers.discord import make_layout_bot
 from tests.helpers.voting import GENERIC_OPTIONS
 
 OWNER_ID = 11
@@ -22,7 +23,7 @@ def make_wizard() -> PollConfirmationComponent:
 def test_scheduler_backed_wizard_renews_its_private_session() -> None:
     reactor = sl.discord.Reactor()
 
-    mount = make_wizard().mount(reactor=reactor)
+    mount = make_wizard().mount(source=make_layout_bot(), reactor=reactor)
 
     assert mount.scheduler is reactor
     assert isinstance(mount.expiry, sl.discord.RenewEphemeral)
@@ -34,7 +35,7 @@ async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> N
     Finishing through it would have replaced the "Poll cancelled." reply with a disabled
     wizard and left the real wizard clickable. The mount falls back to the message instead.
     """
-    mount = make_wizard().mount()
+    mount = make_wizard().mount(source=make_layout_bot())
     message = fake_message()
     await mount.send(delivered_to(message))
 
@@ -50,7 +51,7 @@ async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> N
 
 async def test_custom_duration_submission_returns_through_the_mount_funnel() -> None:
     wizard = make_wizard()
-    mount = wizard.mount()
+    mount = wizard.mount(source=make_layout_bot())
     commit_render(mount)
     opening = fake_interaction(user_id=OWNER_ID)
 

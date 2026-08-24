@@ -88,7 +88,7 @@ def test_of_resolves_from_a_client_an_interaction_and_a_command_context() -> Non
 
     assert LayoutHost.of(cast(Any, client)) is host
     assert LayoutHost.of(interaction) is host
-    assert LayoutHost.of(context) is host
+    assert LayoutHost.of(cast(Any, context)) is host
 
 
 def test_of_raises_rather_than_returning_none_when_nothing_is_installed() -> None:

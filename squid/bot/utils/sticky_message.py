@@ -10,7 +10,7 @@ import discord
 from discord import TextChannel
 
 import squid_layouts as sl
-from squid.bot.ui import send_to
+from squid_layouts.discord import send_to
 
 logger = logging.getLogger(__name__)
 

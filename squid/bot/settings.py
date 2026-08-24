@@ -55,7 +55,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         # One panel per admin per guild: a second `/settings` replaces the first rather than
         # leaving two live panels writing the same settings service.
         await self.bot.mounts.open(
-            view.mount(),
+            view.mount(source=ctx),
             destination(ctx, visibility="personal", locale=locale),
             key=SessionKey.user_guild("settings", ctx.author.id, ctx.guild.id),
             actor_id=ctx.author.id,
