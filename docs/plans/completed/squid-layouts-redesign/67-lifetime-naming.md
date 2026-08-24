@@ -9,14 +9,14 @@ a closed suffix vocabulary where a type's last word says what ends it.
 and `squid_stores` there are **93 distinct class-name suffixes, 60 used exactly once**; only 15
 recur three times or more. A closed table would have to reject `Component`, `Mount`, `Screen`,
 `Destination`, `Composition`, `Target` and `Work`, or grow until it was not a table. Collapsing
-to one word per lifetime class is worse — see [90](90-deferred.md).
+to one word per lifetime class is worse — see [90](../../squid-layouts-redesign/90-deferred.md).
 
 ## Decision
 
 **Lifetime is carried by verbs, not nouns.** Verbs name events natively; nouns name things.
 Six closed verbs (`close`, `detach`, `finish`, `cancel`, `discard`, `run`), and nouns get three
 consistency rules that need no dictionary. Both are written up in
-`docs/squid-layouts-architecture.md` under "Ownership and lifetime".
+`../../../squid-layouts-architecture.md` under "Ownership and lifetime".
 
 The verbs were in better shape than expected. A scan found only two classes with more than one
 terminating verb and both are correct (`PersistedPool` has `run` and `close`;
@@ -44,7 +44,7 @@ wire key and the `squid_layout_snapshots` table. Both say so at the line that wr
 
 ## Enforcement
 
-`tests/architecture/test_naming.py`, alongside the existing pytest-archon boundary rules:
+`../../../../tests/architecture/test_naming.py`, alongside the existing pytest-archon boundary rules:
 
 1. One exported name means one class, asserted as set equality against a documented list of
    deliberate parallels — a semantic node and the primitive it lowers to, the parallel settled
