@@ -59,6 +59,7 @@ from squid_layouts.semantic import Download as SemanticDownload
 from squid_layouts.semantic import (
     FormTrigger as SemanticFormTrigger,
 )
+from squid_layouts.semantic import Grid as SemanticGrid
 from squid_layouts.semantic import (
     Items as SemanticItems,
 )
@@ -366,6 +367,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticChoices(key=key)
                 | SemanticNavigation(key=key)
                 | SemanticTable(key=key)
+                | SemanticGrid(key=key)
                 | SemanticRoster(key=key)
                 | SemanticMedia(key=key)
                 | SemanticFormTrigger(key=key)
