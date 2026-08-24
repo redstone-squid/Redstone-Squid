@@ -34,13 +34,17 @@ Portable action outcomes use JSON schema version 1. They contain identifiers, ti
 terminal classification, and change counts. They do not contain owners, values, closures, tracebacks,
 mutable backend objects, or arbitrary `repr()` output. Unknown schemas are rejected.
 
-## Backend spike evidence
+## Initial backend spike evidence (superseded)
 
-The spike pins [Loro Python 1.13.2](https://pypi.org/project/loro/) and
+The first spike pinned [Loro Python 1.13.2](https://pypi.org/project/loro/) and
 [pycrdt 0.14.2](https://pypi.org/project/pycrdt/). Both publish Python 3.14 wheels for the primary
 platforms audited. The shared focused test proves that a non-latest text insertion can be targeted and
 inverted after a later insertion while preserving that later text, that its token can be encoded and
 reloaded, and that exported updates import idempotently.
+
+This section preserves the evidence available at the initial Plan 68 cutover. Its failing rows and
+measurements were replaced by the broader executable research in
+[the final backend report](68-replicated-backend-report.md); they are not the current gate result.
 
 - Loro records the before/after `Frontiers`. Planning computes the reverse diff on a current fork and
   exports the new update. This preserved later text in the spike. Fork cost and all retained-frontier
@@ -54,7 +58,7 @@ The current Loro API also has a stack-oriented `UndoManager`, and current pycrdt
 origins, stack items, and binary `IdSet` codecs. These observations come from executed integration
 spikes, not feature-list inference.
 
-### Measured spike cost
+### Initial measured spike cost
 
 `benchmarks/plan68_backends.py` is a focused, non-pytest harness over synthetic text documents on
 CPython 3.14.6/Linux x86-64. Values below are medians in microseconds; they are evidence about the
@@ -73,7 +77,7 @@ well in Loro, so exported byte size is deliberately not compared between engines
 The fake shipped adapter has separate Hypothesis models for three-replica delivery permutations and
 semantic inverse preservation. Those models do not upgrade either text spike into a production adapter.
 
-### Twelve-criterion gate record
+### Initial twelve-criterion gate record
 
 | Criterion | Loro | pycrdt | Evidence or missing proof |
 | --- | --- | --- | --- |
@@ -118,14 +122,14 @@ schema-one token reload, duplicate/reordered delivery, a Hypothesis three-replic
 public snapshots, and scope disposal. It owns no transport task; the host owns any AnyIO task and receives only
 post-commit `ReplicatedUpdate` envelopes.
 
-## Production gate result
+## Current production gate result
 
-No general CRDT backend is selected yet. Both adapters remain experimental extras because only text has
-passed. Rich map/list/tree/counter grouping, three-replica model tests, token survival across backend
-compaction, representative document benchmarks, cancellation/ownership under transport load, corrupted
-and oversized input policy, and durable restart/GC coordination are still unproven. This explicitly
-narrows the initial shipped replicated behavior to the deterministic counter/tagged-set reference
-engine and defers generalized collaborative text history.
+Loro is now selected as the generalized adapter hardening direction, based on the expanded evidence in
+[the final backend report](68-replicated-backend-report.md). This is not production promotion. Both adapters
+remain experimental while register-conflict planning, backend-wide property tests, representative document
+benchmarks, compaction authority, cancellation/ownership under transport load, corrupted-input mapping, and
+durable restart coordination are incomplete. The supported shipped behavior remains narrowed to the
+deterministic counter/tagged-set reference engine.
 
 There is no unsafe fallback. Applications needing a real backend may run the experimental SPI tests,
 but the public package does not silently promise production support or leak a backend container. A
