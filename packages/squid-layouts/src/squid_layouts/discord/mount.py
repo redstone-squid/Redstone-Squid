@@ -115,6 +115,7 @@ from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_reactive.actions import ActionContext, ActorRef
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -1337,7 +1338,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         return _LifecycleCandidate(view, composition, handlers, generation)
 
     @contextmanager
-    def _action_transaction(self, policy: ActionPolicy) -> Iterator[None]:
+    def _action_transaction(self, policy: ActionPolicy, context: ActionContext) -> Iterator[None]:
         """Run one handler in its transaction, watching for writes this mount renders.
 
         A shared cell publishes on the bus rather than invalidating a component, so without
@@ -1350,7 +1351,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             with readonly_transaction():
                 yield
             return
-        with transaction():
+        with transaction(action_context=context):
             on_action_commit(self._note_shared_writes, key=self)
             yield
 
@@ -2546,6 +2547,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         busy: _BusyPaint | None = None,
     ) -> None:
         event = self._event(interaction, values)
+        action_context = ActionContext.create(
+            f"{type(self.component).__name__}.{key}",
+            actor=ActorRef("discord_user", str(interaction.user.id)),
+            metadata={"mount_id": self.id, "generation": str(active_generation)},
+        )
         request = ActionRequest(
             event,
             key,
@@ -2553,11 +2559,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             binding.policy,
             submitted_generation,
             active_generation,
+            action_context,
             rebased,
         )
 
         async def handle() -> None:
-            with self._action_transaction(binding.policy):
+            with self._action_transaction(binding.policy, action_context):
                 # Before the handler: the entry is the transaction's whole delta either
                 # way, and reserving the history here is what makes a handler's own
                 # `record` the error it is.
@@ -2675,11 +2682,16 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 binding.policy,
                 generation,
                 active_generation,
+                action_context := ActionContext.create(
+                    f"{type(self.component).__name__}.{key}",
+                    actor=ActorRef("discord_user", str(interaction.user.id)),
+                    metadata={"mount_id": self.id, "generation": str(active_generation)},
+                ),
                 rebased,
             )
 
             async def handle() -> None:
-                with self._action_transaction(binding.policy):
+                with self._action_transaction(binding.policy, action_context):
                     await binding.handler(event)
 
             handled = await self._run_middleware(request, handle, profile.operation)
