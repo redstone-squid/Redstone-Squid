@@ -44,6 +44,19 @@ class Editor(sl.Component):
         )
 ```
 
+Modal submissions use the same declarative binding; the entry is reserved only when the parsed submission
+enters its transaction, not when the form-opening button is pressed:
+
+```python
+sl.form(
+    "Rename",
+    rename_form,
+    key="rename",
+    on_submit=self.rename,
+    record=self.history,
+)
+```
+
 Undo is a new `UNDO` action. Its conditional patch requires the exact version written by the original
 action. If a sibling changes the same `Shared` register, the result is a conflict and neither target
 changes:

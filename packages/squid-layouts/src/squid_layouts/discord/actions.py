@@ -13,6 +13,7 @@ from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
+    from squid_layouts.runtime.histories import History
 
 
 class ActionResponder:
@@ -55,11 +56,13 @@ class ActionResponder:
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None:
         """Present a portable form and route its submission back through this mount."""
         spec, handler, default_policy = bind_form(form, on_submit)
         selected_policy = policy or default_policy
-        modal = self._form_modal(spec, key, handler, selected_policy, self.mount.generation)
+        modal = self._form_modal(spec, key, handler, selected_policy, self.mount.generation, label, record)
         if self.interaction.response.is_done():
             message = "Discord modals must be the interaction's initial response"
             raise RuntimeError(message)
@@ -72,6 +75,8 @@ class ActionResponder:
         handler: SubmitHandler,
         policy: ActionPolicy,
         generation: int,
+        label: TextLike,
+        record: History | None,
     ) -> discord.ui.Modal:
         async def submit(interaction: discord.Interaction, values: dict[str, object]) -> None:
             await self.mount.dispatch_submit(
@@ -82,6 +87,8 @@ class ActionResponder:
                 handler,
                 policy=policy,
                 generation=generation,
+                label=label,
+                record=record,
             )
 
         return build_form_modal(
@@ -102,6 +109,8 @@ class ActionResponder:
         policy: ActionPolicy,
         generation: int,
         actor_id: int,
+        label: TextLike,
+        record: History | None,
     ) -> None:
         """Render validation errors with a button that reopens the attempted form."""
         lines: list[str] = []
@@ -121,6 +130,8 @@ class ActionResponder:
                 handler,
                 policy,
                 generation,
+                label,
+                record,
             ),
         )
         view = discord.ui.LayoutView(timeout=300)

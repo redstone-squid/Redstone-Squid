@@ -1113,7 +1113,14 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
     spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.modal_components)
 
     async def present(event: PressEvent) -> None:
-        await event.present_form(spec, key=node.key, on_submit=node.on_submit, policy=node.policy)
+        await event.present_form(
+            spec,
+            key=node.key,
+            on_submit=node.on_submit,
+            policy=node.policy,
+            label=node.label,
+            record=node.record,
+        )
 
     return [
         PrimitiveActionGroup(
@@ -1129,7 +1136,7 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
                     guard=node.guard,
                     # The adapted spec, not `node.spec`: it is what the reader will actually
                     # be shown, and so what a late submission must be parsed against.
-                    form=FormBinding(node.key, spec, node.on_submit, node.policy),
+                    form=FormBinding(node.key, spec, node.on_submit, node.policy, node.label, node.record),
                 ),
             )
         )

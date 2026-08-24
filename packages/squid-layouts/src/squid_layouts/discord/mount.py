@@ -91,6 +91,7 @@ from squid_layouts.profiling import (
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.runtime.component import Component, ComponentTree
+from squid_layouts.runtime.histories import History
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_layouts.runtime.reactivity import (
@@ -2135,6 +2136,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         *,
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         generation: int | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None:
         """Route a modal submission through the same stale, action-policy, access, and flush funnel.
 
@@ -2163,13 +2166,20 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             try:
                 if not await self._begin_dispatch(interaction, profile):
                     return
-                binding = _SubmitBinding(key, handler, policy, spec=spec)
+                binding = _SubmitBinding(key, handler, policy, label=label, record=record, spec=spec)
 
                 def rebase() -> ActionBinding | None:
                     newest = self._form_bindings.get(key)
                     if newest is None or newest.spec.field_keys != spec.field_keys:
                         return binding
-                    return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
+                    return _SubmitBinding(
+                        key,
+                        newest.on_submit,
+                        policy,
+                        label=newest.label,
+                        record=newest.record,
+                        spec=newest.spec,
+                    )
 
                 async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
                     resolved = (
@@ -2670,6 +2680,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     policy=binding.policy,
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
+                    label=binding.label,
+                    record=binding.record,
                 )
                 profile.presentation = PresentationOutcome.WRITTEN
                 profile.acknowledge("validation_retry")
@@ -2692,6 +2704,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
 
             async def handle() -> None:
                 with self._action_transaction(binding.policy, action_context):
+                    if binding.record is not None:
+                        binding.record.record(binding.label)
                     await binding.handler(event)
 
             handled = await self._run_middleware(request, handle, profile.operation)

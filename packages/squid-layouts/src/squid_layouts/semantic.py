@@ -421,6 +421,8 @@ class FormTrigger:
     emphasis: Emphasis = Emphasis.NORMAL
     guard: Guard | None = None
     """Admission for the press that opens the form; the submission is not re-admitted."""
+    record: History | None = None
+    """History the successful submission enters under this trigger's label."""
 
 
 @dataclass(frozen=True, slots=True)

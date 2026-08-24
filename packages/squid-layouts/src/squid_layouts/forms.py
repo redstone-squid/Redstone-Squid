@@ -11,7 +11,7 @@ from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, ClassVar, NoReturn, Self, overload
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, overload
 
 from squid_layouts.emoji import EmojiLike, normalize_emoji
 from squid_layouts.errors import LayoutInvariantError
@@ -28,6 +28,9 @@ from squid_layouts.temporal import (
     timezone_from_name,
 )
 from squid_layouts.text import TextLike
+
+if TYPE_CHECKING:
+    from squid_layouts.runtime.histories import History
 
 
 @dataclass(frozen=True, slots=True)
@@ -786,6 +789,8 @@ class FormBinding:
     spec: FormSpec
     on_submit: SubmitHandler
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    label: TextLike = ""
+    record: History | None = None
 
 
 type FormLike = FormSpec | Form
