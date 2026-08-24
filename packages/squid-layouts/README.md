@@ -632,6 +632,32 @@ range totals; offset-only sources get a range; keyset-only sources get no numeri
 declares no count must return `total=None`. Source-backed rankings are components because fetching stays
 outside planning and cannot run in `RouterShell.render()`.
 
+## Testing a panel with no Discord attached
+
+`sl.discord.testing` is public surface, not a private test helper. Send a mount to nowhere,
+then drive it through `Mount.dispatch` — the same funnel a real press takes, so access
+policies, guards, the action transaction and the repaint all run:
+
+```python
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+
+mount = sl.discord.Mount(Settings(), access=sl.discord.Everyone())
+await mount.send(delivered_to(fake_message()))
+
+await mount.dispatch("save", fake_interaction(user_id=AUTHOR_ID))
+
+assert mount.component.saved
+```
+
+`commit_render(mount)` is the shortcut when the load path is not what is under test: it stages
+and commits a render with no delivery and does not run `on_load`. Modal submissions go through
+`Mount.dispatch_submit`. There is no `press("save")` sugar on purpose — `dispatch` is the real
+entry point, and a second spelling of it would be one more thing to keep true.
+
+The other half of the module checks the wire payload rather than the Python objects:
+`assert_within_limits(built)`, or `payload_problems` / `modal_problems` when a test wants the
+list rather than an assertion.
+
 ## Host integration rules
 
 - The base package depends only on the zero-dependency `squid-reactive` kernel. Install the

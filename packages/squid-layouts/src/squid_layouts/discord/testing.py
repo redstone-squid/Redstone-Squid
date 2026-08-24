@@ -1,8 +1,15 @@
-"""Structural verification of built payloads against the limits table.
+"""Doubles and payload assertions for exercising a mount with no Discord attached.
 
-`assert_within_limits` walks the serialized wire payload — not the Python objects — so it
-verifies exactly what Discord will see, including any chrome discord.py adds during
-serialization.
+Two halves. `fake_interaction`, `fake_message`, `delivered_to` and `commit_render` stand in
+for the Discord boundary, so a test can send a mount to nowhere and then drive it through
+`Mount.dispatch` — the same funnel a real press takes. `payload_problems`, `modal_problems`
+and `assert_within_limits` check the other end: they walk the serialized wire payload, not the
+Python objects, so they verify exactly what Discord will see, including any chrome discord.py
+adds during serialization.
+
+This module is public and versioned like the rest of the package. It is imported by tests
+rather than by a running bot, so it is reachable as `sl.discord.testing.X` and promotes no
+names to `sl.discord` itself.
 """
 
 from collections.abc import Iterator
@@ -242,3 +249,16 @@ def assert_within_limits(built: discord.ui.LayoutView | discord.ui.Modal, *, lim
     else:
         problems = payload_problems(built.to_components(), limits=limits)
     assert not problems, "; ".join(problems)
+
+
+__all__ = [
+    "assert_within_limits",
+    "commit_classic_render",
+    "commit_render",
+    "delivered_to",
+    "fake_interaction",
+    "fake_message",
+    "iter_component_payloads",
+    "modal_problems",
+    "payload_problems",
+]
