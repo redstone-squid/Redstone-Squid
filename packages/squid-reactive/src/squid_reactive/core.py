@@ -10,6 +10,7 @@ reference points from reader to source, which is what lets a per-message compone
 collected while the state it read lives on.
 """
 
+import asyncio
 import functools
 import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -90,6 +91,20 @@ class ReactiveCycleError(RuntimeError):
         super().__init__(message)
 
 
+class StaleReactiveContextError(RuntimeError):
+    """A transaction was written through from outside the scope or the task that owns it.
+
+    Two mistakes with one shape, because a transaction travels in a `ContextVar` and a task
+    inherits a copy of it. A task spawned inside a handler still holds the handler's
+    transaction after that `with` block has committed, so a write through it stages into an
+    action that is over. Sibling tasks under one `gather` hold the *same* transaction, and
+    interleaving their staging into one overlay makes what commits a matter of scheduling.
+
+    Reads are left alone either way: a closed transaction reads as though absent, which is
+    what its cells already say, and reading an open one from a branch is what branches do.
+    """
+
+
 class SharedStateConflictError(RuntimeError):
     """An action read a shared cell, wrote it, and someone else moved it in between.
 
@@ -122,6 +137,29 @@ def _frozen(value: Any) -> Any:
 _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactive_transaction", default=None)
 
 
+def _current_task() -> object | None:
+    """The task a write is happening on, or `None` when nothing is running one.
+
+    Synchronous use has no tasks to confuse, so it reports `None` and every transaction
+    counts as confined to it.
+    """
+    try:
+        return asyncio.current_task()
+    except RuntimeError:
+        return None
+
+
+def _active() -> _Transaction | None:
+    """The transaction a *read* should consult: the open one, or none at all.
+
+    A closed transaction is not an error to read through -- it is simply over, and the cells
+    now hold what it decided. Answering `None` for one is what makes an inherited copy
+    harmless to a reader while `_write` stays loud about it.
+    """
+    current = _CURRENT.get()
+    return None if current is None or current.closed else current
+
+
 class _Cell:
     """One state field's storage: an immutable value, and the version that dates it.
 
@@ -141,7 +179,7 @@ class _Cell:
 
     def settle(self) -> int:
         """Return the version a reader should compare against. A cell is always settled."""
-        current = _CURRENT.get()
+        current = _active()
         if current is not None:
             entry = current.staged(self)
             if entry is not None:
@@ -156,7 +194,7 @@ class _Cell:
 
     def read(self) -> Any:
         """Return the value this reader should see, staged write included, and record it."""
-        current = _CURRENT.get()
+        current = _active()
         if current is not None:
             entry = current.staged(self)
             if entry is not None:
@@ -193,7 +231,7 @@ class _Cell:
 
 def _staged_value(cell: _Cell) -> Any:
     """This action's pending value for `cell`, or `_MISSING` if it has not written one."""
-    current = _CURRENT.get()
+    current = _active()
     if current is None:
         return _MISSING
     entry = current.staged(cell)
@@ -403,6 +441,8 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     its construction lands immediately too.
     """
     current = _CURRENT.get()
+    if current is not None and not current.writable():
+        current.reject_stale(f"{type(owner).__name__}.{name}")
     if current is None or not current.protects(owner):
         cell.write(value)
         owner._state_changed(frozenset((name,)))
@@ -413,6 +453,14 @@ def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
 @dataclass(slots=True)
 class _Transaction:
     readonly: bool = False
+    closed: bool = False
+    """Whether this transaction has finished, successfully or not.
+
+    Set once the commit or the rollback is done, so a task still holding an inherited copy
+    finds out rather than staging into an action nobody will publish.
+    """
+    owner_task: object | None = None
+    """The task that opened this transaction, or `None` outside a running loop."""
     writes: dict[_Cell, _Staged] = field(default_factory=dict)
     observed: dict[_Cell, Any] = field(default_factory=dict)
     """Committed values this action read out of addressed cells, first read per cell.
@@ -440,6 +488,30 @@ class _Transaction:
     def note_born(self, owner: object) -> None:
         """Record an object created after this transaction began."""
         self.born[id(owner)] = owner
+
+    def writable(self) -> bool:
+        """Whether this caller may stage into this transaction at all.
+
+        Prior to every policy question `stage` asks: those are about what the action is
+        allowed to do, this is about whether the caller is part of the action.
+        """
+        return not self.closed and (self.owner_task is None or self.owner_task is _current_task())
+
+    def reject_stale(self, what: str) -> None:
+        """Refuse a write from a caller with no standing to make it, saying which mistake."""
+        if self.closed:
+            message = (
+                f"{what} was written through a transaction that has already finished. The write "
+                f"came from a task that outlived the action which opened it, so nothing would "
+                f"publish it: give the task an owner inside the handler, or write in the handler."
+            )
+        else:
+            message = (
+                f"{what} was written from a task other than the one that opened its transaction. "
+                f"Sibling tasks staging into one overlay make what commits depend on scheduling: "
+                f"write from the handler's own task, or give each branch its own transaction."
+            )
+        raise StaleReactiveContextError(message)
 
     def protects(self, owner: object) -> bool:
         """Whether this transaction is responsible for the owner's state.
@@ -533,6 +605,8 @@ class _Transaction:
         The guards run on every call, not just the first: a participant enlisted before a
         `block_writes` region may not keep staging writes inside one.
         """
+        if not self.writable():
+            self.reject_stale("a transaction participant")
         if self.write_block is not None:
             raise ReactiveWriteError(self.write_block)
         if self.readonly:
@@ -614,7 +688,7 @@ def report_undeclared_write(owner: object, name: str) -> None:
     A component built during the action is exempt; assigning to something the action created
     is construction, not mutation.
     """
-    current = _CURRENT.get()
+    current = _active()
     if current is None or not current.protects(owner):
         return
     label = f"{type(owner).__name__}.{name}"
@@ -635,16 +709,22 @@ def report_undeclared_write(owner: object, name: str) -> None:
 @contextmanager
 def transaction() -> Iterator[None]:
     """Coalesce state writes and roll all of them back when the block raises."""
-    if _CURRENT.get() is not None:
+    outer = _CURRENT.get()
+    if outer is not None:
+        # Checked at the `with`, not at the first write inside it, so a task that inherited
+        # someone else's transaction is told where it went wrong rather than where it showed.
+        if not outer.writable():
+            outer.reject_stale("a nested transaction")
         yield
         return
-    current = _Transaction()
+    current = _Transaction(owner_task=_current_task())
     token = _CURRENT.set(current)
     try:
         yield
     except BaseException:
         _CURRENT.reset(token)
         current.rollback()
+        current.closed = True
         raise
     # Reset before committing, not after: the commit notifies owners, and a notification
     # that writes state must not be recorded by the transaction reporting on it.
@@ -656,6 +736,10 @@ def transaction() -> Iterator[None]:
         if not current.published:
             current.rollback()
         raise
+    finally:
+        # After the commit, never before: `publish` and the notifications it drives are the
+        # transaction's own work, and closing first would make it refuse its own participants.
+        current.closed = True
 
 
 @contextmanager
@@ -671,13 +755,14 @@ def readonly_transaction() -> Iterator[None]:
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
-    current = _Transaction(readonly=True)
+    current = _Transaction(readonly=True, owner_task=_current_task())
     token = _CURRENT.set(current)
     try:
         yield
     except BaseException:
         _CURRENT.reset(token)
         current.rollback()
+        current.closed = True
         raise
     # Reset before committing, not after: the commit notifies owners, and a notification
     # that writes state must not be recorded by the transaction reporting on it.
@@ -689,6 +774,8 @@ def readonly_transaction() -> Iterator[None]:
         if not current.published:
             current.rollback()
         raise
+    finally:
+        current.closed = True
 
 
 def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | None = None) -> None:
@@ -703,6 +790,8 @@ def on_action_commit(callback: Callable[[StateDelta], None], *, key: object | No
     if current is None:
         message = "commit hooks are only available inside an action's transaction"
         raise RuntimeError(message)
+    if not current.writable():
+        current.reject_stale("a commit hook")
     if current.readonly:
         message = "a read-only action changed nothing, so it has nothing to record"
         raise ReactiveWriteError(message)
@@ -1346,7 +1435,7 @@ class Reactive:
 
     def __setattr__(self, name: str, value: Any) -> None:
         if (
-            _CURRENT.get() is not None
+            _active() is not None
             and name not in type(self)._reactive_internal_attributes
             and name not in type(self)._state_names
         ):

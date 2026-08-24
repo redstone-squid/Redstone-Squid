@@ -1,8 +1,18 @@
 """Standalone contracts for the transactional state kernel."""
 
+import asyncio
+
 import pytest
 
-from squid_reactive import Reactive, ReactiveWriteError, computed, observe_reads, state, transaction
+from squid_reactive import (
+    Reactive,
+    ReactiveWriteError,
+    StaleReactiveContextError,
+    computed,
+    observe_reads,
+    state,
+    transaction,
+)
 
 
 class Counter(Reactive):
@@ -60,3 +70,68 @@ def test_construction_inside_an_observation_may_assign_declared_state() -> None:
         child = Required(3)
 
     assert child.value == 3
+
+
+async def test_a_task_outliving_the_action_cannot_stage_into_it() -> None:
+    counter = Counter()
+    released = asyncio.Event()
+
+    async def later() -> None:
+        await released.wait()
+        counter.value = 99
+
+    with transaction():
+        escaped = asyncio.create_task(later())
+        counter.value = 1
+
+    released.set()
+    with pytest.raises(StaleReactiveContextError, match="already finished"):
+        await escaped
+    assert counter.value == 1
+
+
+async def test_sibling_tasks_cannot_stage_into_one_transaction() -> None:
+    counter = Counter()
+
+    async def branch(value: int) -> None:
+        counter.value = value
+
+    with pytest.raises(StaleReactiveContextError, match="other than the one that opened"), transaction():
+        await asyncio.gather(branch(1), branch(2))
+
+
+async def test_sibling_tasks_may_read_the_action_they_run_under() -> None:
+    counter = Counter()
+    seen: list[int] = []
+
+    async def branch() -> None:
+        seen.append(counter.value)
+
+    with transaction():
+        counter.value = 7
+        await asyncio.gather(branch(), branch())
+
+    assert seen == [7, 7]
+
+
+async def test_a_finished_transaction_reads_as_though_absent() -> None:
+    counter = Counter()
+    released = asyncio.Event()
+
+    async def later() -> int:
+        await released.wait()
+        return counter.value
+
+    with transaction():
+        escaped = asyncio.create_task(later())
+        counter.value = 4
+
+    released.set()
+    assert await escaped == 4
+
+
+def test_a_synchronous_transaction_is_confined_to_nobody() -> None:
+    counter = Counter()
+    with transaction():
+        counter.value = 3
+    assert counter.value == 3
