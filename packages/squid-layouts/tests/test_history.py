@@ -1,6 +1,8 @@
 """Commit-ledger history and version-conditional undo/redo."""
 
+import gc
 import uuid
+import weakref
 from datetime import UTC, datetime
 
 import anyio
@@ -301,6 +303,22 @@ def test_limit_snapshot_and_controls_follow_retained_entries() -> None:
     assert (undo.available, redo.available) == (True, False)
 
 
+def test_retained_history_does_not_pin_its_component_owner_graph() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 2
+        workspace.selected = 7
+    owner_ref = weakref.ref(subject)
+    history_ref = weakref.ref(subject.history)
+
+    del subject
+    gc.collect()
+
+    assert owner_ref() is None
+    assert history_ref() is None
+
+
 async def test_failed_compensation_is_truthful_and_retry_gets_new_execution() -> None:
     subject, _ = panel()
     calls: list[str] = []
@@ -452,6 +470,16 @@ async def test_compensation_record_round_trips_and_recovers_after_restart() -> N
     await restored.update(retry_intent, CompensationStatus.EXTERNAL_SUCCEEDED)
     after_success = await restored.claim(retry_intent, CompensationRetryPolicy(max_attempts=3))
     assert not after_success.dispatch
+
+
+async def test_reference_compensation_outbox_retention_is_bounded() -> None:
+    outbox = MemoryCompensationOutbox(limit=2)
+    for index in range(3):
+        context = OperationContext(uuid.uuid7(), None, None, f"attempt {index}")
+        intent = CompensationIntent(context, uuid.uuid7(), f"undo:{index}", datetime.now(UTC))
+        await outbox.claim(intent, CompensationRetryPolicy())
+
+    assert [record.intent.idempotency_key for record in outbox.records] == ["undo:1", "undo:2"]
 
 
 def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
