@@ -122,25 +122,27 @@ class _Replacement:
     the last one, exactly as repeated writes to a state cell do.
     """
 
-    __slots__ = ("_baseline", "_resource", "value")
+    __slots__ = ("_resource", "value")
 
     def __init__(self, resource: Resource[Any]) -> None:
-        self._baseline: dict[Any, int] | None = None
         self._resource = resource
         self.value: Any = _MISSING
 
-    def prepare(self) -> None:
-        """Settle every source while the action can still roll back."""
-        if not isinstance(self.value, _Missing):
-            self._baseline = {source: source.settle() for source in self._resource.sources}
+    def prepare(self) -> dict[Any, int] | None:
+        """Settle every source while the action can still roll back.
 
-    def apply(self) -> None:
-        if not isinstance(self.value, _Missing):
-            assert self._baseline is not None
-            self._resource._replace_now(self.value, baseline=self._baseline)
+        `None` means this participant staged no replacement, which is why `apply` can be
+        total: there is no state it has to check before trusting what it was handed.
+        """
+        if isinstance(self.value, _Missing):
+            return None
+        return {source: source.settle() for source in self._resource.sources}
+
+    def apply(self, prepared: dict[Any, int] | None) -> None:
+        if prepared is not None:
+            self._resource._replace_now(self.value, baseline=prepared)
 
     def abort(self) -> None:
-        self._baseline = None
         self.value = _MISSING
 
     def finalize(self) -> None:
