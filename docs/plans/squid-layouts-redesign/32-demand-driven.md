@@ -150,17 +150,20 @@ precedent this sits beside), and the reaction-vote migration in `squid/bot/react
 
 ## 4. Grid
 
-This promotes plan [90](90-deferred.md)'s recorded grid/matrix entry unchanged — the
-three-tier shape decided there is adopted as written, and the entry gets its promotion
-annotation.
+This promotes plan [90](90-deferred.md)'s recorded grid/matrix entry and makes the
+frontend boundary explicit: `sl.grid(...)` is semantic and may degrade, while
+`sl.discord.button_grid(...)` is an exact Discord primitive that never silently changes
+interaction shape.
 
 1. **`TableDisplay.MATRIX`** — a new strategy on the existing `Table` axis: a dense
    code-block grid for content matrices (calendars, availability, comparisons). No new
    node.
-2. **`sl.button_grid(cells, *, key, columns)`** — a factory desugaring to `primitives.Row`s
-   of buttons. The exact-structure contract makes non-degradability free: over budget is a
-   plan failure, by design.
-3. **Semantic `Grid`** — the degradation-ladder promotion:
+2. **`sl.discord.button_grid(cells, *, key, columns)`** — a Discord-specific factory
+   desugaring to exact button rows. It enforces Discord's five-column action-row geometry,
+   preserves one stable cell key per button, and fails planning when the requested shape
+   cannot fit. It does not degrade to a select because callers choosing this API have
+   explicitly chosen the exact interaction shape.
+3. **Semantic `Grid`** and its `sl.grid(...)` factory — the degradation-ladder promotion:
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -178,6 +181,10 @@ class Grid:
     on_pick: Callable[[SelectionEvent], Awaitable[None]]
     flexibility: Flexibility = Flexibility.NORMAL
 ```
+
+`sl.grid(...)` is the frontend-neutral authoring path. `sl.discord.button_grid(...)` may
+be used when a Discord-native board is required, but it is not part of the semantic
+ladder and has no HTML equivalent.
 
 The strategy ladder is BUTTONS → COORDINATE (text grid plus one coordinate select, listing
 only available cells) → PAGED_SELECT, nominated through the existing strategy machinery
@@ -268,9 +275,10 @@ last — it needs nothing new but is the most speculative.
   `routed_action` per slot; handler-and-routes together raise.
 - `test_tally.py`: counts, bars, and `mine` emphasis; the ≤5 adaptation is inherited
   (asserted, not reimplemented); routed round-trip.
-- `test_grid.py`: `MATRIX` is nominated and session-sticky; `button_grid` exact structure
-  fails plans over budget; every ladder rung delivers the same `SelectionEvent` key; the
-  coordinate rung lists only available cells.
+- `test_grid.py`: `MATRIX` is nominated and session-sticky; `sl.discord.button_grid` emits
+  exact five-column rows, preserves cell keys, and fails plans over budget; every semantic
+  ladder rung delivers the same `SelectionEvent` key; the coordinate rung lists only
+  available cells; strategy choice remains session-sticky after the first successful plan.
 - `test_agreement.py`: per-actor approve and withdraw; threshold and `"all"` resolution;
   `on_resolve` fires exactly once; a non-participant press is denied by the access layer
   before any state change; `strict_state` clean.
