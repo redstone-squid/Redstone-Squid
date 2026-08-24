@@ -653,11 +653,14 @@ class LayoutShowcase(sl.Component):
                     record=self.action_history,
                 ),
                 sl.action(L(t"Sibling edit"), self._sibling_edit, key="history.sibling"),
+                key="history-write-actions",
+            ),
+            sl.actions(
                 sl.action(L(t"Undo rename"), self._undo_rename, key="history.undo"),
                 sl.action(L(t"Redo rename"), self._redo_rename, key="history.redo"),
                 sl.action(L(t"Drop conflict"), self._drop_history_conflict, key="history.drop"),
                 sl.action(L(t"Cause rollback"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER),
-                key="history-actions",
+                key="history-outcome-actions",
             ),
         )
 
