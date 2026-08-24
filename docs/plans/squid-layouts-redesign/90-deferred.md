@@ -32,7 +32,14 @@ are not re-derived or accidentally adopted later.
   the keying typed, not ambient. 63 is a store, but a store of application values in a package
   *below* the UI library with no edge pointing up, which is this entry's own prescription ("add a
   host-side event bus, not a store in the package") applied to durable data instead of events. The
-  test that keeps both honest: neither capability is reachable from a `squid_layouts` import.
+  test that keeps both honest: neither *store* is reachable from a `squid_layouts` import.
+  **Amended 2026-08-24** alongside 59's rewrite, which sharpened that last sentence. `SharedPool`
+  is re-exported as `sl.runtime.SharedPool`, so a keyed lifetime owner *is* reachable from a
+  `squid_layouts` import and always was going to be — what stays unreachable is a store, a global,
+  and any way to obtain a namespace nobody handed you. 59 also dropped the `sl.discord.scopes`
+  module this note's "scope vocabulary" referred to; the taxonomy it adopts is now reached through
+  `screens.py`'s existing `Opener`/`Scope`, which strengthens rather than weakens the point, since
+  no new surface was added at all.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
