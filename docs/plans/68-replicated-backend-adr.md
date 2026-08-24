@@ -89,6 +89,30 @@ The failing rows are a deliberate gate result, not deferred test cleanup. Genera
 remains experimental and unsupported until a later ADR can change every required row to pass or explicitly
 narrow the supported data types further.
 
+### Narrowed fake-adapter scale boundary
+
+The shipped fake engine is a deterministic reference adapter for counters and tagged sets, not a production
+network/storage engine. `benchmarks/plan68_fake_replication.py` measures its deliberate operation-log costs.
+Each seed item contributes one counter and one set operation.
+
+| Seed items | Stage + prepare | Apply | Immutable snapshot | Import into fresh engine | Export bytes | Token bytes |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 8 µs | 2 µs | 64 µs | 538 µs | 5,940 | 224 |
+| 100 | 10 µs | 1 µs | 291 µs | 1.49 ms | 19,241 | 226 |
+| 1,000 | 89 µs | 3 µs | 3.24 ms | 23.85 ms | 154,402 | 228 |
+| 4,000 | 440 µs | 4 µs | 19.26 ms | 100.47 ms | 606,909 | 227 |
+
+Snapshots and fresh import are intentionally linear in retained operations. Envelopes reject more than 1.5 MiB,
+backend updates reject more than 1 MiB or 10,000 operations, pending exports retain 1,000 envelopes, and remote
+deduplication retains 10,000 identities. These bounds make the adapter suitable for deterministic conformance,
+examples, and small semantic documents; they are also why it is not presented as an offline database.
+
+Within that narrowed promise the adapter passes isolated staging, multi-container action grouping, arbitrary
+retained action tokens, remote-edit-preserving counter/set inverses, typed conflicts on expired authority,
+schema-one token reload, duplicate/reordered delivery, a Hypothesis three-replica convergence model, immutable
+public snapshots, and scope disposal. It owns no transport task; the host owns any AnyIO task and receives only
+post-commit `ReplicatedUpdate` envelopes.
+
 ## Production gate result
 
 No general CRDT backend is selected yet. Both adapters remain experimental extras because only text has
