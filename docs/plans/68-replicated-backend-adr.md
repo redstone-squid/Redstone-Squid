@@ -1,8 +1,13 @@
 # ADR: Plan 68 action ledger and replicated backend gate
 
-Status: accepted, with production CRDT selection deferred  
+Status: accepted; Loro hardening direction selected, production promotion deferred
 Audit base: `13ce58a3755d3629e916c40cbe1d87200f5d8a31`  
 Audit date: 2026-08-24
+
+> **Backend research superseded:** the runtime decision in this ADR remains authoritative, but the original
+> two-backend gate below was an interim spike. The expanded remote, restart, compaction, multi-container, and
+> performance evidence plus the conclusive Loro hardening recommendation are recorded in
+> [the final backend report](68-replicated-backend-report.md).
 
 ## Rebase audit
 

@@ -100,8 +100,9 @@ live transaction context.
 Do not add CRDT behavior to `state()` or `Shared`. Use the optional `squid-replicated` package for
 immutable snapshots and semantic mutations. Transport messages are `ReplicatedUpdate` envelopes with
 document/backend/schema/source/action identity and a verified payload hash. Loro and pycrdt text engines
-remain experimental; the production gate and its failing rows are recorded in
-[the backend ADR](plans/68-replicated-backend-adr.md).
+remain experimental. Loro is the selected generalized-backend hardening direction, while its production
+promotion and the failing rows are recorded in
+[the conclusive backend report](plans/68-replicated-backend-report.md).
 
 ## Durable records
 
