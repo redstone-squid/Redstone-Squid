@@ -450,6 +450,34 @@ assets, target/version/limits, chrome, reservation, presentation/position state,
 version, strictness, and search budget. Cache hits always recollect current callbacks,
 including planner-generated pager controls.
 
+## What each primitive promises
+
+Four primitives carry the whole model, and each owes one thing:
+
+    computed     repeatable synchronous derivation
+    resource     repeatable asynchronous derivation; safe to cancel and restart
+    operation    effectful execution; never implicitly restarted
+    action       atomic over reactive state and enlisted participants -- and nothing else
+
+The obligations are what make the rest follow. A loader may run zero times, once, or many
+times -- a hidden resource never loads, a moved dependency re-pends one that did, and a
+superseded load is discarded -- so an irreversible effect inside a loader is programmer error,
+not a supported pattern. Supersession is not failure: `Failed` is reserved for a loader that
+raised. That is why effects belong in an operation, which the runtime never re-arms on its own;
+retrying is the author starting another execution.
+
+`action` is where the promise is narrowest and most often misread. **External effects are not
+rolled back.** An action is atomic over cells and over participants that enlisted in the commit
+gate, and a network call is neither. The supported shape is that the transaction commits the
+*intent* and an operation the action arms reaches the terminal outcome, which a later action
+records; `on_action_rollback` is how an author finds out that the effect already happened and
+the commit did not.
+
+The same narrowness explains why transactional state cannot be a loading indicator. Writing
+`self.saving = True` inside a handler stages it, so it is invisible until commit -- by which
+point it means nothing. `sl.Feedback` covers the fixed case from outside the transaction, and an
+operation's progress covers the author-controlled one, for the same reason.
+
 ## Actions and frontend adapters
 
 Components receive PressEvent or SelectionEvent, not discord.Interaction. Events expose
