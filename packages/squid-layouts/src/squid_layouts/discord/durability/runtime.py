@@ -314,10 +314,14 @@ class DurableSessionRuntime:
                         ),
                     ),
                 )
+                # The newcomer's own summary, not the pre-session one built above: that one
+                # predates the Session and so carries no participants, and nothing forces a
+                # checkpoint after opening. A remote process reading the empty projection would
+                # let ProtectCrossUserAttachments retire another user's durable session.
                 token = await self.store.commit(
                     reservation,
                     key=summary.id,
-                    summary_payload=_dumps_summary(summary),
+                    summary_payload=_dumps_summary(newcomer.summary),
                     snapshot_payload=DurableSessionCodec.dumps(record),
                     victims=tuple(victim.id for victim in victims if victim.durable),
                     lease_seconds=self.lease_seconds,
