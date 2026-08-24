@@ -3,10 +3,23 @@
 import asyncio
 import uuid
 from collections.abc import Awaitable, Callable, Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol, overload
 
-from squid_reactive.actions import ActionId, CausalRef, current_action
+from squid_reactive.actions import (
+    DEFAULT_REDACTION,
+    ActionContext,
+    ActionId,
+    ActionKind,
+    CausalRef,
+    ExceptionSummary,
+    OperationEventSnapshot,
+    causal_scope,
+    current_action,
+    emit_causal_event,
+)
 from squid_reactive.completion import Completion
 from squid_reactive.resources import AsyncBinding, PendingPolicy, _observe
 
@@ -144,13 +157,15 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
         self._started = True
         progress = Progress(self)
         try:
-            value = await self._loader(progress)
+            with causal_scope(self.context.causal_ref(), self.context.root_action_id):
+                value = await self._loader(progress)
         except asyncio.CancelledError:
             current = self._status
             assert isinstance(current, Pending)
             self._status = Cancelled(current.progress)
             self._owner.invalidate()
             self._completion.cancel()
+            self._emit("cancelled")
             raise
         except Exception as error:
             current = self._status
@@ -158,11 +173,41 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
             self._status = Failed(error, current.progress)
             self._owner.invalidate()
             self._completion.resolve(self._status)
+            self._emit("failed", error)
         else:
             self._status = Succeeded(value)
             self._owner.invalidate()
             self._completion.resolve(self._status)
+            self._emit("succeeded")
         return self._status
+
+    @contextmanager
+    def start_action(self, name: str, *, kind: ActionKind = ActionKind.SYSTEM):
+        """Start a fresh state-publishing action caused by this execution."""
+        from squid_reactive.core import fresh_action_transaction
+
+        context = ActionContext.create(
+            name,
+            kind=kind,
+            cause=self.context.causal_ref(),
+            root_action_id=self.context.root_action_id,
+        )
+        with fresh_action_transaction(action_context=context):
+            yield context
+
+    def _emit(self, status: str, error: BaseException | None = None) -> None:
+        summary = None if error is None else DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+        emit_causal_event(
+            OperationEventSnapshot(
+                str(self.context.execution_id),
+                None if self.context.root_action_id is None else str(self.context.root_action_id),
+                self.context.cause,
+                self.context.name,
+                status,
+                datetime.now(UTC),
+                summary,
+            )
+        )
 
 
 class OperationDefinition[ValueT, ProgressT]:
@@ -193,7 +238,9 @@ class OperationDefinition[ValueT, ProgressT]:
             cause = cause or action.causal_ref()
             root_action_id = root_action_id or action.root_action_id
         context = OperationContext(uuid.uuid7(), cause, root_action_id, self.name)
-        return OperationExecution(self._owner, self._loader, context=context, initial=self.initial)
+        execution = OperationExecution(self._owner, self._loader, context=context, initial=self.initial)
+        execution._emit("started")
+        return execution
 
 
 class _OperationDescriptor[OwnerT: OperationOwner, ValueT, ProgressT]:

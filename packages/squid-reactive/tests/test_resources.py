@@ -3,7 +3,20 @@ import asyncio
 import anyio
 import pytest
 
-from squid_reactive import LocalTopicBus, Reactive, Shared, Topic, state, transaction, watch
+from squid_reactive import (
+    ActionContext,
+    ActionLedger,
+    LocalTopicBus,
+    Reactive,
+    ResourceEventSnapshot,
+    Shared,
+    Topic,
+    action_scope,
+    add_action_outcome_sink,
+    state,
+    transaction,
+    watch,
+)
 from squid_reactive.resources import Pending, Ready, resource
 
 
@@ -111,3 +124,21 @@ async def test_cancelled_load_attempt_remains_pending_and_retryable() -> None:
     assert isinstance(owner.value.status, Pending)
     assert await owner.value == "ready"
     assert attempts == 2
+
+
+async def test_resource_generations_are_causal_without_profiler_retention() -> None:
+    source = Source()
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    action = ActionContext.create("refresh")
+    try:
+        with action_scope(action):
+            await source.value.reload()
+    finally:
+        ledger.close()
+
+    events = [event for event in ledger.events if isinstance(event, ResourceEventSnapshot)]
+    assert [event.status for event in events] == ["started", "ready"]
+    assert {event.generation_id for event in events} == {events[0].generation_id}
+    assert events[0].cause == action.causal_ref()
+    assert events[0].root_action_id == str(action.root_action_id)
