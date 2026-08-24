@@ -729,7 +729,7 @@ def _plan_cache_key(
 ) -> str:
     relevant = {
         "document": stable_value(nodes),
-        "target": (target.id, target.version),
+        "target": target.fingerprint,
         "limits": stable_value(limits),
         "presentation": stable_value(presentation),
         "chrome": (

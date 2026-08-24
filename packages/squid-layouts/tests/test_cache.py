@@ -19,7 +19,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import PlanReport, SceneComponentsV2, SceneDocument, ScenePanel
+from squid_layouts.scene.model import PlanReport, SceneComponentsV2, SceneDocument, ScenePanel, SceneText
 from squid_layouts.semantic import Action, Actions, Heading, List, ListItem, Paragraph, Section, Stack
 from squid_layouts.text import Localization, Message
 
