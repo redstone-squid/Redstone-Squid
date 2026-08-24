@@ -2,9 +2,16 @@
 
 ## Status
 
-Designed, not started. Depends on [31](31-action-ergonomics.md) (shipped),
-[43](43-mount-defaults.md) for the presenter's home, and on a task seam the package does not
-have yet (§3).
+Shipped. `sl.guards.confirm` is `guards.py`; the funnel changes are `mount.py`; the presenter
+and its supervisor are `discord/challenges.py`; the tests are `tests/test_challenges.py`.
+`AccountPanel._unlink` is migrated and its three pieces of view state are gone.
+
+Built on [31](31-action-ergonomics.md) and [43](43-mount-defaults.md). The task seam §3
+demanded is `ChallengeRunner`, and it is part of this plan rather than a prerequisite for it.
+
+Where the build differs from what was designed, the section says so — the substantial ones
+are §2 (the routed key needed no new plumbing), §3 (the seam's shape), §4 (a counter, not a
+token) and Scope (`FormTrigger` is refused, `ClaimReviewComponent` was never a consumer).
 
 This is not the fix for the defect the first draft was written around. That defect is closed;
 see Provenance, which is the part of this file worth reading first.
@@ -86,7 +93,8 @@ every author writes the two-press state machine by hand. This bot writes it twic
 - `AccountPanel._unlink` (`account_view.py:223-241`) holds `unlink_armed`, returns early on the
   first press, relabels its own button to "Unlink for good", and renders the warning from
   `_footer()`. Three pieces of view state and render logic for "are you sure".
-- `ClaimReviewComponent` holds `reassign_armed` for the same shape over a conflicting claim.
+- `ClaimReviewComponent` holds `reassign_armed` for what looks like the same shape over a
+  conflicting claim. It turned out not to be; see Scope.
 
 Neither is consent, neither is exotic, and both are `primitives.Button` — where `guard=`
 already is. That is the demand this plan answers, and unlike the consent case the scope
@@ -116,14 +124,20 @@ class Challenge:
 
     ask: Callable[[ChallengeResolver], Component]
     deadline: float | None = 120.0
-    on_decline: TextLike | None = None      # None -> chrome default
+    on_decline: TextLike | None = None      # None -> say nothing; see §9
 
 class ChallengeResolver(Protocol):
     async def approve(self) -> None: ...
     async def decline(self) -> None: ...
 
 # sl.guards
-def confirm(prompt: TextLike, *, danger: bool = True, deadline: float | None = 120.0) -> Guard: ...
+def confirm(
+    prompt: TextLike,
+    *,
+    danger: bool = True,
+    deadline: float | None = 120.0,
+    on_decline: TextLike | None = None,
+) -> Guard: ...
 ```
 
 `sl.guards.confirm` is sugar over `Challenge` plus the existing `sl.patterns.confirm()`
@@ -162,7 +176,20 @@ finishes; the parent redraws where it already lives.
 
 Mechanically this is one field, not a parameter threaded through six frames:
 `_DispatchProfile.resumed`. All three sites already hold the profile — `_begin_dispatch` and
-`_invoke_and_flush` take it directly, and `_flush` receives it as `dispatch=`.
+`_invoke_and_flush` take it directly, and `_flush` receives it as `dispatch=`. There is a
+fourth, which the draft missed twice over: `_BusyPaint` takes its own handle from the
+interaction, at `show` and again at `restore`, so it is constructed with the flag. All four
+now go through one `Mount._source(interaction, resumed=...)`.
+
+**As built, the hazard cannot arise anyway, and the flag is still worth having.** The resumed
+press carries the interaction that *asked*, not the one that answered — approval needs no
+fresh interaction, and reusing the asking one keeps `ChallengeResolver.approve()` argument-free.
+That interaction spent its response on the question, and `handle_from` already returns `None`
+for an interaction "whose response has been spent on something that is not that message"
+(`delivery.py:300-306`). So the invariant holds twice: once because the mount refuses to take
+a handle on a resumed press, and once because there is no handle to take. The flag is what
+makes it the mount's own rule rather than a consequence of what the presenter did with the
+interaction — a presenter that deferred first would otherwise quietly re-enable it.
 
 ### 1. A challenge presents and returns; it never awaits inside the lock
 
@@ -187,7 +214,12 @@ check, access policy, concurrency gate, guards — runs again against current tr
 Two details it must carry:
 
 - **The routed binding key, not the original control key.** `dispatch` rewrites the key for a
-  grouped select at `mount.py:1872-1880`; retaining the outer key would lose the route.
+  grouped select at `mount.py:1872-1880`; retaining the outer key would lose the route. This
+  needed no new plumbing, which the draft did not know: a grouped select's route bindings are
+  registered in `_handlers` under their own keys (`dialect.py:85-87`), and re-routing an
+  already-routed binding is a no-op (`routed()` returns `self` when `routes` is empty). So the
+  resumption passes the key `_admit` saw, together with the same values, and lands on the same
+  binding.
 - **`generation=None`.** The submitted generation is stale by definition after a dialog, and
   EXCLUSIVE rejects a mismatched one at `mount.py:2176`. Passing `None` accepts that the press
   now runs against the newest scene, which is the same contract `ActionPolicy.REBASE` already
@@ -223,13 +255,39 @@ resumed press commits its own transaction.
 
 The first draft did not have this section, which is why it read as smaller than it is.
 
-### 4. The approval token lives in the `GuardLedger`
+**As built.** `ChallengeSupervisor` is one synchronous method, `resume(press)` — deliberately
+synchronous, because an implementation that could await would be tempted to await the press.
+`ChallengeRunner` is the shipped one: `resume` is an `asyncio.Queue.put_nowait`, and `run()`
+is a host background task, started next to the reactor, that drains the queue and starts each
+press from *its own* task. That last detail is the whole point and is easy to get wrong —
+`TaskGroup.create_task` copies the caller's context, so calling it from the approving handler
+would carry the transaction across; called from the drain loop it copies the loop's, which
+predates every press. The queue is what crosses the boundary, and it is bounded: a full runner
+drops the approval with a warning rather than awaiting inside a transaction, and the actor can
+press again.
+
+`resume` is called by the presenter's resolver, not by the mount, so `ChallengeRequest.approve`
+— which is the resumed dispatch — reaches the supervisor without ever being awaited by the
+dialog's own handler.
+
+### 4. The approval lives in the `GuardLedger`, and it is a count
 
 Guards are rebuilt on every render and hold no state (`guards.py:62-63`), so a guard cannot
-remember that it just challenged — without a token the resumed pass challenges again, forever.
+remember that it just challenged — without a record the resumed pass challenges again, forever.
 The `GuardLedger` (`guards.py:58-94`) is the only mount-lifetime store a guard can see, which
-makes it the right home. The token is keyed by action and actor like every other bucket, and is
-consumed on read, so one approval admits one press.
+makes it the right home. It is keyed by action and actor like every other bucket, and consumed
+on read, so one approval admits one press.
+
+Two things the draft called a "token" needed pinning down to build it:
+
+- **Where the name comes from.** The mount writes the approval and a guard reads it, so the two
+  have to agree on the bucket without either owning the other. `guards.approvals(ledger, actor)`
+  is that agreement, exported beside the vocabulary it belongs to.
+- **It is an integer, not a flag.** With a flag, `all_of(confirm(a), confirm(b))` never
+  converges: the second pass has the first guard eat the flag and the second guard ask again.
+  With a count it does, and §5 is why — the pass that ends in the second question is discarded,
+  so the first guard's consumption rolls back and both approvals are still there on the third
+  pass. "One approval admits one press" survives verbatim; it just also composes.
 
 ### 5. A challenging pass records nothing
 
@@ -255,6 +313,11 @@ Mechanically the composites cannot let their members write during a challenging 
 ledger view handed to guards during admission buffers writes and replays them unless the
 outcome is a `Challenge`. Buffering sits at the ledger view rather than at the verdict, because
 a guard may write and then deny in the same call.
+
+Built as `GuardLedger.staged()` and `.commit()`: `_admit` stages every pass and commits the
+ones that did not end in a question. Guards see no difference, because a staged view reads its
+own writes back. `clear()` stages too — a tombstone rather than a write — so a guard that
+forgets an entry during a challenging pass has not actually forgotten it.
 
 31 §1's "guards record at admission" holds verbatim — it is now true of a single, atomic
 admission outcome.
@@ -286,10 +349,23 @@ This also keeps `Challenge` portable. The core names *what to ask*; the Discord 
 it is shown*. A mount with no presenter configured refuses a challenge as a programmer error at
 admission — routed to `handle_error` like a raising guard, never silently admitted.
 
+The dialog opens with `parent=` and inherits the asking mount's `localization`, so the question
+and its Confirm/Cancel chrome are in the reader's language rather than the host's default. Two
+consequences worth knowing when wiring a host: a panel that was never opened through the
+registry has no session to attach to, so its dialog opens as a root session under the screen's
+own key and still dies on its deadline; and *every* construction path needs the presenter, not
+just the registry's. In this bot most panels are built by `create_mount` from a module-level
+`MOUNT_DEFAULTS` and never touch `bot.mounts`, so the bot installs the presenter into both —
+otherwise a migrated button would challenge and be refused as a programmer error in exactly the
+places least likely to be tested.
+
 ### 8. `_admit` stops returning `bool`
 
 It currently returns a boolean *and* terminates the profile itself (`mount.py:2137, 2149`), so
-a third outcome is a small return-type change at both call sites. Two new
+a third outcome is a small return-type change at both call sites. It returns `_Admission`, and
+the reason it is three-valued rather than "refused, already answered" is §1: the challenge has
+to be carried back out of the `try` block so the dialog is opened with the action lock already
+released. Two new
 `DispatchDisposition` members (`profiling/model.py:30-45`), `CHALLENGE_ISSUED` and
 `CHALLENGE_DECLINED`, keep [37](37-runtime-profiling.md)'s traces honest about which stage
 refused, the way `GUARD_DENIED` / `GUARD_FAILED` were added. Both map to
@@ -299,18 +375,21 @@ which is worth stating because the default mapping gets it right for the wrong r
 ### 9. Lifetime
 
 An unanswered challenge dies with the mount and carries a deadline; expiry is a decline that
-never issued a token, so there is nothing to consume and nothing to clean up. A decline answers
-with `on_decline` or the chrome default. Resumption against a finished mount is refused with
-the existing `session_ended` chrome, not re-run.
+never issued an approval, so there is nothing to consume and nothing to clean up. The deadline
+is simply the dialog mount's `timeout`, so this needs no timer of its own. Resumption against a
+finished mount is refused with the existing `session_ended` chrome, not re-run.
 
-The first draft said a declined challenge consumes its token. It never had one: the token is
+`on_decline` is delivered by the mount as a private followup, not rendered by the dialog, so
+every challenge declines the same way whoever wrote its `ask`. `None` says nothing at all
+rather than falling back to chrome, which is what the draft had: a dialog that closes is
+already the answer, and a second ephemeral saying so is noise.
+
+The first draft said a declined challenge consumes its token. It never had one: the approval is
 written by `approve`.
 
 ## Scope
 
-`Action` and `primitives.Button` only, matching where `guard=` is accepted today. Both
-hand-rolled confirmations under The gap are `primitives.Button`, so the scope covers its own
-motivation — which is the check the first draft failed.
+`Action` and `primitives.Button` only, matching where `guard=` is accepted today.
 
 `Toggle` (`semantic.py:349-358`), `Choices`, `SelectMenu` and `PatternControls.action`
 (`patterns/shells.py:85`) have no `guard=` seam at all. Widening it is a separate decision with
@@ -321,6 +400,29 @@ per submission (`mount.py:2012`) that never enters `_handlers`, and the modal in
 single-use, so there is no key to resume by. This is the same line 31 §1 drew for guards on
 forms — the press that opens the modal is admitted, the submission that follows is the
 completion of an already-admitted press.
+
+**Nor can a form *trigger* be challenged, which the draft did not notice.** `FormTrigger`
+accepts `guard=` (`semantic.py:422`), but the press it guards answers with `send_modal`, and a
+challenged press has spent its response on the question. Since the resumption reuses that same
+interaction (§0), there is nothing left to open a modal through. `_present_challenge` refuses
+it as a programmer error — `key in self._form_bindings` is the whole check — rather than
+letting it fail at Discord. Confirming a form is `confirm()` *inside* the form, or an ordinary
+button that opens it.
+
+### The second consumer was not one
+
+The gap named two hand-rolled machines. Only `AccountPanel._unlink` is a confirmation.
+
+`ClaimReviewComponent.reassign_armed` looks identical from the outside — a flag, an early
+return, a relabelled danger button — but it is armed by `AliasAlreadyClaimedError` coming back
+from the service (`claims_view.py:178-181`), not by the first press. The question "take this
+name from its current holder?" only exists once the attempt has failed, and a guard runs before
+the handler, so `confirm()` cannot know to ask it. Asking on every approval instead would be
+worse than the flag.
+
+It is left alone. That the first draft counted it as a consumer is the same failure it
+diagnosed in its own predecessor: naming a consumer without checking that the mechanism reaches
+it. One genuine consumer is enough to justify the sugar; two would have been a nicer sentence.
 
 Routed actions stay out for the reason 31 §1 gave: stateless dispatch has no mount and no
 ledger, and [16](16-routed-actions-part-two.md)'s middleware onion is the routed admission
@@ -385,9 +487,29 @@ seam.
 - An expired challenge declines; a challenge outliving its mount is collected with it.
 - Traces report `CHALLENGE_ISSUED` and `CHALLENGE_DECLINED` and map both to `COMPLETED`.
 - `feedback=` behaviour is unchanged: run the existing busy-paint tests untouched.
-- Migrate `AccountPanel._unlink` and `ClaimReviewComponent`'s `reassign_armed`, and delete the
-  view state, the early return and the relabelling each holds. That the sugar *deletes* code
-  rather than wrapping it is the evidence the abstraction is placed correctly.
+- A `FormTrigger` carrying a challenging guard is refused as a programmer error.
+- Migrate `AccountPanel._unlink` and delete the view state, the early return and the
+  relabelling it holds. That the sugar *deletes* code rather than wrapping it is the evidence
+  the abstraction is placed correctly. (`ClaimReviewComponent` is not a consumer; see Scope.)
 - Focused runs of `test_guards.py`, `test_mount.py::TestGuards`, `test_decision_pattern.py` and
   the account-panel tests with `--no-cov`, then `just typecheck`, `alembic heads`, and
   `git diff --check`.
+
+### What the build actually ran
+
+`tests/test_challenges.py` is the new file, 27 tests over the list above. Every bullet is
+covered except two, and both are deliberate:
+
+- *"An expired challenge declines"* — the deadline is the dialog mount's own `timeout`, so the
+  behaviour under test belongs to `Mount`, which already has it covered. Nothing here re-tests
+  it.
+- *"`feedback=` behaviour is unchanged"* — the existing busy-paint tests ran untouched and
+  pass, which is the assertion. `_BusyPaint` took a `resumed` flag on the way past.
+
+Suites: `packages/squid-layouts/tests` — 1624 passed with the same 9 pre-existing failures as
+before the change (`test_adoption` and friends, none of them admission); `tests/unit/bot` —
+595 passed with the same 5 failures and 2 errors as the branch already had. `pyrefly` holds at
+287 errors, unchanged: widening `Guard.admit` to `GuardOutcome` cost 41 of them in
+`test_guards.py` until those assertions were narrowed through one `_verdict` helper, which is
+the honest price of the third outcome and is paid once. `alembic heads` was not run — nothing
+here touches the schema.
