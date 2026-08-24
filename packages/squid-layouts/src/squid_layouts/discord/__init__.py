@@ -30,6 +30,7 @@ from squid_layouts.discord import (
     sessions,
     target,
     targets,
+    testing,
 )
 from squid_layouts.discord import (
     modal as modals,
@@ -231,4 +232,5 @@ __all__ = [
     "sessions",
     "target",
     "targets",
+    "testing",
 ]
