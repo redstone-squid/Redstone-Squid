@@ -4,6 +4,7 @@ import dataclasses
 import io
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from datetime import datetime, timedelta
 
 import discord
 from discord.ext import commands
@@ -26,7 +27,7 @@ from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
-from squid_layouts.profiling import OperationKind, Profiler, RuntimeTrace
+from squid_layouts.profiling import AttributeValue, OperationKind, Profiler, RuntimeTrace
 from squid_layouts.runtime.topics import TopicBus
 from squid_layouts.semantic import LayoutNode
 
@@ -178,6 +179,35 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             return
         await self._profile_mount(ctx, mount_id)
 
+    @ui_group.command(name="timeline")
+    async def inspect_timeline(self, ctx: Context[BotT], limit: int = 20, target: str | None = None) -> None:
+        """Show retained dispatches across every mount in the order they happened.
+
+        `ui profile` answers how slow one mount is; this answers what people just did.
+        `target` narrows to one origin: `mount:<id>` or `actor:<user_id>`.
+        """
+        try:
+            attribute, wanted = _timeline_filter(target)
+        except ValueError as error:
+            await self._refuse(ctx, str(error))
+            return
+        snapshot = self._profiler.snapshot()
+        retained = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
+        traces = {
+            trace.trace_id: trace
+            for trace in retained
+            if trace.operation in {OperationKind.DISPATCH, OperationKind.ROUTE_DISPATCH}
+            and (attribute is None or str(_root_attribute(trace, attribute)) == wanted)
+        }
+        # Oldest first, so the tail of the retained ring reads as a transcript.
+        ordered = sorted(traces.values(), key=lambda trace: trace.started)[-max(1, limit) :]
+        body = (
+            "No retained dispatches."
+            if not ordered
+            else "\n".join(_timeline_text(trace, snapshot.started_at) for trace in ordered)
+        )
+        await self._send(ctx, [section(sl.heading("Dispatch timeline"), code(body))])
+
     @ui_group.command(name="persistence")
     async def inspect_persistence(self, ctx: Context[BotT]) -> None:
         """Show durable-runtime health and persisted record metadata."""
@@ -296,16 +326,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     async def _profile_mount(self, ctx: Context[BotT], mount_id: str) -> None:
         snapshot = self._profiler.snapshot()
         retained = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
-        traces = {
-            trace.trace_id: trace
-            for trace in retained
-            if any(
-                attribute.key == "mount_id" and attribute.value == mount_id
-                for span in trace.spans
-                if span.parent_span_id is None
-                for attribute in span.attributes
-            )
-        }
+        traces = {trace.trace_id: trace for trace in retained if _root_attribute(trace, "mount_id") == mount_id}
         ordered = sorted(traces.values(), key=lambda trace: trace.started, reverse=True)[:12]
         body = (
             f"No retained profiles for mount {mount_id}."
@@ -419,6 +440,45 @@ def _trace_text(trace: RuntimeTrace) -> str:
         if span.parent_span_id is not None
     )
     return "\n".join(lines)
+
+
+def _root_attribute(trace: RuntimeTrace, key: str) -> AttributeValue:
+    """The value ``key`` carries on the trace's root span; `None` if it carries none."""
+    return next(
+        (
+            attribute.value
+            for span in trace.spans
+            if span.parent_span_id is None
+            for attribute in span.attributes
+            if attribute.key == key
+        ),
+        None,
+    )
+
+
+def _timeline_filter(target: str | None) -> tuple[str | None, str]:
+    """Split a ``mount:``/``actor:`` filter into the root-span attribute it selects on."""
+    if target is None:
+        return None, ""
+    prefix, separator, wanted = target.partition(":")
+    attribute = {"mount": "mount_id", "actor": "actor"}.get(prefix)
+    if not separator or attribute is None or not wanted:
+        message = f"Filter `{target}` is neither `mount:<id>` nor `actor:<user_id>`."
+        raise ValueError(message)
+    return attribute, wanted
+
+
+def _timeline_text(trace: RuntimeTrace, origin: datetime) -> str:
+    # `RuntimeTrace.started` is seconds since the profiler started, and `started_at` is the wall
+    # clock it started at, so the two together are the only way back to a readable time.
+    at = (origin + timedelta(seconds=trace.started)).strftime("%H:%M:%S")
+    mount_id = _root_attribute(trace, "mount_id")
+    where = "route" if mount_id is None else f"mount={mount_id}"
+    status = trace.result.outcome if trace.result.dispatch is None else trace.result.dispatch.disposition
+    return (
+        f"{at} {trace.name:<28.28} actor={_root_attribute(trace, 'actor')} "
+        f"{where} {status} {_milliseconds(trace.duration)}"
+    )
 
 
 def _milliseconds(seconds: float | None) -> str:
