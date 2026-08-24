@@ -150,3 +150,37 @@ def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() ->
     assert ledger.outcomes[1].tags == frozenset({"framework_integrity_failure"})
     assert "commit.before_publication" in integrity.seen
     assert "commit.after_cell_publication" in integrity.seen
+
+
+def test_change_description_failure_aborts_with_the_prepared_value() -> None:
+    prepared = object()
+    aborted: list[object | None] = []
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+
+    class Participant:
+        def prepare(self, view) -> object:
+            return prepared
+
+        def describe_change(self, value: object) -> None:
+            assert value is prepared
+            raise RuntimeError("cannot describe change")
+
+        def apply(self, value: object) -> None:
+            raise AssertionError("unreachable")
+
+        def abort(self, value: object | None, cause: BaseException) -> None:
+            aborted.append(value)
+
+        def finalize(self, value: object) -> None:
+            raise AssertionError("unreachable")
+
+    try:
+        with pytest.raises(RuntimeError, match="describe change"), transaction():
+            join_action(object(), Participant)
+    finally:
+        ledger.close()
+
+    assert aborted == [prepared]
+    assert len(ledger.outcomes) == 1
+    assert ledger.outcomes[0].reason == "participant_prepare_failed"
