@@ -68,6 +68,7 @@ ROOT_API = frozenset(
         "figure",
         "form",
         "forms",
+        "grid",
         "group",
         "guards",
         "heading",
@@ -176,6 +177,7 @@ SPECIALIST_SAMPLES = {
     "ZonedDateTime": sl.temporal,
     "RosterPlacement": sl.patterns,
     "TallyOption": sl.patterns,
+    "GridCell": sl.patterns,
     "Message": sl.text,
 }
 
@@ -222,6 +224,7 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
+    assert sl.discord.button_grid
     assert sl.discord.modals.CheckboxGroupField
     assert sl.discord.MountDefaults
     assert sl.discord.SessionRegistry

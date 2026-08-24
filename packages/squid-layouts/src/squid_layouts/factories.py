@@ -22,6 +22,7 @@ from string.templatelib import Template
 from types import UnionType
 from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
 
+from squid_layouts._grid import GridCell
 from squid_layouts._roster import RosterPlacement
 from squid_layouts._tally import TallyOption
 from squid_layouts.assets import Asset
@@ -68,6 +69,7 @@ from squid_layouts.semantic import (
     Figure,
     Flexibility,
     FormTrigger,
+    Grid,
     Group,
     Heading,
     Importance,
@@ -498,6 +500,17 @@ def roster(
     return Roster(key, placement, on_join, routes, locked, show_waitlist)
 
 
+def grid(
+    *cells: Conditional[GridCell],
+    key: str,
+    columns: int,
+    on_pick: Callable[[SelectionEvent], Awaitable[None]],
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Grid:
+    """A selectable grid that adapts without changing its submitted cell keys."""
+    return Grid(key, _collect(cells, (GridCell,), "sl.grid()"), columns, on_pick, flexibility)
+
+
 def _tally_label(option: TallyOption) -> Message:
     prefix = "{emoji} " if option.emoji is not None else ""
     label = "**{label}**" if option.mine else "{label}"
@@ -867,6 +880,7 @@ __all__ = [
     "fields",
     "figure",
     "form",
+    "grid",
     "group",
     "heading",
     "item",
