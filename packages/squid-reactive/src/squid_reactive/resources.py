@@ -1,12 +1,24 @@
 """Reactive async values observed by synchronous component renders."""
 
+import asyncio
+import uuid
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal, Protocol, overload
 
+from squid_reactive.actions import (
+    DEFAULT_REDACTION,
+    ActionId,
+    CausalRef,
+    ExceptionSummary,
+    ResourceEventSnapshot,
+    current_causality,
+    emit_causal_event,
+)
 from squid_reactive.completion import Completion
 from squid_reactive.core import (
     _CONSUMER,
@@ -189,6 +201,10 @@ class Resource[ValueT](AsyncBinding):
         self._status: ResourceStatus[ValueT] = Pending()
         self._loading: tuple[int, Completion[ResourceStatus[ValueT]]] | None = None
         self._request_token = 0
+        self._generation_id = uuid.uuid7()
+        causality = current_causality()
+        self._generation_cause = None if causality is None else causality[0]
+        self._generation_root = None if causality is None else causality[1]
         self._rechecking = False
         self.version = 0
         """Dates this resource's state, so a reader can tell whether it has moved.
@@ -315,7 +331,7 @@ class Resource[ValueT](AsyncBinding):
         self._invalidate(notify=True)
 
     def _invalidate(self, *, notify: bool) -> None:
-        self._request_token += 1
+        self._new_generation()
         self._status = Pending(_previous(self._status))
         self._moved()
         if notify:
@@ -338,7 +354,7 @@ class Resource[ValueT](AsyncBinding):
     def _replace_now(self, value: ValueT, *, baseline: dict[Any, int] | None = None) -> None:
         if baseline is None:
             baseline = {source: source.settle() for source in self.sources}
-        self._request_token += 1
+        self._new_generation()
         self._status = Ready(value)
         self._landed()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
@@ -413,21 +429,32 @@ class Resource[ValueT](AsyncBinding):
 
         settled: Completion[ResourceStatus[ValueT]] = Completion()
         self._loading = (token, settled)
+        generation = (self._generation_id, self._generation_cause, self._generation_root)
+        self._emit_generation("started", generation)
         self.sources = {}
         consumer = _CONSUMER.set(self)
         try:
             try:
                 value = await self._loader()
+            except asyncio.CancelledError as error:
+                self._emit_generation("cancelled", generation, error)
+                raise
             except Exception as error:
                 if token == self._request_token:
                     self._status = Failed(error, _previous(self._status))
                     self._landed()
                     self._notify()
+                    self._emit_generation("failed", generation, error)
+                else:
+                    self._emit_generation("superseded", generation)
             else:
                 if token == self._request_token:
                     self._status = Ready(value)
                     self._landed()
                     self._notify()
+                    self._emit_generation("ready", generation)
+                else:
+                    self._emit_generation("superseded", generation)
         finally:
             _CONSUMER.reset(consumer)
             if self._loading is not None and self._loading[0] == token:
@@ -435,6 +462,33 @@ class Resource[ValueT](AsyncBinding):
             if not settled.done:
                 settled.resolve(self._status)
         return self._status
+
+    def _new_generation(self) -> None:
+        self._request_token += 1
+        self._generation_id = uuid.uuid7()
+        causality = current_causality()
+        self._generation_cause = None if causality is None else causality[0]
+        self._generation_root = None if causality is None else causality[1]
+
+    def _emit_generation(
+        self,
+        status: str,
+        generation: tuple[uuid.UUID, CausalRef | None, ActionId | None],
+        error: BaseException | None = None,
+    ) -> None:
+        generation_id, cause, root_action_id = generation
+        exception = None if error is None else DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+        emit_causal_event(
+            ResourceEventSnapshot(
+                str(generation_id),
+                None if root_action_id is None else str(root_action_id),
+                cause,
+                self._label,
+                status,
+                datetime.now(UTC),
+                exception,
+            )
+        )
 
 
 class AtomicResource[ValueT](Resource[ValueT]):
