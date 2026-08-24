@@ -47,7 +47,6 @@ class AccountPanel(sl.Component):
     """A mounted account workspace with semantic identity actions."""
 
     selected_id: int | None = sl.state(None)
-    unlink_armed: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
     # Refreshed from the service by load(), so a snapshot would only restore them stale.
     _identities: tuple[AccountIdentity, ...] = sl.state((), persist=False)
@@ -89,7 +88,6 @@ class AccountPanel(sl.Component):
         self._profile = await self._accounts.get_profile(self._account_id)
         if self.selected is None:
             self.selected_id = None
-            self.unlink_armed = None
 
     @property
     def identities(self) -> tuple[AccountIdentity, ...]:
@@ -180,13 +178,12 @@ class AccountPanel(sl.Component):
             sl.primitives.Row(
                 (
                     sl.primitives.Button(
-                        t(self.locale, _("Unlink for good"))
-                        if self.unlink_armed == self.selected_id
-                        else t(self.locale, _("Unlink")),
+                        t(self.locale, _("Unlink")),
                         self._unlink,
                         "unlink",
                         style=sl.primitives.ActionStyle.DANGER,
                         disabled=self.selected is None,
+                        guard=sl.guards.confirm(self._unlink_warning()),
                     ),
                     sl.primitives.Button(
                         t(self.locale, _("Edit page")),
@@ -202,7 +199,6 @@ class AccountPanel(sl.Component):
 
     async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
-        self.unlink_armed = None
 
     async def _toggle_identity(self, event: sl.ToggleEvent) -> None:
         identity = self.selected
@@ -226,15 +222,12 @@ class AccountPanel(sl.Component):
         await self._with_consent(event, apply)
 
     async def _unlink(self, event: sl.PressEvent) -> None:
+        """Remove the selected identity. The reader has already agreed to this."""
         identity = self.selected
         if identity is None or identity.id is None:
             return
-        if self.unlink_armed != identity.id:
-            self.unlink_armed = identity.id
-            return
         await event.acknowledge()
         removed = await self._accounts.unlink_identity(self._account_id, identity.id)
-        self.unlink_armed = None
         await self._reload()
         await event.notice(
             t(
@@ -445,20 +438,24 @@ class AccountPanel(sl.Component):
             ),
         )
 
-    def _footer(self) -> str | None:
+    def _unlink_warning(self) -> str:
+        """What the reader is agreeing to, asked before the press rather than after it."""
         identity = self.selected
-        if self.unlink_armed == self.selected_id and identity is not None:
-            warning = t(
+        if identity is None:
+            return t(self.locale, _("Remove this linked account?"))
+        warning = t(
+            self.locale,
+            _("Remove {identity}? Any build credit you hold is unaffected."),
+            identity=identity_label(identity, self.locale),
+        )
+        if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
+            warning += " " + t(
                 self.locale,
-                _("Click **Unlink** again to remove {identity}."),
-                identity=identity_label(identity, self.locale),
+                _("This is the Discord account you are using now. The bot will stop recognising you here."),
             )
-            if identity.provider is IdentityProvider.DISCORD and identity.discord_id == self._author_id:
-                warning += " " + t(
-                    self.locale,
-                    _("This is the Discord account you are using now. The bot will stop recognising you here."),
-                )
-            return warning
+        return warning
+
+    def _footer(self) -> str | None:
         if self.page_hidden:
             return t(
                 self.locale,

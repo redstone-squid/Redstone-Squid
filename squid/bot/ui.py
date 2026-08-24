@@ -50,6 +50,7 @@ __all__ = [
     "help_layout",
     "info_layout",
     "info_node",
+    "install_mount_defaults",
     "link_layout",
     "localization_for",
     "render_item",
@@ -404,6 +405,20 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
 
 
 MOUNT_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+"""Host-wide mount construction, read by `create_mount` on every call.
+
+Not every default can be written down here: a challenge presenter needs the session registry
+and the background runner, and both belong to a bot instance. `install_mount_defaults` is how
+the bot fills those in once it has built them, so a panel constructed through `create_mount`
+-- which is most of them, and none of which hold a bot -- gets the same wiring as one opened
+through `bot.mounts`.
+"""
+
+
+def install_mount_defaults(defaults: ui.discord.MountDefaults) -> None:
+    """Replace the process's host defaults. Called once, from the bot's constructor."""
+    global MOUNT_DEFAULTS
+    MOUNT_DEFAULTS = defaults
 
 
 def create_mount(
