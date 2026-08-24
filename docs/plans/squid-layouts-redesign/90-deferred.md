@@ -112,6 +112,30 @@ are not re-derived or accidentally adopted later.
   through [28](28-history.md) build for the library user rather than waiting on bot
   consumers. Actual PyPI publication remains a separate, still-unmade call; the 3.10
   backport stays rejected.
+- **A generic `action.status` (`Idle | Pending | Failed`) in the reactive layer** — proposed
+  2026-08-24 by an external review, on the correct observation that `sl.Feedback` is fixed
+  policy: `_BusyPaint.show` relabels the pressed control and disables the panel, and label text
+  plus `restore_on_error` are the only knobs. The need for author-controlled pending UI is real;
+  this is the wrong place for it, on two grounds. It has nowhere to live — an `Action` is a frozen
+  semantic value rebuilt every render, so status would need mount-side dispatch state keyed by
+  action key and plumbed into render, new machinery for a node that is conceptually a value. And
+  the need signals the work is in the wrong primitive: `Progress.set` invalidates outside any
+  transaction, which is exactly "presentation status, not transactional domain state", and Plan
+  68's definition/execution split made an operation re-armable. So the routing rule is that slow
+  or effectful work belongs in an operation the action arms, not in the action's transaction.
+  The residual — an action that is genuinely transactional *and* slow, such as a large recompute
+  with no external effect — cannot move into an operation, and there `Feedback`'s fixed paint is
+  correct. Transactional state cannot be a loading indicator: `self.saving = True` stages and is
+  invisible until commit, by which point it means nothing.
+- **Blind history restore, revisited and reversed.** Plan 28 chose deliberately: a restore is a
+  write with no prior read, so it carries no precondition and cannot conflict. The tests said why
+  — "a sibling panel setting the same filter is the motivating case, not an error case", and "the
+  local half is not held hostage by the shared one" — resting on `Shared` holding view state, so a
+  sibling losing its filter to an undo is not data loss. A version check was proposed and reverted
+  on 2026-08-24 for exactly that reason, then adopted days later by Plan 68, which had the piece
+  the first attempt lacked: weak versus strong targets, so an undo conflicts on what the author
+  said matters and stays blind on what it does not. `StateDelta` is gone; see
+  [the Plan 68 migration guide](../../plan68-migration.md).
 
 ## Deferred until a real consumer exists
 
@@ -240,6 +264,16 @@ are not re-derived or accidentally adopted later.
   so a loader would hold permission to complete *its* generation rather than comparing a
   counter. The comparison is three lines at `resources.py:401-421`, correct and commented.
   Churn.
+  **Revisited 2026-08-24**: the rename stays rejected and `_request_token` is unchanged, but the
+  rejection was tested against a proposal that was purely a spelling, so it never asked what else
+  a generation owns. One thing did belong to it: the tracked read set. `_CONSUMER` pointed at the
+  `Resource`, and `Resource.sources` is a single dict, so a superseded loader — which does not
+  stop, and resumes with its own `_CONSUMER` still set — went on recording into the live
+  generation's dependency set. The live value ended up subscribed to state it never read, and
+  `Observation.addresses()` could broadcast an address it did not depend on. Fixed by a private
+  `_Load` per generation that the winner publishes onto the resource, with a regression test that
+  fails without it. The lesson is narrower than "reopen rejections": a rejection is only as wide
+  as the proposal it was argued against.
 - **`_Candidate` typestate classes** (`StagedCandidate.presented() -> PresentedCandidate`) —
   same review. The half worth having is one `settled` flag, shipped; the other half is already
   enforced a layer down, because `_draw` stages subscriptions and the reconciler refuses a
@@ -248,6 +282,15 @@ are not re-derived or accidentally adopted later.
 - **A `CompensableEffect` saga interface** for external side effects — plan 28's History
   already separates a transactional `StateDelta` from an author-supplied external inverse, and
   gives the tiers. Nothing to add until a consumer needs compensation ordering.
+  **Overturned 2026-08-24** by Plan 68, both halves, for reasons this entry did not weigh. The
+  History argument covers undo of a *committed* action; `record()` fires through
+  `on_action_commit`, which never runs on a rolled-back one. The uncovered case is the mirror —
+  an action whose external work already happened and whose commit then failed — and the author
+  cannot close it by hand, because `ReactiveConflictError` and a failing participant `prepare()`
+  both fire after the handler returns. Strict read-set validation raised how often that happens.
+  Plan 68 shipped `on_action_rollback` for the notification and, having found the consumer this
+  entry was waiting for, the ordering half too: `CompensationOutbox` with idempotency keys,
+  restart recovery and reconciliation. See [the Plan 68 completion audit](../68-completion-audit.md).
 - **An `adopt()` capture/into-component wrapper** — the review proposed making adoption an
   explicit move. Plan 53 already enforces unsent-only with a second-writer-refusing proxy, and
   the review itself concedes `adopt()` is pleasantly simple.
@@ -258,3 +301,12 @@ are not re-derived or accidentally adopted later.
   id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
   in-tree defect motivating it, and the routing module docstring already states it in prose.
   Revisit if a mix-up ever ships.
+- **Abandoning a superseded resource load** — proposed 2026-08-24 alongside the generation fix,
+  so a load whose token has been bumped is cancelled rather than run to completion. No orphan
+  motivates it: every `_load` is awaited by whoever started it, and the mount's settle pass runs
+  its task group to completion before the next pass, so a superseded load is wasted work rather
+  than a leak — and since the resource contract makes a loader safe to run zero, one or many
+  times, wasted work is all it can be. Cancellation also has to live in `squid-layouts`, because
+  `squid-reactive` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. Revisit
+  when a loader is expensive enough that the waste shows up, or when a port makes concurrent
+  supersession ordinary rather than rare.
