@@ -150,6 +150,7 @@ def fake_interaction(
     message = _fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7, components_v2=components_v2)
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
+        guild_id=message.guild.id if message.guild is not None else None,
         message=message,
         response=response,
         followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock(), delete_message=AsyncMock()),
