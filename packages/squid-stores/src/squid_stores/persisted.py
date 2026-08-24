@@ -6,6 +6,7 @@ from collections.abc import Callable, Hashable, Mapping
 from typing import Any
 
 import anyio
+from anyio.abc import TaskStatus
 
 from squid_reactive import Shared, SharedPool, TopicBus, export_state, restore_state
 from squid_stores.scoped import ScopedStore, Slot
@@ -20,6 +21,10 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     loaded, commits enqueue a snapshot synchronously and a supervised anyio worker performs
     the best-effort write. Store failures are sent to on_error and never travel back
     through the action that produced the state change.
+
+    The pool owns that worker for the whole life of :meth:`run`, which the host supervises;
+    :meth:`close` drains what is queued and lets `run` return. A pool is loadable only while
+    it is running, because hydration is a read and a read must not quietly acquire a task.
 
     The canonical-handle machinery is a :class:`~squid_reactive.pool.SharedPool` held privately.
     This class composes one rather than subclassing it because `SharedPool.get` is synchronous and
@@ -48,7 +53,7 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         self._pending_event = asyncio.Event()
         self._idle = asyncio.Event()
         self._idle.set()
-        self._task_group: anyio.abc.TaskGroup | None = None
+        self._running = False
         self._closing = False
 
     @property
@@ -61,13 +66,43 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         """The topic bus every namespace this pool retains must hold."""
         return self._pool.bus
 
+    async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
+        """Own the persistence worker until :meth:`close` drains it, or the caller cancels.
+
+        The task group is entered and exited by this one coroutine. An earlier version
+        entered it inside `load` and exited it inside `close`, which anyio rejects whenever
+        those run in different tasks -- the ordinary case, since `load` belongs to whichever
+        request first needed the namespace.
+        """
+        if self._running:
+            msg = "persisted pool is already running"
+            raise RuntimeError(msg)
+        if self._closing:
+            msg = "persisted pool is closed"
+            raise RuntimeError(msg)
+        self._running = True
+        try:
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(self._drain)
+                task_status.started()
+        finally:
+            self._running = False
+
     async def load(self, scope: ScopeT) -> SharedT:
         """Return the canonical namespace for scope, hydrating it on the first load."""
         async with self._load_lock:
+            # Checked before the cache: `close` is terminal for the pool, even for a scope it
+            # already holds. A caller still holding that namespace keeps an ordinary `Shared`;
+            # what ended is the pool's willingness to hand out more and to persist them.
+            if self._closing:
+                msg = "persisted pool is closed"
+                raise RuntimeError(msg)
             existing = self._pool.get_existing(scope)
             if existing is not None:
                 return existing
-            await self._ensure_worker()
+            if not self._running:
+                msg = "persisted pool is not running; start run() before loading a namespace"
+                raise RuntimeError(msg)
             created = self._pool._create(scope)
             values = await self.store.get(self.slot, scope)
             if values is not None:
@@ -114,23 +149,19 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
 
     async def flush(self) -> None:
         """Wait until every snapshot queued so far has been attempted."""
-        if self._task_group is None:
+        if not self._running:
             return
         await self._idle.wait()
 
     async def close(self) -> None:
-        """Drain pending writes and stop the owned persistence worker."""
-        async with self._load_lock:
-            task_group = self._task_group
-            if task_group is None:
-                self._closing = True
-                return
-            self._closing = True
-            for scope, handle in self._pool.active().items():
-                self._detach(handle, scope)
-            self._pending_event.set()
-            await task_group.__aexit__(None, None, None)
-            self._task_group = None
+        """Drain pending writes and stop accepting loads; `run` returns once drained."""
+        # Listeners stay attached deliberately. Detaching here would block the write but also
+        # silence it; `_stage`'s closed guard blocks it and reports it, which is what a host
+        # that outlived its pool needs to hear.
+        self._closing = True
+        self._pending_event.set()
+        if self._running:
+            await self._idle.wait()
 
     def _listener_for(self, namespace: SharedT, scope: ScopeT) -> Callable[[], None]:
         def stage() -> None:
@@ -143,17 +174,13 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
         if listener is not None:
             namespace._remove_commit_listener(listener)
 
-    async def _ensure_worker(self) -> None:
-        if self._closing:
-            msg = "persisted pool is closed"
-            raise RuntimeError(msg)
-        if self._task_group is not None:
-            return
-        task_group = anyio.create_task_group()
-        self._task_group = await task_group.__aenter__()
-        self._task_group.start_soon(self._drain)
-
     def _stage(self, namespace: SharedT, scope: ScopeT) -> None:
+        if self._closing:
+            # Queuing here would drop the write silently: no worker is left to drain it.
+            # A namespace outliving its pool is the host's mistake, so it is reported like
+            # any other persistence failure rather than raised into the action.
+            self._report(RuntimeError(f"persisted pool is closed; dropped a write for scope {scope!r}"))
+            return
         try:
             values = dict(export_state(namespace))
         except BaseException as error:
