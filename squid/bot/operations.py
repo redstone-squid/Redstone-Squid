@@ -30,6 +30,8 @@ type ManagedResultCallback[**P] = Callable[P, Coroutine[Any, Any, None]]
 class CommandOperation(sl.Component):
     """A command effect whose progress and terminal outcome are its rendered state."""
 
+    execution: sl.operations.OperationExecution[RenderResult, RenderResult | None]
+
     def __init__(
         self,
         work: OperationWork,
@@ -41,9 +43,10 @@ class CommandOperation(sl.Component):
         self._initial = initial
         self._locale = locale
         self._receipt: sl.discord.delivery.DeliveryReceipt | None = None
+        self.execution = self._execute.start()
 
     @sl.operation(initial=_INITIAL_PROGRESS)
-    async def execution(
+    async def _execute(
         self,
         progress: sl.operations.Progress[RenderResult | None],
     ) -> RenderResult:
@@ -70,6 +73,8 @@ class CommandOperation(sl.Component):
 class _ManagedResultComponent(sl.Component):
     """Run one command callback after its initial layout has been delivered."""
 
+    execution: sl.operations.OperationExecution[RenderResult, None]
+
     def __init__(
         self,
         callback: Callable[..., Awaitable[RenderResult]],
@@ -84,9 +89,10 @@ class _ManagedResultComponent(sl.Component):
         self._kwargs = kwargs
         self._initial = initial
         self._locale = locale
+        self.execution = self._execute.start()
 
     @sl.operation(initial=None)
-    async def execution(self, _progress: sl.operations.Progress[None]) -> RenderResult:
+    async def _execute(self, _progress: sl.operations.Progress[None]) -> RenderResult:
         """Evaluate the command callback once the mount has committed its initial delivery."""
         return await self._callback(*self._args, **self._kwargs)
 

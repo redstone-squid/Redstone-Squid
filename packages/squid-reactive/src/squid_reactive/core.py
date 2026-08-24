@@ -967,6 +967,27 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
 
 
 @contextmanager
+def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]:
+    """Start a distinct causal transaction while an empty admitting transaction is open.
+
+    Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
+    empty envelope lets the history operation remain a real action with its own identity. An
+    outer transaction that already staged work is rejected because committing the inner action
+    could not then be rolled back with the outer one.
+    """
+    outer = _CURRENT.get()
+    if outer is not None and (outer.writes or outer.participants or outer.preconditions):
+        message = "a fresh action cannot start after the admitting transaction staged changes"
+        raise RuntimeError(message)
+    token = _CURRENT.set(None)
+    try:
+        with transaction(action_context=action_context):
+            yield
+    finally:
+        _CURRENT.reset(token)
+
+
+@contextmanager
 def batch() -> Iterator[None]:
     """Coalesce related state writes into one invalidation per component."""
     with transaction():
