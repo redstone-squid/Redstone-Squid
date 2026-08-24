@@ -225,6 +225,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
   in-tree defect motivating it, and the routing module docstring already states it in prose.
   Revisit if a mix-up ever ships.
+
 ## No longer live (resolved, shipped, overturned, closed, or promoted elsewhere)
 
 - **Abandoning a superseded resource load** *(resolved — shipped as an optional seam in `34d56b52`)* — proposed 2026-08-24 alongside the generation fix,
