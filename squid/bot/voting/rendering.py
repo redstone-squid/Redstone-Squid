@@ -125,10 +125,84 @@ def render_generic_poll(
     An open poll carries its own close and refresh controls; a closed one has nothing left
     to do, so its card is inert and stays readable as a record.
     """
-    nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
+    nodes = _generic_poll_nodes(snapshot, voter_discord_ids)
     if snapshot.status is not VoteStatus.CLOSED:
         nodes.append(poll_controls())
     return render_presentation(nodes)
+
+
+def _generic_poll_nodes(
+    snapshot: VoteSessionSnapshot,
+    voter_discord_ids: Mapping[int, int],
+) -> list[sl.LayoutNode]:
+    """Build the semantic content for a generic poll without its controls."""
+    poll = snapshot.poll
+    assert poll is not None
+    closed = snapshot.status is VoteStatus.CLOSED
+    show_totals = poll.visibility != "anonymous_hidden" or closed
+    options = snapshot.options_for_guild(poll.guild_id or 0)
+    nodes: list[sl.LayoutNode] = [sl.heading(sl.plain(poll.question))]
+
+    if show_totals:
+        raw = snapshot.raw_tallies()
+        weighted = snapshot.weighted_tallies()
+        tally_options: list[sl.patterns.TallyOption] = []
+        for option in options:
+            option_id = option.identifier or ""
+            voters = [
+                f"<@{discord_id}>"
+                for vote in snapshot.selections
+                if vote.option_id == option.identifier
+                and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+            ]
+            voter_suffix = sl.raw_md(f" ({', '.join(voters)})" if poll.visibility == "visible_live" and voters else "")
+            label = option.label or option.identifier or option.emoji
+            weighted_count = weighted.get(option_id, 0)
+            tally_options.append(
+                sl.patterns.TallyOption(
+                    option_id,
+                    sl.md(t"{label} ??{weighted_count:g} weighted{voter_suffix}"),
+                    raw.get(option_id, 0),
+                    emoji=option.emoji,
+                )
+            )
+        nodes.append(sl.tally(tally_options, key="poll.tally"))
+    else:
+        nodes.append(
+            sl.bullets(
+                *(
+                    sl.bullet(sl.md(t"{option.emoji} {option.label}"), key=option.identifier or option.emoji)
+                    for option in options
+                ),
+                key="poll.options",
+            )
+        )
+
+    if closed:
+        weighted = snapshot.weighted_tallies()
+        best = max(weighted.values(), default=0)
+        winners = [
+            option.label or option.identifier or option.emoji
+            for option in snapshot.options
+            if weighted.get(option.identifier or "", 0) == best
+        ]
+        outcome = (
+            "No votes"
+            if not weighted
+            else f"Tie: {', '.join(winners)}"
+            if len(winners) > 1
+            else f"Winner: {winners[0]}"
+        )
+        nodes.append(sl.status(sl.md(t"Poll closed ??{outcome}"), emphasis=sl.semantic.Emphasis.STRONG))
+    else:
+        nodes.append(
+            sl.note(
+                sl.md(
+                    t"Closes {sl.timestamp(poll.deadline.to_stdlib(), style=sl.semantic.TimeStyle.RELATIVE)}."
+                )
+            )
+        )
+    return nodes
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:
