@@ -193,6 +193,7 @@ def _frozen(value: Any) -> Any:
 
 _CURRENT: ContextVar[_Transaction | None] = ContextVar("squid_reactive_transaction", default=None)
 _RELAXED_READS: ContextVar[int] = ContextVar("squid_reactive_relaxed_reads", default=0)
+_STRONG_READS: ContextVar[int] = ContextVar("squid_reactive_strong_reads", default=0)
 _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
     "squid_reactive_deterministic_interleaver", default=None
 )
@@ -274,7 +275,7 @@ class _Cell:
                 self.track(entry.version)
                 return entry.value
             if self.address is not None and _RELAXED_READS.get() == 0:
-                current.observe(self)
+                current.observe(self, strong=_STRONG_READS.get() > 0)
         self.track(self.version)
         return self.value
 
@@ -422,13 +423,31 @@ def untracked() -> Iterator[None]:
 def relaxed_read() -> Iterator[None]:
     """Read shared state without adding a commit-time consistency precondition.
 
-    Unlike :func:`untracked`, this does not change reactive dependency tracking.
+    Only reads a precondition would otherwise cover are affected: a cell this action also
+    writes, and any read taken inside :func:`strong_read`. Unlike :func:`untracked`, this
+    does not change reactive dependency tracking.
     """
     token = _RELAXED_READS.set(_RELAXED_READS.get() + 1)
     try:
         yield
     finally:
         _RELAXED_READS.reset(token)
+
+
+@contextmanager
+def strong_read() -> Iterator[None]:
+    """Require every shared read taken inside to still hold its version at commit.
+
+    The upgrade an action opts into when it branches on shared state it does not write --
+    read A, write B, and by default nothing says A was still true. Wrap the whole handler
+    body to make one action serializable over what it read; wrap one read to guard just that
+    one. :func:`relaxed_read` nested inside opts a read back out.
+    """
+    token = _STRONG_READS.set(_STRONG_READS.get() + 1)
+    try:
+        yield
+    finally:
+        _STRONG_READS.reset(token)
 
 
 @dataclass(slots=True)
@@ -617,11 +636,15 @@ class _Transaction:
     """The task that opened this transaction, or `None` outside a running loop."""
     writes: dict[_Cell, _Staged] = field(default_factory=dict)
     observed: dict[_Cell, int] = field(default_factory=dict)
-    preconditions: dict[_Cell, int] = field(default_factory=dict)
-    """Committed values this action read out of addressed cells, first read per cell.
+    """Committed versions this action read out of addressed cells, first read per cell.
 
     Only shared cells are recorded, because only they can move under a running action.
+    Recorded whether or not the read carries a precondition, because the ledger reports what
+    an action looked at and that is true either way.
     """
+    strong: dict[_Cell, int] = field(default_factory=dict)
+    """The subset of `observed` taken inside `strong_read()`, which must still hold at commit."""
+    preconditions: dict[_Cell, int] = field(default_factory=dict)
     changed: dict[int, ReactiveOwner] = field(default_factory=dict)
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
@@ -689,26 +712,36 @@ class _Transaction:
         """This action's pending write to `cell`, if it has made one."""
         return self.writes.get(cell)
 
-    def observe(self, cell: _Cell) -> None:
+    def observe(self, cell: _Cell, *, strong: bool) -> None:
         """Note that this action looked at a shared cell's committed value.
 
         The first read is the one kept: a later write does not clear it, because the action
-        has already branched on what it saw.
+        has already branched on what it saw. `strong` marks a read taken inside
+        `strong_read()` and is kept separately, at the version *that* read returned: an
+        earlier unguarded read of the same cell was disclaimed by not being guarded, so it
+        cannot be what the commit requires.
         """
         if cell not in self.observed:
             self.observed[cell] = cell.version
+        if strong and cell not in self.strong:
+            self.strong[cell] = cell.version
 
     def check_preconditions(self) -> None:
         """Reject a publishing action if any strong input or explicit precondition moved.
 
-        Blind writes remain last-commit-wins. Every strong read guards a transaction that
-        publishes either cell or participant state, including reads of cells it did not write.
+        A read is strong -- it guards the commit -- when the action also wrote that cell, or
+        when it was taken inside `strong_read()`. Read-only reads carry no precondition by
+        default, because handlers routinely consult shared state for a decision and write
+        something unrelated, and aborting those costs more than the write skew it prevents.
+        `strong_read()` is how an action that does branch on shared state says so. Blind
+        writes remain last-commit-wins.
         """
         _checkpoint("commit.before_validation")
         if not (self.writes or self.participants):
             _checkpoint("commit.after_validation")
             return
-        required = dict(self.observed)
+        required = {cell: version for cell, version in self.observed.items() if cell in self.writes}
+        required.update(self.strong)
         required.update(self.preconditions)
         for cell, version in required.items():
             if cell.version == version:
