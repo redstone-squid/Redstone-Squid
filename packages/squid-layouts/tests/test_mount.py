@@ -119,6 +119,39 @@ async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
     assert snapshot.handle_expires_in == pytest.approx(45)
 
 
+class TestCandidateSettlement:
+    """A drawn candidate owes the mount exactly one ending: committed, or rolled back."""
+
+    async def test_a_candidate_cannot_be_rolled_back_twice(self) -> None:
+        mount = Mount(Counter(), access=Everyone())
+        await mount.send(delivered_to(fake_message()))
+        candidate = mount._stage()
+
+        mount._rollback(candidate)
+
+        with pytest.raises(LayoutInvariantError, match="already settled"):
+            mount._rollback(candidate)
+
+    async def test_a_committed_candidate_cannot_be_rolled_back(self) -> None:
+        mount = Mount(Counter(), access=Everyone())
+        await mount.send(delivered_to(fake_message()))
+        candidate = mount._stage()
+
+        mount._commit(candidate)
+
+        with pytest.raises(LayoutInvariantError, match="already settled"):
+            mount._rollback(candidate)
+
+    async def test_only_one_candidate_may_be_outstanding_at_a_time(self) -> None:
+        """The reconciler owns this half: a second draw cannot stage over the first."""
+        mount = Mount(Counter(), access=Everyone())
+        await mount.send(delivered_to(fake_message()))
+        mount._stage()
+
+        with pytest.raises(RuntimeError, match="already staged"):
+            mount._stage()
+
+
 async def _armed_mount(
     component: Component | None = None,
     *,
