@@ -33,6 +33,7 @@ from squid_reactive.actions import (
 )
 from squid_reactive.core import (
     ActionParticipant,
+    ActionValidationError,
     CellPatch,
     CellPatchSet,
     CellReport,
@@ -92,6 +93,7 @@ __all__ = [
     "ActionOutcomeSnapshot",
     "ActionParticipant",
     "ActionRollback",
+    "ActionValidationError",
     "ActorRef",
     "Address",
     "Aftermath",

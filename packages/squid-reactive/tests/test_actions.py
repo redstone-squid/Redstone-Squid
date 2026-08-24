@@ -17,6 +17,7 @@ from squid_reactive import (
     ActionOutcomeCodec,
     ActionOutcomeSnapshot,
     ActionRollback,
+    ActionValidationError,
     ActorRef,
     AftermathFailureSnapshot,
     DurableOutcomePolicy,
@@ -333,6 +334,18 @@ def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
         codec.decode(b"not-json")
     with pytest.raises(ValueError, match="maximum encoded size"):
         codec.decode(b" " * 1_048_577)
+
+
+def test_application_validation_has_a_distinct_rollback_reason() -> None:
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    try:
+        with pytest.raises(ActionValidationError), transaction():
+            raise ActionValidationError("name is required")
+    finally:
+        ledger.close()
+
+    assert ledger.outcomes[0].reason == "validation_failed"
 
 
 def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -> None:
