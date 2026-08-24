@@ -37,6 +37,7 @@ class LoroTextBranch:
     def __init__(self, engine: LoroTextEngine) -> None:
         self._engine = engine
         self.doc = engine.doc.fork()
+        self.doc.peer_id = engine.doc.peer_id
         self._base_vv = engine.doc.oplog_vv
         self._before = engine.doc.oplog_frontiers.encode()
 
@@ -56,6 +57,9 @@ class LoroTextBranch:
         return self.doc.get_text("text").to_string()
 
     def prepare(self, base: object) -> LoroPrepared:
+        if base != self._before or self._engine.version() != self._before:
+            message = "Loro document changed after this branch was staged"
+            raise RuntimeError(message)
         loro = self._engine.module
         self.doc.commit()
         update = self.doc.export(loro.ExportMode.Updates(self._base_vv))
@@ -108,6 +112,7 @@ class LoroTextEngine:
         before = self.module.Frontiers.decode(token.before)
         after = self.module.Frontiers.decode(token.after)
         branch = self.doc.fork()
+        branch.peer_id = self.doc.peer_id
         base_vv = self.doc.oplog_vv
         branch.apply_diff(branch.diff(after, before))
         branch.commit()

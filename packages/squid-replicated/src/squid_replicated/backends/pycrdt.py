@@ -37,7 +37,7 @@ class PycrdtTextBranch:
         module = engine.module
         self._engine = engine
         self.text = module.Text()
-        self.doc = module.Doc({"text": self.text}, skip_gc=True)
+        self.doc = module.Doc({"text": self.text}, client_id=engine.doc.client_id, skip_gc=True)
         self.doc.apply_update(engine.doc.get_update())
         self._base = engine.doc.get_state()
         self._undo = module.UndoManager(scopes=[self.text], capture_timeout_millis=60_000, timestamp=lambda: 0)
@@ -57,6 +57,9 @@ class PycrdtTextBranch:
         return self.text.to_py()
 
     def prepare(self, base: object) -> PycrdtPrepared:
+        if base != self._base or self._engine.version() != self._base:
+            message = "pycrdt document changed after this branch was staged"
+            raise RuntimeError(message)
         stack = self._undo.undo_stack
         token = None
         if stack:
