@@ -9,6 +9,7 @@ from squid_reactive import (
     ActionContext,
     ActionKind,
     ActionLedger,
+    ActionOutcomeCodec,
     LocalTopicBus,
     ReactiveConflictError,
     ReactiveWriteError,
@@ -145,3 +146,18 @@ def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
     finally:
         ledger.close()
     assert ledger.outcomes[0].kind == "undo"
+
+
+def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    try:
+        with transaction():
+            pass
+    finally:
+        ledger.close()
+    codec = ActionOutcomeCodec()
+
+    assert codec.decode(codec.encode(ledger.outcomes[0])) == ledger.outcomes[0]
+    with pytest.raises(ValueError, match="unsupported"):
+        codec.decode(b'{"schema":2}')

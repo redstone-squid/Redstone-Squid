@@ -16,6 +16,7 @@ from squid_layouts.discord.routing import Router
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind
+from squid_reactive import ActionLedger, add_action_outcome_sink, transaction
 
 
 class Subject(sl.Component):
@@ -121,6 +122,23 @@ class TestMountCommands:
         await run(cog.dump_metrics, cog, ctx, "missing")
 
         assert "missing" in str(ctx.send.await_args.kwargs["view"].to_components())
+
+    async def test_actions_uses_ledger_when_profiler_has_no_trace(self) -> None:
+        ledger = ActionLedger()
+        add_action_outcome_sink(ledger)
+        try:
+            with transaction():
+                pass
+            ctx = make_context()
+            cog = DevTools(action_ledger=ledger)
+
+            await run(cog.inspect_actions, cog, ctx)
+
+            rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+            assert "Action outcomes" in rendered
+            assert ledger.outcomes[0].action_id in rendered
+        finally:
+            ledger.close()
 
 
 class TestRoutes:
