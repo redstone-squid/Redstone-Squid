@@ -433,6 +433,16 @@ def _operation_trace(profiler: MemoryProfiler, operation: OperationKind) -> Runt
 
 
 class TestDispatchProfiling:
+    async def test_dispatch_names_the_actor_on_the_root_span(self) -> None:
+        profiler = MemoryProfiler()
+        mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction(user_id=77))
+
+        root = next(span for span in _profile_trace(profiler).spans if span.parent_span_id is None)
+        assert ("actor", 77) in {(attribute.key, attribute.value) for attribute in root.attributes}
+
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()
         component = Counter()

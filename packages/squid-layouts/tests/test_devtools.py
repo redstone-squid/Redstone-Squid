@@ -12,14 +12,24 @@ import squid_layouts as sl
 from squid_layouts.discord import Everyone, Mount, Owner, live
 from squid_layouts.discord.devtools import DevTools
 from squid_layouts.discord.routing import Router
-from squid_layouts.discord.testing import delivered_to, fake_message
-from squid_layouts.primitives import Heading
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_layouts.primitives import Button, Heading, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind
 
 
 class Subject(sl.Component):
     def render(self):
         return [Heading("Subject")]
+
+
+class Clicker(sl.Component):
+    count: int = sl.state(0)
+
+    def render(self):
+        return [Heading("Clicker"), Row((Button(label="Bump", on_click=self.bump, key="bump"),))]
+
+    async def bump(self, event) -> None:
+        self.count += 1
 
 
 class FakeBot:
@@ -172,6 +182,51 @@ class TestProfiles:
         assert f"Profile for mount {subject.id}" in rendered
         assert "send" in rendered
         assert "planner" in rendered
+
+    async def test_timeline_reads_as_a_transcript_across_mounts(self) -> None:
+        profiler = MemoryProfiler()
+        first = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        second = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(first)
+        commit_render(second)
+        await first.dispatch("bump", fake_interaction(user_id=11))
+        await second.dispatch("bump", fake_interaction(user_id=22))
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.inspect_timeline, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "Dispatch timeline" in rendered
+        assert "actor=11" in rendered
+        assert "actor=22" in rendered
+        # Oldest first: the second press must not be reported before the first.
+        assert rendered.index("actor=11") < rendered.index("actor=22")
+        assert "completed" in rendered
+
+    async def test_timeline_filters_to_one_actor(self) -> None:
+        profiler = MemoryProfiler()
+        mount = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+        await mount.dispatch("bump", fake_interaction(user_id=11))
+        await mount.dispatch("bump", fake_interaction(user_id=22))
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.inspect_timeline, cog, ctx, 20, "actor:11")
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "actor=11" in rendered
+        assert "actor=22" not in rendered
+
+    async def test_timeline_refuses_an_unreadable_filter(self) -> None:
+        ctx = make_context()
+        cog = DevTools(profiler=MemoryProfiler())
+
+        await run(cog.inspect_timeline, cog, ctx, 20, "user=11")
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "refused" in rendered
 
     async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
         profiler = MemoryProfiler()

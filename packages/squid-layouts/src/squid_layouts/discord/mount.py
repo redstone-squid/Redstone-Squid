@@ -1987,7 +1987,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": kind.value, "mount_id": self.id, "resumed": resumed},
+            attributes={
+                "kind": kind.value,
+                "mount_id": self.id,
+                "resumed": resumed,
+                "actor": interaction.user.id,
+            },
         ) as operation:
             profile = _DispatchProfile(
                 operation,
@@ -2136,7 +2141,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": ActionKind.SUBMIT.value, "mount_id": self.id},
+            attributes={
+                "kind": ActionKind.SUBMIT.value,
+                "mount_id": self.id,
+                "actor": interaction.user.id,
+            },
         ) as operation:
             profile = _DispatchProfile(
                 operation,
@@ -2383,7 +2392,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": ActionKind.PRESS.value, "mount_id": self.id, "resumed": True},
+            attributes={
+                "kind": ActionKind.PRESS.value,
+                "mount_id": self.id,
+                "resumed": True,
+                "actor": interaction.user.id,
+            },
         ) as operation:
             if challenge.on_decline is not None:
                 await deliver.respond_text(interaction, self._chrome_text(challenge.on_decline), ephemeral=True)
