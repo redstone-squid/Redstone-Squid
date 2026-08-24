@@ -507,3 +507,29 @@ def test_compensation_codec_rejects_unknown_corrupt_and_oversized_records() -> N
         codec.decode(b"not-json")
     with pytest.raises(ValueError, match="maximum encoded size"):
         codec.decode(b" " * 65_537)
+
+
+async def test_outbox_claim_failure_is_a_truthful_compensation_failure() -> None:
+    class BrokenOutbox:
+        async def claim(self, intent, retry):
+            raise RuntimeError("outbox unavailable")
+
+        async def update(self, intent, status, error=None) -> None:
+            pass
+
+    subject, _ = panel()
+
+    async def compensate(key: str) -> None:
+        raise AssertionError("claim failed, so external work must not start")
+
+    stack = History(subject, compensation_outbox=BrokenOutbox())
+    with transaction():
+        stack.record("page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
+        subject.page = 4
+
+    result = await stack.undo()
+
+    assert result.status is HistoryResultStatus.FAILED
+    assert result.entry is not None and result.entry.compensation_execution is not None
+    assert result.entry.compensation_execution.status is CompensationStatus.FAILED
+    assert isinstance(result.error, RuntimeError)
