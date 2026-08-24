@@ -165,7 +165,7 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
     restored.import_update(update)
     reloaded = ReplicatedChangeToken.decode(restored, encoded)
     inverse = reloaded.plan_inverse()
-    assert not hasattr(inverse, "target_id")
+    assert isinstance(inverse, tuple)
     with transaction():
         reloaded.stage_inverse(inverse)
 
