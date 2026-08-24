@@ -96,6 +96,33 @@ async def test_undo_preserves_unrelated_later_work() -> None:
     assert subject.history.can_redo
 
 
+async def test_mounted_handler_envelope_starts_a_fresh_undo_action() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 4
+
+    with transaction():
+        result = await subject.history.undo()
+
+    assert result.applied
+    assert subject.page == 1
+
+
+async def test_fresh_undo_is_rejected_after_outer_handler_staged_work() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 4
+
+    with pytest.raises(RuntimeError, match="staged changes"), transaction():
+        subject.open = True
+        await subject.history.undo()
+
+    assert subject.page == 4
+    assert subject.open is False
+
+
 async def test_later_same_target_write_conflicts_without_clobbering() -> None:
     subject, workspace = panel()
     with transaction():
@@ -209,10 +236,12 @@ async def test_failed_compensation_is_truthful_and_retry_gets_new_execution() ->
         subject.page = 4
 
     failed = await subject.history.undo()
+    assert failed.entry is not None
     first_execution = failed.entry.compensation_execution
     assert failed.status is HistoryResultStatus.FAILED
     assert first_execution is not None and first_execution.status is CompensationStatus.FAILED
     retried = await subject.history.undo()
+    assert retried.entry is not None and retried.entry.compensation_execution is not None
     assert retried.applied
     assert retried.entry.compensation_execution.execution_id != first_execution.execution_id
     assert calls == [calls[0], calls[0]]
@@ -238,6 +267,7 @@ async def test_external_success_then_local_conflict_needs_reconciliation_without
     retry = await subject.history.undo()
 
     assert result.status is HistoryResultStatus.NEEDS_RECONCILIATION
+    assert result.entry is not None
     assert result.entry.state is HistoryEntryState.NEEDS_RECONCILIATION
     assert retry.status is HistoryResultStatus.NEEDS_RECONCILIATION
     assert len(calls) == 1
