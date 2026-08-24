@@ -223,3 +223,21 @@ This plan is design only; the implementing plan owes:
   and a `README.md` host-integration note that `install` starts nothing until `run()` is
   supervised.
 - `just typecheck` compared against the recorded baseline, and `git diff --check`.
+
+## What landed
+
+Implemented 2026-08-25. Two departures from the design above, both about where the
+registry is named:
+
+- **`Screen.open` takes the component first and the registry by keyword**, widened to
+  `SessionRegistry | HostSource`. A form literally *omitting* `sessions` is impossible for
+  `open`: it receives a `Destination` and an `Opener`, and neither carries a client. Passing
+  the target you already hold is what collapses `consent.py`'s dispatch, which is the
+  dividend the plan was after. `Screen.respond` does default it, from the interaction.
+- **`create_mount` grew a required `source`** rather than reading an ambient host. The plan
+  said it "reads `LayoutHost.of(...)`" without saying what it looks up from; a module-level
+  default would have been the deleted global under a new name. Every call site had a client,
+  an interaction or a context in reach, and each panel's `mount()` threads it from its caller.
+
+`deliver_to` also declines a `files` keyword, because `respond_to` has no host-files
+parameter and an overload that silently dropped them would be worse than not offering them.
