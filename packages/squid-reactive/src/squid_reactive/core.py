@@ -531,6 +531,22 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
         _write(owner, patch.target.name, cell, patch.value.raw())
 
 
+def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> None:
+    """Stage an explicitly unsafe overwrite, refusing shared or participant-backed targets."""
+    current = _CURRENT.get()
+    if current is None or not current.writable():
+        message = "local overwrite patches require an active writable transaction"
+        raise RuntimeError(message)
+    resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
+    for patch, _, cell in resolved:
+        if cell.address is None:
+            continue
+        detail = ConflictDetail(patch.target.identity, patch.expected_version, cell.version)
+        raise ReactiveConflictError(detail, "local overwrite policy cannot target Shared state")
+    for patch, owner, cell in resolved:
+        _write(owner, patch.target.name, cell, patch.value.raw())
+
+
 def _cell_for(owner: ReactiveOwner, name: str) -> _Cell:
     """Return the cell behind one state slot, empty until something assigns it.
 
