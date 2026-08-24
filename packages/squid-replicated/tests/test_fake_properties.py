@@ -2,7 +2,7 @@
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from squid_replicated import PreparedReplicatedInverse, ReplicatedScope
+from squid_replicated import PreparedReplicatedInverse, ReplicatedChangeToken, ReplicatedDocument, ReplicatedScope
 
 from squid_reactive import ActionCommit, on_action_commit, transaction
 
@@ -59,3 +59,48 @@ def test_semantic_inverse_preserves_later_remote_work(local_amount: int, remote_
 
     assert local.counter("votes").value == remote_amount
     assert local.set("tags").value == frozenset({"theirs"})
+
+
+def _sync(replicas: list[ReplicatedDocument], order: list[int]) -> None:
+    updates = [replica.export_since() for replica in replicas]
+    for replica in replicas:
+        for index in order:
+            replica.import_update(updates[index])
+
+
+def _discard(document: ReplicatedDocument, value: str) -> ReplicatedChangeToken:
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        document.set("tags").discard(value)
+    return commits[0].participant_changes[0].token
+
+
+@settings(max_examples=30, deadline=None)
+@given(
+    removers=st.lists(st.sampled_from((0, 1, 2)), min_size=1, max_size=3, unique=True),
+    undone=st.lists(st.sampled_from((0, 1, 2)), max_size=3, unique=True),
+    order=st.permutations((0, 1, 2)),
+)
+def test_a_value_returns_only_when_every_concurrent_removal_is_undone(
+    removers: list[int], undone: list[int], order: list[int]
+) -> None:
+    replicas = [ReplicatedScope(name).open("project") for name in ("a", "b", "c")]
+    with transaction():
+        replicas[0].set("tags").add("shared")
+    _sync(replicas, order)
+
+    tokens = {index: _discard(replicas[index], "shared") for index in removers}
+    _sync(replicas, order)
+    assert all(replica.set("tags").value == frozenset() for replica in replicas)
+
+    for index in (index for index in undone if index in tokens):
+        inverse = tokens[index].plan_inverse()
+        assert isinstance(inverse, PreparedReplicatedInverse)
+        with transaction():
+            tokens[index].stage_inverse(inverse)
+    _sync(replicas, order)
+
+    standing = {index for index in tokens if index not in undone}
+    assert len({replica.snapshot() for replica in replicas}) == 1
+    assert replicas[0].set("tags").value == (frozenset() if standing else frozenset({"shared"}))
