@@ -4,6 +4,7 @@ import json
 import logging
 import time
 import uuid
+import weakref
 from collections import deque
 from collections.abc import Callable, Mapping
 from contextlib import contextmanager
@@ -208,6 +209,7 @@ class ActionOutcomeSnapshot:
     sequence: CommitSequence | None
     reason: str | None
     changes: ChangeSummary
+    tags: frozenset[str] = frozenset()
 
     @classmethod
     def from_outcome(cls, outcome: ActionOutcome) -> ActionOutcomeSnapshot:
@@ -225,6 +227,7 @@ class ActionOutcomeSnapshot:
                 outcome.sequence,
                 None,
                 changes,
+                outcome.tags,
             )
         return cls(
             str(context.action_id),
@@ -262,6 +265,7 @@ class ActionOutcomeCodec:
             else {"runtime_id": str(outcome.sequence.runtime_id), "value": outcome.sequence.value},
             "reason": outcome.reason,
             "changes": {"cells": outcome.changes.cells, "participants": outcome.changes.participants},
+            "tags": sorted(outcome.tags),
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
@@ -283,6 +287,7 @@ class ActionOutcomeCodec:
             None if sequence is None else CommitSequence(uuid.UUID(sequence["runtime_id"]), sequence["value"]),
             payload["reason"],
             ChangeSummary(payload["changes"]["cells"], payload["changes"]["participants"]),
+            frozenset(payload.get("tags", ())),
         )
 
 
@@ -314,7 +319,7 @@ class ActionLedger:
 
 _RUNTIME_ID = uuid.uuid4()
 _sequence = 0
-_sinks: list[ActionOutcomeSink] = []
+_sinks: list[weakref.ReferenceType[ActionOutcomeSink]] = []
 _CURRENT_ACTION: ContextVar[ActionContext | None] = ContextVar("squid_reactive_action", default=None)
 _aftermath_depth: ContextVar[int] = ContextVar("squid_reactive_aftermath_depth", default=0)
 
@@ -341,22 +346,29 @@ def action_scope(context: ActionContext):
 
 
 def add_action_outcome_sink(sink: ActionOutcomeSink) -> None:
-    if sink not in _sinks:
-        _sinks.append(sink)
+    if not any(reference() is sink for reference in _sinks):
+        _sinks.append(weakref.ref(sink))
 
 
 def remove_action_outcome_sink(sink: ActionOutcomeSink) -> None:
-    if sink in _sinks:
-        _sinks.remove(sink)
+    _sinks[:] = [
+        reference for reference in _sinks if (registered := reference()) is not None and registered is not sink
+    ]
 
 
 def emit_outcome(outcome: ActionOutcome) -> None:
     snapshot = ActionOutcomeSnapshot.from_outcome(outcome)
-    for sink in tuple(_sinks):
+    live: list[weakref.ReferenceType[ActionOutcomeSink]] = []
+    for reference in _sinks:
+        sink = reference()
+        if sink is None:
+            continue
+        live.append(reference)
         try:
             sink.accept(snapshot)
         except Exception:
             _log.exception("an action outcome sink failed")
+    _sinks[:] = live
 
 
 class Aftermath:
@@ -367,14 +379,16 @@ class Aftermath:
 
     @contextmanager
     def start_action(self, name: str, *, kind: ActionKind = ActionKind.RECOVERY):
-        """Start a fresh causal action context for a new transaction."""
+        """Start a fresh causal action and transaction."""
+        from squid_reactive.core import fresh_action_transaction
+
         context = ActionContext.create(
             name,
             kind=kind,
             cause=self.outcome.context.causal_ref(),
             root_action_id=self.outcome.context.root_action_id,
         )
-        with action_scope(context):
+        with fresh_action_transaction(action_context=context):
             yield context
 
     def start_operation(self, start: Callable[[CausalRef, ActionId], Any]) -> Any:
