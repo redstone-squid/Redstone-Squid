@@ -26,7 +26,7 @@ from squid_layouts.discord.durability import (
     SnapshotError,
     Unreachable,
 )
-from squid_layouts.discord.sessions import Opened, SessionPolicy, Unprotected
+from squid_layouts.discord.sessions import Opened, Rejected, RejectionReason, SessionPolicy, Unprotected
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Text
 from squid_layouts.profiling import PresentationOutcome
@@ -155,6 +155,56 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
         await result.session.finish()
         assert await store.list_records() == ()
         assert mount.finished
+        tasks.cancel_scope.cancel()
+
+
+async def test_initial_summary_records_the_opener_as_a_participant() -> None:
+    store = MemorySnapshotStore()
+    durable = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        _, result = await open_counter(durable)
+
+        assert isinstance(result, Opened)
+        records = await store.list_records()
+        assert json.loads(records[0].summary_payload)["participants"] == [7]
+        tasks.cancel_scope.cancel()
+
+
+async def test_a_remote_summary_protects_another_user_from_replacement() -> None:
+    """A second live process protects an incumbent from the summary alone."""
+    store = MemorySnapshotStore()
+    key = SessionKey.guild("counter", 5)
+    first = runtime(store, FakeFrontend())
+
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(first.run)
+        _, opened = await open_counter(first, key=key)
+        assert isinstance(opened, Opened)
+
+        # The first process keeps its claim, so the second cannot recover the record and
+        # holds no live session for the key: the stored summary is its only evidence.
+        second = runtime(store, FakeFrontend())
+        async with anyio.create_task_group() as inner:
+            report = await inner.start(second.run)
+            assert len(report.claimed_elsewhere) == 1
+
+            mount = sl.discord.Mount(Counter(), access=Everyone(), timeout=None)
+            result = await second.open(
+                mount,
+                delivered_to(fake_message(message_id=100)),
+                recipe="counter",
+                key=key,
+                actor_id=9,
+            )
+
+            assert isinstance(result, Rejected)
+            assert result.reason is RejectionReason.PROTECTED
+            assert result.occupants[0].participants == frozenset({7})
+            assert not result.occupants[0].is_local
+            assert mount.handle is None
+            inner.cancel_scope.cancel()
         tasks.cancel_scope.cancel()
 
 
