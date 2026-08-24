@@ -225,17 +225,26 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
   in-tree defect motivating it, and the routing module docstring already states it in prose.
   Revisit if a mix-up ever ships.
-- **Abandoning a superseded resource load** *(still deferred)* — proposed 2026-08-24 alongside the generation fix,
+## No longer live (resolved, shipped, overturned, closed, or promoted elsewhere)
+
+- **Abandoning a superseded resource load** *(resolved — shipped as an optional seam in `34d56b52`)* — proposed 2026-08-24 alongside the generation fix,
   so a load whose token has been bumped is cancelled rather than run to completion. No orphan
-  motivates it: every `_load` is awaited by whoever started it, and the mount's settle pass runs
+  motivated it: every `_load` is awaited by whoever started it, and the mount's settle pass runs
   its task group to completion before the next pass, so a superseded load is wasted work rather
   than a leak — and since the resource contract makes a loader safe to run zero, one or many
   times, wasted work is all it can be. Cancellation also has to live in `squid-layouts`, because
-  `squid-reactive` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. Revisit
-  when a loader is expensive enough that the waste shows up, or when a port makes concurrent
-  supersession ordinary rather than rare.
-
-## No longer live (resolved, shipped, overturned, closed, or promoted elsewhere)
+  `squid-reactive` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. The
+  removal condition was "a loader expensive enough that the waste shows up, or a port that makes
+  concurrent supersession ordinary".
+  **Resolved 2026-08-24**, the same day, and by splitting the entry rather than meeting its
+  condition. `squid-reactive` supplies the seam — a `LoadScope` protocol and
+  `abandon_superseded_loads`, read when a load *starts* rather than when the resource is
+  constructed, so one installation covers a whole settle group — and `_new_generation` cancels
+  through it; `sl.discord` installs the `anyio.CancelScope` that makes it real. Uninstalled it is
+  inert and a loader still runs to completion, so the contract this entry protects is unchanged
+  and no loader is required to be cancel-safe. The dependency argument was right and is what
+  chose the shape. [91](91-prior-art.md) §2 records why Dioxus's stronger rule — computations may
+  be dropped at *any* `await` — stays rejected as a contract even now that the mechanism exists.
 
 - **Persistence batteries** *(resolved — built by plan 27)* — (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in

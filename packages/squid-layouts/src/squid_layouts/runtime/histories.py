@@ -198,7 +198,7 @@ class TransactionalCompensationOutbox(CompensationOutbox, Protocol):
 
 
 class MemoryCompensationOutbox:
-    """Bounded reference outbox; :meth:`restore` replaces it after a simulated restart."""
+    """Bounded reference outbox; ``records=`` rebuilds one after a simulated restart."""
 
     def __init__(self, *, limit: int = 100, records: Iterable[CompensationRecord] = ()) -> None:
         if limit < 1:
