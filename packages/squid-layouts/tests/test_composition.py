@@ -1,5 +1,7 @@
 """Composable components: embedding, key namespacing, and where invalidation travels."""
 
+from collections.abc import Callable
+
 import discord
 import pytest
 from hypothesis import given
@@ -11,7 +13,10 @@ from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.primitives import (
     Boundary,
+    Break,
+    Budget,
     Button,
+    Card,
     Heading,
     Lines,
     Node,
@@ -20,6 +25,7 @@ from squid_layouts.primitives import (
     Row,
     Text,
 )
+from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
 
@@ -108,6 +114,42 @@ class TestBoundaries:
         button = row.items[0]
         assert isinstance(button, Button)
         assert button.key == "inc"
+
+
+@pytest.mark.parametrize(
+    "wrap",
+    (
+        lambda children: Card(children=children),
+        lambda children: Budget(children=children, minimum=0, preferred=100),
+        lambda children: Break(children=children),
+    ),
+)
+def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
+    wrap: Callable[[tuple[Node | Boundary, ...]], Node],
+) -> None:
+    child = Counter("nested")
+
+    class Parent(Component):
+        def render(self) -> Node:
+            return wrap((self.boundary(child, key="child"),))
+
+    container = render_component_tree(Parent()).nodes[0]
+    assert isinstance(container, Card | Budget | Break)
+    row = next(node for node in container.children if isinstance(node, Row))
+    button = row.items[0]
+    assert isinstance(button, Button)
+    assert button.key == "child.inc"
+
+
+def test_component_expansion_preserves_container_metadata() -> None:
+    class Parent(Component):
+        def render(self) -> Panel:
+            return Panel((Text("body"),), accent=0x123456, spoiler=True)
+
+    panel = render_component_tree(Parent()).nodes[0]
+    assert isinstance(panel, Panel)
+    assert panel.accent == 0x123456
+    assert panel.spoiler is True
 
 
 class Nest(Component):
