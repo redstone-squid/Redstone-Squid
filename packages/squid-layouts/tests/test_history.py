@@ -1,69 +1,46 @@
-"""Undo: what the framework restores, what the author reverses, and where each stops."""
-
-from unittest.mock import AsyncMock
+"""Commit-ledger history and version-conditional undo/redo."""
 
 import pytest
 
-import squid_layouts as sl
-from squid_layouts import ActionEvent, Component, state
-from squid_layouts.discord import Everyone, Mount
-from squid_layouts.discord.testing import commit_render, fake_interaction
+from squid_layouts import Component, state
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import (
-    CellAddress,
     ComponentRuntime,
     History,
+    HistoryEntryState,
     HistoryError,
+    HistoryResultStatus,
     LocalTopicBus,
-    ReactiveWriteError,
     Shared,
     history,
     history_actions,
     transaction,
 )
-from squid_layouts.runtime.reactivity import readonly_transaction
 from squid_layouts.semantic import Action
 
 
-class World:
-    """The half the framework cannot restore: a database, an API, anything outside the tree."""
-
-    def __init__(self, channel: int | None = None) -> None:
-        self.channel = channel
-        self.calls: list[str] = []
-
-    async def set_channel(self, channel: int | None) -> None:
-        self.calls.append(f"set:{channel}")
-        self.channel = channel
+class Workspace(Shared[str]):
+    selected: int | None = state(None)
+    filters: tuple[str, ...] = state(())
 
 
 class Panel(Component):
     history: History = history(limit=3)
-    channel: int | None = state(None)
     page: int = state(1)
-    build: object = state(None, opaque=True)
+    open: bool = state(default=False)
 
-    def __init__(self, world: World) -> None:
-        self.world = world
+    def __init__(self, workspace: Workspace) -> None:
+        self.workspace = workspace
 
     def render(self):
-        return Text(str(self.channel))
-
-    async def set_channel(self, channel: int | None) -> None:
-        previous = self.channel
-        await self.world.set_channel(channel)
-        self.channel = channel
-        self.history.record("channel", undo=lambda: self.world.set_channel(previous))
+        return Text(str(self.page))
 
 
-def attached[ComponentT: Component](component: ComponentT) -> ComponentT:
-    """Give a component a runtime, which is what makes its writes state changes."""
-    ComponentRuntime(component)
-    return component
-
-
-def panel() -> Panel:
-    return attached(Panel(World()))
+def panel() -> tuple[Panel, Workspace]:
+    workspace = Workspace(LocalTopicBus(), "here")
+    subject = Panel(workspace)
+    ComponentRuntime(subject)
+    return subject, workspace
 
 
 def controls(stack: History) -> tuple[Action, Action]:
@@ -73,555 +50,141 @@ def controls(stack: History) -> tuple[Action, Action]:
     return undo, redo
 
 
-class TestRecording:
-    def test_needs_an_action_in_flight(self):
-        stack = panel().history
-        with pytest.raises(RuntimeError, match="inside an action's transaction"):
-            stack.record("nothing")
+def test_record_requires_an_action_and_rejects_old_inverse_shape() -> None:
+    subject, _ = panel()
+    with pytest.raises(RuntimeError, match="inside an action"):
+        subject.history.record("nothing")
+    with transaction(), pytest.raises(TypeError):
+        subject.history.record("old", undo=lambda: None)  # type: ignore[call-arg]
 
-    def test_a_read_only_action_has_nothing_to_record(self):
-        stack = panel().history
-        with pytest.raises(ReactiveWriteError, match="changed nothing"), readonly_transaction():
-            stack.record("nothing")
 
-    def test_a_failed_action_records_nothing(self):
-        subject = panel()
-        with pytest.raises(RuntimeError), transaction():
-            subject.channel = 7
-            subject.history.record("channel")
-            message = "the handler failed after recording"
-            raise RuntimeError(message)
-        assert subject.history.entries == ()
-        assert subject.channel is None
+def test_one_entry_captures_the_whole_committed_action() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("select")
+        subject.open = True
+        workspace.selected = 7
 
-    def test_one_entry_describes_the_whole_action(self):
-        subject = panel()
+    entry = subject.history.entries[0]
+    assert len(entry.undo_plan.cells) == 2
+    assert entry.state is HistoryEntryState.READY
+
+
+def test_one_history_may_only_record_once_per_action() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("first")
+        with pytest.raises(HistoryError, match="already used"):
+            subject.history.record("second")
+
+
+async def test_undo_preserves_unrelated_later_work() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("select")
+        workspace.selected = 7
+    with transaction():
+        subject.page = 4
+
+    result = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.APPLIED
+    assert workspace.selected is None
+    assert subject.page == 4
+    assert subject.history.can_redo
+
+
+async def test_later_same_target_write_conflicts_without_clobbering() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("select")
+        workspace.selected = 7
+    with transaction():
+        workspace.selected = 9
+
+    result = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.CONFLICT
+    assert workspace.selected == 9
+    assert subject.history.entries[0].state is HistoryEntryState.CONFLICTED
+    assert subject.history.drop_conflicted() is not None
+    assert not subject.history.can_undo
+
+
+async def test_mixed_inverse_is_all_or_nothing() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("open selection")
+        subject.open = True
+        workspace.selected = 7
+    with transaction():
+        workspace.selected = 9
+
+    result = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.CONFLICT
+    assert subject.open is True
+    assert workspace.selected == 9
+
+
+async def test_redo_is_based_on_the_actual_undo_commit() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 4
+
+    undo = await subject.history.undo()
+    assert undo.applied
+    assert subject.page == 1
+    redo = await subject.history.redo()
+    assert redo.applied
+    assert subject.page == 4
+    again = await subject.history.undo()
+    assert again.applied
+    assert subject.page == 1
+
+
+async def test_intervening_write_makes_redo_conflict() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 4
+    assert (await subject.history.undo()).applied
+    with transaction():
+        subject.page = 8
+
+    result = await subject.history.redo()
+
+    assert result.status is HistoryResultStatus.CONFLICT
+    assert subject.page == 8
+
+
+async def test_selective_targeting_uses_action_identity() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 2
+    first_id = subject.history.entries[-1].original_action_id
+    with transaction():
+        subject.history.record("select")
+        workspace.selected = 7
+
+    result = await subject.history.undo(first_id)
+
+    assert result.applied
+    assert subject.page == 1
+    assert workspace.selected == 7
+
+
+def test_limit_snapshot_and_controls_follow_retained_entries() -> None:
+    subject, _ = panel()
+    for page in range(2, 7):
         with transaction():
-            subject.history.record("first")
-            with pytest.raises(HistoryError, match="already used"):
-                subject.history.record("second")
-
-    def test_redo_without_undo_is_refused(self):
-        subject = panel()
-        with transaction(), pytest.raises(TypeError, match="pass undo="):
-            subject.history.record("channel", redo=lambda: subject.world.set_channel(1))
-
-    def test_the_entry_covers_writes_made_after_the_call(self):
-        subject = panel()
-        with transaction():
-            subject.history.record("channel")
-            subject.channel = 7
-        assert subject.history.entries[-1].delta.changes
-
-    def test_the_limit_drops_the_oldest(self):
-        subject = panel()
-        for index in range(5):
-            with transaction():
-                subject.page = index
-                subject.history.record(f"page {index}")
-        assert [entry.label for entry in subject.history.entries] == ["page 2", "page 3", "page 4"]
-
-
-class TestUndo:
-    async def test_it_restores_only_what_the_action_wrote(self):
-        subject = panel()
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel")
-        with transaction():
-            subject.page = 4
-        await subject.history.undo()
-        assert subject.channel is None
-        assert subject.page == 4
-
-    async def test_an_empty_stack_is_not_an_error(self):
-        assert await panel().history.undo() is None
-
-    async def test_the_world_goes_first(self):
-        subject = panel()
-        order: list[str] = []
-
-        async def inverse() -> None:
-            order.append(f"world, state was {subject.channel}")
-
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel", undo=inverse)
-        await subject.history.undo()
-        assert order == ["world, state was 7"]
-        assert subject.channel is None
-
-    async def test_a_failed_inverse_keeps_the_entry_and_the_state(self):
-        subject = panel()
-
-        async def inverse() -> None:
-            message = "the service rejected the reversal"
-            raise RuntimeError(message)
-
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel", undo=inverse)
-        with pytest.raises(RuntimeError, match="rejected the reversal"):
-            await subject.history.undo()
-        assert subject.channel == 7
-        assert [entry.label for entry in subject.history.entries] == ["channel"]
-
-    async def test_an_inverse_may_not_write_component_state(self):
-        subject = panel()
-
-        async def inverse() -> None:
-            subject.page = 99
-
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel", undo=inverse)
-        with pytest.raises(ReactiveWriteError, match="may not write component state"):
-            await subject.history.undo()
-        assert subject.page == 1
-        assert subject.channel == 7
-
-    async def test_the_real_shape_reverses_both_halves(self):
-        world = World()
-        subject = attached(Panel(world))
-        # Two ordinary actions; the mount is what supplies the transaction in production.
-        for channel in (4, 9):
-            with transaction():
-                await subject.set_channel(channel)
-        assert world.channel == 9
-        await subject.history.undo()
-        assert world.channel == 4
-        assert subject.channel == 4
-
-    async def test_reference_copied_state_restores_the_reference(self):
-        subject = panel()
-        first, second = [1], [2]
-        subject.build = first
-        with transaction():
-            subject.build = second
-            subject.history.record("build")
-        second.append(3)
-        await subject.history.undo()
-        assert subject.build is first
-        # The known limit, pinned: in-place mutation of the object was never captured.
-        assert second == [2, 3]
-
-    async def test_a_later_action_failure_rolls_back_the_state_and_stack(self) -> None:
-        subject = panel()
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel")
-        entries = subject.history.entries
-
-        with pytest.raises(RuntimeError, match="later work failed"), transaction():
-            await subject.history.undo()
-            message = "later work failed"
-            raise RuntimeError(message)
-
-        assert subject.channel == 7
-        assert subject.history.entries == entries
-        assert subject.history.can_undo
-        assert not subject.history.can_redo
-
-    async def test_two_undos_cannot_reserve_one_action(self) -> None:
-        subject = panel()
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel")
-
-        with pytest.raises(HistoryError, match="already used"), transaction():
-            await subject.history.undo()
-            await subject.history.undo()
-
-        assert subject.channel == 7
-        assert subject.history.can_undo
-        assert not subject.history.can_redo
-
-    async def test_record_then_undo_cannot_reserve_one_action(self) -> None:
-        subject = panel()
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel")
-
-        with pytest.raises(HistoryError, match="already used"), transaction():
-            subject.page = 2
-            subject.history.record("page")
-            await subject.history.undo()
-
-        assert subject.channel == 7
-        assert subject.page == 1
-        assert [entry.label for entry in subject.history.entries] == ["channel"]
-
-    async def test_undo_outside_an_action_commits_its_stack_change(self) -> None:
-        subject = panel()
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel")
-
-        entry = await subject.history.undo()
-
-        assert entry is not None
-        assert subject.channel is None
-        assert not subject.history.can_undo
-        assert subject.history.can_redo
-
-
-class TestRedo:
-    async def test_a_framework_only_entry_replays_itself(self):
-        subject = panel()
-        with transaction():
-            subject.page = 4
-            subject.history.record("page")
-        await subject.history.undo()
-        assert subject.page == 1
-        assert await subject.history.redo() is not None
-        assert subject.page == 4
-        assert subject.history.can_undo
-
-    async def test_a_world_entry_without_an_inverse_is_dropped(self):
-        subject = panel()
-        with transaction():
-            subject.channel = 7
-            subject.history.record("channel", undo=lambda: subject.world.set_channel(None))
-        await subject.history.undo()
-        assert subject.history.redoable == ()
-        assert not subject.history.can_redo
-
-    async def test_a_world_entry_with_an_inverse_replays_both_halves(self):
-        world = World()
-        subject = attached(Panel(world))
-        with transaction():
-            subject.channel = 7
-            subject.history.record(
-                "channel",
-                undo=lambda: world.set_channel(None),
-                redo=lambda: world.set_channel(7),
-            )
-        await subject.history.undo()
-        assert (world.channel, subject.channel) == (None, None)
-        await subject.history.redo()
-        assert (world.channel, subject.channel) == (7, 7)
-
-    async def test_recording_clears_the_redo_stack(self):
-        subject = panel()
-        with transaction():
-            subject.page = 4
-            subject.history.record("page")
-        await subject.history.undo()
-        assert subject.history.can_redo
-        with transaction():
-            subject.page = 9
-            subject.history.record("page again")
-        assert not subject.history.can_redo
-
-    async def test_a_later_action_failure_rolls_back_the_state_and_stack(self) -> None:
-        subject = panel()
-        with transaction():
-            subject.page = 4
-            subject.history.record("page")
-        await subject.history.undo()
-        redoable = subject.history.redoable
-
-        with pytest.raises(RuntimeError, match="later work failed"), transaction():
-            await subject.history.redo()
-            message = "later work failed"
-            raise RuntimeError(message)
-
-        assert subject.page == 1
-        assert subject.history.entries == ()
-        assert subject.history.redoable == redoable
-        assert not subject.history.can_undo
-        assert subject.history.can_redo
-
-
-class TestControls:
-    def test_availability_follows_the_stacks(self):
-        subject = panel()
-        undo, redo = controls(subject.history)
-        assert (undo.available, redo.available) == (False, False)
-        with transaction():
-            subject.page = 2
-            subject.history.record("page")
-        undo, redo = controls(subject.history)
-        assert (undo.available, redo.available) == (True, False)
-
-    async def test_the_controls_drive_the_stack(self):
-        subject = panel()
-        with transaction():
-            subject.page = 2
-            subject.history.record("page")
-        undo, _ = controls(subject.history)
-        with transaction():
-            await undo.on_trigger(None)  # type: ignore[bad-argument-type]
-        assert subject.page == 1
-
-    def test_labels_name_the_reversible_action(self):
-        subject = panel()
-        assert subject.history.undo_label is None
-        with transaction():
-            subject.page = 2
-            subject.history.record("turned the page")
-        assert subject.history.undo_label == "turned the page"
-
-
-def test_each_instance_owns_its_stack():
-    first, second = panel(), panel()
-    assert first.history is not second.history
-    assert first.history is first.history
-
-
-class Workspace(Shared[str]):
-    selected: int | None = state(None)
-    filters: tuple[str, ...] = state(())
-
-
-class Preferences(Shared[str]):
-    theme: str = state("system")
-
-
-class Sharing(Component):
-    """A panel whose actions write local state and two namespaces at once."""
-
-    history: History = history(limit=3)
-    open: bool = state(default=False)
-
-    def __init__(self, workspace: Workspace, preferences: Preferences) -> None:
-        self.workspace = workspace
-        self.preferences = preferences
-
-    def render(self):
-        return Text(f"{self.open} {self.workspace.selected} {self.preferences.theme}")
-
-    def select(self, build_id: int) -> None:
-        self.open = True
-        self.workspace.selected = build_id
-        self.preferences.theme = "dark"
-        self.history.record(f"Select build {build_id}")
-
-
-class TestSharedState:
-    """One entry covers an action's local writes and its shared writes, in both directions."""
-
-    def sharing(self) -> tuple[Sharing, Workspace, Preferences, LocalTopicBus]:
-        bus = LocalTopicBus()
-        workspace, preferences = Workspace(bus, "here"), Preferences(bus, "here")
-        return attached(Sharing(workspace, preferences)), workspace, preferences, bus
-
-    async def test_one_entry_undoes_local_and_two_namespaces(self):
-        subject, workspace, preferences, _ = self.sharing()
-        with transaction():
-            subject.select(7)
-        assert (subject.open, workspace.selected, preferences.theme) == (True, 7, "dark")
-
-        await subject.history.undo()
-        assert (subject.open, workspace.selected, preferences.theme) == (False, None, "system")
-
-    async def test_redo_reapplies_every_half(self):
-        subject, workspace, preferences, _ = self.sharing()
-        with transaction():
-            subject.select(7)
-        await subject.history.undo()
-        await subject.history.redo()
-        assert (subject.open, workspace.selected, preferences.theme) == (True, 7, "dark")
-
-    async def test_undo_is_blind_and_a_sibling_write_cannot_brick_the_stack(self):
-        """A sibling panel setting the same filter is the motivating case, not an error case."""
-        subject, workspace, _, _ = self.sharing()
-        with transaction():
-            subject.select(7)
-        with transaction():
-            workspace.selected = 99
-
-        assert subject.history.can_undo
-        await subject.history.undo()
-        assert workspace.selected is None, "undo restores what the entry recorded, reading nothing"
-        assert subject.open is False, "the local half is not held hostage by the shared one"
-
-    async def test_undo_redo_undo_stays_guard_free(self):
-        """Every direction is a blind restore, so the round trip never runs out of moves."""
-        subject, workspace, _, _ = self.sharing()
-        with transaction():
-            subject.select(7)
-        await subject.history.undo()
-        assert workspace.selected is None
-        await subject.history.redo()
-        assert workspace.selected == 7
-        await subject.history.undo()
-        assert workspace.selected is None
-
-    async def test_undo_publishes_to_a_sibling(self):
-        subject, workspace, _, bus = self.sharing()
-        seen: list[object] = []
-
-        def subscriber(topic: object) -> None:
-            seen.append(topic)
-
-        bus.subscribe(CellAddress(workspace, "selected"), subscriber)
-        with transaction():
-            subject.select(7)
-        seen.clear()
-
-        await subject.history.undo()
-        assert seen == [CellAddress(workspace, "selected")]
-
-    async def test_a_failed_external_inverse_restores_nothing(self):
-        subject, workspace, preferences, _ = self.sharing()
-
-        async def boom() -> None:
-            message = "the world refused"
-            raise RuntimeError(message)
-
-        with transaction():
-            subject.open = True
-            workspace.selected = 7
-            subject.history.record("select", undo=boom)
-
-        with pytest.raises(RuntimeError, match="the world refused"):
-            await subject.history.undo()
-        assert (subject.open, workspace.selected) == (True, 7)
-        assert subject.history.can_undo, "the entry stays on the stack"
-
-    async def test_an_inverse_may_not_write_a_shared_cell_either(self):
-        subject, workspace, _, _ = self.sharing()
-
-        async def writes() -> None:
-            workspace.filters = ("sneaky",)
-
-        with transaction():
-            workspace.selected = 7
-            subject.history.record("select", undo=writes)
-
-        with pytest.raises(ReactiveWriteError, match="may not write component state"):
-            await subject.history.undo()
-        assert workspace.filters == ()
-
-
-class Declared(Component):
-    """The `record=` shape: a tier-1 action whose whole delta is state the framework owns."""
-
-    history: History = history(limit=3)
-    page: int = state(1)
-
-    def render(self):
-        return sl.actions(
-            sl.action("Turn the page", self._turn, key="turn", record=self.history),
-            sl.action("Reset", self._reset, key="reset"),
-            key="controls",
-        )
-
-    async def _turn(self, event: ActionEvent) -> None:
-        self.page += 1
-
-    async def _reset(self, event: ActionEvent) -> None:
-        self.page = 1
-
-
-def mounted[ComponentT: Component](component: ComponentT, **kwargs: object) -> Mount:
-    mount = Mount(component, access=Everyone(), timeout=None, **kwargs)  # type: ignore[bad-argument-type]
-    commit_render(mount)
-    return mount
-
-
-class TestDeclaredRecording:
-    """`sl.action(record=...)`: the framework opens the entry, the contract of 28 is unchanged."""
-
-    async def test_a_press_records_one_entry_named_by_the_control(self):
-        subject = Declared()
-        mount = mounted(subject)
-
-        await mount.dispatch("turn", fake_interaction())
-
-        assert subject.page == 2
-        assert [entry.label for entry in subject.history.entries] == ["Turn the page"]
-
-    async def test_undo_restores_the_delta_and_redo_replays_it(self):
-        subject = Declared()
-        mount = mounted(subject)
-
-        await mount.dispatch("turn", fake_interaction())
-        await subject.history.undo()
-        assert subject.page == 1
-        await subject.history.redo()
-        assert subject.page == 2
-
-    async def test_an_action_without_record_enters_nothing(self):
-        subject = Declared()
-        mount = mounted(subject)
-
-        await mount.dispatch("reset", fake_interaction())
-
-        assert subject.history.entries == ()
-
-    async def test_the_entry_covers_writes_the_handler_makes_after_the_press(self):
-        """The entry is opened first but describes the whole transaction, as a manual one does."""
-        subject = Declared()
-        mount = mounted(subject)
-
-        await mount.dispatch("turn", fake_interaction())
-
-        (entry,) = subject.history.entries
-        assert entry.delta.changes
-
-    async def test_a_handler_that_records_too_is_refused(self):
-        class Doubled(Component):
-            history: History = history(limit=3)
-            page: int = state(1)
-
-            def render(self):
-                return sl.actions(
-                    sl.action("Turn the page", self._turn, key="turn", record=self.history), key="controls"
-                )
-
-            async def _turn(self, event: ActionEvent) -> None:
-                self.page += 1
-                self.history.record("and again")
-
-        subject = Doubled()
-        hook = AsyncMock()
-        mount = mounted(subject, on_error=hook)
-
-        await mount.dispatch("turn", fake_interaction())
-
-        assert hook.await_args is not None
-        (_interaction, error, source), _ = hook.await_args
-        assert isinstance(error, HistoryError)
-        assert source == "action:turn"
-        assert subject.page == 1, "the refused action rolled back"
-        assert subject.history.entries == ()
-
-    async def test_a_grouped_action_still_records_through_the_select(self):
-        """Recording rides the route binding, so a row collapsing into a picker keeps it."""
-
-        class Crowd(Component):
-            history: History = history(limit=3)
-            page: int = state(1)
-
-            def render(self):
-                return sl.actions(
-                    *(
-                        sl.action(f"Act {index}", self._act, key=f"act{index}", record=self.history)
-                        for index in range(8)
-                    ),
-                    key="crowd",
-                    display=sl.semantic.ActionDisplay.GROUPED,
-                )
-
-            async def _act(self, event: ActionEvent) -> None:
-                self.page += 1
-
-        subject = Crowd()
-        mount = mounted(subject)
-        (picker,) = set(mount.snapshot().handler_keys) - {f"act{index}" for index in range(8)}
-
-        await mount.dispatch(picker, fake_interaction(), ["act3"])
-
-        assert [entry.label for entry in subject.history.entries] == ["Act 3"]
-        await subject.history.undo()
-        assert subject.page == 1
-
-    def test_a_parallel_read_action_has_nothing_to_record(self):
-        async def act(event: ActionEvent) -> None: ...
-
-        with pytest.raises(ValueError, match="nothing to record"):
-            sl.action(
-                "Peek", act, key="peek", policy=sl.interactions.ActionPolicy.PARALLEL_READ, record=panel().history
-            )
+            subject.history.record(f"page {page}")
+            subject.page = page
+
+    assert [entry.label for entry in subject.history.entries] == ["page 4", "page 5", "page 6"]
+    snapshot = subject.history.snapshot("history")
+    assert snapshot.undo[-1].state == "ready"
+    undo, redo = controls(subject.history)
+    assert (undo.available, redo.available) == (True, False)

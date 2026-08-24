@@ -4,7 +4,7 @@ import contextvars
 
 import pytest
 
-from squid_reactive import LocalTopicBus, Shared, SharedStateConflictError, state, transaction
+from squid_reactive import LocalTopicBus, ReactiveConflictError, Shared, state, transaction
 from squid_reactive.core import _CURRENT
 from squid_reactive.topics import Address, CellAddress
 
@@ -32,7 +32,7 @@ def test_shared_read_write_conflict_rolls_back() -> None:
     bus = LocalTopicBus()
     preferences = Preferences(bus, 7)
 
-    with pytest.raises(SharedStateConflictError), transaction():
+    with pytest.raises(ReactiveConflictError), transaction():
         assert preferences.theme == "dark"
         preferences.theme = "ours"
         descriptor = type(preferences)._state_descriptors["theme"]

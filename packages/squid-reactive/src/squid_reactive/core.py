@@ -656,7 +656,11 @@ class _Transaction:
             raise ReactiveConflictError(detail, message)
 
     def target_id(self, cell: _Cell) -> str:
-        return str(cell.address) if cell.address is not None else f"cell:{id(cell)}"
+        if cell.address is None:
+            return f"cell:{id(cell)}"
+        if hasattr(cell.address, "owner") and hasattr(cell.address, "name"):
+            return f"{cell.address.owner!r}.{cell.address.name}"
+        return str(cell.address)
 
     def require_version(self, cell: _Cell, version: int) -> None:
         existing = self.preconditions.get(cell)
