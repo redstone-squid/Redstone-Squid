@@ -1,5 +1,8 @@
 """Reactive replicated documents integrated as Squid action participants."""
 
+import base64
+import binascii
+import json
 import weakref
 from collections import deque
 from collections.abc import Callable
@@ -41,11 +44,20 @@ class ReplicatedClosedError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
+class PreparedReplicatedInverse:
+    """An opaque semantic inverse tied to the backend-history generation that planned it."""
+
+    operations: tuple[FakeOperation, ...]
+    token_epoch: int
+
+
+@dataclass(frozen=True, slots=True)
 class ReplicatedChangeToken:
     """An action-addressable semantic token retained by opted-in history."""
 
     document: weakref.ReferenceType[ReplicatedDocument]
     operations: tuple[FakeOperation, ...]
+    token_epoch: int
 
     def encode(self) -> bytes:
         """Encode this token for durable history while its document remains available."""
@@ -53,18 +65,48 @@ class ReplicatedChangeToken:
         if document is None or document.closed:
             message = "replicated history token no longer has a live document"
             raise ReplicatedClosedError(message)
-        return document.engine.encode_token(self.operations)
+        payload = {
+            "backend": document.engine.backend_id,
+            "document": document.document_id,
+            "payload": base64.b64encode(document.engine.encode_token(self.operations)).decode("ascii"),
+            "schema": 1,
+            "token_epoch": self.token_epoch,
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
     @classmethod
     def decode(cls, document: ReplicatedDocument, token: bytes) -> ReplicatedChangeToken:
         """Reload an encoded token against the current instance of its document."""
         document._ensure_open()
-        return cls(weakref.ref(document), document.engine.decode_token(token))
+        try:
+            payload: Any = json.loads(token)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            message = "replicated history token has an unsupported or corrupt schema"
+            raise ValueError(message) from error
+        if not isinstance(payload, dict) or payload.get("schema") != 1:
+            message = "replicated history token has an unsupported or corrupt schema"
+            raise ValueError(message)
+        if payload.get("backend") != document.engine.backend_id or payload.get("document") != document.document_id:
+            message = "replicated history token targets the wrong backend or document"
+            raise ValueError(message)
+        encoded = payload.get("payload")
+        token_epoch = payload.get("token_epoch")
+        if not isinstance(encoded, str) or not isinstance(token_epoch, int):
+            message = "replicated history token has an unsupported or corrupt schema"
+            raise ValueError(message)  # noqa: TRY004
+        try:
+            operations = document.engine.decode_token(base64.b64decode(encoded, validate=True))
+        except (binascii.Error, TypeError, ValueError) as error:
+            message = "replicated history token has corrupt backend data"
+            raise ValueError(message) from error
+        return cls(weakref.ref(document), operations, token_epoch)
 
-    def plan_inverse(self) -> tuple[FakeOperation, ...] | ConflictDetail:
+    def plan_inverse(self) -> PreparedReplicatedInverse | ConflictDetail:
         document = self.document()
         if document is None or document.closed:
             return ConflictDetail("replicated:closed", 0, 0)
+        if self.token_epoch != document.token_epoch:
+            return ConflictDetail(f"replicated:{document.document_id}:expired", self.token_epoch, document.token_epoch)
         inverse: list[FakeOperation] = []
         for operation in reversed(self.operations):
             if operation.kind == "increment":
@@ -76,15 +118,22 @@ class ReplicatedChangeToken:
                 )
             else:
                 return ConflictDetail(f"replicated:{operation.path}", 0, 0)
-        return tuple(inverse)
+        return PreparedReplicatedInverse(tuple(inverse), self.token_epoch)
 
-    def stage_inverse(self, operations: tuple[FakeOperation, ...]) -> None:
+    def stage_inverse(self, inverse: PreparedReplicatedInverse) -> None:
         document = self.document()
         if document is None or document.closed:
             detail = ConflictDetail("replicated:closed", 0, 0)
             raise ReactiveConflictError(detail, "replicated document is no longer available")
+        if inverse.token_epoch != document.token_epoch:
+            detail = ConflictDetail(
+                f"replicated:{document.document_id}:expired",
+                inverse.token_epoch,
+                document.token_epoch,
+            )
+            raise ReactiveConflictError(detail, "replicated inverse expired before it could be staged")
         participant = document._participant()
-        for operation in operations:
+        for operation in inverse.operations:
             participant.branch.apply(operation)
 
 
@@ -115,7 +164,7 @@ class _ReplicationParticipant:
     def describe_change(self, prepared: PreparedFakeUpdate) -> ParticipantChange | None:
         if not prepared.operations:
             return None
-        token = ReplicatedChangeToken(weakref.ref(self.document), prepared.operations)
+        token = ReplicatedChangeToken(weakref.ref(self.document), prepared.operations, self.document.token_epoch)
         return ParticipantChange(self.document.identity, token, ChangeSummary(participants=1))
 
     def apply(self, prepared: PreparedFakeUpdate) -> None:
@@ -144,10 +193,16 @@ class ReplicatedDocument:
         self._pending_updates: deque[ReplicatedUpdate] = deque(maxlen=_PENDING_UPDATE_LIMIT)
         self._seen_updates: deque[str] = deque(maxlen=_DEDUP_LIMIT)
         self._seen_update_ids: set[str] = set()
+        self._token_epoch = 0
 
     @property
     def identity(self) -> str:
         return f"replicated:{self.document_id}"
+
+    @property
+    def token_epoch(self) -> int:
+        """Return the local backend-history generation used by retained inverse tokens."""
+        return self._token_epoch
 
     def snapshot(self) -> FakeSnapshot:
         self._ensure_open()
@@ -232,6 +287,11 @@ class ReplicatedDocument:
         updates = tuple(self._pending_updates)
         self._pending_updates.clear()
         return updates
+
+    def expire_history_tokens(self) -> None:
+        """Expire retained inverse authority before backend compaction discards its metadata."""
+        self._ensure_open()
+        self._token_epoch += 1
 
     def close(self) -> None:
         self.closed = True

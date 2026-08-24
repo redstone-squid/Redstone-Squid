@@ -2,7 +2,7 @@
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from squid_replicated import ReplicatedScope
+from squid_replicated import PreparedReplicatedInverse, ReplicatedScope
 
 from squid_reactive import ActionCommit, on_action_commit, transaction
 
@@ -53,7 +53,7 @@ def test_semantic_inverse_preserves_later_remote_work(local_amount: int, remote_
 
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
-    assert isinstance(inverse, tuple)
+    assert isinstance(inverse, PreparedReplicatedInverse)
     with transaction():
         token.stage_inverse(inverse)
 
