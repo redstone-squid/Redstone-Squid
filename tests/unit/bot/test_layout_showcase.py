@@ -301,15 +301,23 @@ class TestSharedAppearance:
 class TestLobby:
     """The roster is session membership, so the panel holds none of it."""
 
-    async def opened(self, *, capacity: int = 4) -> tuple[SessionRegistry, Lobby]:
-        registry = SessionRegistry()
-        panel = Lobby(registry, host_id=7)
+    async def opened(
+        self,
+        *,
+        capacity: int = 4,
+        registry: SessionRegistry | None = None,
+        guild_id: int = 5,
+        host_id: int = 7,
+    ) -> tuple[SessionRegistry, Lobby]:
+        registry = SessionRegistry() if registry is None else registry
+        panel = Lobby(registry, host_id=host_id)
         result = await registry.open(
             panel.mount(),
             delivered_to(fake_message(message_id=1)),
-            key=SessionKey.guild("showcase-lobby", 5),
-            actor_id=7,
+            key=SessionKey.guild("showcase-lobby", guild_id),
+            actor_id=host_id,
             capacity=capacity,
+            quota=1,
         )
         assert isinstance(result, sl.discord.sessions.Opened)
         return registry, panel
@@ -358,3 +366,15 @@ class TestLobby:
 
         assert panel.started_with == 2
         assert "Started with 2 players." in _texts(commit_render(panel._mount))
+
+    async def test_a_reader_cannot_hold_a_seat_in_two_servers(self) -> None:
+        """Two lobbies, two hosts, one reader: the quota is what stops the second seat."""
+        registry, here = await self.opened()
+        _, elsewhere = await self.opened(registry=registry, guild_id=6, host_id=9)
+
+        await elsewhere._mount.dispatch("join", fake_interaction(user_id=8))
+        await here._mount.dispatch("join", fake_interaction(user_id=8))
+
+        assert registry.sessions_for_member(8) == (registry.sessions_for_member(8)[0],)
+        assert 8 in elsewhere._session().members
+        assert 8 not in here._session().members
