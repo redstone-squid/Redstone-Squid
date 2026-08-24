@@ -12,6 +12,7 @@ from squid_reactive.core import (
     _CONSUMER,
     ReactiveCycleError,
     ReactiveOwner,
+    TransactionView,
     _bump_epoch,
     action_participant,
     cycle_path,
@@ -128,7 +129,7 @@ class _Replacement:
         self._resource = resource
         self.value: Any = _MISSING
 
-    def prepare(self) -> dict[Any, int] | None:
+    def prepare(self, view: TransactionView) -> dict[Any, int] | None:
         """Settle every source while the action can still roll back.
 
         `None` means this participant staged no replacement, which is why `apply` can be
@@ -142,10 +143,13 @@ class _Replacement:
         if prepared is not None:
             self._resource._replace_now(self.value, baseline=prepared)
 
-    def abort(self) -> None:
+    def describe_change(self, prepared: dict[Any, int] | None) -> None:
+        return None
+
+    def abort(self, prepared: dict[Any, int] | None, cause: BaseException) -> None:
         self.value = _MISSING
 
-    def finalize(self) -> None:
+    def finalize(self, prepared: dict[Any, int] | None) -> None:
         """Installing already invalidated the owner, which is the only watcher there is."""
 
 
