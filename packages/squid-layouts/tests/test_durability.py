@@ -12,10 +12,10 @@ from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,
     DurableSessionStore,
-    MemorySnapshotStore,
+    MemorySessionStore,
     MountStateCodec,
     MountStateError,
-    SQLiteSnapshotStore,
+    SQLiteSessionStore,
 )
 from squid_layouts.discord.testing import commit_render
 from squid_layouts.primitives import Lines, Paginate, Text
@@ -48,8 +48,8 @@ def _registry(*, version: int = 1, migrations=None) -> ComponentRegistry:
 
 def _snapshot_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
     if kind == "memory":
-        return MemorySnapshotStore(clock=clock)
-    return SQLiteSnapshotStore(path, table_name="durable_sessions", clock=clock)
+        return MemorySessionStore(clock=clock)
+    return SQLiteSessionStore(path, table_name="durable_sessions", clock=clock)
 
 
 async def _publish(
@@ -116,7 +116,7 @@ async def test_admission_atomically_retires_victims_and_fences_their_writers(kin
 
 async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
     now = [100.0]
-    store = SQLiteSnapshotStore(tmp_path / "snapshots.sqlite3", clock=lambda: now[0])
+    store = SQLiteSessionStore(tmp_path / "snapshots.sqlite3", clock=lambda: now[0])
     stale = await store.reserve("scope", "first", 10.0)
     assert stale is not None
     now[0] = 110.1
@@ -139,13 +139,13 @@ async def test_lost_admission_token_cannot_publish(tmp_path: Path) -> None:
 
 async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
     path = tmp_path / "snapshots.sqlite3"
-    writer = SQLiteSnapshotStore(path)
+    writer = SQLiteSessionStore(path)
     token = await _publish(writer, key="session")
     assert await writer.release(token)
-    contenders = [SQLiteSnapshotStore(path), SQLiteSnapshotStore(path)]
+    contenders = [SQLiteSessionStore(path), SQLiteSessionStore(path)]
     results: list[bool] = []
 
-    async def claim(store: SQLiteSnapshotStore, owner: str) -> None:
+    async def claim(store: SQLiteSessionStore, owner: str) -> None:
         results.append(await store.claim("session", owner, 30.0) is not None)
 
     async with anyio.create_task_group() as tasks:
@@ -157,7 +157,7 @@ async def test_sqlite_store_serializes_claim_contention(tmp_path: Path) -> None:
 
 def test_snapshot_store_rejects_unsafe_table_names(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="SQL identifier"):
-        SQLiteSnapshotStore(tmp_path / "snapshots.sqlite3", table_name="snapshots; DROP TABLE users")
+        SQLiteSessionStore(tmp_path / "snapshots.sqlite3", table_name="snapshots; DROP TABLE users")
 
 
 def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() -> None:

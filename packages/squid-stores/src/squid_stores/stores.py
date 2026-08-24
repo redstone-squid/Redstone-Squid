@@ -14,6 +14,9 @@ from typing import Protocol, runtime_checkable
 
 _SCHEMA_VERSION = 2
 _LEGACY_SCHEMA_KEY = "__squid_layouts_schema_version__"
+# The table keeps its original name: renaming the class is a source change, renaming a
+# deployed table is a migration. Every message below that says "snapshot" is about this
+# table or its schema, and is accurate.
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
 
 
@@ -100,7 +103,7 @@ class _MemoryLease:
     expires_at: float
 
 
-class MemorySnapshotStore:
+class MemorySessionStore:
     """In-process implementation of the complete fenced store contract."""
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
@@ -254,7 +257,7 @@ class MemorySnapshotStore:
         return current is not None and current.owner == owner and current.fence == fence
 
 
-class SQLiteSnapshotStore:
+class SQLiteSessionStore:
     """Persist fenced durable sessions in a SQLite file.
 
     SQLite is a single-host/shared-filesystem option. Lease expiry uses the

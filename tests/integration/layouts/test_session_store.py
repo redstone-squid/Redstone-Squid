@@ -5,7 +5,7 @@ import uuid
 import asyncpg
 from testcontainers.postgres import PostgresContainer
 
-from squid_layouts.discord.durability import PostgresSnapshotStore
+from squid_layouts.discord.durability import PostgresSessionStore
 
 
 async def test_postgres_snapshot_store_contract(postgres_container: PostgresContainer) -> None:
@@ -13,7 +13,7 @@ async def test_postgres_snapshot_store_contract(postgres_container: PostgresCont
     pool = await asyncpg.create_pool(dsn)
     assert pool is not None
     table_name = f"snapshot_test_{uuid.uuid4().hex}"
-    store = PostgresSnapshotStore(pool, table_name=table_name)
+    store = PostgresSessionStore(pool, table_name=table_name)
     try:
         second_admission = await store.reserve("scope:second", "writer", 10.0)
         assert second_admission is not None

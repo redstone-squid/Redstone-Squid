@@ -285,9 +285,9 @@ class BlockAsyncpg(importlib.abc.MetaPathFinder):
         return None
 
 sys.meta_path.insert(0, BlockAsyncpg())
-from squid_layouts.discord.durability import PostgresSnapshotStore, SQLiteSnapshotStore
-assert PostgresSnapshotStore
-assert SQLiteSnapshotStore
+from squid_layouts.discord.durability import PostgresSessionStore, SQLiteSessionStore
+assert PostgresSessionStore
+assert SQLiteSessionStore
 assert "asyncpg" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)

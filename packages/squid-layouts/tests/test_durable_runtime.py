@@ -17,7 +17,7 @@ from squid_layouts.discord.durability import (
     DurableSession,
     DurableSessionCodec,
     DurableSessionRuntime,
-    MemorySnapshotStore,
+    MemorySessionStore,
     Missing,
     MountLocator,
     MountStateError,
@@ -108,7 +108,7 @@ def components() -> ComponentRegistry:
 
 
 def runtime(
-    store: MemorySnapshotStore,
+    store: MemorySessionStore,
     frontend: FakeFrontend,
     *,
     sessions: SessionRegistry | None = None,
@@ -145,7 +145,7 @@ async def open_counter(
 
 
 async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -168,7 +168,7 @@ async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
 
 
 async def test_initial_summary_records_the_opener_as_a_participant() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -183,7 +183,7 @@ async def test_initial_summary_records_the_opener_as_a_participant() -> None:
 
 async def test_a_remote_summary_protects_another_user_from_replacement() -> None:
     """A second live process protects an incumbent from the summary alone."""
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     key = SessionKey.guild("counter", 5)
     first = runtime(store, FakeFrontend())
 
@@ -218,7 +218,7 @@ async def test_a_remote_summary_protects_another_user_from_replacement() -> None
 
 
 async def test_purge_reports_missing_records_while_runtime_is_supervised() -> None:
-    durable = runtime(MemorySnapshotStore(), FakeFrontend())
+    durable = runtime(MemorySessionStore(), FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(durable.run)
@@ -232,7 +232,7 @@ async def test_purge_reports_missing_records_while_runtime_is_supervised() -> No
 
 
 async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
     component = HiddenDraft()
     mount = sl.discord.Mount(component, access=Everyone(), timeout=None)
@@ -264,7 +264,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
 
 
 async def test_failed_promotion_keeps_the_durable_incumbent() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     frontend = FakeFrontend()
     sessions = SessionRegistry()
     durable = runtime(store, frontend, sessions=sessions)
@@ -285,7 +285,7 @@ async def test_failed_promotion_keeps_the_durable_incumbent() -> None:
 
 
 async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -323,7 +323,7 @@ async def test_attached_mount_is_checkpointed_in_the_same_record() -> None:
 
 
 async def test_task_start_handshake_recovers_after_the_previous_runtime_releases_its_claim() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -345,7 +345,7 @@ async def test_task_start_handshake_recovers_after_the_previous_runtime_releases
 
 
 async def test_remote_summaries_participate_in_distributed_cardinality() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
     first_runtime.owner = "first"
 
@@ -375,7 +375,7 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
 
 
 async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -405,7 +405,7 @@ async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
 
 
 async def test_missing_root_is_reported_and_deleted() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -425,7 +425,7 @@ async def test_missing_root_is_reported_and_deleted() -> None:
 
 
 async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -462,7 +462,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
 
 
 async def test_expired_record_is_deleted_before_reconnection() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend(), clock=lambda: 0.0)
 
     async with anyio.create_task_group() as tasks:
@@ -482,7 +482,7 @@ async def test_expired_record_is_deleted_before_reconnection() -> None:
 
 
 async def test_unreachable_record_is_retained_and_released() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -505,7 +505,7 @@ async def test_unreachable_record_is_retained_and_released() -> None:
 
 
 async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     key = SessionKey.guild("counter", 5)
 
     async with anyio.create_task_group() as tasks:
@@ -544,7 +544,7 @@ async def test_a_durable_join_is_checkpointed_and_survives_recovery() -> None:
 
 
 async def test_a_recovered_attachment_actor_is_attributed_but_not_a_member() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     key = SessionKey.guild("counter", 5)
 
     async with anyio.create_task_group() as tasks:
@@ -571,7 +571,7 @@ async def test_a_recovered_attachment_actor_is_attributed_but_not_a_member() -> 
 
 
 async def test_a_membership_checkpoint_that_loses_the_claim_finishes_without_deadlocking() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -591,7 +591,7 @@ async def test_a_membership_checkpoint_that_loses_the_claim_finishes_without_dea
 
 
 async def test_a_failed_membership_checkpoint_leaves_the_session_dirty_and_usable() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     durable = runtime(store, FakeFrontend())
 
     async with anyio.create_task_group() as tasks:
@@ -629,7 +629,7 @@ async def _fenced_out(*args: object, **kwargs: object) -> bool:
 
 
 async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
     key = SessionKey.guild("counter", 5)
 
     async with anyio.create_task_group() as tasks:
@@ -680,7 +680,7 @@ async def test_a_protocol_1_record_recovers_unbounded_with_its_opener_as_member(
 
 
 async def test_a_summary_disagreeing_with_its_record_is_refused() -> None:
-    store = MemorySnapshotStore()
+    store = MemorySessionStore()
 
     async with anyio.create_task_group() as tasks:
         first = runtime(store, FakeFrontend())
