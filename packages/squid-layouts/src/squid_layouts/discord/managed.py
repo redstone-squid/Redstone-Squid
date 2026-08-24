@@ -8,7 +8,7 @@ from typing import cast, overload
 from squid_layouts.discord.delivery import Delivered, Destination, SendResult
 from squid_layouts.discord.mount import Mount
 from squid_layouts.runtime.component import Component, RenderResult
-from squid_reactive.operations import Cancelled, Failed, Pending, Progress, Succeeded, operation
+from squid_reactive.operations import Cancelled, Failed, OperationExecution, Pending, Progress, Succeeded, operation
 
 type Work[ValueT] = Callable[[], Awaitable[ValueT]]
 type SuccessRenderer[ValueT] = Callable[[ValueT], RenderResult]
@@ -39,6 +39,8 @@ class _Scene(Component):
 class _ManagedResult[ValueT](Component):
     """Expose a callback's pending and terminal states as a component."""
 
+    execution: OperationExecution[ValueT, None]
+
     def __init__(
         self,
         work: Work[ValueT],
@@ -51,6 +53,7 @@ class _ManagedResult[ValueT](Component):
         self._initial = initial
         self._render_success = render_success
         self._render_error = render_error
+        self.execution = self._run.start()
 
     @property
     def initial(self) -> RenderResult:
@@ -77,7 +80,7 @@ class _ManagedResult[ValueT](Component):
                 return self._initial
 
     @operation(initial=None)
-    async def execution(self, _progress: Progress[None]) -> ValueT:
+    async def _run(self, _progress: Progress[None]) -> ValueT:
         """Run the callback once the initial scene has been delivered."""
         return await self._work()
 
