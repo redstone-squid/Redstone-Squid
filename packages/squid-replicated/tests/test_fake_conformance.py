@@ -2,9 +2,10 @@
 
 import contextvars
 import json
+import uuid
 
 import pytest
-from squid_replicated import ReplicatedChangeToken, ReplicatedClosedError, ReplicatedScope
+from squid_replicated import ReplicatedChangeToken, ReplicatedClosedError, ReplicatedScope, ReplicatedUpdate
 
 from squid_layouts.runtime import History
 from squid_reactive import (
@@ -90,6 +91,39 @@ def test_duplicate_and_reordered_delivery_converges() -> None:
     assert first.set("tags").value == frozenset({"red", "blue"})
 
 
+def test_committed_local_updates_are_routed_and_attributed_after_commit() -> None:
+    document = ReplicatedScope("replica-a").open("project")
+    observed: list[ReplicatedUpdate] = []
+    document.subscribe_updates(observed.append)
+
+    with transaction():
+        document.counter("votes").increment(1)
+        assert observed == []
+
+    update = observed[0]
+    assert update.document_id == "project"
+    assert update.backend_id == "squid-fake-v1"
+    assert update.source_replica_id == "replica-a"
+    assert update.origin_action_id is not None
+    assert document.drain_updates() == (update,)
+
+
+def test_transport_envelope_rejects_wrong_document_and_tampering() -> None:
+    source = ReplicatedScope("a").open("source")
+    target = ReplicatedScope("b").open("target")
+    with transaction():
+        source.counter("votes").increment(1)
+    encoded = source.export_since()
+
+    with pytest.raises(ValueError, match="targets"):
+        target.import_update(encoded)
+
+    body = json.loads(encoded)
+    body["hash"] = "0" * 64
+    with pytest.raises(ValueError, match="hash"):
+        source.import_update(json.dumps(body).encode())
+
+
 def test_three_replicas_converge_for_every_delivery_order() -> None:
     replicas = [ReplicatedScope(name).open("project") for name in ("a", "b", "c")]
     for index, replica in enumerate(replicas, start=1):
@@ -124,6 +158,9 @@ def test_remote_import_invalidates_and_has_remote_action_outcome() -> None:
 
     assert snapshots[-1].counter("votes") == 1
     assert ledger.outcomes[-1].kind == "remote"
+    assert ledger.outcomes[-1].actor is not None
+    assert ledger.outcomes[-1].actor.identity == "a"
+    assert ledger.outcomes[-1].metadata == ()
 
 
 def test_scheduler_places_remote_import_before_local_validation() -> None:
@@ -211,7 +248,7 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
     [
         b"not-json",
         json.dumps({"backend": "wrong", "schema": 1, "kind": "update", "operations": []}).encode(),
-        json.dumps({"backend": "squid-fake-v1", "schema": 2, "kind": "update", "operations": []}).encode(),
+        json.dumps({"backend": "squid-fake-v1", "schema": 2}).encode(),
     ],
 )
 def test_corrupted_wrong_backend_and_wrong_schema_updates_are_rejected(payload: bytes) -> None:
@@ -225,7 +262,35 @@ def test_oversized_updates_are_rejected_before_decoding() -> None:
     document = ReplicatedScope("a").open("project")
 
     with pytest.raises(ValueError, match="maximum encoded size"):
-        document.import_update(b" " * 1_048_577)
+        document.import_update(b" " * 1_500_001)
+
+
+def test_duplicate_update_identity_is_ignored_before_backend_prepare() -> None:
+    source = ReplicatedScope("a").open("project")
+    target = ReplicatedScope("b").open("project")
+    with transaction():
+        source.counter("votes").increment(1)
+    encoded = source.export_since()
+
+    target.import_update(encoded)
+    target.import_update(encoded)
+
+    assert target.counter("votes").value == 1
+
+
+def test_envelope_rejects_invalid_identifiers() -> None:
+    update = ReplicatedUpdate(
+        "project",
+        "squid-fake-v1",
+        "a",
+        uuid.uuid7(),
+        b"payload",
+    )
+    body = json.loads(update.encode())
+    body["update_id"] = "not-a-uuid"
+
+    with pytest.raises(ValueError, match="identifiers"):
+        ReplicatedUpdate.decode(json.dumps(body).encode())
 
 
 def test_scope_disposal_prevents_late_import_and_mutation() -> None:
@@ -237,6 +302,8 @@ def test_scope_disposal_prevents_late_import_and_mutation() -> None:
         document.import_update(b"{}")
     with pytest.raises(ReplicatedClosedError), transaction():
         document.counter("votes").increment(1)
+    with pytest.raises(ReplicatedClosedError):
+        document.drain_updates()
 
 
 async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> None:
