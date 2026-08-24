@@ -3,10 +3,11 @@ from math import inf, nan
 from types import SimpleNamespace
 from typing import Any, cast
 
+import discord
 import pytest
 
 from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_duration
-from squid.bot.voting.rendering import generic_poll_text
+from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.voting.application import RoleVoteWeightPolicy
 from squid.voting.domain import (
@@ -101,6 +102,41 @@ def test_visible_poll_lists_voters_and_keeps_their_reactions() -> None:
     assert not visible.is_anonymous
     assert not visible.should_remove_reaction_on_cast()
     assert "<@420>" in generic_poll_text(visible, {42: 420})
+
+
+def test_generic_poll_presentation_uses_host_owned_tallies() -> None:
+    snapshot = poll_snapshot(
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        selections=(VoteSelection(42, 10, "one", "1儭", 2),),
+    )
+
+    presentation = render_generic_poll(snapshot, {42: 420})
+    assert presentation.view is not None
+    text = "\n".join(
+        child.content
+        for child in presentation.view.walk_children()
+        if isinstance(child, discord.ui.TextDisplay)
+    )
+    assert "2 weighted" in text
+    assert "— 1" in text
+    assert "<@420>" in text
+
+
+def test_hidden_poll_presentation_omits_every_tally_value() -> None:
+    snapshot = poll_snapshot(
+        visibility=VoteVisibility.ANONYMOUS_HIDDEN,
+        selections=(VoteSelection(42, 10, "one", "1儭", 2),),
+    )
+
+    presentation = render_generic_poll(snapshot)
+    assert presentation.view is not None
+    text = "\n".join(
+        child.content
+        for child in presentation.view.walk_children()
+        if isinstance(child, discord.ui.TextDisplay)
+    )
+    assert "weighted" not in text
+    assert "%" not in text
 
 
 @pytest.mark.parametrize(
