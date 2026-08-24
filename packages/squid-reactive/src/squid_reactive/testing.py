@@ -4,7 +4,7 @@ from collections import defaultdict, deque
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
-from squid_reactive.core import _INTERLEAVER
+import squid_reactive.core as core
 
 
 class InterleavingHarness:
@@ -28,11 +28,13 @@ class InterleavingHarness:
     @contextmanager
     def installed(self) -> Iterator[InterleavingHarness]:
         """Install this harness for the lexical test scope."""
-        token = _INTERLEAVER.set(self.checkpoint)
+        token = core._INTERLEAVER.set(self.checkpoint)
+        core._INTERLEAVER_USERS += 1
         try:
             yield self
         finally:
-            _INTERLEAVER.reset(token)
+            core._INTERLEAVER_USERS -= 1
+            core._INTERLEAVER.reset(token)
 
 
 __all__ = ["InterleavingHarness"]

@@ -41,7 +41,6 @@ from squid_reactive.actions import (
     aftermath_callback,
     current_action,
     current_causality,
-    elapsed,
     emit_aftermath_failure,
     emit_outcome,
     in_aftermath,
@@ -185,9 +184,12 @@ _RELAXED_READS: ContextVar[int] = ContextVar("squid_reactive_relaxed_reads", def
 _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
     "squid_reactive_deterministic_interleaver", default=None
 )
+_INTERLEAVER_USERS = 0
 
 
 def _checkpoint(name: str) -> None:
+    if _INTERLEAVER_USERS == 0:
+        return
     interleaver = _INTERLEAVER.get()
     if interleaver is not None:
         interleaver(name)
@@ -739,6 +741,9 @@ class _Transaction:
     def publish(self) -> None:
         """Make this action's writes visible. The staged version becomes the cell's, so a
         reader that already sampled it inside the action stays valid across the commit."""
+        if not self.writes:
+            self.applied = True
+            return
         for entry in self.writes.values():
             entry.cell.value = entry.value
             entry.cell.version = entry.version
@@ -786,6 +791,8 @@ class _Transaction:
 
     def patches(self) -> CellPatchSet:
         """Freeze the physical slot lineage written by this action."""
+        if not self.writes:
+            return CellPatchSet()
         return CellPatchSet(
             tuple(
                 CellPatch(
@@ -818,11 +825,12 @@ class _Transaction:
         changes = tuple(
             change for participant, value in prepared if (change := participant.describe_change(value)) is not None
         )
+        committed_at = datetime.now(UTC)
         commit = ActionCommit(
             self.context,
             next_commit_sequence(),
-            datetime.now(UTC),
-            elapsed(self.context),
+            committed_at,
+            committed_at - self.context.started_at,
             self.reads(),
             self.patches(),
             changes,
@@ -849,6 +857,8 @@ class _Transaction:
     def finalize_commit(self) -> None:
         """Notify reactive consumers after the commit gate, isolating aftermath failures."""
         assert self.commit_record is not None
+        if not self.changed and not self.prepared_participants:
+            return
         _checkpoint("aftermath.before_notification")
         for owner in self.changed.values():
             try:
@@ -962,6 +972,8 @@ def _notify_hooks(
     outcome: ActionOutcome,
     hooks: Sequence[tuple[object | None, Callable[[Any, Aftermath], None]]],
 ) -> None:
+    if not hooks:
+        return
     aftermath = Aftermath(outcome)
     with aftermath_callback():
         for _, callback in hooks:
@@ -991,10 +1003,11 @@ def _emit_commit(current: _Transaction, commit: ActionCommit) -> None:
 
 def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit: bool) -> ActionRollback:
     cleanup_errors = current.abort(error)
+    rolled_back_at = datetime.now(UTC)
     rollback = ActionRollback(
         current.context,
-        datetime.now(UTC),
-        elapsed(current.context),
+        rolled_back_at,
+        rolled_back_at - current.context.started_at,
         _rollback_reason(error, during_commit=during_commit),
         current.reads(),
         error.detail if isinstance(error, ReactiveConflictError) else None,
