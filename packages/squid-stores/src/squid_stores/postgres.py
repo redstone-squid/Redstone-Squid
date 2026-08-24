@@ -44,6 +44,9 @@ class _NotifyConnection(Protocol):
     async def execute(self, query: str, *args: object) -> object: ...
 
 
+# The table keeps its original name: renaming the class is a source change, renaming a
+# deployed table is a migration. Every message below that says "snapshot" is about this
+# table or its schema, and is accurate.
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
 _DEFAULT_TOPIC_CHANNEL = "squid_topics"
 _ORIGIN_SEPARATOR = ":"
@@ -53,7 +56,7 @@ _MAX_NOTIFY_PAYLOAD = 8000
 """PostgreSQL refuses a NOTIFY payload of 8000 bytes or more, counting the terminator."""
 
 
-class PostgresSnapshotStore:
+class PostgresSessionStore:
     """Persist fenced durable sessions through an asyncpg pool.
 
     PostgreSQL is the multi-host store. Every expiry comparison and every new
