@@ -9,7 +9,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, MountDefaults, Owner, Screen, SessionRegistry
 from squid_layouts.discord.screens import Opener, Scope
-from squid_layouts.discord.sessions import Opened
+from squid_layouts.discord.sessions import Opened, Rejected, RejectionReason
 from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Heading
 
@@ -188,3 +188,17 @@ async def test_a_screen_carries_its_capacity_into_the_session() -> None:
     assert isinstance(opened, Opened)
     assert opened.session.capacity == 4
     assert opened.session.remaining_capacity == 3
+
+
+async def test_a_screen_carries_its_quota_and_domain() -> None:
+    sessions = SessionRegistry()
+    screen = Screen("lobby", scope=Scope.GUILD, quota=1, domain="game", access=lambda opener: Everyone())
+
+    first = await screen.open(sessions, Panel(), to_message(), opener=Opener(7, guild_id=5))
+    second = await screen.open(sessions, Panel(), to_message(), opener=Opener(7, guild_id=6))
+
+    assert isinstance(first, Opened)
+    assert first.session.quota == 1
+    assert first.session.domain == "game"
+    assert isinstance(second, Rejected)
+    assert second.reason is RejectionReason.QUOTA_REACHED
