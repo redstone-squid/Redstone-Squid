@@ -18,6 +18,7 @@ from typing import Any, Protocol
 _log = logging.getLogger(__name__)
 
 type ActionId = uuid.UUID
+_EMPTY_METADATA: Mapping[str, str] = MappingProxyType({})
 
 
 class ActionKind(Enum):
@@ -70,7 +71,7 @@ class ActionContext:
     name: str
     actor: ActorRef | None
     started_at: datetime
-    metadata: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}))
+    metadata: Mapping[str, str] = field(default_factory=lambda: _EMPTY_METADATA)
     reverses_action_id: ActionId | None = None
     reapplies_action_id: ActionId | None = None
     compensates_action_id: ActionId | None = None
@@ -98,7 +99,7 @@ class ActionContext:
             name,
             actor,
             datetime.now(UTC),
-            MappingProxyType(dict(metadata or {})),
+            _EMPTY_METADATA if not metadata else MappingProxyType(dict(metadata)),
             reverses_action_id,
             reapplies_action_id,
             compensates_action_id,
@@ -497,6 +498,8 @@ def remove_action_outcome_sink(sink: ActionOutcomeSink) -> None:
 
 
 def emit_outcome(outcome: ActionOutcome) -> None:
+    if not _sinks:
+        return
     snapshot = ActionOutcomeSnapshot.from_outcome(outcome)
     emit_causal_event(snapshot)
 
