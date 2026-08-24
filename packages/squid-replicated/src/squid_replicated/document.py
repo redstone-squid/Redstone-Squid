@@ -204,6 +204,21 @@ class ReplicatedDocument:
         """Return the local backend-history generation used by retained inverse tokens."""
         return self._token_epoch
 
+    @property
+    def pending_update_count(self) -> int:
+        """Return the bounded number of committed envelopes awaiting host transport."""
+        return len(self._pending_updates)
+
+    @property
+    def subscription_count(self) -> int:
+        """Return the snapshot and outbound listener authorities owned by this document."""
+        return len(self._listeners) + len(self._update_listeners)
+
+    @property
+    def deduplication_count(self) -> int:
+        """Return the bounded number of remote update identities retained for deduplication."""
+        return len(self._seen_update_ids)
+
     def snapshot(self) -> FakeSnapshot:
         self._ensure_open()
         self._version_cell.read()
@@ -390,6 +405,11 @@ class ReplicatedScope:
         if document is None:
             document = self._documents[document_id] = ReplicatedDocument(document_id, FakeEngine(self.replica_id))
         return document
+
+    @property
+    def active_documents(self) -> tuple[str, ...]:
+        """Return the document identities whose authority this scope still owns."""
+        return tuple(self._documents)
 
     def close(self) -> None:
         for document in self._documents.values():
