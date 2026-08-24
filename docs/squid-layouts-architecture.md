@@ -4,6 +4,25 @@ squid-layouts separates UI intent, target planning, and drawing. Discord is one 
 not the data model: the same resolved scene can be drawn as Discord Components V2 or safe
 HTML, serialized to JSON, and handed to another process.
 
+## Concepts at a glance
+
+Seven buckets, and every API in the package belongs to one of them. The rest of this document
+expands them in roughly this order.
+
+| Bucket | What it decides | Principal APIs | Expanded in |
+|---|---|---|---|
+| Rendering | what the user sees | `Document`, `plan`, target adapters, `SceneDocument`, `Renderer` | [Semantic authoring](#semantic-authoring-adaptation-and-exact-primitives), [Scenes and renderers](#scenes-and-renderers) |
+| State | what one component knows | `sl.state`, `sl.computed`, `sl.resource` | [Components and reactivity](#components-and-vue-inspired-reactivity) |
+| Shared state | what several panels agree on | `Shared`, `SharedPool`, `TopicBus` | [Shared state across mounts](#shared-state-across-mounts) |
+| Actions | what a press is allowed to do | `sl.action`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
+| Lifetime | how long a panel lives and who may use it | `Mount`, `Screen`, `SessionRegistry`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
+| Durability | what survives a restart | `DurableSessionRuntime`, `Router`, `PersistedPool` | [Durable sessions](#durable-sessions), [Durable route graph](#durable-route-graph-and-dispatch-onion) |
+| Diagnostics | what happened | `Profiler`, `DevTools`, `sl.discord.testing` | package `README.md` |
+
+The two rules that decide which bucket something lands in are in
+[Ownership and lifetime](#ownership-and-lifetime): identity is never authority, and anything
+owning background work ends through one named method.
+
 ## End-to-end flow
 
     Component state
@@ -37,6 +56,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 |---|---|---|
 | Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
 | Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
+| Per-open policy for one screen | sl.discord.Screen(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
 | Static Components V2 message | sl.discord.render_static(document) | DiscordPresentation |
 | Static classic message | sl.discord.classic.render_static(document) | DiscordPresentation |
 | Region in a host-owned classic message | sl.discord.classic.contribute(document, to=...) | AttachedClassicContribution |
@@ -55,6 +75,15 @@ reservation, measured from the host view rather than counted by hand; composing 
 document is preferable because the planner can see every cost. A reservation is applied by
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
+
+`sl.discord.Screen` is the per-open policy for one logical screen, written once and shared by
+every opening of it: `scope` picks the key an opening collides on, `policy` decides what happens
+when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
+user may be in, and `access` builds the mount's access policy from the opener. `Screen.open` and
+`Screen.respond` construct the mount and hand it to the `SessionRegistry`, which still owns
+lifetime -- a screen owns the policy, not the sessions. The two are separate values because a
+component is not intrinsically a session policy: the same component can be opened under more than
+one screen, or under none at all.
 
 ## Semantic authoring, adaptation, and exact primitives
 
@@ -257,16 +286,44 @@ commit precondition -- if someone else moved it meanwhile the action raises
 `sl.runtime.SharedStateConflictError` and publishes nothing. `Chrome.changed_elsewhere` is the wording
 for that, shown through `handle_error` or an `ActionMiddleware`.
 
-There is no store and no lookup: two panels converge because something handed them the same
-object, by constructor injection or `ContextKey`. That also settles lifetime -- the handle *is*
-the state, so panels holding it means it dies with the last panel, and a cog or session holding
-it means it survives every panel opening and closing. A mount subscribes to exactly the cells
+There is no global store and no lookup by type: two panels converge because something handed
+them the same object, by constructor injection or `ContextKey`. That also settles lifetime -- the
+handle *is* the state, so panels holding it means it dies with the last panel, and a cog or session
+holding it means it survives every panel opening and closing. When what a host holds is *one handle
+per scope*, `sl.runtime.SharedPool` writes that lifetime down where it is known instead of leaving a
+`setdefault` cache around every namespace; see below. A mount subscribes to exactly the cells
 its latest render read, reconciled at stage time, and `sl.runtime.addresses(lambda: appearance.accent)`
 names an address by hand for a host that wants to follow one itself. A mount repaints its own
 writes inside the interaction that made them -- `Mount.observed` is what it rendered,
 `Mount.followed` what it managed to subscribe to -- so a missing reactor costs live updates
 from *other* mounts and nothing else. Nothing durable belongs
 here; anything the application would still want with nobody looking at it is a service.
+
+### Pooling one namespace per scope
+
+A pool is strong and single-typed: it owns one `Shared` subclass and retains one canonical handle
+per hashable scope until that scope is dropped, the pool is cleared, or the pool itself is released.
+
+    self._appearance = sl.runtime.SharedPool(Appearance, bot.topic_bus)
+    ...
+    appearance = self._appearance.get(scope)
+
+`get(scope)` is get-or-create and synchronous, so nothing awaits between the miss and the insert.
+`get_existing`, `drop`, `clear` and `active` are the rest of the surface. Where the pool is held *is*
+the retention policy -- on the bot for process lifetime, on a cog for extension lifetime, on a
+session for that session's. `squid/bot/layout_showcase.py` keeps one on the cog for exactly that
+reason. None of this changes `Shared` itself: constructing a handle and passing it directly stays
+supported, and a scope used outside a pool may still be mutable or unhashable.
+
+The scope a pool keys on is the one a `Screen` already computes. `Opener.of(interaction)` yields the
+opener, and asking it for a kind statically -- `opener.user_guild()` is a `UserGuildScope` -- is what
+lets a `Shared[UserGuildScope]` pool refuse the wrong scope at the call site. A panel holding its
+session key reaches a pool through `key.scope` with nothing to convert. `Opener` and `Scope` are
+deliberately not on `sl.discord`; import them from `squid_layouts.discord.screens`.
+
+`squid_stores.PersistedPool` is the hydrating variant, for a namespace that should survive a
+restart: `await load(scope)` in place of `get(scope)`, `run()` as the background writer, and
+`flush`/`close` to end it.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
