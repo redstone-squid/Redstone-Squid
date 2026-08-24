@@ -502,6 +502,8 @@ class History:
         entry = self._select(self._undone, action_id)
         if entry is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
+        if entry.state is HistoryEntryState.NEEDS_RECONCILIATION and entry.last_result is not None:
+            return entry.last_result
         if entry.compensation is not None:
             return await self._compensate(entry)
         return self._undo_state(entry)
@@ -630,17 +632,32 @@ class History:
                 self._owner.invalidate()
                 raise
             except Exception as error:
+                external_error = error
+                try:
+                    await self._compensation_outbox.update(
+                        intent, CompensationStatus.FAILED, ExceptionSummary.capture(external_error)
+                    )
+                except Exception as outbox_error:
+                    error = ExceptionGroup(
+                        "external compensation and outbox recording both failed",
+                        (external_error, outbox_error),
+                    )
                 execution.transition(CompensationStatus.FAILED, error)
                 entry.state = HistoryEntryState.FAILED
-                await self._compensation_outbox.update(
-                    intent, CompensationStatus.FAILED, ExceptionSummary.capture(error)
-                )
                 result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
                 entry.last_result = result
                 self._owner.invalidate()
                 return result
             execution.transition(CompensationStatus.EXTERNAL_SUCCEEDED)
-            await self._compensation_outbox.update(intent, CompensationStatus.EXTERNAL_SUCCEEDED)
+            try:
+                await self._compensation_outbox.update(intent, CompensationStatus.EXTERNAL_SUCCEEDED)
+            except Exception as error:
+                execution.transition(CompensationStatus.NEEDS_RECONCILIATION, error)
+                entry.state = HistoryEntryState.NEEDS_RECONCILIATION
+                result = HistoryResult(HistoryResultStatus.NEEDS_RECONCILIATION, entry, error=error)
+                entry.last_result = result
+                self._owner.invalidate()
+                return result
         compensation_context = ActionContext.create(
             f"Apply compensation for {entry.label}",
             kind=ActionKind.COMPENSATION,
@@ -652,18 +669,35 @@ class History:
         if result.status is HistoryResultStatus.CONFLICT:
             execution.transition(CompensationStatus.NEEDS_RECONCILIATION)
             entry.state = HistoryEntryState.NEEDS_RECONCILIATION
-            await self._compensation_outbox.update(intent, CompensationStatus.NEEDS_RECONCILIATION)
+            try:
+                await self._compensation_outbox.update(intent, CompensationStatus.NEEDS_RECONCILIATION)
+                outbox_error = None
+            except Exception as error:
+                outbox_error = error
             result = HistoryResult(
                 HistoryResultStatus.NEEDS_RECONCILIATION,
                 entry,
                 result.action_id,
                 result.conflict,
-                result.error,
+                outbox_error or result.error,
             )
             entry.last_result = result
         else:
             execution.transition(CompensationStatus.REVERTED)
-            await self._compensation_outbox.update(intent, CompensationStatus.REVERTED)
+            try:
+                await self._compensation_outbox.update(intent, CompensationStatus.REVERTED)
+            except Exception as error:
+                execution.transition(CompensationStatus.NEEDS_RECONCILIATION, error)
+                entry.state = HistoryEntryState.NEEDS_RECONCILIATION
+                result = HistoryResult(
+                    HistoryResultStatus.NEEDS_RECONCILIATION,
+                    entry,
+                    result.action_id,
+                    error=error,
+                )
+                entry.last_result = result
+                if not any(candidate is entry for candidate in self._undone):
+                    self._undone.append(entry)
         self._owner.invalidate()
         return result
 

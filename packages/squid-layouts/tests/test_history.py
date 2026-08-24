@@ -11,6 +11,7 @@ import pytest
 from squid_layouts import Component, state
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import (
+    CompensationClaim,
     CompensationIntent,
     CompensationRecordCodec,
     CompensationRetryPolicy,
@@ -533,3 +534,31 @@ async def test_outbox_claim_failure_is_a_truthful_compensation_failure() -> None
     assert result.entry is not None and result.entry.compensation_execution is not None
     assert result.entry.compensation_execution.status is CompensationStatus.FAILED
     assert isinstance(result.error, RuntimeError)
+
+
+async def test_outbox_failure_after_external_success_needs_reconciliation_before_local_inverse() -> None:
+    class BrokenUpdateOutbox:
+        async def claim(self, intent, retry):
+            return CompensationClaim(dispatch=True, attempts=1, status=CompensationStatus.REVERTING)
+
+        async def update(self, intent, status, error=None) -> None:
+            raise RuntimeError("cannot persist external success")
+
+    subject, _ = panel()
+    calls: list[str] = []
+
+    async def compensate(key: str) -> None:
+        calls.append(key)
+
+    stack = History(subject, compensation_outbox=BrokenUpdateOutbox())
+    with transaction():
+        stack.record("page", compensate=CompensationSpec(compensate, lambda commit: "outbox"))
+        subject.page = 4
+
+    result = await stack.undo()
+    repeated = await stack.undo()
+
+    assert result.status is HistoryResultStatus.NEEDS_RECONCILIATION
+    assert repeated is result
+    assert subject.page == 4
+    assert calls == ["outbox"]
