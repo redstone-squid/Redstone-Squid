@@ -246,6 +246,21 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
         assert removed not in sl.discord.__all__ and not hasattr(sl.discord, removed)
 
 
+def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
+    """A consumer's tests import these, so they are versioned surface, not a private module."""
+    from types import ModuleType
+
+    assert "testing" in sl.discord.__all__
+    assert isinstance(sl.discord.testing, ModuleType)
+    assert {"fake_interaction", "delivered_to", "commit_render", "assert_within_limits"} <= set(
+        sl.discord.testing.__all__
+    )
+    assert [name for name in sl.discord.testing.__all__ if not hasattr(sl.discord.testing, name)] == []
+    # The doubles stay one tier down; nothing here belongs beside Mount and Screen.
+    for name in sl.discord.testing.__all__:
+        assert name not in sl.discord.__all__
+
+
 def test_core_and_html_import_without_discord_dependencies() -> None:
     code = """
 import importlib.abc
