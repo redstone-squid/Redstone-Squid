@@ -297,10 +297,16 @@ have dedicated bounded retention. `profiler.snapshot()` returns frozen data, and
 objects. The profiler starts no tasks and performs no I/O; keep exporters under the host's own
 supervisor.
 
-The owner-only devtools cog adds `dev profile actions`, `dev profile queues`,
-`dev ui profile <mount-id>`, and `dev profile export`. Trace attributes may retain a mount ID in
-these bounded buffers, but mount IDs, topics, users, message IDs, route values, and form payloads
-never become aggregate keys.
+The owner-only devtools cog reads all of this back: `dev ui profile` for latency aggregates,
+`dev ui profile <mount-id>` for one mount's retained traces, `dev ui timeline [limit] [target]`
+for every retained dispatch in the order it happened, `dev ui queues` for the bus, and
+`dev ui export` for the whole snapshot as JSON. A timeline entry names the action key, the actor,
+the mount and the disposition, and `target` narrows it to `mount:<id>` or `actor:<user_id>`.
+
+Trace attributes may retain a mount ID and the acting user ID in these bounded buffers, and
+`dev ui export` will dump both. Neither ever becomes an aggregate key: mount IDs, topics, users,
+message IDs, route values, and form payloads are excluded from those by construction, so the
+unbounded half of the profiler stays free of identifiers.
 
 ## Interaction patterns and two shells
 
