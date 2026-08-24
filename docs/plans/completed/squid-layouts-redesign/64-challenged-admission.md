@@ -506,8 +506,8 @@ covered except two, and both are deliberate:
 - *"`feedback=` behaviour is unchanged"* — the existing busy-paint tests ran untouched and
   pass, which is the assertion. `_BusyPaint` took a `resumed` flag on the way past.
 
-Suites: `packages/squid-layouts/tests` — 1624 passed with the same 9 pre-existing failures as
-before the change (`test_adoption` and friends, none of them admission); `tests/unit/bot` —
+Suites: `../../../../packages/squid-layouts/tests` — 1624 passed with the same 9 pre-existing failures as
+before the change (`test_adoption` and friends, none of them admission); `../../../../tests/unit/bot` —
 595 passed with the same 5 failures and 2 errors as the branch already had. `pyrefly` holds at
 287 errors, unchanged: widening `Guard.admit` to `GuardOutcome` cost 41 of them in
 `test_guards.py` until those assertions were narrowed through one `_verdict` helper, which is

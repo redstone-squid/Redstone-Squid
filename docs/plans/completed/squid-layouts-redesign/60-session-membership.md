@@ -4,8 +4,8 @@
 
 Shipped. Membership is `sessions.py`; the record protocol is `durability/session_records.py`;
 the durable path is `durability/runtime.py`; the worked consumer is `/layout lobby` in
-`squid/bot/layout_showcase.py`. This closes [90](90-deferred.md)'s "Participant tracking /
-shared sessions" entry on [34](../completed/squid-layouts-redesign/34-safe-session-runtime.md)
+`../../../../squid/bot/layout_showcase.py`. This closes [90](../../squid-layouts-redesign/90-deferred.md)'s "Participant tracking /
+shared sessions" entry on [34](34-safe-session-runtime.md)
 §B.4's terms.
 
 The build differs from the first draft in five places, and each difference is a section below:
@@ -211,7 +211,7 @@ devtools, not only for the quota.
 in `join` is evaded by opening a second session. That is the argument for declaring the quota on
 the session rather than passing it per call the way `when=` is passed: a per-call predicate would
 have to be repeated at two call sites and kept in sync by hand, which is the load-bearing-comment
-failure [51](../completed/squid-layouts-redesign/51-screens.md) was written about.
+failure [51](51-screens.md) was written about.
 
 **Opening cannot hold the lock across delivery**, because that is network I/O under a lock — the
 thing this whole plan has been avoiding. So the check before `mount.send` is advisory, sparing a

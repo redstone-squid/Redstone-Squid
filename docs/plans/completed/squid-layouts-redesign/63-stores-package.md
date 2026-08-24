@@ -128,7 +128,7 @@ whose version is *newer* than the declaration is refused rather than decoded, ma
 `ComponentRegistry._migrate`'s treatment of future snapshots.
 
 The scope is any hashable the host encodes. The `sl.discord.scopes` vocabulary
-([59](../../squid-layouts-redesign/59-shared-pool.md)) is the conventional one, and encoding it is the host's business, so
+([59](59-shared-pool.md)) is the conventional one, and encoding it is the host's business, so
 `squid-stores` stays Discord-free exactly as `squid-reactive` does.
 
 ### What co-location earns
@@ -177,7 +177,7 @@ pool = PersistedPool(Preferences, bus, store=store, slot=preferences_slot)
 prefs = await pool.load(GuildScope(guild_id))     # async: it does I/O, and says so
 ```
 
-- **`load` is async; `SharedPool.get` stays synchronous.** [59](../../squid-layouts-redesign/59-shared-pool.md) fixed
+- **`load` is async; `SharedPool.get` stays synchronous.** [59](59-shared-pool.md) fixed
   synchronous factories because creating reactive view state performs no I/O. Hydration *is* I/O,
   so this is a different class, not a widened one — `SharedPool` is untouched. It is awaited from
   `on_load` ([09](09-async-data-loading.md)), which exists for this, and an unloaded namespace
@@ -266,4 +266,4 @@ in `[tool.uv.sources]`.
 ## Status
 
 Designed. Unit 1 is independent and mechanical. Unit 2's `PersistedPool` needs
-[59](../../squid-layouts-redesign/59-shared-pool.md)'s `SharedPool` to exist first; `ScopedStore` itself does not.
+[59](59-shared-pool.md)'s `SharedPool` to exist first; `ScopedStore` itself does not.
