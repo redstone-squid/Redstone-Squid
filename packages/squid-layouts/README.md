@@ -297,7 +297,8 @@ have dedicated bounded retention. `profiler.snapshot()` returns frozen data, and
 objects. The profiler starts no tasks and performs no I/O; keep exporters under the host's own
 supervisor.
 
-The owner-only devtools cog reads all of this back: `dev ui profile` for latency aggregates,
+The owner-only devtools cog reads all of this back: `dev ui actions [limit]` for the bounded causal
+action ledger (including rollbacks even when profiling is disabled), `dev ui profile` for latency aggregates,
 `dev ui profile <mount-id>` for one mount's retained traces, `dev ui timeline [limit] [target]`
 for every retained dispatch in the order it happened, `dev ui queues` for the bus, and
 `dev ui export` for the whole snapshot as JSON. A timeline entry names the action key, the actor,
@@ -468,6 +469,13 @@ versions. For an external effect, record a `CompensationSpec` whose operation re
 key. Compensation failure and external-success/local-conflict are visible as `FAILED` and
 `NEEDS_RECONCILIATION`; neither is described as rollback.
 
+Every admitted transaction has an `ActionContext` before middleware runs and produces exactly one immutable
+`ActionCommit` or `ActionRollback`. Commit, rollback, and outcome hooks run only after the transaction is dead.
+They cannot mutate it or change its result; use `aftermath.start_action(...)` for a separately identified recovery.
+Portable ledger snapshots retain IDs, causality, timing, classifications, and change counts—not state values,
+owners, tracebacks, or closures. See [the action ledger guide](../../docs/action-ledger.md) for the commit point,
+hook rules, compensation, and replicated-state examples.
+
 ### Shared state
 
 `sl.runtime.Shared` is a namespace of view state several live mounts agree on. Subclass it, declare
@@ -579,15 +587,21 @@ background work.
 new value without immediately loading it, and `replace(value)` publishes an authoritative local
 result. Resource state is runtime-only and is not included in durable component snapshots.
 
-### One-shot operations
+### Operation definitions and executions
 
-`sl.operation` is a component-bound effect that runs once under the mount's caller-owned task.
-Progress is explicit, reactive current state; it is not an event stream:
+`sl.operation` declares a repeatable component-bound definition. Each `start()` creates a fresh,
+causally identified one-shot execution under the mount's caller-owned task. Store the execution that
+the component renders; progress is explicit reactive current state, not an event stream:
 
 ```python
 class PublishVote(sl.Component):
+    publication: sl.operations.OperationExecution[VoteId, PublishProgress]
+
+    def __init__(self) -> None:
+        self.publication = self._publish.start()
+
     @sl.operation(initial=PublishProgress.CREATING)
-    async def publication(
+    async def _publish(
         self,
         progress: sl.operations.Progress[PublishProgress],
     ) -> VoteId:
@@ -606,8 +620,9 @@ class PublishVote(sl.Component):
                 return cancelled_vote(progress)
 ```
 
-Unlike a resource, an operation has no `reload`, `invalidate`, or `replace`: success, failure,
-and cancellation are terminal. Mounts coalesce progress invalidations through their ordinary
+Unlike a resource, an execution has no `reload`, `invalidate`, or `replace`: success, failure,
+and cancellation are terminal for that execution. A retry is `self._publish.start()` and receives a
+new execution ID while keeping the initiating action as its cause. Mounts coalesce progress invalidations through their ordinary
 stage/deliver/commit path while the operation runs. Resources remain repeatable and intentionally
 have no cancelled status; cancelling one load attempt leaves it pending and retryable.
 
