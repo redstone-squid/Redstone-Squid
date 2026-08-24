@@ -14,10 +14,11 @@ from squid.bot.layout_showcase import (
     AppearancePanel,
     LayoutShowcase,
     LayoutShowcaseCog,
+    Lobby,
     PreviewPanel,
     Session,
 )
-from squid_layouts.discord import Everyone, Mount, Owner, Reactor
+from squid_layouts.discord import Everyone, Mount, Owner, Reactor, SessionKey, SessionRegistry
 from squid_layouts.discord.sessions import UserScope
 from squid_layouts.discord.testing import (
     assert_within_limits,
@@ -295,3 +296,65 @@ class TestSharedAppearance:
 
         assert gone() is None, "co-existence state: nothing was looking at it"
         assert kept() is appearance, "retention state: the caller still holds it"
+
+
+class TestLobby:
+    """The roster is session membership, so the panel holds none of it."""
+
+    async def opened(self, *, capacity: int = 4) -> tuple[SessionRegistry, Lobby]:
+        registry = SessionRegistry()
+        panel = Lobby(registry, host_id=7)
+        result = await registry.open(
+            panel.mount(),
+            delivered_to(fake_message(message_id=1)),
+            key=SessionKey.guild("showcase-lobby", 5),
+            actor_id=7,
+            capacity=capacity,
+        )
+        assert isinstance(result, sl.discord.sessions.Opened)
+        return registry, panel
+
+    async def test_the_host_opens_as_the_only_member(self) -> None:
+        registry, panel = await self.opened()
+
+        assert next(iter(registry.active())).members == frozenset({7})
+        assert "Lobby (1/4)" in _texts(commit_render(panel._mount))
+
+    async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
+        registry, panel = await self.opened()
+
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+
+        assert next(iter(registry.active())).members == frozenset({7, 8})
+        assert "Lobby (2/4)" in _texts(commit_render(panel._mount))
+
+    async def test_the_lobby_fills_and_then_refuses(self) -> None:
+        registry, panel = await self.opened(capacity=2)
+
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("join", fake_interaction(user_id=9))
+
+        assert next(iter(registry.active())).members == frozenset({7, 8})
+
+    async def test_a_roster_dependent_rule_closes_the_lobby_when_the_host_leaves(self) -> None:
+        registry, panel = await self.opened()
+        session = next(iter(registry.active()))
+
+        await panel._mount.dispatch("leave", fake_interaction(user_id=7))
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+
+        assert session.members == frozenset()
+        assert not session.root.finished
+
+    async def test_only_a_member_may_start(self) -> None:
+        """Everyone may press Join, so the control that is not for everyone checks itself."""
+        _, panel = await self.opened()
+
+        await panel._mount.dispatch("start", fake_interaction(user_id=8))
+        assert panel.started_with is None
+
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("start", fake_interaction(user_id=8))
+
+        assert panel.started_with == 2
+        assert "Started with 2 players." in _texts(commit_render(panel._mount))

@@ -7,12 +7,22 @@ from typing import TYPE_CHECKING, Literal
 
 from discord import app_commands
 from discord.ext import commands
-from discord.ext.commands import Cog, Context
+from discord.ext.commands import Cog, Context, guild_only
 
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale
-from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, L, localization_for, send_component
+from squid.bot.ui import (
+    DISCORD_BLUE,
+    DISCORD_GREEN,
+    DISCORD_YELLOW,
+    L,
+    create_mount,
+    destination,
+    localization_for,
+    send_component,
+)
 from squid.core.i18n import _
+from squid_layouts.discord import SessionKey
 from squid_layouts.discord.screens import Opener
 from squid_layouts.discord.sessions import UserScope
 
@@ -719,6 +729,99 @@ class PreviewPanel(sl.Component):
         )
 
 
+class Lobby(sl.Component):
+    """A guild lobby whose roster is session membership, not view state.
+
+    Membership belongs to the logical session: it survives a redraw, it is what replacement
+    protection reads, and it is what a durable runtime persists. The panel therefore holds no
+    roster of its own -- it reads `session.members` and asks for a redraw after each change.
+    """
+
+    started_with: int | None = sl.state(None)
+    """How many players the game began with. The only fact here that *is* view state."""
+
+    def __init__(self, sessions: sl.discord.SessionRegistry, host_id: int) -> None:
+        self.sessions = sessions
+        self.host_id = host_id
+        self._mount: sl.discord.Mount | None = None
+
+    def mount(self, *, locale: str | None = None) -> sl.discord.Mount:
+        # Kept so the panel can find its own session; the mount cannot be handed to the
+        # component that renders it any other way.
+        self._mount = create_mount(self, access=sl.discord.Everyone(), locale=locale, timeout=None)
+        return self._mount
+
+    def render(self) -> sl.LayoutNode:
+        session = self._session()
+        if session is None:
+            return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))
+        roster = "\n".join(f"- <@{user_id}>" for user_id in sorted(session.members)) or "_empty_"
+        status = (
+            L("Started with {count} players.", count=self.started_with)
+            if self.started_with is not None
+            else L("{remaining} seats left.", remaining=session.remaining_capacity)
+        )
+        return sl.section(
+            sl.heading(L("Lobby ({count}/{capacity})", count=len(session.members), capacity=session.capacity)),
+            sl.paragraph(roster),
+            sl.paragraph(status),
+            sl.actions(
+                sl.action(L(t"Join"), self._join, key="join"),
+                sl.action(L(t"Leave"), self._leave, key="leave"),
+                sl.action(L(t"Start"), self._start, key="start"),
+                key="lobby",
+            ),
+        )
+
+    async def _join(self, event: sl.PressEvent) -> None:
+        session = self._session()
+        if session is None:
+            return
+        # Whether this presser is *allowed* to join is the caller's question, and an async
+        # one; it is answered out here, where it cannot stall the session's lock. Only the
+        # rule that depends on the roster goes inside, and it is a plain predicate.
+        result = await session.join(int(event.actor.id), when=lambda members: self.host_id in members)
+        await event.notice(_JOIN_NOTICES[result.status])
+        self.invalidate()
+
+    async def _leave(self, event: sl.PressEvent) -> None:
+        session = self._session()
+        if session is None:
+            return
+        result = await session.leave(int(event.actor.id))
+        await event.notice(_LEAVE_NOTICES[result.status])
+        self.invalidate()
+
+    async def _start(self, event: sl.PressEvent) -> None:
+        # Everyone may press Join, so the lobby is mounted for everyone; the controls that
+        # only members may use consult the roster themselves.
+        session = self._session()
+        if session is None or not session.has_member(int(event.actor.id)):
+            await event.notice(L(t"Join the lobby first."))
+            return
+        self.started_with = len(session.members)
+
+    def _session(self) -> sl.discord.sessions.Session | None:
+        return None if self._mount is None else self.sessions.session_for(self._mount)
+
+
+_JOIN_NOTICES = {
+    sl.discord.sessions.MembershipStatus.JOINED: L(t"You are in."),
+    sl.discord.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
+    sl.discord.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
+    sl.discord.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
+    sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
+    sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+}
+
+_LEAVE_NOTICES = {
+    sl.discord.sessions.MembershipStatus.LEFT: L(t"You have left."),
+    sl.discord.sessions.MembershipStatus.NOT_MEMBER: L(t"You were not in this lobby."),
+    sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
+    sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+}
+
+
 class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     """Public commands demonstrating the layout engine."""
 
@@ -775,6 +878,21 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 locale=locale,
                 reactor=self.bot.layout_reactor,
             )
+
+    @layout_group.command(name="lobby")
+    @guild_only()
+    async def lobby(self, ctx: Context[BotT]) -> None:
+        """Open a four-seat lobby whose roster lives in the session, not the panel."""
+        assert ctx.guild is not None
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        panel = Lobby(self.bot.mounts, ctx.author.id)
+        await self.bot.mounts.open(
+            panel.mount(locale=locale),
+            destination(ctx, locale=locale),
+            key=SessionKey.guild("showcase-lobby", ctx.guild.id),
+            actor_id=ctx.author.id,
+            capacity=4,
+        )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
