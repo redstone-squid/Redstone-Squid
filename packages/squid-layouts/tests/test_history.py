@@ -38,6 +38,17 @@ class Panel(Component):
         return Text(str(self.page))
 
 
+class RequiredPanel(Component):
+    history: History = history()
+    value: int = state()
+
+    def __init__(self) -> None:
+        self.value = 3
+
+    def render(self):
+        return Text("required")
+
+
 def panel() -> tuple[Panel, Workspace]:
     workspace = Workspace(LocalTopicBus(), "here")
     subject = Panel(workspace)
@@ -186,6 +197,38 @@ async def test_intervening_write_makes_redo_conflict() -> None:
 
     assert result.status is HistoryResultStatus.CONFLICT
     assert subject.page == 8
+
+
+async def test_absent_slot_keeps_lineage_across_undo_and_recreation() -> None:
+    subject = RequiredPanel()
+    ComponentRuntime(subject)
+    with transaction():
+        subject.history.record("delete")
+        del subject.value
+
+    with pytest.raises(AttributeError, match="never assigned"):
+        _ = subject.value
+    with transaction():
+        subject.value = 9
+
+    result = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.CONFLICT
+    assert subject.value == 9
+
+
+async def test_deleted_slot_undo_and_redo_use_fresh_versions() -> None:
+    subject = RequiredPanel()
+    ComponentRuntime(subject)
+    with transaction():
+        subject.history.record("delete")
+        del subject.value
+
+    assert (await subject.history.undo()).applied
+    assert subject.value == 3
+    assert (await subject.history.redo()).applied
+    with pytest.raises(AttributeError, match="never assigned"):
+        _ = subject.value
 
 
 async def test_selective_targeting_uses_action_identity() -> None:
