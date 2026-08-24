@@ -1,11 +1,13 @@
 """Deterministic operation-log backend for counter and tagged-set conformance tests."""
 
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
 _MAX_UPDATE_BYTES = 1_048_576
 _MAX_OPERATIONS = 10_000
+_KINDS = frozenset({"increment", "add", "remove", "restore"})
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -29,6 +31,8 @@ class FakeOperation:
     path: str
     value: str | int
     tags: tuple[OperationId, ...] = ()
+    undoes: OperationId | None = None
+    """The removal a ``restore`` reverses. Set on that kind alone."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,9 +98,16 @@ class FakeEngine:
         self._next_sequence = 0
         self._operations: dict[OperationId, FakeOperation] = {}
 
-    def operation(self, kind: str, path: str, value: str | int, tags: tuple[OperationId, ...] = ()) -> FakeOperation:
+    def operation(
+        self,
+        kind: str,
+        path: str,
+        value: str | int,
+        tags: tuple[OperationId, ...] = (),
+        undoes: OperationId | None = None,
+    ) -> FakeOperation:
         self._next_sequence += 1
-        return FakeOperation(OperationId(self.replica_id, self._next_sequence), kind, path, value, tags)
+        return FakeOperation(OperationId(self.replica_id, self._next_sequence), kind, path, value, tags, undoes)
 
     def version(self) -> FakeVersion:
         return FakeVersion(frozenset(self._operations))
@@ -109,21 +120,20 @@ class FakeEngine:
 
     def snapshot_with(self, additions: tuple[FakeOperation, ...] | list[FakeOperation]) -> FakeSnapshot:
         operations = {**self._operations, **{operation.identity: operation for operation in additions}}
+        ordered = sorted(operations.values(), key=lambda item: item.identity)
         counters: dict[str, int] = {}
         added: dict[tuple[str, str], set[OperationId]] = {}
-        removed: set[OperationId] = set()
-        for operation in sorted(operations.values(), key=lambda item: item.identity):
+        for operation in ordered:
             if operation.kind == "increment":
                 assert isinstance(operation.value, int)
                 counters[operation.path] = counters.get(operation.path, 0) + operation.value
             elif operation.kind == "add":
                 assert isinstance(operation.value, str)
                 added.setdefault((operation.path, operation.value), set()).add(operation.identity)
-            elif operation.kind == "remove":
-                removed.update(operation.tags)
+        standing = self._standing_removals(ordered)
         sets: dict[str, set[str]] = {}
         for (path, value), tags in added.items():
-            if tags - removed:
+            if any(not standing.get(tag) for tag in tags):
                 sets.setdefault(path, set()).add(value)
         return FakeSnapshot(
             tuple(sorted(counters.items())),
@@ -132,15 +142,33 @@ class FakeEngine:
 
     def visible_tags(self, path: str, value: str, additions: tuple[FakeOperation, ...] = ()) -> tuple[OperationId, ...]:
         operations = {**self._operations, **{operation.identity: operation for operation in additions}}
-        removed = {tag for operation in operations.values() if operation.kind == "remove" for tag in operation.tags}
+        standing = self._standing_removals(operations.values())
         return tuple(
             operation.identity
             for operation in operations.values()
             if operation.kind == "add"
             and operation.path == path
             and operation.value == value
-            and operation.identity not in removed
+            and not standing.get(operation.identity)
         )
+
+    def _standing_removals(self, operations: Iterable[FakeOperation]) -> dict[OperationId, set[OperationId]]:
+        """Map each removed add-tag to the removals still standing against it.
+
+        A tag is live when its entry is empty or absent. Keyed by which removal killed it
+        rather than flattened into one tombstone set, so undoing one replica's removal
+        cancels that removal alone and leaves a concurrent one in force.
+        """
+        removals: dict[OperationId, set[OperationId]] = {}
+        reversed_removals: set[OperationId] = set()
+        for operation in operations:
+            if operation.kind == "remove":
+                for tag in operation.tags:
+                    removals.setdefault(tag, set()).add(operation.identity)
+            elif operation.kind == "restore":
+                assert operation.undoes is not None
+                reversed_removals.add(operation.undoes)
+        return {tag: killers - reversed_removals for tag, killers in removals.items()}
 
     def apply(self, prepared: PreparedFakeUpdate) -> FakeChange:
         for operation in prepared.operations:
@@ -206,15 +234,33 @@ class FakeEngine:
         path = item["path"]
         value = item["value"]
         tags = item.get("tags", ())
-        if kind not in {"increment", "add", "remove"} or not isinstance(path, str) or not isinstance(tags, list):
+        undoes = item.get("undoes")
+        if (
+            kind not in _KINDS
+            or not isinstance(path, str)
+            or not isinstance(tags, list)
+            or not isinstance(undoes, str | None)
+        ):
             message = "replicated operation has invalid fields"
             raise ValueError(message)
         if (kind == "increment" and not isinstance(value, int)) or (
-            kind in {"add", "remove"} and not isinstance(value, str)
+            kind in {"add", "remove", "restore"} and not isinstance(value, str)
         ):
             message = "replicated operation value does not match its kind"
             raise ValueError(message)
-        return FakeOperation(identity, kind, path, value, tuple(OperationId.decode(tag) for tag in tags))
+        # Naming a reversed removal from any other kind would cancel a removal that nothing
+        # claims to be undoing, so the field and the kind have to agree in both directions.
+        if (kind == "restore") != (undoes is not None):
+            message = "replicated operation names a reversed removal it does not match"
+            raise ValueError(message)
+        return FakeOperation(
+            identity,
+            kind,
+            path,
+            value,
+            tuple(OperationId.decode(tag) for tag in tags),
+            None if undoes is None else OperationId.decode(undoes),
+        )
 
     def _encode_envelope(self, kind: str, operations: tuple[FakeOperation, ...]) -> bytes:
         payload = {
@@ -228,6 +274,7 @@ class FakeEngine:
                     "path": operation.path,
                     "value": operation.value,
                     "tags": [tag.encode() for tag in operation.tags],
+                    "undoes": None if operation.undoes is None else operation.undoes.encode(),
                 }
                 for operation in operations
             ],
