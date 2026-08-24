@@ -15,6 +15,8 @@ import functools
 import inspect
 import logging
 import threading
+import uuid
+import weakref
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from contextlib import contextmanager
@@ -213,9 +215,10 @@ class _Cell:
     presence rather than off a second cell type.
     """
 
-    __slots__ = ("address", "value", "version")
+    __slots__ = ("__weakref__", "address", "identity", "value", "version")
 
     def __init__(self, value: Any = _MISSING, version: int = 0, address: Any = None) -> None:
+        self.identity = uuid.uuid7()
         self.value = value
         self.version = version
         self.address = address
@@ -435,18 +438,33 @@ class SlotValue:
         return self.value if self.present else _MISSING
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class CellTarget:
-    """The stable runtime identity of one reversible state slot."""
+    """A weak runtime capability for one stable reversible state slot."""
 
-    owner: ReactiveOwner
+    _owner: weakref.ReferenceType[ReactiveOwner]
+    _cell: weakref.ReferenceType[_Cell]
     name: str
-    cell: _Cell
+    identity: str
 
-    @property
-    def identity(self) -> str:
-        address = self.cell.address
-        return str(address) if address is not None else f"cell:{id(self.cell)}"
+    def __init__(self, owner: ReactiveOwner, name: str, cell: _Cell) -> None:
+        object.__setattr__(self, "_owner", weakref.ref(owner))
+        object.__setattr__(self, "_cell", weakref.ref(cell))
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "identity", f"slot:{cell.identity}")
+
+    def resolve(self, expected_version: int) -> tuple[ReactiveOwner, _Cell]:
+        """Return the live slot or report an expired conditional inverse."""
+        owner = self._owner()
+        cell = self._cell()
+        if owner is None or cell is None:
+            detail = ConflictDetail(self.identity, expected_version, -1)
+            raise ReactiveConflictError(detail, f"{self.identity} no longer exists; nothing was published")
+        return owner, cell
+
+    def live_cell(self) -> _Cell | None:
+        """Return the slot for non-mutating diagnostics, or ``None`` after collection."""
+        return self._cell()
 
 
 @dataclass(frozen=True, slots=True)
@@ -488,7 +506,8 @@ class CellPatchSet:
         found: list[Any] = []
         seen: set[int] = set()
         for patch in self.patches:
-            address = patch.target.cell.address
+            cell = patch.target.live_cell()
+            address = None if cell is None else cell.address
             if address is None or id(address) in seen:
                 continue
             seen.add(id(address))
@@ -505,10 +524,11 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
     if current is None or not current.writable():
         message = "conditional patches require an active writable transaction"
         raise RuntimeError(message)
-    for patch in patches:
-        current.require_version(patch.target.cell, patch.expected_version)
-    for patch in patches:
-        _write(patch.target.owner, patch.target.name, patch.target.cell, patch.value.raw())
+    resolved = tuple((patch, *patch.target.resolve(patch.expected_version)) for patch in patches)
+    for patch, _, cell in resolved:
+        current.require_version(cell, patch.expected_version)
+    for patch, owner, cell in resolved:
+        _write(owner, patch.target.name, cell, patch.value.raw())
 
 
 def _cell_for(owner: ReactiveOwner, name: str) -> _Cell:
@@ -658,11 +678,7 @@ class _Transaction:
             raise ReactiveConflictError(detail, message)
 
     def target_id(self, cell: _Cell) -> str:
-        if cell.address is None:
-            return f"cell:{id(cell)}"
-        if hasattr(cell.address, "owner") and hasattr(cell.address, "name"):
-            return f"{cell.address.owner!r}.{cell.address.name}"
-        return str(cell.address)
+        return f"slot:{cell.identity}"
 
     def require_version(self, cell: _Cell, version: int) -> None:
         existing = self.preconditions.get(cell)
@@ -841,11 +857,13 @@ class _FrozenTransactionView:
         return self.transaction.context
 
     def read_staged(self, target: CellTarget) -> SlotValue:
-        staged = self.transaction.staged(target.cell)
-        return SlotValue.from_raw(target.cell.value if staged is None else staged.value)
+        _, cell = target.resolve(-1)
+        staged = self.transaction.staged(cell)
+        return SlotValue.from_raw(cell.value if staged is None else staged.value)
 
     def read_committed(self, target: CellTarget) -> SlotValue:
-        return SlotValue.from_raw(target.cell.value)
+        _, cell = target.resolve(-1)
+        return SlotValue.from_raw(cell.value)
 
 
 def report_undeclared_write(owner: object, name: str) -> None:
@@ -1246,6 +1264,17 @@ class _State:
             if held is value if self.opaque else _equal(held, value):
                 return
         _write(instance, self._name, self.cell(instance), value)
+
+    def __delete__(self, instance: ReactiveOwner) -> None:
+        """Stage removal while retaining the slot's identity and version lineage."""
+        cell = instance.__dict__.get(self._name)
+        held = _MISSING if cell is None else _staged_value(cell)
+        if cell is not None and held is _MISSING:
+            held = cell.value
+        if cell is None or held is _MISSING:
+            message = f"{type(instance).__name__}.{self.public_name} was never assigned"
+            raise AttributeError(message)
+        _write(instance, self._name, cell, _MISSING)
 
 
 @overload

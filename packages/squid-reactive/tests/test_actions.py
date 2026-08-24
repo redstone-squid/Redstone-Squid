@@ -16,6 +16,7 @@ from squid_reactive import (
     ActionLedger,
     ActionOutcomeCodec,
     LocalTopicBus,
+    Reactive,
     ReactiveConflictError,
     ReactiveWriteError,
     Shared,
@@ -38,6 +39,10 @@ class Preferences(Shared[int]):
 
 
 class Counter(Shared[int]):
+    value: int = state(0)
+
+
+class LocalCounter(Reactive):
     value: int = state(0)
 
 
@@ -150,6 +155,23 @@ def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
         with transaction():
             apply_conditional_patches(inverse)
         assert counter.value == 0
+
+
+def test_retained_patch_uses_weak_slot_authority() -> None:
+    counter = LocalCounter()
+    owner = weakref.ref(counter)
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        counter.value = 1
+    inverse = commits[0].patches.inverse()
+
+    del counter
+    gc.collect()
+
+    assert owner() is None
+    with pytest.raises(ReactiveConflictError, match="no longer exists"), transaction():
+        apply_conditional_patches(inverse)
 
 
 def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
