@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Hashable, Iterat
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Protocol
 from uuid import uuid4
 
@@ -95,9 +95,9 @@ class RejectionReason(Enum):
 class SessionSummary:
     """Immutable facts a session policy may use during local admission.
 
-    ``id`` and ``opened_at`` do not change over a session's lifetime. Participant fields
+    ``id`` and ``opened_at`` do not change over a session's lifetime. Membership fields
     are a point-in-time copy too: the registry creates a fresh summary for a decision after
-    an attachment change while retaining the same identity and opening time.
+    a membership or attachment change while retaining the same identity and opening time.
     """
 
     id: str
@@ -106,8 +106,25 @@ class SessionSummary:
     actor_id: int | None
     durable: bool = False
     local: bool = True
-    participants: frozenset[int] = frozenset()
+    members: frozenset[int] = frozenset()
     attachment_actors: frozenset[int] = frozenset()
+    capacity: int | None = None
+
+    @property
+    def participants(self) -> frozenset[int]:
+        """Every user attributable to this session, however they arrived.
+
+        Derived rather than stored so a policy reads one field: explicit members, actors
+        attributed to attached mounts, and the opener are all reasons to treat a session as
+        somebody's. A policy that wants only one of them reads that field directly.
+        """
+        opener = frozenset() if self.actor_id is None else frozenset({self.actor_id})
+        return self.members | self.attachment_actors | opener
+
+    @property
+    def remaining_capacity(self) -> int | None:
+        """Free member slots, or `None` when this session is unbounded."""
+        return None if self.capacity is None else max(self.capacity - len(self.members), 0)
 
     @property
     def is_durable(self) -> bool:
@@ -200,10 +217,8 @@ class ProtectCrossUserAttachments:
 
     async def allows(self, request: OpeningRequest, victim: SessionSummary) -> bool:
         actor_id = request.actor_id
-        if actor_id is None:
-            allowed = not victim.participants and not victim.attachment_actors
-        else:
-            allowed = not (victim.participants - {actor_id}) and not (victim.attachment_actors - {actor_id})
+        others = victim.participants if actor_id is None else victim.participants - {actor_id}
+        allowed = not others
         # A temporary open must not silently retire a durable session. Hosts that
         # intentionally perform that operation can supply ``Unprotected`` or their own
         # protection policy.
@@ -235,6 +250,42 @@ class SessionPolicy:
 DEFAULT_SESSION_POLICY = SessionPolicy()
 
 
+class MembershipStatus(StrEnum):
+    """The outcome of one membership operation."""
+
+    JOINED = "joined"
+    ALREADY_MEMBER = "already_member"
+    LEFT = "left"
+    NOT_MEMBER = "not_member"
+    AT_CAPACITY = "at_capacity"
+    REFUSED = "refused"
+    CONFLICT = "conflict"
+    SESSION_FINISHED = "session_finished"
+
+
+@dataclass(frozen=True, slots=True)
+class MembershipResult:
+    """What one `join` or `leave` decided, with the set it decided against."""
+
+    user_id: int
+    status: MembershipStatus
+    members: frozenset[int]
+    remaining_capacity: int | None
+
+    @property
+    def committed(self) -> bool:
+        """Whether this operation changed the membership set."""
+        return self.status in (MembershipStatus.JOINED, MembershipStatus.LEFT)
+
+
+def _require_user_id(user_id: int) -> int:
+    """Reject the two shapes a Discord id is never allowed to take."""
+    if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
+        message = "member ids must be positive integers"
+        raise ValueError(message)
+    return user_id
+
+
 class Session:
     """One root mount and every child mount in its operational lifetime."""
 
@@ -248,14 +299,24 @@ class Session:
         durable: bool = False,
         local: bool = True,
         summary: SessionSummary | None = None,
+        members: frozenset[int] | None = None,
+        capacity: int | None = None,
     ) -> None:
+        if capacity is not None and capacity <= 0:
+            message = "session capacity must be positive or None"
+            raise ValueError(message)
         self.key = key
         self.root = root
         self._registry = registry
         self._mounts: list[Mount] = [root]
         self._parent: dict[Mount, Mount | None] = {root: None}
         self._actor: dict[Mount, int | None] = {root: actor_id}
-        self._participants = frozenset() if actor_id is None else frozenset({actor_id})
+        # The opener is the initial member: a semantic default that makes their presence
+        # explicit, not an authorization decision. Recovery supplies the stored set instead.
+        if members is None:
+            members = frozenset() if actor_id is None else frozenset({_require_user_id(actor_id)})
+        self._members = members
+        self._capacity = capacity
         self._summary = summary or SessionSummary(
             id=str(uuid4()),
             opened_at=datetime.now(UTC),
@@ -274,9 +335,28 @@ class Session:
         return tuple(self._mounts)
 
     @property
+    def members(self) -> frozenset[int]:
+        """The users explicitly admitted to this session."""
+        return self._members
+
+    @property
     def participants(self) -> frozenset[int]:
-        """Operational actors already attributed to this session."""
-        return self._participants
+        """Every user attributable to this session; see `SessionSummary.participants`."""
+        return self.summary.participants
+
+    @property
+    def capacity(self) -> int | None:
+        """The most members this session admits, or `None` when unbounded."""
+        return self._capacity
+
+    @property
+    def remaining_capacity(self) -> int | None:
+        """Free member slots, or `None` when this session is unbounded."""
+        return None if self._capacity is None else max(self._capacity - len(self._members), 0)
+
+    def has_member(self, user_id: int) -> bool:
+        """Whether `user_id` is an explicit member of this session."""
+        return user_id in self._members
 
     @property
     def attachment_actors(self) -> frozenset[int]:
@@ -301,8 +381,9 @@ class Session:
             actor_id=self._summary.actor_id,
             durable=self._summary.durable,
             local=self._summary.local,
-            participants=self.participants,
+            members=self._members,
             attachment_actors=self.attachment_actors,
+            capacity=self._capacity,
         )
 
     @property
@@ -349,6 +430,64 @@ class Session:
             self._registry._index_mount(self, mount)
             mount.on_finish(self._mount_finished)
             return Opened(self)
+
+    async def join(
+        self,
+        user_id: int,
+        *,
+        when: Callable[[frozenset[int]], bool] | None = None,
+        expect: frozenset[int] | None = None,
+    ) -> MembershipResult:
+        """Admit `user_id` to this session under its capacity.
+
+        Membership is caller-authorized: the framework decides capacity and atomicity, never
+        whether a user was invited, banned, paid, or assigned to a team. Perform that check
+        before calling.
+
+        `when` is an extra rule over the current members, evaluated under the session
+        lifecycle lock. **It must be synchronous and pure** — that lock also serialises
+        `attach` and `finish`, so I/O inside it stalls the whole session. A rule that is both
+        asynchronous and set-dependent belongs outside the lock instead: read `members`, make
+        the async decision, then commit with `expect=` and retry on `CONFLICT`.
+        """
+        _require_user_id(user_id)
+        async with self._lifecycle_lock:
+            if (dead := self._membership_refusal(user_id, expect)) is not None:
+                return dead
+            if user_id in self._members:
+                return self._membership(user_id, MembershipStatus.ALREADY_MEMBER)
+            if (remaining := self.remaining_capacity) is not None and remaining <= 0:
+                return self._membership(user_id, MembershipStatus.AT_CAPACITY)
+            if when is not None and not when(self._members):
+                return self._membership(user_id, MembershipStatus.REFUSED)
+            self._members = self._members | {user_id}
+            return self._membership(user_id, MembershipStatus.JOINED)
+
+    async def leave(self, user_id: int, *, expect: frozenset[int] | None = None) -> MembershipResult:
+        """Remove `user_id` from this session.
+
+        The opener and the final member may both leave. An empty session stays alive; only
+        the application knows when a lobby or game is over.
+        """
+        _require_user_id(user_id)
+        async with self._lifecycle_lock:
+            if (dead := self._membership_refusal(user_id, expect)) is not None:
+                return dead
+            if user_id not in self._members:
+                return self._membership(user_id, MembershipStatus.NOT_MEMBER)
+            self._members = self._members - {user_id}
+            return self._membership(user_id, MembershipStatus.LEFT)
+
+    def _membership_refusal(self, user_id: int, expect: frozenset[int] | None) -> MembershipResult | None:
+        """The two refusals both operations share, checked under the lifecycle lock."""
+        if self._closed or self.root.finished:
+            return self._membership(user_id, MembershipStatus.SESSION_FINISHED)
+        if expect is not None and expect != self._members:
+            return self._membership(user_id, MembershipStatus.CONFLICT)
+        return None
+
+    def _membership(self, user_id: int, status: MembershipStatus) -> MembershipResult:
+        return MembershipResult(user_id, status, self._members, self.remaining_capacity)
 
     async def finish(self, *, disable: bool = True) -> None:
         """Finish every mount depth-first and unregister the session."""
@@ -456,12 +595,14 @@ class SessionRegistry:
         durable: bool = False,
         local: bool = True,
         summary: SessionSummary | None = None,
+        capacity: int | None = None,
     ) -> OpenResult:
         """Admit, deliver, and register one new root session.
 
         ``durable`` and ``local`` are descriptive admission facts.  A caller restoring a
         session may pass its immutable ``summary`` instead to retain the original identity
-        and opening time.
+        and opening time.  ``capacity`` caps the session's explicit members; it is a fact of
+        this session rather than of the key contest, so it is not part of ``policy``.
         """
         if not isinstance(mount, Mount):
             message = "SessionRegistry.open requires a Mount; use MountDefaults.mount or Screen.open"
@@ -477,6 +618,7 @@ class SessionRegistry:
                 durable=durable,
                 local=local,
                 summary=summary,
+                capacity=capacity,
                 remote_occupants=(),
                 before_registration=None,
                 session_type=Session,
@@ -491,6 +633,7 @@ class SessionRegistry:
                 durable=durable,
                 local=local,
                 summary=summary,
+                capacity=capacity,
                 remote_occupants=(),
                 before_registration=None,
                 session_type=Session,
@@ -508,6 +651,7 @@ class SessionRegistry:
         remote_occupants: tuple[SessionSummary, ...],
         before_registration: BeforeRegistration,
         session_type: type[SessionT],
+        capacity: int | None = None,
     ) -> Opened[SessionT] | Rejected | Abandoned:
         """Open under the registry lock with a caller-owned external commit boundary.
 
@@ -524,6 +668,7 @@ class SessionRegistry:
                 durable=True,
                 local=True,
                 summary=summary,
+                capacity=capacity,
                 remote_occupants=remote_occupants,
                 before_registration=before_registration,
                 session_type=session_type,
@@ -538,6 +683,8 @@ class SessionRegistry:
         summary: SessionSummary,
         attachments: tuple[tuple[Mount, Mount, int | None], ...],
         session_type: type[SessionT],
+        members: frozenset[int] | None = None,
+        capacity: int | None = None,
     ) -> SessionT:
         """Register a frontend-reconnected session without delivering its mounts again."""
         session = session_type(
@@ -548,6 +695,8 @@ class SessionRegistry:
             durable=True,
             local=True,
             summary=summary,
+            members=members,
+            capacity=capacity,
         )
         self._sessions.append(session)
         self._by_key.setdefault(key, []).append(session)
@@ -596,6 +745,7 @@ class SessionRegistry:
         durable: bool,
         local: bool,
         summary: SessionSummary | None,
+        capacity: int | None,
         remote_occupants: tuple[SessionSummary, ...],
         before_registration: BeforeRegistration | None,
         session_type: type[Session],
@@ -613,6 +763,7 @@ class SessionRegistry:
             durable=durable,
             local=local,
             summary=summary,
+            capacity=capacity,
         )
         victims: tuple[Session, ...] = ()
         selected: tuple[SessionSummary, ...] = ()
