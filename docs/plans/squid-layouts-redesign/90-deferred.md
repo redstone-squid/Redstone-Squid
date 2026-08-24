@@ -146,6 +146,11 @@ are not re-derived or accidentally adopted later.
   `Agreement` component state. The participant *lifecycle* model is now
   [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
+  **Closed 2026-08-24**: [60](60-session-membership.md) shipped `join`/`leave`, per-session
+  capacity and durable membership, with `/layout lobby` as the worked example this entry
+  required. One piece of 34 §B.4 stays deferred and moves to 60's Not included: the
+  cross-session member index, which is the only part needing two locks and still has no
+  consumer.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
