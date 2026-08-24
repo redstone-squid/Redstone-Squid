@@ -1,8 +1,10 @@
 """Replicated SPI conformance against the deterministic fake backend."""
 
 import contextvars
+import gc
 import json
 import uuid
+import weakref
 
 import pytest
 from squid_replicated import (
@@ -362,6 +364,62 @@ def test_scope_disposal_prevents_late_import_and_mutation() -> None:
         document.counter("votes").increment(1)
     with pytest.raises(ReplicatedClosedError):
         document.drain_updates()
+
+
+def test_scope_disposal_clears_documents_subscriptions_pending_exports_and_deduplication() -> None:
+    source = ReplicatedScope("source").open("project")
+    scope = ReplicatedScope("target")
+    document = scope.open("project")
+
+    class Listener:
+        def receive(self, value) -> None:
+            pass
+
+    listener = Listener()
+    listener_ref = weakref.ref(listener)
+    document.subscribe(listener.receive)
+    document.subscribe_updates(lambda update: None)
+    with transaction():
+        source.counter("votes").increment(1)
+    document.import_update(source.export_since())
+    with transaction():
+        document.counter("votes").increment(1)
+    assert document.subscription_count == 2
+    assert document.pending_update_count == 1
+    assert document.deduplication_count == 1
+    assert scope.active_documents == ("project",)
+
+    del listener
+    scope.close()
+    gc.collect()
+
+    assert listener_ref() is None
+    assert document.subscription_count == 0
+    assert document.pending_update_count == 0
+    assert document.deduplication_count == 0
+    assert scope.active_documents == ()
+
+
+def test_remote_deduplication_retention_is_bounded() -> None:
+    document = ReplicatedScope("a").open("project")
+
+    for index in range(10_005):
+        document._remember_update(str(index))
+
+    assert document.deduplication_count == 10_000
+    assert "0" not in document._seen_update_ids
+
+
+def test_pending_outbound_retention_is_bounded() -> None:
+    source = ReplicatedScope("source").open("project")
+    with transaction():
+        source.counter("votes").increment(1)
+    update = source.drain_updates()[0]
+    target = ReplicatedScope("target").open("project")
+
+    target._pending_updates.extend(update for _ in range(1_005))
+
+    assert target.pending_update_count == 1_000
 
 
 async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> None:
