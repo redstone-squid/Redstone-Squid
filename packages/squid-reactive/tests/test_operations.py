@@ -23,11 +23,12 @@ class Owner:
 
 async def test_operation_reports_progress_and_succeeds_once() -> None:
     owner = Owner()
+    execution = owner.work.start()
 
-    assert owner.work.status == Pending("starting")
-    assert await owner.work == 42
-    assert owner.work.status == Succeeded(42)
-    assert await owner.work == 42
+    assert execution.status == Pending("starting")
+    assert await execution == 42
+    assert execution.status == Succeeded(42)
+    assert await execution == 42
     assert owner.calls == 1
     assert owner.invalidations == 2
 
@@ -45,10 +46,11 @@ async def test_operation_joins_one_in_flight_attempt() -> None:
             return "done"
 
     owner = SlowOwner()
+    execution = owner.slow.start()
     values: list[str] = []
 
     async def run() -> None:
-        values.append(await owner.slow)
+        values.append(await execution)
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(run)
@@ -68,16 +70,17 @@ async def test_operation_failure_is_terminal() -> None:
             raise ValueError("nope")
 
     owner = FailingOwner()
+    execution = owner.failing.start()
 
     with pytest.raises(ValueError, match="nope"):
-        await owner.failing
-    match owner.failing.status:
+        await execution
+    match execution.status:
         case Failed(error=error, progress="almost"):
             assert str(error) == "nope"
         case status:
             pytest.fail(f"unexpected operation status: {status!r}")
     with pytest.raises(ValueError, match="nope"):
-        await owner.failing
+        await execution
 
 
 async def test_operation_cancellation_is_terminal() -> None:
@@ -87,10 +90,22 @@ async def test_operation_cancellation_is_terminal() -> None:
             await anyio.sleep_forever()
 
     owner = CancelledOwner()
+    execution = owner.waiting.start()
 
     with anyio.move_on_after(0.01):
-        await owner.waiting
+        await execution
 
-    assert owner.waiting.status == Cancelled("waiting")
+    assert execution.status == Cancelled("waiting")
     with pytest.raises(asyncio.CancelledError):
-        await owner.waiting
+        await execution
+
+
+async def test_each_start_has_fresh_identity_and_retry_state() -> None:
+    owner = Owner()
+    first = owner.work.start()
+    second = owner.work.start()
+
+    assert first.context.execution_id != second.context.execution_id
+    assert await first == 42
+    assert await second == 42
+    assert owner.calls == 2

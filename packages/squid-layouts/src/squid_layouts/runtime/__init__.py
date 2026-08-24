@@ -3,6 +3,9 @@
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.histories import (
+    CompensationExecution,
+    CompensationSpec,
+    CompensationStatus,
     History,
     HistoryEntry,
     HistoryEntrySnapshot,
@@ -127,6 +130,9 @@ __all__ = [
     "CellPatch",
     "CellPatchSet",
     "CellReport",
+    "CompensationExecution",
+    "CompensationSpec",
+    "CompensationStatus",
     "Component",
     "ComponentRuntime",
     "ComputedReport",
