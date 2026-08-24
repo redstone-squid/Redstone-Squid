@@ -63,7 +63,7 @@ from squid_layouts.runtime.resources import (
     ResourceStatus,
     resource,
 )
-from squid_layouts.runtime.shared import Shared
+from squid_layouts.runtime.shared import Shared, SharedFactory, SharedPool
 from squid_layouts.runtime.topics import (
     Address,
     BusSnapshot,
@@ -125,6 +125,8 @@ __all__ = [
     "SelectionState",
     "SessionUpdate",
     "Shared",
+    "SharedFactory",
+    "SharedPool",
     "SharedStateConflictError",
     "StateChange",
     "StateDelta",
