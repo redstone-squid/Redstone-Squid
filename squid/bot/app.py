@@ -22,7 +22,7 @@ from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRen
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
-from squid.bot.ui import MOUNT_DEFAULTS, install_mount_defaults
+from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -49,7 +49,7 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_layouts.discord import ChallengeRunner, DialogPresenter, Reactor, SessionRegistry
+from squid_layouts.discord import install
 from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
 from squid_reactive import LocalTopicBus
@@ -157,26 +157,23 @@ class RedstoneSquid(Bot):
         # Permission checks resolve a Discord id to an account on every command,
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
-        # How many of each panel a user may have open, and which mounts die with their
-        # parent. Reached from a handler as `interaction.client.mounts`.
         self.layout_profiler = MemoryProfiler()
         self.topic_bus = LocalTopicBus()
-        self.layout_reactor = Reactor(self.topic_bus, profiler=self.layout_profiler)
         self.topic_bridge: PostgresTopicBridge | None = None
         # Publishing goes through whichever of the two reaches every process. Until
         # `setup_hook` opens the bridge -- and forever, if no listener URL is configured --
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
-        self.mounts = SessionRegistry(defaults=MOUNT_DEFAULTS.replace(scheduler=self.layout_reactor))
-        # A guard that challenges a press asks in a child panel and resumes the press once
-        # the reader agrees. The resumption must not run in the answering press's
-        # transaction, so it goes through this runner's queue rather than a spawned task.
-        self.layout_challenges = ChallengeRunner()
-        presenter = DialogPresenter(self.mounts, self.layout_challenges)
-        self.mounts.defaults = self.mounts.defaults.replace(challenge=presenter)
-        # And again for the panels that never touch the registry: `create_mount` reads the
-        # module default, and a guard that challenges is a programmer error without one.
-        install_mount_defaults(MOUNT_DEFAULTS.replace(challenge=presenter))
+        # One assembly for the whole process, reachable from any interaction as
+        # `LayoutHost.of(...)`: the session registry, the reactor, and the challenge runner
+        # a guard's dialog resumes an approved press through.
+        self.layout_host = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
+        assert self.layout_host.reactor is not None, "a topic bus was given, so there is a reactor"
+        self.layout_reactor = self.layout_host.reactor
+        self.layout_challenges = self.layout_host.challenges
+        # How many of each panel a user may have open, and which mounts die with their
+        # parent. Reached from a handler as `interaction.client.mounts`.
+        self.mounts = self.layout_host.mounts
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -202,7 +199,7 @@ class RedstoneSquid(Bot):
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
         with anyio.move_on_after(3.0):
-            await self.mounts.close_all()
+            await self.layout_host.close()
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not

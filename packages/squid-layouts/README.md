@@ -756,6 +756,20 @@ list rather than an assertion.
 - The base package depends only on the zero-dependency `squid-reactive` kernel. Install the
   `discord` extra for discord.py and anyio. The adapter never starts background work on its own;
   start `sl.discord.Reactor.run()` and any external bridge under your own supervisor.
+- `sl.discord.install(client)` performs the assembly whose construction is circular -- the
+  session registry, the challenge runner, and the dialog presenter that needs both -- and records
+  the `LayoutHost` against the client, so anything carrying that client reaches it again through
+  `LayoutHost.of(source)`. Once per client; a second install is refused.
+
+  ```python
+  host = sl.discord.install(bot, defaults=MountDefaults(chrome=CHROME), bus=topic_bus)
+  ```
+
+  **`install` starts nothing.** Nothing refreshes and no approved press resumes until
+  `host.run()` is supervised, or until `host.reactor.run()` and `host.challenges.run()` are
+  started as separate jobs -- which is what a host wanting per-job health granularity does.
+  `host.close()` ends it: every session is finished, and the client stops answering
+  `LayoutHost.of`.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the

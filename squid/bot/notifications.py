@@ -62,7 +62,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             author_id=interaction.user.id,
             locale=locale,
         )
-        mount = component.mount()
+        mount = component.mount(source=interaction)
         await mount.send(respond_to(interaction, ephemeral=True, wait=True))
 
     @autocompletes(

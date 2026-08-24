@@ -1202,10 +1202,10 @@ class Lobby(sl.Component):
         self.host_id = host_id
         self._mount: sl.discord.Mount | None = None
 
-    def mount(self, *, locale: str | None = None) -> sl.discord.Mount:
+    def mount(self, *, source: sl.discord.host.HostSource, locale: str | None = None) -> sl.discord.Mount:
         # Kept so the panel can find its own session; the mount cannot be handed to the
         # component that renders it any other way.
-        self._mount = create_mount(self, access=sl.discord.Everyone(), locale=locale, timeout=None)
+        self._mount = create_mount(self, source=source, access=sl.discord.Everyone(), locale=locale, timeout=None)
         return self._mount
 
     def render(self) -> sl.LayoutNode:
@@ -1349,7 +1349,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(ctx, self.bot.services.settings)
         panel = Lobby(self.bot.mounts, ctx.author.id)
         await self.bot.mounts.open(
-            panel.mount(locale=locale),
+            panel.mount(source=ctx, locale=locale),
             destination(ctx, locale=locale),
             key=SessionKey.guild("showcase-lobby", ctx.guild.id),
             actor_id=ctx.author.id,

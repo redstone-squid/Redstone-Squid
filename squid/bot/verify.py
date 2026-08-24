@@ -86,8 +86,14 @@ class MergeConfirmation(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self) -> sl.discord.Mount:
-        return create_mount(self, access=sl.discord.Owner(self.author_id), locale=self.locale, timeout=self._timeout)
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+        return create_mount(
+            self,
+            source=source,
+            access=sl.discord.Owner(self.author_id),
+            locale=self.locale,
+            timeout=self._timeout,
+        )
 
 
 class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
@@ -122,7 +128,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        mount = component.mount()
+        mount = component.mount(source=ctx)
         await mount.send(destination(ctx, visibility="personal", locale=locale))
 
     async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
@@ -362,7 +368,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             author_id=ctx.author.id,
             locale=locale,
         )
-        await confirmation.mount().send(destination(ctx, visibility="personal", locale=locale))
+        await confirmation.mount(source=ctx).send(destination(ctx, visibility="personal", locale=locale))
         await confirmation.wait()
 
         if confirmation.value is None:
@@ -423,7 +429,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             can_approve=approve.allowed,
             can_reject=reject.allowed,
         )
-        mount = component.mount()
+        mount = component.mount(source=ctx)
         await mount.send(destination(ctx, visibility="personal", locale=locale))
 
 

@@ -82,9 +82,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         locale=locale,
         timeout=120,
     )
-    registry = interaction.client.mounts
     opened = await CONSENT_SCREEN.respond(
-        registry,
         component,
         interaction,
         wait=True,
