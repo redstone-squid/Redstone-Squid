@@ -18,6 +18,7 @@ from squid.bot.layout_showcase import (
     Session,
 )
 from squid_layouts.discord import Everyone, Mount, Owner, Reactor
+from squid_layouts.discord.sessions import UserScope
 from squid_layouts.discord.testing import (
     assert_within_limits,
     commit_render,
@@ -199,7 +200,9 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
 
 async def test_demo_command_and_controls_are_public() -> None:
     settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    cog = LayoutShowcaseCog(cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings))))
+    cog = LayoutShowcaseCog(
+        cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus()))
+    )
     ctx = cast(
         commands.Context[Any],
         cast(
@@ -228,7 +231,8 @@ class TestSharedAppearance:
     def panels(self) -> tuple[sl.runtime.LocalTopicBus, Reactor, Appearance, Session, Mount, Mount]:
         bus = sl.runtime.LocalTopicBus()
         reactor = Reactor(bus)
-        appearance, session = Appearance(bus, 7), Session(bus, 7)
+        scope = UserScope(7)
+        appearance, session = Appearance(bus, scope), Session(bus, scope)
         writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
         reader = Mount(PreviewPanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
         return bus, reactor, appearance, session, writer, reader

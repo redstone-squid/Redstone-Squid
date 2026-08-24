@@ -13,6 +13,8 @@ import squid_layouts as sl
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, L, localization_for, send_component
 from squid.core.i18n import _
+from squid_layouts.discord.screens import Opener
+from squid_layouts.discord.sessions import UserScope
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -593,7 +595,7 @@ class LayoutShowcase(sl.Component):
 # --- Shared state ---------------------------------------------------------------------------
 
 
-class Appearance(sl.runtime.Shared[int]):
+class Appearance(sl.runtime.Shared[UserScope]):
     """View state two live panels agree on, scoped to one reader.
 
     Nothing outside the screen wants a theme name, so it is not a service and not a row: it
@@ -605,7 +607,7 @@ class Appearance(sl.runtime.Shared[int]):
     density: str = sl.state("comfortable")
 
 
-class Session(sl.runtime.Shared[int]):
+class Session(sl.runtime.Shared[UserScope]):
     """What one invocation's two panels are looking at, and only for as long as they are."""
 
     focus: str = sl.state("overview")
@@ -723,9 +725,9 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
         # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
-        # a reader's accent survives closing and reopening the demo. The dict is the retention
+        # a reader's accent survives closing and reopening the demo. The pool is the retention
         # policy, written down where the lifetime is known.
-        self._appearance: dict[int, Appearance] = {}
+        self._appearance = sl.runtime.SharedPool(Appearance, bot.topic_bus)
 
     @commands.hybrid_group(name="layout")
     async def layout_group(self, ctx: Context[BotT]) -> None:
@@ -756,10 +758,12 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that share one namespace of view state."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        appearance = self._appearance.setdefault(ctx.author.id, Appearance(self.bot.topic_bus, ctx.author.id))
+        scope = Opener(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
+        appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
-        # of them finishes. Nothing was looking at it, and that is the correct lifetime.
-        session = Session(self.bot.topic_bus, ctx.author.id)
+        # of them finishes. Nothing was looking at it, so it wants no pool -- the lifetime the
+        # handle already has is the correct one.
+        session = Session(self.bot.topic_bus, scope)
         for component in (
             AppearancePanel(appearance, session),
             PreviewPanel(appearance, session),
