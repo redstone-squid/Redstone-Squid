@@ -21,6 +21,7 @@ from squid.accounts.domain import (
 )
 from squid.bot.account_view import AccountPanel
 from squid.bot.verify import VerifyCog
+from squid_layouts.discord.testing import commit_render, fake_interaction
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
@@ -260,3 +261,71 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
         ACCOUNT_ID, DISCORD.id, is_public=True
     )
     mount.refresh.assert_awaited_once()
+
+
+class _Recorder:
+    """A challenge presenter that keeps the question instead of showing it."""
+
+    def __init__(self) -> None:
+        self.requests: list[Any] = []
+
+    async def present(self, request: Any) -> None:
+        self.requests.append(request)
+
+
+def _linked_panel() -> tuple[AccountPanel, _Recorder, AsyncMock, sl.discord.Mount]:
+    unlink = AsyncMock(return_value=JAVA)
+    panel = AccountPanel(
+        accounts=cast(Any, SimpleNamespace(unlink_identity=unlink)),
+        account_id=ACCOUNT_ID,
+        author_id=AUTHOR_ID,
+        locale="en",
+    )
+    panel._profile = AccountProfile.empty(ACCOUNT_ID)
+    panel._identities = (DISCORD, JAVA)
+    panel.selected_id = JAVA.id
+    panel._refresh = AsyncMock()  # type: ignore[method-assign]
+    presenter = _Recorder()
+    mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), timeout=None, challenge=presenter)
+    commit_render(mount)
+    return panel, presenter, unlink, mount
+
+
+async def test_unlinking_asks_before_it_removes_anything() -> None:
+    """The armed flag is gone: the button declares that it needs reaffirming.
+
+    What used to be three pieces of view state, an early return and a relabelled button is now
+    `guard=sl.guards.confirm(...)`, and the warning is in the question instead of the footer.
+    """
+    panel, presenter, unlink, mount = _linked_panel()
+
+    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+
+    unlink.assert_not_awaited()
+    assert len(presenter.requests) == 1
+    assert presenter.requests[0].key == "unlink"
+
+
+async def test_agreeing_to_the_question_removes_the_identity() -> None:
+    panel, presenter, unlink, mount = _linked_panel()
+    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+
+    await presenter.requests[0].approve()
+
+    unlink.assert_awaited_once_with(ACCOUNT_ID, JAVA.id)
+
+
+async def test_declining_the_question_removes_nothing() -> None:
+    panel, presenter, unlink, mount = _linked_panel()
+    await mount.dispatch("unlink", fake_interaction(user_id=AUTHOR_ID))
+
+    await presenter.requests[0].decline()
+
+    unlink.assert_not_awaited()
+
+
+def test_unlinking_your_own_discord_account_says_what_that_costs() -> None:
+    panel, _, _, _ = _linked_panel()
+    panel.selected_id = DISCORD.id
+
+    assert "stop recognising you here" in panel._unlink_warning()
