@@ -63,6 +63,7 @@ async def test_session_inspection_reports_membership_and_capacity() -> None:
         key=SessionKey.global_("devtools"),
         actor_id=7,
         capacity=3,
+        quota=1,
     )
     assert isinstance(opened, Opened)
     await opened.session.join(8)
@@ -72,6 +73,8 @@ async def test_session_inspection_reports_membership_and_capacity() -> None:
 
     assert inspected.members == (7, 8)
     assert inspected.capacity == 3
+    assert inspected.quota == 1
+    assert inspected.domain == "devtools"
     assert inspected.remaining_capacity == 1
     assert inspected.participants == (7, 8)
 

@@ -84,6 +84,8 @@ class SessionInspection:
     members: tuple[int, ...] = ()
     capacity: int | None = None
     remaining_capacity: int | None = None
+    quota: int | None = None
+    domain: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -371,6 +373,8 @@ def _session_inspection(session: Session) -> SessionInspection:
         tuple(sorted(summary.members)),
         summary.capacity,
         summary.remaining_capacity,
+        session.quota,
+        session.domain,
     )
 
 
