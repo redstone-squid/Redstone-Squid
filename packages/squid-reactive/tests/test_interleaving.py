@@ -109,3 +109,44 @@ def test_scheduler_observes_prepare_abort_and_failure_isolated_hook_order() -> N
     with hook_schedule.installed(), transaction():
         on_action_commit(lambda commit, aftermath: (_ for _ in ()).throw(RuntimeError("hook")))
     assert "aftermath.before_hook" in hook_schedule.seen
+
+
+def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() -> None:
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    read_only = InterleavingHarness()
+    try:
+        with read_only.installed(), transaction():
+            pass
+        assert len(ledger.outcomes) == 1
+        assert ledger.outcomes[0].terminal == "committed"
+        assert ledger.outcomes[0].changes.cells == 0
+        assert read_only.seen[:2] == ["transaction.enter_body", "transaction.close_staging"]
+
+        class BrokenParticipant:
+            def prepare(self, view) -> None:
+                return None
+
+            def describe_change(self, prepared: None) -> None:
+                return None
+
+            def apply(self, prepared: None) -> None:
+                raise RuntimeError("integrity failure")
+
+            def abort(self, prepared: None, cause: BaseException) -> None:
+                pass
+
+            def finalize(self, prepared: None) -> None:
+                pass
+
+        integrity = InterleavingHarness()
+        with integrity.installed(), pytest.raises(RuntimeError, match="integrity failure"), transaction():
+            join_action(object(), BrokenParticipant)
+    finally:
+        ledger.close()
+
+    assert len(ledger.outcomes) == 2
+    assert ledger.outcomes[1].terminal == "committed"
+    assert ledger.outcomes[1].tags == frozenset({"framework_integrity_failure"})
+    assert "commit.before_publication" in integrity.seen
+    assert "commit.after_cell_publication" in integrity.seen
