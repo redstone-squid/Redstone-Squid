@@ -6,6 +6,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
 
+from squid_layouts._grid import GridCell, validate_grid
 from squid_layouts._roster import RosterPlacement
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
@@ -44,6 +45,7 @@ class TableDisplay(StrEnum):
     AUTO = "auto"
     TABULAR = "tabular"
     RECORDS = "records"
+    MATRIX = "matrix"
 
 
 class DetailLevel(StrEnum):
@@ -410,6 +412,23 @@ class Roster:
 
 
 @dataclass(frozen=True, slots=True)
+class Grid:
+    """A selectable spatial collection with target-shaped fallback strategies."""
+
+    key: str
+    cells: tuple[GridCell, ...]
+    columns: int
+    on_pick: Callable[[SelectionEvent], Awaitable[None]]
+    flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "Grid key must not be empty"
+            raise ValueError(message)
+        validate_grid(self.cells, self.columns)
+
+
+@dataclass(frozen=True, slots=True)
 class Measure:
     value: int | float | str
     label: TextLike
@@ -772,6 +791,7 @@ type SemanticNode = (
     | Status
     | Progress
     | Roster
+    | Grid
     | Measure
     | Timestamp
     | ZonedTimestamp

@@ -17,6 +17,7 @@ from squid_layouts.patterns.editor import (
     EditorState,
     EditorValues,
 )
+from squid_layouts.patterns.grid import GridCell
 from squid_layouts.patterns.lookup import Lookup, LookupPickHandler, LookupSearch
 from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
 from squid_layouts.patterns.multichoice import (
@@ -81,6 +82,7 @@ __all__ = [
     "EditorSectionState",
     "EditorState",
     "EditorValues",
+    "GridCell",
     "Lookup",
     "LookupPickHandler",
     "LookupSearch",

@@ -16,6 +16,7 @@ from squid_layouts.discord import (
     devtools,
     durability,
     fragments,
+    grids,
     guards,
     inspection,
     live,
@@ -66,6 +67,7 @@ from squid_layouts.discord.delivery import (
     respond_to,
 )
 from squid_layouts.discord.fragments import contribute
+from squid_layouts.discord.grids import button_grid
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.managed import (
     ErrorObserver,
@@ -195,6 +197,7 @@ __all__ = [
     "actions",
     "adapter",
     "adopt",
+    "button_grid",
     "challenges",
     "classic",
     "classic_renderer",
@@ -206,6 +209,7 @@ __all__ = [
     "devtools",
     "durability",
     "fragments",
+    "grids",
     "guards",
     "inspection",
     "limits",
