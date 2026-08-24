@@ -300,7 +300,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   pool that added no capability, purely so hosts stopped re-deriving one. Batteries a library
   user expects are part of the product, and this series' bar for *speculation* is not a bar
   for *completeness*.
-- **`squid_layouts.patterns` library** *(mostly delivered — see 18, 19, and the 29–32 survey batches; batch D of 32 is still in progress)* — (Form, Wizard, richer table/list browser à la
+- **`squid_layouts.patterns` library** *(closed — delivered across 18, 19, and survey batches 29–32)* — (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
@@ -309,15 +309,15 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   **Revisited 2026-08-22**: continued by the survey batches
   [29](29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
   table/list browser this entry originally named (30's `Browser`). Batch D (roster, tally,
-  grid, `Agreement`) in [32](32-demand-driven.md) is the one piece not yet landed.
-- **Grid / matrix interaction** *(promoted — designed and being built as batch D of plan 32, in progress, not this entry's concern anymore)* — (added 2026-08-21) — content grids are a `Table`
+  grid, `Agreement`) shipped under [32](32-demand-driven.md) on 2026-08-24; this entry is closed.
+- **Grid / matrix interaction** *(closed — shipped as batch D of plan 32)* — (added 2026-08-21) — content grids are a `Table`
   display strategy (`MATRIX`), not a new node; interactive grids start as an
-  `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
+  `sl.discord.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
   non-degradability free. The degradation ladder (button grid → text grid +
   coordinate select → paged select) is the semantic-node promotion, and it waits for
   a real consumer.
   **Revisited 2026-08-22**: promoted by [32](32-demand-driven.md); the recorded three-tier
-  shape is adopted unchanged.
+  shape was adopted and shipped on 2026-08-24 with a variadic cell API; this entry is closed.
 - **`sl.resource` descriptor** *(resolved — shipped as plan 33)* — resolved 2026-08-22 by [33](33-resources.md). Explicit
   `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
   resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
