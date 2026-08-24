@@ -27,6 +27,7 @@ from squid_reactive.core import (
     transaction,
     untracked,
 )
+from squid_reactive.pool import SharedFactory, SharedPool
 from squid_reactive.shared import Shared
 from squid_reactive.topics import (
     Address,
@@ -53,6 +54,8 @@ __all__ = [
     "ReactiveCycleError",
     "ReactiveWriteError",
     "Shared",
+    "SharedFactory",
+    "SharedPool",
     "SharedStateConflictError",
     "StateChange",
     "StateDelta",
