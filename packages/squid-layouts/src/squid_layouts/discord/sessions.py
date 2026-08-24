@@ -286,6 +286,21 @@ def _require_user_id(user_id: int) -> int:
     return user_id
 
 
+@dataclass(frozen=True, slots=True)
+class _Membership:
+    """One mount's place in a session: under which parent, and attributed to whom.
+
+    Attaching a mount used to write a list and two parallel dicts that had to stay in step
+    by inspection, and detaching had to unwind all three. One record per mount makes the
+    session's ownership a single entry that is either there or not.
+    """
+
+    parent: Mount | None
+    """`None` for the root, which the session holds directly."""
+    actor: int | None
+    """Operational attribution, not membership -- see `Session.join`."""
+
+
 class Session:
     """One root mount and every child mount in its operational lifetime."""
 
@@ -308,9 +323,7 @@ class Session:
         self.key = key
         self.root = root
         self._registry = registry
-        self._mounts: list[Mount] = [root]
-        self._parent: dict[Mount, Mount | None] = {root: None}
-        self._actor: dict[Mount, int | None] = {root: actor_id}
+        self._graph: dict[Mount, _Membership] = {root: _Membership(parent=None, actor=actor_id)}
         # The opener is the initial member: a semantic default that makes their presence
         # explicit, not an authorization decision. Recovery supplies the stored set instead.
         if members is None:
@@ -332,7 +345,7 @@ class Session:
     @property
     def mounts(self) -> tuple[Mount, ...]:
         """The root followed by attached mounts in registration order."""
-        return tuple(self._mounts)
+        return tuple(self._graph)
 
     @property
     def members(self) -> frozenset[int]:
@@ -361,15 +374,21 @@ class Session:
     @property
     def attachment_actors(self) -> frozenset[int]:
         """Actors attributed to non-root mounts, for replacement protection."""
-        return frozenset(actor for mount, actor in self._actor.items() if mount is not self.root and actor is not None)
+        return frozenset(
+            membership.actor
+            for mount, membership in self._graph.items()
+            if mount is not self.root and membership.actor is not None
+        )
 
     def parent_of(self, mount: Mount) -> Mount | None:
         """Return the mount's parent, or `None` for the root or an unknown mount."""
-        return self._parent.get(mount)
+        membership = self._graph.get(mount)
+        return None if membership is None else membership.parent
 
     def actor_for(self, mount: Mount) -> int | None:
         """Return the actor attributed to one mount in this session."""
-        return self._actor.get(mount)
+        membership = self._graph.get(mount)
+        return None if membership is None else membership.actor
 
     @property
     def summary(self) -> SessionSummary:
@@ -419,14 +438,12 @@ class Session:
             if self._closed or self.root.finished:
                 return Rejected((self.summary,), RejectionReason.SESSION_FINISHED)
             parent = self.root if parent is None else parent
-            if parent not in self._parent or parent.finished:
+            if parent not in self._graph or parent.finished:
                 return Rejected((self.summary,), RejectionReason.SESSION_FINISHED)
             result = await mount.send(destination)
             if isinstance(result, Abandoned):
                 return result
-            self._mounts.append(mount)
-            self._parent[mount] = parent
-            self._actor[mount] = actor_id
+            self._graph[mount] = _Membership(parent=parent, actor=actor_id)
             self._registry._index_mount(self, mount)
             mount.on_finish(self._mount_finished)
             return Opened(self)
@@ -508,12 +525,10 @@ class Session:
 
     def _attach_existing(self, mount: Mount, *, parent: Mount, actor_id: int | None) -> None:
         """Attach an already presented mount while reconstructing a session."""
-        if parent not in self._parent:
+        if parent not in self._graph:
             message = "recovered attachment parent is not in the session"
             raise ValueError(message)
-        self._mounts.append(mount)
-        self._parent[mount] = parent
-        self._actor[mount] = actor_id
+        self._graph[mount] = _Membership(parent=parent, actor=actor_id)
         self._registry._index_mount(self, mount)
         mount.on_finish(self._mount_finished)
 
@@ -521,7 +536,7 @@ class Session:
         if self._finishing or self._closed:
             return
         async with self._lifecycle_lock:
-            if self._finishing or self._closed or mount not in self._parent:
+            if self._finishing or self._closed or mount not in self._graph:
                 return
             self._finishing = True
             try:
@@ -543,8 +558,8 @@ class Session:
         ordered: list[Mount] = []
 
         def visit(parent: Mount) -> None:
-            for child in tuple(self._mounts):
-                if self._parent.get(child) is parent:
+            for child, membership in tuple(self._graph.items()):
+                if membership.parent is parent:
                     visit(child)
             ordered.append(parent)
 
@@ -560,11 +575,10 @@ class Session:
 
     def _detach(self, branch: Sequence[Mount]) -> None:
         for mount in branch:
+            # The registry is a separate owner of the same mount, so its index is dropped
+            # separately rather than folded into the membership record.
             self._registry._unindex_mount(self, mount)
-            self._parent.pop(mount, None)
-            self._actor.pop(mount, None)
-            if mount in self._mounts:
-                self._mounts.remove(mount)
+            self._graph.pop(mount, None)
 
 
 def _resolve_victims(selected: tuple[SessionSummary, ...], occupants: tuple[Session, ...]) -> tuple[Session, ...]:
