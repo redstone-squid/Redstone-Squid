@@ -147,10 +147,13 @@ are not re-derived or accidentally adopted later.
   [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
   **Closed 2026-08-24**: [60](60-session-membership.md) shipped `join`/`leave`, per-session
-  capacity and durable membership, with `/layout lobby` as the worked example this entry
-  required. One piece of 34 §B.4 stays deferred and moves to 60's Not included: the
-  cross-session member index, which is the only part needing two locks and still has no
-  consumer.
+  capacity, durable membership and the cross-session quota 34 §B.4 asked for, with
+  `/layout lobby` as the worked example this entry required. The quota was very nearly
+  deferred a third time on "no consumer needs it" — the same reasoning this entry had already
+  been reopened twice under. [59](59-shared-pool.md) is the counter-precedent: it shipped a
+  pool that added no capability, purely so hosts stopped re-deriving one. Batteries a library
+  user expects are part of the product, and this series' bar for *speculation* is not a bar
+  for *completeness*.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
