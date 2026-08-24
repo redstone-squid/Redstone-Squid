@@ -32,7 +32,15 @@ from squid_layouts.profiling import AttributeValue, OperationAggregate, Operatio
 from squid_layouts.runtime.histories import HistorySnapshot
 from squid_layouts.runtime.topics import BusSnapshot, TopicBus
 from squid_layouts.semantic import LayoutNode
-from squid_reactive.actions import ActionLedger, ActionOutcomeSnapshot, add_action_outcome_sink
+from squid_reactive.actions import (
+    ActionLedger,
+    ActionOutcomeSnapshot,
+    AftermathFailureSnapshot,
+    CausalEventSnapshot,
+    OperationEventSnapshot,
+    ResourceEventSnapshot,
+    add_action_outcome_sink,
+)
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
@@ -224,8 +232,8 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     @ui_group.command(name="actions")
     async def inspect_actions(self, ctx: Context[BotT], limit: int = 20) -> None:
         """Show causal action outcomes independently of profiler retention."""
-        outcomes = self._action_ledger.outcomes[-max(1, limit) :]
-        body = "No retained action outcomes." if not outcomes else "\n".join(_action_text(item) for item in outcomes)
+        events = self._action_ledger.events[-max(1, limit) :]
+        body = "No retained causal events." if not events else "\n".join(_causal_event_text(item) for item in events)
         await self._send(ctx, [section(sl.heading("Action outcomes"), code(body))])
 
     @ui_group.command(name="persistence")
@@ -433,10 +441,35 @@ def _history_text(history: HistorySnapshot) -> str:
 def _action_text(outcome: ActionOutcomeSnapshot) -> str:
     cause = "root" if outcome.cause is None else f"{outcome.cause.kind}:{outcome.cause.identity}"
     detail = outcome.terminal if outcome.reason is None else f"{outcome.terminal}:{outcome.reason}"
+    relation = ""
+    if outcome.reverses_action_id is not None:
+        relation = f" reverses={outcome.reverses_action_id}"
+    elif outcome.reapplies_action_id is not None:
+        relation = f" reapplies={outcome.reapplies_action_id}"
+    elif outcome.compensates_action_id is not None:
+        relation = f" compensates={outcome.compensates_action_id}"
+    conflict = "" if outcome.conflict is None else f" conflict={outcome.conflict.target_id}"
     return (
         f"{outcome.action_id} {outcome.kind} {outcome.name} {detail} cause={cause} "
-        f"cells={outcome.changes.cells} participants={outcome.changes.participants}"
+        f"cells={outcome.changes.cells} participants={outcome.changes.participants}{relation}{conflict}"
     )
+
+
+def _causal_event_text(event: CausalEventSnapshot) -> str:
+    match event:
+        case ActionOutcomeSnapshot():
+            return _action_text(event)
+        case OperationEventSnapshot():
+            cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
+            return f"operation:{event.execution_id} {event.name} {event.status} cause={cause}"
+        case ResourceEventSnapshot():
+            cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
+            return f"resource:{event.generation_id} {event.name} {event.status} cause={cause}"
+        case AftermathFailureSnapshot():
+            return (
+                f"aftermath:{event.failure_id} failed {event.stage} {event.callback} "
+                f"cause={event.cause.kind}:{event.cause.identity}"
+            )
 
 
 def _reactor_text(snapshot: ReactorSnapshot | None) -> str:

@@ -15,10 +15,15 @@ from squid_reactive import (
     ActionKind,
     ActionLedger,
     ActionOutcomeCodec,
+    ActionOutcomeSnapshot,
+    ActionRollback,
+    ActorRef,
+    AftermathFailureSnapshot,
     LocalTopicBus,
     Reactive,
     ReactiveConflictError,
     ReactiveWriteError,
+    RedactionPolicy,
     Shared,
     add_action_outcome_sink,
     apply_conditional_patches,
@@ -200,6 +205,27 @@ def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) 
     assert "aftermath hook failed" in caplog.text
 
 
+def test_hook_failure_is_a_bounded_causal_diagnostic_node() -> None:
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+
+    def fail(commit, aftermath) -> None:
+        raise RuntimeError("secret hook detail")
+
+    try:
+        with transaction():
+            on_action_commit(fail)
+    finally:
+        ledger.close()
+
+    assert len(ledger.outcomes) == 1
+    failure = ledger.events[-1]
+    assert isinstance(failure, AftermathFailureSnapshot)
+    assert failure.cause.identity == ledger.outcomes[0].action_id
+    assert failure.exception.type_name == "RuntimeError"
+    assert failure.exception.message == "[redacted]"
+
+
 def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     ledger = ActionLedger()
@@ -301,3 +327,30 @@ def test_portable_schema_one_round_trips_and_rejects_unknown_versions() -> None:
     assert codec.decode(codec.encode(ledger.outcomes[0])) == ledger.outcomes[0]
     with pytest.raises(ValueError, match="unsupported"):
         codec.decode(b'{"schema":2}')
+
+
+def test_portable_snapshot_redacts_by_default_and_can_opt_into_safe_metadata() -> None:
+    context = ActionContext.create(
+        "sensitive",
+        actor=ActorRef("user", "42"),
+        metadata={"tenant": "safe", "token": "secret"},
+    )
+    ledger = ActionLedger()
+    rollbacks: list[ActionRollback] = []
+    add_action_outcome_sink(ledger)
+    try:
+        with pytest.raises(RuntimeError), transaction(action_context=context):
+            on_action_rollback(lambda rollback, aftermath: rollbacks.append(rollback))
+            raise RuntimeError("private failure message")
+    finally:
+        ledger.close()
+
+    snapshot = ledger.outcomes[0]
+    assert snapshot.actor == ActorRef("user", "42")
+    assert snapshot.metadata == ()
+    assert snapshot.exception is not None and snapshot.exception.message == "[redacted]"
+    opted_in = ActionOutcomeSnapshot.from_outcome(
+        rollbacks[0], RedactionPolicy(include_metadata=True, include_exception_messages=True)
+    )
+    assert dict(opted_in.metadata) == {"tenant": "safe", "token": "secret"}
+    assert opted_in.exception is not None and opted_in.exception.message == "private failure message"

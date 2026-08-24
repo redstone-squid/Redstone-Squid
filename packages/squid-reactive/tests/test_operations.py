@@ -3,6 +3,15 @@ import asyncio
 import anyio
 import pytest
 
+from squid_reactive import (
+    ActionContext,
+    ActionLedger,
+    OperationEventSnapshot,
+    Reactive,
+    action_scope,
+    add_action_outcome_sink,
+    state,
+)
 from squid_reactive.operations import Cancelled, Failed, Pending, Progress, Succeeded, operation
 
 
@@ -109,3 +118,50 @@ async def test_each_start_has_fresh_identity_and_retry_state() -> None:
     assert await first == 42
     assert await second == 42
     assert owner.calls == 2
+
+
+async def test_operation_start_and_terminal_state_form_causal_ledger_nodes() -> None:
+    owner = Owner()
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    action = ActionContext.create("publish")
+    try:
+        with action_scope(action):
+            execution = owner.work.start()
+        await execution
+    finally:
+        ledger.close()
+
+    events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
+    assert [event.status for event in events] == ["started", "succeeded"]
+    assert {event.execution_id for event in events} == {str(execution.context.execution_id)}
+    assert events[0].cause == action.causal_ref()
+    assert events[0].root_action_id == str(action.root_action_id)
+
+
+async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -> None:
+    class StatefulOwner(Reactive):
+        value: int = state(0)
+
+        def invalidate(self) -> None:
+            pass
+
+        @operation(initial=None)
+        async def work(self, progress: Progress[None]) -> int:
+            return 42
+
+    owner = StatefulOwner()
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    execution = owner.work.start()
+    try:
+        result = await execution
+        with execution.start_action("publish result"):
+            owner.value = result
+    finally:
+        ledger.close()
+
+    assert owner.value == 42
+    outcome = ledger.outcomes[0]
+    assert outcome.cause == execution.context.causal_ref()
+    assert outcome.root_action_id == str(outcome.action_id)

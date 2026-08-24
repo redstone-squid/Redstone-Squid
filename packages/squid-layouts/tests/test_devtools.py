@@ -1,6 +1,7 @@
 """The generic, injected devtools cog over public runtime contracts."""
 
 import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -16,7 +17,7 @@ from squid_layouts.discord.routing import Router
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind
-from squid_reactive import ActionLedger, add_action_outcome_sink, transaction
+from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_outcome_sink, transaction
 
 
 class Subject(sl.Component):
@@ -139,6 +140,18 @@ class TestMountCommands:
             assert ledger.outcomes[0].action_id in rendered
         finally:
             ledger.close()
+
+    async def test_actions_renders_operation_nodes_with_profiler_disabled(self) -> None:
+        ledger = ActionLedger()
+        ledger.accept(OperationEventSnapshot("execution-1", None, None, "publish", "succeeded", datetime.now(UTC)))
+        ctx = make_context()
+        cog = DevTools(action_ledger=ledger)
+
+        await run(cog.inspect_actions, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "operation:execution-1" in rendered
+        assert "publish succeeded" in rendered
 
 
 class TestRoutes:

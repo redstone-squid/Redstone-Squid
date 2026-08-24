@@ -40,7 +40,9 @@ from squid_reactive.actions import (
     action_scope,
     aftermath_callback,
     current_action,
+    current_causality,
     elapsed,
+    emit_aftermath_failure,
     emit_outcome,
     in_aftermath,
     next_commit_sequence,
@@ -829,16 +831,29 @@ class _Transaction:
 
     def finalize_commit(self) -> None:
         """Notify reactive consumers after the commit gate, isolating aftermath failures."""
+        assert self.commit_record is not None
         for owner in self.changed.values():
             try:
                 owner._state_changed(frozenset(self.changed_names[id(owner)]))
-            except Exception:
+            except Exception as error:
                 _log.exception("a reactive owner failed to process its committed state")
+                emit_aftermath_failure(
+                    self.commit_record,
+                    "notification",
+                    f"{type(owner).__qualname__}._state_changed",
+                    error,
+                )
         for participant, value in self.prepared_participants:
             try:
                 participant.finalize(value)
-            except Exception:
+            except Exception as error:
                 _log.exception("a transaction participant failed to finalize")
+                emit_aftermath_failure(
+                    self.commit_record,
+                    "participant_finalize",
+                    f"{type(participant).__qualname__}.finalize",
+                    error,
+                )
 
     def abort(
         self,
@@ -937,8 +952,14 @@ def _notify_hooks(
                         result.close()
                     message = "action aftermath hooks must be synchronous; start an operation instead"
                     raise TypeError(message)  # noqa: TRY301
-            except Exception:
+            except Exception as error:
                 _log.exception("an action aftermath hook failed")
+                emit_aftermath_failure(
+                    outcome,
+                    "hook",
+                    getattr(callback, "__qualname__", type(callback).__qualname__),
+                    error,
+                )
 
 
 def _emit_commit(current: _Transaction, commit: ActionCommit) -> None:
@@ -977,7 +998,15 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
             outer.reject_stale("a nested transaction")
         yield
         return
-    context = action_context or current_action() or ActionContext.create()
+    causality = current_causality()
+    context = (
+        action_context
+        or current_action()
+        or ActionContext.create(
+            cause=None if causality is None else causality[0],
+            root_action_id=None if causality is None else causality[1],
+        )
+    )
     current = _Transaction(owner_task=_current_task(), context=context)
     with action_scope(context):
         token = _CURRENT.set(current)
@@ -1045,7 +1074,12 @@ def readonly_transaction() -> Iterator[None]:
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
-    context = current_action() or ActionContext.create("read-only action")
+    causality = current_causality()
+    context = current_action() or ActionContext.create(
+        "read-only action",
+        cause=None if causality is None else causality[0],
+        root_action_id=None if causality is None else causality[1],
+    )
     current = _Transaction(readonly=True, owner_task=_current_task(), context=context)
     with action_scope(context):
         token = _CURRENT.set(current)
