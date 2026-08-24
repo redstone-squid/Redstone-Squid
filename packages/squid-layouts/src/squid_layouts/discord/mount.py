@@ -93,7 +93,13 @@ from squid_layouts.profiling import (
 from squid_layouts.runtime.component import Component, ComponentTree
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
-from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
+from squid_layouts.runtime.reactivity import (
+    ActionCommit,
+    Aftermath,
+    on_action_commit,
+    readonly_transaction,
+    transaction,
+)
 from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
@@ -1348,7 +1354,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             on_action_commit(self._note_shared_writes, key=self)
             yield
 
-    def _note_shared_writes(self, delta: StateDelta) -> None:
+    def _note_shared_writes(self, commit: ActionCommit, aftermath: Aftermath) -> None:
         """Move the render-input revision if the action wrote a shared cell this mount reads.
 
         Through `invalidate` rather than `_dirty` directly, because a candidate delivered
@@ -1360,7 +1366,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         watched = self._subscriptions.watched
         if not watched:
             return
-        if any(address in watched for address in delta.addresses()):
+        if any(address in watched for address in commit.patches.addresses()):
             self.runtime.invalidate()
 
     def _composer(self) -> Callable[..., Composition[Any]]:
