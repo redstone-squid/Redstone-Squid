@@ -11,6 +11,7 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, Mount, Owner, live
 from squid_layouts.discord.devtools import DevTools
+from squid_layouts.discord.operations import DevToolsRuntime
 from squid_layouts.discord.routing import Router
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
@@ -246,8 +247,12 @@ class TestProfiles:
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert "reactor" in rendered
         assert "topics" in rendered
-        assert "queued=1" in rendered
-        assert "build:devtools" in rendered
+        # Neither was passed, so "unconfigured" anywhere means an inference did not happen.
+        assert "unconfigured" not in rendered
+        assert "build:devtools subscribers=1" in rendered
+        # A local bus publishes synchronously, so the press is delivered rather than queued.
+        assert "delivered=1" in rendered
+        assert DevToolsRuntime(reactor=reactor).profiler is profiler
 
     async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
         profiler = MemoryProfiler()
