@@ -1,11 +1,16 @@
 """Action outcomes, version lineage, and aftermath boundaries."""
 
 import contextvars
+import gc
 import logging
+import weakref
 
 import pytest
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 
 from squid_reactive import (
+    ActionCommit,
     ActionContext,
     ActionKind,
     ActionLedger,
@@ -15,8 +20,11 @@ from squid_reactive import (
     ReactiveWriteError,
     Shared,
     add_action_outcome_sink,
+    apply_conditional_patches,
+    join_action,
     on_action_commit,
     on_action_rollback,
+    readonly_transaction,
     relaxed_read,
     state,
     transaction,
@@ -27,6 +35,10 @@ from squid_reactive.core import _CURRENT
 class Preferences(Shared[int]):
     theme: str = state("system")
     locale: str = state("en")
+
+
+class Counter(Shared[int]):
+    value: int = state(0)
 
 
 def _outside_write(preferences: Preferences, name: str, value: str) -> None:
@@ -51,6 +63,31 @@ def test_each_action_emits_one_identified_terminal_outcome() -> None:
     assert outcome.action_id == str(context.action_id)
     assert outcome.terminal == "committed"
     assert outcome.changes.cells == 1
+
+
+def test_outcome_registration_does_not_retain_an_abandoned_sink() -> None:
+    ledger = ActionLedger()
+    reference = weakref.ref(ledger)
+    add_action_outcome_sink(ledger)
+
+    del ledger
+    gc.collect()
+
+    assert reference() is None
+
+
+def test_read_only_actions_emit_terminal_outcomes() -> None:
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+    try:
+        with readonly_transaction():
+            pass
+        with pytest.raises(RuntimeError, match="read failed"), readonly_transaction():
+            raise RuntimeError("read failed")
+    finally:
+        ledger.close()
+
+    assert [outcome.terminal for outcome in ledger.outcomes] == ["committed", "rolled_back"]
 
 
 def test_handler_failure_emits_rollback_after_staged_state_dies() -> None:
@@ -91,6 +128,30 @@ def test_a_b_a_lineage_change_conflicts_even_when_value_matches() -> None:
         _outside_write(preferences, "theme", "system")
 
 
+@settings(max_examples=30)
+@given(st.integers(), st.one_of(st.none(), st.integers()))
+def test_conditional_inverse_model_preserves_or_conflicts_without_clobbering(
+    committed_value: int, later_value: int | None
+) -> None:
+    assume(later_value is None or later_value != committed_value)
+    counter = Counter(LocalTopicBus(), 1)
+    commits: list[ActionCommit] = []
+    with transaction():
+        on_action_commit(lambda commit, aftermath: commits.append(commit))
+        counter.value = committed_value
+    inverse = commits[0].patches.inverse()
+
+    if later_value is not None:
+        counter.value = later_value
+        with pytest.raises(ReactiveConflictError), transaction():
+            apply_conditional_patches(inverse)
+        assert counter.value == later_value
+    else:
+        with transaction():
+            apply_conditional_patches(inverse)
+        assert counter.value == 0
+
+
 def test_relaxed_read_is_distinct_from_reactive_untracking() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
 
@@ -117,6 +178,40 @@ def test_hook_failure_is_isolated_from_commit(caplog: pytest.LogCaptureFixture) 
     assert "aftermath hook failed" in caplog.text
 
 
+def test_apply_contract_failure_preserves_one_integrity_commit() -> None:
+    preferences = Preferences(LocalTopicBus(), 1)
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+
+    class BrokenParticipant:
+        def prepare(self, view) -> None:
+            return None
+
+        def describe_change(self, prepared: None) -> None:
+            return None
+
+        def apply(self, prepared: None) -> None:
+            raise RuntimeError("adapter broke its infallible apply contract")
+
+        def abort(self, prepared: None, cause: BaseException) -> None:
+            pass
+
+        def finalize(self, prepared: None) -> None:
+            pass
+
+    try:
+        with pytest.raises(RuntimeError, match="infallible apply contract"), transaction():
+            preferences.theme = "dark"
+            join_action(object(), BrokenParticipant)
+    finally:
+        ledger.close()
+
+    assert preferences.theme == "dark"
+    assert len(ledger.outcomes) == 1
+    assert ledger.outcomes[0].terminal == "committed"
+    assert ledger.outcomes[0].tags == frozenset({"framework_integrity_failure"})
+
+
 def test_aftermath_direct_mutation_is_rejected() -> None:
     preferences = Preferences(LocalTopicBus(), 1)
     errors: list[Exception] = []
@@ -134,6 +229,29 @@ def test_aftermath_direct_mutation_is_rejected() -> None:
     assert len(errors) == 1
     assert isinstance(errors[0], ReactiveWriteError)
     assert preferences.theme == "dark"
+
+
+def test_aftermath_recovery_is_a_fresh_causally_linked_action() -> None:
+    preferences = Preferences(LocalTopicBus(), 1)
+    ledger = ActionLedger()
+    add_action_outcome_sink(ledger)
+
+    def recover(rollback, aftermath) -> None:
+        with aftermath.start_action("present error"):
+            preferences.theme = "recovered"
+
+    try:
+        with pytest.raises(RuntimeError), transaction():
+            on_action_rollback(recover)
+            raise RuntimeError("failed")
+    finally:
+        ledger.close()
+
+    assert preferences.theme == "recovered"
+    assert [outcome.terminal for outcome in ledger.outcomes] == ["rolled_back", "committed"]
+    assert ledger.outcomes[1].cause is not None
+    assert ledger.outcomes[1].cause.identity == ledger.outcomes[0].action_id
+    assert ledger.outcomes[1].root_action_id == ledger.outcomes[0].root_action_id
 
 
 def test_undo_kind_is_explicit_identity_not_hook_timing() -> None:
