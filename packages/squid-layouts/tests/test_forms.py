@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.interactions import ActionPolicy
 from squid_layouts.planning.limits import LIMITS
 from squid_layouts.planning.target import TargetProfile
 from squid_layouts.scene.model import SceneButton, SceneRow
@@ -38,6 +39,23 @@ def test_descriptor_form_compiles_keys_labels_and_prefill() -> None:
     assert [field.key for field in fields] == ["name", "age", "public"]
     assert [field.label for field in fields] == ["Name", "Age", "Public"]
     assert spec.prefill == {"name": "Ada", "age": 36, "public": False}
+
+
+def test_parallel_read_form_cannot_declare_history_recording() -> None:
+    class Owner:
+        def invalidate(self) -> None:
+            pass
+
+    stack = sl.runtime.History(Owner())
+
+    with pytest.raises(ValueError, match="nothing to record"):
+        sl.form(
+            "Inspect",
+            ProfileForm(),
+            key="inspect",
+            policy=ActionPolicy.PARALLEL_READ,
+            record=stack,
+        )
 
 
 def _multi_choice(
