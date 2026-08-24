@@ -6,6 +6,10 @@ requires-python = ">=3.14"
 license = "MIT"
 dependencies = ["squid-reactive"]
 
+[project.optional-dependencies]
+loro = ["loro==1.13.2"]
+pycrdt = ["pycrdt==0.14.2"]
+
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]
 build-backend = "uv_build"
