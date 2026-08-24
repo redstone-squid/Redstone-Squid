@@ -299,6 +299,8 @@ class DurableSessionRuntime:
         actor_id: int | None = None,
         expires_at: float | None = None,
         capacity: int | None = None,
+        quota: int | None = None,
+        domain: str | None = None,
     ) -> DurableOpenResult:
         """Reserve, deliver, persist, and register one durable session atomically."""
         self._require_running()
@@ -348,6 +350,8 @@ class DurableSessionRuntime:
                     ),
                     members=newcomer.members,
                     capacity=capacity,
+                    quota=newcomer.quota,
+                    domain=newcomer.domain,
                 )
                 # The newcomer's own summary, not the pre-session one built above: that one
                 # predates the Session and so carries no participants, and nothing forces a
@@ -387,6 +391,8 @@ class DurableSessionRuntime:
                     before_registration=persist,
                     session_type=DurableSession,
                     capacity=capacity,
+                    quota=quota,
+                    domain=domain,
                 )
             except _NotDurableOpen:
                 assert not_durable is not None
@@ -507,6 +513,8 @@ class DurableSessionRuntime:
                     session_type=DurableSession,
                     members=record.members,
                     capacity=record.capacity,
+                    quota=record.quota,
+                    domain=record.domain,
                 )
                 self._bind(
                     session,
@@ -682,6 +690,8 @@ class DurableSessionRuntime:
             mounts,
             members=session.members,
             capacity=session.capacity,
+            quota=session.quota,
+            domain=session.domain,
         )
 
     async def _finish_record(self, record_id: str) -> None:
