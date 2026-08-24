@@ -4,8 +4,8 @@ from dataclasses import replace
 from time import perf_counter
 
 from squid_layouts import Palette, fallback
-from squid_layouts.discord import V2_TARGET, compose
-from squid_layouts.planning import PlanCache, plan
+from squid_layouts.discord import V2_LIMITS, V2_TARGET, compose
+from squid_layouts.planning import PlanCache, TargetProfile, plan
 from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.primitives import (
     Button,
@@ -14,6 +14,7 @@ from squid_layouts.primitives import (
     Panel,
     Row,
     Text,
+    Variant,
     Variants,
 )
 from squid_layouts.runtime import PresentationSession
@@ -49,6 +50,25 @@ def test_palette_is_part_of_plan_cache_identity() -> None:
         0x111111,
         0x222222,
     )
+
+
+def test_plan_cache_separates_targets_with_different_capabilities() -> None:
+    cache = PlanCache()
+    document = Variants(
+        (
+            Variant((Text("rich"),), requires=frozenset({"rich-text"})),
+            Variant((Text("plain"),)),
+        )
+    )
+    basic = TargetProfile("test", 1, limits=V2_LIMITS)
+    rich = TargetProfile("test", 1, capabilities=frozenset({"rich-text"}), limits=V2_LIMITS)
+
+    first = plan(document, target=basic, cache=cache)
+    second = plan(document, target=rich, cache=cache)
+
+    assert not second.metrics.cache_hit
+    assert first.scene.components_v2.children == (SceneText("plain"),)
+    assert second.scene.components_v2.children == (SceneText("rich"),)
 
 
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
