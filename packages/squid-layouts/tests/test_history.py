@@ -14,6 +14,7 @@ from squid_layouts.runtime import (
     HistoryResultStatus,
     LocalTopicBus,
     Shared,
+    UndoStrategy,
     history,
     history_actions,
     transaction,
@@ -149,6 +150,34 @@ async def test_later_same_target_write_conflicts_without_clobbering() -> None:
     assert subject.history.entries[0].state is HistoryEntryState.CONFLICTED
     assert subject.history.drop_conflicted() is not None
     assert not subject.history.can_undo
+
+
+async def test_named_local_overwrite_policy_replaces_later_ephemeral_work() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page", strategy=UndoStrategy.LOCAL_OVERWRITE)
+        subject.page = 4
+    with transaction():
+        subject.page = 8
+
+    result = await subject.history.undo()
+
+    assert result.applied
+    assert subject.page == 1
+
+
+async def test_local_overwrite_policy_refuses_shared_state() -> None:
+    subject, workspace = panel()
+    with transaction():
+        subject.history.record("select", strategy=UndoStrategy.LOCAL_OVERWRITE)
+        workspace.selected = 7
+    with transaction():
+        workspace.selected = 9
+
+    result = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.CONFLICT
+    assert workspace.selected == 9
 
 
 async def test_mixed_inverse_is_all_or_nothing() -> None:
