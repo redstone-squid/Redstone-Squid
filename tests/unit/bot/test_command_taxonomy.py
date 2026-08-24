@@ -51,6 +51,7 @@ UNGATED_COMMANDS = frozenset(
         "info source",
         "layout",
         "layout demo",
+        "layout lobby",
         "layout shared",
         "search",
         "tag",
@@ -124,7 +125,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "view",
     ),
     "info": ("docs", "form", "invite", "source"),
-    "layout": ("demo", "shared"),
+    "layout": ("demo", "lobby", "shared"),
     # `whoami`, `test` and `explain` were three spellings of "what may this person do";
     # `can` is the one (docs/plans/command-redesign/05-condensation.md).
     "perm": (
