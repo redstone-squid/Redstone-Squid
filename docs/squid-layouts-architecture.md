@@ -625,6 +625,86 @@ Policy:
   `on_interaction` router would have to peek into ViewStore to avoid double-handling
   live views, so the sanctioned hook wins and gets pinned instead.
 
+## Ownership and lifetime
+
+Every abstraction here belongs to exactly one owner, and the useful design-review question is
+no longer "which layer does this belong in?" but:
+
+> Who owns this, when does that ownership begin, and what exact event ends it?
+
+| Layer | Owner | Owns |
+|---|---|---|
+| Domain | the host application | facts that outlive the UI |
+| Reactive | the cell's owner; a transaction, temporarily | values; writes, until it commits |
+| Presentation | a component | one declarative projection |
+| | a candidate | one prospective projection, until it is settled |
+| Frontend | a mount | one message |
+| | a session | a graph of mounts |
+| | an `EditHandle` | temporary or permanent write authority |
+| Async | the caller | a resource's or operation's execution |
+| | a supervisor | long-running infrastructure tasks |
+| Durability | a store | bytes |
+| | a runtime | claims and leases |
+| Stateless | a route | identity that outlives every live UI object |
+
+Two rules fall out of the table, and both have caught real defects:
+
+**Identity and authority are never the same value.** A `MountAddress` says where a message is
+and stays true forever; an `EditHandle` says what may be written to it and expires. Collapsing
+them is what made `notice()` clobber the panel before plan 07.
+
+**A resource's death is explicit.** Anything owning background work says so in its type, ends
+through one named method, and refuses to acquire a task as a side effect of a read.
+`PersistedPool` acquired one inside `load()` and released it inside `close()`, which anyio
+refuses across tasks — the ordinary case, and no test reached it.
+
+### Lifecycle verbs
+
+Closed set. A seventh synonym for "it is over" puts the reader back where they started, so
+`tests/architecture/test_naming.py` denies the obvious ones.
+
+| Verb | Means | After it |
+|---|---|---|
+| `close` | terminal; the object rejects further operations | unusable |
+| `detach` | remove external integration | still usable, disconnected |
+| `finish` | user-visible lifecycle completion | the subject is done |
+| `cancel` | abandon unfinished async work | settled as cancelled |
+| `discard` | drop staged, unpublished work | back to unstaged |
+| `run` | own tasks until cancelled or drained | returns; the owner is done |
+
+`close` and `finish` both end *the object*, so no class has both. `run`, `discard` and `cancel`
+name other subjects, which is why `PersistedPool` has `run` and `close`, and
+`SubscriptionReconciler` has `discard` and `close`.
+
+`Fragment.release` and `ActionParticipant.abort` sit outside the set on purpose: `release`
+transfers ownership to the caller (and its docstring argues why it is not `detach`), the stores
+release a *claim* rather than themselves, and `abort` is two-phase-commit vocabulary paired
+with `prepare`.
+
+### Naming
+
+Lifetime is carried by verbs, not nouns. A closed noun vocabulary was designed and rejected:
+the public surface has 93 distinct class-name suffixes and 60 are used exactly once, so the
+table would have had to reject `Component`, `Mount`, `Screen` and `Destination` or grow until
+it was not a table. What nouns owe instead is consistency, which needs no dictionary:
+
+1. **One meaning per word.** `MountSnapshot` named both a view of a live mount and the
+   serialized state that outlives it, and both were exported from `squid_layouts.discord`.
+2. **A name uses the same word its own members use.** `MemorySnapshotStore`'s methods were
+   `list_records`/`load` and its field was `_records`; only the class name said "snapshot".
+3. **Identity and authority are never one type**, as above.
+
+Two words that recur and are worth pinning:
+
+- **`Snapshot`** — a read-only view of something still alive. If the subject can be gone and
+  the value still means something, it is a `Record` (a serialized fact) or a `State` (the same,
+  without the metadata).
+- **`Store`** — owns bytes beyond the process, and its name says what it stores.
+
+A type that defines a terminating verb, or hands out expiring authority, states what ends it
+in one clause in its docstring. Everything else states nothing: a frozen value has no lifetime
+to describe, and saying so is noise.
+
 ## Deliberate boundaries and current gaps
 
 - Form schemas, parsing, validation, and submission events are portable. Discord presentation
