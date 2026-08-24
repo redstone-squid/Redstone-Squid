@@ -186,3 +186,43 @@ def make_reaction_bot(
         SimpleNamespace(get_guild=lambda guild_id: guild, get_or_fetch_message=get_or_fetch_message),
     )
     return ReactionBotHarness(bot, get_or_fetch_message)
+
+
+class FakeClient:
+    """A bot stand-in a layout host can be installed on.
+
+    `sl.discord.install` keys a weak table on the client, which rules `SimpleNamespace` out.
+    Everything else about these doubles is unchanged: attributes are whatever the code under
+    test reads off a bot.
+    """
+
+    def __init__(self, **attributes: Any) -> None:
+        self.__dict__.update(attributes)
+
+    def __repr__(self) -> str:
+        return f"FakeClient({', '.join(sorted(self.__dict__))})"
+
+
+def make_layout_bot(**attributes: Any) -> Any:
+    """A bot double with the layout runtime installed, the way `RedstoneSquid` installs it.
+
+    Panels reach their chrome, error hook and challenge presenter through
+    `LayoutHost.of(source)`, so a test building one needs a real installation rather than a
+    bare `SessionRegistry`. The installation is weakly keyed, so it leaves with the double.
+    """
+    import squid_layouts as sl
+    from squid.bot.ui import HOST_DEFAULTS
+    from squid_reactive import LocalTopicBus
+
+    bus = attributes.get("topic_bus") or LocalTopicBus()
+    client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
+    host = sl.discord.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
+    # Written through `__dict__` because these are the bot attributes the code under test
+    # reads, and the double is a bag of them rather than a class declaring any.
+    client.__dict__.update(
+        layout_host=host,
+        mounts=host.mounts,
+        layout_reactor=host.reactor,
+        layout_challenges=host.challenges,
+    )
+    return client

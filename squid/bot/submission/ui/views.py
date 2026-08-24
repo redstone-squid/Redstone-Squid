@@ -413,9 +413,10 @@ class SubmissionFormComponent(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            source=source,
             access=(sl.discord.Owner(self.author_id) if self.author_id is not None else sl.discord.Everyone()),
             locale=self.locale,
             timeout=self._timeout,
@@ -723,7 +724,7 @@ class BuildEditComponent(sl.Component):
             return latest, await client.for_build(latest).render_node()
 
         self._refresh = refresh
-        mount = self.mount(interaction.user.id, reactor=client.layout_reactor)
+        mount = self.mount(interaction.user.id, source=interaction, reactor=client.layout_reactor)
         destination = sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True)
         parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
         if parent_session is None:
@@ -736,9 +737,12 @@ class BuildEditComponent(sl.Component):
         else:
             await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
 
-    def mount(self, user_id: int, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
+    def mount(
+        self, user_id: int, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
+    ) -> sl.discord.Mount:
         self._mount = create_mount(
             self,
+            source=source,
             access=sl.discord.Owner(user_id),
             locale=self.locale,
             timeout=self._timeout,

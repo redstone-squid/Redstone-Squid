@@ -12,7 +12,7 @@ from squid.bot.submission.edit import BuildEditCommands
 from squid.bot.submission.ui.views import BuildEditComponent
 from squid.builds.domain import DoorBuild, OtherBuild, Status
 from squid.topics import resource_topic
-from squid_layouts.discord import SessionRegistry
+from tests.helpers.discord import make_layout_bot
 
 
 class _Response:
@@ -81,11 +81,9 @@ class StubBuilds:
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
     cog.builds = cast(Any, StubBuilds(build))
-    topic_bus = sl.runtime.LocalTopicBus()
-    layout_reactor = sl.discord.Reactor(topic_bus)
     cog.bot = cast(
         Any,
-        SimpleNamespace(
+        make_layout_bot(
             services=SimpleNamespace(
                 settings=SimpleNamespace(),
                 accounts=SimpleNamespace(),
@@ -97,9 +95,6 @@ def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Bui
                 render_container=AsyncMock(return_value=discord.ui.Container(discord.ui.TextDisplay("card"))),
                 render_node=AsyncMock(return_value=sl.paragraph("card")),
             ),
-            mounts=SessionRegistry(),
-            topic_bus=topic_bus,
-            layout_reactor=layout_reactor,
         ),
     )
     return cog

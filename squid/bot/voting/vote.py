@@ -13,7 +13,7 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import run_command_operation
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import error_layout, info_node, respond_presentation, send_to, text_layout
+from squid.bot.ui import error_layout, info_node, respond_presentation, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.poll_wizard import present_poll_form
 from squid.bot.voting.publisher import DiscordPollPublisher
@@ -21,6 +21,7 @@ from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
 from squid.runtime import JobHandle
 from squid.voting.domain import VoteActor, VoteKind, VoteRejection
+from squid_layouts.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -252,6 +253,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await run_command_operation(
             message.channel,
             publish,
+            source=self.bot,
             locale=locale,
             reports=self.bot.services.error_reports,
         )

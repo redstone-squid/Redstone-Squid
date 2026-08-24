@@ -12,10 +12,11 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.bot.ui import send_to, text_layout
+from squid.bot.ui import text_layout
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
+from squid_layouts.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

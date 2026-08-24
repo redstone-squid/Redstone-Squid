@@ -9,6 +9,7 @@ from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_b
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft
 from squid_layouts.discord.testing import commit_render
+from tests.helpers.discord import make_layout_bot
 
 
 def _component(**kwargs: Any) -> SubmissionFormComponent:
@@ -36,7 +37,7 @@ def test_basics_form_describes_portable_fields() -> None:
 
 async def test_changing_the_door_type_marks_the_mount_dirty() -> None:
     component = _component()
-    mount = component.mount()
+    mount = component.mount(source=make_layout_bot())
     commit_render(mount)
 
     await component._door_changed(cast(sl.ChoiceEvent, SimpleNamespace(selected=("Door",))))

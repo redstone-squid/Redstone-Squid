@@ -108,9 +108,12 @@ class BuildInfoComponent(sl.Component):
             locale=self.locale,
         ).send(interaction, ephemeral=self._ephemeral, parent=sl.discord.responder(event).mount)
 
-    def mount(self, *, reactor: sl.discord.Reactor | None = None) -> sl.discord.Mount:
+    def mount(
+        self, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
+    ) -> sl.discord.Mount:
         return create_mount(
             self,
+            source=source,
             access=self._access,
             locale=self.locale,
             timeout=self._timeout,

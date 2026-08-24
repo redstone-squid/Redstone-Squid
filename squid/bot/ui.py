@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil
 from string.templatelib import Template
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import discord
 from discord.ext.commands import Context
@@ -33,7 +33,7 @@ __all__ = [
     "DISCORD_GREY",
     "DISCORD_RED",
     "DISCORD_YELLOW",
-    "MOUNT_DEFAULTS",
+    "HOST_DEFAULTS",
     "CardField",
     "CardSection",
     "L",
@@ -50,7 +50,6 @@ __all__ = [
     "help_layout",
     "info_layout",
     "info_node",
-    "install_mount_defaults",
     "link_layout",
     "localization_for",
     "render_item",
@@ -60,7 +59,6 @@ __all__ = [
     "reply_presentation",
     "respond_presentation",
     "send_component",
-    "send_to",
     "text_layout",
     "truncate_display_text",
     "warning_layout",
@@ -292,28 +290,6 @@ def destination(
     return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
 
 
-def send_to(
-    channel: discord.abc.Messageable | discord.Member | discord.User | discord.Webhook,
-    *,
-    files: Sequence[discord.File] = (),
-    allowed_mentions: discord.AllowedMentions | None = None,
-    delete_after: float | None = None,
-) -> ui.discord.Destination:
-    """Send a presentation to a Discord messageable through the framework delivery boundary.
-
-    discord.py exposes a family of overloaded ``send`` methods whose precise signatures vary
-    by channel type. The framework intentionally keeps a smaller structural protocol, so this
-    host adapter is the one typed cast between those two surfaces.
-    """
-    channel_protocol = cast(ui.discord.delivery.Messageable, channel)
-    return ui.discord.delivery.send_to(
-        channel_protocol,
-        files=files,
-        allowed_mentions=allowed_mentions,
-        delete_after=delete_after,
-    )
-
-
 def contribute(
     nodes: ui.DocumentLike,
     *,
@@ -343,15 +319,13 @@ def render_item(
     locale: str | None = None,
     reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
 ) -> discord.ui.Item[Any]:
-    """Render one node to a detached item, for composition into a larger layout.
-
-    Prefer `contribute`, which measures the host and places the result atomically. This
-    stays for callers that build the surrounding view themselves and know their own budget.
-    """
-    presentation = render_static([node], locale=locale, reservation=reservation)
-    item = presentation.layout.children[0]
-    presentation.layout.remove_item(item)
-    return item
+    """Render one node to a detached item through the bot's chrome and catalogue."""
+    return ui.discord.render_item(
+        node,
+        chrome=CHROME,
+        localization=localization_for(locale),
+        reservation=reservation,
+    )
 
 
 def render_static(
@@ -404,26 +378,20 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
-MOUNT_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
-"""Host-wide mount construction, read by `create_mount` on every call.
+HOST_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+"""What the bot installs with: the chrome and error handling every panel shares.
 
-Not every default can be written down here: a challenge presenter needs the session registry
-and the background runner, and both belong to a bot instance. `install_mount_defaults` is how
-the bot fills those in once it has built them, so a panel constructed through `create_mount`
--- which is most of them, and none of which hold a bot -- gets the same wiring as one opened
-through `bot.mounts`.
+Only the half that can be written down as a value. The other half -- a challenge presenter,
+which needs the session registry and the background runner -- is assembled by
+`sl.discord.install` and reached back through `LayoutHost.of`, so a panel built from a click
+gets the same wiring as one opened through `bot.mounts`.
 """
-
-
-def install_mount_defaults(defaults: ui.discord.MountDefaults) -> None:
-    """Replace the process's host defaults. Called once, from the bot's constructor."""
-    global MOUNT_DEFAULTS
-    MOUNT_DEFAULTS = defaults
 
 
 def create_mount(
     component: ui.Component,
     *,
+    source: ui.discord.host.HostSource,
     access: ui.discord.AccessPolicy,
     locale: str | None = None,
     chrome: ui.chrome.Chrome | None = None,
@@ -431,8 +399,18 @@ def create_mount(
     reactor: ui.discord.Reactor | None = None,
     expiry: ui.discord.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> ui.discord.Mount:
-    """A mount wired to the bot's chrome and shared interaction error handler."""
-    defaults = MOUNT_DEFAULTS if chrome is None else MOUNT_DEFAULTS.replace(chrome=chrome)
+    """A mount wired to the bot's chrome and shared interaction error handler.
+
+    `source` is whatever names the bot -- the client, the interaction, or the command context
+    the panel is being built for. It is what finds the installed host, and so the challenge
+    presenter a guard needs.
+
+    `reactor` stays explicit rather than inherited from the host: a panel is refreshed only by
+    its own clicks unless it says it reacts to something else.
+    """
+    defaults = ui.discord.LayoutHost.of(source).defaults
+    if chrome is not None:
+        defaults = defaults.replace(chrome=chrome)
     return defaults.mount(
         component,
         access=access,
@@ -459,7 +437,7 @@ async def send_component(
     shared namespace, or a bot topic. Without one the mount is refreshed only by its own
     clicks.
     """
-    mount = create_mount(component, access=access, locale=locale, timeout=timeout, reactor=reactor)
+    mount = create_mount(component, source=ctx, access=access, locale=locale, timeout=timeout, reactor=reactor)
     await mount.send(destination(ctx, visibility=visibility, locale=locale))
     return mount
 
