@@ -1,16 +1,17 @@
 """Frontend-neutral semantic layout vocabulary."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
 
+from squid_layouts._roster import RosterPlacement
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.target_types import Renderable
@@ -385,6 +386,30 @@ class Progress:
 
 
 @dataclass(frozen=True, slots=True)
+class Roster:
+    """A host-owned roster allocation rendered with active localized chrome."""
+
+    key: str
+    placement: RosterPlacement
+    on_join: Callable[[SelectionEvent], Awaitable[None]] | None = None
+    routes: Mapping[str, str] | None = None
+    locked: bool = False
+    show_waitlist: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "Roster key must not be empty"
+            raise ValueError(message)
+        if self.on_join is not None and self.routes is not None:
+            message = "Roster takes on_join or routes, not both"
+            raise ValueError(message)
+        slot_keys = {group.slot.key for group in self.placement.groups}
+        if self.routes is not None and set(self.routes) != slot_keys:
+            message = "Roster routes must contain exactly one route for every slot"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
 class Measure:
     value: int | float | str
     label: TextLike
@@ -746,6 +771,7 @@ type SemanticNode = (
     | Download
     | Status
     | Progress
+    | Roster
     | Measure
     | Timestamp
     | ZonedTimestamp
@@ -935,6 +961,7 @@ __all__ = [
     "Paragraph",
     "Progress",
     "Quote",
+    "Roster",
     "RoutedAction",
     "RoutedChoices",
     "ScaleEvent",
