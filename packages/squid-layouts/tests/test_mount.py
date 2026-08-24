@@ -76,6 +76,7 @@ from squid_layouts.runtime import (
 from squid_layouts.runtime.reactivity import _CURRENT
 from squid_layouts.semantic import Paragraph
 from squid_layouts.text import Localization, Message
+from squid_reactive import ActionLedger, add_action_outcome_sink
 
 
 class Counter(Component):
@@ -442,6 +443,22 @@ class TestDispatchProfiling:
 
         root = next(span for span in _profile_trace(profiler).spans if span.parent_span_id is None)
         assert ("actor", 77) in {(attribute.key, attribute.value) for attribute in root.attributes}
+
+    async def test_handler_span_links_to_the_semantic_action_identity(self) -> None:
+        profiler = MemoryProfiler()
+        ledger = ActionLedger()
+        add_action_outcome_sink(ledger)
+        mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+
+        try:
+            await mount.dispatch("inc", fake_interaction())
+        finally:
+            ledger.close()
+
+        handler = next(span for span in _profile_trace(profiler).spans if span.name == "handler")
+        action_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)["action_id"]
+        assert any(outcome.action_id == action_id for outcome in ledger.outcomes)
 
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()
