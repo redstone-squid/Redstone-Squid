@@ -1,13 +1,15 @@
 """Public interactive showcase for the squid-layouts engine."""
 
+import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from functools import partial
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Never
 
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
+from squid_replicated import ReplicatedDocument, ReplicatedScope
 
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale
@@ -39,6 +41,9 @@ type DemoSection = Literal[
     "forms",
     "composition",
     "localization",
+    "history",
+    "replication",
+    "effects",
 ]
 
 _ACCENTS = (DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW)
@@ -141,7 +146,85 @@ async def switch_language(self, event: sl.PressEvent) -> None:
     mount.localize(localization_for("zh-CN"))
 
 # Interpolated values are Markdown-escaped unless wrapped in sl.raw_md().""",
+    "history": """history: sl.runtime.History = sl.runtime.history(limit=5)
+
+# The whole committed action becomes one conditional inverse plan.
+sl.action("Rename project", self.rename, key="history.rename", record=self.history)
+
+result = await self.history.undo()
+match result.status:
+    case sl.runtime.HistoryResultStatus.APPLIED:
+        ...  # undo committed as a new action, with fresh versions
+    case sl.runtime.HistoryResultStatus.CONFLICT:
+        ...  # a later write is intact; nothing was partially restored
+
+# Outcome hooks run after the old transaction is dead. Recovery is a new action.
+def rolled_back(rollback, aftermath):
+    with aftermath.start_action("Present failure"):
+        self.notice = rollback.reason.value
+
+sl.runtime.on_action_rollback(rolled_back)""",
+    "replication": """scope = ReplicatedScope("browser-a")
+document = scope.open("showcase")
+
+# Reads are immutable snapshots; writes are semantic transaction participants.
+document.counter("votes").increment(2)
+document.set("reviewers").add("mine")
+history.record("Add my review")
+
+# Transport is application-owned. Import uses the same commit gate as local state.
+peer.import_update(document.export_since())
+
+# The backend plans this action's inverse at the current frontier, preserving
+# a peer's later +3 and tagged-set insertion.
+result = await history.undo()""",
+    "effects": """@sl.operation(initial="queued")
+async def publish(self, progress: sl.operations.Progress[str]) -> int:
+    progress.set("sending")
+    return 42
+
+execution = self.publish.start()  # every start has a fresh execution id
+with execution.start_action("Accept published revision"):
+    self.published_revision = result
+
+history.record(
+    "Create demo channel",
+    compensate=sl.runtime.CompensationSpec(
+        operation=service.delete,
+        idempotency_key=lambda commit: f"undo:{commit.context.action_id}",
+    ),
+)
+# Failure and retry are inspectable saga outcomes, never described as rollback.
+result = await history.undo()""",
 }
+
+
+class DemoRollback(RuntimeError):
+    """An expected showcase failure used to demonstrate a definitive rollback."""
+
+
+class DemoChannelService:
+    """A tiny external system whose compensation can fail once on demand."""
+
+    def __init__(self) -> None:
+        self.exists = False
+        self.fail_next_delete = False
+
+    async def create(self) -> None:
+        self.exists = True
+
+    async def delete(self, idempotency_key: str) -> None:
+        del idempotency_key
+        if self.fail_next_delete:
+            self.fail_next_delete = False
+            message = "the demo API rejected this compensation attempt"
+            raise RuntimeError(message)
+        self.exists = False
+
+
+def _fail_demo_action() -> Never:
+    message = "expected showcase failure"
+    raise DemoRollback(message)
 
 
 class DemoCounter(sl.Component):
@@ -228,6 +311,18 @@ class LayoutShowcase(sl.Component):
     feedback_headline: str = sl.state("")
     feedback_score: int = sl.state(0)
     display_locale: str = sl.state("en", persist=False)
+    project_name: str = sl.state("Redstone Squid")
+    history_result: str = sl.state("No history action yet.", persist=False)
+    outcome_result: str = sl.state("No terminal outcome observed yet.", persist=False)
+    replication_result: str = sl.state("Add a local review, then merge a peer edit.", persist=False)
+    channel_present: bool = sl.state(default=False)
+    compensation_result: str = sl.state("Create the external channel to begin.", persist=False)
+    published_revision: int | None = sl.state(None)
+    publication: sl.operations.OperationExecution[int, str] | None = sl.state(None, persist=False, opaque=True)
+
+    action_history: sl.runtime.History = sl.runtime.history(limit=5)
+    replication_history: sl.runtime.History = sl.runtime.history(limit=5)
+    effect_history: sl.runtime.History = sl.runtime.history(limit=5)
 
     def __init__(self, *, section: DemoSection, entries: int, locale: str | None) -> None:
         self.section = section
@@ -236,6 +331,18 @@ class LayoutShowcase(sl.Component):
         self.opened_at = datetime.now(UTC)
         self.left = DemoCounter(L(t"Left child"))
         self.right = DemoCounter(L(t"Right child"))
+        self.channel_service = DemoChannelService()
+        self.local_replication_scope = ReplicatedScope("showcase-local")
+        self.peer_replication_scope = ReplicatedScope("showcase-peer")
+        self.local_document: ReplicatedDocument = self.local_replication_scope.open("layout-showcase")
+        self.peer_document: ReplicatedDocument = self.peer_replication_scope.open("layout-showcase")
+
+    @sl.operation(initial="queued")
+    async def publish_revision(self, progress: sl.operations.Progress[str]) -> int:
+        """Simulate one repeatable external publication execution."""
+        progress.set("sending")
+        await asyncio.sleep(0)
+        return (self.published_revision or 40) + 1
 
     @sl.computed
     def status(self) -> sl.text.Message:
@@ -290,6 +397,12 @@ class LayoutShowcase(sl.Component):
                 exhibit = self._composition()
             case "localization":
                 exhibit = self._localization()
+            case "history":
+                exhibit = self._history()
+            case "replication":
+                exhibit = self._replication()
+            case "effects":
+                exhibit = self._effects()
             case _:
                 exhibit = self._pagination()
         return (*exhibit, self._source_example())
@@ -507,6 +620,128 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
+    def _history(self) -> Sequence[sl.LayoutNode]:
+        return (
+            sl.section(
+                sl.heading(L(t"Action outcomes and conflict-safe history")),
+                sl.paragraph(
+                    L(
+                        "Rename records one immutable commit. Undo is another action and only applies if the "
+                        "recorded lineage is still current. Use the sibling edit before undo to see a conflict "
+                        "leave that later value untouched."
+                    )
+                ),
+                sl.fields(
+                    sl.field(L(t"Project name"), self.project_name),
+                    sl.field(L(t"History result"), self.history_result),
+                    sl.field(L(t"Outcome hook"), self.outcome_result),
+                ),
+                sl.note(
+                    L(
+                        "The rollback button stages a value, raises, then presents the structured failure from "
+                        "a fresh recovery action. The staged project name never appears."
+                    )
+                ),
+                accent=DISCORD_GREEN,
+            ),
+            sl.actions(
+                sl.action(
+                    L(t"Rename project"),
+                    self._rename_project,
+                    key="history.rename",
+                    tone=sl.Tone.SUCCESS,
+                    record=self.action_history,
+                ),
+                sl.action(L(t"Sibling edit"), self._sibling_edit, key="history.sibling"),
+                sl.action(L(t"Undo rename"), self._undo_rename, key="history.undo"),
+                sl.action(L(t"Redo rename"), self._redo_rename, key="history.redo"),
+                sl.action(L(t"Drop conflict"), self._drop_history_conflict, key="history.drop"),
+                sl.action(L(t"Cause rollback"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER),
+                key="history-actions",
+            ),
+        )
+
+    def _replication(self) -> Sequence[sl.LayoutNode]:
+        local_counter = self.local_document.counter("votes").value
+        local_reviewers = self.local_document.set("reviewers").value
+        peer_counter = self.peer_document.counter("votes").value
+        peer_reviewers = self.peer_document.set("reviewers").value
+        return (
+            sl.section(
+                sl.heading(L(t"Replicated state with semantic selective undo")),
+                sl.paragraph(
+                    L(
+                        "The local action contributes +2 and a tagged-set member. The simulated peer first "
+                        "receives it, then contributes +3 and its own member, and sends the converged update "
+                        "back. Undo targets only the retained local action."
+                    )
+                ),
+                sl.fields(
+                    sl.field(L(t"Local snapshot"), self._replica_summary(local_counter, local_reviewers)),
+                    sl.field(L(t"Peer snapshot"), self._replica_summary(peer_counter, peer_reviewers)),
+                    sl.field(L(t"Last inverse"), self.replication_result),
+                ),
+                sl.note(
+                    L(
+                        "These public values are immutable Python snapshots. Encoded updates are transported "
+                        "explicitly; mutable backend containers never enter component state."
+                    )
+                ),
+                accent=DISCORD_BLUE,
+            ),
+            sl.actions(
+                sl.action(
+                    L(t"Add my +2 review"),
+                    self._add_local_review,
+                    key="replication.local",
+                    record=self.replication_history,
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action(L(t"Merge peer +3"), self._merge_peer_review, key="replication.peer"),
+                sl.action(L(t"Undo my review"), self._undo_local_review, key="replication.undo"),
+                key="replication-actions",
+            ),
+        )
+
+    def _effects(self) -> Sequence[sl.LayoutNode]:
+        return (
+            sl.section(
+                sl.heading(L(t"Operations and compensation sagas")),
+                sl.paragraph(
+                    L(
+                        "Publication is a repeatable operation definition: every start gets a distinct execution "
+                        "identity, and accepting its result creates a causally linked action. The channel is an "
+                        "external effect, so undo runs an idempotent compensation before a conditional local inverse."
+                    )
+                ),
+                sl.fields(
+                    sl.field(L(t"Publication"), self._publication_status()),
+                    sl.field(
+                        L(t"Accepted revision"),
+                        "--" if self.published_revision is None else str(self.published_revision),
+                    ),
+                    sl.field(L(t"External channel"), L(t"exists") if self.channel_service.exists else L(t"absent")),
+                    sl.field(L(t"Local channel flag"), L(t"present") if self.channel_present else L(t"absent")),
+                    sl.field(L(t"Compensation"), self.compensation_result),
+                ),
+                sl.note(
+                    L(
+                        "Arm one failure before undo. The first attempt reports FAILED and keeps local state; "
+                        "the second is a new execution using the same idempotency key and completes honestly."
+                    )
+                ),
+                accent=DISCORD_YELLOW,
+            ),
+            sl.actions(
+                sl.action(L(t"Start publication"), self._start_publication, key="effects.publish"),
+                sl.action(L(t"Accept result"), self._accept_publication, key="effects.accept"),
+                sl.action(L(t"Create channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS),
+                sl.action(L(t"Fail next compensation"), self._fail_next_compensation, key="effects.fail"),
+                sl.action(L(t"Undo / retry channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER),
+                key="effects-actions",
+            ),
+        )
+
     def _source_example(self) -> sl.semantic.Section:
         return sl.semantic.Section(
             sl.semantic.Heading(L(t"Declaration source")),
@@ -560,6 +795,21 @@ class LayoutShowcase(sl.Component):
                 L(t"Deferred localization"),
                 L(t"Live locale changes and safe interpolation"),
             ),
+            (
+                "history",
+                L(t"Action history"),
+                L(t"Immutable outcomes, conditional undo, and rollback recovery"),
+            ),
+            (
+                "replication",
+                L(t"Replicated state"),
+                L(t"Semantic counter and tagged-set selective undo"),
+            ),
+            (
+                "effects",
+                L(t"Effects and operations"),
+                L(t"Causal executions and truthful compensation retries"),
+            ),
         )
 
     def _entry(self, index: int) -> str:
@@ -600,6 +850,159 @@ class LayoutShowcase(sl.Component):
 
     async def _action_notice(self, event: sl.ActionEvent) -> None:
         await event.notice(L(t"The semantic action kept its own callback after adaptation."))
+
+    async def _rename_project(self, event: sl.ActionEvent) -> None:
+        del event
+        self.project_name = "Action Ledger" if self.project_name == "Redstone Squid" else "Redstone Squid"
+
+        def committed(commit: sl.runtime.ActionCommit, aftermath: sl.runtime.Aftermath) -> None:
+            with aftermath.start_action("Present commit outcome"):
+                self.outcome_result = (
+                    f"COMMITTED · local sequence {commit.sequence.value} · action {str(commit.context.action_id)[-8:]}"
+                )
+
+        sl.runtime.on_action_commit(committed)
+
+    async def _sibling_edit(self, event: sl.ActionEvent) -> None:
+        del event
+        self.project_name = "Squid after a sibling edit"
+        self.history_result = "A later ordinary action wrote the same register. Undo will now conflict."
+
+    async def _undo_rename(self, event: sl.ActionEvent) -> None:
+        del event
+        result = await self.action_history.undo()
+        self.history_result = self._history_result_text("Undo", result)
+
+    async def _redo_rename(self, event: sl.ActionEvent) -> None:
+        del event
+        result = await self.action_history.redo()
+        self.history_result = self._history_result_text("Redo", result)
+
+    async def _drop_history_conflict(self, event: sl.ActionEvent) -> None:
+        del event
+        dropped = self.action_history.drop_conflicted()
+        self.history_result = (
+            "Dropped the conflicted entry without changing state." if dropped else "No conflict to drop."
+        )
+
+    async def _cause_rollback(self, event: sl.ActionEvent) -> None:
+        del event
+        context = sl.runtime.ActionContext.create("Demonstrate rollback")
+        try:
+            with sl.runtime.fresh_action_transaction(action_context=context):
+                self.project_name = "THIS STAGED VALUE MUST NOT APPEAR"
+
+                def rolled_back(rollback: sl.runtime.ActionRollback, aftermath: sl.runtime.Aftermath) -> None:
+                    with aftermath.start_action("Present rollback outcome"):
+                        self.outcome_result = (
+                            f"ROLLED BACK · {rollback.reason.value} · action "
+                            f"{str(rollback.context.action_id)[-8:]} · recovery is a fresh action"
+                        )
+
+                sl.runtime.on_action_rollback(rolled_back)
+                _fail_demo_action()
+        except DemoRollback:
+            pass
+
+    async def _add_local_review(self, event: sl.ActionEvent) -> None:
+        del event
+        self.local_document.counter("votes").increment(2)
+        self.local_document.set("reviewers").add("mine")
+
+    async def _merge_peer_review(self, event: sl.ActionEvent) -> None:
+        del event
+        with sl.runtime.fresh_action_transaction(
+            action_context=sl.runtime.ActionContext.create("Receive local update", kind=sl.runtime.ActionKind.REMOTE)
+        ):
+            self.peer_document.import_update(self.local_document.export_since())
+        with sl.runtime.fresh_action_transaction(
+            action_context=sl.runtime.ActionContext.create("Peer review", kind=sl.runtime.ActionKind.REMOTE)
+        ):
+            self.peer_document.counter("votes").increment(3)
+            self.peer_document.set("reviewers").add("peer")
+        with sl.runtime.fresh_action_transaction(
+            action_context=sl.runtime.ActionContext.create("Receive peer update", kind=sl.runtime.ActionKind.REMOTE)
+        ):
+            self.local_document.import_update(self.peer_document.export_since())
+        self.replication_result = "Replicas converged. Undo can now preserve the peer's later contribution."
+
+    async def _undo_local_review(self, event: sl.ActionEvent) -> None:
+        del event
+        result = await self.replication_history.undo()
+        self.replication_result = self._history_result_text("Selective undo", result)
+
+    async def _start_publication(self, event: sl.ActionEvent) -> None:
+        del event
+        self.publication = self.publish_revision.start()
+
+    async def _accept_publication(self, event: sl.ActionEvent) -> None:
+        del event
+        execution = self.publication
+        if execution is None or not isinstance(execution.status, sl.operations.Succeeded):
+            return
+        with execution.start_action("Accept published revision"):
+            self.published_revision = execution.status.value
+
+    async def _create_channel(self, event: sl.ActionEvent) -> None:
+        del event
+        if self.channel_service.exists:
+            self.compensation_result = "The external channel already exists."
+            return
+        await self.channel_service.create()
+        self.channel_present = True
+        self.effect_history.record(
+            L(t"Create demo channel"),
+            compensate=sl.runtime.CompensationSpec(
+                operation=self.channel_service.delete,
+                idempotency_key=lambda commit: f"layout-demo:undo:{commit.context.action_id}",
+            ),
+        )
+
+    async def _fail_next_compensation(self, event: sl.ActionEvent) -> None:
+        del event
+        self.channel_service.fail_next_delete = True
+        self.compensation_result = "The next external delete will fail once."
+
+    async def _undo_channel(self, event: sl.ActionEvent) -> None:
+        del event
+        result = await self.effect_history.undo()
+        self.compensation_result = self._history_result_text("Compensation", result)
+
+    def _history_result_text(self, verb: str, result: sl.runtime.HistoryResult) -> str:
+        match result.status:
+            case sl.runtime.HistoryResultStatus.APPLIED:
+                return f"{verb}: APPLIED as action {str(result.action_id)[-8:]}."
+            case sl.runtime.HistoryResultStatus.CONFLICT:
+                return f"{verb}: CONFLICT; no state changed ({result.conflict})."
+            case sl.runtime.HistoryResultStatus.NEEDS_RECONCILIATION:
+                return f"{verb}: NEEDS RECONCILIATION after the external effect succeeded."
+            case sl.runtime.HistoryResultStatus.FAILED:
+                return f"{verb}: FAILED ({result.error}). Retry is a new execution."
+            case _:
+                return f"{verb}: EMPTY; there is no retained action."
+
+    def _replica_summary(self, votes: int, reviewers: frozenset[str]) -> str:
+        names = ", ".join(sorted(reviewers)) or "none"
+        return f"votes={votes} · reviewers={names}"
+
+    def _publication_status(self) -> str:
+        execution = self.publication
+        if execution is None:
+            return "not started"
+        identity = str(execution.context.execution_id)[:8]
+        match execution.status:
+            case sl.operations.Pending(progress):
+                return f"{identity} · PENDING · {progress}"
+            case sl.operations.Succeeded(value):
+                return f"{identity} · SUCCEEDED · revision {value}"
+            case sl.operations.Failed(error):
+                return f"{identity} · FAILED · {error}"
+            case sl.operations.Cancelled(progress):
+                return f"{identity} · CANCELLED · {progress}"
+
+    def on_unmount(self) -> None:
+        self.local_replication_scope.close()
+        self.peer_replication_scope.close()
 
 
 # --- Shared state ---------------------------------------------------------------------------
