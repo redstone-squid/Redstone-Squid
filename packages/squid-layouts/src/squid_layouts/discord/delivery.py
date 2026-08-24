@@ -24,7 +24,7 @@ Delivery *policy* (ephemeral rules, DM fallback) stays host-side.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, overload
 
 import discord
 
@@ -465,18 +465,47 @@ def reply_to(
     return send
 
 
+@overload
+def send_to(
+    channel: discord.abc.Messageable,
+    *,
+    files: Sequence[discord.File] = ...,
+    allowed_mentions: discord.AllowedMentions | None = ...,
+    delete_after: float | None = ...,
+) -> Destination: ...
+
+
+@overload
 def send_to(
     channel: Messageable,
+    *,
+    files: Sequence[discord.File] = ...,
+    allowed_mentions: discord.AllowedMentions | None = ...,
+    delete_after: float | None = ...,
+) -> Destination: ...
+
+
+def send_to(
+    channel: discord.abc.Messageable | Messageable,
     *,
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
     delete_after: float | None = None,
 ) -> Destination:
-    """Send a complete presentation to a channel and retain bot-token edit authority."""
+    """Send a complete presentation to a channel and retain bot-token edit authority.
+
+    Takes a real discord.py messageable or anything shaped like one. The two overloads exist
+    because discord.py's `send` is overloaded per channel type precisely so a `LayoutView`
+    and a `content` cannot be named together, and no single signature covers both; the
+    structural overload is what keeps a test double, or a host's own wrapper, usable.
+    """
+    # The one cast between discord.py's overload family and this package's structural view of
+    # it. `_send_fields` has already decided which of the two shapes the payload is.
+    target = cast(Messageable, channel)
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
-        message = await channel.send(
+        message = await target.send(
             files=_merged_files(files, presentation),
             allowed_mentions=mentions,
             **({"delete_after": delete_after} if delete_after is not None else {}),
@@ -527,3 +556,63 @@ def respond_to(
         return _callback_receipt(response, handle, fallback=message)
 
     return send
+
+
+def edit_to(
+    message: discord.Message,
+    *,
+    files: Sequence[discord.File] = (),
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> Destination:
+    """Write a mount's first render onto a message the bot already owns.
+
+    The way a mount *arrives* on an existing message: `Mount.send` runs its usual
+    stage/deliver/commit around it, and the receipt names the permanent bot-token authority
+    for the message it wrote. `Mount.adopt_handle` is the other half of the pair -- it
+    retains authority for a mount that is already live, and stays the answer when the handle
+    was established somewhere else.
+
+    The mode transition is read here rather than guessed: the message says what it is showing
+    now, the presentation says what it will show, and Discord refuses some pairs of the two.
+    """
+    mentions = no_mentions() if allowed_mentions is None else allowed_mentions
+
+    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+        fields = presentation._edit_fields(mode_of(message))
+        fields["attachments"] = _merged_files(files, presentation)
+        try:
+            edited = await message.edit(allowed_mentions=mentions, **fields)
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                detail = "the bot no longer has authority to edit this message"
+                raise StaleHandleError(detail) from error
+            raise
+        return DeliveryReceipt(edited, handle_for(edited, mode=presentation.mode))
+
+    return send
+
+
+def deliver_to(
+    target: discord.Interaction[Any] | Replyable,
+    *,
+    ephemeral: bool = False,
+    wait: bool = True,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> Destination:
+    """Answer whichever of the two invocation surfaces `target` is.
+
+    `respond_to` for an interaction, `reply_to` for anything a command arrived on. Chosen by
+    shape -- only the latter can `send` -- so a test double is dispatched like the real thing.
+
+    Carries no visibility policy: `ephemeral` is the caller's word, because who may read an
+    answer is a fact about the host's audience rules rather than about its transport. `wait`
+    reaches only the interaction branch; a command reply always returns its message.
+    """
+    if callable(getattr(target, "send", None)):
+        return reply_to(cast(Replyable, target), ephemeral=ephemeral, allowed_mentions=allowed_mentions)
+    return respond_to(
+        cast(discord.Interaction[Any], target),
+        ephemeral=ephemeral,
+        wait=wait,
+        allowed_mentions=allowed_mentions,
+    )

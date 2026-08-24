@@ -96,7 +96,7 @@ async def test_screen_applies_options_overrides_and_access() -> None:
     registry = SessionRegistry(MountDefaults(timeout=30, strict=True, on_error=on_error))
     screen = Screen("panel", access=lambda opener: Everyone(), options={"timeout": 20})
 
-    result = await screen.open(registry, Panel(), to_message(), opener=Opener(7), timeout=None)
+    result = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), timeout=None)
 
     assert isinstance(result, Opened)
     assert result.session.root.access == Everyone()
@@ -114,9 +114,9 @@ async def test_screen_respond_derives_identity_and_delivery_from_the_interaction
     screen = Screen("panel", scope=Scope.USER_GUILD)
 
     result = await screen.respond(
-        registry,
         Panel(),
         interaction,
+        sessions=registry,
         ephemeral=False,
         wait=True,
         timeout=None,
@@ -140,9 +140,9 @@ async def test_screen_respond_forwards_parent_attachment() -> None:
     interaction.guild_id = None
 
     attached = await Screen("child").respond(
-        registry,
         Panel(),
         interaction,
+        sessions=registry,
         parent=root.session.root,
         timeout=None,
     )
@@ -160,7 +160,7 @@ async def test_screen_attaches_to_a_live_parent_session() -> None:
     assert isinstance(root, Opened)
     screen = Screen("child", options={"timeout": None})
 
-    attached = await screen.open(registry, Panel(), to_message(), opener=Opener(7), parent=root.session.root)
+    attached = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=root.session.root)
 
     assert isinstance(attached, Opened)
     assert attached.session is root.session
@@ -173,7 +173,7 @@ async def test_screen_opens_a_root_when_parent_has_no_live_session() -> None:
     unknown_parent = MountDefaults(timeout=None).mount(Panel(), access=Owner(7))
     screen = Screen("child", options={"timeout": None})
 
-    opened = await screen.open(registry, Panel(), to_message(), opener=Opener(7), parent=unknown_parent)
+    opened = await screen.open(Panel(), to_message(), sessions=registry, opener=Opener(7), parent=unknown_parent)
 
     assert isinstance(opened, Opened)
     assert opened.session.key == screen.key(Opener(7))
@@ -183,7 +183,7 @@ async def test_a_screen_carries_its_capacity_into_the_session() -> None:
     sessions = SessionRegistry()
     screen = Screen("lobby", scope=Scope.GUILD, capacity=4, access=lambda opener: Everyone())
 
-    opened = await screen.open(sessions, Panel(), to_message(), opener=Opener(7, guild_id=5))
+    opened = await screen.open(Panel(), to_message(), sessions=sessions, opener=Opener(7, guild_id=5))
 
     assert isinstance(opened, Opened)
     assert opened.session.capacity == 4
@@ -194,8 +194,8 @@ async def test_a_screen_carries_its_quota_and_domain() -> None:
     sessions = SessionRegistry()
     screen = Screen("lobby", scope=Scope.GUILD, quota=1, domain="game", access=lambda opener: Everyone())
 
-    first = await screen.open(sessions, Panel(), to_message(), opener=Opener(7, guild_id=5))
-    second = await screen.open(sessions, Panel(), to_message(), opener=Opener(7, guild_id=6))
+    first = await screen.open(Panel(), to_message(), sessions=sessions, opener=Opener(7, guild_id=5))
+    second = await screen.open(Panel(), to_message(), sessions=sessions, opener=Opener(7, guild_id=6))
 
     assert isinstance(first, Opened)
     assert first.session.quota == 1

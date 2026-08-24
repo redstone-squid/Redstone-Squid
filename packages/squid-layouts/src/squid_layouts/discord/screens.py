@@ -4,13 +4,13 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Unpack, cast
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import discord
 
 from squid_layouts.discord.access import AccessPolicy, Owner
 from squid_layouts.discord.defaults import MountOptions
-from squid_layouts.discord.delivery import Destination, respond_to
+from squid_layouts.discord.delivery import Destination, Replyable, respond_to
 from squid_layouts.discord.mount import Mount
 from squid_layouts.discord.sessions import (
     DEFAULT_SESSION_POLICY,
@@ -26,6 +26,9 @@ from squid_layouts.discord.sessions import (
 )
 from squid_layouts.runtime.component import Component
 
+if TYPE_CHECKING:
+    from squid_layouts.discord.host import HostSource
+
 
 @dataclass(frozen=True, slots=True)
 class Opener:
@@ -35,9 +38,22 @@ class Opener:
     guild_id: int | None = None
 
     @classmethod
-    def of(cls, interaction: discord.Interaction) -> Opener:
-        """Build an opener from a Discord interaction."""
-        return cls(interaction.user.id, interaction.guild_id)
+    def of(cls, source: discord.Interaction[Any] | Replyable) -> Opener:
+        """Build an opener from an interaction, or from whatever a command arrived on.
+
+        Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
+        its user and guild directly, a command context names an `author` and a `guild`. The
+        two surfaces never meet in discord.py's type hierarchy, and a screen's policy does
+        not care which one a reader arrived through.
+        """
+        user = getattr(source, "user", None)
+        if user is None:
+            user = cast(Any, source).author
+        guild_id = getattr(source, "guild_id", None)
+        if guild_id is None:
+            guild = getattr(source, "guild", None)
+            guild_id = None if guild is None else guild.id
+        return cls(user.id, guild_id)
 
     def user(self) -> UserScope:
         """This opener's user, as a keyable scope."""
@@ -95,6 +111,18 @@ def _owner(opener: Opener) -> AccessPolicy:
     return Owner(opener.user_id)
 
 
+def _registry(source: SessionRegistry | HostSource) -> SessionRegistry:
+    """The registry itself, or the one belonging to the host `source` is installed on."""
+    if isinstance(source, SessionRegistry):
+        return source
+    # Imported here because a host installs a challenge presenter, which is a screen: the
+    # two modules are genuinely mutually recursive, and this is the one direction that is
+    # not needed at import time.
+    from squid_layouts.discord.host import LayoutHost
+
+    return LayoutHost.of(source).mounts
+
+
 @dataclass(frozen=True, slots=True)
 class Screen:
     """Per-open session policy shared by every opening of one logical screen."""
@@ -133,15 +161,21 @@ class Screen:
 
     async def open(
         self,
-        sessions: SessionRegistry,
         component: Component,
         destination: Destination,
         *,
+        sessions: SessionRegistry | HostSource,
         opener: Opener,
         parent: Mount | None = None,
         **overrides: Unpack[MountOptions],
     ) -> OpenResult:
-        """Construct and open or attach a mount using this screen's policy."""
+        """Construct and open or attach a mount using this screen's policy.
+
+        `sessions` is the registry, or anything an installed host can be found from -- the
+        interaction or command context the opening came from will do, which is what spares a
+        caller holding neither from dispatching over the two invocation surfaces itself.
+        """
+        sessions = _registry(sessions)
         options = cast(MountOptions, {**self.options, **overrides})
         mount = sessions.defaults.mount(component, access=self.access(opener), **options)
         parent_session = None if parent is None else sessions.session_for(parent)
@@ -160,20 +194,24 @@ class Screen:
 
     async def respond(
         self,
-        sessions: SessionRegistry,
         component: Component,
         interaction: discord.Interaction[Any],
         *,
+        sessions: SessionRegistry | HostSource | None = None,
         parent: Mount | None = None,
         ephemeral: bool = True,
         wait: bool = False,
         **overrides: Unpack[MountOptions],
     ) -> OpenResult:
-        """Open this screen as an interaction response."""
+        """Open this screen as an interaction response.
+
+        `sessions` defaults to the registry of the host installed on the interaction's
+        client. Name one only to reach a registry that is not this client's.
+        """
         return await self.open(
-            sessions,
             component,
             respond_to(interaction, ephemeral=ephemeral, wait=wait),
+            sessions=interaction if sessions is None else sessions,
             opener=Opener.of(interaction),
             parent=parent,
             **overrides,
