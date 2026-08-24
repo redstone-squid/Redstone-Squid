@@ -23,19 +23,15 @@ from squid_layouts.primitives.nodes import (
     Boundary,
     Button,
     Code,
-    Extension,
     Footer,
     Heading,
     Lines,
-    Node,
-    Panel,
     Row,
     Section,
     SelectMenu,
     Text,
-    Variant,
-    Variants,
 )
+from squid_layouts.runtime._tree import map_layout_children
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.resources import (
     AsyncBinding,
@@ -54,39 +50,18 @@ from squid_layouts.semantic import (
     Actions as SemanticActions,
 )
 from squid_layouts.semantic import (
-    Article as SemanticArticle,
-)
-from squid_layouts.semantic import (
-    Aside as SemanticAside,
-)
-from squid_layouts.semantic import (
-    BestEffort as SemanticBestEffort,
-)
-from squid_layouts.semantic import Block as SemanticBlock
-from squid_layouts.semantic import Budgeted as SemanticBudgeted
-from squid_layouts.semantic import (
     Choices as SemanticChoices,
-)
-from squid_layouts.semantic import (
-    Cluster as SemanticCluster,
 )
 from squid_layouts.semantic import (
     Details as SemanticDetails,
 )
 from squid_layouts.semantic import Download as SemanticDownload
 from squid_layouts.semantic import (
-    FallbackContent as SemanticFallbackContent,
-)
-from squid_layouts.semantic import (
     FormTrigger as SemanticFormTrigger,
-)
-from squid_layouts.semantic import (
-    Group as SemanticGroup,
 )
 from squid_layouts.semantic import (
     Items as SemanticItems,
 )
-from squid_layouts.semantic import KeepWithNext as SemanticKeepWithNext
 from squid_layouts.semantic import (
     LayoutNode,
 )
@@ -102,28 +77,11 @@ from squid_layouts.semantic import (
 from squid_layouts.semantic import (
     Navigation as SemanticNavigation,
 )
-from squid_layouts.semantic import (
-    OptionalContent as SemanticOptionalContent,
-)
 from squid_layouts.semantic import Paged as SemanticPaged
-from squid_layouts.semantic import (
-    Section as SemanticSection,
-)
-from squid_layouts.semantic import (
-    Spilled as SemanticSpilled,
-)
-from squid_layouts.semantic import (
-    Stack as SemanticStack,
-)
 from squid_layouts.semantic import (
     Table as SemanticTable,
 )
-from squid_layouts.semantic import Themed as SemanticThemed
 from squid_layouts.semantic import Toggle as SemanticToggle
-from squid_layouts.semantic import (
-    Truncated as SemanticTruncated,
-)
-from squid_layouts.semantic import Unbreakable as SemanticUnbreakable
 from squid_reactive.core import (
     _RENDER_OBSERVATION,
     Reactive,
@@ -289,12 +247,6 @@ def render_component_tree(
             return rendered.children
         return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
 
-    def one(expanded: list[LayoutNode], path: str) -> LayoutNode:
-        if len(expanded) != 1:
-            message = f"{path}: this structural position requires exactly one node"
-            raise LayoutInvariantError(message)
-        return expanded[0]
-
     def expand(
         component: Component,
         path: str,
@@ -332,83 +284,7 @@ def render_component_tree(
                     return []
                 child_path = item.key if path == "$" else f"{path}.{item.key}"
                 return _namespace(expand(item.component, child_path, context), item.key)
-            match item:
-                case (
-                    SemanticGroup(children=children)
-                    | SemanticStack(children=children)
-                    | SemanticCluster(children=children)
-                    | SemanticThemed(children=children)
-                    | SemanticBlock(children=children)
-                    | SemanticSection(children=children)
-                    | SemanticArticle(children=children)
-                    | SemanticAside(children=children)
-                    | SemanticDetails(children=children)
-                ):
-                    return [replace(item, children=expand_children(children, item_path))]
-                case SemanticItems(items=items):
-                    return [
-                        replace(
-                            item,
-                            items=tuple(
-                                replace(
-                                    entry,
-                                    children=expand_children(entry.children, f"{item_path}.item.{index}"),
-                                )
-                                for index, entry in enumerate(items)
-                            ),
-                        )
-                    ]
-                case (
-                    SemanticTruncated(node=child)
-                    | SemanticSpilled(node=child)
-                    | SemanticOptionalContent(node=child)
-                    | SemanticBestEffort(node=child)
-                    | SemanticBudgeted(node=child)
-                    | SemanticUnbreakable(node=child)
-                    | SemanticKeepWithNext(node=child)
-                    | SemanticPaged(node=child)
-                ):
-                    node_path = f"{item_path}.node"
-                    return [replace(item, node=one(expand_item(child, node_path), node_path))]
-                case SemanticFallbackContent(primary=primary, alternates=alternates):
-                    primary_path = f"{item_path}.primary"
-                    return [
-                        replace(
-                            item,
-                            primary=one(expand_item(primary, primary_path), primary_path),
-                            alternates=tuple(
-                                one(
-                                    expand_item(alternate, f"{item_path}.alternate.{index}"),
-                                    f"{item_path}.alternate.{index}",
-                                )
-                                for index, alternate in enumerate(alternates)
-                            ),
-                        )
-                    ]
-                case Panel(children=children, accent=accent):
-                    expanded: list[Node] = []
-                    for index, child in enumerate(children):
-                        expanded.extend(expand_item(child, f"{item_path}.{index}"))  # pyrefly: ignore
-                    return [Panel(tuple(expanded), accent)]
-                case Variants(variants=variants, priority=priority):
-                    rungs: list[Variant] = []
-                    for index, variant in enumerate(variants):
-                        expanded_rung: list[Node] = []
-                        for child_index, child in enumerate(variant.nodes):
-                            expanded_rung.extend(expand_item(child, f"{item_path}.variant.{index}.{child_index}"))  # pyrefly: ignore
-                        rungs.append(Variant(tuple(expanded_rung), variant.requires, variant.fidelity))
-                    return [Variants(tuple(rungs), priority)]
-                case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
-                    expanded = expand_item(fallback, f"{item_path}.fallback")
-                    return [Extension(kind, version, payload, one(expanded, f"{item_path}.fallback"))]
-                case _:
-                    return [item]
-
-        def expand_children(children: Sequence[RenderNode], parent_path: str) -> tuple[LayoutNode, ...]:
-            expanded: list[LayoutNode] = []
-            for index, child in enumerate(children):
-                expanded.extend(expand_item(child, f"{parent_path}.{index}"))
-            return tuple(expanded)
+            return [map_layout_children(item, item_path, expand_item)]
 
         try:
             # Past this point, a write of this component's own state is no longer construction:
@@ -481,34 +357,9 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                     key=f"{prefix}.{key}",
                     items=tuple(rewrite_semantic_action(item) for item in items),
                 )
-            case (
-                SemanticGroup(children=children)
-                | SemanticStack(children=children)
-                | SemanticCluster(children=children)
-                | SemanticThemed(children=children)
-            ):
-                return replace(node, children=tuple(rewrite(child) for child in children))
-            case (
-                SemanticSection(children=children)
-                | SemanticArticle(children=children)
-                | SemanticBlock(children=children)
-                | SemanticAside(children=children)
-            ):
-                return replace(node, children=tuple(rewrite(child) for child in children))
-            case SemanticDetails(key=key, children=children):
-                return replace(
-                    node,
-                    key=f"{prefix}.{key}",
-                    children=tuple(rewrite(child) for child in children),
-                )
-            case SemanticItems(key=key, items=items):
-                return replace(
-                    node,
-                    key=f"{prefix}.{key}",
-                    items=tuple(
-                        replace(item, children=tuple(rewrite(child) for child in item.children)) for item in items
-                    ),
-                )
+            case SemanticDetails(key=key) | SemanticItems(key=key):
+                keyed = replace(node, key=f"{prefix}.{key}")
+                return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
             case (
                 SemanticList(key=key)
                 | SemanticChoices(key=key)
@@ -520,28 +371,11 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 | SemanticDownload(key=key)
             ):
                 return replace(node, key=f"{prefix}.{key}")
-            case (
-                SemanticTruncated(node=child)
-                | SemanticSpilled(node=child)
-                | SemanticOptionalContent(node=child)
-                | SemanticBestEffort(node=child)
-                | SemanticBudgeted(node=child)
-                | SemanticUnbreakable(node=child)
-                | SemanticKeepWithNext(node=child)
-            ):
-                return replace(node, node=rewrite(child))
-            case SemanticPaged(node=child, key=key):
-                return replace(node, node=rewrite(child), key=f"{prefix}.{key}")
-            case SemanticFallbackContent(primary=primary, alternates=alternates):
-                return replace(
-                    node,
-                    primary=rewrite(primary),
-                    alternates=tuple(rewrite(alternate) for alternate in alternates),
-                )
+            case SemanticPaged(key=key):
+                keyed = replace(node, key=f"{prefix}.{key}")
+                return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
             case Text() | Heading() | Footer() | Code() | Lines():
                 return rewrite_text(node)
-            case Panel(children=children, accent=accent):
-                return Panel(children=tuple(rewrite(child) for child in children), accent=accent)
             case Row(items=items):
                 return Row(items=tuple(rewrite_item(item) for item in items))
             case ActionGroup(items=items):
@@ -550,17 +384,7 @@ def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
                 return Section(texts=tuple(rewrite_text(text) for text in texts), accessory=rewrite_item(accessory))
             case SelectMenu():
                 return replace(node, key=key_for(node))
-            case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
-                return Extension(kind, version, payload, rewrite(fallback))
-            case Variants(variants=variants, priority=priority):
-                return Variants(
-                    variants=tuple(
-                        Variant(tuple(rewrite(child) for child in variant.nodes), variant.requires, variant.fidelity)
-                        for variant in variants
-                    ),
-                    priority=priority,
-                )
             case _:
-                return node
+                return map_layout_children(node, "$", lambda child, _path: (rewrite(child),))
 
     return [rewrite(node) for node in nodes]
