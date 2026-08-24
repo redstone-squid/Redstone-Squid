@@ -2850,8 +2850,11 @@ class AtomicResourcePanel(Component):
 
 
 class OperationPanel(Component):
+    def __init__(self) -> None:
+        self.publication = self._publication.start()
+
     @sl.operation(initial="starting")
-    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+    async def _publication(self, progress: sl.operations.Progress[str]) -> int:
         progress.set("publishing")
         return 42
 
@@ -2871,9 +2874,10 @@ class ProgressiveOperationPanel(OperationPanel):
     def __init__(self, progressed: asyncio.Event, resume: asyncio.Event) -> None:
         self.progressed = progressed
         self.resume = resume
+        super().__init__()
 
     @sl.operation(initial="starting")
-    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+    async def _publication(self, progress: sl.operations.Progress[str]) -> int:
         progress.set("publishing")
         self.progressed.set()
         await self.resume.wait()

@@ -18,13 +18,13 @@ from squid_layouts.runtime.reactivity import (
     ConditionalCellPatch,
     ReactiveConflictError,
     apply_conditional_patches,
+    fresh_action_transaction,
     has_action_hook,
     on_action_commit,
-    transaction,
 )
 from squid_layouts.semantic import ActionGroup
 from squid_layouts.text import TextLike
-from squid_reactive.actions import ConflictDetail, ParticipantChange
+from squid_reactive.actions import ConflictDetail, ParticipantChange, current_action
 
 
 class HistoryError(RuntimeError):
@@ -229,11 +229,16 @@ class History:
 
     def _undo_state(self, entry: HistoryEntry, *, retain_redo: bool = True) -> UndoResult:
         entry.state = HistoryEntryState.REVERSING
+        cause = current_action()
         context = ActionContext.create(
-            f"Undo {entry.label}", kind=ActionKind.UNDO, reverses_action_id=entry.original_action_id
+            f"Undo {entry.label}",
+            kind=ActionKind.UNDO,
+            cause=None if cause is None else cause.causal_ref(),
+            root_action_id=None if cause is None else cause.root_action_id,
+            reverses_action_id=entry.original_action_id,
         )
         try:
-            with transaction(action_context=context):
+            with fresh_action_transaction(action_context=context):
                 planned: list[tuple[object, object]] = []
                 for change in entry.undo_plan.participants:
                     inverse = change.token.plan_inverse()
@@ -309,11 +314,16 @@ class History:
         if entry is None or entry.redo_plan is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
         entry.state = HistoryEntryState.REAPPLYING
+        cause = current_action()
         context = ActionContext.create(
-            f"Redo {entry.label}", kind=ActionKind.REDO, reapplies_action_id=entry.original_action_id
+            f"Redo {entry.label}",
+            kind=ActionKind.REDO,
+            cause=None if cause is None else cause.causal_ref(),
+            root_action_id=None if cause is None else cause.root_action_id,
+            reapplies_action_id=entry.original_action_id,
         )
         try:
-            with transaction(action_context=context):
+            with fresh_action_transaction(action_context=context):
                 apply_conditional_patches(entry.redo_plan.cells)
 
                 def committed(commit: ActionCommit, aftermath: object) -> None:
