@@ -216,3 +216,42 @@ are not re-derived or accidentally adopted later.
   five routes carry no parameters at all. Registration-time `inspect.signature` checking
   is the substitute, and it is stricter than Flask's, which waits for the first request.
   Revisit only if pyrefly gains generic `Unpack` support.
+
+- **A closed suffix taxonomy that encodes lifetime in nouns** (plan 67, 2026-08-24) — designed
+  as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
+  `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
+  `State` outlive the process) and rejected on measurement. The public surface across `sl`,
+  `sl.discord`, its twenty sub-namespaces, `squid_reactive` and `squid_stores` has **93
+  distinct class-name suffixes, 60 of them used exactly once**; only 15 recur three times or
+  more. A closed table would have to reject `Component`, `Mount`, `Screen`, `Destination`,
+  `Composition`, `Target` and `Work`, or grow until it was not a table. Record the numbers,
+  not just the conclusion, or this gets re-proposed.
+- **Collapsing suffixes to one word per lifetime class** — the follow-on idea, worse.
+  `TopicBus` → `TopicOwner` and `PersistedPool` → `PersistedOwner` destroy the information
+  that a bus delivers and a pool canonicalises, to encode a fact a single method signature
+  already carries. Lifetime belongs on verbs; nouns owe one-meaning-per-word instead.
+- **`-er` agent-noun consistency** — `ChallengeRunner` and `ChallengeSupervisor` own tasks
+  while `ErrorRenderer` and `ChallengePresenter` own nothing, so the suffix says nothing
+  about ownership. Real, but it violates no rule and renaming would be taste.
+- **A generation object replacing `Resource._request_token`** — proposed by an external review
+  so a loader would hold permission to complete *its* generation rather than comparing a
+  counter. The comparison is three lines at `resources.py:401-421`, correct and commented.
+  Churn.
+- **`_Candidate` typestate classes** (`StagedCandidate.presented() -> PresentedCandidate`) —
+  same review. The half worth having is one `settled` flag, shipped; the other half is already
+  enforced a layer down, because `_draw` stages subscriptions and the reconciler refuses a
+  second staged set. Three classes to restate what one guard states is emulating Rust syntax
+  rather than its principle.
+- **A `CompensableEffect` saga interface** for external side effects — plan 28's History
+  already separates a transactional `StateDelta` from an author-supplied external inverse, and
+  gives the tiers. Nothing to add until a consumer needs compensation ordering.
+- **An `adopt()` capture/into-component wrapper** — the review proposed making adoption an
+  explicit move. Plan 53 already enforces unsent-only with a second-writer-refusing proxy, and
+  the review itself concedes `adopt()` is pleasantly simple.
+- **A universal `Lifetime`/`Owner`/`Borrow`/`Lease` framework** — Python will not enforce it
+  strongly enough to justify making every call unpleasant. Make invalid ownership transitions
+  difficult and resource death explicit; do not emulate the syntax.
+- **`ActionKey`/`WireId`/`RouteId` newtypes** — a logical action key, a per-generation control
+  id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
+  in-tree defect motivating it, and the routing module docstring already states it in prose.
+  Revisit if a mix-up ever ships.
