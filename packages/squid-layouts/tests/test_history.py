@@ -5,6 +5,8 @@ import pytest
 from squid_layouts import Component, state
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import (
+    CompensationSpec,
+    CompensationStatus,
     ComponentRuntime,
     History,
     HistoryEntryState,
@@ -188,3 +190,55 @@ def test_limit_snapshot_and_controls_follow_retained_entries() -> None:
     assert snapshot.undo[-1].state == "ready"
     undo, redo = controls(subject.history)
     assert (undo.available, redo.available) == (True, False)
+
+
+async def test_failed_compensation_is_truthful_and_retry_gets_new_execution() -> None:
+    subject, _ = panel()
+    calls: list[str] = []
+
+    async def compensate(key: str) -> None:
+        calls.append(key)
+        if len(calls) == 1:
+            raise RuntimeError("service unavailable")
+
+    with transaction():
+        subject.history.record(
+            "page",
+            compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.action_id}"),
+        )
+        subject.page = 4
+
+    failed = await subject.history.undo()
+    first_execution = failed.entry.compensation_execution
+    assert failed.status is HistoryResultStatus.FAILED
+    assert first_execution is not None and first_execution.status is CompensationStatus.FAILED
+    retried = await subject.history.undo()
+    assert retried.applied
+    assert retried.entry.compensation_execution.execution_id != first_execution.execution_id
+    assert calls == [calls[0], calls[0]]
+
+
+async def test_external_success_then_local_conflict_needs_reconciliation_without_duplicate_retry() -> None:
+    subject, _ = panel()
+    calls: list[str] = []
+
+    async def compensate(key: str) -> None:
+        calls.append(key)
+
+    with transaction():
+        subject.history.record(
+            "page",
+            compensate=CompensationSpec(compensate, lambda commit: f"undo:{commit.context.action_id}"),
+        )
+        subject.page = 4
+    with transaction():
+        subject.page = 8
+
+    result = await subject.history.undo()
+    retry = await subject.history.undo()
+
+    assert result.status is HistoryResultStatus.NEEDS_RECONCILIATION
+    assert result.entry.state is HistoryEntryState.NEEDS_RECONCILIATION
+    assert retry.status is HistoryResultStatus.NEEDS_RECONCILIATION
+    assert len(calls) == 1
+    assert subject.page == 8
