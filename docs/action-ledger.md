@@ -61,6 +61,21 @@ Later writes elsewhere survive. Redo is the inverse of the committed undo, so an
 write makes redo conflict rather than overwrite it. A conflicted entry remains inspectable and may be
 explicitly removed with `drop_conflicted()`.
 
+A sibling write to a `Shared` register demonstrates the conditional rule directly:
+
+```python
+with transaction():
+    history.record("Select project")
+    workspace.selected = "a"
+
+with transaction():
+    workspace.selected = "b"
+
+result = await history.undo()
+assert result.status is HistoryResultStatus.CONFLICT
+assert workspace.selected == "b"
+```
+
 ## Semantic replicated inverse
 
 `state()` and `Shared` remain transactional registers. The optional `squid-replicated` package exposes
@@ -74,6 +89,19 @@ with transaction():
     history.record("vote and tag")
     document.counter("votes").increment(2)
     document.set("tags").add("mine")
+
+other = ReplicatedScope("replica-b").open("project-7")
+other.import_update(document.export_since())
+with transaction():
+    other.counter("votes").increment(3)
+    other.set("tags").add("theirs")
+document.import_update(other.export_since())
+
+# selective undo leaves the other replica's contributions
+result = await history.undo()
+assert result.status is HistoryResultStatus.APPLIED
+assert document.counter("votes").value == 3
+assert document.set("tags").value == frozenset({"theirs"})
 ```
 
 The fake conformance backend retains operation identities. Its inverse decrements only this action's
@@ -86,10 +114,44 @@ gate. A local action that read document version 10 and intends to publish state 
 import advances the document before local commit—even though the backend can merge the document data.
 Convergence does not prove that the business decision derived from version 10 is still valid.
 
+For example, a receiver admitted outside the local transaction can land between its read and commit:
+
+```python
+# local decision action
+with transaction():
+    if target.counter("votes").value < 10:  # strong document-version read
+        receiver_checkpoint()              # the receiver imports an envelope here
+        panel.accepted = True               # commit raises ReactiveConflictError
+
+assert panel.accepted is False
+```
+
+The deterministic test harness drives that checkpoint in tests; production receivers decode and route
+the envelope before entering the same synchronous commit gate.
+
 The Loro 1.13.2 and pycrdt 0.14.2 extras are conformance spikes. Both selectively reverse a non-latest
 text insertion while preserving a later insertion and reload their action token, but neither is a
 production selection. Rich types, compaction, representative performance, and transport ownership
 remain gated by [the backend ADR](plans/68-replicated-backend-adr.md).
+
+The collaborative-text spike targets an action token, not “the latest local edit”:
+
+```python
+engine = LoroTextEngine()
+first = engine.branch()
+first.apply(LoroTextOperation("insert", 0, "A"))
+token = engine.apply(first.prepare(engine.version()))
+
+later = engine.branch()
+later.apply(LoroTextOperation("insert", 1, "B"))
+engine.apply(later.prepare(engine.version()))
+engine.apply(engine.plan_inverse(LoroChangeToken.decode(token.encode())))
+
+assert engine.snapshot() == "B"
+```
+
+This is evidence for the experimental adapter only. It is deliberately not exposed as a production
+`ReplicatedDocument.text()` until the remaining backend gate passes.
 
 ## Compensation is not rollback
 
@@ -110,6 +172,14 @@ Each retry receives a fresh execution ID and the same idempotency key. External 
 External success followed by a local inverse conflict is `NEEDS_RECONCILIATION`; Squid never labels
 either path an atomic rollback. Durable applications persist the intent and dispatch it through their
 own transactional outbox.
+
+```python
+first = await history.undo()
+assert first.status is HistoryResultStatus.FAILED
+
+second = await history.undo()  # new execution, same idempotency key
+assert second.status in {HistoryResultStatus.APPLIED, HistoryResultStatus.NEEDS_RECONCILIATION}
+```
 
 ## Aftermath and recovery
 
@@ -136,7 +206,11 @@ coroutine from a hook is an error.
 `ActionOutcomeSnapshot` and JSON schema 1 retain only stable IDs, causality, times, terminal status,
 safe tags, and change counts. They retain no values, owners, mutable backend objects, closures,
 tracebacks, or arbitrary `repr()`. Unknown schemas are rejected. A durable application must separately
-define codecs, redaction, actor privacy, access, encryption, retention, and deletion policy.
+define codecs, redaction, actor privacy, access, encryption, retention, and deletion policy. Use
+`DurableOutcomeSink` with a `DurableOutcomePolicy` to make those host decisions inspectable; values remain
+summary-only in schema 1.
 
 DevTools owns a bounded ledger and exposes it with `dev ui actions [limit]`; it remains available when
 profiler sampling is disabled or detailed traces have been evicted.
+
+See [the breaking migration](plan68-migration.md) for direct old/new call-site examples.

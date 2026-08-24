@@ -475,6 +475,8 @@ They cannot mutate it or change its result; use `aftermath.start_action(...)` fo
 Portable ledger snapshots retain IDs, causality, timing, classifications, and change counts—not state values,
 owners, tracebacks, or closures. See [the action ledger guide](../../docs/action-ledger.md) for the commit point,
 hook rules, compensation, and replicated-state examples.
+The coordinated breaking signatures and direct before/after examples are in
+[the Plan 68 migration guide](../../docs/plan68-migration.md).
 
 ### Shared state
 
