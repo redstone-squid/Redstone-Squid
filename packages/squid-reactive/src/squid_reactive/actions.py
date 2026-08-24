@@ -568,6 +568,7 @@ def emit_outcome(outcome: ActionOutcome) -> None:
         return
     live: list[_SinkRegistration] = []
     snapshots: dict[RedactionPolicy, ActionOutcomeSnapshot] = {}
+    failures: list[tuple[ActionOutcomeSink, Exception]] = []
     for registration in _sinks:
         sink = registration.reference()
         if sink is None:
@@ -581,13 +582,10 @@ def emit_outcome(outcome: ActionOutcome) -> None:
             sink.accept(snapshot)
         except Exception as error:
             _log.exception("an action outcome sink failed")
-            emit_aftermath_failure(
-                outcome,
-                "outcome_sink",
-                type(sink).__qualname__,
-                error,
-            )
+            failures.append((sink, error))
     _sinks[:] = live
+    for sink, error in failures:
+        emit_aftermath_failure(outcome, "outcome_sink", type(sink).__qualname__, error)
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:

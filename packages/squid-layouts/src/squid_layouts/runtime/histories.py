@@ -588,15 +588,28 @@ class History:
             root_action_id=original.root_action_id,
             compensates_action_id=original.action_id,
         )
-        with fresh_action_transaction(action_context=intent_context):
-            participant = getattr(self._compensation_outbox, "participant", None)
-            if participant is not None:
-                joined = join_action(
-                    (self._compensation_outbox, key),
-                    lambda: participant(intent),
-                )
-                assert joined is not None
-        claim = await self._compensation_outbox.claim(intent, entry.compensation.retry)
+        try:
+            with fresh_action_transaction(action_context=intent_context):
+                participant = getattr(self._compensation_outbox, "participant", None)
+                if participant is not None:
+                    joined = join_action(
+                        (self._compensation_outbox, key),
+                        lambda: participant(intent),
+                    )
+                    assert joined is not None
+            claim = await self._compensation_outbox.claim(intent, entry.compensation.retry)
+        except asyncio.CancelledError:
+            execution.transition(CompensationStatus.CANCELLED)
+            entry.state = HistoryEntryState.FAILED
+            self._owner.invalidate()
+            raise
+        except Exception as error:
+            execution.transition(CompensationStatus.FAILED, error)
+            entry.state = HistoryEntryState.FAILED
+            result = HistoryResult(HistoryResultStatus.FAILED, entry, error=error)
+            entry.last_result = result
+            self._owner.invalidate()
+            return result
         if not claim.dispatch and claim.status is CompensationStatus.FAILED:
             error = RuntimeError("compensation retry limit exhausted")
             execution.transition(CompensationStatus.FAILED, error)
