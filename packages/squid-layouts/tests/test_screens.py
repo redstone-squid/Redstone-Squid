@@ -1,7 +1,8 @@
 """Reusable per-open Discord screen policy."""
 
 from collections.abc import Callable
-from typing import cast
+from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -38,6 +39,22 @@ def to_message() -> sl.discord.Destination:
 )
 def test_screen_key_uses_its_declared_scope(scope: Scope, opener: Opener, expected: sl.discord.SessionKey) -> None:
     assert Screen("panel", scope=scope).key(opener) == expected
+
+
+def test_opener_reads_an_interaction_and_a_command_context_alike() -> None:
+    """`Replyable` and `discord.Interaction` never meet, and screen policy does not care."""
+    interaction = fake_interaction(user_id=7)
+    interaction.guild_id = 42
+    context = SimpleNamespace(author=SimpleNamespace(id=7), guild=SimpleNamespace(id=42), send=AsyncMock())
+
+    assert Opener.of(interaction) == Opener(7, 42)
+    assert Opener.of(cast(Any, context)) == Opener(7, 42)
+
+
+def test_opener_reads_a_command_context_in_a_dm_as_guildless() -> None:
+    context = SimpleNamespace(author=SimpleNamespace(id=7), guild=None, send=AsyncMock())
+
+    assert Opener.of(cast(Any, context)) == Opener(7, None)
 
 
 @pytest.mark.parametrize("scope", [Scope.GUILD, Scope.USER_GUILD])

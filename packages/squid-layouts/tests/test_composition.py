@@ -7,6 +7,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+import squid_layouts as sl
 from squid_layouts import Component, ContextKey, PressEvent, state
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
@@ -351,3 +352,27 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
     assert {"left.choice", "right.choice"} <= mount._handlers.keys()
     assert "__cursor_next.left.entries" in mount._handlers
     assert "__cursor_next.right.entries" in mount._handlers
+
+
+class TestRenderItem:
+    """One node, drawn to an item a host places into a view it assembles itself."""
+
+    def test_the_item_is_detached_from_the_view_the_renderer_built(self) -> None:
+        item = sl.discord.render_item(sl.heading("Title"))
+
+        assert isinstance(item, discord.ui.TextDisplay)
+        assert item._view is None
+        assert item._parent is None
+
+    def test_the_surrounding_view_is_the_hosts_to_build(self) -> None:
+        """Nothing half-built survives the call: the renderer's view is discarded here."""
+        host = discord.ui.LayoutView(timeout=None)
+
+        host.add_item(sl.discord.render_item(sl.section(sl.heading("Title"), sl.paragraph("Body"))))
+
+        assert len(host.children) == 1
+        assert host.children[0]._view is host
+
+    def test_a_node_that_draws_nothing_is_refused_rather_than_indexed(self) -> None:
+        with pytest.raises(sl.discord.DiscordModeError, match="produced no item"):
+            sl.discord.render_item(sl.group())
