@@ -717,10 +717,25 @@ class History:
         )
         try:
             with fresh_action_transaction(action_context=context):
+                planned: list[tuple[object, object]] = []
+                if entry.strategy is UndoStrategy.LOCAL_OVERWRITE and entry.redo_plan.participants:
+                    detail = ConflictDetail("participant", 0, 0)
+                    raise ReactiveConflictError(  # noqa: TRY301
+                        detail, "local overwrite policy cannot target transaction participants"
+                    )
+                for change in entry.redo_plan.participants:
+                    inverse = change.token.plan_inverse()
+                    if isinstance(inverse, ConflictDetail):
+                        raise ReactiveConflictError(  # noqa: TRY301
+                            inverse, f"{change.participant_id} cannot be reapplied safely"
+                        )
+                    planned.append((change.token, inverse))
                 if entry.strategy is UndoStrategy.LOCAL_OVERWRITE:
                     apply_local_overwrite_patches(entry.redo_plan.cells)
                 else:
                     apply_conditional_patches(entry.redo_plan.cells)
+                for token, inverse in planned:
+                    token.stage_inverse(inverse)
 
                 def committed(commit: ActionCommit, aftermath: object) -> None:
                     entry.undo_plan = UndoPlan.from_commit(commit)
