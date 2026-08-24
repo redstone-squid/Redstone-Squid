@@ -55,6 +55,27 @@ async def test_snapshot_and_mount_inspection_include_sessions_history_and_middle
     assert inspection.histories[0].undo == ()
 
 
+async def test_session_inspection_reports_membership_and_capacity() -> None:
+    registry = SessionRegistry()
+    opened = await registry.open(
+        sl.discord.Mount(Panel(), access=Everyone(), timeout=None),
+        delivered_to(fake_message()),
+        key=SessionKey.global_("devtools"),
+        actor_id=7,
+        capacity=3,
+    )
+    assert isinstance(opened, Opened)
+    await opened.session.join(8)
+    runtime = DevToolsRuntime(sessions=registry)
+
+    inspected = runtime.snapshot().sessions[0]
+
+    assert inspected.members == (7, 8)
+    assert inspected.capacity == 3
+    assert inspected.remaining_capacity == 1
+    assert inspected.participants == (7, 8)
+
+
 async def test_close_session_requires_confirmation_and_finishes_all_mounts() -> None:
     registry = SessionRegistry()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))

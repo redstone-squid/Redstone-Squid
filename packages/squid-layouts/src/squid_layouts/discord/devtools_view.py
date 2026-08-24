@@ -317,6 +317,7 @@ class OperationalInspector(sl.Component):
                             f"**Id**\n`{session.id}`",
                             f"**Key**\n`{session.key}`",
                             f"**Actor**\n{session.actor_id if session.actor_id is not None else 'none'}",
+                            f"**Members**\n{_members(session)}",
                             f"**Mounts**\n{_dump(session.mounts)}",
                         ),
                     ),
@@ -327,7 +328,10 @@ class OperationalInspector(sl.Component):
         else:
             notice = None
 
-        rows = [f"`{session.id}` · key `{session.key}` · mounts={len(session.mounts)}" for session in snapshot.sessions]
+        rows = [
+            f"`{session.id}` · key `{session.key}` · mounts={len(session.mounts)} · members={_members(session)}"
+            for session in snapshot.sessions
+        ]
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading("Live sessions"),
@@ -673,6 +677,12 @@ def _presentation(session: sl.runtime.PresentationSession) -> dict[str, object]:
         "disclosures": dict(session.disclosures),
         "strategies": dict(session.strategies),
     }
+
+
+def _members(session: sl.discord.operations.SessionInspection) -> str:
+    """Membership as `used/limit`, or a bare count when the session is unbounded."""
+    count = len(session.members)
+    return f"{count}" if session.capacity is None else f"{count}/{session.capacity}"
 
 
 def _dump(value: object) -> str:
