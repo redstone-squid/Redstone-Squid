@@ -158,13 +158,11 @@ class Shared[ScopeT = None](Reactive):
 def describe(address: Address) -> str:
     """One address as ``Preferences(Member(1, 2)).theme`` or ``build:123``, for diagnostics.
 
-    Devtools and host logs get a readable name without knowing how an address is built.
+    Devtools and host logs get a readable name without knowing how an address is built. Every
+    address kind now spells itself, so this is the name for the operation rather than a place
+    the formatting lives.
     """
-    match address:
-        case CellAddress(owner=Shared() as owner, name=name):
-            return f"{owner!r}.{name}"
-        case _:
-            return str(address)
+    return str(address)
 
 
 __all__ = ["Shared", "describe"]

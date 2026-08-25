@@ -482,9 +482,27 @@ class SlotValue:
         return self.value if self.present else _MISSING
 
 
+def _slot_name(cell: _Cell) -> str:
+    """How a conflict report or a ledger entry names this slot.
+
+    An addressed cell says which field on which namespace, because that is what somebody
+    reading the report has to go and look at. A component's own cell is not addressed and has
+    no name worth printing outside the tree that owns it, so it keeps the opaque identity its
+    slot has carried since it was made.
+    """
+    return f"slot:{cell.identity}" if cell.address is None else str(cell.address)
+
+
 @dataclass(frozen=True, slots=True, init=False)
 class CellTarget:
-    """A weak runtime capability for one stable reversible state slot."""
+    """A weak runtime capability for one stable reversible state slot.
+
+    `identity` stays opaque rather than naming the field. A retained inverse outlives what it
+    points at, and the report that matters most -- the target is gone -- is the one where
+    there is no cell left to ask for a name. A stable string that means the same slot before
+    and after collection is worth more there than a readable one that becomes unavailable
+    exactly when it is needed.
+    """
 
     _owner: weakref.ReferenceType[ReactiveOwner]
     _cell: weakref.ReferenceType[_Cell]
@@ -585,8 +603,11 @@ def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> No
     for patch, _, cell in resolved:
         if cell.address is None:
             continue
-        detail = ConflictDetail(patch.target.identity, patch.expected_version, cell.version)
-        raise ReactiveConflictError(detail, "local overwrite policy cannot target Shared state")
+        # Named here, unlike `CellTarget.identity`: this cell is alive, so the report can say
+        # which shared field the policy was pointed at instead of an opaque slot id.
+        detail = ConflictDetail(_slot_name(cell), patch.expected_version, cell.version)
+        message = f"local overwrite policy cannot target Shared state ({_slot_name(cell)})"
+        raise ReactiveConflictError(detail, message)
     for patch, owner, cell in resolved:
         _write(owner, patch.target.name, cell, patch.value.raw())
 
@@ -755,7 +776,7 @@ class _Transaction:
         _checkpoint("commit.after_validation")
 
     def target_id(self, cell: _Cell) -> str:
-        return f"slot:{cell.identity}"
+        return _slot_name(cell)
 
     def require_version(self, cell: _Cell, version: int) -> None:
         existing = self.preconditions.get(cell)
