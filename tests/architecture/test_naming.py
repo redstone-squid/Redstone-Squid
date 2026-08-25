@@ -17,6 +17,7 @@ from types import ModuleType
 
 import squid_discord
 import squid_layouts
+import squid_patterns
 import squid_reactive
 import squid_replicated
 import squid_stores
@@ -27,6 +28,7 @@ PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-replicated/src"),
     Path("packages/squid-stores/src"),
     Path("packages/squid-discord/src"),
+    Path("packages/squid-patterns/src"),
 )
 
 TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
@@ -92,7 +94,7 @@ neither is forgotten before the package is published.
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_discord, squid_layouts, squid_reactive, squid_replicated, squid_stores):
+    for package in (squid_discord, squid_layouts, squid_patterns, squid_reactive, squid_replicated, squid_stores):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)

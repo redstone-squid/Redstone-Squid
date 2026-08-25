@@ -8,19 +8,20 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_layouts.chrome import Chrome
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.scene import SceneButton, SceneRoutedButton, SceneText
 
 SLOTS = (
-    sl.patterns.RosterSlot("tank", "Tank", capacity=1),
-    sl.patterns.RosterSlot("healer", "Healer", capacity=1, tone=sl.Tone.SUCCESS),
+    sp.RosterSlot("tank", "Tank", capacity=1),
+    sp.RosterSlot("healer", "Healer", capacity=1, tone=sl.Tone.SUCCESS),
 )
 
 
-def _entry(actor: str, slot: str, minute: int | None) -> sl.patterns.RosterEntry:
+def _entry(actor: str, slot: str, minute: int | None) -> sp.RosterEntry:
     joined_at = None if minute is None else datetime(2026, 1, 1, tzinfo=UTC) + timedelta(minutes=minute)
-    return sl.patterns.RosterEntry(actor, actor.title(), slot, joined_at)
+    return sp.RosterEntry(actor, actor.title(), slot, joined_at)
 
 
 def _walk(value: object):
@@ -38,28 +39,28 @@ def test_allocation_is_fifo_and_promotion_follows_from_reallocation() -> None:
     bob = _entry("bob", "tank", 1)
     undated = _entry("charlie", "tank", None)
 
-    placement = sl.patterns.place_roster((undated, bob, alice), SLOTS)
+    placement = sp.place_roster((undated, bob, alice), SLOTS)
 
     assert placement.group("tank").members == (alice,)
     assert placement.waitlist == (bob, undated)
-    assert placement.status("alice") is sl.patterns.RosterStatus.SEATED
-    assert placement.status("bob") is sl.patterns.RosterStatus.WAITLISTED
-    assert sl.patterns.place_roster((bob, undated), SLOTS).group("tank").members == (bob,)
+    assert placement.status("alice") is sp.RosterStatus.SEATED
+    assert placement.status("bob") is sp.RosterStatus.WAITLISTED
+    assert sp.place_roster((bob, undated), SLOTS).group("tank").members == (bob,)
 
 
 def test_reject_overflow_is_retained_as_an_explicit_outcome() -> None:
     alice = _entry("alice", "tank", 0)
     bob = _entry("bob", "tank", 1)
 
-    placement = sl.patterns.place_roster(
+    placement = sp.place_roster(
         (alice, bob),
         SLOTS,
-        overflow=sl.patterns.RosterOverflow.REJECT,
+        overflow=sp.RosterOverflow.REJECT,
     )
 
     assert placement.waitlist == ()
     assert placement.rejected == (bob,)
-    assert placement.status("bob") is sl.patterns.RosterStatus.REJECTED
+    assert placement.status("bob") is sp.RosterStatus.REJECTED
 
 
 @pytest.mark.parametrize(
@@ -72,14 +73,14 @@ def test_reject_overflow_is_retained_as_an_explicit_outcome() -> None:
 )
 def test_allocation_rejects_invalid_ledgers(entries, slots, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        sl.patterns.place_roster(entries, slots)
+        sp.place_roster(entries, slots)
 
 
 def test_roster_uses_active_chrome_and_renders_routed_slots() -> None:
-    placement = sl.patterns.place_roster(
+    placement = sp.place_roster(
         (_entry("alice", "tank", 0), _entry("bob", "tank", 1)),
         SLOTS,
-        overflow=sl.patterns.RosterOverflow.REJECT,
+        overflow=sp.RosterOverflow.REJECT,
     )
     node = sl.roster(
         placement,
@@ -108,7 +109,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
         seen.append(event)
 
     result = sl.planning.plan(
-        sl.roster(sl.patterns.place_roster((), SLOTS), key="raid", on_join=join),
+        sl.roster(sp.place_roster((), SLOTS), key="raid", on_join=join),
         target=squid_discord.V2_TARGET,
     )
     button = next(item for item in _walk(result.scene.body) if isinstance(item, SceneButton))
@@ -120,7 +121,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
 
 
 def test_roster_validates_dispatch_modes_and_namespaces_its_controls() -> None:
-    placement = sl.patterns.place_roster((), SLOTS)
+    placement = sp.place_roster((), SLOTS)
 
     async def join(_event: sl.SelectionEvent) -> None: ...
 

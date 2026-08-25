@@ -8,6 +8,7 @@ from discord.utils import escape_markdown
 
 import squid_discord as sd
 import squid_layouts as sl
+import squid_patterns as sp
 from squid.bot.i18n import t
 from squid.bot.ui import DISCORD_GREEN, create_mount
 from squid.builds.domain import Build
@@ -145,7 +146,7 @@ class SearchResultsView(sl.Component):
         self.locale = locale
         self._load_build = load_build
         self._render_build = render_build
-        self._browser = sl.patterns.Browser(
+        self._browser = sp.Browser(
             self._source,
             key="search",
             identity=_hit_identity,

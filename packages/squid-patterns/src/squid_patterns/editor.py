@@ -8,9 +8,6 @@ from typing import Any, cast
 from squid_layouts.document import Document
 from squid_layouts.factories import actions, heading, paragraph, stack, status
 from squid_layouts.forms import Form, FormField, FormIssue, FormLike, FormSpec
-from squid_layouts.patterns._content import ContentLike, display_text, normalize_content, require_key
-from squid_layouts.patterns.commit import CommitPolicy
-from squid_layouts.patterns.shells import ComponentShell, Pattern, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import (
     Action,
@@ -25,6 +22,9 @@ from squid_layouts.semantic import (
     Tone,
 )
 from squid_layouts.text import TextLike
+from squid_patterns._content import ContentLike, display_text, normalize_content, require_key
+from squid_patterns.commit import CommitPolicy
+from squid_patterns.shells import ComponentShell, Pattern, PatternControls, PatternEvent
 
 type EditorValues = Mapping[str, object]
 type EditorCommitHandler = Callable[[PatternEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]

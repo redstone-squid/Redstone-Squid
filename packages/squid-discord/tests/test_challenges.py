@@ -8,6 +8,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_discord import Everyone, Mount, delivery
 from squid_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_discord.mount import ChallengeRequest
@@ -86,7 +87,7 @@ def _dispositions(profiler: MemoryProfiler) -> list[DispatchDisposition]:
 
 class TestIssuing:
     async def test_a_challenge_admits_nothing_and_leaves_the_panel_free(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Delete everything?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Delete everything?"))
         generation = mount.generation
 
         await mount.dispatch("go", fake_interaction())
@@ -97,7 +98,7 @@ class TestIssuing:
         assert presenter.only.key == "go"
 
     async def test_a_second_press_does_not_wait_behind_an_outstanding_challenge(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?"))
 
         await mount.dispatch("go", fake_interaction())
         with anyio.fail_after(2):
@@ -109,7 +110,7 @@ class TestIssuing:
     async def test_the_question_is_traced_as_its_own_disposition(self):
         profiler = MemoryProfiler()
         mount = Mount(
-            _Panel(guard=sl.guards.confirm("Sure?")),
+            _Panel(guard=sp.guards.confirm("Sure?")),
             access=Everyone(),
             timeout=None,
             challenge=_Recorder(),
@@ -128,7 +129,7 @@ class TestIssuing:
             recorded.append((interaction, error, source))
 
         profiler = MemoryProfiler()
-        panel = _Panel(guard=sl.guards.confirm("Sure?"))
+        panel = _Panel(guard=sp.guards.confirm("Sure?"))
         mount = Mount(panel, access=Everyone(), timeout=None, on_error=hook, profiler=profiler)
         commit_render(mount)
 
@@ -151,7 +152,7 @@ class TestIssuing:
                     FormSpec("Rename", (TextField(key="name", label="Name"),)),
                     key="rename",
                     on_submit=self.submitted,
-                    guard=sl.guards.confirm("Sure?"),
+                    guard=sp.guards.confirm("Sure?"),
                 )
 
             async def submitted(self, event) -> None:  # pragma: no cover - never reached
@@ -167,7 +168,7 @@ class TestIssuing:
 
 class TestResuming:
     async def test_approval_runs_the_press_the_actor_confirmed(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?"))
         await mount.dispatch("go", fake_interaction())
 
         await presenter.only.approve()
@@ -175,7 +176,7 @@ class TestResuming:
         assert panel.count == 1
 
     async def test_approval_admits_exactly_one_press(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?"))
         await mount.dispatch("go", fake_interaction())
         request = presenter.only
 
@@ -194,7 +195,7 @@ class TestResuming:
                 self.pressed: list[str] = []
 
             def render(self):
-                guard = sl.guards.confirm("Sure?")
+                guard = sp.guards.confirm("Sure?")
                 return sl.actions(
                     sl.action("Go", self.go, key="go", guard=guard),
                     sl.action("Stop", self.stop, key="stop", guard=guard),
@@ -220,7 +221,7 @@ class TestResuming:
         assert len(presenter.requests) == 2
 
     async def test_a_challenge_answered_by_the_wrong_actor_admits_nothing(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?"))
         await mount.dispatch("go", fake_interaction(user_id=11))
 
         await presenter.only.approve()
@@ -235,7 +236,7 @@ class TestResuming:
         async def check(event) -> bool:
             return allowed
 
-        panel, mount, presenter = _panel(sl.guards.all_of(sl.guards.permission(check), sl.guards.confirm("Sure?")))
+        panel, mount, presenter = _panel(sl.guards.all_of(sl.guards.permission(check), sp.guards.confirm("Sure?")))
         await mount.dispatch("go", fake_interaction())
         allowed = False
 
@@ -244,7 +245,7 @@ class TestResuming:
         assert panel.count == 0, "permission lost while the dialog was open must still refuse"
 
     async def test_a_finished_mount_refuses_the_press_it_asked_about(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?"))
         await mount.dispatch("go", fake_interaction())
         await mount.finish(disable=False)
 
@@ -253,7 +254,7 @@ class TestResuming:
         assert panel.count == 0
 
     async def test_the_resumed_press_redraws_where_the_mount_already_lives(self):
-        panel = _Panel(guard=sl.guards.confirm("Sure?"))
+        panel = _Panel(guard=sp.guards.confirm("Sure?"))
         presenter = _Recorder()
         mount = Mount(panel, access=Everyone(), timeout=None, challenge=presenter)
         # A handle the mount could be tempted to trade away: not the bot's own, so `_renew`
@@ -287,7 +288,7 @@ class TestResuming:
                         "Go",
                         self.go,
                         key="go",
-                        guard=sl.guards.confirm("Sure?"),
+                        guard=sp.guards.confirm("Sure?"),
                         policy=ActionPolicy.PARALLEL_READ,
                     ),
                     key="panel",
@@ -311,7 +312,7 @@ class TestResuming:
 
 class TestDeclining:
     async def test_a_decline_runs_nothing_and_leaves_no_approval_behind(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?"))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?"))
         await mount.dispatch("go", fake_interaction())
 
         await presenter.only.decline()
@@ -321,7 +322,7 @@ class TestDeclining:
         assert len(presenter.requests) == 2, "the next press asks again"
 
     async def test_a_decline_says_so_when_the_challenge_asked_for_wording(self):
-        panel, mount, presenter = _panel(sl.guards.confirm("Sure?", on_decline="Nothing was changed."))
+        panel, mount, presenter = _panel(sp.guards.confirm("Sure?", on_decline="Nothing was changed."))
         interaction = fake_interaction()
         await mount.dispatch("go", interaction)
 
@@ -333,7 +334,7 @@ class TestDeclining:
         profiler = MemoryProfiler()
         presenter = _Recorder()
         mount = Mount(
-            _Panel(guard=sl.guards.confirm("Sure?")),
+            _Panel(guard=sp.guards.confirm("Sure?")),
             access=Everyone(),
             timeout=None,
             challenge=presenter,
@@ -353,7 +354,7 @@ class TestDeclining:
 class TestLedger:
     async def test_a_challenging_pass_spends_no_earlier_guard(self):
         clock = _Clock()
-        panel = _Panel(guard=sl.guards.all_of(sl.guards.cooldown(30), sl.guards.confirm("Sure?")))
+        panel = _Panel(guard=sl.guards.all_of(sl.guards.cooldown(30), sp.guards.confirm("Sure?")))
         presenter = _Recorder()
         mount = Mount(panel, access=Everyone(), timeout=None, challenge=presenter, clock=clock)
         commit_render(mount)
@@ -368,7 +369,7 @@ class TestLedger:
 
     async def test_approving_spends_the_earlier_guard_exactly_once(self):
         clock = _Clock()
-        panel = _Panel(guard=sl.guards.all_of(sl.guards.cooldown(30), sl.guards.confirm("Sure?")))
+        panel = _Panel(guard=sl.guards.all_of(sl.guards.cooldown(30), sp.guards.confirm("Sure?")))
         presenter = _Recorder()
         mount = Mount(panel, access=Everyone(), timeout=None, challenge=presenter, clock=clock)
         commit_render(mount)
@@ -440,7 +441,7 @@ class TestComposition:
         assert outcome.reason == "Second."
 
     async def test_two_questions_in_one_chain_converge(self):
-        panel, mount, presenter = _panel(sl.guards.all_of(sl.guards.confirm("First?"), sl.guards.confirm("Second?")))
+        panel, mount, presenter = _panel(sl.guards.all_of(sp.guards.confirm("First?"), sp.guards.confirm("Second?")))
 
         await mount.dispatch("go", fake_interaction())
         await presenter.requests[0].approve()
@@ -567,7 +568,7 @@ class TestDialog:
         registry = SessionRegistry()
         runner = ChallengeRunner()
         registry.defaults = registry.defaults.replace(challenge=DialogPresenter(registry, runner))
-        panel = _Panel(guard=sl.guards.confirm("Delete everything?"))
+        panel = _Panel(guard=sp.guards.confirm("Delete everything?"))
         opening = fake_interaction(message_id=99)
         mount = registry.defaults.mount(panel, access=Everyone(), timeout=None)
         await registry.open(mount, delivered_to(fake_message(message_id=99)), key="panel", actor_id=1)

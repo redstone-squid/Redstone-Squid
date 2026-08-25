@@ -12,6 +12,7 @@ from whenever import Instant
 
 import squid_discord as sd
 import squid_layouts as sl
+import squid_patterns as sp
 from squid.accounts.domain import (
     Account,
     AccountConsent,
@@ -116,7 +117,7 @@ def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
     )
 
     component = panel._build_profile_editor()
-    editor = cast(sl.patterns.Editor, component.pattern)
+    editor = cast(sp.Editor, component.pattern)
     values = editor.values(component.pattern_state)
 
     assert values["profile"] == {"display_name": "Builder", "pronouns": None, "bio": "Hello"}
@@ -139,7 +140,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
     component = panel._build_profile_editor()
     panel._profile_editor = component
-    editor = cast(sl.patterns.Editor, component.pattern)
+    editor = cast(sp.Editor, component.pattern)
     staged = editor.transition(
         component.pattern_state,
         "submit:profile",
@@ -149,7 +150,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     source = SimpleNamespace(notice=AsyncMock())
 
     assert component.on_change is not None
-    await component.on_change(sl.patterns.PatternEvent(cast(Any, source), "save", staged, committed))
+    await component.on_change(sp.PatternEvent(cast(Any, source), "save", staged, committed))
 
     cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
     assert panel._profile_editor is None
@@ -296,7 +297,7 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
     """The armed flag is gone: the button declares that it needs reaffirming.
 
     What used to be three pieces of view state, an early return and a relabelled button is now
-    `guard=sl.guards.confirm(...)`, and the warning is in the question instead of the footer.
+    `guard=sp.guards.confirm(...)`, and the warning is in the question instead of the footer.
     """
     panel, presenter, unlink, mount = _linked_panel()
 

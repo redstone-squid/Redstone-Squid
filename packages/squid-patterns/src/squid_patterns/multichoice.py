@@ -5,14 +5,14 @@ from dataclasses import dataclass
 
 from squid_layouts.factories import actions, heading, paragraph, stack, status
 from squid_layouts.forms import ChoiceOption, FormSpec, MultiChoiceField
-from squid_layouts.patterns._content import display_text, require_key
-from squid_layouts.patterns._paging import window
-from squid_layouts.patterns.commit import CommitPolicy
-from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import ActionDisplay, Choice, Tone, fallback
 from squid_layouts.sources import Position
 from squid_layouts.text import TextLike
+from squid_patterns._content import display_text, require_key
+from squid_patterns._paging import window
+from squid_patterns.commit import CommitPolicy
+from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 
 
 @dataclass(frozen=True, slots=True)
