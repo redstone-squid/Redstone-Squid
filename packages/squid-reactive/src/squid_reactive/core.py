@@ -769,7 +769,7 @@ class _Transaction:
                 continue
             detail = ConflictDetail(self.target_id(cell), version, cell.version)
             message = (
-                f"{self.describe(cell)} changed while this action was running: expected version "
+                f"{_slot_name(cell)} changed while this action was running: expected version "
                 f"{version}, found {cell.version}. Nothing was published."
             )
             raise ReactiveConflictError(detail, message)
