@@ -171,8 +171,19 @@ class FakeEngine:
         return {tag: killers - reversed_removals for tag, killers in removals.items()}
 
     def apply(self, prepared: PreparedFakeUpdate) -> FakeChange:
+        # Checked before anything is recorded, so a rejected update leaves the log untouched.
+        for operation in prepared.operations:
+            existing = self._operations.get(operation.identity)
+            if existing is not None and existing != operation:
+                message = f"replicated operation identity {operation.identity.encode()!r} was reused"
+                raise ValueError(message)
         for operation in prepared.operations:
             self._operations.setdefault(operation.identity, operation)
+            if operation.identity.replica == self.replica_id:
+                # Restores the clock from the log. A restarted process reusing its replica ID
+                # would otherwise re-mint identities its peers already hold, and the duplicate
+                # dropped as already-known is its own new work rather than the stale copy.
+                self._next_sequence = max(self._next_sequence, operation.identity.sequence)
         return FakeChange(prepared.operations)
 
     def prepare_remote(self, update: bytes) -> PreparedFakeUpdate:
