@@ -211,6 +211,25 @@ def test_superseded_replicated_read_rejects_local_publication() -> None:
     assert target.counter("votes").value == 1
 
 
+def test_a_read_only_replicated_read_does_not_block_an_unrelated_local_write() -> None:
+    source = ReplicatedScope("a").open("project")
+    target = ReplicatedScope("b").open("project")
+    model = LocalModel()
+    with transaction():
+        source.counter("votes").increment(1)
+    update = source.export_since()
+
+    # The same shape as the strong_read() case above, minus the opt-in: a read of a cell this
+    # action never writes carries no precondition, so the import does not invalidate the write.
+    with transaction():
+        assert target.counter("votes").value == 0
+        model.selected = True
+        _outside(target.import_update, update)
+
+    assert model.selected is True
+    assert target.counter("votes").value == 1
+
+
 def test_action_token_selectively_inverts_counter_and_add_after_remote_work() -> None:
     local = ReplicatedScope("a").open("project")
     remote = ReplicatedScope("b").open("project")
