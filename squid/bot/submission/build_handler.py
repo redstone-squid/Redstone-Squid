@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import discord
 from discord.utils import escape_markdown
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import (
@@ -97,16 +98,16 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> sl.discord.presentation.DiscordPresentation:
+    async def render_layout(self) -> sd.presentation.DiscordPresentation:
         """Render a standalone Components V2 presentation for the build."""
         return render_static([await self.render_node()])
 
-    async def render_presentation(self) -> sl.discord.presentation.DiscordPresentation:
+    async def render_presentation(self) -> sd.presentation.DiscordPresentation:
         """Render the complete presentation used by post delivery."""
         return render_presentation([await self.render_node()])
 
     async def render_container(
-        self, *, reservation: sl.discord.ResourceCost = sl.discord.EMPTY_RESERVATION
+        self, *, reservation: sd.ResourceCost = sd.EMPTY_RESERVATION
     ) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
 

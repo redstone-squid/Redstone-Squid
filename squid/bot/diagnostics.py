@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from discord.ext import commands
 from discord.ext.commands import Context
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.ui import Private, create_mount, destination, info_layout
@@ -79,7 +79,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         mount = create_mount(
             browser,
             source=ctx,
-            access=sl.discord.Owner(ctx.author.id),
+            access=sd.Owner(ctx.author.id),
             locale=locale,
             chrome=browser.chrome(),
             timeout=SESSION_SECONDS,
@@ -99,7 +99,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     async def _deliver(
         self,
         ctx: Context[BotT],
-        presentation: sl.discord.presentation.DiscordPresentation,
+        presentation: sd.presentation.DiscordPresentation,
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""

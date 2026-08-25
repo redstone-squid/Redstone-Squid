@@ -15,6 +15,7 @@ from collections import defaultdict
 from pathlib import Path
 from types import ModuleType
 
+import squid_discord
 import squid_layouts
 import squid_reactive
 import squid_replicated
@@ -25,6 +26,7 @@ PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-reactive/src"),
     Path("packages/squid-replicated/src"),
     Path("packages/squid-stores/src"),
+    Path("packages/squid-discord/src"),
 )
 
 TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
@@ -90,7 +92,7 @@ neither is forgotten before the package is published.
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_layouts, squid_reactive, squid_replicated, squid_stores):
+    for package in (squid_discord, squid_layouts, squid_reactive, squid_replicated, squid_stores):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)
@@ -122,7 +124,7 @@ def test_one_public_name_means_one_class() -> None:
     """Two classes sharing a short name is the defect, whatever the word happens to be.
 
     `MountSnapshot` named both a view of a live mount and the serialized state that
-    outlives it, and both were exported from `squid_layouts.discord`.
+    outlives it, and both were exported from `squid_discord`.
     """
     collisions = {name: sorted(where) for name, where in _exported_classes().items() if len(where) > 1}
     known = SAME_CONCEPT_TWO_LAYERS | UNRELATED_CONCEPTS_SHARING_A_WORD

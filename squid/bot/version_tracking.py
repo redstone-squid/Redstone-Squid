@@ -13,7 +13,7 @@ from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
-from squid_layouts.discord import send_to
+from squid_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

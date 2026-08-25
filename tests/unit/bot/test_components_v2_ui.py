@@ -18,7 +18,7 @@ from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Stat
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
-from squid_layouts.discord.testing import commit_render, delivered_to, fake_message
+from squid_discord.testing import commit_render, delivered_to, fake_message
 from tests.helpers.discord import make_layout_bot
 
 if TYPE_CHECKING:

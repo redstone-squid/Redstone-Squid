@@ -5,9 +5,9 @@ from typing import Any, cast
 
 import discord
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.bot.voting.poll_wizard import PollConfirmationComponent, PollDraft
-from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 from tests.helpers.voting import GENERIC_OPTIONS
 
@@ -21,12 +21,12 @@ def make_wizard() -> PollConfirmationComponent:
 
 
 def test_scheduler_backed_wizard_renews_its_private_session() -> None:
-    reactor = sl.discord.Reactor()
+    reactor = sd.Reactor()
 
     mount = make_wizard().mount(source=make_layout_bot(), reactor=reactor)
 
     assert mount.scheduler is reactor
-    assert isinstance(mount.expiry, sl.discord.RenewEphemeral)
+    assert isinstance(mount.expiry, sd.RenewEphemeral)
 
 
 async def test_cancelling_disables_the_wizard_and_leaves_the_notice_alone() -> None:

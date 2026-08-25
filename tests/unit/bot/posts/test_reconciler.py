@@ -15,7 +15,7 @@ import discord
 import pytest
 from whenever import Instant
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
@@ -197,7 +197,7 @@ class FakeRenderer:
                 channel_id=channel.id,
                 guild_id=GUILD,
                 surface="build_card",
-                presentation=sl.discord.render_static([]),
+                presentation=sd.render_static([]),
             )
             for channel in self.channels
         ]

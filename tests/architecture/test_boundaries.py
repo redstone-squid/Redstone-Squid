@@ -13,6 +13,7 @@ SCAN_ROOTS = (
     Path("squid"),
     Path("packages/squid-reactive/src"),
     Path("packages/squid-layouts/src"),
+    Path("packages/squid-discord/src"),
     Path("packages/squid-replicated/src"),
 )
 
@@ -31,7 +32,22 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("sqlalchemy*")
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
+        .should_not_import("squid_discord*")
         .check("squid_layouts", only_direct_imports=True)
+    )
+
+
+def test_discord_package_stays_a_leaf() -> None:
+    """The transport adapter is downstream of everything; nothing may point back at it."""
+    (
+        archrule("squid-discord depends on the engine, not on the host")
+        .match("squid_discord*")
+        .should_not_import("squid")
+        .should_not_import("squid.*")
+        .should_not_import("sqlalchemy*")
+        .should_not_import("fastapi*")
+        .should_not_import("nucleation*")
+        .check("squid_discord", only_direct_imports=True)
     )
 
 
@@ -54,14 +70,16 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
     assert violations == []
 
 
-def test_only_the_discord_transport_uses_the_layouts_package() -> None:
-    (
-        archrule("squid-layouts is a Discord presentation concern")
-        .match("squid*")
-        .exclude("squid.bot*")
-        .should_not_import("squid_layouts*")
-        .check("squid", only_direct_imports=True)
-    )
+def test_only_the_bot_transport_uses_the_ui_packages() -> None:
+    """Presentation is `squid.bot`'s business; no other layer may reach for a UI package."""
+    for package in ("squid_layouts*", "squid_discord*"):
+        (
+            archrule(f"{package} is a Discord presentation concern")
+            .match("squid*")
+            .exclude("squid.bot*")
+            .should_not_import(package)
+            .check("squid", only_direct_imports=True)
+        )
 
 
 def test_layouts_package_carries_no_translation_markers() -> None:
@@ -117,9 +135,9 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
                 continue
             resolved = ".".join((aliases.get(target.id, target.id), *reversed(parts)))
             # These are dotted *call* targets (package attribute -> function), not module
-            # paths: squid_layouts.discord.composition defines compose(), so a call resolves
-            # to "squid_layouts.discord.compose" regardless of which file compose() lives in.
-            if resolved in {"squid_layouts.discord.compose", "squid_layouts.discord.render_static"}:
+            # paths: squid_discord.composition defines compose(), so a call resolves
+            # to "squid_discord.compose" regardless of which file compose() lives in.
+            if resolved in {"squid_discord.compose", "squid_discord.render_static"}:
                 violations.append(f"{path}:{node.lineno}")
 
     assert violations == []
@@ -481,13 +499,18 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
     assert stale == {}, f"lower or drop these BARE_RAISE_ALLOWLIST entries (allowed, found): {stale}"
 
 
-def test_only_the_discord_adapter_imports_adapter_dependencies() -> None:
-    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install."""
+def test_the_engine_needs_no_transport_install() -> None:
+    """Portable authoring, planning, runtime, scenes, and HTML need no Discord install.
+
+    This used to skip a `discord/` directory inside the same distribution. Now that the
+    adapter is its own package the rule is flat, and the blocked set widens to the packages
+    that sit above the engine: nothing here may import them, in a function body or under
+    TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
+    """
     root = Path("packages/squid-layouts/src/squid_layouts")
+    blocked = {"anyio", "discord", "squid_stores", "squid_discord"}
     violations: list[str] = []
     for path in root.rglob("*.py"):
-        if path.relative_to(root).parts[0] == "discord":
-            continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 imported = {alias.name.split(".", 1)[0] for alias in node.names}
@@ -495,7 +518,7 @@ def test_only_the_discord_adapter_imports_adapter_dependencies() -> None:
                 imported = {node.module.split(".", 1)[0]}
             else:
                 continue
-            if blocked := imported & {"anyio", "discord"}:
-                violations.append(f"{path}:{node.lineno}: {sorted(blocked)}")
+            if found := imported & blocked:
+                violations.append(f"{path}:{node.lineno}: {sorted(found)}")
 
     assert violations == []

@@ -8,7 +8,7 @@ import squid_layouts as sl
 from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_basics_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft
-from squid_layouts.discord.testing import commit_render
+from squid_discord.testing import commit_render
 from tests.helpers.discord import make_layout_bot
 
 

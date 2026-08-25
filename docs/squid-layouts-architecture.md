@@ -17,7 +17,7 @@ expands them in roughly this order.
 | Actions | what a press is allowed to do | `sl.action`, `Guard`, `history`, `ActionMiddleware` | [Actions and frontend adapters](#actions-and-frontend-adapters) |
 | Lifetime | how long a panel lives and who may use it | `Mount`, `Screen`, `SessionRegistry`, `AccessPolicy` | [Which entry point to use](#which-entry-point-to-use), [Ownership and lifetime](#ownership-and-lifetime) |
 | Durability | what survives a restart | `DurableSessionRuntime`, `Router`, `PersistedPool` | [Durable sessions](#durable-sessions), [Durable route graph](#durable-route-graph-and-dispatch-onion) |
-| Diagnostics | what happened | `Profiler`, `DevTools`, `sl.discord.testing` | package `README.md` |
+| Diagnostics | what happened | `Profiler`, `DevTools`, `sd.testing` | package `README.md` |
 
 The two rules that decide which bucket something lands in are in
 [Ownership and lifetime](#ownership-and-lifetime): identity is never authority, and anything
@@ -43,7 +43,7 @@ owning background work ends through one named method.
         v
     immutable SceneDocument -- `sl.scene.Codec` JSON and JSON Schema
         |
-        +-- sl.discord.Renderer --> discord.ui.LayoutView
+        +-- sd.Renderer --> discord.ui.LayoutView
         +-- sl.html.Renderer ----> safe semantic HTML
 
 The planner is the only layer allowed to choose an alternate, drop content, split a page, or
@@ -54,24 +54,24 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Runtime for one discord.py client | sl.discord.install(client, defaults=..., bus=...) | LayoutHost: registry, reactor, challenge runner |
-| That runtime, from an interaction or context | sl.discord.LayoutHost.of(source) | the installed host, or `LayoutHostMissing` |
-| Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
-| Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
-| Per-open policy for one screen | sl.discord.Screen(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
-| Static Components V2 message | sl.discord.render_static(document) | DiscordPresentation |
-| One node as a detached item | sl.discord.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
-| Static classic message | sl.discord.classic.render_static(document) | DiscordPresentation |
-| Region in a host-owned classic message | sl.discord.classic.contribute(document, to=...) | AttachedClassicContribution |
-| Discord message plus diagnostics | sl.discord.compose(document) | Composition |
+| Runtime for one discord.py client | sd.install(client, defaults=..., bus=...) | LayoutHost: registry, reactor, challenge runner |
+| That runtime, from an interaction or context | sd.LayoutHost.of(source) | the installed host, or `LayoutHostMissing` |
+| Stateful Discord interaction | sd.Mount(component, access=...) | lifecycle, access, events, paging, edits |
+| Scoped live UI lifetime | sd.SessionRegistry | root/child cascade, cardinality, replacement |
+| Per-open policy for one screen | sd.Screen(name, scope=..., policy=...) | session key, cardinality, capacity, quota, access |
+| Static Components V2 message | sd.render_static(document) | DiscordPresentation |
+| One node as a detached item | sd.render_item(node, reservation=...) | discord.ui.Item for a host-built view |
+| Static classic message | sd.classic.render_static(document) | DiscordPresentation |
+| Region in a host-owned classic message | sd.classic.contribute(document, to=...) | AttachedClassicContribution |
+| Discord message plus diagnostics | sd.compose(document) | Composition |
 | Portable planning | plan(document, target=...) | PlanResult |
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
-| Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
-| Mount onto a message the bot owns | sl.discord.edit_to(message) | Destination writing that message |
+| Resume an opted-in session | sd.durability.DurableSessionRuntime | recovered Session graph |
+| Mount onto a message the bot owns | sd.edit_to(message) | Destination writing that message |
 
-sl.discord.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
-`V2Renderer`, then strictly audit the result. `sl.discord.classic.compose` is its counterpart
+sd.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
+`V2Renderer`, then strictly audit the result. `sd.classic.compose` is its counterpart
 for `CLASSIC_TARGET` and `ClassicRenderer`; both return a `DiscordPresentation`, which is the
 whole outgoing message rather than half of it. There is no default — the author picks the
 target, because the two modes differ in what a message can carry. Detached composition passes a
@@ -80,7 +80,7 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
-`sl.discord.Screen` is the per-open policy for one logical screen, written once and shared by
+`sd.Screen` is the per-open policy for one logical screen, written once and shared by
 every opening of it: `scope` picks the key an opening collides on, `policy` decides what happens
 when it does, `capacity` caps members per session, `quota` caps how many sessions in `domain` one
 user may be in, and `access` builds the mount's access policy from the opener. `Screen.open` and
@@ -135,7 +135,7 @@ Choices semantics instead of storing votes. Mounted tally controls adapt between
 selects, while routed tally controls use one `RoutedChoices` route for all option keys.
 
 Spatial data has three explicit contracts. `sl.semantic.TableDisplay.MATRIX` is an authoritative dense
-code-block representation. `sl.discord.button_grid(*cells, ...)` returns exact Discord rows
+code-block representation. `sd.button_grid(*cells, ...)` returns exact Discord rows
 and fails planning when that chosen shape exceeds Discord limits. `sl.grid(*cells, ...)` is
 semantic: its sticky `discord.grid` strategy moves from button rows to a coordinate matrix and
 select, then to a paged select. Every rung submits the same stable cell key in a
@@ -234,7 +234,7 @@ stored cursors and are clamped by the same policy as planner-owned lists. The cu
 transition is actor-keyed, so it is a mounted component with two explicitly non-persistent
 state cells (`approved` and `resolved`). Participant display names are host data, actor identity
 comes from the event, and `ActionPolicy.EXCLUSIVE` serializes approval and withdrawal. Discord
-hosts should mount it under `sl.discord.Users(...)`; the component repeats membership validation
+hosts should mount it under `sd.Users(...)`; the component repeats membership validation
 as a frontend-neutral safety boundary and calls its resolution hook once at the threshold.
 
 `SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
@@ -277,7 +277,7 @@ mutate it, and assign it back; the last line is the ordinary write.
 nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
 never evaluated, and one that raises fails where its value is used. `untracked()` reads
 without subscribing. batch coalesces related writes. transaction rolls back every write if an
-exception escapes, and `sl.discord.Mount` dispatch wraps mutating actions in one.
+exception escapes, and `sd.Mount` dispatch wraps mutating actions in one.
 
 That guarantee reaches declared state, and only declared state:
 
@@ -369,7 +369,7 @@ The scope a pool keys on is the one a `Screen` already computes. `Opener.of(inte
 opener, and asking it for a kind statically -- `opener.user_guild()` is a `UserGuildScope` -- is what
 lets a `Shared[UserGuildScope]` pool refuse the wrong scope at the call site. A panel holding its
 session key reaches a pool through `key.scope` with nothing to convert. `Opener` and `Scope` are
-deliberately not on `sl.discord`; import them from `squid_layouts.discord.screens`.
+deliberately not on `sd`; import them from `squid_discord.screens`.
 
 `squid_stores.PersistedPool` is the hydrating variant, for a namespace that should survive a
 restart: `await load(scope)` in place of `get(scope)`, `run()` as the background writer, and
@@ -456,7 +456,7 @@ Children appear through explicit keyed boundaries:
             self.embed(self.results, key="results"),
         )
 
-`sl.runtime.ComponentRuntime`, not `sl.discord.Mount`, owns rendering, keyed component identity, lifecycle,
+`sl.runtime.ComponentRuntime`, not `sd.Mount`, owns rendering, keyed component identity, lifecycle,
 invalidation, injected context, presentation state, and the bounded plan cache. Expansion
 scopes action keys and pager keys, detects cycles and duplicate instances, and gives the
 runtime deterministic `on_mount`/`on_unmount` ownership. Components have no mount reference;
@@ -497,7 +497,7 @@ Four primitives carry the whole model, and each owes one thing:
 The obligations are what make the rest follow. A loader may run zero times, once, or many
 times -- a hidden resource never loads, a moved dependency re-pends one that did, and a
 superseded load is discarded, or stopped outright where a host installs
-`abandon_superseded_loads` as `sl.discord` does -- so an irreversible effect inside a loader is
+`abandon_superseded_loads` as `sd` does -- so an irreversible effect inside a loader is
 programmer error, not a supported pattern. Supersession is not failure: `Failed` is reserved for a loader that
 raised. That is why effects belong in an operation, which the runtime never re-arms on its own;
 retrying is the author starting another execution.
@@ -519,7 +519,7 @@ operation's progress covers the author-controlled one, for the same reason.
 Components receive PressEvent or SelectionEvent, not discord.Interaction. Events expose
 portable actor facts and response intents: notice, present_form, download, redirect, and
 finish. Each frontend implements ActionResponder; Discord details live in
-sl.discord.ActionResponder.
+sd.ActionResponder.
 
 What a delivery moves is a `DiscordPresentation`: mode, content, embeds, view and assets as
 one value, so the payload Squid owns can be staged, logged and asserted on rather than
@@ -554,7 +554,7 @@ owned by the Discord reconciliation queue. The same queue drain publishes after 
 reconciliation.
 
 The bus is process-local, so a write made in another process reaches it through a host-owned
-bridge rather than a subscription. `sl.discord.durability.PostgresTopicBridge` is that bridge over
+bridge rather than a subscription. `sd.durability.PostgresTopicBridge` is that bridge over
 `LISTEN`/`NOTIFY`: it takes a host `sl.runtime.TopicCodec`, publishes an encoded address and never state,
 drops its own notifications by process origin, and calls `TopicBus.publish` for everything it
 receives — so it composes with the bus contract instead of relaying it, and an address the codec
@@ -609,12 +609,12 @@ to the same key in two different tables: `bindings` opens the form, `form_bindin
 
 ## Pagination
 
-Every paginator has an explicit unique string key. `sl.discord.Mount` stores a cursor per key; embedded
+Every paginator has an explicit unique string key. `sd.Mount` stores a cursor per key; embedded
 components prefix it automatically. `measure()` costs active footers and navigation IR to
 a fixed point, so controls spend real text and component budgets.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
-`sl.discord.Mount` resets only that cursor; keyed anchors preserve the reader's page across insertions and
+`sd.Mount` resets only that cursor; keyed anchors preserve the reader's page across insertions and
 reordering where possible. `per=N` is count-based pagination; the default fills by target text
 budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
 All use the same `NavFactory`.
@@ -625,7 +625,7 @@ and for a source window only when it declares `SourceCapabilities.jumpable` with
 It is a page rather than a `Position` because `NavigationState.position.offset` is a page index
 for a materialized cursor but an item offset for a source window; `NavigationState.page` is the
 comparable one, and pairs with `extent`. The stock `default_nav` draws no jump control, since a
-select costs a whole component row on every paginator in the process; `sl.discord.page_select_nav`
+select costs a whole component row on every paginator in the process; `sd.page_select_nav`
 opts into one, offering every page when there are at most 25 and an evenly spaced ladder across
 the whole range beyond that.
 
@@ -714,7 +714,7 @@ is the single framework boundary outside the whole user onion.
 ## Library binding: discord.py, not Discord alone
 
 For an ownership-first path from existing views and persistent controls into these adapter
-boundaries, see [Migrating an existing discord.py bot](../packages/squid-layouts/docs/migrating.md).
+boundaries, see [Migrating an existing discord.py bot](../packages/squid-discord/docs/migrating.md).
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
 `measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
@@ -826,7 +826,7 @@ table would have had to reject `Component`, `Mount`, `Screen` and `Destination` 
 it was not a table. What nouns owe instead is consistency, which needs no dictionary:
 
 1. **One meaning per word.** `MountSnapshot` named both a view of a live mount and the
-   serialized state that outlives it, and both were exported from `squid_layouts.discord`.
+   serialized state that outlives it, and both were exported from `squid_discord`.
 2. **A name uses the same word its own members use.** `MemorySnapshotStore`'s methods were
    `list_records`/`load` and its field was `_records`; only the class name said "snapshot".
 3. **Identity and authority are never one type**, as above.
@@ -854,4 +854,4 @@ to describe, and saying so is noise.
   use is unaffected, and `Mount.pending` reports a render held back for this reason.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
-- The base distribution is dependency-free; `squid-layouts[discord]` installs discord.py and anyio for the adapter.
+- The engine depends only on `squid-reactive`. `squid-discord` is a separate distribution for the discord.py adapter -- mounts, sessions, routing, durability -- and `squid-discord[durable]` adds `squid-stores` for durable panels. Discord *protocol* knowledge stays in the engine: the planner plans against Components V2 limits and dialects, and the HTML renderer reads the same target ids.

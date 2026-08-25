@@ -10,6 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, guild_only
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import (
@@ -23,9 +24,9 @@ from squid.bot.ui import (
     send_component,
 )
 from squid.core.i18n import _
-from squid_layouts.discord import SessionKey
-from squid_layouts.discord.screens import Opener
-from squid_layouts.discord.sessions import UserScope
+from squid_discord import SessionKey
+from squid_discord.screens import Opener
+from squid_discord.sessions import UserScope
 from squid_replicated import ReplicatedDocument, ReplicatedScope
 
 if TYPE_CHECKING:
@@ -155,7 +156,7 @@ return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback"
     )
 
 async def switch_language(self, event: sl.PressEvent) -> None:
-    mount = sl.discord.responder(event).mount
+    mount = sd.responder(event).mount
     mount.localize(localization_for("zh-CN"))
 
 # Interpolated values are Markdown-escaped unless wrapped in sl.raw_md().""",
@@ -900,7 +901,7 @@ class LayoutShowcase(sl.Component):
 
     async def _switch_language(self, event: sl.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
-        sl.discord.responder(event).mount.localize(localization_for(self.display_locale))
+        sd.responder(event).mount.localize(localization_for(self.display_locale))
 
     async def _action_notice(self, event: sl.ActionEvent) -> None:
         await event.notice(L(t"The semantic action kept its own callback after adaptation."))
@@ -1197,15 +1198,15 @@ class Lobby(sl.Component):
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
 
-    def __init__(self, sessions: sl.discord.SessionRegistry, host_id: int) -> None:
+    def __init__(self, sessions: sd.SessionRegistry, host_id: int) -> None:
         self.sessions = sessions
         self.host_id = host_id
-        self._mount: sl.discord.Mount | None = None
+        self._mount: sd.Mount | None = None
 
-    def mount(self, *, source: sl.discord.host.HostSource, locale: str | None = None) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource, locale: str | None = None) -> sd.Mount:
         # Kept so the panel can find its own session; the mount cannot be handed to the
         # component that renders it any other way.
-        self._mount = create_mount(self, source=source, access=sl.discord.Everyone(), locale=locale, timeout=None)
+        self._mount = create_mount(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
         return self._mount
 
     def render(self) -> sl.LayoutNode:
@@ -1262,25 +1263,25 @@ class Lobby(sl.Component):
             return
         self.started_with = len(session.members)
 
-    def _session(self) -> sl.discord.sessions.Session | None:
+    def _session(self) -> sd.sessions.Session | None:
         return None if self._mount is None else self.sessions.session_for(self._mount)
 
 
 _JOIN_NOTICES = {
-    sl.discord.sessions.MembershipStatus.JOINED: L(t"You are in."),
-    sl.discord.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
-    sl.discord.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
-    sl.discord.sessions.MembershipStatus.QUOTA_REACHED: L(t"You are already in a lobby on another server."),
-    sl.discord.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
-    sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
-    sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+    sd.sessions.MembershipStatus.JOINED: L(t"You are in."),
+    sd.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
+    sd.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
+    sd.sessions.MembershipStatus.QUOTA_REACHED: L(t"You are already in a lobby on another server."),
+    sd.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
+    sd.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
+    sd.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
 }
 
 _LEAVE_NOTICES = {
-    sl.discord.sessions.MembershipStatus.LEFT: L(t"You have left."),
-    sl.discord.sessions.MembershipStatus.NOT_MEMBER: L(t"You were not in this lobby."),
-    sl.discord.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
-    sl.discord.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+    sd.sessions.MembershipStatus.LEFT: L(t"You have left."),
+    sd.sessions.MembershipStatus.NOT_MEMBER: L(t"You were not in this lobby."),
+    sd.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
+    sd.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
 }
 
 
@@ -1315,7 +1316,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         await send_component(
             ctx,
             LayoutShowcase(section=section, entries=entries, locale=locale),
-            access=sl.discord.Everyone(),
+            access=sd.Everyone(),
             locale=locale,
         )
 
@@ -1336,7 +1337,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await send_component(
                 ctx,
                 component,
-                access=sl.discord.Owner(ctx.author.id),
+                access=sd.Owner(ctx.author.id),
                 locale=locale,
                 reactor=self.bot.layout_reactor,
             )

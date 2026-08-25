@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from discord import Interaction, TextChannel
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt
@@ -19,7 +20,7 @@ from squid.bot.ui import (
 )
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord.sessions import Opened, Rejected
+from squid_discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -124,7 +125,7 @@ class BuildLogConsentStickyMessage(StickyMessage):
     """Sticky banner posted in build-log channels when unconsented users post."""
 
     @override
-    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+    async def render(self, channel: TextChannel) -> sd.presentation.DiscordPresentation:
         return render_presentation(
             [
                 sl.primitives.Text(

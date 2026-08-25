@@ -4,7 +4,7 @@ from typing import Protocol, cast
 
 import discord
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.bot.routes._root import routes
 
 
@@ -12,13 +12,13 @@ class _OwnerGuildClient(Protocol):
     owner_server_id: int
 
 
-class OwnerGuildOnly[BotT: discord.Client](sl.discord.routing.Middleware[BotT]):
+class OwnerGuildOnly[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Silently ignore durable role controls outside the configured owner guild."""
 
     async def dispatch(
         self,
-        request: sl.discord.routing.RouteRequest[BotT],
-        proceed: sl.discord.routing.RouteProceed,
+        request: sd.routing.RouteRequest[BotT],
+        proceed: sd.routing.RouteProceed,
     ) -> None:
         interaction = request.interaction
         client = cast(_OwnerGuildClient, interaction.client)

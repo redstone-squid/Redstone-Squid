@@ -9,7 +9,7 @@ from discord.ext import commands
 
 from squid.bot.submission.records import RecordCog
 from squid.bot.version_tracking import VersionTracker
-from squid_layouts.discord.testing import fake_interaction, fake_message
+from squid_discord.testing import fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 
