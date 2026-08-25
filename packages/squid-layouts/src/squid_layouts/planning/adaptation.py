@@ -3,13 +3,13 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
-from squid_layouts._grid import GridCell
 from squid_layouts.assets import Asset
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.entity import EntityKind, EntityRef
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.forms import FormBinding
+from squid_layouts.grids import GridCell
 from squid_layouts.interactions import ActionBinding, ActionEvent, EntitySelectionEvent, PressEvent, SelectionEvent
 from squid_layouts.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks

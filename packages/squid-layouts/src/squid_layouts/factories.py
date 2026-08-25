@@ -20,17 +20,16 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, get_args
+from typing import TYPE_CHECKING, Literal, NoReturn, TypeAliasType, TypeIs, get_args
 
-from squid_layouts._grid import GridCell
-from squid_layouts._roster import RosterPlacement
-from squid_layouts._tally import TallyOption
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
+from squid_layouts.grids import GridCell
 from squid_layouts.guards import Guard
 from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette
+from squid_layouts.rosters import RosterPlacement
 from squid_layouts.semantic import (
     CLOSED,
     FIRST_DESTINATION,
@@ -114,6 +113,7 @@ from squid_layouts.semantic import (
     Tone,
     ZonedTimestamp,
 )
+from squid_layouts.tallies import TallyOption
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import Message, ResolvedText, TextLike, md
 
@@ -150,6 +150,16 @@ def _node_types(annotation: object) -> Iterator[type]:
 # Derived from the union rather than hand-listed, so a new node type is accepted the moment
 # it joins `LayoutNode`.
 _NODE_TYPES: tuple[type, ...] = tuple(_node_types(ConcreteLayoutNode))
+
+
+def is_layout_node(value: object) -> TypeIs[ConcreteLayoutNode]:
+    """True when `value` is already a layout node, rather than text or a component.
+
+    The public form of the derived `_NODE_TYPES` tuple: callers outside this module — the
+    pattern content normalizers above all — need the membership test, never the tuple, and
+    a predicate keeps the union's membership an implementation detail.
+    """
+    return isinstance(value, _NODE_TYPES)
 
 
 def _text(value: TextValue) -> TextLike:

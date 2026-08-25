@@ -6,15 +6,15 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, Literal, overload
 
-from squid_layouts._grid import GridCell, validate_grid
-from squid_layouts._roster import RosterPlacement
 from squid_layouts.assets import Asset
 from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormSpec, SubmitHandler
+from squid_layouts.grids import GridCell, validate_grid
 from squid_layouts.guards import Guard
 from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
+from squid_layouts.rosters import RosterPlacement
 from squid_layouts.target_types import Renderable
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
