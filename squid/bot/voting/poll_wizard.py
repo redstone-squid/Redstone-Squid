@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import discord
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import create_mount
@@ -19,7 +20,7 @@ from squid.voting.domain import (
     VoteVisibility,
 )
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_layouts.discord import SessionKey
+from squid_discord import SessionKey
 
 if TYPE_CHECKING:
     from squid.bot.voting.publisher import PollPublisher
@@ -180,7 +181,7 @@ async def present_poll_form(
 
     async def submitted(form_interaction: discord.Interaction[Any], values: dict[str, object]) -> None:
         if form_interaction.guild is None:
-            await sl.discord.delivery.respond_text(form_interaction, "Polls can only be created in a server.")
+            await sd.delivery.respond_text(form_interaction, "Polls can only be created in a server.")
             return
         current = draft or PollDraft(question="", options_text="")
         edited = replace(
@@ -191,7 +192,7 @@ async def present_poll_form(
         try:
             options = await publisher.resolve_options(form_interaction.guild.id, edited.option_lines)
         except InvalidVoteConfigurationError as error:
-            await sl.discord.delivery.respond_text(form_interaction, str(error))
+            await sd.delivery.respond_text(form_interaction, str(error))
             return
         component = PollConfirmationComponent(
             publisher,
@@ -203,12 +204,12 @@ async def present_poll_form(
         )
         await form_interaction.client.mounts.open(
             component.mount(source=form_interaction, reactor=getattr(form_interaction.client, "layout_reactor", None)),
-            sl.discord.respond_to(form_interaction, ephemeral=True, wait=True),
+            sd.respond_to(form_interaction, ephemeral=True, wait=True),
             key=SessionKey.user_guild("poll-wizard", form_interaction.user.id, form_interaction.guild.id),
             actor_id=form_interaction.user.id,
         )
 
-    modal = sl.discord.modal.build_form_modal(poll_form(draft), on_submit=submitted)
+    modal = sd.modal.build_form_modal(poll_form(draft), on_submit=submitted)
     await interaction.response.send_modal(modal)
 
 
@@ -236,7 +237,7 @@ class PollConfirmationComponent(sl.Component):
         self.options = options
         self.allow_network = allow_network
         self._timeout = timeout
-        self._mount: sl.discord.Mount | None = None
+        self._mount: sd.Mount | None = None
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.published:
@@ -338,7 +339,7 @@ class PollConfirmationComponent(sl.Component):
         self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
 
     async def _publish(self, event: sl.PressEvent) -> None:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if interaction.guild is None or interaction.channel is None:
             await event.notice("Polls can only be published in a server.")
             return
@@ -376,7 +377,7 @@ class PollConfirmationComponent(sl.Component):
             question=cast(str, event.values["question"]),
             options_text=cast(str, event.values["options"]),
         )
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if interaction.guild is None:
             await event.notice("Polls can only be edited in a server.")
             return
@@ -399,14 +400,14 @@ class PollConfirmationComponent(sl.Component):
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
 
     def mount(
-        self, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
-    ) -> sl.discord.Mount:
+        self, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None
+    ) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(self.owner_id),
+            access=sd.Owner(self.owner_id),
             timeout=self._timeout,
             reactor=reactor,
-            expiry=sl.discord.RenewEphemeral() if reactor is not None else sl.discord.PauseUpdates(),
+            expiry=sd.RenewEphemeral() if reactor is not None else sd.PauseUpdates(),
         )
         return self._mount

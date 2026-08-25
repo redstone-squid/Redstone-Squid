@@ -9,14 +9,15 @@ import pytest
 from discord.ext import commands
 
 import squid.bot.submission.search as search_module
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
 from squid.topics import resource_topic
-from squid_layouts.discord import Everyone
-from squid_layouts.discord.testing import fake_interaction, fake_message
+from squid_discord import Everyone
+from squid_discord.testing import fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 
@@ -144,7 +145,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     build = OtherBuild(id=42)
     renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
     topic_bus = sl.runtime.LocalTopicBus()
-    layout_reactor = sl.discord.Reactor(topic_bus)
+    layout_reactor = sd.Reactor(topic_bus)
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=SimpleNamespace()),
         for_build=lambda current: renderer,
@@ -155,10 +156,10 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     cog.bot = cast(Any, bot)
     queries = SimpleNamespace(get=AsyncMock(return_value=build))
     cog.queries = cast(Any, queries)
-    mounts: list[sl.discord.Mount] = []
+    mounts: list[sd.Mount] = []
 
-    def capture_mount(component: sl.Component, **kwargs: Any) -> sl.discord.Mount:
-        mount = sl.discord.Mount(component, access=Everyone(), timeout=None, scheduler=kwargs.get("reactor"))
+    def capture_mount(component: sl.Component, **kwargs: Any) -> sd.Mount:
+        mount = sd.Mount(component, access=Everyone(), timeout=None, scheduler=kwargs.get("reactor"))
         mounts.append(mount)
         return mount
 

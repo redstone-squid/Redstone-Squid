@@ -1,12 +1,20 @@
 # squid-layouts
 
-A declarative, limits-aware UI engine with Discord Components V2, classic-message, and HTML renderers.
+A declarative, limits-aware UI engine: semantic authoring, a planner that fits a document to a
+target's limits, a scene IR, a component runtime, and an HTML renderer.
 
 Discord rejects any message that exceeds one of its many hard limits (4000 display characters,
 40 components, 25 select options, 45-char modal titles, …) with an opaque HTTP 50035. This
 package prevents known target-limit violations before delivery: views describe *intent*, and the engine measures
 every markdown prefix and code fence exactly, allocates the shared budgets by priority, and
 degrades content the way its author said it should degrade.
+
+> **The discord.py runtime lives in [`squid-discord`](../squid-discord/README.md).** Mounts,
+> sessions, routing, delivery, adoption, roles, devtools and durable panels moved there; the
+> examples below that call `sd.Mount(...)` need it installed. What stays here is Discord
+> *protocol* knowledge — Components V2 and classic limits, the two dialects, the scene shapes,
+> the capability tags — because that is what the planner plans against, and none of it imports
+> discord.py. Installing `squid-layouts` alone pulls in neither discord.py nor a store backend.
 
 ```python
 import squid_layouts as sl
@@ -27,7 +35,7 @@ class Counter(sl.Component):
 
 See [the architecture and API interaction guide](../../docs/squid-layouts-architecture.md)
 for component composition, planning, renderers, action policies, and durable mounts, and
-[Classic Discord messages](docs/classic-messages.md) for the second target: content, embeds,
+[Classic Discord messages](../squid-discord/docs/classic-messages.md) for the second target: content, embeds,
 and action rows, from the same semantic document.
 
 ## The layers
@@ -50,39 +58,39 @@ and action rows, from the same semantic document.
 5. **Scene protocol 1** is immutable canonical JSON with action references but no callbacks or
    native frontend objects.
 6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
-   `sl.discord.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
+   `sd.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
 
-`sl.discord.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
-message carries content the engine cannot see — `sl.discord.measure(view)` and `sl.discord.cost(item)`
+`sd.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
+message carries content the engine cannot see — `sd.measure(view)` and `sd.cost(item)`
 produce one without hand-counting. It always creates a renderer-owned view;
 adopting a *live* `discord.py` view — one already sent, which will edit its own message — is
 intentionally unsupported, because two writers on one message make measurement unsound.
 
 There are four ways to adopt the package, and they can be mixed in one bot:
 
-1. **A new screen.** Use `sl.discord.Mount` for one command while everything else stays as it is.
-2. **A region of an existing V2 screen.** `sl.discord.contribute(document, to=view, followed_by=...)`
+1. **A new screen.** Use `sd.Mount` for one command while everything else stays as it is.
+2. **A region of an existing V2 screen.** `sd.contribute(document, to=view, followed_by=...)`
    measures the host, plans into what is left, and places the result — the host keeps sending,
    editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
    routed controls only, since no mount exists to wire a component-local callback.
-3. **An unsent classic view.** `sl.discord.adopt(view)` turns a never-sent `discord.ui.View`
+3. **An unsent classic view.** `sd.adopt(view)` turns a never-sent `discord.ui.View`
    into a `Component`: Squid builds its own controls from `view.children`, owns the message,
    and dispatches to the legacy callbacks unchanged. The mount owns the timeout, and anything
    that would make the legacy object a second writer raises `AdoptionError`.
 4. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
 
-See [Migrating an existing discord.py bot](docs/migrating.md) for an incremental path covering
+See [Migrating an existing discord.py bot](../squid-discord/docs/migrating.md) for an incremental path covering
 V2 and classic contributions, persistent routes, mounts, sessions, forms, and durability.
 
 A fragment is not a miniature mount. If two independently stateful regions need to edit one
 message, give them a single parent component, or keep the legacy view as the sole owner and make
 the Squid region stateless. Components nest through explicit
-`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sl.discord.Mount`
+`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sd.Mount`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
-controls, `sl.discord.Reactor` coalesces out-of-band refreshes, and `sl.discord.Navigator` stacks screens with
+controls, `sd.Reactor` coalesces out-of-band refreshes, and `sd.Navigator` stacks screens with
 Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
-controls built from `sl.discord.NavigationContext`; the same factory receives materialized pages and
+controls built from `sd.NavigationContext`; the same factory receives materialized pages and
 asynchronously loaded windows. Semantic pickers page through keyed
 25-option windows. A keyed root `Document` may promote structural overflow to whole-message
 pages; local pagination wins, and local plus root navigation are never shown simultaneously.
@@ -91,13 +99,13 @@ heterogeneous container with `sl.paged(section, key=..., chars=...)`. Use
 `sl.keep_with_next(heading)` to prevent a stranded heading and `sl.unbreakable(group)` when a
 region's children must stay together. These declarations use the same keyed cursor lifecycle as
 text and option pagination.
-`sl.discord.render_static` is the sessionless
-path for reconciler-managed posts. `sl.discord.build_modal`/`sl.discord.conform_modal` do the same for modals,
+`sd.render_static` is the sessionless
+path for reconciler-managed posts. `sd.build_modal`/`sd.conform_modal` do the same for modals,
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
-other processes; `sl.discord.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
+other processes; `sd.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
 
-Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sl.discord.compose`,
-`sl.discord.render_static`, or `sl.discord.Mount`. An omitted section or article accent inherits
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sd.compose`,
+`sd.render_static`, or `sd.Mount`. An omitted section or article accent inherits
 `Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
 Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
 subtree, so a component may select a palette from reactive state while the final scene still contains
@@ -140,7 +148,7 @@ board = sl.grid(
 )
 ```
 
-Use `sl.discord.button_grid(*cells, ...)` only when exact button rows are part of the
+Use `sd.button_grid(*cells, ...)` only when exact button rows are part of the
 contract and exceeding Discord's row or message budget should be an error. Use
 `sl.semantic.TableDisplay.MATRIX` for a non-interactive dense matrix.
 
@@ -157,9 +165,9 @@ agreement = sl.patterns.Agreement(
     require="all",
     on_resolve=release,
 )
-mount = sl.discord.Mount(
+mount = sd.Mount(
     agreement,
-    access=sl.discord.Users({member.id for member in reviewers}),
+    access=sd.Users({member.id for member in reviewers}),
     timeout=900,
 )
 ```
@@ -174,7 +182,7 @@ choices = (
     sl.forms.ChoiceOption("alerts", "Alerts", "alerts", emoji="🔔"),
     sl.forms.ChoiceOption("reports", "Reports", "reports"),
 )
-field = sl.discord.CheckboxGroupField(
+field = sd.CheckboxGroupField(
     key="subscriptions",
     label="Subscriptions",
     options=choices,
@@ -256,10 +264,10 @@ for a subscriber that is not a mount:
 
 ```python
 bus = sl.runtime.LocalTopicBus()
-reactor = sl.discord.Reactor(bus)
-mount = sl.discord.Mount(panel, access=sl.discord.Owner(interaction.user.id), scheduler=reactor)
+reactor = sd.Reactor(bus)
+mount = sd.Mount(panel, access=sd.Owner(interaction.user.id), scheduler=reactor)
 reactor.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
-await mount.send(sl.discord.respond_to(interaction))
+await mount.send(sd.respond_to(interaction))
 
 # The host owns the only long-running coroutine.
 async with anyio.create_task_group() as tasks:
@@ -282,7 +290,7 @@ PostgreSQL: it publishes through the bus rather than relaying it, so nothing loo
 payload is an encoded *address*, never state.
 
 ```python
-bridge = sl.discord.durability.PostgresTopicBridge(pool, bus)
+bridge = sd.durability.PostgresTopicBridge(pool, bus)
 tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
 bridge.publish(sl.runtime.Topic("build", "123"))  # local subscribers now, other processes shortly after
 ```
@@ -293,7 +301,7 @@ rather than a value -- so shared cells stay process-local by type rather than by
 `codec=` only to speak a format someone else already defined:
 
 ```python
-bridge = sl.discord.durability.PostgresTopicBridge(pool, bus, LegacyCodec())
+bridge = sd.durability.PostgresTopicBridge(pool, bus, LegacyCodec())
 ```
 
 Every process that takes part runs the bridge, including one that only publishes. Delivery is
@@ -321,11 +329,11 @@ no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A
 ephemeral panel can opt into an explicit, non-mutating handoff instead:
 
 ```python
-mount = sl.discord.Mount(
+mount = sd.Mount(
     panel,
-    access=sl.discord.Owner(user_id),
+    access=sd.Owner(user_id),
     scheduler=reactor,
-    expiry=sl.discord.RenewEphemeral(warning=90),
+    expiry=sd.RenewEphemeral(warning=90),
 )
 ```
 
@@ -344,11 +352,11 @@ directly.
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
 bus = sl.runtime.LocalTopicBus()
-reactor = sl.discord.Reactor(bus, profiler=profiler)
+reactor = sd.Reactor(bus, profiler=profiler)
 
-mount = sl.discord.Mount(panel, access=sl.discord.Everyone(), scheduler=reactor)
-router = sl.discord.Router(profiler=profiler)
-devtools = sl.discord.devtools.DevTools(reactor=reactor)
+mount = sd.Mount(panel, access=sd.Everyone(), scheduler=reactor)
+router = sd.Router(profiler=profiler)
+devtools = sd.devtools.DevTools(reactor=reactor)
 ```
 
 Completed operations contribute to lifetime and rolling histograms and event counters even when
@@ -383,7 +391,7 @@ tabs = sl.patterns.Tabs(
 )
 
 # A mounted message: state lives in sl.state and controls use sl.action closures.
-mount = sl.discord.Mount(tabs.component(), access=sl.discord.Everyone())
+mount = sd.Mount(tabs.component(), access=sd.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
 shell = sl.patterns.RouterShell(
@@ -401,9 +409,9 @@ class TraceActions(sl.interactions.ActionMiddleware):
             await proceed()
 
 
-mount = sl.discord.Mount(
+mount = sd.Mount(
     panel,
-    access=sl.discord.Everyone(),
+    access=sd.Everyone(),
     middleware=(TraceActions(),),
 )
 ```
@@ -459,11 +467,11 @@ Controls on long-lived posts use a stable route tree rather than an in-memory mo
 is an ordinary root group; every `define` returns its final, context-free identity immediately:
 
 ```python
-routes = sl.discord.RouteGroup[Bot]("r")
+routes = sd.RouteGroup[Bot]("r")
 polls = routes.group("polls")
 close_poll = polls.define("close", aliases=("poll:close",))
 
-router = sl.discord.Router(namespace=routes, on_gone=control_gone)
+router = sd.Router(namespace=routes, on_gone=control_gone)
 
 @polls.route(close_poll)
 async def close(interaction: discord.Interaction[Bot]) -> None:
@@ -473,7 +481,7 @@ async def close(interaction: discord.Interaction[Bot]) -> None:
 Reusable policy is a `Middleware[BotT]` instance attached before `Router.register(client)`:
 
 ```python
-class TraceRoutes(sl.discord.Middleware[Bot]):
+class TraceRoutes(sd.Middleware[Bot]):
     async def dispatch(self, request, proceed) -> None:
         with route_span(request):
             await proceed()
@@ -728,14 +736,14 @@ outside planning and cannot run in `RouterShell.render()`.
 
 ## Testing a panel with no Discord attached
 
-`sl.discord.testing` is public surface, not a private test helper. Send a mount to nowhere,
+`sd.testing` is public surface, not a private test helper. Send a mount to nowhere,
 then drive it through `Mount.dispatch` — the same funnel a real press takes, so access
 policies, guards, the action transaction and the repaint all run:
 
 ```python
-from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
-mount = sl.discord.Mount(Settings(), access=sl.discord.Everyone())
+mount = sd.Mount(Settings(), access=sd.Everyone())
 await mount.send(delivered_to(fake_message()))
 
 await mount.dispatch("save", fake_interaction(user_id=AUTHOR_ID))
@@ -754,23 +762,9 @@ list rather than an assertion.
 
 ## Host integration rules
 
-- The base package depends only on the zero-dependency `squid-reactive` kernel. Install the
-  `discord` extra for discord.py and anyio. The adapter never starts background work on its own;
-  start `sl.discord.Reactor.run()` and any external bridge under your own supervisor.
-- `sl.discord.install(client)` performs the assembly whose construction is circular -- the
-  session registry, the challenge runner, and the dialog presenter that needs both -- and records
-  the `LayoutHost` against the client, so anything carrying that client reaches it again through
-  `LayoutHost.of(source)`. Once per client; a second install is refused.
-
-  ```python
-  host = sl.discord.install(bot, defaults=MountDefaults(chrome=CHROME), bus=topic_bus)
-  ```
-
-  **`install` starts nothing.** Nothing refreshes and no approved press resumes until
-  `host.run()` is supervised, or until `host.reactor.run()` and `host.challenges.run()` are
-  started as separate jobs -- which is what a host wanting per-job health granularity does.
-  `host.close()` ends it: every session is finished, and the client stops answering
-  `LayoutHost.of`.
+- The base package depends only on the zero-dependency `squid-reactive` kernel. Install
+  `squid-discord` for the discord.py adapter. The adapter never starts background work on its own;
+  start `sd.Reactor.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the

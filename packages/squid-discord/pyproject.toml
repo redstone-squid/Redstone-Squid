@@ -1,0 +1,30 @@
+[project]
+name = "squid-discord"
+version = "0.1.0"
+description = "Discord application runtime for squid-layouts: mounts, sessions, routing, and durable panels"
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+dependencies = [
+    "squid-layouts",
+    "discord-py>=2.7,<3",
+    "anyio>=4.14,<5",
+    "packaging>=24,<27",
+]
+
+[project.optional-dependencies]
+# Durable mounts and sessions. Optional so a bot that never persists a panel installs no store
+# backend; `squid_discord.durability` is imported lazily to keep that promise real, and the
+# modules that name its types do so under TYPE_CHECKING.
+durable = ["squid-stores"]
+postgres = ["squid-stores[postgres]"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+# uv's default cache key for a path dependency is the mtime of pyproject.toml plus the module
+# root directory -- neither of which changes when a module is added under src/squid_discord/.
+# Docker builds with a persistent uv cache mount would otherwise reinstall a stale wheel.
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

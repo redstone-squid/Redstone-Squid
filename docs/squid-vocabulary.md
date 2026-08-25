@@ -305,7 +305,7 @@ cannot be evaluated until the package boundaries are final:
 
 - **The redundant-prefix rule reads differently after the split.** `Discord*` currently names
   a real variant that coexists with its alternatives in one namespace, which is why it was
-  exempted above. Once `squid_layouts.discord` becomes `squid_discord`, the prefix starts
+  exempted above. Once `squid_discord` becomes `squid_discord`, the prefix starts
   repeating the package name for everything that moves — `DiscordMode`, `DiscordPresentation`,
   `DiscordFrontend` — while staying necessary for everything that does not, because
   `DiscordTarget` and `DiscordAdapter` live in `planning` and stay behind.

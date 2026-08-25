@@ -86,7 +86,7 @@ anyio==4.14.2 \
     #   httpx
     #   openai
     #   redstone-squid
-    #   squid-layouts
+    #   squid-discord
     #   squid-stores
     #   starlette
 async-lru==2.3.0 \
@@ -111,7 +111,9 @@ asyncpg==0.31.0 \
     --hash=sha256:cea3a0b2a14f95834cee29432e4ddc399b95700eb1d51bbc5bfee8f31fa07b2b \
     --hash=sha256:e009abc333464ff18b8f6fd146addffd9aaf63e79aa3bb40ab7a4c332d0c5e9e \
     --hash=sha256:f6b56b91bb0ffc328c4e3ed113136cddd9deefdf5f79ab448598b9772831df44
-    # via sqlalchemy
+    # via
+    #   sqlalchemy
+    #   squid-stores
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \
     --hash=sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32
@@ -342,7 +344,7 @@ discord-py==2.7.1 \
     # via
     #   jishaku
     #   redstone-squid
-    #   squid-layouts
+    #   squid-discord
 distro==1.9.0 \
     --hash=sha256:2fa77c6fd8940f116ee1d6b94a2f90b13b5ea8d019b98bc8bafdcabcdd9bdbed \
     --hash=sha256:7bffd925d65168f85027d8da9af6bddab658135b840670a223589bc0c8ef02b2
@@ -624,7 +626,7 @@ orjson==3.11.9 \
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661
-    # via squid-layouts
+    # via squid-discord
 parse==1.22.1 \
     --hash=sha256:20f0925a46f06602485ac90d751764d0697fd8455aaa97489ba8953a4b66de32 \
     --hash=sha256:d3a4740ec3da338e2b258b2d69741b731eadfddca59e24a14bc4ee5fce38c911

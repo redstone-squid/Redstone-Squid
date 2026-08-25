@@ -10,6 +10,7 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
@@ -200,20 +201,20 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             on_submit=persist_draft,
         )
         mount = component.mount(source=interaction)
-        delivered = await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
+        delivered = await mount.send(sd.respond_to(interaction, ephemeral=True, wait=True))
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.
-        assert isinstance(delivered, sl.discord.delivery.Delivered), "the interaction response cannot be abandoned"
+        assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"
         workspace_message = delivered.receipt.message
         assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()
         if component.value is None:
             expired = text_layout(t(locale, _("Submission expired. Nothing was saved.")))
-            await sl.discord.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
+            await sd.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
             return
         if component.value is False:
             cancelled = text_layout(t(locale, _("Submission cancelled. Nothing was saved.")))
-            await sl.discord.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
+            await sd.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
             return
 
         assert submitted is not None, "The form only reports success once the build is persisted."
@@ -242,7 +243,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         )
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(
-                sl.discord.delivery.handle_for(workspace_message, mode=preview.mode).write,
+                sd.delivery.handle_for(workspace_message, mode=preview.mode).write,
                 preview,
             )
             tasks.start_soon(self.bot.for_build(build).post_for_voting)

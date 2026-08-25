@@ -8,10 +8,11 @@ import discord
 import pytest
 
 import squid.bot.settings_view as settings_view
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.voting.domain import VoteKind
-from squid_layouts.discord.testing import commit_render
+from squid_discord.testing import commit_render
 from squid_layouts.runtime.reactivity import readonly_transaction
 from tests.helpers.discord import make_layout_bot
 
@@ -208,7 +209,7 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
             context={"frontend": "discord"},
         ),
     )
-    monkeypatch.setattr(sl.discord, "native", lambda _event: SimpleNamespace())
+    monkeypatch.setattr(sd, "native", lambda _event: SimpleNamespace())
 
     with sl.runtime.transaction():
         await panel._undo(event)
@@ -233,7 +234,7 @@ async def test_a_large_guild_still_fits_one_message() -> None:
 
 async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=True))
-    monkeypatch.setattr(sl.discord, "native", lambda _event: SimpleNamespace())
+    monkeypatch.setattr(sd, "native", lambda _event: SimpleNamespace())
     panel, settings = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 

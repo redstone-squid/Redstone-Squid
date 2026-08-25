@@ -1,6 +1,6 @@
 """Per-action admission: may *this* press execute right now?
 
-Access policies (`sl.discord.access`) answer who may interact with a message; guards answer
+Access policies (`sd.access`) answer who may interact with a message; guards answer
 whether one control may run this instant. They compose, and neither subsumes the other: a
 cooldown, a deadline, or a single privileged button on an otherwise public panel is a guard.
 

@@ -10,13 +10,14 @@ import pytest
 from discord.ext import commands
 from whenever import Instant
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
-from squid_layouts.discord import Everyone, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import Opened
-from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_discord import Everyone, SessionKey, SessionRegistry
+from squid_discord.sessions import Opened
+from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -192,7 +193,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     the 120 s, which is the leak this was supposed to close.
     """
     ctx = make_context()
-    parent = sl.discord.Mount(_Blank(), access=Everyone(), timeout=None)
+    parent = sd.Mount(_Blank(), access=Everyone(), timeout=None)
     parent_opened = await ctx.bot.mounts.open(parent, delivered_to(fake_message()))
     assert isinstance(parent_opened, Opened)
     outcomes: list[Any] = []
@@ -238,10 +239,10 @@ class _Gate(sl.Component):
 
     async def _ask(self, event: sl.PressEvent) -> None:
         await request_consent(
-            sl.discord.native(event),
+            sd.native(event),
             user_id=USER_ID,
             on_answer=self._answered,
-            parent=sl.discord.responder(event).mount,
+            parent=sd.responder(event).mount,
         )
 
     async def _count(self, event: sl.PressEvent) -> None:
@@ -259,7 +260,7 @@ def _clicked(client: Any, *, message_id: int) -> Any:
     return interaction
 
 
-def _prompt_of(registry: SessionRegistry, panel: sl.discord.Mount) -> sl.discord.Mount | None:
+def _prompt_of(registry: SessionRegistry, panel: sd.Mount) -> sd.Mount | None:
     """The notice attached to `panel`'s session, which is where `parent=` puts it."""
     session = registry.session_for(panel)
     assert session is not None
@@ -277,7 +278,7 @@ async def test_asking_for_consent_from_a_handler_leaves_the_panel_free() -> None
     bot = make_layout_bot()
     registry = bot.mounts
     panel = _Gate()
-    mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
+    mount = sd.Mount(panel, access=Everyone(), timeout=None)
     assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
     commit_render(mount)
 
@@ -298,7 +299,7 @@ async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     bot = make_layout_bot()
     registry = bot.mounts
     panel = _Gate()
-    mount = sl.discord.Mount(panel, access=Everyone(), timeout=None)
+    mount = sd.Mount(panel, access=Everyone(), timeout=None)
     assert isinstance(await registry.open(mount, delivered_to(fake_message())), Opened)
     commit_render(mount)
     await mount.dispatch("ask", _clicked(bot, message_id=1))

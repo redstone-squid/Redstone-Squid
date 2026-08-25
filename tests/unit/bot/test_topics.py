@@ -7,11 +7,12 @@ from unittest.mock import AsyncMock
 
 import anyio
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.app import RedstoneSquid
 from squid.topics import resource_topic
-from squid_layouts.discord import Everyone
-from squid_layouts.discord.testing import delivered_to, fake_message
+from squid_discord import Everyone
+from squid_discord.testing import delivered_to, fake_message
 
 
 class Projection(sl.Component):
@@ -39,7 +40,7 @@ class Projection(sl.Component):
                 return sl.paragraph("loading")
 
 
-async def _drain_reactor(reactor: sl.discord.Reactor) -> None:
+async def _drain_reactor(reactor: sd.Reactor) -> None:
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(reactor.run)
         await asyncio.wait_for(reactor._queue.join(), timeout=1)
@@ -48,13 +49,13 @@ async def _drain_reactor(reactor: sl.discord.Reactor) -> None:
 
 async def test_one_resource_publish_refreshes_two_panels_without_second_post_writer() -> None:
     bus = sl.runtime.LocalTopicBus()
-    reactor = sl.discord.Reactor(bus)
+    reactor = sd.Reactor(bus)
     messages = [fake_message(message_id=1), fake_message(message_id=2)]
     source = "before"
     panels = [Projection(lambda: source), Projection(lambda: source)]
 
     for panel, message in zip(panels, messages, strict=True):
-        mount = sl.discord.Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
+        mount = sd.Mount(panel, access=Everyone(), scheduler=reactor, timeout=None)
         await mount.send(delivered_to(message))
         assert mount.followed == (resource_topic("build", "42"),), "following is what the render read"
 

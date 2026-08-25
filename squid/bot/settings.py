@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
@@ -23,7 +23,7 @@ from squid.permissions.domain.catalogue import (
 from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_layouts.discord import SessionKey
+from squid_discord import SessionKey
 from squid_layouts.runtime.component import RenderResult
 
 if TYPE_CHECKING:
@@ -225,7 +225,7 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], presentation: sl.discord.presentation.DiscordPresentation) -> None:
+    async def _reply(self, ctx: Context[BotT], presentation: sd.presentation.DiscordPresentation) -> None:
         """Answer the caller privately through the presentation delivery boundary."""
         await reply_presentation(
             ctx,

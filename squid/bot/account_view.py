@@ -13,6 +13,7 @@ from typing import cast
 
 import discord
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
@@ -73,7 +74,7 @@ class AccountPanel(sl.Component):
         self._timeout = timeout
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
-        self._mount: sl.discord.Mount | None = None
+        self._mount: sd.Mount | None = None
 
     async def on_load(self) -> None:
         await self._refresh()
@@ -382,7 +383,7 @@ class AccountPanel(sl.Component):
         if not self._needs_consent:
             await work()
             return
-        mount = sl.discord.responder(event).mount
+        mount = sd.responder(event).mount
 
         async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
@@ -395,7 +396,7 @@ class AccountPanel(sl.Component):
             await mount.refresh()
 
         await request_consent(
-            sl.discord.native(event),
+            sd.native(event),
             user_id=self._author_id,
             on_answer=answered,
             locale=self.locale,
@@ -463,11 +464,11 @@ class AccountPanel(sl.Component):
             )
         return None
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(self._author_id),
+            access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,
         )

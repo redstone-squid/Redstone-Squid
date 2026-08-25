@@ -9,6 +9,7 @@ import anyio
 import discord
 from discord.ext import commands
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
@@ -22,9 +23,9 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_layouts.discord import Screen
-from squid_layouts.discord.screens import Opener
-from squid_layouts.discord.sessions import Opened, Reject, Rejected, SessionPolicy
+from squid_discord import Screen
+from squid_discord.screens import Opener
+from squid_discord.sessions import Opened, Reject, Rejected, SessionPolicy
 
 CONSENT_SCREEN = Screen(
     "consent",
@@ -158,22 +159,22 @@ class ConsentPrompt(sl.Component):
 def _is_context(target: ConsentTarget) -> bool:
     """Whether this arrived as a command rather than as a bare interaction.
 
-    By shape, the way `sl.discord.deliver_to` dispatches: only a command context can `send`.
+    By shape, the way `sd.deliver_to` dispatches: only a command context can `send`.
     """
     return callable(getattr(target, "send", None))
 
 
-def _destination(target: ConsentTarget) -> sl.discord.Destination:
+def _destination(target: ConsentTarget) -> sd.Destination:
     """Choose the reply transport for a consent prompt.
 
     Ephemeral wherever the surface allows it: a consent notice names what the bot would store
     about one reader, and a channel is not the audience for that.
     """
     ephemeral = not _is_context(target) or cast(commands.Context[Any], target).interaction is not None
-    return sl.discord.deliver_to(target, ephemeral=ephemeral, wait=True)
+    return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
 
 
-async def _send(target: ConsentTarget, presentation: sl.discord.presentation.DiscordPresentation) -> None:
+async def _send(target: ConsentTarget, presentation: sd.presentation.DiscordPresentation) -> None:
     """Send a plain presentation where the prompt itself would have gone."""
     await _destination(target)(presentation)
 
@@ -291,7 +292,7 @@ async def _open_prompt(
     user_id: int,
     locale: str | None,
     timeout: float,
-    parent: sl.discord.Mount | None,
+    parent: sd.Mount | None,
 ) -> bool:
     """Put the prompt on screen, telling the reader why not when it could not be opened."""
     opened = await CONSENT_SCREEN.open(
@@ -318,7 +319,7 @@ async def prompt_for_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
+    parent: sd.Mount | None = None,
 ) -> AccountConsent | NotAskedType | None:
     """Show the notice and wait, returning the consent the user granted.
 
@@ -340,7 +341,7 @@ async def request_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
+    parent: sd.Mount | None = None,
 ) -> bool:
     """Show the notice and return, running `on_answer` from the prompt's own press.
 
@@ -377,13 +378,13 @@ async def with_consented_account(
     through its own handle: the prompt's interaction addresses the prompt's message, and
     flushing the panel through it would draw the panel into the dialog.
     """
-    interaction = sl.discord.native(event)
+    interaction = sd.native(event)
     user = interaction.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await work(event, account.id)
         return
-    mount = sl.discord.responder(event).mount
+    mount = sd.responder(event).mount
 
     async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
         if consent is None:
@@ -409,7 +410,7 @@ async def ensure_consented_account(
     *,
     locale: str | None = None,
     timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
+    parent: sd.Mount | None = None,
 ) -> int | None:
     """Return the user's account id after current consent has been granted.
 
