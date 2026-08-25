@@ -280,10 +280,22 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     assert _text_input(retried).default == "eventually"
 
 
-async def test_valid_submission_dispatches_typed_event_and_commits_a_new_generation() -> None:
+async def test_valid_submission_dispatches_typed_event_and_commits_the_runtime() -> None:
+    """A submission commits even when it changes nothing the reader can see.
+
+    This panel renders the same trigger whatever `seconds` holds, so the render that follows
+    the submission is suppressed as redundant and the live Discord generation is deliberately
+    retained. What must still happen is the application commit -- the event dispatched, the
+    state written, the bindings published -- which is exactly the boundary `on_committed`
+    reports and `on_presented` does not.
+    """
     panel = DurationPanel()
     mount = Mount(panel, access=Everyone(), timeout=None)
+    committed: list[Mount] = []
+    presented: list[Mount] = []
     commit_render(mount)
+    mount.on_committed(committed.append)
+    mount.on_presented(presented.append)
     generation = mount.generation
     modal = await _open_form(panel, mount)
     _text_input(modal)._value = "2h"  # pyrefly: ignore[missing-attribute]
@@ -294,7 +306,9 @@ async def test_valid_submission_dispatches_typed_event_and_commits_a_new_generat
     assert len(panel.events) == 1
     assert isinstance(panel.events[0], sl.SubmitEvent)
     assert panel.events[0].values == {"duration": 7200}
-    assert mount.generation > generation
+    assert committed == [mount], "the submission committed the application runtime"
+    assert presented == [], "nothing visible moved, so no presentation was published"
+    assert mount.generation == generation, "a suppressed render retains the live generation"
 
 
 async def test_exclusive_submission_from_a_stale_generation_is_ignored() -> None:

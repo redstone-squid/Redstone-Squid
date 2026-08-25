@@ -1,4 +1,7 @@
-"""Immutable display values for host-owned tallies."""
+"""Immutable display values for host-owned tallies.
+
+Named in the plural for the same reason as `grids`: `sl.tally` is the factory.
+"""
 
 from dataclasses import dataclass
 

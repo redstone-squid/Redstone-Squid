@@ -1,4 +1,7 @@
-"""Immutable roster values shared by semantic rendering and public patterns."""
+"""Immutable roster values shared by semantic rendering and downstream pattern packages.
+
+Named in the plural for the same reason as `grids`: `sl.roster` is the factory.
+"""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
