@@ -6,6 +6,7 @@ import pytest
 
 from squid_reactive import (
     ActionLedger,
+    ActionParticipant,
     LocalTopicBus,
     ReactiveConflictError,
     Shared,
@@ -159,26 +160,26 @@ def test_scheduler_records_read_only_noop_and_integrity_commit_exactly_once() ->
 
 
 def test_change_description_failure_aborts_with_the_prepared_value() -> None:
-    prepared = object()
+    prepared_value = object()
     aborted: list[object | None] = []
     ledger = ActionLedger()
     add_action_outcome_sink(ledger)
 
-    class Participant:
+    class Participant(ActionParticipant[object]):
         def prepare(self, view) -> object:
-            return prepared
+            return prepared_value
 
-        def describe_change(self, value: object) -> None:
-            assert value is prepared
+        def describe_change(self, prepared: object) -> None:
+            assert prepared is prepared_value
             raise RuntimeError("cannot describe change")
 
-        def apply(self, value: object) -> None:
+        def apply(self, prepared: object) -> None:
             raise AssertionError("unreachable")
 
-        def abort(self, value: object | None, cause: BaseException) -> None:
-            aborted.append(value)
+        def abort(self, prepared: object | None, cause: BaseException) -> None:
+            aborted.append(prepared)
 
-        def finalize(self, value: object) -> None:
+        def finalize(self, prepared: object) -> None:
             raise AssertionError("unreachable")
 
     try:
@@ -187,6 +188,6 @@ def test_change_description_failure_aborts_with_the_prepared_value() -> None:
     finally:
         ledger.close()
 
-    assert aborted == [prepared]
+    assert aborted == [prepared_value]
     assert len(ledger.outcomes) == 1
     assert ledger.outcomes[0].reason == "participant_prepare_failed"
