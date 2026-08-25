@@ -5,7 +5,7 @@ import uuid
 import asyncpg
 from testcontainers.postgres import PostgresContainer
 
-from squid_layouts.discord.durability import PostgresSessionStore
+from squid_stores import PostgresSessionStore
 
 
 async def test_postgres_snapshot_store_contract(postgres_container: PostgresContainer) -> None:

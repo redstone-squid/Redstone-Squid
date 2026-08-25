@@ -50,9 +50,9 @@ from squid.runtime import (
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_layouts.discord import install
-from squid_layouts.discord.durability import PostgresTopicBridge
 from squid_layouts.profiling import MemoryProfiler
 from squid_reactive import LocalTopicBus
+from squid_stores import PostgresTopicBridge
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
