@@ -232,11 +232,18 @@ and is the model.
 
 ### Constructors
 
-Classmethod constructors are `from_<source>`. `of` retires: `Opener.of(interaction)` becomes
-`Opener.from_interaction`, and `Variants.of` becomes `Variants.from_ladder`.
+Both `of` and `from_<source>` stay, and neither retires. Rule 2 is there to stop a reader
+being misled, and a constructor's source is never ambiguous: nobody misreads
+`Opener.of(interaction)` or `UndoPlan.from_commit(commit)`. Forcing one spelling buys
+uniformity at the price of `from_interaction(interaction)`, and a name that stutters is a
+worse name by the standard the rest of this document is held to.
 
-`Scope.of(opener)` is not a constructor — it projects an opener into a scope — and becomes
-`Scope.scope_for(opener)`.
+The real defect here is narrower. **A classmethod that does not return its own class is not
+a constructor and must not be spelled like one.** `Scope.of(opener)` returns a
+`SessionScope`, not a `Scope`, so the name misdirects — a rule 3 violation rather than a rule
+2 one, and the only one in this family. It becomes `Scope.resolve(opener)`, which reuses the
+dictionary verb that already means "turn an abstract selector plus a context into the
+concrete thing": `Router.resolve`, `TargetRegistry.resolve`, `PositionPolicy.resolve`.
 
 ### Methods are verb phrases
 
