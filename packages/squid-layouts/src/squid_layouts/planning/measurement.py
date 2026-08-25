@@ -14,14 +14,36 @@ planner's search decisions, and a layout reaching this module has already made t
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from datetime import datetime
-from enum import Enum, StrEnum
 from heapq import heappop, heappush
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
+from squid_layouts.planning.layout_measurement.diagnostics import (
+    LayoutOverflowError,
+    SolveNote,
+    SolveNoteCode,
+    SolveNoteSeverity,
+    lossy_notes,
+)
+from squid_layouts.planning.layout_measurement.diagnostics import (
+    note as _note,
+)
+from squid_layouts.planning.layout_measurement.model import (
+    PAGE_FOOTER_PREFIX,
+    Pager,
+    RCard,
+    RCardField,
+    RContent,
+    Realized,
+    RGroup,
+    RPanel,
+    RSection,
+    RText,
+    RTime,
+    RZonedTime,
+)
 from squid_layouts.planning.limits import (
     COMPONENTS,
     CONTENT_TEXT,
@@ -49,12 +71,10 @@ from squid_layouts.primitives.nodes import (
     Budget,
     Button,
     Card,
-    CardMedia,
     CardText,
     Code,
     Content,
     EntitySelect,
-    File,
     Footer,
     Gallery,
     Heading,
@@ -64,7 +84,6 @@ from squid_layouts.primitives.nodes import (
     Node,
     Option,
     Panel,
-    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -79,230 +98,10 @@ from squid_layouts.primitives.nodes import (
     ZonedTime,
     card_text,
 )
-from squid_layouts.primitives.styles import Color
 from squid_layouts.sources import Position
-from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
-
-
-class SolveNoteCode(StrEnum):
-    """Stable identities for diagnostics emitted by the measured solver."""
-
-    CLAMP_BUTTON_LABEL = "clamp.button_label"
-    CLAMP_SELECT_OPTIONS = "clamp.select_options"
-    CLAMP_SELECT_OPTION_TEXT = "clamp.select_option_text"
-    CLAMP_SELECT_PLACEHOLDER = "clamp.select_placeholder"
-    CLAMP_SECTION_TEXTS = "clamp.section_texts"
-    CLAMP_GALLERY_ITEMS = "clamp.gallery_items"
-    CLAMP_EMBED_TEXT = "clamp.embed_text"
-    CLAMP_EMBED_FIELDS = "clamp.embed_fields"
-    NODE_DROPPED = "degradation.node_dropped"
-    ALTERNATE = "degradation.alternate"
-    ALTERNATE_EXHAUSTED = "degradation.alternate_exhausted"
-    TRUNCATED = "degradation.truncated"
-    NEVER_CLAMPED = "degradation.never_clamped"
-    CHROME_DROP = "degradation.chrome_drop"
-    CONDENSED = "degradation.condensed"
-    CONDENSE_TRUNCATED = "degradation.condense_truncated"
-    SPILL_ALTERNATES = "degradation.spill_alternates"
-    SPILLED = "degradation.spilled"
-    SPILL_DROPPED = "degradation.spill_dropped"
-    NEVER_BUDGET = "failure.never_budget"
-    BUDGET_FLOOR = "failure.budget_floor"
-    BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
-    VARIANT_STEP = "adaptation.variant_step"
-    SEMANTIC_FALLBACK = "degradation.semantic_fallback"
-    OPTIONAL_DROPPED = "degradation.optional_dropped"
-    VARIANT_REFORMATTED = "degradation.variant_reformatted"
-    VARIANT_LOSSY = "degradation.variant_lossy"
-    PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
-    COMPONENT_BUDGET = "degradation.component_budget"
-    TEXT_BUDGET = "degradation.text_budget"
-
-
-class SolveNoteSeverity(Enum):
-    """How a solver note affects feasibility and reporting."""
-
-    ADAPTATION = "adaptation"
-    """The layout took another shape and lost nothing; `strict=True` accepts this.
-
-    Stepping a ladder to an exact rung is the case that matters: paginating a long region
-    or splitting it across cards shows every word the author wrote, so a caller who asked
-    for no degradation has not been given any.
-    """
-
-    CLAMP = "clamp"
-    DEGRADATION = "degradation"
-    FAILURE = "failure"
-
-
-@dataclass(frozen=True, slots=True)
-class SolveNote:
-    """A stable solver diagnostic whose meaning does not depend on message wording."""
-
-    code: SolveNoteCode
-    message: str
-    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION
-
-    def __str__(self) -> str:
-        return self.message
-
-
-def lossy_notes(notes: Sequence[SolveNote]) -> list[SolveNote]:
-    """The notes `strict=True` refuses: everything that is not lossless adaptation."""
-    return [note for note in notes if note.severity is not SolveNoteSeverity.ADAPTATION]
-
-
-def _note(
-    code: SolveNoteCode,
-    message: str,
-    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION,
-) -> SolveNote:
-    return SolveNote(code, message, severity)
-
-
-class LayoutOverflowError(Exception):
-    """The document cannot fit its hard constraints into Discord's budgets."""
-
-    def __init__(self, notes: list[SolveNote]) -> None:
-        super().__init__("; ".join(note.message for note in notes))
-        self.notes = notes
-
-
-# --- Realized tree: the same shapes with final strings, consumed by scene conversion -------
-
-
-@dataclass(slots=True)
-class RText:
-    content: str = ""
-    dropped: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class RTime:
-    instant: datetime
-    style: str
-    prefix: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RZonedTime:
-    value: ZonedDateTime
-    prefix: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class RSection:
-    texts: list[RText]
-    accessory: Thumbnail | LinkButton | PremiumButton | RoutedButton | RawItem
-
-
-@dataclass(frozen=True, slots=True)
-class RPanel:
-    children: list[Realized]
-    accent: Color | None
-    spoiler: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class RGroup:
-    """A transparent realized group removed before scene conversion."""
-
-    children: list[Realized]
-
-
-@dataclass(frozen=True, slots=True)
-class RContent:
-    """The realized `content` field, whose text was allocated from its own pool."""
-
-    slot: RText
-
-
-@dataclass(frozen=True, slots=True)
-class RCardField:
-    name: RText
-    value: RText
-    inline: bool
-
-
-@dataclass(frozen=True, slots=True)
-class RCard:
-    """One realized embed. Every slot already holds its final, allocated string."""
-
-    title: RText | None
-    url: str | None
-    blocks: list[Realized]
-    """Description blocks, joined by the dialect once their text is allocated."""
-    fields: list[RCardField]
-    footer: RText | None
-    footer_icon: str | None
-    author: RText | None
-    author_url: str | None
-    author_icon: str | None
-    accent: Color | None
-    image: CardMedia | None
-    thumbnail: CardMedia | None
-    timestamp: ZonedDateTime | datetime | None
-
-
-type Realized = (
-    RText
-    | RTime
-    | RZonedTime
-    | RSection
-    | RPanel
-    | RGroup
-    | RCard
-    | RContent
-    | File
-    | Sep
-    | Row
-    | SelectMenu
-    | EntitySelect
-    | RoutedSelect
-    | Thumbnail
-    | Gallery
-    | RawItem
-)
-
-
-PAGE_FOOTER_PREFIX = "-# "
-
-
-@dataclass(slots=True)
-class Pager:
-    """Page state for one keyed Paginate node that overflowed."""
-
-    key: str
-    slot: RText
-    prefix: str
-    suffix: str
-    fragments: list[str]
-    footer_slot: RText
-    footer: Callable[[int, int], str]
-    axis: str = DISPLAY_TEXT
-    """The text pool this pager's body and footer draw from."""
-    initial: int = 0
-    """The page to open on; a mount adopts this before its first render."""
-    page: int = 0
-    nav_host: list[Realized] | None = None
-    """The realized list holding this pager's nav, so `repage` can replace it in place."""
-    nav_at: int = 0
-    nav_count: int = 0
-
-    @property
-    def pages(self) -> int:
-        return len(self.fragments)
-
-    def select(self, index: int) -> int:
-        """Render page ``index`` (clamped) into the document; returns the page shown."""
-        index = max(0, min(index, self.pages - 1))
-        self.slot.content = self.prefix + self.fragments[index] + self.suffix
-        self.footer_slot.content = PAGE_FOOTER_PREFIX + self.footer(index + 1, self.pages)
-        self.page = index
-        return index
 
 
 @dataclass(frozen=True, slots=True)
