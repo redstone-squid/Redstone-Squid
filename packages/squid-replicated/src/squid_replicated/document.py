@@ -400,7 +400,12 @@ class ReplicatedSet:
 
 
 class ReplicatedScope:
-    """Own replicated documents and listeners. Calling :meth:`close` closes every document."""
+    """Own replicated documents and listeners. Calling :meth:`close` closes every document.
+
+    `replica_id` names an incarnation, not a machine. A restarted process that reuses one must
+    import peer state before its first local mutation so the log can restore the operation
+    clock; mutating first re-mints identities its peers already hold, and that is refused.
+    """
 
     def __init__(self, replica_id: str) -> None:
         self.replica_id = replica_id
