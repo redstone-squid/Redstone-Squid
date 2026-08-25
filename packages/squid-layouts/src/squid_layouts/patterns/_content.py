@@ -3,7 +3,7 @@
 import re
 from collections.abc import Iterable, Mapping
 
-from squid_layouts.factories import _NODE_TYPES, paragraph
+from squid_layouts.factories import is_layout_node, paragraph
 from squid_layouts.runtime.component import Component
 from squid_layouts.semantic import LayoutNode
 from squid_layouts.text import Message, ResolvedText, TextLike
@@ -18,7 +18,7 @@ def normalize_content(value: object, *, name: str) -> tuple[ContentItem, ...]:
         return (value,)
     if isinstance(value, str | ResolvedText | Message):
         return (paragraph(value),)
-    if isinstance(value, _NODE_TYPES):
+    if is_layout_node(value):
         return (value,)
     if isinstance(value, Mapping):
         message = f"{name} cannot be a mapping; unpack the content you meant"
@@ -35,7 +35,7 @@ def _normalize_item(value: object, *, name: str) -> ContentItem:
         return value
     if isinstance(value, str | ResolvedText | Message):
         return paragraph(value)
-    if isinstance(value, _NODE_TYPES):
+    if is_layout_node(value):
         return value
     message = f"{name} is not a layout node, text value, or Component"
     raise TypeError(message)
