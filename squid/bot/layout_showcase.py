@@ -12,6 +12,7 @@ from discord.ext.commands import Cog, Context, guild_only
 
 import squid_discord as sd
 import squid_layouts as sl
+import squid_patterns as sp
 from squid.bot.i18n import resolve_locale
 from squid.bot.ui import (
     DISCORD_BLUE,
@@ -99,7 +100,7 @@ return sl.actions(*actions, key="showcase-actions")""",
     sl.table(columns, *rows, key="capability-table"),
 )""",
     "grid": """cells = tuple(
-    sl.patterns.GridCell(
+    sp.GridCell(
         f"cell-{index}",
         str(index + 1),
         available=index not in blocked,
@@ -570,7 +571,7 @@ class LayoutShowcase(sl.Component):
     def _grid(self) -> Sequence[sl.LayoutNode]:
         blocked = {5, 10}
         cells = tuple(
-            sl.patterns.GridCell(
+            sp.GridCell(
                 f"cell-{index}",
                 str(index + 1),
                 available=index not in blocked,
@@ -1213,11 +1214,9 @@ class Lobby(sl.Component):
         session = self._session()
         if session is None:
             return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))
-        placement = sl.patterns.place_roster(
-            tuple(
-                sl.patterns.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)
-            ),
-            (sl.patterns.RosterSlot("players", L(t"Players"), session.capacity),),
+        placement = sp.place_roster(
+            tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)),
+            (sp.RosterSlot("players", L(t"Players"), session.capacity),),
         )
         status = (
             L("Started with {count} players.", count=self.started_with)

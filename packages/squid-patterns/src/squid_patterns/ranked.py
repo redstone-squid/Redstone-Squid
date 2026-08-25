@@ -4,15 +4,15 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
 from squid_layouts.factories import actions, heading, note, stack
-from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
-from squid_layouts.patterns._paging import window
-from squid_layouts.patterns._ranked import Projector, RankedEntry, RankedRows
-from squid_layouts.patterns.shells import ComponentShell, PatternControls
 from squid_layouts.primitives import Lines
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import LayoutNode
 from squid_layouts.sources import ORIGIN, Position
 from squid_layouts.text import TextLike
+from squid_patterns._content import ContentLike, normalize_content, require_key
+from squid_patterns._paging import window
+from squid_patterns._ranked import Projector, RankedEntry, RankedRows
+from squid_patterns.shells import ComponentShell, PatternControls
 
 
 @dataclass(frozen=True, slots=True)

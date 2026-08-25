@@ -18,9 +18,7 @@ routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
-    async def dispatch(
-        self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed
-    ) -> None:
+    async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": "discord_route",
             "squid.route.component": request.component.value,

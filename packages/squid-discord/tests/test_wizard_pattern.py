@@ -4,21 +4,22 @@ import discord
 import pytest
 
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts.patterns import REVIEW_STEP
 from squid_layouts.semantic import FormTrigger, Stack
+from squid_patterns import REVIEW_STEP
 
 
 def _form(title: str, key: str) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(title, (sl.forms.TextField(key=key, label=key.title()),))
 
 
-def _steps(answers: sl.patterns.WizardAnswers):
-    yield sl.patterns.WizardStep("kind", "Kind", _form("Choose kind", "kind"))
+def _steps(answers: sp.WizardAnswers):
+    yield sp.WizardStep("kind", "Kind", _form("Choose kind", "kind"))
     if answers.get("kind", {}).get("kind") == "advanced":
-        yield sl.patterns.WizardStep("detail", "Detail", _form("Add detail", "detail"))
-    yield sl.patterns.WizardStep("review", "Review", sl.paragraph("Review answers"))
+        yield sp.WizardStep("detail", "Detail", _form("Add detail", "detail"))
+    yield sp.WizardStep("review", "Review", sl.paragraph("Review answers"))
 
 
 def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
@@ -38,7 +39,7 @@ async def _submit_form(mount: Mount, key: str, value: str) -> None:
 
 
 def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> None:
-    wizard = sl.patterns.Wizard("Build", _steps)
+    wizard = sp.Wizard("Build", _steps)
     state = wizard.transition(wizard.initial_state, "submit:kind", submitted={"kind": "advanced"})
     state = wizard.transition(state, "submit:detail", submitted={"detail": "kept"})
     assert state.current == "review"
@@ -62,7 +63,7 @@ def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> No
 
 
 async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
-    wizard = sl.patterns.Wizard("Build", _steps).component()
+    wizard = sp.Wizard("Build", _steps).component()
     mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -77,12 +78,12 @@ async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> N
 
 
 async def test_plain_next_opens_the_following_form_without_an_intermediate_render() -> None:
-    wizard = sl.patterns.Wizard(
+    wizard = sp.Wizard(
         "Profile",
         (
-            sl.patterns.WizardStep("intro", "Introduction", "Ready"),
-            sl.patterns.WizardStep("name", "Name", _form("Name", "name")),
-            sl.patterns.WizardStep("done", "Done", "Review"),
+            sp.WizardStep("intro", "Introduction", "Ready"),
+            sp.WizardStep("name", "Name", _form("Name", "name")),
+            sp.WizardStep("done", "Done", "Review"),
         ),
     ).component()
     mount = Mount(wizard, access=Everyone(), timeout=None)
@@ -96,16 +97,12 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
 
 
 async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
-    completed: list[sl.patterns.WizardAnswers] = []
+    completed: list[sp.WizardAnswers] = []
 
-    async def finish(
-        _event: sl.patterns.PatternEvent[sl.patterns.WizardState], answers: sl.patterns.WizardAnswers
-    ) -> None:
+    async def finish(_event: sp.PatternEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(answers)
 
-    wizard = sl.patterns.Wizard("One", (sl.patterns.WizardStep("name", "Name", _form("Name", "name")),)).component(
-        on_finish=finish
-    )
+    wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).component(on_finish=finish)
     mount = Mount(wizard, access=Everyone(), timeout=None)
     commit_render(mount)
 
@@ -116,38 +113,36 @@ async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
 
 
 def test_router_shell_uses_input_phase_for_forms_and_next_state_for_buttons() -> None:
-    wizard = sl.patterns.Wizard(
+    wizard = sp.Wizard(
         "Routed",
-        (sl.patterns.WizardStep("intro", "Intro", "Hello"), sl.patterns.WizardStep("done", "Done", "Bye")),
+        (sp.WizardStep("intro", "Intro", "Hello"), sp.WizardStep("done", "Done", "Bye")),
     )
-    routes: list[sl.patterns.PatternRoute[sl.patterns.WizardState]] = []
+    routes: list[sp.PatternRoute[sp.WizardState]] = []
 
-    def route(request: sl.patterns.PatternRoute[sl.patterns.WizardState]) -> str:
+    def route(request: sp.PatternRoute[sp.WizardState]) -> str:
         routes.append(request)
         return f"wizard:{request.state.current}:{int(request.state.complete)}"
 
-    sl.patterns.RouterShell(route).render(wizard, wizard.initial_state)
-    assert next(request for request in routes if request.action == "next") == sl.patterns.PatternRoute(
-        "next", sl.patterns.WizardState("done"), "next"
+    sp.RouterShell(route).render(wizard, wizard.initial_state)
+    assert next(request for request in routes if request.action == "next") == sp.PatternRoute(
+        "next", sp.WizardState("done"), "next"
     )
 
-    form_wizard = sl.patterns.Wizard("Form", (sl.patterns.WizardStep("name", "Name", _form("Name", "name")),))
-    sl.patterns.RouterShell(route).render(form_wizard, form_wizard.initial_state)
-    assert next(request for request in routes if request.action == "submit:name") == sl.patterns.PatternRoute(
-        "submit:name", sl.patterns.WizardState("name"), "input"
+    form_wizard = sp.Wizard("Form", (sp.WizardStep("name", "Name", _form("Name", "name")),))
+    sp.RouterShell(route).render(form_wizard, form_wizard.initial_state)
+    assert next(request for request in routes if request.action == "submit:name") == sp.PatternRoute(
+        "submit:name", sp.WizardState("name"), "input"
     )
 
 
-def _review_steps(answers: sl.patterns.WizardAnswers):
-    yield sl.patterns.WizardStep("name", "Name", _form("Name", "name"))
-    yield sl.patterns.WizardStep("kind", "Kind", _form("Kind", "kind"))
+def _review_steps(answers: sp.WizardAnswers):
+    yield sp.WizardStep("name", "Name", _form("Name", "name"))
+    yield sp.WizardStep("kind", "Kind", _form("Kind", "kind"))
     if answers.get("kind", {}).get("kind") == "advanced":
-        yield sl.patterns.WizardStep("detail", "Detail", _form("Detail", "detail"))
+        yield sp.WizardStep("detail", "Detail", _form("Detail", "detail"))
 
 
-def _answer(
-    wizard: sl.patterns.Wizard, state: sl.patterns.WizardState, step: str, value: str
-) -> sl.patterns.WizardState:
+def _answer(wizard: sp.Wizard, state: sp.WizardState, step: str, value: str) -> sp.WizardState:
     return wizard.transition(state, f"submit:{step}", submitted={step: value})
 
 
@@ -166,7 +161,7 @@ def _walk(node):
 
 
 def test_a_final_submit_lands_on_review_instead_of_completing() -> None:
-    wizard = sl.patterns.Wizard("Build", _review_steps, review=True)
+    wizard = sp.Wizard("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     assert state.current == "kind"
 
@@ -178,7 +173,7 @@ def test_a_final_submit_lands_on_review_instead_of_completing() -> None:
 
 
 def test_a_jumped_edit_returns_to_review_rather_than_marching_on() -> None:
-    wizard = sl.patterns.Wizard("Build", _review_steps, review=True)
+    wizard = sp.Wizard("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
 
@@ -192,7 +187,7 @@ def test_a_jumped_edit_returns_to_review_rather_than_marching_on() -> None:
 
 
 def test_back_from_a_jumped_edit_returns_to_review() -> None:
-    wizard = sl.patterns.Wizard("Build", _review_steps, review=True)
+    wizard = sp.Wizard("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
     state = wizard.transition(state, "goto:name")
@@ -201,7 +196,7 @@ def test_back_from_a_jumped_edit_returns_to_review() -> None:
 
 
 def test_a_branch_that_grows_after_an_edit_gates_finish_in_the_state_machine() -> None:
-    wizard = sl.patterns.Wizard("Build", _review_steps, review=True)
+    wizard = sp.Wizard("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
     assert wizard.answered(state)
@@ -220,7 +215,7 @@ def test_a_branch_that_grows_after_an_edit_gates_finish_in_the_state_machine() -
 
 
 def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
-    wizard = sl.patterns.Wizard("Build", _review_steps, review=True)
+    wizard = sp.Wizard("Build", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
     # Editing the branch answer from review grows a step nobody has answered yet.
@@ -235,8 +230,8 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
 
 
 def test_a_summarize_callback_replaces_the_default_rows() -> None:
-    review = sl.patterns.WizardReview(summarize=lambda answers: sl.paragraph(f"{len(answers)} answers"))
-    wizard = sl.patterns.Wizard("Build", _review_steps, review=review)
+    review = sp.WizardReview(summarize=lambda answers: sl.paragraph(f"{len(answers)} answers"))
+    wizard = sp.Wizard("Build", _review_steps, review=review)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
 
@@ -247,14 +242,12 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
 
 
 async def test_finish_dispatches_once_from_the_review_screen() -> None:
-    completed: list[sl.patterns.WizardAnswers] = []
+    completed: list[sp.WizardAnswers] = []
 
-    async def finish(
-        _event: sl.patterns.PatternEvent[sl.patterns.WizardState], answers: sl.patterns.WizardAnswers
-    ) -> None:
+    async def finish(_event: sp.PatternEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(dict(answers))
 
-    wizard = sl.patterns.Wizard("One", (sl.patterns.WizardStep("name", "Name", _form("Name", "name")),), review=True)
+    wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),), review=True)
     shell = wizard.component(on_finish=finish)
     mount = Mount(shell, access=Everyone(), timeout=None)
     commit_render(mount)
@@ -271,12 +264,12 @@ async def test_finish_dispatches_once_from_the_review_screen() -> None:
 
 
 def test_a_review_state_still_routes_through_the_stateless_shell() -> None:
-    wizard = sl.patterns.Wizard("Routed", _review_steps, review=True)
+    wizard = sp.Wizard("Routed", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
-    routes: list[sl.patterns.PatternRoute[sl.patterns.WizardState]] = []
+    routes: list[sp.PatternRoute[sp.WizardState]] = []
 
-    sl.patterns.RouterShell(lambda request: (routes.append(request), "route")[1]).render(wizard, state)
+    sp.RouterShell(lambda request: (routes.append(request), "route")[1]).render(wizard, state)
 
     assert any(request.action == "goto:name" and request.state.reviewing for request in routes)
     assert any(request.action == "finish" for request in routes)
@@ -284,11 +277,11 @@ def test_a_review_state_still_routes_through_the_stateless_shell() -> None:
 
 def test_the_review_step_key_is_reserved() -> None:
     with pytest.raises(ValueError, match="reserved"):
-        sl.patterns.Wizard("Build", (sl.patterns.WizardStep(REVIEW_STEP, "Nope", "hi"),), review=True)
+        sp.Wizard("Build", (sp.WizardStep(REVIEW_STEP, "Nope", "hi"),), review=True)
 
 
 def test_a_wizard_without_review_is_unchanged() -> None:
-    wizard = sl.patterns.Wizard("Build", _review_steps)
+    wizard = sp.Wizard("Build", _review_steps)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
 

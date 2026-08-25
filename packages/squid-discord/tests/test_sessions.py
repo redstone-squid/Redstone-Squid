@@ -48,7 +48,9 @@ _DEFAULT_MESSAGE = object()
 def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_discord.Destination:
     delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
-    async def send(presentation: squid_discord.presentation.DiscordPresentation) -> squid_discord.delivery.DeliveryReceipt:
+    async def send(
+        presentation: squid_discord.presentation.DiscordPresentation,
+    ) -> squid_discord.delivery.DeliveryReceipt:
         handle = None if delivered is None else squid_discord.delivery.handle_for(delivered)
         return squid_discord.delivery.DeliveryReceipt(delivered, handle)
 
@@ -56,7 +58,9 @@ def to_message(message: Any = _DEFAULT_MESSAGE) -> squid_discord.Destination:
 
 
 def slowly() -> squid_discord.Destination:
-    async def send(presentation: squid_discord.presentation.DiscordPresentation) -> squid_discord.delivery.DeliveryReceipt:
+    async def send(
+        presentation: squid_discord.presentation.DiscordPresentation,
+    ) -> squid_discord.delivery.DeliveryReceipt:
         await anyio.sleep(0)
         message = fake_message()
         return squid_discord.delivery.DeliveryReceipt(message, squid_discord.delivery.handle_for(message))
@@ -65,14 +69,18 @@ def slowly() -> squid_discord.Destination:
 
 
 def abandoning() -> squid_discord.Destination:
-    async def send(presentation: squid_discord.presentation.DiscordPresentation) -> squid_discord.delivery.DeliveryReceipt:
+    async def send(
+        presentation: squid_discord.presentation.DiscordPresentation,
+    ) -> squid_discord.delivery.DeliveryReceipt:
         raise squid_discord.delivery.DeliveryAbandoned
 
     return send
 
 
 def failing(error: Exception) -> squid_discord.Destination:
-    async def send(presentation: squid_discord.presentation.DiscordPresentation) -> squid_discord.delivery.DeliveryReceipt:
+    async def send(
+        presentation: squid_discord.presentation.DiscordPresentation,
+    ) -> squid_discord.delivery.DeliveryReceipt:
         raise error
 
     return send
@@ -248,7 +256,9 @@ class TestCardinality:
 
     async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
         class ReplaceNewest:
-            async def select(self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSummary, ...]):
+            async def select(
+                self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSummary, ...]
+            ):
                 return Replace(occupants[-request.required_victims :])
 
         registry = SessionRegistry()
@@ -268,7 +278,9 @@ class TestCardinality:
 
     async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
         class SelectNobody:
-            async def select(self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSummary, ...]):
+            async def select(
+                self, request: OpeningRequest, occupants: tuple[squid_discord.sessions.SessionSummary, ...]
+            ):
                 return Replace(())
 
         registry = SessionRegistry()

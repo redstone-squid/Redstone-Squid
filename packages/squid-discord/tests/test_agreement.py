@@ -7,15 +7,16 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_discord.testing import commit_render, fake_interaction
 
 
-def _agreement(**overrides: Any) -> sl.patterns.Agreement:
-    return sl.patterns.Agreement(
+def _agreement(**overrides: Any) -> sp.Agreement:
+    return sp.Agreement(
         "Ship this change?",
         (
-            sl.patterns.AgreementParticipant("1", "Alice"),
-            sl.patterns.AgreementParticipant("2", "Bob"),
+            sp.AgreementParticipant("1", "Alice"),
+            sp.AgreementParticipant("2", "Bob"),
         ),
         **overrides,
     )
@@ -98,14 +99,14 @@ async def test_users_access_denies_before_agreement_dispatch() -> None:
 
 
 def test_agreement_validates_identity_threshold_and_controls() -> None:
-    participant = sl.patterns.AgreementParticipant("1", "Alice")
+    participant = sp.AgreementParticipant("1", "Alice")
     with pytest.raises(ValueError, match="at least one participant"):
-        sl.patterns.Agreement("Prompt", ())
+        sp.Agreement("Prompt", ())
     with pytest.raises(ValueError, match="unique"):
-        sl.patterns.Agreement("Prompt", (participant, participant))
+        sp.Agreement("Prompt", (participant, participant))
     with pytest.raises(ValueError, match="reachable positive threshold"):
-        sl.patterns.Agreement("Prompt", (participant,), require=2)
+        sp.Agreement("Prompt", (participant,), require=2)
 
-    agreement = sl.patterns.Agreement("Prompt", (participant,), allow_withdraw=False)
+    agreement = sp.Agreement("Prompt", (participant,), allow_withdraw=False)
     mount = squid_discord.Mount(agreement, access=squid_discord.Users({1}), timeout=None)
     assert [button.label for button in _buttons(commit_render(mount))] == ["Approve"]
