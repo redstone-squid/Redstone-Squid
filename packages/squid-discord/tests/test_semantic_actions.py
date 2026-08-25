@@ -343,7 +343,7 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
         ),
     )
 
-    result = plan(document, target=V2_TARGET)
+    result = plan(document, target=V2_TARGET)  # pyrefly: ignore[bad-argument-type]
     rendered = _texts(result)
 
     # individual, grouped, the opened branch, then the nested branch: four, not five. The

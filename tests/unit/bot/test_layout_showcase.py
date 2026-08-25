@@ -399,6 +399,17 @@ class TestSharedAppearance:
         assert kept() is appearance, "retention state: the caller still holds it"
 
 
+def _lobby_mount(panel: Lobby) -> Mount:
+    assert panel._mount is not None
+    return panel._mount
+
+
+def _lobby_session(panel: Lobby) -> sd.sessions.Session:
+    session = panel._session()
+    assert session is not None
+    return session
+
+
 class TestLobby:
     """The roster is session membership, so the panel holds none of it."""
 
@@ -428,21 +439,21 @@ class TestLobby:
         registry, panel = await self.opened()
 
         assert next(iter(registry.active())).members == frozenset({7})
-        assert "### Players — 1/4" in _texts(commit_render(panel._mount))
+        assert "### Players — 1/4" in _texts(commit_render(_lobby_mount(panel)))
 
     async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
         registry, panel = await self.opened()
 
-        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_mount(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert next(iter(registry.active())).members == frozenset({7, 8})
-        assert "### Players — 2/4" in _texts(commit_render(panel._mount))
+        assert "### Players — 2/4" in _texts(commit_render(_lobby_mount(panel)))
 
     async def test_the_lobby_fills_and_then_refuses(self) -> None:
         registry, panel = await self.opened(capacity=2)
 
-        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
-        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=9))
+        await _lobby_mount(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_mount(panel).dispatch("lobby-roster.players", fake_interaction(user_id=9))
 
         assert next(iter(registry.active())).members == frozenset({7, 8})
 
@@ -450,8 +461,8 @@ class TestLobby:
         registry, panel = await self.opened()
         session = next(iter(registry.active()))
 
-        await panel._mount.dispatch("leave", fake_interaction(user_id=7))
-        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_mount(panel).dispatch("leave", fake_interaction(user_id=7))
+        await _lobby_mount(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert session.members == frozenset()
         assert not session.root.finished
@@ -460,23 +471,23 @@ class TestLobby:
         """Everyone may press Join, so the control that is not for everyone checks itself."""
         _, panel = await self.opened()
 
-        await panel._mount.dispatch("start", fake_interaction(user_id=8))
+        await _lobby_mount(panel).dispatch("start", fake_interaction(user_id=8))
         assert panel.started_with is None
 
-        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
-        await panel._mount.dispatch("start", fake_interaction(user_id=8))
+        await _lobby_mount(panel).dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_mount(panel).dispatch("start", fake_interaction(user_id=8))
 
         assert panel.started_with == 2
-        assert "Started with 2 players." in _texts(commit_render(panel._mount))
+        assert "Started with 2 players." in _texts(commit_render(_lobby_mount(panel)))
 
     async def test_a_reader_cannot_hold_a_seat_in_two_servers(self) -> None:
         """Two lobbies, two hosts, one reader: the quota is what stops the second seat."""
         registry, here = await self.opened()
         _, elsewhere = await self.opened(registry=registry, guild_id=6, host_id=9)
 
-        await elsewhere._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
-        await here._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_mount(elsewhere).dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await _lobby_mount(here).dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert registry.sessions_for_member(8) == (registry.sessions_for_member(8)[0],)
-        assert 8 in elsewhere._session().members
-        assert 8 not in here._session().members
+        assert 8 in _lobby_session(elsewhere).members
+        assert 8 not in _lobby_session(here).members

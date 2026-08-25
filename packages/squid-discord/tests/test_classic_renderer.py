@@ -26,7 +26,7 @@ from squid_layouts.scene.model import (
 from squid_layouts.semantic import Actions, Link, Note, Paragraph
 
 
-def scene(body) -> SceneDocument:
+def scene(body: SceneClassicMessage) -> SceneDocument[SceneClassicMessage]:
     return SceneDocument(SceneCodec.protocol, "discord.components-v1", 1, body)
 
 
@@ -92,7 +92,7 @@ class TestMalformedScenes:
         wrong = SceneDocument(SceneCodec.protocol, "discord.components-v1", 1, SceneComponentsV2((SceneText("x"),)))
 
         with pytest.raises(DrawInvariantError, match="cannot draw a SceneComponentsV2 body"):
-            ClassicRenderer().draw(wrong)
+            ClassicRenderer().draw(wrong)  # pyrefly: ignore[bad-argument-type]
 
     def test_the_v2_target_id_is_refused(self) -> None:
         wrong = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, SceneClassicMessage())
