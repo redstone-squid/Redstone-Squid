@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 import squid_layouts as sl
+from squid_layouts.capabilities import Capability
 from squid_layouts.interactions import ActionPolicy
 from squid_layouts.planning.limits import LIMITS
 from squid_layouts.planning.target import TargetProfile
@@ -374,7 +375,7 @@ async def _submitted(event: sl.SubmitEvent) -> None: ...
 
 
 def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
-    target = TargetProfile("html", 1, frozenset({"forms.inline"}), limits=LIMITS)
+    target = TargetProfile("html", 1, frozenset({Capability.FORMS_MODAL}), limits=LIMITS)
     spec = sl.forms.FormSpec("Edit", (sl.forms.TextField(key="name", label="Name"),))
 
     result = sl.planning.plan(sl.form("Edit", spec, key="edit", on_submit=_submitted), target=target)
@@ -395,7 +396,7 @@ class NativeOnlyField(sl.forms.ExtensionField[str]):
 
 
 def test_extension_field_without_a_fallback_is_a_planning_error() -> None:
-    target = TargetProfile("html", 1, frozenset({"forms.inline"}), limits=LIMITS)
+    target = TargetProfile("html", 1, frozenset({Capability.FORMS_MODAL}), limits=LIMITS)
     spec = sl.forms.FormSpec("Native", (NativeOnlyField(key="native", label="Native"),))
 
     with pytest.raises(sl.errors.LayoutInvariantError, match=r"forms\.native-only"):
@@ -403,7 +404,7 @@ def test_extension_field_without_a_fallback_is_a_planning_error() -> None:
 
 
 def test_extension_field_uses_its_portable_fallback() -> None:
-    target = TargetProfile("html", 1, frozenset({"forms.inline"}), limits=LIMITS)
+    target = TargetProfile("html", 1, frozenset({Capability.FORMS_MODAL}), limits=LIMITS)
     spec = sl.forms.FormSpec(
         "Native",
         (

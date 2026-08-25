@@ -3,6 +3,7 @@
 import asyncio
 import json
 import subprocess
+import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
@@ -727,4 +728,7 @@ assert \"discord\" not in sys.modules
 assert \"anyio\" not in sys.modules
 """
 
-    subprocess.run(["python", "-c", code], check=True)
+    # `sys.executable`, not a bare "python": the interpreter on PATH is not this venv when
+    # pytest is driven from Git Bash, and the import assertions below only mean anything when
+    # the subprocess is the same interpreter that installed squid_layouts.
+    subprocess.run([sys.executable, "-c", code], check=True)

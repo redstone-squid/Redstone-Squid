@@ -392,6 +392,10 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "-ra",                 # short summary of skips/xfails
+    # Each package's tests/ is deliberately namespace-less (see the INP ignore above), so the
+    # default prepend mode derives a module name from the basename alone and two packages that
+    # both ship a `test_topics.py` collide. importlib mode keys on the full path instead.
+    "--import-mode=importlib",
     "--cov=squid",
     "--cov=squid_reactive",
     "--cov=squid_stores",

@@ -13,6 +13,7 @@ from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
+from squid_layouts.profiling.profiler import _MAX_NAME_LENGTH
 from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
@@ -858,7 +859,12 @@ class TestProfiling:
         assert trace.name == POLL_CLOSE.format
         assert trace.result.outcome is TraceOutcome.COMPLETED
         spans = {span.name: span for span in trace.spans}
-        middleware_name = f"middleware:{__name__}.TestProfiling.test_route_trace_profiles_middleware_handler_and_acknowledgement.<locals>.Continue"
+        # Bounded the way the profiler bounds it. Unbounded, this qualname is exactly 120
+        # characters when `__name__` is a bare `test_routing`, so the assertion used to pass
+        # by a single character and truncated the moment the module gained a longer name.
+        middleware_name = f"middleware:{__name__}.TestProfiling.test_route_trace_profiles_middleware_handler_and_acknowledgement.<locals>.Continue"[
+            :_MAX_NAME_LENGTH
+        ]
         assert {"acknowledgement", middleware_name, "handler"} <= spans.keys()
         assert (
             dict((attribute.key, attribute.value) for attribute in spans["acknowledgement"].attributes)["source"]
