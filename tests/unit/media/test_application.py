@@ -223,7 +223,13 @@ async def test_symlink_sources_are_rejected(tmp_path: Path) -> None:
     target = tmp_path / "target.mp4"
     target.write_bytes(b"video")
     source = tmp_path / "source.mp4"
-    source.symlink_to(target)
+    # Windows refuses this without Developer Mode or SeCreateSymbolicLinkPrivilege, and a
+    # test about *rejecting* symlinks cannot run where none can be made. Skipped rather
+    # than xfailed: the guard under test is fine, the platform simply will not set it up.
+    try:
+        source.symlink_to(target)
+    except OSError as error:
+        pytest.skip(f"creating symlinks is not permitted here: {error}")
     normalizer = FakeMediaNormalizer(video_probe())
     service = MediaNormalizationService(normalizer)
     command = MediaNormalizationRequest(

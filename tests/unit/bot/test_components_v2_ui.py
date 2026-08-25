@@ -65,9 +65,15 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     assert "Submission ID: 7" in str(payload)
 
 
-def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
+async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
     field = get_text_input(display_build, "version_spec")
     component = BuildEditComponent(display_build, cast(BuildService, object()), [field])
+
+    # `projection` is an atomic resource, so reading its status aborts a discovery render
+    # until it has settled. A mount settles it before rendering; calling `render()` straight
+    # from a test has to do the same. The loader returns the seed the constructor supplied,
+    # so this touches no service.
+    await component.projection.reload()
 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())

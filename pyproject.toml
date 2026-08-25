@@ -34,6 +34,9 @@ dependencies = [
     "rapidfuzz>=3.13.0",
     "squid-layouts[discord]",
     "squid-replicated",
+    # Direct: `squid/topics.py` opens the LISTEN/NOTIFY bridge itself rather than reaching
+    # for it through the UI package that used to re-export it.
+    "squid-stores[postgres]",
     "sqlalchemy[postgresql-asyncpg,postgresql-psycopg2binary]>=2.0.41",
     "uvloop>=0.21.0 ; sys_platform != 'win32'",
     "advanced-alchemy>=1.11.0",
