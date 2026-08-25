@@ -148,8 +148,7 @@ class LayoutHost[ClientT: discord.Client]:
             if host is not None:
                 return host
         message = (
-            f"no layout host is installed on this {type(source).__name__}; "
-            "call sd.install(client) once at startup"
+            f"no layout host is installed on this {type(source).__name__}; call sd.install(client) once at startup"
         )
         raise LayoutHostMissing(message)
 

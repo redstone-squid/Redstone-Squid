@@ -738,9 +738,7 @@ class BuildEditComponent(sl.Component):
         else:
             await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
 
-    def mount(
-        self, user_id: int, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None
-    ) -> sd.Mount:
+    def mount(self, user_id: int, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
