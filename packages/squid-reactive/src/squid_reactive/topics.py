@@ -38,6 +38,16 @@ class CellAddress:
     def __hash__(self) -> int:
         return hash((id(self.owner), self.name))
 
+    def __str__(self) -> str:
+        """``Preferences(Member(1, 2)).theme``: what a person needs to find the field.
+
+        Here rather than only in :func:`squid_reactive.shared.describe` so that
+        :mod:`squid_reactive.core` can name an address too. It cannot import the namespace
+        module -- that module imports it -- and a conflict that says which field moved is
+        worth more than a diagnostic layered on top of one that does not.
+        """
+        return f"{self.owner!r}.{self.name}"
+
 
 type Address = Topic | CellAddress
 type Subscriber = Callable[[Address], None]
