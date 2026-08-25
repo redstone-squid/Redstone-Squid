@@ -8,12 +8,14 @@ import weakref
 
 import pytest
 from squid_replicated import (
+    FakeEngine,
     PreparedReplicatedInverse,
     ReplicatedChangeToken,
     ReplicatedClosedError,
     ReplicatedScope,
     ReplicatedUpdate,
 )
+from squid_replicated.fake import FakeOperation, PreparedFakeUpdate
 
 from squid_layouts.runtime import History
 from squid_reactive import (
@@ -319,6 +321,51 @@ def test_action_token_reloads_against_a_recreated_document() -> None:
         reloaded.stage_inverse(inverse)
 
     assert restored.counter("votes").value == 0
+
+
+def test_a_restarted_replica_restores_its_clock_from_imported_history() -> None:
+    original = ReplicatedScope("a").open("project")
+    with transaction():
+        original.counter("votes").increment(2)
+        original.set("tags").add("mine")
+    history = original.export_since()
+
+    restarted = ReplicatedScope("a").open("project")
+    restarted.import_update(history)
+    with transaction():
+        restarted.counter("votes").increment(5)
+
+    assert restarted.counter("votes").value == 7
+    peer = ReplicatedScope("b").open("project")
+    peer.import_update(restarted.export_since())
+    assert peer.counter("votes").value == 7
+
+
+def test_a_restarted_replica_that_mutates_before_importing_refuses_the_collision() -> None:
+    original = ReplicatedScope("a").open("project")
+    with transaction():
+        original.counter("votes").increment(2)
+    history = original.export_since()
+
+    restarted = ReplicatedScope("a").open("project")
+    with transaction():
+        restarted.counter("votes").increment(5)
+
+    with pytest.raises(ValueError, match="was reused"):
+        restarted.import_update(history)
+
+
+def test_applying_a_reused_identity_with_different_content_records_nothing() -> None:
+    engine = FakeEngine("a")
+    recorded = engine.operation("increment", "votes", 2)
+    engine.apply(PreparedFakeUpdate(None, (recorded,)))
+    forged = FakeOperation(recorded.identity, "increment", "votes", 5)
+    fresh = engine.operation("increment", "votes", 1)
+
+    with pytest.raises(ValueError, match="was reused"):
+        engine.apply(PreparedFakeUpdate(None, (fresh, forged)))
+
+    assert engine.snapshot().counter("votes") == 2
 
 
 def test_compaction_epoch_expires_retained_history_tokens_without_fallback() -> None:
