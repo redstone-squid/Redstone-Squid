@@ -343,6 +343,32 @@ class TestMutatedInPlace:
         with pytest.raises(TypeError, match="no opaque state on Panel holds"):
             panel.mutated(Uncopyable())
 
+    def test_it_stages_the_signal_with_the_action_that_made_it(self):
+        """The object changed for good; announcing it is still the action's to take back."""
+        panel = Panel(Uncopyable())
+        runtime = ComponentRuntime(panel)
+        runtime.commit(runtime.render())
+        assert runtime.dirty is False
+
+        with pytest.raises(RuntimeError, match="abort"), transaction():
+            panel.mutated(panel.service)
+            assert runtime.dirty is False, "nothing is announced while the action can still fail"
+            message = "abort"
+            raise RuntimeError(message)
+
+        assert runtime.dirty is False
+
+    def test_it_announces_a_committed_signal_once(self):
+        panel = Panel(Uncopyable())
+        runtime = ComponentRuntime(panel)
+        runtime.commit(runtime.render())
+
+        with transaction():
+            panel.mutated(panel.service)
+            panel.mutated(panel.service)
+
+        assert runtime.dirty is True
+
 
 class TestAbstractBases:
     def test_an_unimplemented_component_may_leave_state_to_its_subclasses(self):
