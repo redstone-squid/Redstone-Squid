@@ -250,9 +250,14 @@ class _Load:
     publishes what it read.
     """
 
-    __slots__ = ("completion", "scope", "sources", "token")
+    __slots__ = ("completion", "owner", "scope", "sources", "token")
 
-    def __init__(self, token: int, completion: Completion[Any], scope: LoadScope) -> None:
+    def __init__(self, owner: Resource[Any], token: int, completion: Completion[Any], scope: LoadScope) -> None:
+        # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
+        # runs it, not the resource, is the `_CONSUMER`, so an identity check against the
+        # consumer alone would let a loader that reads its own resource subscribe the resource
+        # to itself -- which re-pends it forever rather than settling.
+        self.owner = owner
         self.token = token
         self.completion = completion
         self.scope = scope
@@ -335,8 +340,13 @@ class Resource[ValueT](AsyncBinding):
         another, and a computed derive from a resource.
         """
         consumer = _CONSUMER.get()
-        if consumer is not None and consumer is not self:
-            consumer.sources[self] = self.version
+        if consumer is None or consumer is self:
+            return
+        if isinstance(consumer, _Load) and consumer.owner is self:
+            # This resource's own load is reading it. A dependency on itself would make every
+            # install invalidate the value it just installed.
+            return
+        consumer.sources[self] = self.version
 
     def settle(self) -> int:
         """The version a reader should compare against, as `_Cell.settle` does for a cell.
@@ -391,9 +401,17 @@ class Resource[ValueT](AsyncBinding):
         """
         if self._rechecking:
             return
+        # While a load is in flight, its own notebook is the live read set: `self.sources`
+        # describes the settled value's inputs and is emptied for the duration, so consulting
+        # it here would make a move in something the loader has *already read* invisible. The
+        # generation would then run to completion and install a value built from inputs that
+        # have since changed, and nothing would supersede it.
+        watched = self._loading.sources if self._loading is not None else self.sources
         self._rechecking = True
         try:
-            moved = self.sources and any(source.settle() != seen for source, seen in self.sources.items())
+            # Snapshotted: `settle()` re-checks a source, which can reach back into this
+            # resource, and a load still recording would otherwise resize the dict under us.
+            moved = watched and any(source.settle() != seen for source, seen in tuple(watched.items()))
         finally:
             self._rechecking = False
         if moved:
@@ -522,7 +540,7 @@ class Resource[ValueT](AsyncBinding):
             return self._status
 
         settled: Completion[ResourceStatus[ValueT]] = Completion()
-        load = _Load(token, settled, _load_scope())
+        load = _Load(self, token, settled, _load_scope())
         self._loading = load
         generation = (self._generation_id, self._generation_cause, self._generation_root)
         self._emit_generation("started", generation)

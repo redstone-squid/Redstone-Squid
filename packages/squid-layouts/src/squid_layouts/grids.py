@@ -1,4 +1,9 @@
-"""Immutable cell declarations shared by semantic and exact grids."""
+"""Immutable cell declarations shared by the semantic vocabulary and exact grids.
+
+Public, but deliberately not part of the root namespace: `sl.grid` is the factory that builds
+a grid, and a module of that name bound on the package would shadow it. Downstream pattern
+and transport packages import `squid_layouts.grids` directly.
+"""
 
 from dataclasses import dataclass
 
