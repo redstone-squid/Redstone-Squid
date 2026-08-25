@@ -517,6 +517,7 @@ class History:
         retain_redo: bool = True,
         action_context: ActionContext | None = None,
     ) -> UndoResult:
+        previous = entry.state
         entry.state = HistoryEntryState.REVERSING
         cause = current_action()
         context = action_context or ActionContext.create(
@@ -567,6 +568,8 @@ class History:
             self._owner.invalidate()
             return result
         except FrameworkIntegrityError, FreshActionError:
+            # No inverse was admitted, so the entry is still whatever it was selected as.
+            entry.state = previous
             raise
         except Exception as error:
             entry.state = HistoryEntryState.FAILED
@@ -590,6 +593,7 @@ class History:
         execution = CompensationExecution(operation_context, key)
         execution.transition(CompensationStatus.REVERTING)
         intent = CompensationIntent(operation_context, original.action_id, key, datetime.now(UTC))
+        previous = entry.state
         entry.compensation_execution = execution
         entry.state = HistoryEntryState.REVERSING
         self._owner.invalidate()
@@ -613,6 +617,11 @@ class History:
         except asyncio.CancelledError:
             execution.transition(CompensationStatus.CANCELLED)
             entry.state = HistoryEntryState.FAILED
+            self._owner.invalidate()
+            raise
+        except FrameworkIntegrityError, FreshActionError:
+            # No compensation was admitted, so the entry is still whatever it was selected as.
+            entry.state = previous
             self._owner.invalidate()
             raise
         except Exception as error:
@@ -716,6 +725,7 @@ class History:
         entry = self._select(self._redoable, None)
         if entry is None or entry.redo_plan is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
+        previous = entry.state
         entry.state = HistoryEntryState.REAPPLYING
         cause = current_action()
         context = ActionContext.create(
@@ -764,6 +774,8 @@ class History:
             self._owner.invalidate()
             return result
         except FrameworkIntegrityError, FreshActionError:
+            # No inverse was admitted, so the entry is still whatever it was selected as.
+            entry.state = previous
             raise
         except Exception as error:
             entry.state = HistoryEntryState.FAILED
