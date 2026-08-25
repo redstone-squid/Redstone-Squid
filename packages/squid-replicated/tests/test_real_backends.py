@@ -3,6 +3,7 @@
 from itertools import permutations
 
 import pytest
+
 from squid_replicated.backends.loro import LoroChangeToken, LoroTextEngine, LoroTextOperation
 from squid_replicated.backends.pycrdt import PycrdtChangeToken, PycrdtTextEngine, PycrdtTextOperation
 
