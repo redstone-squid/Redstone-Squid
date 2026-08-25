@@ -11,7 +11,9 @@ A Discord dispatch receives an `ActionContext` before middleware. A local transa
 2. closes staging and enters the runtime-local, no-await commit gate;
 3. validates every strong shared/replicated read and explicit inverse precondition by version --
    strong meaning a cell the action also wrote, or one read inside `strong_read()`;
-4. freezes `CellPatchSet` and `TransactionView`, then prepares every participant without publication;
+4. freezes `CellPatchSet` and `TransactionView`, then prepares every participant without publication —
+   prepare reads the staged overlay, so it validates what the action decided rather than what the
+   world held before it, and may not write or enlist a further participant;
 5. installs cell patches and synchronously applies every prepared participant—the commit point;
 6. releases the gate, notifies reactive owners, finalizes participants, emits one immutable outcome,
    and runs failure-isolated aftermath hooks.
