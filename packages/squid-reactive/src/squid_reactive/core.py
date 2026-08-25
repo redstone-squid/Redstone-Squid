@@ -784,14 +784,21 @@ class _Transaction:
         _bump_epoch()
 
     def publish(self) -> None:
-        """Make this action's writes visible. The staged version becomes the cell's, so a
-        reader that already sampled it inside the action stays valid across the commit."""
+        """Make this action's writes visible, never leaving a cell's version where it was.
+
+        The staged version is used where it still leads, so a reader that already sampled the
+        cell inside the action stays valid across the commit. It no longer leads once another
+        action published to the same cell while this one was staging: a blind write staged at
+        `version + 1` would then land on the version that action already took, and every
+        reader settled against it would keep reporting a value the cell no longer holds.
+        Last-commit-wins is about which value survives, not about standing still.
+        """
         if not self.writes:
             self.applied = True
             return
         for entry in self.writes.values():
             entry.cell.value = entry.value
-            entry.cell.version = entry.version
+            entry.cell.version = max(entry.version, entry.cell.version + 1)
         self.applied = True
         _bump_epoch()
 
