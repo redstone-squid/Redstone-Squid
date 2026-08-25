@@ -396,7 +396,7 @@ def create_mount(
     access: sd.AccessPolicy,
     locale: str | None = None,
     chrome: ui.chrome.Chrome | None = None,
-    timeout: float = 180,
+    timeout: float | None = 180,
     reactor: sd.Reactor | None = None,
     expiry: sd.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> sd.Mount:

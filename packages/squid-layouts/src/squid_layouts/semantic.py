@@ -11,7 +11,7 @@ from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_en
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.grids import GridCell, validate_grid
 from squid_layouts.guards import Guard
-from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, SelectionEvent
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback, PressHandler, SelectionEvent
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
 from squid_layouts.rosters import RosterPlacement
@@ -473,7 +473,7 @@ class FormTrigger:
 class Action:
     key: str
     label: TextLike
-    on_trigger: Callable[[ActionEvent], Awaitable[None]]
+    on_trigger: PressHandler
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
     available: bool = True
