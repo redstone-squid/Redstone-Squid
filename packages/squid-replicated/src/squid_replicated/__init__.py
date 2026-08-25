@@ -6,6 +6,7 @@ from squid_replicated.document import (
     ReplicatedClosedError,
     ReplicatedCounter,
     ReplicatedDocument,
+    ReplicatedResyncRequiredError,
     ReplicatedScope,
     ReplicatedSet,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "ReplicatedCounter",
     "ReplicatedDocument",
     "ReplicatedEngine",
+    "ReplicatedResyncRequiredError",
     "ReplicatedScope",
     "ReplicatedSet",
     "ReplicatedUpdate",
