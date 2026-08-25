@@ -248,9 +248,7 @@ class SearchResultsView(sl.Component):
 
     def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         """Create the mount used by the command transport."""
-        return create_mount(
-            self, source=source, access=sd.Owner(self._author_id), locale=self.locale, timeout=180
-        )
+        return create_mount(self, source=source, access=sd.Owner(self._author_id), locale=self.locale, timeout=180)
 
 
 def _build_id(hit: SearchHit) -> int | None:
