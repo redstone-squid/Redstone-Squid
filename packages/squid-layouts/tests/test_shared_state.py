@@ -238,6 +238,35 @@ async def test_only_the_cells_that_moved_publish(bus: LocalTopicBus, here: Membe
     assert seen == [CellAddress(preferences, "theme")]
 
 
+async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus) -> None:
+    """`mutated()` is a write like any other, and a rolled-back one was never published.
+
+    The list itself keeps the appended item -- in place means in place -- but no other mount
+    is told to re-read a namespace on behalf of an action that failed.
+    """
+
+    class Draft(Shared):
+        body: list[str] = state(factory=list, opaque=True)
+
+    draft = Draft(bus)
+    seen: list[object] = []
+    bus.subscribe(CellAddress(draft, "body"), _record(seen))
+
+    with pytest.raises(RuntimeError, match="abort"), transaction():
+        draft.body.append("first")
+        draft.mutated(draft.body)
+        assert seen == [], "nothing is published while the action can still fail"
+        message = "abort"
+        raise RuntimeError(message)
+
+    assert seen == []
+
+    with transaction():
+        draft.body.append("second")
+        draft.mutated(draft.body)
+    assert seen == [CellAddress(draft, "body")]
+
+
 # --- Actions ----------------------------------------------------------------------------
 
 
