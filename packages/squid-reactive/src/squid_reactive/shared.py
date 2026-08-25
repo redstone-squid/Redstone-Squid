@@ -125,6 +125,22 @@ class Shared[ScopeT = None](Reactive):
             raise AttributeError(message)
         super().__setattr__(name, value)
 
+    def __delattr__(self, name: str) -> None:
+        """Refuse removal of declared state; a namespace field is reset by assigning it.
+
+        `_State.__delete__` stages removal, which is right for a component that owns its own
+        slots and can stop having one. A namespace field is addressed: readers elsewhere hold
+        a `CellAddress` for it, so removing it would leave them pointed at a slot with no
+        value, and the next read would resurrect the default as though someone had written it.
+        """
+        if name in type(self)._state_descriptors:
+            message = (
+                f"{type(self).__name__}.{name} cannot be deleted. Assign it to reset it; a "
+                f"namespace field is addressed, and removal would strand readers holding it."
+            )
+            raise AttributeError(message)
+        super().__delattr__(name)
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.scope!r})" if self.scope is not None else f"{type(self).__name__}()"
 

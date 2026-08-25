@@ -769,7 +769,7 @@ class _Transaction:
                 continue
             detail = ConflictDetail(self.target_id(cell), version, cell.version)
             message = (
-                f"{detail.target_id} changed while this action was running: expected version "
+                f"{self.describe(cell)} changed while this action was running: expected version "
                 f"{version}, found {cell.version}. Nothing was published."
             )
             raise ReactiveConflictError(detail, message)
@@ -1717,7 +1717,15 @@ class _Derived:
 
     def settle(self) -> int:
         """Return this node's current version, recomputing only if a source moved."""
-        if self._epoch == _EPOCH:
+        # The epoch fast path asserts nothing anywhere has moved since this node settled.
+        # A staged write breaks that assertion without bumping the epoch -- staging is
+        # deliberately cheap, so it does not invalidate every settled node in the process --
+        # so inside an action that has staged something, fall through to the source
+        # comparison, which consults staged versions and recomputes against what the action
+        # wrote. Skipping it here is what lets a participant settle its sources *before* the
+        # commit becomes irreversible rather than reporting a pre-action baseline.
+        current = _active()
+        if self._epoch == _EPOCH and (current is None or not current.writes):
             return self.version
         if self._settled and all(source.settle() == seen for source, seen in self.sources.items()):
             self._epoch = _EPOCH
