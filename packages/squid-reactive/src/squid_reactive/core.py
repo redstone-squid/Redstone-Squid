@@ -1386,8 +1386,22 @@ class _State:
         return cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING)
 
     def mutated(self, instance: ReactiveOwner) -> None:
-        """Note that the held value changed in place: the version moves, the value does not."""
-        self.cell(instance).touch()
+        """Note that the held value changed in place: the version moves, the value does not.
+
+        Staged like any other write when an action is open. The change to the object itself
+        is already irreversible -- that is what "in place" means -- but *saying so* is not,
+        and a version bump that lands immediately publishes a shared namespace to every
+        other mount from inside a transaction that may still fail.
+
+        Re-staging the value it already holds is what moves the version: `__set__` is
+        deliberately not used, because its settled-value check would see the same object and
+        decline the write it is being asked to record.
+        """
+        cell = self.cell(instance)
+        held = _staged_value(cell)
+        if held is _MISSING:
+            held = cell.value
+        _write(instance, self._name, cell, held)
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
         if instance is None:
@@ -1936,7 +1950,12 @@ class Reactive:
         """Invalidate projections owned by this object, if it has any."""
 
     def mutated(self, collaborator: object) -> None:
-        """Signal an in-place change to the object held by one opaque state field."""
+        """Signal an in-place change to the object held by one opaque state field.
+
+        Inside an action the signal stages with it, so a handler that fails publishes no
+        notification and a namespace does not tell other mounts to re-read halfway through
+        a transaction that is about to roll back.
+        """
         with untracked():
             holders = [
                 (name, descriptor)
@@ -1951,5 +1970,6 @@ class Reactive:
             message = f"{type(self).__name__} holds {collaborator!r} in more than one field ({names})"
             raise TypeError(message)
         _, descriptor = holders[0]
+        # No notification of its own: the staged write carries one, delivered at the commit
+        # outside an action and at `finalize_commit` inside one.
         descriptor.mutated(self)
-        self._state_changed(frozenset((descriptor._name,)))
