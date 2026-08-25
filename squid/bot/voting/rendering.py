@@ -11,6 +11,7 @@ from textwrap import dedent
 
 import squid_discord as sd
 import squid_layouts as sl
+import squid_patterns as sp
 from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_presentation
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
@@ -71,9 +72,7 @@ def render_build_review(
     return render_presentation([post])
 
 
-def render_delete_log(
-    snapshot: VoteSessionSnapshot, target_content: str
-) -> sd.presentation.DiscordPresentation:
+def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.presentation.DiscordPresentation:
     """Render the card asking whether a logged message should be deleted."""
     # Compare enum members rather than their string values: `status == "closed"` is true at
     # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
@@ -147,7 +146,7 @@ def _generic_poll_nodes(
     if show_totals:
         raw = snapshot.raw_tallies()
         weighted = snapshot.weighted_tallies()
-        tally_options: list[sl.patterns.TallyOption] = []
+        tally_options: list[sp.TallyOption] = []
         for option in options:
             option_id = option.identifier or ""
             voters = [
@@ -160,7 +159,7 @@ def _generic_poll_nodes(
             label = option.label or option.identifier or option.emoji
             weighted_count = weighted.get(option_id, 0)
             tally_options.append(
-                sl.patterns.TallyOption(
+                sp.TallyOption(
                     option_id,
                     sl.md(t"{label} ??{weighted_count:g} weighted{voter_suffix}"),
                     raw.get(option_id, 0),

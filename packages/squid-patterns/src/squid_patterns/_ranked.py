@@ -3,8 +3,8 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from squid_layouts.patterns._content import display_text
 from squid_layouts.text import TextLike
+from squid_patterns._content import display_text
 
 
 @dataclass(frozen=True, slots=True)

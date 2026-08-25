@@ -446,6 +446,8 @@ class TestDurableMode:
             locator=locator,
         )
 
-        restored = squid_discord.durability.DurableMountCodec.loads(squid_discord.durability.DurableMountCodec.dumps(record))
+        restored = squid_discord.durability.DurableMountCodec.loads(
+            squid_discord.durability.DurableMountCodec.dumps(record)
+        )
 
         assert restored.locator.values["mode"] == "components_v2"

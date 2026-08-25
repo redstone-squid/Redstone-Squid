@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
 
@@ -55,7 +56,7 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
         built.append(entry.key)
         return Detail(entry)
 
-    browser = sl.patterns.Browser(
+    browser = sp.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,
@@ -85,7 +86,7 @@ async def test_browser_opens_and_retains_one_detail_component_per_open() -> None
 
 async def test_browser_navigation_keeps_previous_window_visible_while_pending() -> None:
     source, loaded = await _loaded((Entry("a", "A"), Entry("b", "B"), Entry("c", "C")))
-    browser = sl.patterns.Browser(
+    browser = sp.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,
@@ -107,7 +108,7 @@ async def test_browser_navigation_keeps_previous_window_visible_while_pending() 
 async def test_browser_overview_receives_the_loaded_window() -> None:
     source, loaded = await _loaded((Entry("a", "A"),))
     seen: list[sl.sources.LoadedWindow[Entry]] = []
-    browser = sl.patterns.Browser(
+    browser = sp.Browser(
         source,
         identity=lambda item: item.key,
         label=lambda item: item.label,

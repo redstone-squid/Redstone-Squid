@@ -245,7 +245,9 @@ class TestReservationAxes:
             squid_discord.Target.v2().reserve(squid_discord.ResourceCost({"pixels": 1}))
 
     def test_reservation_never_goes_negative(self):
-        reserved = squid_discord.Target.v2().reserve(squid_discord.ResourceCost({"display_text": LIMITS.total_text * 2}))
+        reserved = squid_discord.Target.v2().reserve(
+            squid_discord.ResourceCost({"display_text": LIMITS.total_text * 2})
+        )
         assert isinstance(reserved.limits, type(LIMITS))
         assert reserved.limits.total_text == 0
 

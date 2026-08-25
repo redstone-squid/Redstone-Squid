@@ -7,6 +7,7 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.component import render_component_tree
@@ -14,8 +15,8 @@ from squid_layouts.runtime.presentation import StrategyUpdate
 from squid_layouts.scene import SceneButton, SceneRow, SceneSelect, SceneText
 
 
-def _cells(count: int) -> tuple[sl.patterns.GridCell, ...]:
-    return tuple(sl.patterns.GridCell(f"cell-{index}", f"Cell {index}") for index in range(count))
+def _cells(count: int) -> tuple[sp.GridCell, ...]:
+    return tuple(sp.GridCell(f"cell-{index}", f"Cell {index}") for index in range(count))
 
 
 def _walk(value: object):
@@ -57,7 +58,7 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
     async def pick(event: sl.SelectionEvent) -> None:
         seen.append(event)
 
-    cells = (*_cells(6)[:5], sl.patterns.GridCell("blocked", "Blocked", available=False))
+    cells = (*_cells(6)[:5], sp.GridCell("blocked", "Blocked", available=False))
     result = sl.planning.plan(
         squid_discord.button_grid(*cells, key="board", columns=5, on_pick=pick),
         target=squid_discord.V2_TARGET,
@@ -141,8 +142,8 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
 
     result = sl.planning.plan(
         sl.grid(
-            sl.patterns.GridCell("open", "Open"),
-            sl.patterns.GridCell("blocked", "Blocked", available=False),
+            sp.GridCell("open", "Open"),
+            sp.GridCell("blocked", "Blocked", available=False),
             key="board",
             columns=6,
             on_pick=pick,

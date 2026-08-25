@@ -25,8 +25,6 @@ from squid_layouts.interactions import ActionEvent
 from squid_layouts.text import TextLike
 
 if TYPE_CHECKING:
-    from squid_layouts.patterns.decision import DecisionState
-    from squid_layouts.patterns.shells import PatternEvent
     from squid_layouts.runtime.component import Component
 
 
@@ -103,10 +101,12 @@ class GuardScope(StrEnum):
 class _Staged:
     """One admission pass's ledger writes, held back until its outcome is known.
 
-    A pass that ends in a challenge must record nothing: `confirm` belongs last in a chain,
-    so it is exactly the guard whose non-admit outcome would otherwise spend every earlier
-    one, and the actor who cancelled would be the one paying the cooldown. Buffering sits
-    here rather than at the verdict because a guard may write and then deny in the same call.
+    A pass that ends in a challenge must record nothing: `squid_patterns.guards.confirm`
+    belongs last in a chain, so it is exactly the guard whose non-admit outcome would
+    otherwise spend every earlier one, and the actor who cancelled would be the one paying
+    the cooldown. Buffering sits here rather than at the verdict because a guard may write
+    and then deny in the same call. The challenge mechanism is this module's; the one guard
+    that raises a rendered question lives beside the shells it renders.
 
     Denial is not buffered away — `all_of(cooldown(5), permission(deny))` spends the cooldown
     today, deliberately, and only a challenge rolls a pass back.
@@ -333,46 +333,6 @@ class _AnyOf:
         return last
 
 
-@dataclass(frozen=True, slots=True)
-class _Confirm:
-    prompt: TextLike
-    danger: bool
-    deadline: float | None
-    on_decline: TextLike | None
-
-    async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardOutcome:
-        bucket = approvals(ledger, event.actor.id)
-        outstanding: int = ledger.read(bucket, 0)
-        if outstanding > 0:
-            ledger.write(bucket, outstanding - 1)
-            return ADMIT
-        return Challenge(self._ask, deadline=self.deadline, on_decline=self.on_decline)
-
-    def _ask(self, resolver: ChallengeResolver) -> Component:
-        # Imported here because `patterns` is built on `semantic`, which is built on this
-        # module: the rendering half of a confirmation may depend on the vocabulary, but the
-        # vocabulary cannot depend on it at import time.
-        from squid_layouts.patterns.decision import confirm as confirm_shell
-        from squid_layouts.semantic import Tone
-
-        async def approved(event: PatternEvent[DecisionState]) -> None:
-            # Closing first answers the click inside its own deadline, and leaves nothing in
-            # this handler that could fail after the press has been handed on.
-            await event.source.finish()
-            await resolver.approve()
-
-        async def declined(event: PatternEvent[DecisionState]) -> None:
-            await event.source.finish()
-            await resolver.decline()
-
-        return confirm_shell(
-            self.prompt,
-            on_confirm=approved,
-            on_cancel=declined,
-            tone=Tone.DANGER if self.danger else Tone.NEUTRAL,
-        )
-
-
 def cooldown(seconds: float, *, per: GuardScope = GuardScope.ACTOR, key: str | None = None) -> Guard:
     """Admit at most one press every `seconds`, counted per actor unless `per` says otherwise.
 
@@ -421,8 +381,8 @@ def all_of(*guards: Guard) -> Guard:
 
     Order matters for stateful guards: an earlier `cooldown` records its press before a
     later `permission` gets to deny it, so put the cheap unconditional checks first. That
-    advice cannot work for `confirm`, which belongs last -- so a pass ending in a challenge
-    records nothing at all, and the guards run again on approval.
+    advice cannot work for `squid_patterns.guards.confirm`, which belongs last -- so a pass
+    ending in a challenge records nothing at all, and the guards run again on approval.
     """
     return _AllOf(guards)
 
@@ -433,31 +393,10 @@ def any_of(*guards: Guard) -> Guard:
     Stateful guards ahead of the admitting one still record their press, for the same
     reason `all_of` cares about order. A challenge from any member is returned as one --
     a question is not a "no" -- which gives this composite an ordering rule opposite to
-    `all_of`'s: `any_of(confirm(...), permission(admin))` asks an admin the permission
-    branch would have admitted for free, so `confirm` belongs last here too.
+    `all_of`'s: `any_of(squid_patterns.guards.confirm(...), permission(admin))` asks an admin
+    the permission branch would have admitted for free, so it belongs last here too.
     """
     return _AnyOf(guards)
-
-
-def confirm(
-    prompt: TextLike,
-    *,
-    danger: bool = True,
-    deadline: float | None = 120.0,
-    on_decline: TextLike | None = None,
-) -> Guard:
-    """Admit once the actor reaffirms this press, and ask them when they have not.
-
-    The two-press "are you sure" state machine, declared where the control is rather than
-    hand-rolled in component state: no armed flag, no early return, no relabelling. The
-    first press opens a private confirmation and executes nothing; approving it re-runs the
-    whole funnel, so access lost or a cooldown started while the dialog was open still
-    refuse the press the actor confirmed.
-
-    Put it last in an `all_of`: a chain should not ask a question it is about to deny, and
-    an earlier guard's record is discarded by the pass that ends in the question.
-    """
-    return _Confirm(prompt, danger, deadline, on_decline)
 
 
 __all__ = [
@@ -472,7 +411,6 @@ __all__ = [
     "all_of",
     "any_of",
     "approvals",
-    "confirm",
     "cooldown",
     "deny",
     "once",

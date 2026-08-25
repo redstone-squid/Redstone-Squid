@@ -8,7 +8,6 @@ from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_layouts.factories import action, choice, choices, controlled, form, routed_action, routed_choices
 from squid_layouts.forms import Form, FormLike
 from squid_layouts.interactions import ActionEvent, SubmitEvent
-from squid_layouts.patterns._content import ContentItem
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
 from squid_layouts.semantic import (
@@ -24,6 +23,7 @@ from squid_layouts.semantic import (
     Tone,
 )
 from squid_layouts.text import TextLike
+from squid_patterns._content import ContentItem
 
 
 @dataclass(frozen=True, slots=True)

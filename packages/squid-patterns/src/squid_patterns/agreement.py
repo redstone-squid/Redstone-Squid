@@ -7,11 +7,11 @@ from typing import Literal
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.factories import action, actions, bullet, bullets, stack, status
 from squid_layouts.interactions import ActionEvent, ActionPolicy, PressEvent
-from squid_layouts.patterns._content import ContentLike, normalize_content, render_content, require_key
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
 from squid_layouts.semantic import ActionDisplay, Emphasis, Tone
 from squid_layouts.text import Message, TextLike
+from squid_patterns._content import ContentLike, normalize_content, render_content, require_key
 
 
 @dataclass(frozen=True, slots=True)

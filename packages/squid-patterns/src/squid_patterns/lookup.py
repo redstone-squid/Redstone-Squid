@@ -9,13 +9,13 @@ from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, choice, choices, controlled, form, heading, note, paragraph, stack
 from squid_layouts.forms import FormSpec, TextField
 from squid_layouts.interactions import ActionEvent, SubmitEvent
-from squid_layouts.patterns._content import require_key
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
 from squid_layouts.runtime.resources import Failed, Pending, Ready, resource
 from squid_layouts.semantic import ActionDisplay, ChoiceEvent, LayoutNode, Tone
 from squid_layouts.sources import LoadedWindow, WindowLoader, WindowSource, window_footer
 from squid_layouts.text import TextLike
+from squid_patterns._content import require_key
 
 type LookupSearch[ItemT] = Callable[[str], WindowSource[ItemT]]
 type LookupPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]

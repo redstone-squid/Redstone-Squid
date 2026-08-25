@@ -4,11 +4,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from squid_layouts.factories import actions, choice, heading, stack
-from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, require_key, slug
-from squid_layouts.patterns.shells import ComponentShell, PatternControls
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import ActionDisplay
 from squid_layouts.text import Message, ResolvedText, TextLike
+from squid_patterns._content import ContentItem, ContentLike, normalize_content, require_key, slug
+from squid_patterns.shells import ComponentShell, PatternControls
 
 _MISSING = object()
 
