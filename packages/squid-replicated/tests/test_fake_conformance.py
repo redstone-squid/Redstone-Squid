@@ -500,6 +500,12 @@ def test_scope_disposal_prevents_late_import_and_mutation() -> None:
         document.counter("votes").increment(1)
     with pytest.raises(ReplicatedClosedError):
         document.drain_updates()
+    # Both subscriptions, on the same terms: a closed document delivers nothing, so accepting
+    # a listener for one would only be a quieter way of never calling it.
+    with pytest.raises(ReplicatedClosedError):
+        document.subscribe(lambda snapshot: None)
+    with pytest.raises(ReplicatedClosedError):
+        document.subscribe_updates(lambda update: None)
 
 
 def test_scope_disposal_clears_documents_subscriptions_pending_exports_and_deduplication() -> None:

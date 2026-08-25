@@ -310,6 +310,8 @@ class ReplicatedDocument:
         self._remember_update(update_id)
 
     def subscribe(self, callback: Callable[[FakeSnapshot], None]) -> Callable[[], None]:
+        """Receive each committed snapshot until the returned function or document closes it."""
+        self._ensure_open()
         self._listeners.add(callback)
 
         def unsubscribe() -> None:
