@@ -584,6 +584,29 @@ async def test_reference_compensation_outbox_retention_is_bounded() -> None:
         await outbox.claim(intent, CompensationRetryPolicy())
 
     assert [record.intent.idempotency_key for record in outbox.records] == ["undo:1", "undo:2"]
+    assert outbox.dropped_records == 0, "an unsettled record carries no answer to lose"
+
+
+async def test_reference_compensation_outbox_reports_a_forgotten_settled_answer() -> None:
+    """The bound can only be held by forgetting, and forgetting a "yes" repeats an effect."""
+    outbox = MemoryCompensationOutbox(limit=2)
+
+    def intent_for(index: int) -> CompensationIntent:
+        context = OperationContext(uuid.uuid7(), None, None, f"attempt {index}")
+        return CompensationIntent(context, uuid.uuid7(), f"undo:{index}", datetime.now(UTC))
+
+    settled = intent_for(0)
+    await outbox.claim(settled, CompensationRetryPolicy())
+    await outbox.update(settled, CompensationStatus.EXTERNAL_SUCCEEDED)
+    assert not (await outbox.claim(settled, CompensationRetryPolicy())).dispatch
+
+    for index in (1, 2):
+        await outbox.claim(intent_for(index), CompensationRetryPolicy())
+
+    assert outbox.dropped_records == 1
+    # The record is gone, so the outbox can no longer refuse it -- which is exactly why the
+    # loss is counted rather than absorbed.
+    assert (await outbox.claim(settled, CompensationRetryPolicy())).dispatch
 
 
 def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
