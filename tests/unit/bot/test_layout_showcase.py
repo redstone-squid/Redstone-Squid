@@ -8,6 +8,7 @@ import discord
 import pytest
 from discord.ext import commands
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.layout_showcase import (
     Appearance,
@@ -18,9 +19,9 @@ from squid.bot.layout_showcase import (
     PreviewPanel,
     Session,
 )
-from squid_layouts.discord import Everyone, Mount, Owner, Reactor, SessionKey, SessionRegistry
-from squid_layouts.discord.sessions import UserScope
-from squid_layouts.discord.testing import (
+from squid_discord import Everyone, Mount, Owner, Reactor, SessionKey, SessionRegistry
+from squid_discord.sessions import UserScope
+from squid_discord.testing import (
     assert_within_limits,
     commit_render,
     delivered_to,
@@ -420,7 +421,7 @@ class TestLobby:
             capacity=capacity,
             quota=1,
         )
-        assert isinstance(result, sl.discord.sessions.Opened)
+        assert isinstance(result, sd.sessions.Opened)
         return registry, panel
 
     async def test_the_host_opens_as_the_only_member(self) -> None:

@@ -1,4 +1,4 @@
-"""Public namespace and optional-adapter packaging contracts."""
+"""Public namespace and packaging contracts for the portable engine."""
 
 import subprocess
 import sys
@@ -155,8 +155,6 @@ RENAMED_SUBMODULES = (
     "squid_layouts.planning.measurement",
     "squid_layouts.runtime.histories",
     "squid_layouts.runtime.topics",
-    "squid_layouts.discord.composition",
-    "squid_layouts.discord.conformance",
 )
 
 SPECIALIST_SAMPLES = {
@@ -199,6 +197,19 @@ def test_namespaces_are_modules_not_shadowed_callables() -> None:
         assert isinstance(getattr(sl, name), ModuleType), f"sl.{name} is shadowed"
 
 
+def test_promoted_value_modules_do_not_shadow_their_factories() -> None:
+    """`grids`, `rosters` and `tallies` are plural precisely so they cannot do this.
+
+    `sl.grid`, `sl.roster` and `sl.tally` are factories. A submodule of the same name would be
+    bound onto the package by the import system on first import and shadow them.
+    """
+    import squid_layouts.grids
+    import squid_layouts.rosters
+    import squid_layouts.tallies  # noqa: F401
+
+    assert callable(sl.grid) and callable(sl.roster) and callable(sl.tally)
+
+
 @pytest.mark.parametrize("dotted", RENAMED_SUBMODULES)
 def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> None:
     import importlib
@@ -225,70 +236,38 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.scene.Codec
     assert sl.scene.SceneFile
     assert sl.html.Renderer
-    assert sl.discord.Mount
-    assert sl.discord.button_grid
-    assert sl.discord.modals.CheckboxGroupField
-    assert sl.discord.MountDefaults
-    assert sl.discord.SessionRegistry
-    assert sl.discord.routing.routers
-    assert sl.discord.renderer.V2Renderer
-    assert sl.discord.classic_renderer.ClassicRenderer
-    assert sl.discord.classic.compose
-    assert sl.discord.SessionKey
-    assert sl.discord.sessions.SessionPolicy
-    assert sl.discord.Screen
-    assert sl.discord.screens.Scope
-    assert sl.discord.screens.Opener
-    assert sl.discord.presentation.DiscordPresentation
-    assert sl.discord.DiscordMode.COMPONENTS_V2
-    assert sl.discord.DiscordModeError
-    assert sl.discord.mode_of
-    assert sl.discord.presentation.DiscordPresentation
-    assert not hasattr(sl.discord, "MountRegistry")
-    assert not hasattr(sl.discord, "WhenOpen")
-    assert sl.discord.guards.requires_role
-    assert sl.discord.durability.DurableSessionRuntime
-    assert sl.discord.durability.DurableBot
-    assert sl.discord.durability.DiscordFrontend
-    assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.runtime.TopicBus
-    assert sl.discord.Reactor.follow
     assert {"Shared", "SharedPool", "SharedFactory", "ReactiveConflictError", "state", "addresses"} <= set(
         sl.runtime.__all__
     )
-    for removed in ("SessionPolicy", "Opener", "Scope", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
-        assert removed not in sl.discord.__all__ and not hasattr(sl.discord, removed)
 
 
-def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
-    """A consumer's tests import these, so they are versioned surface, not a private module."""
-    from types import ModuleType
-
-    assert "testing" in sl.discord.__all__
-    assert isinstance(sl.discord.testing, ModuleType)
-    assert {"fake_interaction", "delivered_to", "commit_render", "assert_within_limits"} <= set(
-        sl.discord.testing.__all__
-    )
-    assert [name for name in sl.discord.testing.__all__ if not hasattr(sl.discord.testing, name)] == []
-    # The doubles stay one tier down; nothing here belongs beside Mount and Screen.
-    for name in sl.discord.testing.__all__:
-        assert name not in sl.discord.__all__
+def test_the_engine_no_longer_carries_a_discord_namespace() -> None:
+    """`sd` was a lazy hook into a subpackage that is now its own distribution."""
+    assert not hasattr(sl, "discord")
+    assert "discord" not in sl.__all__
 
 
-def test_core_and_html_import_without_discord_dependencies() -> None:
+def test_engine_imports_without_transport_or_store_dependencies() -> None:
+    """The point of the split, asserted: the engine installs none of these.
+
+    `squid_stores` joins `discord` and `anyio` on the blocked list because it was a mandatory
+    dependency of this package while only the Discord durability modules imported it.
+    """
     code = """
 import importlib.abc
 import sys
 
-class BlockAdapterDependencies(importlib.abc.MetaPathFinder):
+class BlockDownstream(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio"}:
+        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_stores", "squid_discord"}:
             raise ModuleNotFoundError(fullname)
         return None
 
-sys.meta_path.insert(0, BlockAdapterDependencies())
+sys.meta_path.insert(0, BlockDownstream())
 import squid_layouts
 import squid_layouts.html
+import squid_layouts.patterns
 import squid_layouts.planning
 import squid_layouts.profiling
 import squid_layouts.runtime
@@ -296,40 +275,16 @@ import squid_layouts.runtime.shared
 import squid_layouts.runtime.topics
 assert squid_layouts.runtime.shared.Shared
 assert squid_layouts.runtime.shared.SharedPool
-assert "discord" not in sys.modules
-assert "anyio" not in sys.modules
+assert not {"discord", "anyio", "squid_stores", "squid_discord"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_durability_imports_without_postgres_dependency() -> None:
-    code = """
-import importlib.abc
-import sys
-
-class BlockAsyncpg(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] == "asyncpg":
-            raise ModuleNotFoundError(fullname)
-        return None
-
-sys.meta_path.insert(0, BlockAsyncpg())
-from squid_layouts.discord.durability import PostgresSessionStore, SQLiteSessionStore
-assert PostgresSessionStore
-assert SQLiteSessionStore
-assert "asyncpg" not in sys.modules
-"""
-    subprocess.run([sys.executable, "-c", code], check=True)
-
-
-def test_package_metadata_keeps_version_and_adapter_extra() -> None:
+def test_package_metadata_names_only_the_reactive_kernel() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
     assert project["version"] == "0.1.0"
-    assert project["dependencies"] == ["squid-reactive", "squid-stores"]
-    assert set(project["optional-dependencies"]["discord"]) == {
-        "discord-py>=2.7,<3",
-        "anyio>=4.14,<5",
-        "packaging>=24,<27",
-    }
-    assert project["optional-dependencies"]["postgres"] == ["squid-stores[postgres]"]
+    assert project["dependencies"] == ["squid-reactive"]
+    # Both extras left with the adapter: `discord` carried discord.py/anyio/packaging, and
+    # `postgres` only ever forwarded to squid-stores for Discord durability.
+    assert "optional-dependencies" not in project

@@ -21,7 +21,7 @@ from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
 from squid.runtime import JobHandle
 from squid.voting.domain import VoteActor, VoteKind, VoteRejection
-from squid_layouts.discord import send_to
+from squid_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

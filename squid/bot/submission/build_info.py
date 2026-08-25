@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import t
 from squid.bot.routes.builds import build_edit
@@ -34,7 +35,7 @@ class BuildInfoComponent(sl.Component):
         locale: str | None = None,
         ephemeral: bool = False,
         timeout: float = 300,
-        access: sl.discord.AccessPolicy | None = None,
+        access: sd.AccessPolicy | None = None,
     ) -> None:
         self._seed: Projection | None = (build, node)
         self._refresh = refresh
@@ -42,7 +43,7 @@ class BuildInfoComponent(sl.Component):
         self.locale = locale
         self._ephemeral = ephemeral
         self._timeout = timeout
-        self._access = access if access is not None else sl.discord.Everyone()
+        self._access = access if access is not None else sd.Everyone()
 
     @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def projection(self) -> Projection:
@@ -99,18 +100,18 @@ class BuildInfoComponent(sl.Component):
         return (node, edit)
 
     async def _edit(self, event: sl.PressEvent) -> None:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         from squid.bot.submission.ui.views import BuildEditComponent
 
         await BuildEditComponent(
             self.build,
             interaction.client.services.builds,
             locale=self.locale,
-        ).send(interaction, ephemeral=self._ephemeral, parent=sl.discord.responder(event).mount)
+        ).send(interaction, ephemeral=self._ephemeral, parent=sd.responder(event).mount)
 
     def mount(
-        self, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
-    ) -> sl.discord.Mount:
+        self, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None
+    ) -> sd.Mount:
         return create_mount(
             self,
             source=source,

@@ -9,6 +9,7 @@ from typing import Any, overload
 from discord.abc import Messageable
 from discord.ext.commands import Context
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.errors import build_error_presentation, record_operation_error
 from squid.bot.i18n import resolve_locale
@@ -17,7 +18,7 @@ from squid.core.i18n import _, translate
 from squid_layouts.runtime.component import RenderResult
 
 type OperationWork = Callable[
-    [sl.operations.Progress[RenderResult | None], sl.discord.delivery.DeliveryReceipt],
+    [sl.operations.Progress[RenderResult | None], sd.delivery.DeliveryReceipt],
     Awaitable[RenderResult],
 ]
 _INITIAL_PROGRESS: RenderResult | None = None
@@ -41,7 +42,7 @@ class CommandOperation(sl.Component):
         self._work = work
         self._initial = initial
         self._locale = locale
-        self._receipt: sl.discord.delivery.DeliveryReceipt | None = None
+        self._receipt: sd.delivery.DeliveryReceipt | None = None
         self.execution = self._execute.start()
 
     @sl.operation(initial=_INITIAL_PROGRESS)
@@ -155,19 +156,19 @@ def managed_result[**P](
                 initial=info_node(translate(locale, title), translate(locale, description)),
                 locale=locale,
             )
-            mount = create_mount(component, source=ctx, access=sl.discord.Everyone(), locale=locale, timeout=900)
+            mount = create_mount(component, source=ctx, access=sd.Everyone(), locale=locale, timeout=900)
             delivered = await mount.send(destination(ctx, locale=locale))
             match component.execution.status:
                 case sl.operations.Succeeded():
                     if dismiss_on_success:
                         await mount.dismiss()
                 case sl.operations.Failed(error=error):
-                    receipt = delivered.receipt if isinstance(delivered, sl.discord.delivery.Delivered) else None
+                    receipt = delivered.receipt if isinstance(delivered, sd.delivery.Delivered) else None
                     await record_operation_error(
                         error,
                         locale=locale,
                         receipt=receipt,
-                        presented=isinstance(delivered, sl.discord.delivery.Delivered) and delivered.settled,
+                        presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
                         reports=_error_reports(bound.arguments),
                     )
                     raise error
@@ -222,7 +223,7 @@ async def run_command_operation(
     target: Messageable,
     work: OperationWork,
     *,
-    source: sl.discord.host.HostSource,
+    source: sd.host.HostSource,
     title: str = _("Working"),
     description: str = _("Getting information..."),
     locale: str | None = None,
@@ -235,12 +236,12 @@ async def run_command_operation(
         initial=info_node(translate(locale, title), translate(locale, description)),
         locale=locale,
     )
-    mount = create_mount(component, source=source, access=sl.discord.Everyone(), locale=locale, timeout=900)
-    destination = sl.discord.send_to(target)
+    mount = create_mount(component, source=source, access=sd.Everyone(), locale=locale, timeout=900)
+    destination = sd.send_to(target)
 
     async def capture(
-        presentation: sl.discord.presentation.DiscordPresentation,
-    ) -> sl.discord.delivery.DeliveryReceipt:
+        presentation: sd.presentation.DiscordPresentation,
+    ) -> sd.delivery.DeliveryReceipt:
         receipt = await destination(presentation)
         component._receipt = receipt
         return receipt
@@ -251,12 +252,12 @@ async def run_command_operation(
             if dismiss_on_success:
                 await mount.dismiss()
         case sl.operations.Failed(error=error):
-            receipt = delivered.receipt if isinstance(delivered, sl.discord.delivery.Delivered) else None
+            receipt = delivered.receipt if isinstance(delivered, sd.delivery.Delivered) else None
             await record_operation_error(
                 error,
                 locale=locale,
                 receipt=receipt,
-                presented=isinstance(delivered, sl.discord.delivery.Delivered) and delivered.settled,
+                presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
                 reports=reports,
             )
             raise error

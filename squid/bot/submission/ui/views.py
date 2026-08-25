@@ -8,6 +8,7 @@ import anyio
 import discord
 from whenever import Instant
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
@@ -20,7 +21,7 @@ from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, Bu
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.topics import resource_topic
-from squid_layouts.discord import SessionKey
+from squid_discord import SessionKey
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,7 +206,7 @@ class SubmissionFormComponent(sl.Component):
         self._timeout = timeout
         self.on_submit = on_submit
         self._done = anyio.Event()
-        self._mount: sl.discord.Mount | None = None
+        self._mount: sd.Mount | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -413,11 +414,11 @@ class SubmissionFormComponent(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
-            access=(sl.discord.Owner(self.author_id) if self.author_id is not None else sl.discord.Everyone()),
+            access=(sd.Owner(self.author_id) if self.author_id is not None else sd.Everyone()),
             locale=self.locale,
             timeout=self._timeout,
         )
@@ -474,7 +475,7 @@ class BuildEditComponent(sl.Component):
                 if field.applies_to(build)
             ]
         self.items = tuple(items)
-        self._mount: sl.discord.Mount | None = None
+        self._mount: sd.Mount | None = None
 
     @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
@@ -646,7 +647,7 @@ class BuildEditComponent(sl.Component):
     async def _apply(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event):
             return
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         changed = [item for item in self.items if item.modified]
         await event.acknowledge()
         patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
@@ -671,7 +672,7 @@ class BuildEditComponent(sl.Component):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if Instant.now() > self.expiry_time:
             await event.notice(t(self.locale, _("This edit session expired. Reopen the build to start again.")))
             return False
@@ -695,7 +696,7 @@ class BuildEditComponent(sl.Component):
         interaction: discord.Interaction[Any],
         ephemeral: bool = True,
         *,
-        parent: sl.discord.Mount | None = None,
+        parent: sd.Mount | None = None,
     ) -> None:
         """Open an editor for this build, replacing this user's previous one."""
         self.locale = await resolve_locale(interaction, interaction.client.services.settings)
@@ -725,7 +726,7 @@ class BuildEditComponent(sl.Component):
 
         self._refresh = refresh
         mount = self.mount(interaction.user.id, source=interaction, reactor=client.layout_reactor)
-        destination = sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True)
+        destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
         parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
         if parent_session is None:
             await interaction.client.mounts.open(
@@ -738,12 +739,12 @@ class BuildEditComponent(sl.Component):
             await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(
-        self, user_id: int, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
-    ) -> sl.discord.Mount:
+        self, user_id: int, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None
+    ) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(user_id),
+            access=sd.Owner(user_id),
             locale=self.locale,
             timeout=self._timeout,
             reactor=reactor,

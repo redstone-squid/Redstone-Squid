@@ -75,7 +75,7 @@ class LoadScope(Protocol):
 
     Ends when the loader returns or raises, or when `cancel` is called because the generation
     was superseded; exiting swallows only the cancellation this scope itself delivered.
-    `anyio.CancelScope` satisfies this as it stands, which is what `sl.discord` installs --
+    `anyio.CancelScope` satisfies this as it stands, which is what `sd` installs --
     this package has no dependencies, so it supplies the seam rather than the cancellation.
     """
 

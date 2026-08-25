@@ -1,7 +1,5 @@
 """Semantic-first, limits-aware UI planning and component runtime."""
 
-from importlib import import_module
-
 from squid_layouts import (
     errors,
     forms,
@@ -137,13 +135,6 @@ from squid_layouts.text import (
     raw_md,
 )
 from squid_reactive.operations import operation
-
-
-def __getattr__(name: str) -> object:
-    if name == "discord":
-        return import_module("squid_layouts.discord")
-    raise AttributeError(name)
-
 
 __all__ = [
     "ActionEvent",

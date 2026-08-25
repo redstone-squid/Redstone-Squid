@@ -68,7 +68,7 @@ class ActionResponder(Protocol):
 
     Every method here is one that any frontend can honestly implement. Forms joined this
     surface once their schemas became portable; frontend-native payloads remain on concrete
-    adapters reached through helpers such as `sl.discord.responder(event)`.
+    adapters reached through helpers such as `sd.responder(event)`.
     """
 
     async def acknowledge(self) -> None: ...
@@ -99,8 +99,8 @@ class ActionEvent:
 
     `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
     the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
-    frontend facts — a Discord-only handler should reach for `sl.discord.native(event)`
-    or `sl.discord.responder(event)` instead, which hand back the real Discord surfaces.
+    frontend facts — a Discord-only handler should reach for `sd.native(event)`
+    or `sd.responder(event)` instead, which hand back the real Discord surfaces.
     """
 
     actor: Actor

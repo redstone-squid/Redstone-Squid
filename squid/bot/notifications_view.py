@@ -8,6 +8,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 
 from typing import TYPE_CHECKING
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import t
 from squid.bot.ui import DISCORD_BLUE, create_mount
@@ -207,11 +208,11 @@ class NotificationPanel(sl.Component):
             return None
         return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         return create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(self._author_id),
+            access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=SESSION_SECONDS,
         )

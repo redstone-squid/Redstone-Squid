@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from discord.utils import escape_markdown
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import t
 from squid.bot.ui import DISCORD_GREEN, create_mount
@@ -244,10 +245,10 @@ class SearchResultsView(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         """Create the mount used by the command transport."""
         return create_mount(
-            self, source=source, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=180
+            self, source=source, access=sd.Owner(self._author_id), locale=self.locale, timeout=180
         )
 
 

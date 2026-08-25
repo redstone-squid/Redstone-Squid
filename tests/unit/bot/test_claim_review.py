@@ -8,7 +8,7 @@ from whenever import Instant
 
 from squid.accounts.domain import Account, AccountIdentity, AliasClaim, ClaimStatus
 from squid.bot.claims_view import ClaimReviewComponent
-from squid_layouts.discord.testing import commit_render
+from squid_discord.testing import commit_render
 from tests.helpers.discord import make_layout_bot
 
 AUTHOR_ID = 11

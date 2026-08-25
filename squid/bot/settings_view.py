@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, cast
 
 import discord
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import t
 from squid.bot.ui import CardField, L, create_mount, localization_for
@@ -104,7 +105,7 @@ class SettingsPanel(sl.Component):
         self._capabilities = capabilities
         self.locale = locale
         self._owner_guild_id = owner_guild_id
-        self._mount: sl.discord.Mount | None = None
+        self._mount: sd.Mount | None = None
 
     @property
     def shows_server(self) -> bool:
@@ -355,7 +356,7 @@ class SettingsPanel(sl.Component):
             await event.notice(t(self.locale, _("A vote multiplier must be a positive number, such as 1.5.")))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if interaction.guild is None:
             return
         text = cast(str, event.values["aliases"])
@@ -431,7 +432,7 @@ class SettingsPanel(sl.Component):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
-        if await allows(sl.discord.native(event), node):
+        if await allows(sd.native(event), node):
             return True
         await event.notice(L(t"You are no longer allowed to change this."))
         return False
@@ -543,12 +544,12 @@ class SettingsPanel(sl.Component):
             return None
         return L(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         """Create the production mount with author lock and shared error handling."""
         self._mount = create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(self._author_id),
+            access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=SESSION_SECONDS,
         )

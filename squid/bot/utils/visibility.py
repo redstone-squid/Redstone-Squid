@@ -29,11 +29,11 @@ from typing import Any
 import discord
 from discord.ext.commands import Context
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.bot.i18n import t
 from squid.bot.ui import error_layout, info_layout, reply_presentation
 from squid.core.i18n import _
-from squid_layouts.discord import send_to
+from squid_discord import send_to
 
 
 def personal(ctx: Context[Any]) -> bool:
@@ -48,7 +48,7 @@ def personal(ctx: Context[Any]) -> bool:
 
 async def deliver_privately(
     ctx: Context[Any],
-    presentation: sl.discord.DiscordPresentation,
+    presentation: sd.DiscordPresentation,
     *,
     reason: str,
     locale: str | None = None,
@@ -66,7 +66,7 @@ async def deliver_privately(
     channel, because the channel is exactly what the payload must not reach.
     """
     if ctx.interaction is not None or ctx.guild is None:
-        receipt = await sl.discord.reply_to(
+        receipt = await sd.reply_to(
             ctx,
             ephemeral=True,
             files=files,

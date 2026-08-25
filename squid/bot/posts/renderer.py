@@ -6,7 +6,7 @@ from typing import Protocol
 
 import discord
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.posts.domain import ResourceKind, Surface
 
 
@@ -17,8 +17,8 @@ class DesiredPost:
     channel_id: int
     guild_id: int
     surface: Surface
-    presentation: sl.discord.presentation.DiscordPresentation
-    allowed_mentions: discord.AllowedMentions = field(default_factory=sl.discord.delivery.no_mentions)
+    presentation: sd.presentation.DiscordPresentation
+    allowed_mentions: discord.AllowedMentions = field(default_factory=sd.delivery.no_mentions)
 
 
 class PostRenderer(Protocol):

@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import cast
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
@@ -151,7 +152,7 @@ class ClaimReviewComponent(sl.Component):
         claim = self.selected
         if claim is None:
             return
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         await enforce(interaction, ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT)
 
         async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
@@ -207,11 +208,11 @@ class ClaimReviewComponent(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         return create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(self._author_id),
+            access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,
         )

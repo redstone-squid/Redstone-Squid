@@ -191,7 +191,7 @@ def make_reaction_bot(
 class FakeClient:
     """A bot stand-in a layout host can be installed on.
 
-    `sl.discord.install` keys a weak table on the client, which rules `SimpleNamespace` out.
+    `sd.install` keys a weak table on the client, which rules `SimpleNamespace` out.
     Everything else about these doubles is unchanged: attributes are whatever the code under
     test reads off a bot.
     """
@@ -210,13 +210,13 @@ def make_layout_bot(**attributes: Any) -> Any:
     `LayoutHost.of(source)`, so a test building one needs a real installation rather than a
     bare `SessionRegistry`. The installation is weakly keyed, so it leaves with the double.
     """
-    import squid_layouts as sl
+    import squid_discord as sd
     from squid.bot.ui import HOST_DEFAULTS
     from squid_reactive import LocalTopicBus
 
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
-    host = sl.discord.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
+    host = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(

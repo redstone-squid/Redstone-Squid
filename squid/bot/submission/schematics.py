@@ -14,6 +14,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Context
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
@@ -131,7 +132,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 t(locale, _("Download schematic")),
                 sl.document.Asset("schematic", name, "application/octet-stream", sl.document.InlineAsset(data)),
             ),
-            access=sl.discord.Everyone(),
+            access=sd.Everyone(),
             locale=locale,
         )
 
@@ -216,7 +217,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 ),
                 description=f"{t(locale, _('Conversion report:'))} {summarise_losses(losses)}",
             ),
-            access=sl.discord.Everyone(),
+            access=sd.Everyone(),
             locale=locale,
         )
 

@@ -4,22 +4,22 @@ from typing import TYPE_CHECKING
 
 import discord
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.observability import SpanAttribute, correlation_scope, trace_span
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
 
 
-routes: sl.discord.routing.RouteGroup[RedstoneSquid] = sl.discord.routing.RouteGroup("r")
+routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
 """The ordinary root group reserving the bot's durable ``r:`` namespace."""
 
 
-class TraceRoutes[BotT: discord.Client](sl.discord.routing.Middleware[BotT]):
+class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
     async def dispatch(
-        self, request: sl.discord.routing.RouteRequest[BotT], proceed: sl.discord.routing.RouteProceed
+        self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed
     ) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": "discord_route",
@@ -50,7 +50,7 @@ async def _route_error_hook(interaction: discord.Interaction, error: Exception, 
     await handle_interaction_error(interaction, error, surface=source)
 
 
-router: sl.discord.routing.Router[RedstoneSquid] = sl.discord.routing.Router(
+router: sd.routing.Router[RedstoneSquid] = sd.routing.Router(
     namespace=routes,
     on_gone=_route_gone_hook,
     on_error=_route_error_hook,

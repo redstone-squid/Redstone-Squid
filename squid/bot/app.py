@@ -49,7 +49,7 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_layouts.discord import install
+from squid_discord import install
 from squid_layouts.profiling import MemoryProfiler
 from squid_reactive import LocalTopicBus
 from squid_stores import PostgresTopicBridge
