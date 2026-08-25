@@ -18,12 +18,14 @@ from squid_discord.mount import _EntityValues
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.document import Document
+from squid_layouts.emoji import Emoji
 from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.primitives import (
     ActionStyle,
     Button,
     EntitySelect,
     Gallery,
+    GalleryItem,
     LinkButton,
     Node,
     Panel,
@@ -31,6 +33,7 @@ from squid_layouts.primitives import (
     Section,
     SelectMenu,
     Text,
+    Thumbnail,
 )
 
 
@@ -75,6 +78,12 @@ def _mounted_layout(view: discord.ui.LayoutView, **options: Any) -> tuple[Mount,
     return mount, errors
 
 
+def _row_buttons(row: Row) -> tuple[Button, ...]:
+    buttons = tuple(item for item in row.items if isinstance(item, Button))
+    assert len(buttons) == len(row.items)
+    return buttons
+
+
 # --- what "unsent" tests ------------------------------------------------------------------
 
 
@@ -82,7 +91,7 @@ async def test_a_dispatching_view_refuses_because_discord_routes_its_clicks() ->
     view = Paginator()
     # What `_start_listening_from_store` leaves behind when a view is sent. `View.message` is a
     # convention discord.py never sets, so this is the only framework-owned signal.
-    view.is_dispatching = lambda: True  # pyrefly: ignore[bad-assignment]
+    view.is_dispatching = lambda: True
 
     with pytest.raises(AdoptionError, match="already dispatching"):
         adopt(view)
@@ -100,7 +109,7 @@ async def test_the_message_convention_still_refuses_as_a_second_signal() -> None
     view = Paginator()
     # An uninitialised `Message` is enough: the check is an isinstance, so that a view whose own
     # button callback happens to be named `message` is not mistaken for a sent one.
-    view.message = discord.Message.__new__(discord.Message)  # pyrefly: ignore[bad-assignment]
+    view.message = discord.Message.__new__(discord.Message)  # pyrefly: ignore[missing-attribute]
 
     with pytest.raises(AdoptionError, match="already holds a message"):
         adopt(view)
@@ -117,7 +126,7 @@ async def test_an_unsent_layout_view_is_adopted_as_exact_v2_content() -> None:
         )
     )
 
-    document = adopt(layout).render()  # pyrefly: ignore[missing-attribute]
+    document = adopt(layout).render()
 
     assert isinstance(document, Document)
     assert isinstance(document.children[0], Panel)
@@ -125,6 +134,7 @@ async def test_an_unsent_layout_view_is_adopted_as_exact_v2_content() -> None:
     assert panel.accent == 0x123456 and panel.spoiler is True
     assert isinstance(panel.children[0], Text)
     assert isinstance(panel.children[1], Row)
+    assert isinstance(panel.children[1].items[0], Button)
     assert panel.children[1].items[0].key == "run"
 
 
@@ -143,14 +153,16 @@ def test_layout_view_preserves_nested_media_and_assets() -> None:
     )
     asset = Asset("gallery", "gallery.png", "image/png", InlineAsset(b"bytes"))
 
-    document = adopt(layout, assets=(asset,)).render()  # pyrefly: ignore[missing-attribute]
+    document = adopt(layout, assets=(asset,)).render()
 
     assert isinstance(document, Document)
     panel = document.children[0]
     assert isinstance(panel, Panel)
     assert isinstance(panel.children[0], Section)
+    assert isinstance(panel.children[0].accessory, Thumbnail)
     assert panel.children[0].accessory.spoiler is True
     assert isinstance(panel.children[1], Gallery)
+    assert isinstance(panel.children[1].items[0], GalleryItem)
     assert panel.children[1].items[0].url == "attachment://gallery.png"
     assert document.assets == (asset,)
 
@@ -180,7 +192,7 @@ def test_layout_view_resolves_http_files_through_stored_asset_metadata() -> None
         StoredAsset("https://example.invalid/report.txt"),
     )
 
-    document = adopt(layout, assets=(asset,)).render()  # pyrefly: ignore[missing-attribute]
+    document = adopt(layout, assets=(asset,)).render()
 
     assert isinstance(document, Document)
     file = document.children[0]
@@ -197,12 +209,13 @@ def test_layout_view_uses_structural_keys_for_nested_controls() -> None:
         )
     )
 
-    document = adopt(layout).render()  # pyrefly: ignore[missing-attribute]
+    document = adopt(layout).render()
 
     assert isinstance(document, Document)
     panel = document.children[0]
     assert isinstance(panel, Panel)
     assert isinstance(panel.children[0], Row)
+    assert isinstance(panel.children[0].items[0], Button)
     assert panel.children[0].items[0].key == "adopted-0.0.0"
 
 
@@ -275,10 +288,10 @@ async def test_rows_reproduce_discord_packing() -> None:
     # with anything, and the explicitly-pinned button keeps row 2.
     first, second, third = nodes
     assert isinstance(first, Row)
-    assert [button.label for button in first.items] == ["auto", "auto too"]
+    assert [button.label for button in _row_buttons(first)] == ["auto", "auto too"]
     assert isinstance(second, SelectMenu)
     assert isinstance(third, Row)
-    assert [button.label for button in third.items] == ["pinned"]
+    assert [button.label for button in _row_buttons(third)] == ["pinned"]
 
 
 async def test_a_link_button_becomes_a_link_button() -> None:
@@ -342,7 +355,7 @@ async def test_author_custom_ids_are_keys_and_generated_ones_are_positional() ->
     row = cast(list[Node], adopt(view).render())[0]
 
     assert isinstance(row, Row)
-    assert [button.key for button in row.items] == ["chosen", "adopted-1"]
+    assert [button.key for button in _row_buttons(row)] == ["chosen", "adopted-1"]
 
 
 async def test_duplicate_keys_refuse_rather_than_sharing_a_handler() -> None:
@@ -361,6 +374,7 @@ async def test_keys_override_both_defaults() -> None:
     row = cast(list[Node], adopt(view, keys=lambda item: f"by-label-{item.label}").render())[0]
 
     assert isinstance(row, Row)
+    assert isinstance(row.items[0], Button)
     assert row.items[0].key == "by-label-one"
 
 
@@ -462,6 +476,7 @@ async def test_the_second_writer_calls_all_refuse() -> None:
 
         @discord.ui.button(label="message", custom_id="message")
         async def via_message(self, interaction: discord.Interaction, button: discord.ui.Button[Any]) -> None:
+            assert interaction.message is not None
             await interaction.message.edit(view=self)
 
         @discord.ui.button(label="delete", custom_id="delete")
@@ -792,4 +807,4 @@ def test_button_translation_keeps_style_and_emoji() -> None:
     button = row.items[0]
     assert isinstance(button, Button)
     assert button.style is ActionStyle.DANGER
-    assert button.emoji is not None and button.emoji.name == "\N{FIRE}"
+    assert button.emoji == Emoji("\N{FIRE}")

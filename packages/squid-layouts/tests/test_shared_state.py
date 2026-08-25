@@ -90,7 +90,7 @@ def test_a_reserved_name_raises_at_class_creation() -> None:
     with pytest.raises(TypeError, match="reserves 'scope'"):
 
         class Bad(Shared[int]):
-            scope: int = state(0)  # pyrefly: ignore[bad-override]
+            scope: int = state(0)
 
 
 def test_an_underscored_cell_raises_at_class_creation() -> None:
@@ -156,7 +156,7 @@ def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: LocalTo
 def test_an_undeclared_attribute_cannot_be_written(bus: LocalTopicBus, here: Member) -> None:
     preferences = Preferences(bus, here)
     with pytest.raises(AttributeError, match="not declared state"):
-        preferences.undeclared = 1  # pyrefly: ignore[missing-attribute]
+        preferences.undeclared = 1
 
 
 def test_a_cell_cannot_be_deleted(bus: LocalTopicBus, here: Member) -> None:
@@ -246,7 +246,7 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
     """
 
     class Draft(Shared):
-        body: list[str] = state(factory=list, opaque=True)
+        body: list[str] = state(factory=list, opaque=True)  # pyrefly: ignore[bad-assignment]
 
     draft = Draft(bus)
     seen: list[object] = []

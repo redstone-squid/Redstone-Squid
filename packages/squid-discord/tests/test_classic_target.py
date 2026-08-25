@@ -160,13 +160,13 @@ class TestGating:
     def test_a_v2_container_has_no_classic_form_and_says_so(self) -> None:
         for node in (Panel(children=(Text("x"),)), Gallery(("https://example.invalid/a.png",))):
             with pytest.raises(LayoutInvariantError, match="no classic form"):
-                plan(node, target=CLASSIC_TARGET)
+                plan(node, target=CLASSIC_TARGET)  # pyrefly: ignore[bad-argument-type]
 
     def test_a_section_is_never_silently_reinterpreted_as_a_card(self) -> None:
         section = Section((Text("x"),), accessory=Thumbnail("https://example.invalid/a.png"))
 
         with pytest.raises(LayoutInvariantError, match="no classic form"):
-            plan(section, target=CLASSIC_TARGET)
+            plan(section, target=CLASSIC_TARGET)  # pyrefly: ignore[bad-argument-type]
 
 
 class TestLocalCaps:
