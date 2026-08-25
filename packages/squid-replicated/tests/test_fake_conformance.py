@@ -7,16 +7,6 @@ import uuid
 import weakref
 
 import pytest
-from squid_replicated import (
-    FakeEngine,
-    PreparedReplicatedInverse,
-    ReplicatedChangeToken,
-    ReplicatedClosedError,
-    ReplicatedResyncRequiredError,
-    ReplicatedScope,
-    ReplicatedUpdate,
-)
-from squid_replicated.fake import FakeOperation, PreparedFakeUpdate
 
 from squid_layouts.runtime import History
 from squid_reactive import (
@@ -33,6 +23,16 @@ from squid_reactive import (
 )
 from squid_reactive.core import _CURRENT
 from squid_reactive.testing import InterleavingHarness
+from squid_replicated import (
+    FakeEngine,
+    PreparedReplicatedInverse,
+    ReplicatedChangeToken,
+    ReplicatedClosedError,
+    ReplicatedResyncRequiredError,
+    ReplicatedScope,
+    ReplicatedUpdate,
+)
+from squid_replicated.fake import FakeOperation, PreparedFakeUpdate
 
 
 class LocalModel(Reactive):

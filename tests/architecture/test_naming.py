@@ -17,11 +17,13 @@ from types import ModuleType
 
 import squid_layouts
 import squid_reactive
+import squid_replicated
 import squid_stores
 
 PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-layouts/src"),
     Path("packages/squid-reactive/src"),
+    Path("packages/squid-replicated/src"),
     Path("packages/squid-stores/src"),
 )
 
@@ -83,7 +85,7 @@ neither is forgotten before the package is published.
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (squid_layouts, squid_reactive, squid_stores):
+    for package in (squid_layouts, squid_reactive, squid_replicated, squid_stores):
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)

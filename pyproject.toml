@@ -274,7 +274,7 @@ ignore = [
 
 [tool.ruff.lint.isort]
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
-known-first-party = ["squid_layouts", "squid_reactive", "squid_stores"]
+known-first-party = ["squid_layouts", "squid_reactive", "squid_replicated", "squid_stores"]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore `E402` (import violations) in all `__init__.py` files.
@@ -385,6 +385,7 @@ testpaths = [
     "packages/squid-reactive/tests",
     "packages/squid-stores/tests",
     "packages/squid-layouts/tests",
+    "packages/squid-replicated/tests",
 ]
 xfail_strict = true
 addopts = [
@@ -395,6 +396,7 @@ addopts = [
     "--cov=squid_reactive",
     "--cov=squid_stores",
     "--cov=squid_layouts",
+    "--cov=squid_replicated",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings
 # When a warning matches more than one option in the list, the action for the last matching option is performed.

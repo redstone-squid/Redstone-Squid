@@ -2,9 +2,9 @@
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from squid_replicated import PreparedReplicatedInverse, ReplicatedChangeToken, ReplicatedDocument, ReplicatedScope
 
 from squid_reactive import ActionCommit, on_action_commit, transaction
+from squid_replicated import PreparedReplicatedInverse, ReplicatedChangeToken, ReplicatedDocument, ReplicatedScope
 
 
 @settings(max_examples=30, deadline=None)
