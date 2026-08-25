@@ -1407,15 +1407,26 @@ class _State:
         if instance is None:
             return self
         cell = instance.__dict__.get(self._name)
-        if cell is not None and (cell.value is not _MISSING or _staged_value(cell) is not _MISSING):
-            return cell.read()
+        # `read()` answers with this action's staged value wherever it has one, so a slot the
+        # action emptied reads as empty rather than handing back the sentinel that spells it.
+        # Asking the cell first is what keeps that sentinel private: deciding on `cell.value`
+        # and only then reading meant a staged absence was returned to the caller verbatim.
+        held = _MISSING if cell is None else cell.read()
+        if held is not _MISSING:
+            return held
         if not self.has_initial:
             message = f"{type(instance).__name__}.{self.public_name} was never assigned"
             raise AttributeError(message)
-        # Materializing a default is not a write: no version bump, no invalidation.
         cell = self.cell(instance)
-        cell.value = self._initial(instance)
-        return cell.read()
+        if cell.value is _MISSING:
+            # Materializing a default is not a write: no version bump, no invalidation.
+            cell.value = self._initial(instance)
+            return cell.read()
+        # The action in flight emptied this slot. Empty reads as the declared default, and
+        # that default is not installed over the committed value: outside the action the
+        # committed value is still what everyone sees, and the commit is about to remove it
+        # rather than replace it with this.
+        return self._initial(instance)
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
         if rendering():
@@ -1453,15 +1464,22 @@ class _State:
         _write(instance, self._name, self.cell(instance), value)
 
     def __delete__(self, instance: ReactiveOwner) -> None:
-        """Stage removal while retaining the slot's identity and version lineage."""
-        cell = instance.__dict__.get(self._name)
-        held = _MISSING if cell is None else _staged_value(cell)
-        if cell is not None and held is _MISSING:
-            held = cell.value
-        if cell is None or held is _MISSING:
-            message = f"{type(instance).__name__}.{self.public_name} was never assigned"
-            raise AttributeError(message)
-        _write(instance, self._name, cell, _MISSING)
+        """Refuse removal: a state field is reset by assignment, never taken away.
+
+        Reading it back would have to answer something, and every answer is a lie about a
+        field that is still declared. Defined rather than left off so the refusal says which
+        field and what to do instead, in place of the bare `AttributeError: __delete__`
+        Python raises for a data descriptor with no deleter.
+
+        Nothing inside the package needs it: history restores a slot that was never assigned
+        by staging that absence through the ordinary write path, which keeps the slot, its
+        identity, and its version lineage.
+        """
+        message = (
+            f"{type(instance).__name__}.{self.public_name} cannot be deleted; a state field is "
+            f"reset, not removed. Assign the value it should hold instead."
+        )
+        raise AttributeError(message)
 
 
 @overload

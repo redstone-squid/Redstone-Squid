@@ -28,6 +28,7 @@ from squid_layouts.runtime import (
     UndoStrategy,
     history,
     history_actions,
+    inspect_cells,
     transaction,
 )
 from squid_layouts.semantic import Action
@@ -60,15 +61,21 @@ class Panel(Component):
         return Text(str(self.page))
 
 
-class RequiredPanel(Component):
-    history: History = history()
-    value: int = state()
+class UnassignedPanel(Component):
+    """A slot that holds no value of its own until an action puts one there.
 
-    def __init__(self) -> None:
-        self.value = 3
+    How an absent slot actually arises: `__init__` leaves the field alone, so the cell exists
+    and its declared default is what anyone reads, but nothing has been assigned and the first
+    write's inverse restores absence rather than a value. `_checked_init` makes this the only
+    shape that reaches it -- a field declared `state()` with no default must be assigned during
+    construction, so no component can carry one that is absent.
+    """
+
+    history: History = history()
+    value: int = state(0)
 
     def render(self):
-        return Text("required")
+        return Text("unassigned")
 
 
 def panel() -> tuple[Panel, Workspace]:
@@ -279,15 +286,14 @@ async def test_intervening_write_makes_redo_conflict() -> None:
     assert subject.page == 8
 
 
-async def test_absent_slot_keeps_lineage_across_undo_and_recreation() -> None:
-    subject = RequiredPanel()
+async def test_absent_slot_keeps_lineage_across_undo_and_reassignment() -> None:
+    subject = UnassignedPanel()
     ComponentRuntime(subject)
+    # Not read before the recorded action: reading materializes the default onto the cell,
+    # which is exactly the absence this is about.
     with transaction():
-        subject.history.record("delete")
-        del subject.value
-
-    with pytest.raises(AttributeError, match="never assigned"):
-        _ = subject.value
+        subject.history.record("assign")
+        subject.value = 7
     with transaction():
         subject.value = 9
 
@@ -297,18 +303,18 @@ async def test_absent_slot_keeps_lineage_across_undo_and_recreation() -> None:
     assert subject.value == 9
 
 
-async def test_deleted_slot_undo_and_redo_use_fresh_versions() -> None:
-    subject = RequiredPanel()
+async def test_absent_slot_undo_and_redo_use_fresh_versions() -> None:
+    subject = UnassignedPanel()
     ComponentRuntime(subject)
     with transaction():
-        subject.history.record("delete")
-        del subject.value
+        subject.history.record("assign")
+        subject.value = 7
 
     assert (await subject.history.undo()).applied
-    assert subject.value == 3
+    assert not inspect_cells(subject)["value"].assigned, "back to holding no value of its own"
+    assert subject.value == 0, "so the declared default is what reads"
     assert (await subject.history.redo()).applied
-    with pytest.raises(AttributeError, match="never assigned"):
-        _ = subject.value
+    assert subject.value == 7
 
 
 async def test_selective_targeting_uses_action_identity() -> None:
