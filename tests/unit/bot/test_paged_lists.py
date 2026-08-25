@@ -9,7 +9,7 @@ from discord.ext import commands
 
 from squid.bot.submission.records import RecordCog
 from squid.bot.version_tracking import VersionTracker
-from squid_layouts.discord.testing import fake_message
+from squid_layouts.discord.testing import fake_interaction, fake_message
 from tests.helpers.discord import make_layout_bot
 
 
@@ -115,13 +115,14 @@ async def test_a_clean_diagnostic_still_says_so() -> None:
 async def test_a_staff_diagnostic_stays_out_of_the_channel_on_the_slash_path() -> None:
     cog = _records_cog([_gap(1)])
     ctx = _context()
-    cast(Any, ctx).interaction = SimpleNamespace(
-        guild_locale=None,
-        locale=None,
-        expires_at=None,
-        is_expired=lambda: False,
-        response=SimpleNamespace(is_done=lambda: False),
-    )
+    # The package's own double rather than a hand-rolled namespace: delivery reads
+    # `is_expired`, `response.is_done()` and the followup surfaces before it decides
+    # between the interaction and the channel, and a partial stub only reports that one
+    # attribute at a time. Locales stay unset, which is what this test is about.
+    interaction = fake_interaction()
+    interaction.guild_locale = None
+    interaction.locale = None
+    cast(Any, ctx).interaction = interaction
 
     await RecordCog.gaps.callback(cog, ctx)  # type: ignore[arg-type]
 

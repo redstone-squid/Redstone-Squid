@@ -1,6 +1,7 @@
 """Contract tests for private streaming submission media routes."""
 
 import asyncio
+import os
 import stat
 from dataclasses import replace
 from pathlib import Path
@@ -220,8 +221,12 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
     }
     assert events == ["owner", "submit"]
     assert media.staged_bytes == b"abcd"
-    assert media.staged_mode == 0o600
-    assert media.parent_mode == 0o700
+    if os.name == "posix":
+        # The upload is opened 0o600 under a 0o700 parent so a staged file is never
+        # world-readable while it is being written. Windows honours neither -- `fchmod`
+        # there only carries the read-only bit -- so assert the intent where it holds.
+        assert media.staged_mode == 0o600
+        assert media.parent_mode == 0o700
     assert media.submission is not None
     assert media.submission.strip_audio is True
     assert media.staged_path is not None

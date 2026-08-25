@@ -57,7 +57,13 @@ async def test_local_artifact_path_upload_rejects_symlinks(tmp_path: Path) -> No
     source = tmp_path / "source"
     source.write_bytes(b"payload")
     link = tmp_path / "link"
-    link.symlink_to(source)
+    # Windows refuses this without Developer Mode or SeCreateSymbolicLinkPrivilege, and a
+    # test about *rejecting* symlinks cannot run where none can be made. Skipped rather
+    # than xfailed: the guard under test is fine, the platform simply will not set it up.
+    try:
+        link.symlink_to(source)
+    except OSError as error:
+        pytest.skip(f"creating symlinks is not permitted here: {error}")
 
     with pytest.raises(ValueError, match="regular files"):
         await store.put_path(
