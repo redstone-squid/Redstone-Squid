@@ -399,9 +399,7 @@ class PollConfirmationComponent(sl.Component):
     def _scope_label(self) -> str:
         return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
 
-    def mount(
-        self, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None
-    ) -> sd.Mount:
+    def mount(self, *, source: sd.host.HostSource, reactor: sd.Reactor | None = None) -> sd.Mount:
         self._mount = create_mount(
             self,
             source=source,
