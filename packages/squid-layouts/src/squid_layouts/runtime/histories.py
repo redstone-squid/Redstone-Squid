@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import time
 import uuid
 from collections import OrderedDict
@@ -45,6 +46,8 @@ from squid_reactive.actions import (
     emit_causal_event,
 )
 from squid_reactive.operations import OperationContext
+
+logger = logging.getLogger(__name__)
 
 
 class HistoryError(RuntimeError):
@@ -197,8 +200,30 @@ class TransactionalCompensationOutbox(CompensationOutbox, Protocol):
     def participant(self, intent: CompensationIntent) -> ActionParticipant[CompensationRecord | None]: ...
 
 
+SETTLED_COMPENSATIONS = frozenset(
+    {
+        CompensationStatus.EXTERNAL_SUCCEEDED,
+        CompensationStatus.REVERTED,
+        CompensationStatus.NEEDS_RECONCILIATION,
+    }
+)
+"""The statuses that answer "has this compensation already happened?" with yes.
+
+A record in one of these is the outbox's entire reason to exist. Forgetting one turns the next
+claim into a second execution of an external effect that already ran.
+"""
+
+
 class MemoryCompensationOutbox:
-    """Bounded reference outbox; ``records=`` rebuilds one after a simulated restart."""
+    """Bounded reference outbox; ``records=`` rebuilds one after a simulated restart.
+
+    ``limit`` is a safety valve, not a cache size. It has to exceed the compensations that can
+    be in flight at once plus those whose settled answer is still worth having, because the
+    bound is enforced by forgetting the oldest record -- and a forgotten settled record
+    dispatches its external effect a second time. :attr:`dropped_records` counts the times
+    that has happened; a host watching it move has a limit set too low, or wants the durable
+    outbox this one stands in for.
+    """
 
     def __init__(self, *, limit: int = 100, records: Iterable[CompensationRecord] = ()) -> None:
         if limit < 1:
@@ -206,6 +231,7 @@ class MemoryCompensationOutbox:
             raise ValueError(message)
         self.limit = limit
         self._records: OrderedDict[str, CompensationRecord] = OrderedDict()
+        self._dropped = 0
         for record in records:
             self._put(record)
 
@@ -213,13 +239,14 @@ class MemoryCompensationOutbox:
     def records(self) -> tuple[CompensationRecord, ...]:
         return tuple(self._records.values())
 
+    @property
+    def dropped_records(self) -> int:
+        """How many settled answers the bound has discarded, each one a possible repeat."""
+        return self._dropped
+
     async def claim(self, intent: CompensationIntent, retry: CompensationRetryPolicy) -> CompensationClaim:
         existing = self._records.get(intent.idempotency_key)
-        if existing is not None and existing.status in {
-            CompensationStatus.EXTERNAL_SUCCEEDED,
-            CompensationStatus.REVERTED,
-            CompensationStatus.NEEDS_RECONCILIATION,
-        }:
+        if existing is not None and existing.status in SETTLED_COMPENSATIONS:
             return CompensationClaim(dispatch=False, attempts=existing.attempts, status=existing.status)
         attempts = 1 if existing is None else existing.attempts + 1
         if retry.max_attempts is not None and attempts > retry.max_attempts:
@@ -238,6 +265,9 @@ class MemoryCompensationOutbox:
         error: ExceptionSummary | None = None,
     ) -> None:
         existing = self._records.get(intent.idempotency_key)
+        # One is a floor, not a count, for a key the bound already forgot: the attempt being
+        # reported is evidence of at least itself, and nothing here remembers the rest. The
+        # status is what callers act on, and that is carried exactly.
         attempts = 1 if existing is None else existing.attempts
         self._put(CompensationRecord(intent, status, attempts, datetime.now(UTC), error))
 
@@ -249,7 +279,20 @@ class MemoryCompensationOutbox:
         self._records.pop(record.intent.idempotency_key, None)
         self._records[record.intent.idempotency_key] = record
         while len(self._records) > self.limit:
-            self._records.popitem(last=False)
+            # Oldest first, deliberately. A claim writes its record immediately before
+            # dispatching, so whatever is in flight is the newest thing here and evicting by
+            # age is what leaves it alone; preferring to drop unsettled records instead would
+            # take exactly the ones a claim/update pair is in the middle of using.
+            key, evicted = self._records.popitem(last=False)
+            if evicted.status in SETTLED_COMPENSATIONS:
+                self._dropped += 1
+                logger.warning(
+                    "compensation outbox is full at %d records and forgot a settled one (%s, %s); "
+                    "a later claim for that key will dispatch its external effect again",
+                    self.limit,
+                    key,
+                    evicted.status.value,
+                )
 
 
 class _CompensationIntentParticipant:
