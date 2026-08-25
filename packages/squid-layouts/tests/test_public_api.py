@@ -91,7 +91,6 @@ ROOT_API = frozenset(
         "operations",
         "paged",
         "paragraph",
-        "patterns",
         "plain",
         "planning",
         "primitives",
@@ -137,7 +136,6 @@ ROOT_NAMESPACES = (
     "html",
     "interactions",
     "operations",
-    "patterns",
     "planning",
     "primitives",
     "profiling",
@@ -158,10 +156,6 @@ RENAMED_SUBMODULES = (
 )
 
 SPECIALIST_SAMPLES = {
-    "Agreement": sl.patterns,
-    "AgreementParticipant": sl.patterns,
-    "Wizard": sl.patterns,
-    "WizardState": sl.patterns,
     "FormSpec": sl.forms,
     "SemanticNode": sl.semantic,
     "ActionMiddleware": sl.interactions,
@@ -175,9 +169,6 @@ SPECIALIST_SAMPLES = {
     "Guard": sl.guards,
     "LayoutError": sl.errors,
     "ZonedDateTime": sl.temporal,
-    "RosterPlacement": sl.patterns,
-    "TallyOption": sl.patterns,
-    "GridCell": sl.patterns,
     "Message": sl.text,
 }
 
@@ -242,10 +233,11 @@ def test_explicit_namespaces_expose_specialized_apis() -> None:
     )
 
 
-def test_the_engine_no_longer_carries_a_discord_namespace() -> None:
-    """`sd` was a lazy hook into a subpackage that is now its own distribution."""
-    assert not hasattr(sl, "discord")
-    assert "discord" not in sl.__all__
+def test_the_engine_no_longer_carries_its_leaf_namespaces() -> None:
+    """`sl.discord` was a lazy hook and `sl.patterns` an eager one; both are packages now."""
+    for name in ("discord", "patterns"):
+        assert not hasattr(sl, name)
+        assert name not in sl.__all__
 
 
 def test_engine_imports_without_transport_or_store_dependencies() -> None:
@@ -260,14 +252,13 @@ import sys
 
 class BlockDownstream(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_stores", "squid_discord"}:
+        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_stores", "squid_discord", "squid_patterns"}:
             raise ModuleNotFoundError(fullname)
         return None
 
 sys.meta_path.insert(0, BlockDownstream())
 import squid_layouts
 import squid_layouts.html
-import squid_layouts.patterns
 import squid_layouts.planning
 import squid_layouts.profiling
 import squid_layouts.runtime
@@ -275,7 +266,7 @@ import squid_layouts.runtime.shared
 import squid_layouts.runtime.topics
 assert squid_layouts.runtime.shared.Shared
 assert squid_layouts.runtime.shared.SharedPool
-assert not {"discord", "anyio", "squid_stores", "squid_discord"} & set(sys.modules)
+assert not {"discord", "anyio", "squid_stores", "squid_discord", "squid_patterns"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)
 

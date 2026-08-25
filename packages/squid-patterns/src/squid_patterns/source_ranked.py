@@ -8,8 +8,6 @@ from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, heading, note, stack
 from squid_layouts.interactions import ActionEvent
-from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
-from squid_layouts.patterns._ranked import Projector, RankedEntry, RankedRows
 from squid_layouts.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     NavigationContext,
@@ -31,6 +29,8 @@ from squid_layouts.sources import (
     window_footer,
 )
 from squid_layouts.text import TextLike
+from squid_patterns._content import ContentLike, normalize_content, require_key
+from squid_patterns._ranked import Projector, RankedEntry, RankedRows
 
 type SourceContentHook = ContentLike | Callable[[int | None], ContentLike]
 

@@ -123,7 +123,9 @@ class MountInspector(sl.Component):
 
     # --- Detail -------------------------------------------------------------------------
 
-    def _detail(self, snapshot: squid_discord.mount.MountSnapshot, mount: squid_discord.Mount) -> Sequence[sl.LayoutNode]:
+    def _detail(
+        self, snapshot: squid_discord.mount.MountSnapshot, mount: squid_discord.Mount
+    ) -> Sequence[sl.LayoutNode]:
         children: list[sl.LayoutNode] = [sl.bullets(*_summary(snapshot), key="summary")]
         if snapshot.handler_keys:
             children.append(

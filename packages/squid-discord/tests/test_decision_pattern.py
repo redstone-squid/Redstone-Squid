@@ -3,6 +3,7 @@
 import discord
 
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
 from squid_layouts.semantic import Actions, Stack, Status
@@ -14,12 +15,12 @@ def _actions(rendered: sl.LayoutNode) -> tuple[sl.semantic.Action, ...]:
     return tuple(item for item in group.items if isinstance(item, sl.semantic.Action))
 
 
-def _decision() -> sl.patterns.Decision:
-    return sl.patterns.Decision(
+def _decision() -> sp.Decision:
+    return sp.Decision(
         sl.paragraph("Delete this build?"),
         (
-            sl.patterns.DecisionOption("delete", "Delete", sl.Tone.DANGER, sl.semantic.Emphasis.STRONG),
-            sl.patterns.DecisionOption("keep", "Keep"),
+            sp.DecisionOption("delete", "Delete", sl.Tone.DANGER, sl.semantic.Emphasis.STRONG),
+            sp.DecisionOption("keep", "Keep"),
         ),
         key="delete-build",
     )
@@ -31,7 +32,7 @@ def test_choose_sets_decided_once_and_later_transitions_are_noops() -> None:
     decided = pattern.transition(pattern.initial_state, "choose:delete")
     repeated = pattern.transition(decided, "choose:keep")
 
-    assert decided == sl.patterns.DecisionState("delete")
+    assert decided == sp.DecisionState("delete")
     assert repeated is decided
 
 
@@ -49,9 +50,9 @@ def test_options_disable_and_status_appears_after_deciding() -> None:
 
 
 async def test_component_handler_receives_the_option_and_finish_action_ends_mount() -> None:
-    seen: list[tuple[str, sl.patterns.DecisionState]] = []
+    seen: list[tuple[str, sp.DecisionState]] = []
 
-    async def decided(event: sl.patterns.PatternEvent[sl.patterns.DecisionState], key: str) -> None:
+    async def decided(event: sp.PatternEvent[sp.DecisionState], key: str) -> None:
         seen.append((key, event.state))
 
     component = _decision().component(on_decide=decided, finish_on={"delete"})
@@ -60,21 +61,21 @@ async def test_component_handler_receives_the_option_and_finish_action_ends_moun
 
     await mount.dispatch("delete-build.delete", fake_interaction())
 
-    assert component.pattern_state == sl.patterns.DecisionState("delete")
-    assert seen == [("delete", sl.patterns.DecisionState("delete"))]
+    assert component.pattern_state == sp.DecisionState("delete")
+    assert seen == [("delete", sp.DecisionState("delete"))]
     assert mount._finished
 
 
 async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
     seen: list[str] = []
 
-    async def confirmed(event: sl.patterns.PatternEvent[sl.patterns.DecisionState]) -> None:
+    async def confirmed(event: sp.PatternEvent[sp.DecisionState]) -> None:
         seen.append(event.action)
 
-    async def cancelled(event: sl.patterns.PatternEvent[sl.patterns.DecisionState]) -> None:
+    async def cancelled(event: sp.PatternEvent[sp.DecisionState]) -> None:
         seen.append(event.action)
 
-    component = sl.patterns.confirm("Proceed?", on_confirm=confirmed, on_cancel=cancelled, tone=sl.Tone.DANGER)
+    component = sp.confirm("Proceed?", on_confirm=confirmed, on_cancel=cancelled, tone=sl.Tone.DANGER)
     mount = Mount(component, access=Everyone(), timeout=None)
     view = commit_render(mount)
     buttons = [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
@@ -93,12 +94,12 @@ async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
 
 def test_router_shell_encodes_serializable_decision_state() -> None:
     pattern = _decision()
-    routes: list[sl.patterns.PatternRoute[sl.patterns.DecisionState]] = []
+    routes: list[sp.PatternRoute[sp.DecisionState]] = []
 
-    def route(request: sl.patterns.PatternRoute[sl.patterns.DecisionState]) -> str:
+    def route(request: sp.PatternRoute[sp.DecisionState]) -> str:
         routes.append(request)
         return f"decision:{request.state.decided}"
 
-    sl.patterns.RouterShell(route).render(pattern, pattern.initial_state)
+    sp.RouterShell(route).render(pattern, pattern.initial_state)
 
-    assert sl.patterns.PatternRoute("choose:delete", sl.patterns.DecisionState("delete"), "next") in routes
+    assert sp.PatternRoute("choose:delete", sp.DecisionState("delete"), "next") in routes

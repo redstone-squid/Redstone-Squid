@@ -1,16 +1,17 @@
 """Reusable, frontend-neutral state-machine patterns."""
 
-from squid_layouts.patterns.agreement import Agreement, AgreementParticipant, AgreementResolveHandler
-from squid_layouts.patterns.browser import Browser, BrowserDetail, BrowserOpenHandler, BrowserOverview
-from squid_layouts.patterns.collection import (
+from squid_patterns import guards
+from squid_patterns.agreement import Agreement, AgreementParticipant, AgreementResolveHandler
+from squid_patterns.browser import Browser, BrowserDetail, BrowserOpenHandler, BrowserOverview
+from squid_patterns.collection import (
     CollectionChangeHandler,
     CollectionEditor,
     CollectionEntry,
     CollectionState,
 )
-from squid_layouts.patterns.commit import CommitPolicy
-from squid_layouts.patterns.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
-from squid_layouts.patterns.editor import (
+from squid_patterns.commit import CommitPolicy
+from squid_patterns.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
+from squid_patterns.editor import (
     Editor,
     EditorCommitHandler,
     EditorSection,
@@ -18,17 +19,17 @@ from squid_layouts.patterns.editor import (
     EditorState,
     EditorValues,
 )
-from squid_layouts.patterns.grid import GridCell
-from squid_layouts.patterns.lookup import Lookup, LookupPickHandler, LookupSearch
-from squid_layouts.patterns.menu import Menu, MenuEntry, MenuState
-from squid_layouts.patterns.multichoice import (
+from squid_patterns.grid import GridCell
+from squid_patterns.lookup import Lookup, LookupPickHandler, LookupSearch
+from squid_patterns.menu import Menu, MenuEntry, MenuState
+from squid_patterns.multichoice import (
     MultiChoiceCommitHandler,
     MultiChoiceGroup,
     MultiChoicePanel,
     MultiChoiceState,
 )
-from squid_layouts.patterns.ranked import RankedEntry, RankedList, RankedListState
-from squid_layouts.patterns.roster import (
+from squid_patterns.ranked import RankedEntry, RankedList, RankedListState
+from squid_patterns.roster import (
     RosterEntry,
     RosterGroup,
     RosterOverflow,
@@ -37,7 +38,7 @@ from squid_layouts.patterns.roster import (
     RosterStatus,
     place_roster,
 )
-from squid_layouts.patterns.shells import (
+from squid_patterns.shells import (
     ComponentShell,
     Pattern,
     PatternControls,
@@ -47,10 +48,10 @@ from squid_layouts.patterns.shells import (
     RouteBuilder,
     RouterShell,
 )
-from squid_layouts.patterns.source_ranked import SourceRankedList
-from squid_layouts.patterns.tabs import Tab, Tabs, TabsState
-from squid_layouts.patterns.tally import TallyOption
-from squid_layouts.patterns.wizard import (
+from squid_patterns.source_ranked import SourceRankedList
+from squid_patterns.tabs import Tab, Tabs, TabsState
+from squid_patterns.tally import TallyOption
+from squid_patterns.wizard import (
     REVIEW_STEP,
     Wizard,
     WizardAnswer,
@@ -126,5 +127,6 @@ __all__ = [
     "WizardState",
     "WizardStep",
     "confirm",
+    "guards",
     "place_roster",
 ]

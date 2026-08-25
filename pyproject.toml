@@ -34,6 +34,7 @@ dependencies = [
     "rapidfuzz>=3.13.0",
     "squid-discord",
     "squid-layouts",
+    "squid-patterns",
     "squid-replicated",
     # Direct: `squid/topics.py` opens the LISTEN/NOTIFY bridge itself rather than reaching
     # for it through the UI package that used to re-export it.
@@ -127,6 +128,7 @@ members = ["packages/*"]
 [tool.uv.sources]
 squid-discord = { workspace = true }
 squid-layouts = { workspace = true }
+squid-patterns = { workspace = true }
 squid-reactive = { workspace = true }
 squid-replicated = { workspace = true }
 squid-stores = { workspace = true }
@@ -279,7 +281,14 @@ ignore = [
 
 [tool.ruff.lint.isort]
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
-known-first-party = ["squid_discord", "squid_layouts", "squid_reactive", "squid_replicated", "squid_stores"]
+known-first-party = [
+    "squid_discord",
+    "squid_layouts",
+    "squid_patterns",
+    "squid_reactive",
+    "squid_replicated",
+    "squid_stores",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Ignore `E402` (import violations) in all `__init__.py` files.
@@ -391,6 +400,7 @@ testpaths = [
     "packages/squid-stores/tests",
     "packages/squid-layouts/tests",
     "packages/squid-discord/tests",
+    "packages/squid-patterns/tests",
     "packages/squid-replicated/tests",
 ]
 xfail_strict = true
@@ -408,6 +418,7 @@ addopts = [
     "--cov=squid_layouts",
     "--cov=squid_replicated",
     "--cov=squid_discord",
+    "--cov=squid_patterns",
 ]
 # https://docs.pytest.org/en/stable/how-to/capture-warnings.html#controlling-warnings
 # When a warning matches more than one option in the list, the action for the last matching option is performed.

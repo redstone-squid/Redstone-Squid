@@ -9,12 +9,15 @@ package prevents known target-limit violations before delivery: views describe *
 every markdown prefix and code fence exactly, allocates the shared budgets by priority, and
 degrades content the way its author said it should degrade.
 
-> **The discord.py runtime lives in [`squid-discord`](../squid-discord/README.md).** Mounts,
+> **The discord.py runtime lives in [`squid-discord`](../squid-discord/README.md), and the
+> reusable application patterns in [`squid-patterns`](../squid-patterns/README.md).** Mounts,
 > sessions, routing, delivery, adoption, roles, devtools and durable panels moved there; the
 > examples below that call `sd.Mount(...)` need it installed. What stays here is Discord
 > *protocol* knowledge — Components V2 and classic limits, the two dialects, the scene shapes,
 > the capability tags — because that is what the planner plans against, and none of it imports
-> discord.py. Installing `squid-layouts` alone pulls in neither discord.py nor a store backend.
+> discord.py. Examples below that use `sp.Wizard`, `sp.Editor` or `sp.guards.confirm` need
+> `squid-patterns`. Installing `squid-layouts` alone pulls in neither discord.py nor a store
+> backend, and neither leaf package.
 
 ```python
 import squid_layouts as sl
@@ -116,18 +119,18 @@ only exact colours. Discord buttons retain Discord's platform-owned style colour
 Roster and tally declarations render domain data without taking ownership of it:
 
 ```python
-placement = sl.patterns.place_roster(
-    tuple(sl.patterns.RosterEntry(str(member.id), member.name, member.team) for member in members),
+placement = sp.place_roster(
+    tuple(sp.RosterEntry(str(member.id), member.name, member.team) for member in members),
     (
-        sl.patterns.RosterSlot("builders", "Builders", capacity=4),
-        sl.patterns.RosterSlot("reviewers", "Reviewers", capacity=2),
+        sp.RosterSlot("builders", "Builders", capacity=4),
+        sp.RosterSlot("reviewers", "Reviewers", capacity=2),
     ),
-    overflow=sl.patterns.RosterOverflow.WAITLIST,
+    overflow=sp.RosterOverflow.WAITLIST,
 )
 roster = sl.roster(placement, key="teams", on_join=move_member)
 
 tally = sl.tally(
-    tuple(sl.patterns.TallyOption(option.key, option.label, counts[option.key]) for option in options),
+    tuple(sp.TallyOption(option.key, option.label, counts[option.key]) for option in options),
     key="poll",
     on_vote=cast_vote,
 )
@@ -138,10 +141,10 @@ preserves one callback contract while adapting its Discord shape:
 
 ```python
 board = sl.grid(
-    sl.patterns.GridCell("a1", "A1"),
-    sl.patterns.GridCell("b1", "B1", available=False),
-    sl.patterns.GridCell("a2", "A2", tone=sl.Tone.SUCCESS),
-    sl.patterns.GridCell("b2", "B2"),
+    sp.GridCell("a1", "A1"),
+    sp.GridCell("b1", "B1", available=False),
+    sp.GridCell("a2", "A2", tone=sl.Tone.SUCCESS),
+    sp.GridCell("b2", "B2"),
     key="board",
     columns=2,
     on_pick=pick_cell,  # SelectionEvent.values contains the stable cell key
@@ -152,14 +155,14 @@ Use `sd.button_grid(*cells, ...)` only when exact button rows are part of the
 contract and exceeding Discord's row or message budget should be an error. Use
 `sl.semantic.TableDisplay.MATRIX` for a non-interactive dense matrix.
 
-`sl.patterns.Agreement` is a mounted, actor-keyed component. Its approval state ends with the
+`sp.Agreement` is a mounted, actor-keyed component. Its approval state ends with the
 mount and is never a substitute for a durable host ledger:
 
 ```python
 participants = tuple(
-    sl.patterns.AgreementParticipant(str(member.id), member.name) for member in reviewers
+    sp.AgreementParticipant(str(member.id), member.name) for member in reviewers
 )
-agreement = sl.patterns.Agreement(
+agreement = sp.Agreement(
     "Approve this release?",
     participants,
     require="all",
@@ -385,8 +388,8 @@ They do not choose between in-memory callbacks and restart-surviving routes. Ins
 that control construction:
 
 ```python
-tabs = sl.patterns.Tabs(
-    (sl.patterns.Tab("summary", "Summary", summary), sl.patterns.Tab("history", "History", history)),
+tabs = sp.Tabs(
+    (sp.Tab("summary", "Summary", summary), sp.Tab("history", "History", history)),
     key="build-tabs",
 )
 
@@ -394,10 +397,10 @@ tabs = sl.patterns.Tabs(
 mount = sd.Mount(tabs.component(), access=sd.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
-shell = sl.patterns.RouterShell(
+shell = sp.RouterShell(
     lambda request: BUILD_TAB.id(build_id=build.id, tab=request.state.selected),
 )
-document = shell.render(tabs, sl.patterns.TabsState(selected=tab))
+document = shell.render(tabs, sp.TabsState(selected=tab))
 ```
 
 Mounted actions accept application-wide middleware directly on the mount:
@@ -711,7 +714,7 @@ class BuildSource:
         resolved, rows, has_previous, has_more = await builds.window(position, extent)
         return sl.sources.Window(resolved, tuple(rows), has_previous, has_more)
 
-ranking = sl.patterns.SourceRankedList(
+ranking = sp.SourceRankedList(
     BuildSource(),
     key="builds",
     label=lambda build: build.title,

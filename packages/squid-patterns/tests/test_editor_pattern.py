@@ -4,6 +4,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_layouts.semantic import Actions, FormTrigger, RoutedAction, Stack
 
 
@@ -16,8 +17,8 @@ def _walk(node: object) -> Iterable[object]:
         yield from node.items
 
 
-def _profile_section() -> sl.patterns.EditorSection[tuple[tuple[str, object], ...], Mapping[str, object]]:
-    return sl.patterns.EditorSection.form(
+def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], Mapping[str, object]]:
+    return sp.EditorSection.form(
         "profile",
         "Profile",
         sl.forms.FormSpec(
@@ -32,7 +33,7 @@ def _profile_section() -> sl.patterns.EditorSection[tuple[tuple[str, object], ..
 
 def test_form_section_prefills_stages_and_explicitly_commits() -> None:
     section = _profile_section()
-    editor = sl.patterns.Editor("Account", (section,))
+    editor = sp.Editor("Account", (section,))
     initial = editor.initial_from({"profile": {"name": "Old", "bio": None}})
 
     form = editor.form_for(initial, "submit:profile")
@@ -49,16 +50,16 @@ def test_form_section_prefills_stages_and_explicitly_commits() -> None:
 
 
 async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -> None:
-    commits: list[tuple[sl.patterns.EditorValues, frozenset[str]]] = []
+    commits: list[tuple[sp.EditorValues, frozenset[str]]] = []
 
     async def committed(
-        _event: sl.patterns.PatternEvent[sl.patterns.EditorState],
-        values: sl.patterns.EditorValues,
+        _event: sp.PatternEvent[sp.EditorState],
+        values: sp.EditorValues,
         changed: frozenset[str],
     ) -> None:
         commits.append((values, changed))
 
-    editor = sl.patterns.Editor("Account", (_profile_section(),), commit=sl.patterns.CommitPolicy.IMMEDIATE)
+    editor = sp.Editor("Account", (_profile_section(),), commit=sp.CommitPolicy.IMMEDIATE)
     component = editor.component(
         initial={"profile": {"name": "Old", "bio": None}},
         on_commit=committed,
@@ -71,21 +72,21 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
     previous = component.pattern_state
     component.pattern_state = state
     assert component.on_change is not None
-    await component.on_change(sl.patterns.PatternEvent(cast(Any, object()), "submit:profile", previous, state))
+    await component.on_change(sp.PatternEvent(cast(Any, object()), "submit:profile", previous, state))
 
     assert commits[-1][0]["profile"] == {"name": "New", "bio": None}
     assert commits[-1][1] == frozenset({"profile"})
 
 
 def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> None:
-    def validate(values: sl.patterns.EditorValues) -> tuple[sl.forms.FormIssue, ...]:
+    def validate(values: sp.EditorValues) -> tuple[sl.forms.FormIssue, ...]:
         profile = cast(Mapping[str, object], values["profile"])
         return () if profile["name"] else (sl.forms.FormError("Name is required."),)
 
-    editor = sl.patterns.Editor(
+    editor = sp.Editor(
         "Account",
         (_profile_section(),),
-        commit=sl.patterns.CommitPolicy.IMMEDIATE,
+        commit=sp.CommitPolicy.IMMEDIATE,
         validate=validate,
     )
     initial = editor.initial_from({"profile": {"name": "Old", "bio": None}})
@@ -98,16 +99,16 @@ def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> 
 
 
 def _collection_section() -> tuple[
-    sl.patterns.CollectionEditor,
-    sl.patterns.EditorSection[sl.patterns.CollectionState, tuple[Mapping[str, object], ...]],
+    sp.CollectionEditor,
+    sp.EditorSection[sp.CollectionState, tuple[Mapping[str, object], ...]],
 ]:
-    collection = sl.patterns.CollectionEditor(
+    collection = sp.CollectionEditor(
         "Links",
         create=sl.forms.FormSpec("Link", (sl.forms.TextField(key="name", label="Name"),)),
         label=lambda value: str(value["name"]),
         window_size=1,
     )
-    section = sl.patterns.EditorSection.pattern(
+    section = sp.EditorSection.pattern(
         "links",
         "Links",
         collection,
@@ -121,7 +122,7 @@ def _collection_section() -> tuple[
 
 def test_nested_pattern_navigation_is_not_dirty_but_value_changes_are() -> None:
     _collection, section = _collection_section()
-    editor = sl.patterns.Editor("Account", (section,))
+    editor = sp.Editor("Account", (section,))
     state = editor.initial_from({"links": ({"name": "A"}, {"name": "B"})})
     state = editor.transition(state, "edit:links")
 
@@ -140,15 +141,15 @@ def test_nested_pattern_navigation_is_not_dirty_but_value_changes_are() -> None:
 
 def test_nested_forms_keep_router_shell_parity() -> None:
     _collection, section = _collection_section()
-    editor = sl.patterns.Editor("Account", (section,))
+    editor = sp.Editor("Account", (section,))
     state = editor.transition(editor.initial_state, "edit:links")
-    routes: list[sl.patterns.PatternRoute[sl.patterns.EditorState]] = []
+    routes: list[sp.PatternRoute[sp.EditorState]] = []
 
-    def route(request: sl.patterns.PatternRoute[sl.patterns.EditorState]) -> str:
+    def route(request: sp.PatternRoute[sp.EditorState]) -> str:
         routes.append(request)
         return f"editor:{len(routes)}"
 
-    rendered = sl.patterns.RouterShell(route).render(editor, state)
+    rendered = sp.RouterShell(route).render(editor, state)
 
     add = next(node for node in _walk(rendered) if isinstance(node, RoutedAction) and node.key.endswith("links.add"))
     assert add
@@ -158,7 +159,7 @@ def test_nested_forms_keep_router_shell_parity() -> None:
 
 
 def test_editor_render_shows_unsaved_status_and_gates_save_on_validation() -> None:
-    editor = sl.patterns.Editor(
+    editor = sp.Editor(
         "Account",
         (_profile_section(),),
         validate=lambda _values: (sl.forms.FormError("Not ready"),),

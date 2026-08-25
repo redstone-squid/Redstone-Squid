@@ -7,12 +7,12 @@ from types import MappingProxyType
 
 from squid_layouts.factories import actions, choice, heading, stack, status
 from squid_layouts.forms import Form, FormLike, FormSpec
-from squid_layouts.patterns._paging import window
-from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import ActionDisplay, FormTrigger, Tone
 from squid_layouts.sources import Position
 from squid_layouts.text import TextLike
+from squid_patterns._paging import window
+from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 
 
 @dataclass(frozen=True, slots=True)

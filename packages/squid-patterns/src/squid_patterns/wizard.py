@@ -6,11 +6,11 @@ from types import MappingProxyType
 
 from squid_layouts.factories import actions, field, fields, heading, progress, stack
 from squid_layouts.forms import Form, FormField, FormLike, FormSpec
-from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, require_key
-from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import Action, ActionDisplay, FormTrigger, LayoutNode, RoutedAction, Tone
 from squid_layouts.text import TextLike
+from squid_patterns._content import ContentItem, ContentLike, normalize_content, require_key
+from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 
 REVIEW_STEP = "@review"
 """The reserved `WizardState.current` value naming the review screen rather than a step."""

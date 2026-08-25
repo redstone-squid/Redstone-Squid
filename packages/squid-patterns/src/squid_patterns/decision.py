@@ -4,11 +4,11 @@ from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass
 
 from squid_layouts.factories import actions, stack, status
-from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
-from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
 from squid_layouts.semantic import ActionDisplay, Emphasis, Tone
 from squid_layouts.text import TextLike
+from squid_patterns._content import ContentLike, normalize_content, require_key
+from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 
 
 @dataclass(frozen=True, slots=True)

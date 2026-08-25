@@ -7,6 +7,7 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.planning.navigation import SEEK_OPTION_LIMIT, NavigationContext, _seek_pages, page_select_nav
@@ -33,10 +34,10 @@ class Screen(sl.Component):
 
 
 async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -> None:
-    pattern = sl.patterns.Tabs(
+    pattern = sp.Tabs(
         [
-            sl.patterns.Tab("general", "General", sl.paragraph("general body")),
-            sl.patterns.Tab("privacy", "Privacy", sl.paragraph("privacy body")),
+            sp.Tab("general", "General", sl.paragraph("general body")),
+            sp.Tab("privacy", "Privacy", sl.paragraph("privacy body")),
         ],
         key="settings",
         heading="Settings",
@@ -50,12 +51,12 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
 
     await mount.dispatch("settings.privacy", fake_interaction())
     view = commit_render(mount)
-    assert tabs.pattern_state == sl.patterns.TabsState("privacy")
+    assert tabs.pattern_state == sp.TabsState("privacy")
     assert "privacy body" in _texts(view)
     assert "general body" not in _texts(view)
 
-    many_pattern = sl.patterns.Tabs(
-        [sl.patterns.Tab(str(index), f"Tab {index}", sl.paragraph(str(index))) for index in range(6)],
+    many_pattern = sp.Tabs(
+        [sp.Tab(str(index), f"Tab {index}", sl.paragraph(str(index))) for index in range(6)],
         key="many-tabs",
     )
     many = many_pattern.component()
@@ -66,12 +67,12 @@ async def test_tabs_component_shell_switches_content_and_adapts_large_strips() -
     assert len(select.options) == 6
 
     await many_mount.dispatch("many-tabs", fake_interaction(), ["4"])
-    assert many.pattern_state == sl.patterns.TabsState("4")
+    assert many.pattern_state == sp.TabsState("4")
 
 
 async def test_tabs_component_shell_embeds_only_selected_content() -> None:
-    tabs = sl.patterns.Tabs(
-        [sl.patterns.Tab("one", "One", Screen("one")), sl.patterns.Tab("two", "Two", Screen("two"))],
+    tabs = sp.Tabs(
+        [sp.Tab("one", "One", Screen("one")), sp.Tab("two", "Two", Screen("two"))],
         key="screens",
     ).component()
     mount = Mount(tabs, access=Everyone(), timeout=None)
@@ -83,38 +84,38 @@ async def test_tabs_component_shell_embeds_only_selected_content() -> None:
 
 
 def test_tabs_router_shell_encodes_next_state_and_input_state() -> None:
-    small = sl.patterns.Tabs(
-        [sl.patterns.Tab("one", "One", "one"), sl.patterns.Tab("two", "Two", "two")],
+    small = sp.Tabs(
+        [sp.Tab("one", "One", "one"), sp.Tab("two", "Two", "two")],
         key="tabs",
     )
-    routes: list[sl.patterns.PatternRoute[sl.patterns.TabsState]] = []
+    routes: list[sp.PatternRoute[sp.TabsState]] = []
 
-    def route(request: sl.patterns.PatternRoute[sl.patterns.TabsState]) -> str:
+    def route(request: sp.PatternRoute[sp.TabsState]) -> str:
         routes.append(request)
         return f"tabs:{request.state.selected}"
 
-    rendered = sl.patterns.RouterShell(route).render(small, small.initial_state)
+    rendered = sp.RouterShell(route).render(small, small.initial_state)
     scene = sl.planning.plan(rendered, target=squid_discord.V2_TARGET).scene
     buttons = [item for row in scene.components_v2.children if hasattr(row, "items") for item in row.items]
     assert all(isinstance(item, SceneRoutedButton) for item in buttons)
-    assert routes[-1] == sl.patterns.PatternRoute("select:two", sl.patterns.TabsState("two"), "next")
+    assert routes[-1] == sp.PatternRoute("select:two", sp.TabsState("two"), "next")
 
-    many = sl.patterns.Tabs([sl.patterns.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
-    routed = sl.patterns.RouterShell(route).render(many, many.initial_state)
+    many = sp.Tabs([sp.Tab(str(index), str(index), str(index)) for index in range(6)], key="many")
+    routed = sp.RouterShell(route).render(many, many.initial_state)
     routed_scene = sl.planning.plan(routed, target=squid_discord.V2_TARGET).scene
     assert isinstance(routed_scene.components_v2.children[0], SceneRoutedSelect)
-    assert routes[-1] == sl.patterns.PatternRoute("select", sl.patterns.TabsState("0"), "input")
+    assert routes[-1] == sp.PatternRoute("select", sp.TabsState("0"), "input")
 
 
 async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
-    menu = sl.patterns.Menu(
+    menu = sp.Menu(
         "Settings",
         [
-            sl.patterns.MenuEntry("appearance", "Appearance", sl.paragraph("appearance body")),
-            sl.patterns.MenuEntry(
+            sp.MenuEntry("appearance", "Appearance", sl.paragraph("appearance body")),
+            sp.MenuEntry(
                 "Administration",
                 Screen("administration"),
-                entries=[sl.patterns.MenuEntry("Audit", sl.paragraph("audit body"), key="audit")],
+                entries=[sp.MenuEntry("Audit", sl.paragraph("audit body"), key="audit")],
             ),
         ],
         key="settings",
@@ -127,26 +128,26 @@ async def test_menu_component_shell_drills_down_and_owns_chrome() -> None:
 
     await mount.dispatch("settings.administration", fake_interaction())
     view = commit_render(mount)
-    assert menu.pattern_state == sl.patterns.MenuState(("administration",))
+    assert menu.pattern_state == sp.MenuState(("administration",))
     assert "screen: administration" in _texts(view)
     assert "Audit" in _labels(view)
 
     await mount.dispatch("settings.audit", fake_interaction())
-    assert menu.pattern_state == sl.patterns.MenuState(("administration", "audit"))
+    assert menu.pattern_state == sp.MenuState(("administration", "audit"))
     await mount.dispatch("settings.home", fake_interaction())
-    assert menu.pattern_state == sl.patterns.MenuState()
+    assert menu.pattern_state == sp.MenuState()
     await mount.dispatch("settings.close", fake_interaction())
     assert mount._finished
 
 
 def test_menu_entry_supports_shorthand_keys_and_rejects_duplicates() -> None:
-    shorthand = sl.patterns.MenuEntry("Appearance", sl.paragraph("body"))
+    shorthand = sp.MenuEntry("Appearance", sl.paragraph("body"))
     assert shorthand.key == "appearance"
 
     with pytest.raises(ValueError, match="keys must be unique"):
-        sl.patterns.Menu(
+        sp.Menu(
             "Settings",
-            [sl.patterns.MenuEntry("Same", sl.paragraph("one")), sl.patterns.MenuEntry("Same", sl.paragraph("two"))],
+            [sp.MenuEntry("Same", sl.paragraph("one")), sp.MenuEntry("Same", sl.paragraph("two"))],
         )
 
 
@@ -205,7 +206,7 @@ class FlakyScoreSource(ScoreSource):
 
 
 def test_ranked_list_projects_entries_and_renders_an_explicit_window() -> None:
-    ranked = sl.patterns.RankedList(
+    ranked = sp.RankedList(
         [Score("Ada", 30), Score("Grace", 20), Score("Edsger", 10)],
         key="leaderboard",
         label="name",
@@ -250,7 +251,7 @@ async def test_source_ranked_list_gates_numeric_chrome_by_capability(
         (("Ada", 30), ("Grace", 20), ("Edsger", 10)),
         capabilities=capabilities,
     )
-    ranked = sl.patterns.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
+    ranked = sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2)
     mount = Mount(ranked, access=Everyone(), timeout=None)
 
     await mount.send(delivered_to(fake_message()))
@@ -270,7 +271,7 @@ async def test_source_ranked_list_fetches_in_handlers_and_uses_source_navigation
             count=sl.sources.CountPrecision.EXACT,
         ),
     )
-    ranked = sl.patterns.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
+    ranked = sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2)
     mount = Mount(ranked, access=Everyone(), timeout=None)
     await mount.send(delivered_to(fake_message()))
 
@@ -300,7 +301,7 @@ async def test_source_ranked_list_retains_stale_rows_and_retries_the_failed_requ
         ),
     )
     mount = Mount(
-        sl.patterns.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
     )
@@ -331,7 +332,7 @@ async def test_a_jumpable_source_seeks_by_page() -> None:
         capabilities=sl.sources.SourceCapabilities(offsets=True, jumpable=True, count=sl.sources.CountPrecision.EXACT),
     )
     mount = Mount(
-        sl.patterns.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
         nav=page_select_nav,
@@ -362,7 +363,7 @@ async def test_a_sequential_source_offers_no_jump_control() -> None:
         return page_select_nav(context)
 
     mount = Mount(
-        sl.patterns.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="stream", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
         nav=nav,
@@ -400,7 +401,7 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
         return (Row((Button("More", context.on_next, "more"),)),)
 
     mount = Mount(
-        sl.patterns.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2),
+        sp.SourceRankedList(source, key="leaderboard", identity=lambda entry: entry[0], page_size=2),
         access=Everyone(),
         timeout=None,
         nav=nav,
@@ -414,24 +415,22 @@ async def test_source_ranked_list_uses_the_mount_navigation_factory() -> None:
 
 
 async def test_ranked_list_keeps_global_ranks_on_later_pages() -> None:
-    ranked = sl.patterns.RankedList(
-        [("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2
-    ).component()
+    ranked = sp.RankedList([("Ada", 30), ("Grace", 20), ("Edsger", 10)], key="leaderboard", page_size=2).component()
     mount = Mount(ranked, access=Everyone(), timeout=None)
     commit_render(mount)
 
     await mount.dispatch("leaderboard.next", fake_interaction())
     view = commit_render(mount)
-    assert ranked.pattern_state == sl.patterns.RankedListState(Position(offset=1))
+    assert ranked.pattern_state == sp.RankedListState(Position(offset=1))
     assert "3. **Edsger** — 10" in _texts(view)
 
 
 def test_ranked_list_top_n_and_explicit_entries() -> None:
-    ranked = sl.patterns.RankedList(
+    ranked = sp.RankedList(
         [
-            sl.patterns.RankedEntry("Ada", 30, key="ada"),
-            sl.patterns.RankedEntry("Grace", 20, key="grace"),
-            sl.patterns.RankedEntry("Edsger", 10, key="edsger"),
+            sp.RankedEntry("Ada", 30, key="ada"),
+            sp.RankedEntry("Grace", 20, key="grace"),
+            sp.RankedEntry("Edsger", 10, key="edsger"),
         ],
         key="top",
         top_n=2,
@@ -445,4 +444,4 @@ def test_ranked_list_top_n_and_explicit_entries() -> None:
 @pytest.mark.parametrize("kwargs", [{"top_n": 0}, {"limit": 0}, {"page_size": 0}])
 def test_ranked_list_rejects_non_positive_limits(kwargs) -> None:
     with pytest.raises(ValueError):
-        sl.patterns.RankedList([], key="ranked", **kwargs)
+        sp.RankedList([], key="ranked", **kwargs)

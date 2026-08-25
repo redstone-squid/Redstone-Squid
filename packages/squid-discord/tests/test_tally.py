@@ -7,11 +7,12 @@ import pytest
 
 import squid_discord
 import squid_layouts as sl
+import squid_patterns as sp
 from squid_layouts.scene import SceneButton, SceneRoutedSelect, SceneSelect, SceneText
 
 OPTIONS = (
-    sl.patterns.TallyOption("yes", "Yes", 3, mine=True, emoji="✅"),
-    sl.patterns.TallyOption("no", "No", 1),
+    sp.TallyOption("yes", "Yes", 3, mine=True, emoji="✅"),
+    sp.TallyOption("no", "No", 1),
 )
 
 
@@ -57,7 +58,7 @@ async def test_mounted_tally_inherits_button_adaptation_and_reports_one_key() ->
 def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
     async def vote(_event: sl.SelectionEvent) -> None: ...
 
-    options = tuple(sl.patterns.TallyOption(str(index), f"Option {index}", index) for index in range(6))
+    options = tuple(sp.TallyOption(str(index), f"Option {index}", index) for index in range(6))
     result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_discord.V2_TARGET)
 
     assert any(isinstance(item, SceneSelect) for item in _walk(result.scene.body))

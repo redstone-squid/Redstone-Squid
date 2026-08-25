@@ -99,7 +99,7 @@ db-stamp-baseline:
     uv run alembic stamp 20260728_baseline
 
 test:
-    uv run pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests
+    uv run pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests packages/squid-patterns/tests
 
 test-integration:
     uv run pytest tests/integration
@@ -115,7 +115,7 @@ fuzz-api-smoke seed="0":
     uv run --locked python -m scripts.run_api_fuzz --seed {{seed}}
 
 test-all:
-    uv run pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests tests/integration
+    uv run pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests packages/squid-patterns/tests tests/integration
 
 [unix]
 fuzz-target *settings:
