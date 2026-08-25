@@ -861,16 +861,40 @@ class _Transaction:
     def reads(self) -> tuple[ObservedRead, ...]:
         return tuple(ObservedRead(self.target_id(cell), version) for cell, version in self.observed.items())
 
+    @contextmanager
+    def preparing(self) -> Iterator[None]:
+        """Re-enter this transaction's overlay, read-only, for the prepare phase.
+
+        `transaction()` closes staging before the commit gate, so by the time a participant
+        is asked to validate what the action staged, an ordinary read answers with the
+        committed value instead -- the one thing prepare must not be told. Reinstating the
+        overlay is what makes "everything fallible happens before publication" true of reads
+        as well as of writes.
+
+        Read-only, through the two mechanisms that already exist. `block_writes` stops
+        anything staging a write or enlisting a further participant, so prepare cannot grow
+        the action it is validating. `relaxed_read` keeps these reads out of `observed`,
+        which is already frozen: `check_preconditions` has run and `reads()` is about to be
+        called, and neither should be told about a read the framework itself provoked.
+        """
+        token = _CURRENT.set(self)
+        try:
+            with block_writes("a transaction participant cannot write while preparing"), relaxed_read():
+                yield
+        finally:
+            _CURRENT.reset(token)
+
     def commit(self) -> ActionCommit:
         """Prepare everything, publish synchronously, and return the immutable commit."""
         self.check_preconditions()
         view = _FrozenTransactionView(self)
         prepared: list[tuple[ActionParticipant[Any], Any]] = []
         try:
-            for participant in self.participants.values():
-                _checkpoint("commit.before_participant_prepare")
-                prepared.append((participant, participant.prepare(view)))
-                _checkpoint("commit.after_participant_prepare")
+            with self.preparing():
+                for participant in self.participants.values():
+                    _checkpoint("commit.before_participant_prepare")
+                    prepared.append((participant, participant.prepare(view)))
+                    _checkpoint("commit.after_participant_prepare")
         except BaseException as error:
             self.abort(error, prepared)
             raise
