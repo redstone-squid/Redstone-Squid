@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Awaitable, Callable, Hashable, Iterator, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Collection, Hashable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -538,17 +538,17 @@ class Session:
             return self._membership(user_id, MembershipStatus.CONFLICT)
         return None
 
-    def _quota_reached(self, user_id: int) -> bool:
+    def _quota_reached(self, user_id: int, *, excluding: Collection[Session] = ()) -> bool:
         """Whether admitting `user_id` here would exceed this domain's per-user quota.
 
         Counted by scanning the registry's live sessions rather than from a maintained index:
         a scan cannot go stale when a session finishes, loses its claim, or is recovered, and
         the population is small. `user_id` is never a member of this session yet, so this one
-        is not among those counted.
+        is not among those counted, and neither is anything in `excluding`.
         """
         if self._quota is None:
             return False
-        held = self._registry.sessions_for_member(user_id, domain=self._domain)
+        held = self._registry.sessions_for_member(user_id, domain=self._domain, excluding=excluding)
         return len(held) >= self._quota
 
     def _membership(self, user_id: int, status: MembershipStatus) -> MembershipResult:
@@ -789,17 +789,26 @@ class SessionRegistry:
         """Return the logical session that owns `mount`, if this registry knows it."""
         return self._by_mount.get(mount)
 
-    def sessions_for_member(self, user_id: int, *, domain: str | None = None) -> tuple[Session, ...]:
+    def sessions_for_member(
+        self, user_id: int, *, domain: str | None = None, excluding: Collection[Session] = ()
+    ) -> tuple[Session, ...]:
         """Every live session `user_id` is an explicit member of, oldest first.
 
         Restrict to one membership family with `domain`. This answers "what is this user in
         right now?" for quotas, for a "you are already in a game" affordance, and for
         devtools.
+
+        `excluding` answers it as of a pending replacement instead: sessions being retired are
+        still registered while their replacement is being opened, and counting them would count
+        a seat twice.
         """
+        retiring = {session.id for session in excluding}
         return tuple(
             session
             for session in self._sessions
-            if user_id in session.members and (domain is None or session.domain == domain)
+            if user_id in session.members
+            and (domain is None or session.domain == domain)
+            and session.id not in retiring
         )
 
     def _member_lock(self, user_id: int) -> AbstractAsyncContextManager[None]:
@@ -885,8 +894,10 @@ class SessionRegistry:
                     return Rejected(summaries, RejectionReason.PROTECTED)
 
         # Advisory: the authoritative check is under the member lock below, but refusing
-        # here means a doomed open costs no Discord message.
-        if actor_id is not None and newcomer._quota_reached(actor_id):
+        # here means a doomed open costs no Discord message. Counted against the membership
+        # this open will leave behind, because the victims below are still registered and a
+        # caller replacing their own session would otherwise be counted in two seats at once.
+        if actor_id is not None and newcomer._quota_reached(actor_id, excluding=victims):
             return Rejected(summaries, RejectionReason.QUOTA_REACHED)
 
         # Indexed before delivery, because delivery renders: a root component that draws
@@ -904,7 +915,7 @@ class SessionRegistry:
         async with AsyncExitStack() as commit:
             if actor_id is not None:
                 await commit.enter_async_context(self._member_lock(actor_id))
-                if newcomer._quota_reached(actor_id):
+                if newcomer._quota_reached(actor_id, excluding=victims):
                     self._unindex_mount(newcomer, mount)
                     await mount.finish()
                     return Rejected(summaries, RejectionReason.QUOTA_REACHED)
