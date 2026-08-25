@@ -45,11 +45,25 @@ class ChallengeRunner:
 
     Without a running drain, approvals queue silently and nothing resumes -- which is the
     honest failure for a host that wired the presenter but forgot the task.
+
+    `concurrency` bounds how many approved presses run at once and `capacity` how many wait;
+    past both, `resume` drops. A press that never returns holds its slot, so a host that
+    resumes work of unbounded duration should give it a timeout of its own.
     """
 
-    def __init__(self, *, capacity: int = 256) -> None:
+    def __init__(self, *, capacity: int = 256, concurrency: int = 16) -> None:
+        if capacity <= 0 or concurrency <= 0:
+            message = "challenge runner capacity and concurrency must be positive"
+            raise ValueError(message)
         self._queue: asyncio.Queue[ResumedPress] = asyncio.Queue(maxsize=capacity)
+        self._limit = asyncio.Semaphore(concurrency)
+        self._active = 0
         self._running = False
+
+    @property
+    def active_count(self) -> int:
+        """Return how many approved presses are running right now."""
+        return self._active
 
     def resume(self, press: ResumedPress) -> None:
         """Queue an approved press. Never blocks, and never runs it here."""
@@ -57,7 +71,8 @@ class ChallengeRunner:
             self._queue.put_nowait(press)
         except asyncio.QueueFull:
             # Dropped rather than awaited: this is called from a handler holding an open
-            # transaction, and the actor can press again.
+            # transaction, and the actor can press again. Full now means genuinely saturated
+            # -- `concurrency` presses running and `capacity` more already waiting.
             logger.warning("challenge runner is full; an approved press was dropped")
 
     async def run(self) -> None:
@@ -70,20 +85,27 @@ class ChallengeRunner:
             async with asyncio.TaskGroup() as tasks:
                 while True:
                     press = await self._queue.get()
+                    # Taken before the task is started, so the loop stops dequeuing while
+                    # saturated. Without it the queue bounds nothing: every approval was
+                    # dequeued and started immediately, so N approvals meant N presses at once.
+                    await self._limit.acquire()
                     # Started from this task, not from the approving one: the resumed press
                     # inherits the context this loop was created in, which has no transaction.
                     tasks.create_task(self._carry(press))
         finally:
             self._running = False
 
-    @staticmethod
-    async def _carry(press: ResumedPress) -> None:
+    async def _carry(self, press: ResumedPress) -> None:
+        self._active += 1
         try:
             await press()
         except Exception:
             # A resumed press routes its own application failures through the mount's error
             # hook, so anything arriving here is the framework's problem, not the actor's.
             logger.exception("a resumed press failed outside its own error handling")
+        finally:
+            self._active -= 1
+            self._limit.release()
 
 
 @dataclass(slots=True)
