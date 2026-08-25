@@ -43,7 +43,9 @@ The package is layered:
   executions; every retry receives a fresh execution ID and terminal status.
 
 A publishing transaction validates every strongly read addressed cell immediately before its
-prepare/apply commit point. `relaxed_read()` opts a read out of that validation;
+prepare/apply commit point. A read is strong when the action also writes that cell, when it was
+taken inside `strong_read()`, or when it was pinned with `require_version()`; a read-only read is
+not validated by default. `relaxed_read()` opts a read out of that validation;
 `untracked()` independently opts out of dependency capture. Commit and rollback aftermath hooks are
 failure-isolated and cannot mutate through a completed transaction. Recovery starts a new causal action.
 

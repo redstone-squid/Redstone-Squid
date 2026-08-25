@@ -124,21 +124,28 @@ and tags. A mixed local/register/replicated inverse prepares all changes togethe
 any participant conflicts.
 
 Remote bytes are checked and decoded before admission, then imported as a `REMOTE` action under the same
-gate. A local action that read document version 10 and intends to publish state conflicts if a remote
-import advances the document before local commit—even though the backend can merge the document data.
-Convergence does not prove that the business decision derived from version 10 is still valid.
+gate. A local action that *strongly* read document version 10 and intends to publish state conflicts if a
+remote import advances the document before local commit—even though the backend can merge the document
+data. Convergence does not prove that the business decision derived from version 10 is still valid.
 
-For example, a receiver admitted outside the local transaction can land between its read and commit:
+Strongly is the operative word, and it is the same rule as for any other addressed cell: a read becomes a
+commit precondition when the action also writes that cell, when it was taken inside `strong_read()`, or
+when it was pinned with an explicit `require_version()`. A read-only replicated read outside
+`strong_read()` does not block an unrelated local write. An action that branches on a document it will
+not write has to say so:
 
 ```python
 # local decision action
-with transaction():
-    if target.counter("votes").value < 10:  # strong document-version read
-        receiver_checkpoint()              # the receiver imports an envelope here
+with transaction(), strong_read():
+    if target.counter("votes").value < 10:  # now a document-version precondition
+        receiver_checkpoint()               # the receiver imports an envelope here
         panel.accepted = True               # commit raises ReactiveConflictError
 
 assert panel.accepted is False
 ```
+
+Without the `strong_read()`, the same code commits and `panel.accepted` is `True`: the counter was
+consulted, not written, so nothing was promised about it.
 
 The deterministic test harness drives that checkpoint in tests; production receivers decode and route
 the envelope before entering the same synchronous commit gate.

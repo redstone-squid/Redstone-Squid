@@ -561,9 +561,10 @@ rendered, reconciled each time it stages one. The mount that *made* the write re
 click itself rather than waiting for the bus, so a panel writing shared state feels no
 different from one writing local state — and needs no reactor to do it. Every shared value an action
 strongly reads is guarded by its version when that action publishes anything, so write skew and
-A→B→A lineage changes raise `sl.runtime.ReactiveConflictError` rather than overwriting. Use
-`relaxed_read()` only when a read deliberately need not remain valid at commit; `untracked()` controls
-reactive subscription and is independent. History covers shared and local writes in one atomic,
+A→B→A lineage changes raise `sl.runtime.ReactiveConflictError` rather than overwriting. A read is
+strong when the action also writes that cell, or when it was taken inside `strong_read()`; a
+read-only read is not validated by default. Use `relaxed_read()` to opt back out of a strong read;
+`untracked()` controls reactive subscription and is independent. History covers shared and local writes in one atomic,
 version-conditional inverse.
 
 Collaborative/offline data is a separate optional `squid-replicated` package. `state()` and `Shared`
