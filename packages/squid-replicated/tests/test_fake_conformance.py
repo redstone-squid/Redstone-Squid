@@ -12,6 +12,7 @@ from squid_replicated import (
     PreparedReplicatedInverse,
     ReplicatedChangeToken,
     ReplicatedClosedError,
+    ReplicatedResyncRequiredError,
     ReplicatedScope,
     ReplicatedUpdate,
 )
@@ -527,15 +528,50 @@ def test_remote_deduplication_retention_is_bounded() -> None:
 
 
 def test_pending_outbound_retention_is_bounded() -> None:
-    source = ReplicatedScope("source").open("project")
+    document = ReplicatedScope("source").open("project")
+
+    for _ in range(1_005):
+        with transaction():
+            document.counter("votes").increment(1)
+
+    assert document.pending_update_count == 1_000
+    assert document.dropped_update_count == 5
+
+
+def test_outbound_overflow_requires_a_resync_before_draining_again() -> None:
+    document = ReplicatedScope("source").open("project")
+    peer = ReplicatedScope("peer").open("project")
+
+    for _ in range(1_005):
+        with transaction():
+            document.counter("votes").increment(1)
+
+    assert document.resync_required
+    with pytest.raises(ReplicatedResyncRequiredError, match="dropped 5 outbound updates"):
+        document.drain_updates()
+
+    peer.import_update(document.export_since())
+    document.acknowledge_resync()
+
+    assert peer.counter("votes").value == 1_005
+    assert document.drain_updates() == ()
+    assert document.dropped_update_count == 0
+    assert document.resync_required is False
     with transaction():
-        source.counter("votes").increment(1)
-    update = source.drain_updates()[0]
-    target = ReplicatedScope("target").open("project")
+        document.counter("votes").increment(1)
+    assert len(document.drain_updates()) == 1
 
-    target._pending_updates.extend(update for _ in range(1_005))
 
-    assert target.pending_update_count == 1_000
+def test_a_document_within_its_outbound_bound_never_demands_a_resync() -> None:
+    document = ReplicatedScope("source").open("project")
+
+    for _ in range(1_000):
+        with transaction():
+            document.counter("votes").increment(1)
+
+    assert document.resync_required is False
+    assert document.dropped_update_count == 0
+    assert len(document.drain_updates()) == 1_000
 
 
 async def test_history_coordinates_cell_and_semantic_replicated_inverse() -> None:

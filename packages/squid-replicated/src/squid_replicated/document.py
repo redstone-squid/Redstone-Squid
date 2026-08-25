@@ -43,6 +43,15 @@ class ReplicatedClosedError(RuntimeError):
     """A replicated scope or document has been closed and no longer grants mutation authority."""
 
 
+class ReplicatedResyncRequiredError(RuntimeError):
+    """The bounded outbound buffer overflowed, so what it still holds is an incomplete history.
+
+    Recover by exporting from the peer's version and acknowledging the resync. Nothing is lost
+    permanently -- the operation log can still answer any version -- but the buffer alone can
+    no longer carry a peer forward.
+    """
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedReplicatedInverse:
     """An opaque semantic inverse tied to the backend-history generation that planned it."""
@@ -204,6 +213,8 @@ class ReplicatedDocument:
         self._seen_updates: deque[str] = deque(maxlen=_DEDUP_LIMIT)
         self._seen_update_ids: set[str] = set()
         self._token_epoch = 0
+        self._dropped_updates = 0
+        self._resync_required = False
 
     @property
     def identity(self) -> str:
@@ -218,6 +229,16 @@ class ReplicatedDocument:
     def pending_update_count(self) -> int:
         """Return the bounded number of committed envelopes awaiting host transport."""
         return len(self._pending_updates)
+
+    @property
+    def resync_required(self) -> bool:
+        """Whether outbound overflow has left the pending buffer unable to carry a peer forward."""
+        return self._resync_required
+
+    @property
+    def dropped_update_count(self) -> int:
+        """Return how many outbound updates overflow discarded since the last acknowledged resync."""
+        return self._dropped_updates
 
     @property
     def subscription_count(self) -> int:
@@ -307,11 +328,34 @@ class ReplicatedDocument:
         return unsubscribe
 
     def drain_updates(self) -> tuple[ReplicatedUpdate, ...]:
-        """Take committed outbound updates retained for an application-owned transport."""
+        """Take committed outbound updates retained for an application-owned transport.
+
+        Raises :class:`ReplicatedResyncRequiredError` once this bounded buffer has overflowed,
+        rather than returning a stream known to have a hole in it. Recover with
+        :meth:`export_since` from the peer's version, then :meth:`acknowledge_resync`.
+        :meth:`subscribe_updates` is the delivery path that never drops.
+        """
         self._ensure_open()
+        if self._resync_required:
+            message = (
+                f"replicated document {self.document_id!r} dropped {self._dropped_updates} outbound "
+                "updates; export from the peer's version and acknowledge the resync"
+            )
+            raise ReplicatedResyncRequiredError(message)
         updates = tuple(self._pending_updates)
         self._pending_updates.clear()
         return updates
+
+    def acknowledge_resync(self) -> None:
+        """Clear an overflow, discarding the partial updates it left behind.
+
+        Call once :meth:`export_since` has carried the peer across the gap; the retained
+        updates go with it because that export already supersedes them.
+        """
+        self._ensure_open()
+        self._pending_updates.clear()
+        self._dropped_updates = 0
+        self._resync_required = False
 
     def expire_history_tokens(self) -> None:
         """Expire retained inverse authority before backend compaction discards its metadata."""
@@ -325,6 +369,8 @@ class ReplicatedDocument:
         self._pending_updates.clear()
         self._seen_updates.clear()
         self._seen_update_ids.clear()
+        self._dropped_updates = 0
+        self._resync_required = False
 
     def _participant(self) -> _ReplicationParticipant:
         self._ensure_open()
@@ -349,6 +395,12 @@ class ReplicatedDocument:
             payload=self.engine.encode_update(prepared.operations),
             origin_action_id=None if context is None else context.action_id,
         )
+        if len(self._pending_updates) == _PENDING_UPDATE_LIMIT:
+            # The deque would evict its oldest entry without a word. The loss itself is
+            # recoverable -- export_since can still answer any version -- so what has to be
+            # preserved is the fact that it happened.
+            self._dropped_updates += 1
+            self._resync_required = True
         self._pending_updates.append(update)
         for callback in tuple(self._update_listeners):
             callback(update)
