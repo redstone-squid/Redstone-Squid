@@ -29,7 +29,12 @@ def test_scheduler_reproduces_read_a_write_b_write_skew() -> None:
     schedule = InterleavingHarness()
     schedule.at("commit.before_validation", lambda: setattr(model, "source", "B"))
 
-    with schedule.installed(), pytest.raises(ReactiveConflictError), transaction(), strong_read():
+    with (
+        schedule.installed(),
+        pytest.raises(ReactiveConflictError, match=r"Model\('model'\)\.source changed"),
+        transaction(),
+        strong_read(),
+    ):
         model.result = model.source.lower()
 
     assert model.source == "B"
