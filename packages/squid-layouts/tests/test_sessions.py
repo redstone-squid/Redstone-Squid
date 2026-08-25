@@ -582,6 +582,46 @@ class TestQuota:
         assert second_mount.handle is None
         assert len(tuple(registry.active())) == 1
 
+    async def test_reopening_the_same_key_at_quota_replaces_rather_than_refuses(self) -> None:
+        registry = SessionRegistry()
+        first_mount, second_mount = a_mount(), a_mount()
+        first = await registry.open(first_mount, to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+
+        second = await registry.open(second_mount, to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+
+        assert isinstance(first, Opened) and isinstance(second, Opened)
+        assert first_mount.finished
+        assert registry.get(self.GUILD_ONE) == (second.session,)
+        assert len(tuple(registry.active())) == 1
+
+    async def test_a_replacement_that_retires_nothing_is_still_refused(self) -> None:
+        registry = SessionRegistry()
+        held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        assert isinstance(held, Opened)
+
+        elsewhere = await registry.open(a_mount(), to_message(), key=self.GUILD_TWO, actor_id=7, quota=1)
+
+        assert isinstance(elsewhere, Rejected)
+        assert elsewhere.reason is RejectionReason.QUOTA_REACHED
+
+    async def test_a_protected_incumbent_is_refused_before_the_quota_is_consulted(self) -> None:
+        registry = SessionRegistry()
+        first = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=7, quota=1)
+        assert isinstance(first, Opened)
+
+        second = await registry.open(
+            a_mount(),
+            to_message(),
+            key=self.GUILD_ONE,
+            actor_id=8,
+            quota=1,
+            policy=SessionPolicy(protect=ProtectCrossUserAttachments()),
+        )
+
+        assert isinstance(second, Rejected)
+        assert second.reason is RejectionReason.PROTECTED
+        assert registry.get(self.GUILD_ONE) == (first.session,)
+
     async def test_a_quota_refuses_a_join_that_would_exceed_it(self) -> None:
         registry = SessionRegistry()
         held = await registry.open(a_mount(), to_message(), key=self.GUILD_ONE, actor_id=8, quota=1)
