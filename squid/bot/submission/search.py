@@ -13,6 +13,7 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
@@ -292,16 +293,16 @@ class SearchCog[
                 return latest, await self.bot.for_build(latest).render_node()
 
             component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
-            navigator = sl.discord.navigation.Navigator(component)
+            navigator = sd.navigation.Navigator(component)
             mount = create_mount(
                 navigator,
                 source=interaction,
-                access=sl.discord.Everyone(),
+                access=sd.Everyone(),
                 locale=locale,
                 timeout=300,
                 reactor=self.bot.layout_reactor,
             )
-            await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
+            await mount.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return
 
         await self._view_build_prefix(ctx, build_id)

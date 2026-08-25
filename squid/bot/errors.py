@@ -9,7 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import squid_layouts as sl
+import squid_discord as sd
 from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_layout, reply_presentation, respond_presentation
 from squid.bot.utils.permissions import PermissionNodeRequired
@@ -30,7 +30,7 @@ from squid.permissions.domain import CATALOGUE
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
-type ErrorResponder = Callable[[sl.discord.presentation.DiscordPresentation], Awaitable[None]]
+type ErrorResponder = Callable[[sd.presentation.DiscordPresentation], Awaitable[None]]
 
 
 def _reports_from(client: object) -> ErrorReportService | None:
@@ -52,7 +52,7 @@ class ErrorPresentation:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_presentation(self) -> sl.discord.presentation.DiscordPresentation:
+    def to_presentation(self) -> sd.presentation.DiscordPresentation:
         """Build the complete Components V2 presentation for this error."""
         return error_layout(self.title, self.detail)
 
@@ -318,7 +318,7 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    async def respond(presentation: sl.discord.presentation.DiscordPresentation) -> None:
+    async def respond(presentation: sd.presentation.DiscordPresentation) -> None:
         await reply_presentation(
             context,
             presentation,
@@ -348,7 +348,7 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    async def respond(presentation: sl.discord.presentation.DiscordPresentation) -> None:
+    async def respond(presentation: sd.presentation.DiscordPresentation) -> None:
         await respond_presentation(interaction, presentation)
 
     command = interaction.command
@@ -370,7 +370,7 @@ async def record_operation_error(
     error: BaseException,
     *,
     locale: str | None,
-    receipt: sl.discord.delivery.DeliveryReceipt | None,
+    receipt: sd.delivery.DeliveryReceipt | None,
     presented: bool,
     reports: ErrorReportService | None = None,
 ) -> None:

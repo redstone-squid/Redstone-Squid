@@ -16,6 +16,7 @@ from typing import Any, Literal
 import discord
 from discord.ext.commands import Context
 
+import squid_discord as sd
 import squid_layouts as ui
 from squid.core.i18n import catalog_for, negotiate_locale
 
@@ -24,7 +25,7 @@ DISCORD_YELLOW = 0xFAA61A
 DISCORD_GREEN = 0x43B581
 DISCORD_BLUE = 0x5865F2
 DISCORD_GREY = 0x4F545C
-_DEFAULT_EXPIRY = ui.discord.PauseUpdates()
+_DEFAULT_EXPIRY = sd.PauseUpdates()
 
 __all__ = [
     "CHROME",
@@ -166,7 +167,7 @@ type Visibility = Private | Literal["public", "personal"]
 
 async def reply(
     ctx: Context[Any],
-    presentation: ui.discord.presentation.DiscordPresentation,
+    presentation: sd.presentation.DiscordPresentation,
     *,
     visibility: Visibility = "public",
     locale: str | None = None,
@@ -190,18 +191,18 @@ async def reply(
             files=files,
         )
     ephemeral = visibility == "personal" and personal(ctx)
-    receipt = await ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
+    receipt = await sd.reply_to(ctx, ephemeral=ephemeral, files=files)(presentation)
     return receipt.message
 
 
 async def reply_presentation(
     ctx: Context[Any],
-    presentation: ui.discord.presentation.DiscordPresentation,
+    presentation: sd.presentation.DiscordPresentation,
     *,
     visibility: Visibility = "public",
     allowed_mentions: discord.AllowedMentions | None = None,
     files: Sequence[discord.File] = (),
-) -> ui.discord.delivery.DeliveryReceipt:
+) -> sd.delivery.DeliveryReceipt:
     """Deliver a complete Squid presentation through the selected command audience."""
     from squid.bot.utils.visibility import personal
 
@@ -216,11 +217,11 @@ async def reply_presentation(
             files=files,
         )
         if message is None:
-            raise ui.discord.delivery.DeliveryAbandoned
-        handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
-        return ui.discord.delivery.DeliveryReceipt(message, handle)
+            raise sd.delivery.DeliveryAbandoned
+        handle = sd.delivery.handle_for(message, mode=presentation.mode)
+        return sd.delivery.DeliveryReceipt(message, handle)
 
-    destination = ui.discord.reply_to(
+    destination = sd.reply_to(
         ctx,
         ephemeral=visibility == "personal" and personal(ctx),
         files=files,
@@ -231,14 +232,14 @@ async def reply_presentation(
 
 async def respond_presentation(
     interaction: discord.Interaction[Any],
-    presentation: ui.discord.DiscordPresentation,
+    presentation: sd.DiscordPresentation,
     *,
     ephemeral: bool = True,
     wait: bool = False,
     allowed_mentions: discord.AllowedMentions | None = None,
-) -> ui.discord.delivery.DeliveryReceipt:
+) -> sd.delivery.DeliveryReceipt:
     """Deliver a complete presentation as an interaction response or follow-up."""
-    return await ui.discord.respond_to(
+    return await sd.respond_to(
         interaction,
         ephemeral=ephemeral,
         wait=wait,
@@ -252,7 +253,7 @@ def destination(
     visibility: Visibility = "public",
     locale: str | None = None,
     files: Sequence[discord.File] = (),
-) -> ui.discord.Destination:
+) -> sd.Destination:
     """Where a mount's first message goes, in the same vocabulary `reply` uses.
 
     The audience rule stays host-side: "public" answers in the channel, "personal" is
@@ -267,11 +268,11 @@ def destination(
 
     if isinstance(visibility, Private):
         if ctx.interaction is not None:
-            return ui.discord.reply_to(ctx, ephemeral=True, files=files)
+            return sd.reply_to(ctx, ephemeral=True, files=files)
 
         async def privately(
-            presentation: ui.discord.presentation.DiscordPresentation,
-        ) -> ui.discord.delivery.DeliveryReceipt:
+            presentation: sd.presentation.DiscordPresentation,
+        ) -> sd.delivery.DeliveryReceipt:
             message = await deliver_privately(
                 ctx,
                 presentation,
@@ -280,14 +281,14 @@ def destination(
                 files=files,
             )
             if message is None:
-                raise ui.discord.delivery.DeliveryAbandoned
-            handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
-            return ui.discord.delivery.DeliveryReceipt(message, handle)
+                raise sd.delivery.DeliveryAbandoned
+            handle = sd.delivery.handle_for(message, mode=presentation.mode)
+            return sd.delivery.DeliveryReceipt(message, handle)
 
         return privately
 
     ephemeral = visibility == "personal" and personal(ctx)
-    return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
+    return sd.reply_to(ctx, ephemeral=ephemeral, files=files)
 
 
 def contribute(
@@ -297,13 +298,13 @@ def contribute(
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     locale: str | None = None,
     strict: bool = False,
-) -> ui.discord.fragments.AttachedFragment:
+) -> sd.fragments.AttachedFragment:
     """Contribute a Squid region to a hand-assembled view, through the bot's chrome.
 
     `followed_by` carries the rows the host adds after the Squid region: they are costed
     into the plan and placed here, so the view proven legal is the view that gets sent.
     """
-    return ui.discord.contribute(
+    return sd.contribute(
         nodes,
         to=to,
         followed_by=followed_by,
@@ -317,10 +318,10 @@ def render_item(
     node: ui.LayoutNode,
     *,
     locale: str | None = None,
-    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
+    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
 ) -> discord.ui.Item[Any]:
     """Render one node to a detached item through the bot's chrome and catalogue."""
-    return ui.discord.render_item(
+    return sd.render_item(
         node,
         chrome=CHROME,
         localization=localization_for(locale),
@@ -333,10 +334,10 @@ def render_static(
     *,
     locale: str | None = None,
     strict: bool = False,
-    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
-) -> ui.discord.presentation.DiscordPresentation:
+    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
+) -> sd.presentation.DiscordPresentation:
     """Render a sessionless document through the bot's chrome and catalogue."""
-    return ui.discord.render_static(
+    return sd.render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
@@ -350,10 +351,10 @@ def render_presentation(
     *,
     locale: str | None = None,
     strict: bool = False,
-    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
-) -> ui.discord.presentation.DiscordPresentation:
+    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
+) -> sd.presentation.DiscordPresentation:
     """Render a complete presentation for framework-owned delivery."""
-    return ui.discord.render_static(
+    return sd.render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
@@ -378,12 +379,12 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
-HOST_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+HOST_DEFAULTS = sd.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
 """What the bot installs with: the chrome and error handling every panel shares.
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
 which needs the session registry and the background runner -- is assembled by
-`sl.discord.install` and reached back through `LayoutHost.of`, so a panel built from a click
+`sd.install` and reached back through `LayoutHost.of`, so a panel built from a click
 gets the same wiring as one opened through `bot.mounts`.
 """
 
@@ -391,14 +392,14 @@ gets the same wiring as one opened through `bot.mounts`.
 def create_mount(
     component: ui.Component,
     *,
-    source: ui.discord.host.HostSource,
-    access: ui.discord.AccessPolicy,
+    source: sd.host.HostSource,
+    access: sd.AccessPolicy,
     locale: str | None = None,
     chrome: ui.chrome.Chrome | None = None,
     timeout: float = 180,
-    reactor: ui.discord.Reactor | None = None,
-    expiry: ui.discord.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
-) -> ui.discord.Mount:
+    reactor: sd.Reactor | None = None,
+    expiry: sd.mount.ExpiryPolicy | None = _DEFAULT_EXPIRY,
+) -> sd.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler.
 
     `source` is whatever names the bot -- the client, the interaction, or the command context
@@ -408,7 +409,7 @@ def create_mount(
     `reactor` stays explicit rather than inherited from the host: a panel is refreshed only by
     its own clicks unless it says it reacts to something else.
     """
-    defaults = ui.discord.LayoutHost.of(source).defaults
+    defaults = sd.LayoutHost.of(source).defaults
     if chrome is not None:
         defaults = defaults.replace(chrome=chrome)
     return defaults.mount(
@@ -425,12 +426,12 @@ async def send_component(
     ctx: Context[Any],
     component: ui.Component,
     *,
-    access: ui.discord.AccessPolicy,
+    access: sd.AccessPolicy,
     locale: str | None = None,
     timeout: float = 180,
     visibility: Visibility = "public",
-    reactor: ui.discord.Reactor | None = None,
-) -> ui.discord.Mount:
+    reactor: sd.Reactor | None = None,
+) -> sd.Mount:
     """Mount a component and send it as the reply to a command.
 
     Pass ``reactor`` for a panel that must react to something another mount changes -- a
@@ -489,12 +490,12 @@ class PagedList(ui.Component):
         total = len(self.entries)
         return L(t"Page {page} of {pages} · {total} in total")
 
-    async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> ui.discord.Mount:
+    async def send(self, ctx: Context[Any], *, visibility: Visibility = "public") -> sd.Mount:
         """Send the first page bound to a mount that owns paging, access, and expiry."""
         return await send_component(
             ctx,
             self,
-            access=ui.discord.Owner(ctx.author.id) if ctx.author else ui.discord.Everyone(),
+            access=sd.Owner(ctx.author.id) if ctx.author else sd.Everyone(),
             locale=self.locale,
             visibility=visibility,
         )
@@ -548,7 +549,7 @@ def card_layout(
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
     locale: str | None = None,
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     """Create a standalone V2 card."""
     return render_static(
         [
@@ -568,7 +569,7 @@ def card_layout(
 
 def text_layout(
     content: ui.TextLike, *, accent_colour: int | None = None, locale: str | None = None
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     """Create a simple V2 text response."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
@@ -589,7 +590,7 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 
 def error_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     return render_static([error_node(title, description)], locale=locale)
 
 
@@ -604,7 +605,7 @@ def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.Layout
 
 def warning_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     return card_layout(
         _prefixed(":warning: ", title),
         description,
@@ -615,7 +616,7 @@ def warning_layout(
 
 def info_layout(
     title: ui.TextLike, description: ui.TextLike | None, *, locale: str | None = None
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     return render_static([info_node(title, description)], locale=locale)
 
 
@@ -631,7 +632,7 @@ def help_layout(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     locale: str | None = None,
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     return card_layout(
         title,
         description,
@@ -649,7 +650,7 @@ def link_layout(
     description: ui.TextLike | None = None,
     label: ui.TextLike = _OPEN_LINK,
     locale: str | None = None,
-) -> ui.discord.presentation.DiscordPresentation:
+) -> sd.presentation.DiscordPresentation:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
         ui.heading(title),

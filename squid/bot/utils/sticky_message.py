@@ -9,8 +9,8 @@ from typing import Any, override
 import discord
 from discord import TextChannel
 
-import squid_layouts as sl
-from squid_layouts.discord import send_to
+import squid_discord as sd
+from squid_discord import send_to
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,7 @@ class StickyMessage(abc.ABC):
         return self._locks[channel_id]
 
     @abc.abstractmethod
-    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+    async def render(self, channel: TextChannel) -> sd.presentation.DiscordPresentation:
         """Render the presentation to display in the sticky message."""
         ...
 
@@ -148,7 +148,7 @@ class FunctionalStickyMessage(StickyMessage):
 
     def __init__(
         self,
-        renderer: Callable[[TextChannel], Coroutine[Any, Any, sl.discord.presentation.DiscordPresentation]],
+        renderer: Callable[[TextChannel], Coroutine[Any, Any, sd.presentation.DiscordPresentation]],
         *,
         stale_threshold: int = DEFAULT_STALE_THRESHOLD,
         debounce_delay: float = DEFAULT_DEBOUNCE_DELAY,
@@ -157,5 +157,5 @@ class FunctionalStickyMessage(StickyMessage):
         self._renderer = renderer
 
     @override
-    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+    async def render(self, channel: TextChannel) -> sd.presentation.DiscordPresentation:
         return await self._renderer(channel)

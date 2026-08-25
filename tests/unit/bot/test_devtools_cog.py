@@ -5,8 +5,8 @@ from typing import Any, cast
 from unittest.mock import AsyncMock
 
 from squid.bot.devtools import _authorized, setup
-from squid_layouts.discord import Reactor, SessionRegistry
-from squid_layouts.discord.devtools import DevTools
+from squid_discord import Reactor, SessionRegistry
+from squid_discord.devtools import DevTools
 from squid_layouts.profiling import MemoryProfiler
 
 

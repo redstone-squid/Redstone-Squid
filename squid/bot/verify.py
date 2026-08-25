@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
+import squid_discord as sd
 import squid_layouts as sl
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
@@ -86,11 +87,11 @@ class MergeConfirmation(sl.Component):
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
+    def mount(self, *, source: sd.host.HostSource) -> sd.Mount:
         return create_mount(
             self,
             source=source,
-            access=sl.discord.Owner(self.author_id),
+            access=sd.Owner(self.author_id),
             locale=self.locale,
             timeout=self._timeout,
         )
