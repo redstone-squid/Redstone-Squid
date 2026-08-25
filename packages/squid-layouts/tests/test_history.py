@@ -154,6 +154,36 @@ async def test_fresh_undo_is_rejected_after_outer_handler_staged_work() -> None:
 
     assert subject.page == 4
     assert subject.open is False
+    # A rejected admission started no inverse, so the entry is still undoable.
+    assert subject.history.entries[0].state is HistoryEntryState.READY
+    assert subject.history.can_undo
+
+    result = await subject.history.undo()
+
+    assert result.applied
+    assert subject.page == 1
+
+
+async def test_fresh_redo_is_rejected_after_outer_handler_staged_work() -> None:
+    subject, _ = panel()
+    with transaction():
+        subject.history.record("page")
+        subject.page = 4
+    assert (await subject.history.undo()).applied
+
+    with pytest.raises(RuntimeError, match="staged changes"), transaction():
+        subject.open = True
+        await subject.history.redo()
+
+    assert subject.page == 1
+    assert subject.open is False
+    assert subject.history.redoable[0].state is HistoryEntryState.UNDONE
+    assert subject.history.can_redo
+
+    result = await subject.history.redo()
+
+    assert result.applied
+    assert subject.page == 4
 
 
 async def test_later_same_target_write_conflicts_without_clobbering() -> None:
@@ -441,6 +471,31 @@ async def test_compensation_intent_and_local_inverse_are_causal_actions() -> Non
     assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
     operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
     assert [event.status for event in operation_events] == ["reverting", "external_succeeded", "reverted"]
+
+
+async def test_fresh_compensation_is_rejected_after_outer_handler_staged_work() -> None:
+    subject, _ = panel()
+    calls: list[str] = []
+
+    async def compensate(key: str) -> None:
+        calls.append(key)
+
+    with transaction():
+        subject.history.record("page", compensate=CompensationSpec(compensate, lambda commit: "page"))
+        subject.page = 4
+
+    with pytest.raises(RuntimeError, match="staged changes"), transaction():
+        subject.open = True
+        await subject.history.undo()
+
+    assert calls == []
+    assert subject.history.entries[0].state is HistoryEntryState.READY
+    assert subject.history.can_undo
+
+    result = await subject.history.undo()
+
+    assert result.applied
+    assert calls == ["page"]
 
 
 async def test_compensation_cancellation_is_retained_and_propagated() -> None:
