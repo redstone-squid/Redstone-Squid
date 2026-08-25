@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock
 
 from squid.bot.sync.reconciler import ReconciliationCog
 from squid.sync import ReconciliationAction, ReconciliationJob, ReconciliationResource
+from squid.topics import resource_topic
 
 
 def _job(
@@ -31,7 +32,9 @@ def _job(
 def _cog() -> tuple[ReconciliationCog, AsyncMock]:
     cog = ReconciliationCog.__new__(ReconciliationCog)
     bot = AsyncMock()
-    bot.topic_bus.publish = Mock()
+    # Synchronous: `publish` is not awaited, and an AsyncMock here leaves an un-awaited
+    # coroutine that surfaces as an unraisable warning at teardown rather than a failure.
+    bot.topic_publisher.publish = Mock()
     cog.bot = bot
     return cog, bot
 
@@ -62,7 +65,7 @@ async def test_a_claimed_job_is_rendered_then_acknowledged() -> None:
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("build", "42", 7)
     bot.services.discord_reconciliation.complete.assert_awaited_once()
-    bot.topic_bus.publish.assert_called_once_with(("build", "42"))
+    bot.topic_publisher.publish.assert_called_once_with(resource_topic("build", "42"))
 
 
 async def test_deletion_needs_no_branch_of_its_own() -> None:
@@ -79,7 +82,7 @@ async def test_deletion_needs_no_branch_of_its_own() -> None:
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("vote_session", "42", 7)
     bot.services.discord_reconciliation.complete.assert_awaited_once()
-    bot.topic_bus.publish.assert_called_once_with(("vote_session", "42"))
+    bot.topic_publisher.publish.assert_called_once_with(resource_topic("vote_session", "42"))
 
 
 async def test_a_failed_render_is_retried_rather_than_acknowledged() -> None:

@@ -67,6 +67,11 @@ SAME_CONCEPT_TWO_LAYERS = {
 """Shared names that are deliberate: the same concept at two layers, or a namespaced form."""
 
 UNRELATED_CONCEPTS_SHARING_A_WORD = {
+    # `interactions.ActionKind` is the shape of a frontend interaction -- press, selection,
+    # submit. `squid_reactive.actions.ActionKind` is why a transaction exists -- action, undo,
+    # redo, compensation. Two senses of "action": the thing a person did, and the unit of work
+    # that records it. Unrelated.
+    "ActionKind",
     # `semantic.Destination(key, label, available)` is one option in a navigation control;
     # `delivery.Destination` is how a mount's message gets created. Unrelated.
     "Destination",

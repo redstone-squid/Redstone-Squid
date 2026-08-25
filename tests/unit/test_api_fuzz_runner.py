@@ -45,7 +45,9 @@ def test_main_runs_fixed_smoke_and_prints_bounded_report(
     assert run_api_fuzz.main(["--seed", "42"]) == 0
     assert observed == [42]
     assert json.loads(capsys.readouterr().out) == {
-        "artifact_directory": ".fuzz/api/run",
+        # `str(Path)`, because the runner reports a relative path and its separator is
+        # the platform's -- the value under test is which directory, not how it prints.
+        "artifact_directory": str(Path(".fuzz") / "api" / "run"),
         "forced_kill": False,
         "returncode": 0,
         "state": "pass",
