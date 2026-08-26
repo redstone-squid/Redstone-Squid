@@ -217,3 +217,21 @@ async def test_representative_change_benchmarks_exercise_their_expected_paths() 
     assert all(result.components == 20 for result in results)
     assert all(result.samples == 2 for result in results)
     assert all(result.p50_ms >= 0 and result.p95_ms >= result.p50_ms for result in results)
+
+
+def test_discordpy_comparison_benchmarks_equivalent_fresh_layouts() -> None:
+    from benchmarks.plan72_discordpy_comparison import measure_comparison
+
+    results = measure_comparison(sizes=(1, 5), samples=2, pipeline_samples=2)
+
+    assert {(result.profile, result.implementation) for result in results} == {
+        ("buttons", "decorators"),
+        ("buttons", "imperative"),
+        ("buttons", "squid_renderer"),
+        ("buttons", "squid_pipeline"),
+        ("rich_40_nodes", "imperative"),
+        ("rich_40_nodes", "squid_renderer"),
+    }
+    assert all(result.samples == 2 for result in results)
+    assert all(result.p50_ms >= 0 and result.p95_ms >= result.p50_ms for result in results)
+    assert all(result.ratio_to_imperative > 0 for result in results)
