@@ -162,6 +162,7 @@ class ComponentRuntime:
             _force_all=self._force_all,
             _subtree_cache=self._subtree_cache,
             _dirty_paths=self._dirty_paths,
+            _component_paths=self._component_paths,
         )
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree

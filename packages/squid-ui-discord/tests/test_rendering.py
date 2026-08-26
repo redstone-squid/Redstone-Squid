@@ -8,6 +8,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_ui as sl
+import squid_ui.runtime.component as component_module
 import squid_ui.runtime.owner as owner_module
 import squid_ui_discord as sd
 from squid_ui import Component, ContextKey, PressEvent, state
@@ -123,6 +124,81 @@ class TestBoundaries:
 
 
 class TestRenderCaching:
+    def test_dirty_leaf_splices_without_visiting_clean_siblings(self, monkeypatch) -> None:
+        class Leaf(Component):
+            value: int = state(0)
+
+            def render(self) -> Text:
+                return Text(str(self.value))
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.leaves = tuple(Leaf() for _ in range(1_000))
+
+            def render(self):
+                return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        namespaces = 0
+        namespace = component_module._namespace
+
+        def counted_namespace(*args, **kwargs):
+            nonlocal namespaces
+            namespaces += 1
+            return namespace(*args, **kwargs)
+
+        monkeypatch.setattr(component_module, "_namespace", counted_namespace)
+        root.leaves[500].value = 1
+
+        changed = runtime.render(reuse_committed=True)
+
+        assert changed.nodes[499:502] == (Text("0"), Text("1"), Text("0"))
+        assert namespaces == 1
+
+    def test_dirty_nested_leaf_splices_through_structural_ancestors(self, monkeypatch) -> None:
+        class Leaf(Component):
+            value: int = state(0)
+
+            def render(self) -> Text:
+                return Text(str(self.value))
+
+        class Middle(Component):
+            def __init__(self) -> None:
+                self.leaf = Leaf()
+
+            def render(self) -> Panel:
+                return Panel(children=(Text("before"), self.boundary(self.leaf, key="leaf"), Text("after")))
+
+        class Root(Component):
+            def __init__(self) -> None:
+                self.middle = Middle()
+
+            def render(self):
+                return self.boundary(self.middle, key="middle")
+
+        root = Root()
+        runtime = ComponentRuntime(root)
+        initial = runtime.render()
+        runtime.commit(initial, rendered_revision=runtime.revision)
+        namespaces = 0
+        namespace = component_module._namespace
+
+        def counted_namespace(*args, **kwargs):
+            nonlocal namespaces
+            namespaces += 1
+            return namespace(*args, **kwargs)
+
+        monkeypatch.setattr(component_module, "_namespace", counted_namespace)
+        root.middle.leaf.value = 1
+
+        changed = runtime.render(reuse_committed=True)
+
+        assert changed.nodes == (Panel(children=(Text("before"), Text("1"), Text("after"))),)
+        assert namespaces == 2
+
     def test_one_changed_leaf_does_not_render_its_parent_or_sibling(self) -> None:
         class Counting(Component):
             value: int = state(0)
