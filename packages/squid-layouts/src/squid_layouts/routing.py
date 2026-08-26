@@ -38,7 +38,7 @@ from string import Formatter
 from typing import Any
 
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning.limits import LIMITS
+from squid_layouts.planning.limits import COMPONENT_LIMITS
 
 _SEPARATOR = ":"
 
@@ -274,8 +274,8 @@ class Route:
         if not self.pattern.fullmatch(route_id):
             message = f"route {self.format!r} cannot match the id it built from {params!r}: {route_id!r}"
             raise ValueError(message)
-        if len(route_id) > LIMITS.custom_id:
-            message = f"route {self.format!r} built a {len(route_id)}-character id, over the {LIMITS.custom_id} budget"
+        if len(route_id) > COMPONENT_LIMITS.custom_id:
+            message = f"route {self.format!r} built a {len(route_id)}-character id, over the {COMPONENT_LIMITS.custom_id} budget"
             raise LayoutInvariantError(message)
         return route_id
 

@@ -9,7 +9,7 @@ from squid_layouts.planning import TargetProfile, measure, plan
 from squid_layouts.planning.layout_measurement.costing import measure_nodes
 from squid_layouts.planning.layout_measurement.model import RText
 from squid_layouts.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
-from squid_layouts.planning.limits import ATTACHMENTS, COMPONENTS, DISPLAY_TEXT
+from squid_layouts.planning.limits import Axis
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.primitives import Never, Panel, Text, Variants
 
@@ -17,36 +17,38 @@ from squid_layouts.primitives import Never, Panel, Text, Variants
 class TestResourceCost:
     def test_a_negative_cost_is_rejected_where_it_is_written(self) -> None:
         with pytest.raises(LayoutInvariantError, match="cannot cost -1"):
-            ResourceCost({COMPONENTS: -1})
+            ResourceCost({Axis.COMPONENTS: -1})
 
     def test_zero_axes_are_dropped_so_equal_spending_compares_equal(self) -> None:
-        assert ResourceCost({COMPONENTS: 2}) == ResourceCost({COMPONENTS: 2, ATTACHMENTS: 0})
+        assert ResourceCost({Axis.COMPONENTS: 2}) == ResourceCost({Axis.COMPONENTS: 2, Axis.ATTACHMENTS: 0})
 
     def test_axes_are_stored_in_name_order_whatever_order_they_arrived_in(self) -> None:
-        cost = ResourceCost({COMPONENTS: 1, ATTACHMENTS: 1, DISPLAY_TEXT: 1})
+        cost = ResourceCost({Axis.COMPONENTS: 1, Axis.ATTACHMENTS: 1, Axis.DISPLAY_TEXT: 1})
 
-        assert cost.axes == (ATTACHMENTS, COMPONENTS, DISPLAY_TEXT)
+        assert cost.axes == (Axis.ATTACHMENTS, Axis.COMPONENTS, Axis.DISPLAY_TEXT)
 
     def test_addition_sums_every_axis_either_side_names(self) -> None:
-        combined = ResourceCost({COMPONENTS: 2, DISPLAY_TEXT: 5}) + ResourceCost({COMPONENTS: 3, ATTACHMENTS: 1})
+        combined = ResourceCost({Axis.COMPONENTS: 2, Axis.DISPLAY_TEXT: 5}) + ResourceCost(
+            {Axis.COMPONENTS: 3, Axis.ATTACHMENTS: 1}
+        )
 
-        assert combined.values == {ATTACHMENTS: 1, COMPONENTS: 5, DISPLAY_TEXT: 5}
+        assert combined.values == {Axis.ATTACHMENTS: 1, Axis.COMPONENTS: 5, Axis.DISPLAY_TEXT: 5}
 
     def test_overspending_names_every_offending_axis_not_just_the_first(self) -> None:
         """A document over two budgets should hear about both in one pass."""
-        cost = ResourceCost({COMPONENTS: 41, DISPLAY_TEXT: 4001, ATTACHMENTS: 1})
+        cost = ResourceCost({Axis.COMPONENTS: 41, Axis.DISPLAY_TEXT: 4001, Axis.ATTACHMENTS: 1})
 
-        assert list(cost.over({COMPONENTS: 40, DISPLAY_TEXT: 4000, ATTACHMENTS: 10})) == [
-            (COMPONENTS, 41, 40),
-            (DISPLAY_TEXT, 4001, 4000),
+        assert list(cost.over({Axis.COMPONENTS: 40, Axis.DISPLAY_TEXT: 4000, Axis.ATTACHMENTS: 10})) == [
+            (Axis.COMPONENTS, 41, 40),
+            (Axis.DISPLAY_TEXT, 4001, 4000),
         ]
 
     def test_an_unbudgeted_axis_is_unconstrained_rather_than_zero_capacity(self) -> None:
-        assert ResourceCost({"embed_text": 9000}).within({COMPONENTS: 40})
+        assert ResourceCost({"embed_text": 9000}).within({Axis.COMPONENTS: 40})
 
     def test_cheaper_anywhere_is_per_axis_and_never_trades_one_for_another(self) -> None:
-        components = ResourceCost({COMPONENTS: 1, DISPLAY_TEXT: 100})
-        text = ResourceCost({COMPONENTS: 10, DISPLAY_TEXT: 5})
+        components = ResourceCost({Axis.COMPONENTS: 1, Axis.DISPLAY_TEXT: 100})
+        text = ResourceCost({Axis.COMPONENTS: 10, Axis.DISPLAY_TEXT: 5})
 
         # Neither dominates: one is blocked on components, the other on text, and the steps
         # that free each are different steps.
@@ -54,22 +56,22 @@ class TestResourceCost:
         assert text.cheaper_anywhere(components)
 
     def test_a_strictly_worse_cost_is_cheaper_nowhere(self) -> None:
-        assert not ResourceCost({COMPONENTS: 10}).cheaper_anywhere(ResourceCost({COMPONENTS: 5}))
+        assert not ResourceCost({Axis.COMPONENTS: 10}).cheaper_anywhere(ResourceCost({Axis.COMPONENTS: 5}))
 
 
 class TestTargetCapacities:
     def test_a_target_reads_its_budgets_from_its_limits(self) -> None:
         assert V2_TARGET.capacities == {
-            DISPLAY_TEXT: LIMITS.total_text,
-            COMPONENTS: LIMITS.total_components,
-            ATTACHMENTS: LIMITS.attachments,
+            Axis.DISPLAY_TEXT: LIMITS.total_text,
+            Axis.COMPONENTS: LIMITS.total_components,
+            Axis.ATTACHMENTS: LIMITS.attachments,
         }
 
     def test_a_reservation_shows_up_as_a_smaller_capacity(self) -> None:
-        reserved = V2_TARGET.reserve(ResourceCost({COMPONENTS: 5}))
+        reserved = V2_TARGET.reserve(ResourceCost({Axis.COMPONENTS: 5}))
 
-        assert reserved.capacity(COMPONENTS) == LIMITS.total_components - 5
-        assert reserved.capacity(DISPLAY_TEXT) == LIMITS.total_text
+        assert reserved.capacity(Axis.COMPONENTS) == LIMITS.total_components - 5
+        assert reserved.capacity(Axis.DISPLAY_TEXT) == LIMITS.total_text
 
     def test_an_axis_the_target_does_not_budget_has_no_capacity(self) -> None:
         assert V2_TARGET.capacity("embed_text") is None
@@ -83,19 +85,19 @@ class TestMeasuredCost:
     def test_a_measured_layout_reports_every_axis_it_spends(self) -> None:
         measured = measure([Panel(children=(Text("hello"), Text("world")))])
 
-        assert measured.cost.get(COMPONENTS) == 3
-        assert measured.cost.get(DISPLAY_TEXT) == len("hello") + len("world")
+        assert measured.cost.get(Axis.COMPONENTS) == 3
+        assert measured.cost.get(Axis.DISPLAY_TEXT) == len("hello") + len("world")
 
     def test_preferred_node_measurement_speaks_the_same_axes(self) -> None:
         cost = measure_nodes([Panel(children=(Text("hello"),))])
 
-        assert cost.get(COMPONENTS) == 2
+        assert cost.get(Axis.COMPONENTS) == 2
         assert text_total(cost) == 5
 
     def test_an_overspent_document_names_the_axis_in_its_failure(self) -> None:
         oversized = [Text(f"line {index}") for index in range(LIMITS.total_components + 1)]
 
-        with pytest.raises(UnsolvableLayoutError, match=rf"41 {COMPONENTS} exceed target maximum 40"):
+        with pytest.raises(UnsolvableLayoutError, match=rf"41 {Axis.COMPONENTS} exceed target maximum 40"):
             plan(oversized, target=V2_TARGET)
 
 
@@ -103,7 +105,7 @@ class TestBudgetRegions:
     def test_a_budget_region_spanning_two_text_pools_is_rejected(self) -> None:
         """One `Budget` states one preferred size; applying it to two pools would double it."""
         units = [
-            make_unit(Text("a"), RText(), 0, DISPLAY_TEXT),
+            make_unit(Text("a"), RText(), 0, Axis.DISPLAY_TEXT),
             make_unit(Text("b"), RText(), 1, "embed_text"),
         ]
         region = BudgetRegion(tuple(unit for unit in units if unit is not None), 0, 10, 0, best_effort=False)
@@ -112,10 +114,10 @@ class TestBudgetRegions:
             _ = region.axis
 
     def test_a_single_pool_region_reports_that_pool(self) -> None:
-        unit = make_unit(Text("a"), RText(), 0, DISPLAY_TEXT)
+        unit = make_unit(Text("a"), RText(), 0, Axis.DISPLAY_TEXT)
         assert unit is not None
 
-        assert BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == DISPLAY_TEXT
+        assert BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == Axis.DISPLAY_TEXT
 
     def test_a_region_holding_no_text_claims_no_pool(self) -> None:
         assert BudgetRegion((), 0, 10, 0, best_effort=False).axis is None
@@ -124,8 +126,8 @@ class TestBudgetRegions:
 class TestParetoSearch:
     def test_a_candidate_cheaper_on_one_axis_is_not_pruned_by_one_cheaper_on_another(self) -> None:
         """Two documents blocked on different budgets need different steps to become legal."""
-        components = ResourceCost({COMPONENTS: 39, DISPLAY_TEXT: 3999})
-        text = ResourceCost({COMPONENTS: 5, DISPLAY_TEXT: 10})
+        components = ResourceCost({Axis.COMPONENTS: 39, Axis.DISPLAY_TEXT: 3999})
+        text = ResourceCost({Axis.COMPONENTS: 5, Axis.DISPLAY_TEXT: 10})
 
         assert components.cheaper_anywhere(text) is False
         assert text.cheaper_anywhere(components) is True

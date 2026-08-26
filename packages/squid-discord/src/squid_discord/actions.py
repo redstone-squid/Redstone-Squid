@@ -43,7 +43,7 @@ class ActionResponder:
         Not part of `sl.ActionResponder`: a form's payload is a frontend object, so no
         portable protocol can type it. Reach this through `squid_discord.responder(event)`.
         """
-        modal = build_modal(form, limits=self.mount.limits) if isinstance(form, ModalSpec) else form
+        modal = build_modal(form, limits=self.mount.limits.components) if isinstance(form, ModalSpec) else form
         if self.interaction.response.is_done():
             message = "Discord modals must be the interaction's initial response"
             raise RuntimeError(message)
@@ -96,7 +96,7 @@ class ActionResponder:
             on_submit=submit,
             timeout=self.mount.timeout,
             localization=self.mount.localization,
-            limits=self.mount.limits,
+            limits=self.mount.limits.components,
         )
 
     async def retry_form(
