@@ -1925,13 +1925,24 @@ class MessageRoot[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 else:
                     with profile.span(
                         "resource_settle.atomic",
-                        attributes={"count": len(atomic), "pass": pass_index},
+                        attributes={
+                            "count": len(atomic),
+                            "pass": pass_index,
+                            "source": "discovered",
+                            "strategy": "direct" if len(atomic) == 1 else "task_group",
+                        },
                     ):
                         await self._settle_resources(atomic)
                 continue
             if preflight and not disabled:
-                return self._preflight(tree, profile=profile)
-            return self._draw(tree, disabled=disabled, profile=profile)
+                if profile is None:
+                    return self._preflight(tree)
+                with profile.span("preflight"):
+                    return self._preflight(tree, profile=profile)
+            if profile is None:
+                return self._draw(tree, disabled=disabled)
+            with profile.span("draw"):
+                return self._draw(tree, disabled=disabled, profile=profile)
         message = f"mount {self.id}: component and resource loading did not settle in {_MAX_LOAD_PASSES} passes"
         raise LayoutInvariantError(message)
 

@@ -219,6 +219,21 @@ async def test_representative_change_benchmarks_exercise_their_expected_paths() 
     assert all(result.p50_ms >= 0 and result.p95_ms >= result.p50_ms for result in results)
 
 
+async def test_atomic_resource_pipeline_benchmark_reports_separate_phase_evidence() -> None:
+    from benchmarks.plan72_render_caching import measure_resource_pipeline
+
+    result = await measure_resource_pipeline(20, samples=2)
+
+    assert result.render_passes_per_operation == 2
+    assert result.leaf_renders_per_operation == 2
+    assert result.loads_per_operation == 1
+    assert not result.scheduler_included
+    phases = {phase.name: phase for phase in result.phases}
+    assert phases.keys() >= {"runtime_render", "resource_settle.atomic", "preflight", "planner", "renderer"}
+    assert phases["runtime_render"].calls_per_operation == 2
+    assert all(phase.p50_ms >= 0 and phase.p95_ms >= phase.p50_ms for phase in phases.values())
+
+
 def test_discordpy_comparison_benchmarks_equivalent_fresh_layouts() -> None:
     from benchmarks.plan72_discordpy_comparison import measure_comparison
 
