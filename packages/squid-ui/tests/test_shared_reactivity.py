@@ -6,7 +6,7 @@ import pytest
 
 from squid_ui import Component, computed, state
 from squid_ui.primitives import Boundary, Text
-from squid_ui.runtime import CellAddress, ReactiveWriteError, Shared, addresses, transaction
+from squid_ui.runtime import CellAddress, ReactiveWriteError, SharedState, addresses, transaction
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.shared import describe
 from squid_ui.runtime.topics import LocalTopicBus, Topic
@@ -17,7 +17,7 @@ class Member:
     user_id: int
 
 
-class Preferences(Shared[Member]):
+class Preferences(SharedState[Member]):
     theme: str = state("system")
     locale: str = state("en")
 

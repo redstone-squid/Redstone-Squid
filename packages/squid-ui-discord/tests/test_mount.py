@@ -43,7 +43,7 @@ from squid_ui.chrome import LOCALIZATION_CONTEXT, Chrome
 from squid_ui.document import Asset, InlineAsset
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormField, FormSpec, TextField
-from squid_ui.interactions import ActionKind, ActionMiddleware, ActionMode, ActionProceed, ActionRequest
+from squid_ui.interactions import InteractionKind, ActionMiddleware, ActionMode, ActionProceed, ActionRequest
 from squid_ui.primitives import (
     ActionGroup,
     Button,
@@ -56,7 +56,7 @@ from squid_ui.primitives import (
     Text,
 )
 from squid_ui.profiling import (
-    ActionResult,
+    ActionStatus,
     DispatchDisposition,
     MemoryProfiler,
     OperationKind,
@@ -474,14 +474,14 @@ class TestDispatchProfiling:
         result = trace.result.dispatch
         assert result is not None
         assert result.disposition is DispatchDisposition.COMPLETED
-        assert result.action is ActionResult.HANDLED
+        assert result.action is ActionStatus.HANDLED
         assert result.presentation is PresentationStatus.WRITTEN
         assert result.generation.submitted == submitted
         assert result.generation.active == submitted
         assert not result.generation.rebased
         aggregate = profiler.snapshot().aggregates[0]
         assert aggregate.key.disposition is DispatchDisposition.COMPLETED
-        assert aggregate.key.action is ActionResult.HANDLED
+        assert aggregate.key.action is ActionStatus.HANDLED
         assert aggregate.key.presentation is PresentationStatus.WRITTEN
         assert {span.name for span in trace.spans} >= {
             "acknowledgement",
@@ -558,7 +558,7 @@ class TestDispatchProfiling:
 
         stopped_result = _profile_trace(stopped_profiler).result.dispatch
         assert stopped_result is not None
-        assert stopped_result.action is ActionResult.SHORT_CIRCUITED
+        assert stopped_result.action is ActionStatus.SHORT_CIRCUITED
 
         class Broken(Counter):
             async def increment(self, event: PressEvent) -> None:
@@ -585,7 +585,7 @@ class TestDispatchProfiling:
         recovered_result = recovered_trace.result.dispatch
         assert recovered_result is not None
         assert recovered_result.disposition is DispatchDisposition.COMPLETED
-        assert recovered_result.action is ActionResult.HANDLED
+        assert recovered_result.action is ActionStatus.HANDLED
         handler = next(span for span in recovered_trace.spans if span.name == "handler")
         assert handler.status is TraceStatus.FAILED
 
@@ -608,7 +608,7 @@ class TestDispatchProfiling:
         action = _profile_trace(action_profiler).result.dispatch
         assert action is not None
         assert action.disposition is DispatchDisposition.ACTION_FAILED
-        assert action.action is ActionResult.FAILED
+        assert action.action is ActionStatus.FAILED
 
         delivery_profiler = MemoryProfiler()
         failed_delivery = Mount(Counter(), access=Everyone(), profiler=delivery_profiler, timeout=None)
@@ -620,7 +620,7 @@ class TestDispatchProfiling:
         delivered = _profile_trace(delivery_profiler).result.dispatch
         assert delivered is not None
         assert delivered.disposition is DispatchDisposition.DELIVERY_FAILED
-        assert delivered.action is ActionResult.HANDLED
+        assert delivered.action is ActionStatus.HANDLED
         assert delivered.presentation is PresentationStatus.FAILED
 
     async def test_watchdog_records_deadline_miss_and_acknowledgement_source(self) -> None:
@@ -1569,7 +1569,7 @@ class TestActionMiddleware:
             ActionRequest(
                 requests[0].event,
                 "run",
-                ActionKind.PRESS,
+                InteractionKind.PRESS,
                 ActionMode.REBASE,
                 submitted,
                 active,
@@ -1597,7 +1597,7 @@ class TestActionMiddleware:
         assert not entered
 
     async def test_selection_and_submission_have_explicit_kinds(self) -> None:
-        kinds: list[ActionKind] = []
+        kinds: list[InteractionKind] = []
 
         class Capture(ActionMiddleware):
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
@@ -1620,7 +1620,7 @@ class TestActionMiddleware:
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
         await form_mount.dispatch_submit("rename", fake_interaction(), spec, {"name": "Ada"}, submit)
 
-        assert kinds == [ActionKind.SELECTION, ActionKind.SUBMIT]
+        assert kinds == [InteractionKind.SELECTION, InteractionKind.SUBMIT]
 
 
 class TestErrors:
@@ -2955,8 +2955,8 @@ class OperationPanel(Component):
         self.publication = self._publication.start()
 
     @sl.operation(initial="starting")
-    async def _publication(self, progress: sl.operations.Progress[str]) -> int:
-        progress.set("publishing")
+    async def _publication(self, progress: sl.operations.ProgressReporter[str]) -> int:
+        progress.report("publishing")
         return 42
 
     def render(self):
@@ -2978,8 +2978,8 @@ class ProgressiveOperationPanel(OperationPanel):
         super().__init__()
 
     @sl.operation(initial="starting")
-    async def _publication(self, progress: sl.operations.Progress[str]) -> int:
-        progress.set("publishing")
+    async def _publication(self, progress: sl.operations.ProgressReporter[str]) -> int:
+        progress.report("publishing")
         self.progressed.set()
         await self.resume.wait()
         return 42
@@ -3731,7 +3731,7 @@ class TestGuards:
         dispatch = _profile_trace(profiler).result.dispatch
         assert dispatch is not None
         assert dispatch.disposition is DispatchDisposition.GUARD_DENIED
-        assert dispatch.action is ActionResult.NOT_RUN
+        assert dispatch.action is ActionStatus.NOT_RUN
 
     async def test_a_raising_guard_reaches_the_error_hook_without_admitting(self):
         error = RuntimeError("permission service unavailable")

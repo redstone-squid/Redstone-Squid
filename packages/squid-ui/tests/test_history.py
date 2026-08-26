@@ -24,7 +24,7 @@ from squid_ui.runtime import (
     HistoryResultStatus,
     LocalTopicBus,
     MemoryCompensationOutbox,
-    Shared,
+    SharedState,
     UndoMode,
     history,
     history_actions,
@@ -36,15 +36,15 @@ from squid_reactivity import (
     ActionLedger,
     ChangeReport,
     OperationEventSnapshot,
-    ParticipantChange,
+    TransactionContribution,
     add_action_result_sink,
-    join_action,
+    enlist,
     on_action_commit,
 )
 from squid_reactivity.operations import OperationContext
 
 
-class Workspace(Shared[str]):
+class Workspace(SharedState[str]):
     selected: int | None = state(None)
     filters: tuple[str, ...] = state(())
 
@@ -357,8 +357,8 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
         def prepare(self, view) -> None:
             return None
 
-        def describe_change(self, prepared: None) -> ParticipantChange:
-            return ParticipantChange("bad", BadToken(), ChangeReport(participants=1))
+        def describe_change(self, prepared: None) -> TransactionContribution:
+            return TransactionContribution("bad", BadToken(), ChangeReport(participants=1))
 
         def apply(self, prepared: None) -> None:
             pass
@@ -373,7 +373,7 @@ async def test_participant_planning_failure_returns_failed_without_partial_inver
     with transaction():
         subject.history.record("page")
         subject.page = 4
-        join_action(object(), Participant)
+        enlist(object(), Participant)
 
     result = await subject.history.undo()
 
@@ -473,7 +473,7 @@ async def test_compensation_intent_and_local_inverse_are_causal_actions() -> Non
 
     assert result.applied
     descendants = [result for result in ledger.results if result.root_action_id == original.root_action_id]
-    assert [result.kind for result in descendants] == ["action", "compensation", "compensation"]
+    assert [result.kind for result in descendants] == ["normal", "compensation", "compensation"]
     assert descendants[1].cause is not None and descendants[1].cause.kind == "operation"
     operation_events = [event for event in ledger.events if isinstance(event, OperationEventSnapshot)]
     assert [event.status for event in operation_events] == ["reverting", "external_succeeded", "reverted"]
@@ -617,9 +617,9 @@ def test_memory_outbox_persists_first_intent_at_the_commit_point() -> None:
     visible_at_commit: list[tuple] = []
 
     with transaction():
-        joined = join_action(outbox, lambda: outbox.participant(intent))
+        joined = enlist(outbox, lambda: outbox.participant(intent))
         assert joined is not None
-        on_action_commit(lambda commit, aftermath: visible_at_commit.append(outbox.records))
+        on_action_commit(lambda commit, continuation: visible_at_commit.append(outbox.records))
 
     assert visible_at_commit[0][0].intent == intent
     assert visible_at_commit[0][0].attempts == 0

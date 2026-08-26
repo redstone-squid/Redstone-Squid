@@ -30,20 +30,20 @@ from squid_reactivity.actions import (
     ActionContext,
     ActionResult,
     ActionRollback,
-    Aftermath,
+    ActionContinuation,
     ChangeReport,
     ConflictDetail,
     ExceptionReport,
     ObservedRead,
-    ParticipantChange,
+    TransactionContribution,
     RollbackReason,
     action_scope,
-    aftermath_callback,
+    continuation_callback,
     current_action,
     current_causality,
-    emit_aftermath_failure,
+    emit_continuation_failure,
     emit_result,
-    in_aftermath,
+    in_continuation,
     next_commit_sequence,
 )
 
@@ -72,12 +72,12 @@ class TransactionView(Protocol):
     def context(self) -> ActionContext: ...
 
 
-class ActionParticipant[PreparedT](Protocol):
+class TransactionParticipant[PreparedT](Protocol):
     """A subsystem that publishes its own writes when the action in flight commits.
 
     The split is the whole point. Everything that can fail happens in `prepare`, before
     any participant has made anything visible, so the transaction can still roll the
-    action back as though it never ran. Register with :func:`join_action`.
+    action back as though it never ran. Register with :func:`enlist`.
 
     `prepare` hands what it built to `apply` as a value, rather than leaving it in a field
     `apply` has to trust. That is what makes "everything fallible happened in prepare" a
@@ -94,7 +94,7 @@ class ActionParticipant[PreparedT](Protocol):
     def apply(self, prepared: PreparedT) -> None:
         """Publish what `prepare` returned. Synchronous, and past the point of failure."""
 
-    def describe_change(self, prepared: PreparedT) -> ParticipantChange | None:
+    def describe_change(self, prepared: PreparedT) -> TransactionContribution | None:
         """Return the participant's reversible token, or no history contribution."""
 
     def abort(self, prepared: PreparedT | None, cause: BaseException) -> None:
@@ -606,7 +606,7 @@ def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> No
         # Named here, unlike `CellTarget.identity`: this cell is alive, so the report can say
         # which shared field the policy was pointed at instead of an opaque slot id.
         detail = ConflictDetail(_slot_name(cell), patch.expected_version, cell.version)
-        message = f"local overwrite policy cannot target Shared state ({_slot_name(cell)})"
+        message = f"local overwrite policy cannot target shared state ({_slot_name(cell)})"
         raise ReactiveConflictError(detail, message)
     for patch, owner, cell in resolved:
         _write(owner, patch.target.name, cell, patch.value.raw())
@@ -627,13 +627,13 @@ def _cell_for(owner: ReactiveOwner, name: str) -> _Cell:
 def _write(owner: ReactiveOwner, name: str, cell: _Cell, value: Any) -> None:
     """Stage a write into the action in flight, or land it now if there is none.
 
-    `join_action` already returns `None` when no transaction is open; this is the same
+    `enlist` already returns `None` when no transaction is open; this is the same
     signal read directly. A component built during the action is not protected by it, so
     its construction lands immediately too.
     """
     current = _CURRENT.get()
-    if current is None and in_aftermath():
-        message = "direct reactive mutation in an aftermath hook is forbidden; use aftermath.start_action(...)"
+    if current is None and in_continuation():
+        message = "direct reactive mutation in an continuation hook is forbidden; use continuation.start_action(...)"
         raise ReactiveWriteError(message)
     if current is not None and not current.writable():
         current.reject_stale(f"{type(owner).__name__}.{name}")
@@ -670,13 +670,13 @@ class _Transaction:
     changed_names: dict[int, set[str]] = field(default_factory=dict)
     # Held by strong reference, so an id cannot be recycled while this transaction runs.
     born: dict[int, object] = field(default_factory=dict)
-    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, Aftermath], None]]] = field(default_factory=list)
-    rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, Aftermath], None]]] = field(
+    commit_hooks: list[tuple[object | None, Callable[[ActionCommit, ActionContinuation], None]]] = field(default_factory=list)
+    rollback_hooks: list[tuple[object | None, Callable[[ActionRollback, ActionContinuation], None]]] = field(
         default_factory=list
     )
-    result_hooks: list[tuple[object | None, Callable[[ActionResult, Aftermath], None]]] = field(default_factory=list)
+    result_hooks: list[tuple[object | None, Callable[[ActionResult, ActionContinuation], None]]] = field(default_factory=list)
     context: ActionContext = field(default_factory=ActionContext.create)
-    participants: dict[object, ActionParticipant[Any]] = field(default_factory=dict)
+    participants: dict[object, TransactionParticipant[Any]] = field(default_factory=dict)
     applied: bool = False
     """Whether `publish` has put the staged values into the cells.
 
@@ -690,7 +690,7 @@ class _Transaction:
     """Why state may not be written right now, while the transaction itself stays open."""
     aborted: bool = False
     cleanup_errors: list[ExceptionReport] = field(default_factory=list)
-    prepared_participants: tuple[tuple[ActionParticipant[Any], Any], ...] = ()
+    prepared_participants: tuple[tuple[TransactionParticipant[Any], Any], ...] = ()
     commit_record: ActionCommit | None = None
 
     def note_born(self, owner: object) -> None:
@@ -840,7 +840,7 @@ class _Transaction:
             # tells it to look again.
             _bump_epoch()
 
-    def enlist[ParticipantT: ActionParticipant[Any]](
+    def enlist[ParticipantT: TransactionParticipant[Any]](
         self, key: object, factory: Callable[[], ParticipantT]
     ) -> ParticipantT:
         """Return this action's participant for `key`, creating it on first use.
@@ -909,7 +909,7 @@ class _Transaction:
         """Prepare everything, publish synchronously, and return the immutable commit."""
         self.check_preconditions()
         view = _FrozenTransactionView(self)
-        prepared: list[tuple[ActionParticipant[Any], Any]] = []
+        prepared: list[tuple[TransactionParticipant[Any], Any]] = []
         try:
             with self.preparing():
                 for participant in self.participants.values():
@@ -952,29 +952,29 @@ class _Transaction:
         return commit
 
     def finalize_commit(self) -> None:
-        """Notify reactive consumers after the commit gate, isolating aftermath failures."""
+        """Notify reactive consumers after the commit gate, isolating continuation failures."""
         assert self.commit_record is not None
         if not self.changed and not self.prepared_participants:
             return
-        _checkpoint("aftermath.before_notification")
+        _checkpoint("continuation.before_notification")
         for owner in self.changed.values():
             try:
                 owner._state_changed(frozenset(self.changed_names[id(owner)]))
             except Exception as error:
                 _log.exception("a reactive owner failed to process its committed state")
-                emit_aftermath_failure(
+                emit_continuation_failure(
                     self.commit_record,
                     "notification",
                     f"{type(owner).__qualname__}._state_changed",
                     error,
                 )
         for participant, value in self.prepared_participants:
-            _checkpoint("aftermath.before_participant_finalize")
+            _checkpoint("continuation.before_participant_finalize")
             try:
                 participant.finalize(value)
             except Exception as error:
                 _log.exception("a transaction participant failed to finalize")
-                emit_aftermath_failure(
+                emit_continuation_failure(
                     self.commit_record,
                     "participant_finalize",
                     f"{type(participant).__qualname__}.finalize",
@@ -984,7 +984,7 @@ class _Transaction:
     def abort(
         self,
         cause: BaseException,
-        prepared: Sequence[tuple[ActionParticipant[Any], Any]] | None = None,
+        prepared: Sequence[tuple[TransactionParticipant[Any], Any]] | None = None,
     ) -> tuple[ExceptionReport, ...]:
         if self.aborted:
             return tuple(self.cleanup_errors)
@@ -1072,24 +1072,24 @@ def _rollback_reason(error: BaseException, *, during_commit: bool) -> RollbackRe
 
 def _notify_hooks(
     result: ActionResult,
-    hooks: Sequence[tuple[object | None, Callable[[Any, Aftermath], None]]],
+    hooks: Sequence[tuple[object | None, Callable[[Any, ActionContinuation], None]]],
 ) -> None:
     if not hooks:
         return
-    aftermath = Aftermath(result)
-    with aftermath_callback():
+    continuation = ActionContinuation(result)
+    with continuation_callback():
         for _, callback in hooks:
-            _checkpoint("aftermath.before_hook")
+            _checkpoint("continuation.before_hook")
             try:
-                callback_result = callback(result, aftermath)
+                callback_result = callback(result, continuation)
                 if inspect.isawaitable(callback_result):
                     if inspect.iscoroutine(callback_result):
                         callback_result.close()
-                    message = "action aftermath hooks must be synchronous; start an operation instead"
+                    message = "action continuation hooks must be synchronous; start an operation instead"
                     raise TypeError(message)  # noqa: TRY301
             except Exception as error:
-                _log.exception("an action aftermath hook failed")
-                emit_aftermath_failure(
+                _log.exception("an action continuation hook failed")
+                emit_continuation_failure(
                     result,
                     "hook",
                     getattr(callback, "__qualname__", type(callback).__qualname__),
@@ -1247,17 +1247,17 @@ def readonly_transaction() -> Iterator[None]:
         _emit_commit(current, commit)
 
 
-def on_action_commit(callback: Callable[[ActionCommit, Aftermath], None], *, key: object | None = None) -> None:
+def on_action_commit(callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None) -> None:
     """Run a failure-isolated synchronous callback after definitive commit."""
     _add_action_hook("commit", callback, key=key)
 
 
-def on_action_rollback(callback: Callable[[ActionRollback, Aftermath], None], *, key: object | None = None) -> None:
+def on_action_rollback(callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None) -> None:
     """Run a failure-isolated callback after staged state is dead."""
     _add_action_hook("rollback", callback, key=key)
 
 
-def on_action_result(callback: Callable[[ActionResult, Aftermath], None], *, key: object | None = None) -> None:
+def on_action_result(callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None) -> None:
     """Run a failure-isolated callback after either terminal result."""
     _add_action_hook("result", callback, key=key)
 
@@ -1283,7 +1283,7 @@ def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | 
     hooks.append((key, callback))
 
 
-def join_action[ParticipantT: ActionParticipant[Any]](
+def enlist[ParticipantT: TransactionParticipant[Any]](
     key: object, factory: Callable[[], ParticipantT]
 ) -> ParticipantT | None:
     """Take part in the action in flight, staging writes instead of publishing them.
@@ -1299,10 +1299,10 @@ def join_action[ParticipantT: ActionParticipant[Any]](
     return current.enlist(key, factory)
 
 
-def action_participant(key: object) -> ActionParticipant[Any] | None:
+def action_participant(key: object) -> TransactionParticipant[Any] | None:
     """`key`'s participant in the action in flight, without enlisting one.
 
-    The read half of :func:`join_action`, for a subsystem that has to answer "what did this
+    The read half of :func:`enlist`, for a subsystem that has to answer "what did this
     action stage" on a path where staging itself would be wrong -- a read, or a render.
     """
     current = _CURRENT.get()
@@ -1452,7 +1452,7 @@ class _State:
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
         if rendering():
             if self.address(instance) is not None:
-                # Shared state: visible to other mounts mid-render, a correctness problem
+                # shared state: visible to other mounts mid-render, a correctness problem
                 # beyond this tree, so no exemption applies -- not even to a fresh instance.
                 message = (
                     f"{instance!r}.{self.public_name} was written while a render was reading it. "
@@ -1933,7 +1933,7 @@ def _checked_init(
     """Wrap an initializer so required reactive state is assigned before it returns."""
 
     @functools.wraps(original)
-    def __init__(self: Reactive, *args: Any, **kwargs: Any) -> None:
+    def __init__(self: StateOwner, *args: Any, **kwargs: Any) -> None:
         try:
             original(self, *args, **kwargs)
             if type(self).__init__ is not __init__:
@@ -1949,7 +1949,7 @@ def _checked_init(
     return __init__
 
 
-class Reactive:
+class StateOwner:
     """Reusable owner for transactional state and computed values.
 
     Subclasses normally override :meth:`on_state_commit` to invalidate whatever projection

@@ -1,4 +1,4 @@
-"""Shared namespaces: declaration, lifetime, staging, and the commit precondition."""
+"""SharedState namespaces: declaration, lifetime, staging, and the commit precondition."""
 
 import contextvars
 import gc
@@ -11,7 +11,7 @@ import pytest
 
 from squid_ui import Component, computed, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import CellAddress, ReactiveConflictError, Shared, transaction
+from squid_ui.runtime import CellAddress, ReactiveConflictError, SharedState, transaction
 from squid_ui.runtime.topics import LocalTopicBus
 
 
@@ -21,18 +21,18 @@ class Member:
     guild_id: int
 
 
-class Preferences(Shared[Member]):
+class Preferences(SharedState[Member]):
     theme: str = state("system")
     locale: str = state("en")
 
 
-class Workspace(Shared[Member]):
+class Workspace(SharedState[Member]):
     theme: str = state("unrelated")
     selected: int | None = state(None)
     filters: tuple[str, ...] = state(())
 
 
-class Anonymous(Shared):
+class Anonymous(SharedState):
     flag: bool = state(default=False)
 
 
@@ -89,21 +89,21 @@ def test_repr_names_the_class_and_the_scope(bus: LocalTopicBus, here: Member) ->
 def test_a_reserved_name_raises_at_class_creation() -> None:
     with pytest.raises(TypeError, match="reserves 'scope'"):
 
-        class Bad(Shared[int]):
+        class Bad(SharedState[int]):
             scope: int = state(0)
 
 
 def test_an_underscored_cell_raises_at_class_creation() -> None:
     with pytest.raises(TypeError, match="underscored"):
 
-        class Bad(Shared[int]):
+        class Bad(SharedState[int]):
             _hidden: int = state(0)
 
 
 def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) -> None:
     """`sl.state()` everywhere: what it means is what holds it, which the class already says."""
 
-    class Namespace(Shared[Member]):
+    class Namespace(SharedState[Member]):
         value: int = state(0)
 
     class Panel(Component):
@@ -123,7 +123,7 @@ def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) ->
 def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: Member) -> None:
     """The whole difference, and it is a property of the owner rather than the declaration."""
 
-    class Namespace(Shared[Member]):
+    class Namespace(SharedState[Member]):
         value: int = state(0)
 
     class Panel(Component):
@@ -140,14 +140,14 @@ def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: M
 def test_a_namespace_refuses_persistence_it_cannot_honour() -> None:
     with pytest.raises(TypeError, match="never persisted"):
 
-        class Bad(Shared[int]):
+        class Bad(SharedState[int]):
             wrong: int = state(0, persist=True)
 
 
 def test_a_namespace_field_that_merely_defaulted_to_persist_is_fine(bus: LocalTopicBus, here: Member) -> None:
     """`persist` defaults to True, so only an explicit ask can be refused."""
 
-    class Fine(Shared[Member]):
+    class Fine(SharedState[Member]):
         value: int = state(0)
 
     assert Fine(bus, here).value == 0
@@ -193,7 +193,7 @@ class Held:
 
 
 def test_an_opaque_cell_settles_by_identity(bus: LocalTopicBus) -> None:
-    class Services(Shared):
+    class Services(SharedState):
         held: Held = state(factory=Held, opaque=True)
 
     services = Services(bus)
@@ -245,7 +245,7 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
     is told to re-read a namespace on behalf of an action that failed.
     """
 
-    class Draft(Shared):
+    class Draft(SharedState):
         body: list[str] = state(factory=list, opaque=True)  # pyrefly: ignore[bad-assignment]
 
     draft = Draft(bus)
@@ -337,7 +337,7 @@ def test_a_read_and_written_cell_conflicts_when_it_moves(bus: LocalTopicBus, her
     assert workspace.filters == ("theirs",), "the losing action published nothing"
 
 
-def _write_from_elsewhere(handle: Shared[Any], name: str, value: object) -> None:
+def _write_from_elsewhere(handle: SharedState[Any], name: str, value: object) -> None:
     """Commit a value the way another task's action would, around this transaction."""
     elsewhere(lambda: setattr(handle, name, value))
 

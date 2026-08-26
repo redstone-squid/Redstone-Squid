@@ -48,7 +48,7 @@ from squid_ui.guards import Challenge, GuardLedger, approvals
 from squid_ui.interactions import (
     ActionBinding,
     ActionEvent,
-    ActionKind,
+    InteractionKind,
     ActionMiddleware,
     ActionMode,
     ActionProceed,
@@ -75,7 +75,7 @@ from squid_ui.planning.navigation import (
 from squid_ui.planning.planner import plan as plan_document
 from squid_ui.primitives.nodes import Button, Node, Row
 from squid_ui.profiling import (
-    ActionResult,
+    ActionStatus,
     DetachedSpanRecorder,
     DispatchDisposition,
     DispatchResult,
@@ -97,7 +97,7 @@ from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
 from squid_ui.runtime.reactivity import (
     ActionCommit,
-    Aftermath,
+    ActionContinuation,
     on_action_commit,
     readonly_transaction,
     transaction,
@@ -793,7 +793,7 @@ class _DispatchProfile:
     interaction: discord.Interaction
     generation: GenerationDecision
     acknowledgement: DetachedSpanRecorder
-    action: ActionResult = ActionResult.NOT_RUN
+    action: ActionStatus = ActionStatus.NOT_RUN
     presentation: PresentationStatus = PresentationStatus.NOT_REQUIRED
     acknowledged: bool = False
     finished: bool = False
@@ -1610,7 +1610,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             on_action_commit(self._note_shared_writes, key=self)
             yield
 
-    def _note_shared_writes(self, commit: ActionCommit, aftermath: Aftermath) -> None:
+    def _note_shared_writes(self, commit: ActionCommit, continuation: ActionContinuation) -> None:
         """Move the render-input revision if the action wrote a shared cell this mount reads.
 
         Through `invalidate` rather than `_dirty` directly, because a candidate delivered
@@ -2248,7 +2248,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         panel may have re-rendered while the dialog was open, so every stage runs again
         against current truth.
         """
-        kind = ActionKind.PRESS if values is None else ActionKind.SELECTION
+        kind = InteractionKind.PRESS if values is None else InteractionKind.SELECTION
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
@@ -2312,7 +2312,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     rebase=lambda: self._handlers.get(key),
                 )
             except anyio.get_cancelled_exc_class():
-                profile.action = ActionResult.CANCELLED
+                profile.action = ActionStatus.CANCELLED
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
@@ -2409,7 +2409,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             OperationKind.DISPATCH,
             name=key,
             attributes={
-                "kind": ActionKind.SUBMIT.value,
+                "kind": InteractionKind.SUBMIT.value,
                 "mount_id": self.id,
                 "actor": interaction.user.id,
             },
@@ -2464,7 +2464,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     rebase=rebase,
                 )
             except anyio.get_cancelled_exc_class():
-                profile.action = ActionResult.CANCELLED
+                profile.action = ActionStatus.CANCELLED
                 profile.finish(DispatchDisposition.CANCELLED)
                 raise
             except Exception as error:
@@ -2667,7 +2667,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             OperationKind.DISPATCH,
             name=key,
             attributes={
-                "kind": ActionKind.PRESS.value,
+                "kind": InteractionKind.PRESS.value,
                 "mount_id": self.id,
                 "resumed": True,
                 "actor": interaction.user.id,
@@ -2681,7 +2681,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     None,
                     DispatchResult(
                         DispatchDisposition.CHALLENGE_DECLINED,
-                        ActionResult.NOT_RUN,
+                        ActionStatus.NOT_RUN,
                         PresentationStatus.WRITTEN
                         if challenge.on_decline is not None
                         else PresentationStatus.NOT_REQUIRED,
@@ -2822,7 +2822,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         request = ActionRequest(
             event,
             key,
-            ActionKind.PRESS if values is None else ActionKind.SELECTION,
+            InteractionKind.PRESS if values is None else InteractionKind.SELECTION,
             binding.mode,
             submitted_generation,
             active_generation,
@@ -2842,7 +2842,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         try:
             handled = await self._run_middleware(request, handle, profile.operation)
         except Exception as error:
-            profile.action = ActionResult.FAILED
+            profile.action = ActionStatus.FAILED
             # Before the error hook: the failed action leaves no flush behind, so without
             # this the panel would sit on "working" with every control dead.
             restore = binding.busy is not None and binding.busy.restore_on_error
@@ -2852,7 +2852,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.ACTION_FAILED, error)
             return
-        profile.action = ActionResult.HANDLED if handled else ActionResult.SHORT_CIRCUITED
+        profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
         profile.acknowledge("action")
         self._renew(interaction, resumed=profile.resumed)
         painted = busy is not None and await busy.close()
@@ -2947,7 +2947,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             request = ActionRequest(
                 event,
                 key,
-                ActionKind.SUBMIT,
+                InteractionKind.SUBMIT,
                 binding.mode,
                 generation,
                 active_generation,
@@ -2966,9 +2966,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     await binding.handler(event)
 
             handled = await self._run_middleware(request, handle, profile.operation)
-            profile.action = ActionResult.HANDLED if handled else ActionResult.SHORT_CIRCUITED
+            profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
         except Exception as error:
-            profile.action = ActionResult.FAILED
+            profile.action = ActionStatus.FAILED
             await self.handle_error(interaction, error, f"form:{key}")
             profile.acknowledge("error_hook")
             profile.finish(DispatchDisposition.ACTION_FAILED, error)
