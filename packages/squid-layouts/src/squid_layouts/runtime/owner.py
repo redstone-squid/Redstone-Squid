@@ -5,7 +5,13 @@ from typing import Any
 
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.cache import PlanCache
-from squid_layouts.runtime.component import Component, ComponentTree, _ComponentRender, render_component_tree
+from squid_layouts.runtime.component import (
+    Component,
+    ComponentTree,
+    _ComponentRender,
+    _ExpandedSubtree,
+    render_component_tree,
+)
 from squid_layouts.runtime.context import ContextKey
 from squid_layouts.runtime.presentation import PresentationSession
 
@@ -30,8 +36,11 @@ class ComponentRuntime:
         self.plan_cache = plan_cache if plan_cache is not None else PlanCache(32)
         self.components: dict[str, Component] = {}
         self._render_cache: dict[Component, _ComponentRender] = {}
+        self._subtree_cache: dict[str, _ExpandedSubtree] = {}
         self._dirty_components: set[Component] = set()
         self._forced_components: set[Component] = set()
+        self._dirty_paths: set[str] = set()
+        self._component_paths: dict[Component, str] = {}
         self._force_all = True
         self._candidate_tree: ComponentTree | None = None
         self._candidate_revision = -1
@@ -54,6 +63,14 @@ class ComponentRuntime:
             self._dirty_components.add(component)
             if not check_dependencies:
                 self._forced_components.add(component)
+            path = self._component_paths.get(component)
+            if path is None:
+                self._force_all = True
+            else:
+                self._dirty_paths.add(path)
+                while path != "$":
+                    path = "$" if "." not in path else path.rsplit(".", 1)[0]
+                    self._dirty_paths.add(path)
         if self.on_invalidate is not None:
             self.on_invalidate()
 
@@ -93,10 +110,13 @@ class ComponentRuntime:
             _dirty=self._dirty_components,
             _forced=self._forced_components,
             _force_all=self._force_all,
+            _subtree_cache=self._subtree_cache,
+            _dirty_paths=self._dirty_paths,
         )
         self._dirty_components.clear()
         self._forced_components.clear()
         self._force_all = False
+        self._dirty_paths.clear()
         if not tree.deferred:
             self._candidate_tree = tree
             self._candidate_revision = self.revision
@@ -136,6 +156,7 @@ class ComponentRuntime:
         for _, component in sorted(added, key=lambda item: depth(item[0])):
             component.on_mount()
         self.components = dict(tree.components)
+        self._component_paths = {component: path for path, component in tree.components.items()}
         self._committed_tree = tree
         if rendered_revision is None or self.revision == rendered_revision:
             self._candidate_tree = tree
@@ -143,6 +164,11 @@ class ComponentRuntime:
         live = set(tree.components.values())
         self._render_cache = {
             component: snapshot for component, snapshot in self._render_cache.items() if component in live
+        }
+        self._subtree_cache = {
+            path: snapshot
+            for path, snapshot in self._subtree_cache.items()
+            if tree.components.get(path) is snapshot.component
         }
         self.dirty = rendered_revision is not None and self.revision != rendered_revision
 
@@ -158,8 +184,11 @@ class ComponentRuntime:
             component._parent = None
         self.components.clear()
         self._render_cache.clear()
+        self._subtree_cache.clear()
         self._dirty_components.clear()
         self._forced_components.clear()
+        self._dirty_paths.clear()
+        self._component_paths.clear()
         self._candidate_tree = None
         self._committed_tree = None
         self.root._runtime = None

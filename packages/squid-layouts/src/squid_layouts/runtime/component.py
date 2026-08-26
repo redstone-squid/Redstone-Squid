@@ -146,6 +146,19 @@ class _ComponentRender:
     async_bindings: tuple[AsyncBinding, ...]
 
 
+@dataclass(slots=True)
+class _ExpandedSubtree:
+    """A complete expansion below one stable component path, before parent namespacing."""
+
+    component: Component
+    inherited_context: dict[ContextKey[Any], object]
+    nodes: tuple[LayoutNode, ...]
+    components: dict[str, Component]
+    assets: tuple[Asset, ...]
+    async_bindings: tuple[AsyncBinding, ...]
+    observations: tuple[Address, ...]
+
+
 class Component[ModeT = Any](Reactive):
     """Base class for mounted, stateful views."""
 
@@ -249,6 +262,8 @@ def render_component_tree(
     _dirty: set[Component] | None = None,
     _forced: set[Component] | None = None,
     _force_all: bool = False,
+    _subtree_cache: dict[str, _ExpandedSubtree] | None = None,
+    _dirty_paths: set[str] | None = None,
 ) -> ComponentTree:
     """Render and expand a component tree, preserving keyed component identity.
 
@@ -269,6 +284,8 @@ def render_component_tree(
     render_cache = {} if _render_cache is None else _render_cache
     dirty = set() if _dirty is None else _dirty
     forced = set() if _forced is None else _forced
+    subtree_cache = {} if _subtree_cache is None else _subtree_cache
+    dirty_paths = set() if _dirty_paths is None else _dirty_paths
 
     def items(rendered: RenderResult, path: str) -> tuple[tuple[RenderNode, ...], tuple[Asset, ...], str | None]:
         if isinstance(rendered, Document):
@@ -359,6 +376,32 @@ def render_component_tree(
         if previous := identities.get(identity):
             message = f"{path}: component instance is already embedded at {previous}"
             raise LayoutInvariantError(message)
+        cached_subtree = subtree_cache.get(path)
+        if (
+            not _force_all
+            and path not in dirty_paths
+            and cached_subtree is not None
+            and cached_subtree.component is component
+            and same_context(cached_subtree.inherited_context, inherited_context)
+        ):
+            for cached_path, cached_component in cached_subtree.components.items():
+                cached_identity = id(cached_component)
+                if previous := identities.get(cached_identity):
+                    message = f"{cached_path}: component instance is already embedded at {previous}"
+                    raise LayoutInvariantError(message)
+                identities[cached_identity] = cached_path
+                components[cached_path] = cached_component
+                cached_component._runtime = runtime
+            assets.extend(cached_subtree.assets)
+            observed_bindings.extend(cached_subtree.async_bindings)
+            observed_addresses.extend(cached_subtree.observations)
+            return list(cached_subtree.nodes)
+
+        component_paths_before = set(components)
+        asset_start = len(assets)
+        binding_start = len(observed_bindings)
+        observation_start = len(observed_addresses)
+        deferred_start = len(deferred)
         identities[identity] = path
         components[path] = component
         component._runtime = runtime
@@ -392,6 +435,22 @@ def render_component_tree(
                 nodes.extend(expand_item(item, f"{path}.{index}"))
             if snapshot.document_key is not None:
                 document_key = snapshot.document_key
+            if len(deferred) == deferred_start:
+                subtree_cache[path] = _ExpandedSubtree(
+                    component,
+                    dict(inherited_context),
+                    tuple(nodes),
+                    {
+                        component_path: held
+                        for component_path, held in components.items()
+                        if component_path not in component_paths_before
+                    },
+                    tuple(assets[asset_start:]),
+                    unique_async_bindings(observed_bindings[binding_start:]),
+                    tuple(dict.fromkeys(observed_addresses[observation_start:])),
+                )
+            else:
+                subtree_cache.pop(path, None)
             return nodes
         finally:
             active.remove(identity)
