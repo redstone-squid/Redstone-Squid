@@ -18,7 +18,7 @@ from squid.diagnostics.domain import ErrorReport
 SESSION_SECONDS = 300
 
 
-class ErrorReportBrowser(sl.Component):
+class ErrorReportBrowser(sl.Component[sl.ComponentsV2Target]):
     """A list of recent reports, each openable in place and readable to its last line.
 
     Holds the reports it was constructed with rather than a service: `recent` already fetches
@@ -62,14 +62,16 @@ class ErrorReportBrowser(sl.Component):
             ),
         )
 
-    def render(self) -> sl.Document:
+    def render(self) -> sl.Document[sl.ComponentsV2Target]:
         nodes = self._render_detail() if self.detail is not None else self._render_list()
         return sl.Document(tuple(nodes))
 
-    def _render_list(self) -> Sequence[sl.LayoutNode]:
+    def _render_list(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         entries = tuple(_list_line(report) for report in self._reports)
         body: sl.TextLike = "\n".join(entries) or L(t"Nothing has failed within the retention window.")
-        nodes: list[sl.LayoutNode] = [sl.section(sl.heading(L(t"Recent errors")), sl.truncate(sl.paragraph(body)))]
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+            sl.section(sl.heading(L(t"Recent errors")), sl.truncate(sl.paragraph(body)))
+        ]
         if self._reports:
             nodes.append(
                 sl.primitives.SelectMenu(
@@ -89,12 +91,12 @@ class ErrorReportBrowser(sl.Component):
         nodes.append(sl.action_controls(self._close_action(), key="list-actions"))
         return nodes
 
-    def _render_detail(self) -> Sequence[sl.LayoutNode]:
+    def _render_detail(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         report = self.detail
         assert report is not None
         reference = report.reference
         traceback_text: sl.TextLike = report.traceback.strip() or L(t"No traceback was recorded.")
-        children: list[sl.LayoutNode] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.primitives.Heading(L(t"Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sl.primitives.Code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),

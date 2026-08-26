@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class MergeConfirmation(sl.Component):
+class MergeConfirmation(sl.Component[sl.ComponentsV2Target]):
     """A short-lived semantic confirmation for account merges."""
 
     value: bool | None = sl.state(None)
@@ -54,7 +54,7 @@ class MergeConfirmation(sl.Component):
         self._timeout = timeout
         self._done = anyio.Event()
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.section(sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt)),
             sl.action_controls(
