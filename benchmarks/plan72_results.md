@@ -13,12 +13,12 @@ warmed 1,000-component tree and 50 samples.
 
 | Change | p50 | p95 |
 | --- | ---: | ---: |
-| One visible leaf | 1.266 ms | 1.438 ms |
-| Ten visible leaves | 2.375 ms | 2.682 ms |
-| Conditional layout branch | 1.008 ms | 1.724 ms |
-| Text crosses planner headroom | 1.122 ms | 1.944 ms |
-| Atomic resource resolves | 1.411 ms | 1.810 ms |
-| Keyed subtree mounts/unmounts | 7.488 ms | 9.202 ms |
+| One visible leaf | 0.888 ms | 0.998 ms |
+| Ten visible leaves | 2.127 ms | 2.532 ms |
+| Conditional layout branch | 0.657 ms | 0.922 ms |
+| Text crosses planner headroom | 0.738 ms | 1.021 ms |
+| Atomic resource resolves | 0.996 ms | 1.314 ms |
+| Keyed subtree mounts/unmounts | 0.685 ms | 0.767 ms |
 
 The original 40.253/152.936 ms atomic result did not reproduce in isolated reruns; before optimization,
 repeated p95 results were roughly 14-18 ms. Phase instrumentation then identified two component-tree
@@ -26,11 +26,21 @@ passes and sibling expansion as the actual avoidable work. Certified cached atom
 settle before rendering, and typed subtree routes splice the final dirty leaf through cached structural
 ancestors. Structural or metadata changes still fall back to full expansion.
 
-The instrumented atomic run measured 1.950 ms p50 and 3.029 ms p95 for the operation. It used exactly
+The final instrumented atomic run measured 1.132 ms p50 and 1.508 ms p95 for the operation. It used exactly
 one render and one load per refresh; scheduler queueing and debounce were excluded. Per-phase p95 was
-0.567 ms for runtime expansion, 0.135 ms for resource settlement, 1.515 ms for preflight (including
-1.310 ms planning), and 0.128 ms for Discord rendering. This makes the async machinery a small part of
+0.345 ms for runtime expansion, 0.071 ms for resource settlement, 0.981 ms for preflight (including
+0.885 ms planning), 0.060 ms for Discord rendering, and 0.022 ms for commit. The planner reported
+incremental reuse with one state explored on every measured refresh, so its remaining cost is the
+certified local lowering, measurement, hashing and scene/report construction rather than global search.
+This makes the async machinery a small part of
 the local cost; real resource I/O remains outside the benchmark.
+
+The last runtime pass added two narrower certificates. A topology-stable tree now retains lifecycle
+indexes instead of rebuilding and pruning them across every component. A component-only structural
+delta carries exact added and removed paths into commit, which is why the mount/unmount case no longer
+falls back to whole-tree expansion and reconciliation. Context matching remains identity-based unless
+the `ContextKey` explicitly supplies a `cache_version` projection; that projection is the application's
+contract that callbacks, authority and all render-observable behavior are interchangeable.
 
 Cold versus fully unchanged p95 for 1, 100 and 1,000 components was 1.041/0.017 ms,
 3.481/0.017 ms and 84.023/0.019 ms respectively. The unchanged path remains effectively independent
