@@ -1,20 +1,24 @@
 """Versioned snapshots and fenced durable-session store contracts."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
+from typing import cast
 
 import anyio
 import pytest
 
 from squid_discord import Everyone, Mount
 from squid_discord.durability import (
+    ComponentState,
     ComponentRegistry,
     DurableSessionStore,
     MemorySessionStore,
     MountStateCodec,
     MountStateError,
+    MountState,
     SQLiteSessionStore,
+    migrate_component_state,
 )
 from squid_discord.testing import commit_render
 from squid_layouts import Component, state
@@ -222,3 +226,96 @@ def test_migration_must_advance_exactly_one_version() -> None:
 
     with pytest.raises(MountStateError, match="must produce version 2"):
         registry.restore(snapshot, access=Everyone())
+
+
+def _snapshot() -> MountState:
+    mount = Mount(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(mount)
+    return _registry().capture(mount, "counter")
+
+
+def test_component_state_helper_changes_one_path_and_preserves_the_rest() -> None:
+    snapshot = _snapshot()
+    child_before = next(component for component in snapshot.components if component.path == "child")
+
+    migrated = migrate_component_state(
+        snapshot,
+        "$",
+        lambda state: {"total": state["count"], "enabled": True},
+        type_id="example:RenamedRoot",
+    )
+
+    root = next(component for component in migrated.components if component.path == "$")
+    assert root.state == {"total": 0, "enabled": True}
+    assert root.type_id == "example:RenamedRoot"
+    assert next(component for component in migrated.components if component.path == "child") == child_before
+    assert migrated.presentation == snapshot.presentation
+    assert migrated.component_version == snapshot.component_version + 1
+
+
+def test_component_state_helper_supports_sequential_registry_migrations() -> None:
+    snapshot = _snapshot()
+    registry = _registry(
+        version=3,
+        migrations={
+            1: lambda current: migrate_component_state(current, "$", dict),
+            2: lambda current: migrate_component_state(current, "child", dict),
+        },
+    )
+
+    restored = registry.restore(snapshot, access=Everyone())
+
+    assert isinstance(restored.component, DurableRoot)
+
+
+@pytest.mark.parametrize("path", ["missing", "child"])
+def test_component_state_helper_rejects_missing_or_duplicate_paths(path: str) -> None:
+    snapshot = _snapshot()
+    if path == "child":
+        child = next(component for component in snapshot.components if component.path == "child")
+        snapshot = replace(snapshot, components=(*snapshot.components, child))
+
+    with pytest.raises(MountStateError, match="missing|duplicate"):
+        migrate_component_state(snapshot, path, dict)
+
+
+@pytest.mark.parametrize(
+    "transform",
+    [
+        lambda _state: [],
+        lambda _state: {1: "value"},
+        lambda _state: {"value": object()},
+    ],
+)
+def test_component_state_helper_rejects_malformed_or_non_json_results(
+    transform: Callable[[Mapping[str, object]], object],
+) -> None:
+    with pytest.raises(MountStateError, match="mapping with string keys|not JSON serializable"):
+        migrate_component_state(
+            _snapshot(), "$", cast(Callable[[Mapping[str, object]], Mapping[str, object]], transform)
+        )
+
+
+def test_component_state_helper_rejects_an_empty_type_identity() -> None:
+    with pytest.raises(MountStateError, match="type identity"):
+        migrate_component_state(_snapshot(), "$", dict, type_id="")
+
+
+def test_failed_transform_cannot_mutate_the_input_snapshot() -> None:
+    snapshot = _snapshot()
+    root_index = next(index for index, component in enumerate(snapshot.components) if component.path == "$")
+    components = list(snapshot.components)
+    components[root_index] = ComponentState("$", components[root_index].type_id, {"nested": {"value": 1}})
+    snapshot = replace(snapshot, components=tuple(components))
+
+    def mutate_then_fail(state: Mapping[str, object]) -> Mapping[str, object]:
+        nested = state["nested"]
+        assert isinstance(nested, dict)
+        nested["value"] = 2
+        raise RuntimeError("migration failed")
+
+    with pytest.raises(RuntimeError, match="migration failed"):
+        migrate_component_state(snapshot, "$", mutate_then_fail)
+
+    root = next(component for component in snapshot.components if component.path == "$")
+    assert root.state == {"nested": {"value": 1}}

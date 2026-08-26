@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from squid_discord.mount import Mount
@@ -74,6 +74,7 @@ __all__ = [
     "TopicBridgeSnapshot",
     "Unreachable",
     "encode_session_scope",
+    "migrate_component_state",
 ]
 
 
@@ -272,6 +273,42 @@ class MountStateCodec:
             _string(target, "fingerprint"),
             tuple(adapter_capabilities),
         )
+
+
+def migrate_component_state(
+    current: MountState,
+    path: str,
+    transform: Callable[[Mapping[str, object]], Mapping[str, object]],
+    *,
+    type_id: str | None = None,
+) -> MountState:
+    """Transform one component snapshot and advance the root's version by one."""
+    isolated = MountStateCodec.loads(MountStateCodec.dumps(current))
+    matches = [index for index, component in enumerate(isolated.components) if component.path == path]
+    if len(matches) != 1:
+        detail = "missing" if not matches else "duplicate"
+        raise MountStateError(f"component path {path!r} is {detail} in the mount state")
+    if type_id == "":
+        raise MountStateError("component type identity must not be empty")
+
+    index = matches[0]
+    component = current.components[index]
+    transformed = transform(isolated.components[index].state)
+    if not isinstance(transformed, Mapping) or not all(isinstance(key, str) for key in transformed):
+        raise MountStateError("component migration result must be a mapping with string keys")
+    components = list(current.components)
+    components[index] = ComponentState(
+        component.path,
+        component.type_id if type_id is None else type_id,
+        dict(transformed),
+    )
+    migrated = replace(
+        current,
+        component_version=current.component_version + 1,
+        components=tuple(components),
+    )
+    MountStateCodec.loads(MountStateCodec.dumps(migrated))
+    return migrated
 
 
 def _presentation_to_dict(state: PresentationState) -> dict[str, object]:
