@@ -233,7 +233,7 @@ class FinishHook(Protocol):
 
     # Positional-only, as `MessageDestination` is: a named parameter would make the protocol demand
     # that every observer spell the argument `mount`.
-    def __call__(self, message_root: MessageRoot, /) -> Awaitable[None]: ...
+    def __call__(self, message_root: AnyMessageRoot, /) -> Awaitable[None]: ...
 
 
 class PresentedHook(Protocol):
@@ -244,7 +244,7 @@ class PresentedHook(Protocol):
     to wait on the mount that is calling it.
     """
 
-    def __call__(self, message_root: MessageRoot, /) -> None: ...
+    def __call__(self, message_root: AnyMessageRoot, /) -> None: ...
 
 
 class CommittedHook(Protocol):
@@ -254,20 +254,30 @@ class CommittedHook(Protocol):
     render lock, where awaiting or re-entering the mount would deadlock.
     """
 
-    def __call__(self, message_root: MessageRoot, /) -> None: ...
+    def __call__(self, message_root: AnyMessageRoot, /) -> None: ...
 
 
 class Scheduler(Protocol):
     """Anything that can absorb out-of-band refresh requests (see `MessageRootScheduler`)."""
 
-    def schedule(self, message_root: MessageRoot) -> None: ...
+    def schedule(self, message_root: AnyMessageRoot) -> None: ...
 
 
 @runtime_checkable
 class ReactiveScheduler(Protocol):
     """A scheduler that can preserve the component attribution of a bus change."""
 
-    def schedule_reactive(self, message_root: MessageRoot, address: Address) -> None: ...
+    def schedule_reactive(self, message_root: AnyMessageRoot, address: Address) -> None: ...
+
+
+type AnyMessageRoot = MessageRoot[Any, Any]
+"""A mount of any target mode and adapter.
+
+`MessageRoot`'s type parameters both default, so a bare `MessageRoot` annotation silently means
+`MessageRoot[ComponentsV2Target, DiscordPy27Adapter]` and rejects every other instantiation —
+including `Self` inside `MessageRoot`'s own methods. Internal machinery that works for any mount
+takes this instead; public signatures keep the precise generic.
+"""
 
 
 type ResumedPress = Callable[[], Awaitable[None]]
@@ -302,7 +312,7 @@ class ChallengeRequest:
     the challenge's wording, so it is safe to await anywhere.
     """
 
-    message_root: MessageRoot
+    message_root: AnyMessageRoot
     interaction: discord.Interaction
     """The interaction that asked. Its response has been spent on the question, so it is an
     actor identity and a private answering channel -- never a handle to this mount's message."""
@@ -328,7 +338,7 @@ class ChallengePresenter(Protocol):
 class ExpirySupervisor(Protocol):
     """A scheduler that observes mount edit-authority deadlines."""
 
-    def watch(self, message_root: MessageRoot) -> Callable[[], None]: ...
+    def watch(self, message_root: AnyMessageRoot) -> Callable[[], None]: ...
 
 
 @runtime_checkable
@@ -341,7 +351,7 @@ class TopicScheduler(Protocol):
 
     bus: TopicBus
 
-    def schedule(self, message_root: MessageRoot) -> None: ...
+    def schedule(self, message_root: AnyMessageRoot) -> None: ...
 
 
 def _unique_by_identity(middleware: Sequence[ActionMiddleware]) -> tuple[ActionMiddleware, ...]:
@@ -400,9 +410,9 @@ class _MountedBehaviour:
     both message modes, and a second copy of them would be a second thing to keep in step.
     """
 
-    _root: MessageRoot
+    _root: AnyMessageRoot
 
-    def __init__(self, message_root: MessageRoot, timeout: float | None) -> None:
+    def __init__(self, message_root: AnyMessageRoot, timeout: float | None) -> None:
         super().__init__(timeout=timeout)  # type: ignore[call-arg]
         self._root = message_root
 
@@ -449,7 +459,7 @@ def _custom_id(message_root_id: str, generation: int, key: str) -> str:
 
 
 class _WiredButton(discord.ui.Button[AnyMountedView]):
-    def __init__(self, node: scene.Button, message_root: MessageRoot, key: str, generation: int) -> None:
+    def __init__(self, node: scene.Button, message_root: AnyMessageRoot, key: str, generation: int) -> None:
         super().__init__(
             style=getattr(discord.ButtonStyle, node.style.value),
             label=node.label,
@@ -466,7 +476,7 @@ class _WiredButton(discord.ui.Button[AnyMountedView]):
 
 
 class _WiredSelect(discord.ui.Select[AnyMountedView]):
-    def __init__(self, node: scene.Select, message_root: MessageRoot, key: str, generation: int) -> None:
+    def __init__(self, node: scene.Select, message_root: AnyMessageRoot, key: str, generation: int) -> None:
         super().__init__(
             placeholder=node.placeholder,
             min_values=node.min_values,
@@ -536,11 +546,11 @@ type _SelectionValues = list[str] | _EntityValues | None
 
 
 class _EntityDispatch:
-    _root: MessageRoot
+    _root: AnyMessageRoot
     _key: str
     _generation: int
 
-    def _wire(self, message_root: MessageRoot, key: str, generation: int) -> None:
+    def _wire(self, message_root: AnyMessageRoot, key: str, generation: int) -> None:
         self._root = message_root
         self._key = key
         self._generation = generation
@@ -572,7 +582,7 @@ class _EntitySelectKwargs(TypedDict):
 
 
 def _entity_kwargs(
-    node: scene.EntitySelect, message_root: MessageRoot, key: str, generation: int
+    node: scene.EntitySelect, message_root: AnyMessageRoot, key: str, generation: int
 ) -> _EntitySelectKwargs:
     return {
         "placeholder": node.placeholder,
@@ -605,7 +615,7 @@ class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyM
 
 
 def _wired_entity_select(
-    node: scene.EntitySelect, message_root: MessageRoot, key: str, generation: int
+    node: scene.EntitySelect, message_root: AnyMessageRoot, key: str, generation: int
 ) -> discord.ui.BaseSelect[Any]:
     kwargs = _entity_kwargs(node, message_root, key, generation)
     if node.entity_type is EntityType.USER:
@@ -894,7 +904,7 @@ class _BusyPaint:
 
     def __init__(
         self,
-        message_root: MessageRoot,
+        message_root: AnyMessageRoot,
         key: str,
         busy: BusySpec,
         interaction: discord.Interaction,
@@ -1051,7 +1061,7 @@ class MessageRoot[ModeT = ComponentsV2Target, AdapterT: DiscordPyAdapter = Disco
         topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
         reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
 
-        def collected(_reference: weakref.ReferenceType[MessageRoot]) -> None:
+        def collected(_reference: weakref.ReferenceType[AnyMessageRoot]) -> None:
             if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
                 reconciler.close()
 
