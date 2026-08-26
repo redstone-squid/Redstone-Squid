@@ -10,9 +10,9 @@ every markdown prefix and code fence exactly, allocates the shared budgets by pr
 degrades content the way its author said it should degrade.
 
 > **The discord.py runtime lives in [`squid-ui-discord`](../squid-ui-discord/README.md), and the
-> reusable application patterns in [`squid-ui-widgets`](../squid-ui-widgets/README.md).** Mounts,
+> reusable application patterns in [`squid-ui-widgets`](../squid-ui-widgets/README.md).** MessageRoots,
 > sessions, routing, delivery, adoption, roles, devtools and durable panels moved there; the
-> examples below that call `sd.Mount(...)` need it installed. What stays here is Discord
+> examples below that call `sd.MessageRoot(...)` need it installed. What stays here is Discord
 > *protocol* knowledge — Components V2 and classic limits, the two dialects, the scene shapes,
 > the capability tags — because that is what the planner plans against, and none of it imports
 > discord.py. Examples below that use `sp.Wizard`, `sp.Editor` or `sp.guards.confirm` need
@@ -29,24 +29,24 @@ class Counter(sl.Component):
         return sl.section(
             sl.heading("Counter"),
             t"Count: {self.count}",
-            sl.actions(sl.action("+1", self.increment, key="increment"), key="counter-actions"),
+            sl.action_controls(sl.action_control("+1", self.increment, key="increment"), key="counter-actions"),
         )
 
     async def increment(self, event: sl.PressEvent) -> None:
-        self.count += 1  # the mount re-renders and edits the message
+        self.count += 1  # the message root re-renders and edits the message
 ```
 
 See [the architecture and API interaction guide](../../docs/squid-ui-architecture.md)
-for component composition, planning, renderers, action policies, and durable mounts, and
+for component composition, planning, renderers, action policies, and durable message roots, and
 [Classic Discord messages](../squid-ui-discord/docs/classic-messages.md) for the second target: content, embeds,
 and action rows, from the same semantic document.
 
 ## The layers
 
 1. **Semantic documents** describe author intent with `Section`, `Paragraph`, `List`,
-   `Fields`, `Table`, `Roster`, `Media`, `Details`, `Actions`, `Choices`, `Items`, `Navigation`, and `Grid`.
+   `Fields`, `Table`, `Roster`, `Media`, `Details`, `ActionControls`, `Choices`, `Items`, `Navigation`, and `Grid`.
    Authors may express a display preference and flexibility, but never an exact Discord shape.
-   The lowercase factories (`sl.section`, `sl.actions`, `sl.field`, …) are the recommended
+   The lowercase factories (`sl.section`, `sl.action_controls`, `sl.field`, …) are the recommended
    authoring surface; the uppercase dataclasses are the IR they build and stay fully public.
 2. **Target adapters** select lossless representations, per target: one document becomes a
    `LayoutView` under `V2_TARGET` and content, embeds, and action rows under `CLASSIC_TARGET`.
@@ -63,7 +63,7 @@ and action rows, from the same semantic document.
 6. **Renderers** mechanically draw a scene. Discord produces Components V2 and audits it with
    `sd.conform(strict=True)`; HTML produces escaped Discord-like preview markup from the same scene.
 
-`sd.compose()` is the Discord convenience pipeline, with `reservation` for callers whose
+`sd.render_message()` is the Discord convenience pipeline, with `reservation` for callers whose
 message carries content the engine cannot see — `sd.measure(view)` and `sd.cost(item)`
 produce one without hand-counting. It always creates a renderer-owned view;
 adopting a *live* `discord.py` view — one already sent, which will edit its own message — is
@@ -71,28 +71,28 @@ intentionally unsupported, because two writers on one message make measurement u
 
 There are four ways to adopt the package, and they can be mixed in one bot:
 
-1. **A new screen.** Use `sd.Mount` for one command while everything else stays as it is.
+1. **A new screen.** Use `sd.MessageRoot` for one command while everything else stays as it is.
 2. **A region of an existing V2 screen.** `sd.contribute(document, to=view, followed_by=...)`
    measures the host, plans into what is left, and places the result — the host keeps sending,
    editing, timeouts, callbacks and error policy. The contributed region is stateless: link and
-   routed controls only, since no mount exists to wire a component-local callback.
+   routed controls only, since no message root exists to wire a component-local callback.
 3. **An unsent classic view.** `sd.adopt(view)` turns a never-sent `discord.ui.View`
    into a `Component`: Squid builds its own controls from `view.children`, owns the message,
-   and dispatches to the legacy callbacks unchanged. The mount owns the timeout, and anything
+   and dispatches to the legacy callbacks unchanged. The message root owns the timeout, and anything
    that would make the legacy object a second writer raises `AdoptionError`.
-4. **The whole message.** Hand it to `Mount` when component state or callbacks move into Squid.
+4. **The whole message.** Hand it to `MessageRoot` when component state or callbacks move into Squid.
 
 See [Migrating an existing discord.py bot](../squid-ui-discord/docs/migrating.md) for an incremental path covering
-V2 and classic contributions, persistent routes, mounts, sessions, forms, and durability.
+V2 and classic contributions, persistent routes, message roots, sessions, forms, and durability.
 
-A fragment is not a miniature mount. If two independently stateful regions need to edit one
+A fragment is not a miniature message root. If two independently stateful regions need to edit one
 message, give them a single parent component, or keep the legacy view as the sole owner and make
 the Squid region stateless. Components nest through explicit
-`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sd.Mount`
+`self.embed(child, key=...)` boundaries, so actions and pagers never cross-wire. `sd.MessageRoot`
 binds a component tree to a message: every
 interaction funnels through it (author lock, error hook, re-render/edit), timeouts disable
-controls, `sd.MountScheduler` coalesces out-of-band refreshes, and `sd.Navigator` stacks screens with
-Back/Home/Close by composition. A mount's `nav=` replaces the stock Previous/Next row with
+controls, `sd.MessageRootScheduler` coalesces out-of-band refreshes, and `sd.Navigator` stacks screens with
+Back/Home/Close by composition. A message root's `nav=` replaces the stock Previous/Next row with
 controls built from `sd.NavigationContext`; the same factory receives materialized pages and
 asynchronously loaded windows. Semantic pickers page through keyed
 25-option windows. A keyed root `Document` may promote structural overflow to whole-message
@@ -107,8 +107,8 @@ path for reconciler-managed posts. `sd.build_modal`/`sd.conform_modal` do the sa
 whose string lengths discord.py does not validate at all. `sl.scene.Codec` transports plans to
 other processes; `sd.durability.DurableSessionRuntime` provides opt-in, whole-session recovery.
 
-Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sd.compose`,
-`sd.render_static`, or `sd.Mount`. An omitted section or article accent inherits
+Presentation colours are an immutable `sl.Palette`, supplied to `sl.planning.plan`, `sd.render_message`,
+`sd.render_static`, or `sd.MessageRoot`. An omitted section or article accent inherits
 `Palette.brand`; `accent=None` explicitly opts out and an integer remains an exact data override.
 Semantic tones resolve through the palette. `sl.themed(palette, *children)` scopes an override to a
 subtree, so a component may select a palette from reactive state while the final scene still contains
@@ -168,7 +168,7 @@ agreement = sp.Agreement(
     require="all",
     on_resolve=release,
 )
-mount = sd.Mount(
+message_root = sd.MessageRoot(
     agreement,
     access=sd.Users({member.id for member in reviewers}),
     timeout=900,
@@ -222,7 +222,7 @@ Premium controls are supported by both Discord message targets. Other targets re
 state; classic Discord and other targets reject V2-only media structures rather than silently
 discarding that content.
 
-### Live updates across mounts
+### Live updates across message roots
 
 `TopicBus` is the two-method protocol for a payload-free latency projection. Publishing says only
 that an address changed; every subscriber re-reads the application's source of truth.
@@ -234,7 +234,7 @@ identity and is only ever received, never built. `sl.runtime.Address` is the uni
 are text on purpose: `sl.runtime.Topic("build", 123)` is a type error rather than a topic nobody else ever
 addresses.
 
-Watch a topic where you read the thing it names, and the mount follows it for you:
+Watch a topic where you read the thing it names, and the message root follows it for you:
 
 ```python
 class BuildPanel(sl.Component):
@@ -252,7 +252,7 @@ class BuildPanel(sl.Component):
 
 `sl.runtime.watch` is a tracked read like any other, so the render that used the resource's value
 follows the topic, a render that stops reading it stops following, and `bus.publish` re-pends
-the resource before the mount redraws. Nothing is subscribed by hand, so nothing has to be
+the resource before the message root redraws. Nothing is subscribed by hand, so nothing has to be
 unsubscribed -- and the initial load is just the resource's first settle. Prefer
 `PendingMode.ATOMIC` for live data: the default `EXPLICIT` would flash a pending paint on
 every external change.
@@ -263,14 +263,14 @@ again. There is no "subscribe before the first read" rule to get wrong. `sl.runt
 resource, never in `on_load`, which runs once and under no consumer.
 
 `scheduler.follow` remains for a dependency no render-time read can express, and `bus.subscribe`
-for a subscriber that is not a mount:
+for a subscriber that is not a message root:
 
 ```python
 bus = sl.runtime.LocalTopicBus()
-scheduler = sd.MountScheduler(bus)
-mount = sd.Mount(panel, access=sd.Owner(interaction.user.id), scheduler=scheduler)
-scheduler.follow(mount, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
-await mount.send(sd.respond_to(interaction))
+scheduler = sd.MessageRootScheduler(bus)
+message_root = sd.MessageRoot(panel, access=sd.Owner(interaction.user.id), scheduler=scheduler)
+scheduler.follow(message_root, sl.runtime.Topic("build", "123"))  # subscribe before the first read/send
+await message_root.send(sd.respond_to(interaction))
 
 # The host owns the only long-running coroutine.
 async with anyio.create_task_group() as tasks:
@@ -284,8 +284,8 @@ its own durable change feed, NOTIFY listener, or queue consumer into the local b
 the application already funnels committed changes; do not subscribe a durable projection that
 already has a reconciler, because that would give one message two competing writers. For tests,
 call `publish()` and assert immediately.
-Expiry and idle-time tests can inject UTC and monotonic clocks through `MountScheduler(clock=...)` and
-`Mount(clock=...)`; production callers normally keep their defaults.
+Expiry and idle-time tests can inject UTC and monotonic clocks through `MessageRootScheduler(clock=...)` and
+`MessageRoot(clock=...)`; production callers normally keep their defaults.
 
 When the change happens in another process -- a worker that finished a render, a second shard --
 the host bridges it in. `PostgresTopicBridge` is that bridge for a deployment that already runs
@@ -327,12 +327,12 @@ then the bridge listener publishes it locally and in other processes. The bridge
 before calling it; unlike `publish()`, it rejects topics that cannot be encoded or fit under the
 NOTIFY payload limit.
 
-Every delivered mount using a scheduler is observed for edit-authority expiry, even when it follows
+Every delivered message root using a scheduler is observed for edit-authority expiry, even when it follows
 no topics. `PauseUpdates(warning=60)` is the default pre-expiry status policy. A long-lived
 ephemeral panel can opt into an explicit, non-mutating handoff instead:
 
 ```python
-mount = sd.Mount(
+message_root = sd.MessageRoot(
     panel,
     access=sd.Owner(user_id),
     scheduler=scheduler,
@@ -340,7 +340,7 @@ mount = sd.Mount(
 )
 ```
 
-The renewal screen preserves the mount and hidden application state, then restores the latest
+The renewal screen preserves the message root and hidden application state, then restores the latest
 render on the same message when its owner clicks **Continue Session**. Pass `expiry=None` to
 disable pre-expiry UI. `RenewEphemeral` requires a scheduler-backed scheduler so timed arming cannot
 silently be missed.
@@ -348,16 +348,16 @@ silently be missed.
 ### Runtime profiling
 
 Runtime profiling is opt-in, bounded, and synchronous. One `MemoryProfiler` can cover the host's
-live-update chain: pass it to `MountScheduler`, and a `Mount` inherits its scheduler's profiler unless
+live-update chain: pass it to `MessageRootScheduler`, and a `MessageRoot` inherits its scheduler's profiler unless
 explicitly overridden. Routers are independent ownership roots and accept the same collector
 directly.
 
 ```python
 profiler = sl.profiling.MemoryProfiler(sample_rate=0.1)
 bus = sl.runtime.LocalTopicBus()
-scheduler = sd.MountScheduler(bus, profiler=profiler)
+scheduler = sd.MessageRootScheduler(bus, profiler=profiler)
 
-mount = sd.Mount(panel, access=sd.Everyone(), scheduler=scheduler)
+message_root = sd.MessageRoot(panel, access=sd.Everyone(), scheduler=scheduler)
 router = sd.Router(profiler=profiler)
 devtools = sd.devtools.DevTools(scheduler=scheduler)
 ```
@@ -371,13 +371,13 @@ supervisor.
 
 The owner-only devtools cog reads all of this back: `dev ui actions [limit]` for the bounded causal
 action ledger (including rollbacks even when profiling is disabled), `dev ui profile` for latency aggregates,
-`dev ui profile <mount-id>` for one mount's retained traces, `dev ui timeline [limit] [target]`
+`dev ui profile <message-root-id>` for one message root's retained traces, `dev ui timeline [limit] [target]`
 for every retained dispatch in the order it happened, `dev ui queues` for the bus, and
 `dev ui export` for the whole snapshot as JSON. A timeline entry names the action key, the actor,
-the mount and the disposition, and `target` narrows it to `mount:<id>` or `actor:<user_id>`.
+the message root and the disposition, and `target` narrows it to `message-root:<id>` or `actor:<user_id>`.
 
-Trace attributes may retain a mount ID and the acting user ID in these bounded buffers, and
-`dev ui export` will dump both. Neither ever becomes an aggregate key: mount IDs, topics, users,
+Trace attributes may retain a message root ID and the acting user ID in these bounded buffers, and
+`dev ui export` will dump both. Neither ever becomes an aggregate key: message-root IDs, topics, users,
 message IDs, route values, and form payloads are excluded from those by construction, so the
 unbounded half of the profiler stays free of identifiers.
 
@@ -393,8 +393,8 @@ tabs = sp.Tabs(
     key="build-tabs",
 )
 
-# A mounted message: state lives in sl.state and controls use sl.action closures.
-mount = sd.Mount(tabs.build_component(), access=sd.Everyone())
+# A stateful message: state lives in sl.state and controls use sl.action_control closures.
+message_root = sd.MessageRoot(tabs.build_component(), access=sd.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
 shell = sp.RouteDriver(
@@ -403,7 +403,7 @@ shell = sp.RouteDriver(
 document = shell.render(tabs, sp.TabsState(selected=tab))
 ```
 
-Mounted actions accept application-wide middleware directly on the mount:
+MessageRooted actions accept application-wide middleware directly on the message root:
 
 ```python
 class TraceActions(sl.interactions.ActionMiddleware):
@@ -412,7 +412,7 @@ class TraceActions(sl.interactions.ActionMiddleware):
             await proceed()
 
 
-mount = sd.Mount(
+message_root = sd.MessageRoot(
     panel,
     access=sd.Everyone(),
     middleware=(TraceActions(),),
@@ -420,8 +420,8 @@ mount = sd.Mount(
 ```
 
 The first middleware is outermost. Returning without `proceed()` short-circuits the handler but
-still lets the mount acknowledge and flush; `proceed()` is one-shot and expires when that
-middleware call returns. Middleware runs after mount admission and stale-generation handling.
+still lets the message root acknowledge and flush; `proceed()` is one-shot and expires when that
+middleware call returns. Middleware runs after message-root admission and stale-generation handling.
 Its `ActionRequest.rebased` flag is generation metadata, not a completion result. Handler state
 rolls back before an exception reaches outer middleware, and Discord rendering/delivery remains
 outside the onion. The onion itself is outside the handler transaction so it can catch commit-time
@@ -429,30 +429,30 @@ shared-state conflicts. Component state written by middleware is consequently in
 not roll back with handler state; middleware is a policy surface unless that independence is
 intentional.
 
-`Mount.on_committed()` and `Mount.on_presented()` observers are synchronous. Committed observers run
+`MessageRoot.on_committed()` and `MessageRoot.on_presented()` observers are synchronous. Committed observers run
 whenever application runtime state advances, including when an identical presentation suppresses the
 Discord edit. Presented observers run only at delivered-generation commit points. Both run under the
-mount's render lock and must not await or call lock-taking mount operations. External hosts migrating
+message root's render lock and must not await or call lock-taking message-root operations. External hosts migrating
 an async observer should enqueue its work or start it through an owned task supervisor.
 
-Every mount states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
+Every message root states who may interact. `Owner`, `Users`, and `Everyone` cover static policy;
 `Check` accepts an asynchronous application policy. Visibility stays a destination concern,
 so owner access does not by itself make a channel message private.
 
-`SessionRegistry` groups a root mount and its attached children under one operational lifetime.
+`SessionManager` groups a root message root and its attached children under one operational lifetime.
 Typed `SessionKey.user`, `guild`, `user_guild`, `global_`, and `custom` constructors name scoped
-cardinality, while `SessionPolicy` composes a limit, collision selection, and replacement
+cardinality, while `AdmissionSpec` composes a limit, collision selection, and replacement
 protection. Opens return `Opened`, `Rejected`, or `Abandoned`; no preflight `get()` is needed to
 explain a collision.
 
-`Screen` holds reusable key scope, admission, access, and mount policy for a logical application
+`SessionSpec` holds reusable key scope, admission, access, and message-root options for a logical application
 screen. Use `screen.respond(sessions, component, interaction)` when one interaction supplies both
-delivery and opener identity; use `screen.open(...)` with an explicit `Destination` and `Opener`
+delivery and open-context identity; use `screen.open(...)` with an explicit `MessageDestination` and `OpenContext`
 for other transports.
 
 Stateful drafts that must survive restarts open through `DurableSessionRuntime`, which coordinates
 fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
-See [Durable sessions](docs/durable-mounts.md) for the imperative and `DurableBot` startup paths.
+See [Durable sessions](../squid-ui-discord/docs/durable-message-roots.md) for the imperative and `DurableBot` startup paths.
 
 `TransitionRoute.phase` is `next` for deterministic buttons: its state is already the state the next
 document should render. Selects and forms use `input`, because their values arrive in the
@@ -466,7 +466,7 @@ instances, but a process-independent route cannot carry an in-memory component i
 
 ### Durable routed controls
 
-Controls on long-lived posts use a stable route tree rather than an in-memory mount. The namespace
+Controls on long-lived posts use a stable route tree rather than an in-memory message root. The namespace
 is an ordinary root group; every `define` returns its final, context-free identity immediately:
 
 ```python
@@ -524,8 +524,8 @@ class Editor(sl.Component):
     title: str = sl.state("")
 
     def render(self):
-        return sl.actions(
-            sl.action("Rename", self.rename, key="rename", record=self.history),
+        return sl.action_controls(
+            sl.action_control("Rename", self.rename, key="rename", record=self.history),
             sl.runtime.history_actions(self.history),
             key="editor-actions",
         )
@@ -552,11 +552,11 @@ The coordinated breaking signatures and direct before/after examples are in
 
 ### SharedState state
 
-`sl.runtime.SharedState` is a namespace of view state several live mounts agree on. Subclass it, declare
+`sl.runtime.SharedStateState` is a namespace of view state several live message roots agree on. Subclass it, declare
 state with `sl.state()`, and hand the same instance to whoever should see the same values:
 
 ```python
-class Workspace(sl.runtime.SharedState[GuildId]):
+class Workspace(sl.runtime.SharedStateState[GuildId]):
     selected: int | None = sl.state(None)
     filters: tuple[str, ...] = sl.state(())
 
@@ -567,8 +567,8 @@ It is the same `sl.state()` a component declares, and literally the same storage
 replacement, `opaque=`, staging and rollback are identical. What differs is who is told when it
 changes, and that is decided by what holds it rather than by how it is declared: a component's
 state invalidates its one owner, while a namespace's publishes an address on the `TopicBus`.
-Every mount whose render read that field refreshes; a mount subscribes to exactly what it
-rendered, reconciled each time it stages one. The mount that *made* the write repaints in the
+Every message root whose render read that field refreshes; a message root subscribes to exactly what it
+rendered, reconciled each time it stages one. The message root that *made* the write repaints in the
 click itself rather than waiting for the bus, so a panel writing shared state feels no
 different from one writing local state — and needs no scheduler to do it. Every shared value an action
 strongly reads is guarded by its version when that action publishes anything, so write skew and
@@ -585,11 +585,11 @@ backend containers.
 
 There is no global store and no lookup by type: two panels converge because something gave them
 the same object, so the handle is the state and its lifetime is whoever holds it. When what a host
-holds is one handle per scope, `sl.runtime.SharedStatePool` is that lifetime written down instead of a
+holds is one handle per scope, `sl.runtime.SharedStateStatePool` is that lifetime written down instead of a
 `setdefault` cache around every namespace:
 
 ```python
-workspaces = sl.runtime.SharedStatePool(Workspace, bus)
+workspaces = sl.runtime.SharedStateStatePool(Workspace, bus)
 workspace = workspaces.get(guild.id)
 ```
 
@@ -655,7 +655,7 @@ resources concurrently, then edits to the settled render. Use
 `@sl.resource(pending=sl.resources.PendingMode.ATOMIC)` when pending should remain internal and
 the first delivery must already be settled. Its `.status` is typed as `Ready[T] | Failed[T]`:
 refreshes expose the previous `Ready` value while loading, and an initial pending read is retried
-by the mount. Both policies use the same internal state machine and neither starts detached
+by the message root. Both policies use the same internal state machine and neither starts detached
 background work.
 
 `await panel.configuration.reload()` is the caller-owned, awaited form. `invalidate()` requests a
@@ -665,7 +665,7 @@ result. Resource state is runtime-only and is not included in durable component 
 ### Operation definitions and executions
 
 `sl.operation` declares a repeatable component-bound definition. Each `start()` creates a fresh,
-causally identified one-shot execution under the mount's caller-owned task. Store the execution that
+causally identified one-shot execution under the message root's caller-owned task. Store the execution that
 the component renders; progress is explicit reactive current state, not an event stream:
 
 ```python
@@ -697,7 +697,7 @@ class PublishVote(sl.Component):
 
 Unlike a resource, an execution has no `reload`, `invalidate`, or `replace`: success, failure,
 and cancellation are terminal for that execution. A retry is `self._publish.start()` and receives a
-new execution ID while keeping the initiating action as its cause. Mounts coalesce progress invalidations through their ordinary
+new execution ID while keeping the initiating action as its cause. MessageRoots coalesce progress invalidations through their ordinary
 stage/deliver/commit path while the operation runs. Resources remain repeatable and intentionally
 have no cancelled status; cancelling one load attempt leaves it pending and retryable.
 
@@ -739,24 +739,24 @@ outside planning and cannot run in `RouteDriver.render()`.
 
 ## Testing a panel with no Discord attached
 
-`sd.testing` is public surface, not a private test helper. Send a mount to nowhere,
-then drive it through `Mount.dispatch` — the same funnel a real press takes, so access
+`sd.testing` is public surface, not a private test helper. Send a message root to nowhere,
+then drive it through `MessageRoot.dispatch` — the same funnel a real press takes, so access
 policies, guards, the action transaction and the repaint all run:
 
 ```python
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
-mount = sd.Mount(Settings(), access=sd.Everyone())
-await mount.send(delivered_to(fake_message()))
+message_root = sd.MessageRoot(Settings(), access=sd.Everyone())
+await message_root.send(delivered_to(fake_message()))
 
-await mount.dispatch("save", fake_interaction(user_id=AUTHOR_ID))
+await message_root.dispatch("save", fake_interaction(user_id=AUTHOR_ID))
 
-assert mount.component.saved
+assert message_root.component.saved
 ```
 
-`commit_render(mount)` is the shortcut when the load path is not what is under test: it stages
+`commit_render(message_root)` is the shortcut when the load path is not what is under test: it stages
 and commits a render with no delivery and does not run `on_load`. Modal submissions go through
-`Mount.dispatch_submit`. There is no `press("save")` sugar on purpose — `dispatch` is the real
+`MessageRoot.dispatch_submit`. There is no `press("save")` sugar on purpose — `dispatch` is the real
 entry point, and a second spelling of it would be one more thing to keep true.
 
 The other half of the module checks the wire payload rather than the Python objects:
@@ -767,7 +767,7 @@ list rather than an assertion.
 
 - The base package depends only on the zero-dependency `squid-reactivity` kernel. Install
   `squid-ui-discord` for the discord.py adapter. The adapter never starts background work on its own;
-  start `sd.MountScheduler.run()` and any external bridge under your own supervisor.
+  start `sd.MessageRootScheduler.run()` and any external bridge under your own supervisor.
 - Factories take content positionally and everything else by keyword. `None` and `False`
   children are skipped, so `cond and node` is the way to include something conditionally;
   `True` is rejected because `and` can never produce it. Collections are unpacked by the

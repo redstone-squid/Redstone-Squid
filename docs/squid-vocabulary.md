@@ -46,16 +46,16 @@ enforceable.
 
 | Suffix | Means | After it |
 |---|---|---|
-| `State` | the facts, no metadata; restorable | `CursorState`, `MountState` |
+| `State` | the facts, no metadata; restorable | `CursorState`, `MessageRootState` |
 | `Snapshot` | read-only view of a subject that is **still alive** | `BusSnapshot`, `HistorySnapshot` |
 | `Record` | a serialized fact that **outlives** its subject; what a `Store` holds | `StoredSessionRecord` |
 | `Report` | diagnostics about a finished operation, for a human | `PlanReport`, `AuditReport` |
 | `Metrics` | numbers about a finished operation, for a machine | `PlanMetrics` |
-| `Inspection` | what `inspect` returns: an **expensive** diagnostic assembly of a live subject, for tools rather than logic | `MountInspection`, `SessionInspection` |
+| `Inspection` | what `inspect` returns: an **expensive** diagnostic assembly of a live subject, for tools rather than logic | `MessageRootInspection`, `SessionInspection` |
 
 `Inspection` and `Snapshot` are not near-synonyms and both stay. A `Snapshot` is the cheap
 read any caller may take; an `Inspection` is the expensive assembly a tool asks for, and it
-*embeds* the snapshot rather than competing with it — `MountInspection` is literally
+*embeds* the snapshot rather than competing with it — `MessageRootInspection` is literally
 `snapshot + middleware + observed + followed + histories`. The pair reads the same way the
 `-er` rule does: the noun is what its verb returns.
 
@@ -71,9 +71,9 @@ read any caller may take; an `Inspection` is the expensive assembly a tool asks 
 | `Decision` | a choice made by an injected `Policy` | `CollisionDecision`, `GenerationDecision` |
 
 `Outcome`, `Verdict`, `Feedback` and `Receipt` retire into these three. This is what
-resolves the `ActionOutcome` homonym without a coin-flip: the reactive union
-`ActionCommit | ActionRollback` is a **Result**, and profiling's `ActionOutcome` enum is a
-**Status**. They stop sharing a word because they were never the same kind of thing.
+resolved the former `ActionOutcome` homonym without a coin-flip: the reactive union
+`ActionCommit | ActionRollback` is an `ActionResult`, and profiling uses `ActionStatus`.
+They stopped sharing a word because they were never the same kind of thing.
 
 ### Identity and authority
 
@@ -87,7 +87,7 @@ resolves the `ActionOutcome` homonym without a coin-flip: the reactive union
 | `Handle` | authority to write to one subject | yes |
 
 `Locator` retires into `Address`. `FrontendAddress` holds durable, frontend-neutral
-coordinates; `MountAddress` holds typed Discord coordinates. Their heads keep the two values
+coordinates; `MessageAddress` holds typed Discord coordinates. Their heads keep the two values
 distinct without reusing the retired suffix.
 
 ### Configuration
@@ -96,17 +96,15 @@ distinct without reusing the retired suffix.
 |---|---|---|
 | `Spec` | a frozen, reusable recipe for building something | `FormSpec`, `ModalSpec` |
 | `Policy` | an **injected decision-maker** — a protocol or callable | `AccessPolicy`, `CollisionPolicy` |
-| `Mode` | an **enum** naming one of a fixed set of behaviours | `DiscordMode` |
+| `Mode` | an **enum** naming one of a fixed set of behaviours | `MessageMode` |
 | `Limits` | hard numeric ceilings imposed by an external system | `V2Limits` |
 | `Profile` | a named bundle of verified behaviour for one library | `AdapterProfile` |
 | `Dialect` | one protocol: what a legal message of it is | `V2Dialect`, `ClassicDialect` |
 | `Target` | the product of a dialect and an adapter, named by its triple | `Target` |
 
-`Policy` currently covers both halves and that is its whole problem: `AccessPolicy` and
-`CollisionPolicy` are protocols you inject, while `CommitPolicy`, `PendingPolicy`,
-`ActionPolicy`, `FormValidationPolicy`, `AmbiguousTimePolicy` and `NonexistentTimePolicy` are
-plain enums. Six of the fourteen are misfiled. `Protection` and `Strategy` retire into
-`Policy`.
+`Policy` is reserved for injected decision-makers such as `AccessPolicy`, `CollisionPolicy`,
+and `ReplacementPolicy`. Fixed choices use `Mode`; frozen recipes use `Spec`. `Protection`
+and `Strategy` retired into those sharper suffixes.
 
 ### Collaborators
 
@@ -173,10 +171,7 @@ The six terminating verbs are unchanged and already enforced: `close`, `detach`,
 | `invalidate` | mark stale so the next render recomputes | no |
 | `refresh` | re-render and deliver the result | yes |
 
-`Mount` currently has `invalidate`, `flush`, `refresh` and `refresh_now` — four words, three
-meanings. `flush` and `refresh_now` fold into `refresh`. Persistence `flush`
-(`PersistedPool.flush`, `DurableSessionRuntime.flush`) names a different subject — writing
-pending bytes — and stays.
+`MessageRoot` uses `invalidate` to mark stale and `refresh` to render and deliver. The former `flush` and `refresh_now` names folded into `refresh`. Persistence `flush` (`PersistentStatePool.flush`, `DurableSessionRuntime.flush`) names a different subject -- writing pending bytes -- and stays.
 
 ### Serialize
 
@@ -232,41 +227,39 @@ and is the model.
 
 Both `of` and `from_<source>` stay, and neither retires. Rule 2 is there to stop a reader
 being misled, and a constructor's source is never ambiguous: nobody misreads
-`Opener.of(interaction)` or `UndoPlan.from_commit(commit)`. Forcing one spelling buys
+`OpenContext.of(interaction)` or `UndoPlan.from_commit(commit)`. Forcing one spelling buys
 uniformity at the price of `from_interaction(interaction)`, and a name that stutters is a
 worse name by the standard the rest of this document is held to.
 
 The real defect here is narrower. **A classmethod that does not return its own class is not
-a constructor and must not be spelled like one.** `Scope.of(opener)` returns a
-`SessionScope`, not a `Scope`, so the name misdirects — a rule 3 violation rather than a rule
-2 one, and the only one in this family. It becomes `Scope.resolve(opener)`, which reuses the
-dictionary verb that already means "turn an abstract selector plus a context into the
-concrete thing": `Router.resolve`, `TargetRegistry.resolve`, `PositionPolicy.resolve`.
+a constructor and must not be spelled like one.** `ScopeKind.resolve(open_context)` returns a
+`SessionScope`, so it uses the dictionary verb that means "turn an abstract selector plus a
+context into the concrete thing": `Router.resolve`, `TargetRegistry.resolve`, and
+`PositionResolver.resolve` follow the same rule.
 
 ### Methods are verb phrases
 
 A member named with a bare noun is a property, not a method. `Pattern.component()`,
-`Composition.files()` and `EditorSection.form()` are methods spelled as nouns; they become
+`RenderedMessage.files()` and `EditorSection.form()` are methods spelled as nouns; they become
 properties, or gain the verb they actually perform (`build_component`, `attachment_files`).
 
 ## The trio, re-derived
 
 Applying the dictionary rather than choosing a metaphor:
 
-**`Screen`** is a frozen dataclass of `name`, `scope`, `policy`, `capacity`, `quota`,
+**`SessionSpec`** is a frozen dataclass of `name`, `scope`, `admission`, `capacity`, `quota`,
 `domain`, `access` and `options`, reused across every opening. That is a **`Spec`**. It is
 not a `Policy` — it *holds* one — and it is not a screen, because nothing about it is
-visual. It becomes **`ScreenSpec`**, and its `policy: SessionPolicy` field, which is
+visual. It became **`SessionSpec`**, and its `admission: AdmissionSpec` field, which is
 `{limit, collision}`, is an occupancy rule rather than an injected decision-maker.
 
 **`Session`** survives. It is a bounded interaction with a set of participants, fourteen
 dependent names already agree with it, and `squid-storage` speaks it independently.
 
-**`Mount`** survives, under the discord.py/Vue mirroring exemption. It is Vue's own word for
-binding a component to a render target, and the alternatives all collide: `Panel` is an exact
-primitive, `View` is discord.py's, `Surface` and `Presentation` are taken. What must change is
-the *family* around it — `MountLocator` becomes `FrontendAddress`, and `MountSnapshot` and
-`MountState` now have non-overlapping definitions rather than a near-synonym pair.
+**`MessageRoot`** replaced `Mount` because it names the root component bound to one Discord
+message without overloading a lifecycle verb. The family follows it directly:
+`MessageAddress`, `MessageRootSnapshot`, `MessageRootInspection`, `MessageRootState`,
+`MessageRootOptions`, and `MessageRootScheduler`.
 
 The honest summary is that the trio was mostly right and its neighbours were wrong.
 
@@ -276,20 +269,20 @@ The seven the dictionary could not make on its own, and what they were decided t
 
 1. **Drop the `Scene` prefix.** 39 renames. `scene.Text` is what `primitives.Text` lowers to,
    so the prefix repeats the import path and carries nothing.
-2. **`semantic.Destination` → `NavOption`.** `delivery.Destination` is the load-bearing
+2. **`semantic.Destination` → `NavOption`.** `delivery.MessageDestination` is the load-bearing
    protocol and keeps the word.
 3. **`semantic.Progress` → `ProgressBar`.** `operations.Progress` is the capability an
    operation reports through; the semantic node is a bar and should say so.
 4. **`allows` → `permits`.** Reads correctly at the call site and stays a verb.
-5. **`Inspection` joins the suffix set; nothing is renamed.** `MountInspection` embeds
-   `MountSnapshot` rather than competing with it, so rule 2 was never in danger.
+5. **`Inspection` joins the suffix set; nothing is renamed.** `MessageRootInspection` embeds
+   `MessageRootSnapshot` rather than competing with it, so rule 2 was never in danger.
 6. **Drop the short `forms` aliases.** `Text`, `Time`, `Choice`, `Bool`, `Int`, `Float`,
    `Date`, `DateTime`, `Duration`, `MultiChoice`, `Scale` and `TextArea` retire; only the
    `*Field` spellings survive. They aliased a field rather than lowering to anything, so the
    two-altitudes rule never covered them — which also lets `Choice`, `Text` and `Time` leave
    `SAME_CONCEPT_TWO_LAYERS`, shrinking the exception set to the four genuine
    semantic/primitive pairs.
-7. **`MountOptions` stays, exempt.** A `TypedDict` of keyword arguments is typing machinery,
+7. **`MessageRootOptions` stays, exempt.** A `TypedDict` of keyword arguments is typing machinery,
    not a `Spec`.
 
 ## What the test enforces
@@ -307,7 +300,7 @@ require more exceptions than rules. New synonyms fail without constraining new c
 
 ## Exceptions and boundaries
 
-- `FrontendAddress` and `MountAddress` stay separate because one is durable and
+- `FrontendAddress` and `MessageAddress` stay separate because one is durable and
   frontend-neutral while the other carries typed Discord coordinates.
 - `BusySpec` is an interim-paint recipe, not a settled result.
 - `UndoMode` is an enum; `Policy` remains reserved for injected decision-makers.
@@ -319,5 +312,7 @@ require more exceptions than rules. New synonyms fail without constraining new c
 Scene, durability, profiler, and durable-store formats use the vocabulary-correct shape as
 protocol or schema v1; no pre-reset wire compatibility is retained.
 
-The redundant `Discord*` prefix inside `squid_ui_discord` remains an explicit public-API
-decision; target and adapter types outside that package still need the prefix.
+Redundant `Discord*` prefixes inside `squid_ui_discord` were removed from message-local roles:
+`MessagePayload`, `MessageMode`, and `MessageReservation` already say what they describe.
+`DiscordPyAdapter` and the portable `DiscordTarget` marker retain the prefix because it names
+a real variant rather than repeating their module.

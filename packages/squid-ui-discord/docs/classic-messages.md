@@ -71,11 +71,11 @@ The host still owns the message, its lifecycle, and its controls. Squid contribu
 into what the host leaves unspent:
 
 ```python
-host = sd.DiscordPresentation.classic(view=DoorView())
+host = sd.MessagePayload.classic(view=DoorView())
 contribution = classic.contribute(document, to=host)
 
 await ctx.send(
-    **contribution.presentation._send_fields(),
+    **contribution.payload._send_fields(),
     files=contribution.build_files(),
 )
 ```
@@ -91,7 +91,7 @@ Squid replaces whole embeds and whole control regions, never anything finer. Spl
 into a host-authored embed would mean owning that embed's internal layout and overflow policy
 without owning the embed.
 
-### 3. Let a mount own the screen
+### 3. Let a message root own the screen
 
 Now the message is Squid's, and the same service function is called from an action:
 
@@ -108,14 +108,14 @@ class Door(sl.Component):
             sl.heading("Piston door"),
             sl.paragraph("A 2x2 flush door."),
             sl.fields(sl.field("Width", "2", key="width")),
-            sl.actions(sl.action("Approve", approve, key="approve"), key="controls"),
+            sl.action_controls(sl.action_control("Approve", approve, key="approve"), key="controls"),
         ]
 
-mount = sd.Mount(Door(), target=CLASSIC_TARGET, access=sd.Owner(user_id))
-await mount.send(sd.reply_to(ctx))
+message_root = sd.MessageRoot(Door(), target=CLASSIC_TARGET, access=sd.Owner(user_id))
+await message_root.send(sd.reply_to(ctx))
 ```
 
-The mount's access policy, generation-qualified custom IDs, transaction funnel, timeout, error
+The message root's access policy, generation-qualified custom IDs, transaction funnel, timeout, error
 hook, forms, navigation, and history are the same code the V2 target uses. Only the dialect,
 the renderer, the view factory, and the message mode differ.
 
@@ -123,17 +123,17 @@ A legacy callback body is reusable; a decorated item or a whole live view is not
 handler genuinely needs the interaction, reach for it explicitly with `sd.native(event)`
 rather than transferring the item that carried it.
 
-### 4. Open a V2 mount instead
+### 4. Open a V2 message root instead
 
 Change the target, and nothing else:
 
 ```python
-mount = sd.Mount(Door(), target=V2_TARGET, access=sd.Owner(user_id))
+message_root = sd.MessageRoot(Door(), target=V2_TARGET, access=sd.Owner(user_id))
 ```
 
 This has to be a *new* message. Discord cannot take the Components V2 flag back off a sent
-message, so a V2-to-classic edit is refused with `DiscordModeError`; classic-to-V2 works by
-replacing the whole presentation.
+message, so a V2-to-classic edit is refused with `MessageModeError`; classic-to-V2 works by
+replacing the whole payload.
 
 ## Exact classic structure
 
@@ -182,7 +182,7 @@ embed, so the second would be silently invisible, which is worse than an error.
 ## Durability
 
 A durable snapshot records its target's id, version, and a fingerprint of the profile. Recovery
-resolves the exact target before rebuilding the mount, so a target that has since changed its
+resolves the exact target before rebuilding the message root, so a target that has since changed its
 capabilities or limits is refused rather than used to rebuild a render it was never fitted to.
 The two built-in targets are registered by default; a custom target needs explicit
 registration:
@@ -193,7 +193,7 @@ from squid_ui.planning.limits import ClassicLimits
 
 compact = Target.classic(limits=ClassicLimits(embeds=2))
 targets = TargetRegistry(compact)
-mount = components.restore(snapshot, targets=targets, access=sd.Everyone())
+message_root = components.restore(snapshot, targets=targets, access=sd.Everyone())
 ```
 
 ## Limits and where they come from

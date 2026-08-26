@@ -1,4 +1,4 @@
-# Spike: `ScopeT` inference for [59](../../../completed/squid-ui-redesign/59-shared-pool.md)'s `SharedPool`
+# Spike: `ScopeT` inference for [59](../../../completed/squid-layouts-redesign/59-shared-pool.md)'s `SharedPool`
 
 Evidence, not a staging area — nothing here is meant to be promoted into the package.
 

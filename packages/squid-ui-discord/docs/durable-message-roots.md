@@ -4,7 +4,7 @@ Use a durable session when a stateful component tree must resume on the same Dis
 The runtime owns the complete lifecycle: distributed admission, delivery promotion, whole-session snapshots,
 recovery, claim renewal, checkpoint retries, expiry, and record deletion.
 
-Register a stable recipe for every mount type the runtime may reconstruct. The recipe builds the complete mount,
+Register a stable recipe for every message-root type the runtime may reconstruct. The recipe builds the complete message root,
 including its dependencies and explicit access policy; snapshots never import application classes or infer an owner.
 
 ```python
@@ -20,10 +20,10 @@ from squid_ui_discord.durability import (
 
 
 components = ComponentRegistry()
-defaults = sd.MountDefaults()
+defaults = sd.MessageRootDefaults()
 
 
-def restore_review(context: RestoreContext) -> sd.Mount:
+def restore_review(context: RestoreContext) -> sd.MessageRoot:
     if context.actor_id is None:
         raise SnapshotError("review sessions require an owner")
     return defaults.mount(
@@ -34,7 +34,7 @@ def restore_review(context: RestoreContext) -> sd.Mount:
 
 
 components.register("review", version=1, restore=restore_review)
-sessions = sd.SessionRegistry(defaults)
+sessions = sd.SessionManager(defaults)
 runtime = DurableSessionRuntime(
     sessions=sessions,
     components=components,
@@ -57,18 +57,18 @@ async with anyio.create_task_group() as tasks:
 the runtime is available as `durable_sessions` during `setup_hook()`. Both inherited `start()` and an explicit
 `await bot.login(...); await bot.connect()` recover before gateway dispatch.
 
-Open a public, addressable delivery through the runtime rather than opening through `SessionRegistry` and trying
+Open a public, addressable delivery through the runtime rather than opening through `SessionManager` and trying
 to persist it afterward:
 
 ```python
 assert interaction.guild_id is not None
-mount = sd.Mount(
+message_root = sd.MessageRoot(
     ReviewPanel(review_service),
     access=sd.Owner(interaction.user.id),
     timeout=None,
 )
 result = await runtime.open(
-    mount,
+    message_root,
     sd.respond_to(interaction, ephemeral=False, wait=True),
     recipe="review",
     key=sd.SessionKey.user_guild("review", interaction.user.id, interaction.guild_id),

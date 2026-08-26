@@ -8,8 +8,8 @@ enough ownership to do the job, and leave the rest of the message lifecycle wher
 | `LayoutView` with working callbacks | V2 fragment | Your view |
 | `View`, embeds, or message content | Classic contribution | Your code |
 | Persistent fixed `custom_id` controls | Router | Your post; Squid dispatches controls |
-| One interactive message | Mount and session | Squid |
-| `Modal` used by a mounted component | Form | Its mount |
+| One interactive message | MessageRoot and session | Squid |
+| `Modal` used by a mounted component | Form | Its message root |
 
 Squid does not adopt a live `View` or `LayoutView`. Planning is sound because the renderer owns
 what it draws and measures everything the host keeps. Move the ownership boundary only when the
@@ -49,10 +49,10 @@ attached = planned.attach(view)
 
 `attach` remeasures the view. A host changed after planning raises `StaleReservationError`; an
 item already owned by another view, a reused fragment, or component-local dispatch without a
-mount raises `FragmentOwnershipError`. Attachment is transactional: a failed preflight or
+message root raises `FragmentOwnershipError`. Attachment is transactional: a failed preflight or
 `add_item` leaves the host unchanged.
 
-A fragment is stateless. It may contain links and routed controls, but it has no mount to own
+A fragment is stateless. It may contain links and routed controls, but it has no message root to own
 component state, local action callbacks, timeout, history, or refreshes. If the region needs any
 of those, make one component own the whole message. There is deliberately no `into=` argument and
 no arbitrary-view adoption: appending after preflight would make the measured payload differ from
@@ -64,11 +64,11 @@ Use the classic adapter when the message needs `content`, embeds, or a normal `d
 The host may contribute a region to an existing presentation or render a complete static one.
 
 ```python
-from squid_ui_discord import DiscordPresentation, classic
+from squid_ui_discord import MessagePayload, classic
 
-host = DiscordPresentation.classic(content="@here", embeds=(legacy_embed,), view=legacy_view)
+host = MessagePayload.classic(content="@here", embeds=(legacy_embed,), view=legacy_view)
 contribution = classic.contribute(document, to=host)
-await destination(contribution.presentation)
+await destination(contribution.payload)
 
 # For a complete, sessionless message:
 presentation = classic.render_static(document)
@@ -78,7 +78,7 @@ await destination(presentation)
 Classic contributions are one-step because content and embeds are immutable presentation values;
 the returned presentation is the complete prospective message. Contributions replace whole embeds
 and control regions—Squid does not splice fields into a host-owned embed. Component-local actions
-remain unavailable until a mount owns the message. See
+remain unavailable until a message root owns the message. See
 [Classic Discord messages](classic-messages.md) for exact primitives and limits. The examples above
 follow `tests/test_classic_contribution.py`.
 
@@ -89,7 +89,7 @@ Message mode is a lifecycle constraint:
 | Classic | Classic | Allowed |
 | Classic | Components V2 | Allowed; content and embeds are cleared |
 | Components V2 | Components V2 | Allowed |
-| Components V2 | Classic | `DiscordModeError` before an API request |
+| Components V2 | Classic | `MessageModeError` before an API request |
 
 Discord does not let a sent message relinquish its Components V2 flag. Open a replacement message
 when migrating back to classic.
@@ -119,7 +119,7 @@ This is the route-group shape tested in `tests/test_routing.py`. New controls us
 `r:polls:close`; the alias continues to dispatch `poll:close` on existing posts. A namespaced
 router requires `on_gone`: any unmatched ID under its prefix belongs to a retired version of that
 router and receives the host's friendly response. The conventional `r:` prefix is not magic, but
-the router reserves whichever namespace it is given. `ctl:` is reserved for mount-generated IDs.
+the router reserves whichever namespace it is given. `ctl:` is reserved for message-root-generated IDs.
 
 Router and group middleware form one onion in attachment order. Use middleware for reusable
 authorization, tracing, and rate policy. Routed controls do not inherit a legacy view's
@@ -142,15 +142,15 @@ class Paginator(discord.ui.View):
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.page += 1
         self.next.disabled = self.page == LAST
-        await interaction.response.edit_message(view=self)   # no HTTP; the mount flushes
+        await interaction.response.edit_message(view=self)   # no HTTP; the message root flushes
 
 
-mount = defaults.mount(sd.adopt(Paginator()), access=sd.Owner(user.id))
-await mount.send(sd.respond_to(interaction))
+message_root = defaults.mount(sd.adopt(Paginator()), access=sd.Owner(user.id))
+await message_root.send(sd.respond_to(interaction))
 ```
 
 `await interaction.response.edit_message(view=self)` is the line that makes this worth doing: it
-means "I am done mutating; redraw", performs no request of its own, and lets the mount answer the
+means "I am done mutating; redraw", performs no request of its own, and lets the message root answer the
 interaction. The view is the model, and the adapter reports its in-place mutations to the runtime
 after every callback returns.
 
@@ -159,53 +159,53 @@ stays unsupported, because Squid and the view would both be writing one message 
 prove the result fits. `adopt()` refuses on `view.is_dispatching()`, and every call that would
 make the legacy object a second writer raises `AdoptionError` rather than being swallowed:
 `edit_original_response`, `interaction.message.edit`, and `edit_message` with a different view or
-with a payload the mount owns. A `LayoutView` is refused too — that is content, so either move it
+with a payload the message root owns. A `LayoutView` is refused too — that is content, so either move it
 to the semantic layer or keep it and use `contribute()` on a region.
 
 Three differences to plan for, all of them loud:
 
-- **The mount owns the timeout.** `view.timeout` is ignored, because a mount's timeout interacts
+- **The message root owns the timeout.** `view.timeout` is ignored, because a message root's timeout interacts
   with its expiry policy, session lifetime, and disable-on-finish behaviour. An overridden
   `on_timeout` is refused at `adopt()` unless you pass `discard_timeout=True`; move real cleanup
-  to a mount finish hook.
-- **In-place mutations do not roll back.** A callback that raises reaches the mount's `on_error`
+  to a message root finish hook.
+- **In-place mutations do not roll back.** A callback that raises reaches the message root's `on_error`
   with component state restored, but the view keeps whatever it wrote before raising.
 - **Generated custom IDs are positional.** discord.py invents a random `custom_id` when you give
   none, so an item without an explicit one is identified by position. A view that rebuilds itself
   with `clear_items()` should pass `keys=` rather than let a reorder move state between controls.
 
-`view.stop()` finishes the mount, an overridden `interaction_check` still guards the press
-alongside the mount's `access`, and an overridden `on_error` still sees its own errors first. A
+`view.stop()` finishes the message root, an overridden `interaction_check` still guards the press
+alongside the message root's `access`, and an overridden `on_error` still sees its own errors first. A
 modal opened from a callback keeps working: its submit is wrapped in the same proxy and refreshes
-the mount, though it runs outside the dispatch funnel, so it takes no author lock and no
+the message root, though it runs outside the dispatch funnel, so it takes no author lock and no
 generation check.
 
 An adopted component composes like any other, which is how a migration finishes — embed it under
 `self.boundary(child, key=...)` and move controls out of the legacy view one at a time.
 
-## Hand one whole message to a Mount
+## Hand one whole message to a MessageRoot
 
-Use a mount when Squid component state, local actions, forms, history, or reactive refreshes should
+Use a message root when Squid component state, local actions, forms, history, or reactive refreshes should
 own the whole message. Access is always explicit and visibility remains a destination decision.
 
 ```python
-defaults = sd.MountDefaults(chrome=BOT_CHROME, on_error=component_error)
-sessions = sd.SessionRegistry(defaults=defaults)
-mount = defaults.mount(
+defaults = sd.MessageRootDefaults(chrome=BOT_CHROME, on_error=component_error)
+sessions = sd.SessionManager(defaults=defaults)
+message_root = defaults.mount(
     SettingsPanel(settings),
     access=sd.Owner(interaction.user.id),
     timeout=300,
 )
 
 result = await sessions.open(
-    mount,
+    message_root,
     sd.respond_to(interaction, ephemeral=True, wait=True),
     key=sd.SessionKey.user_guild(
         "settings",
         interaction.user.id,
         interaction.guild_id,
     ),
-    policy=sd.SessionPolicy(collision=sd.Reject()),
+    admission=sd.AdmissionSpec(collision=sd.Reject()),
     actor_id=interaction.user.id,
 )
 
@@ -213,11 +213,11 @@ if isinstance(result, sd.Rejected):
     await interaction.followup.send("You already have settings open.", ephemeral=True)
 ```
 
-`MountDefaults` holds host-wide construction policy. Per-mount overrides win, while `access=` stays
-required because it identifies the actor allowed to use this particular mount. `SessionRegistry.open`
-accepts a constructed mount, admits, delivers, and registers it atomically, and returns `Opened`,
-`Rejected`, or `Abandoned`; do not race an open with a separate `registry.get()` preflight.
-`SessionPolicy` owns cardinality, collision choice, and replacement protection. Attach an additional
+`MessageRootDefaults` holds host-wide construction policy. Per-message-root overrides win, while `access=` stays
+required because it identifies the actor allowed to use this particular message root. `SessionManager.open`
+accepts a constructed message root, admits, delivers, and registers it atomically, and returns `Opened`,
+`Rejected`, or `Abandoned`; do not race an open with a separate `manager.get()` preflight.
+`AdmissionSpec` owns cardinality, collision choice, and replacement protection. Attach an additional
 mount beneath an existing session with `Session.attach`.
 
 ## Replace mounted modals with forms
@@ -256,16 +256,16 @@ its callback body into the submit handler.
 
 | discord.py surface | Squid surface | Migration note |
 |---|---|---|
-| `View.on_timeout` | `Mount(timeout=...)`, `Mount.on_finish(...)` | The mount disables and tears down its generated view; use a finish hook for host cleanup. |
-| `View.interaction_check` | `AccessPolicy`; action guards | `Owner`, `Users`, `Everyone`, or async `Check` gates the mount. Guards apply finer action policy. |
-| `View.on_error` | `Mount(on_error=...)` / `MountDefaults(on_error=...)` | One host hook receives the interaction, exception, and action source. Routers configure their own hook. |
+| `View.on_timeout` | `MessageRoot(timeout=...)`, `MessageRoot.on_finish(...)` | The message root disables and tears down its generated view; use a finish hook for host cleanup. |
+| `View.interaction_check` | `AccessPolicy`; action guards | `Owner`, `Users`, `Everyone`, or async `Check` gates the message root. Guards apply finer action policy. |
+| `View.on_error` | `MessageRoot(on_error=...)` / `MessageRootDefaults(on_error=...)` | One host hook receives the interaction, exception, and action source. Routers configure their own hook. |
 | `DynamicItem` | `Route`, `RouteGroup`, `Router` | Keep stable IDs and aliases; register the router at startup. |
-| Decorated button callback | `sl.action(..., on_click=...)` | Reuse the service call, not the live item. Use `sd.native(event)` only when the interaction itself is required. |
+| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Use `sd.native(event)` only when the interaction itself is required. |
 | `Modal.on_submit` | `FormSpec` or `sl.forms.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
-| Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `MountScheduler` | Interactive edits can renew credentials; unattended authority still expires. |
+| Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `MessageRootScheduler` | Interactive edits can renew credentials; unattended authority still expires. |
 
 `RenewEphemeral` presents a replacement control before known edit authority expires. It requires a
-scheduler implementing expiry supervision; a plain mount without one raises rather than promising
+scheduler implementing expiry supervision; a plain message root without one raises rather than promising
 a renewal it cannot schedule.
 
 ## When to make a session durable
@@ -275,6 +275,6 @@ controls for long-lived authoritative posts whose state already lives in route p
 application service. Use a durable session only when UI-local state must resume on the same Discord
 messages after a process restart.
 
-See [Durable sessions](durable-mounts.md) for recipes, recovery, storage, leases, and the durable
+See [Durable sessions](durable-message-roots.md) for recipes, recovery, storage, leases, and the durable
 open path. Durability preserves component and presentation state; consequential domain writes still
 belong in the application's authoritative service.
