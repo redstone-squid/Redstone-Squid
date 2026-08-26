@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import anyio
 
-from squid_reactive.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
+from squid_reactivity.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
 from squid_stores.stores import (
     _SCHEMA_VERSION,
     AdmissionToken,

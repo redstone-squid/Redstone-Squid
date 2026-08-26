@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     ActionContext,
     ActionKind,
     ActorRef,
@@ -18,7 +18,7 @@ from squid_reactive.actions import (
     ConflictDetail,
     ParticipantChange,
 )
-from squid_reactive.core import (
+from squid_reactivity.core import (
     ReactiveConflictError,
     TransactionView,
     _Cell,
@@ -387,7 +387,7 @@ class ReplicatedDocument:
             callback(self.snapshot())
 
     def _publish_update(self, prepared: PreparedFakeUpdate) -> None:
-        from squid_reactive import current_action
+        from squid_reactivity import current_action
 
         context = current_action()
         update = ReplicatedUpdate.create(

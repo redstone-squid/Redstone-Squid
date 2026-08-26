@@ -11,7 +11,7 @@ from squid.core.extract import deferred_msgid
 # is held to the same rules as squid itself.
 SCAN_ROOTS = (
     Path("squid"),
-    Path("packages/squid-reactive/src"),
+    Path("packages/squid-reactivity/src"),
     Path("packages/squid-layouts/src"),
     Path("packages/squid-discord/src"),
     Path("packages/squid-patterns/src"),
@@ -90,9 +90,9 @@ def test_discord_package_stays_a_leaf() -> None:
 
 def test_reactive_package_has_no_hard_dependencies() -> None:
     """The extracted runtime may import only itself and Python's standard library."""
-    allowed = sys.stdlib_module_names | {"squid_reactive"}
+    allowed = sys.stdlib_module_names | {"squid_reactivity"}
     violations: list[tuple[Path, int, str]] = []
-    for path in Path("packages/squid-reactive/src").rglob("*.py"):
+    for path in Path("packages/squid-reactivity/src").rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
                 imported = ((node.lineno, alias.name) for alias in node.names)

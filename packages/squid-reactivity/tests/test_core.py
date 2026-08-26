@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from squid_reactive import (
+from squid_reactivity import (
     LocalTopicBus,
     Reactive,
     ReactiveConflictError,

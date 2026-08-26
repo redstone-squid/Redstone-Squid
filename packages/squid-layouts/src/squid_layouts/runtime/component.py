@@ -84,7 +84,7 @@ from squid_layouts.semantic import (
     Table as SemanticTable,
 )
 from squid_layouts.semantic import Toggle as SemanticToggle
-from squid_reactive.core import (
+from squid_reactivity.core import (
     _RENDER_OBSERVATION,
     Observation,
     Reactive,

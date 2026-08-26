@@ -1,6 +1,6 @@
 """Transactional reactive state with no hosting or presentation opinions."""
 
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     ActionCommit,
     ActionContext,
     ActionKind,
@@ -31,7 +31,7 @@ from squid_reactive.actions import (
     current_action,
     remove_action_result_sink,
 )
-from squid_reactive.core import (
+from squid_reactivity.core import (
     ActionParticipant,
     ActionValidationError,
     CellPatch,
@@ -72,9 +72,9 @@ from squid_reactive.core import (
     transaction,
     untracked,
 )
-from squid_reactive.pool import SharedFactory, SharedPool
-from squid_reactive.shared import Shared
-from squid_reactive.topics import (
+from squid_reactivity.pool import SharedFactory, SharedPool
+from squid_reactivity.shared import Shared
+from squid_reactivity.topics import (
     Address,
     CellAddress,
     KindKeyCodec,

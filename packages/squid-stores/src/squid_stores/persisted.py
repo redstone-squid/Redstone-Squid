@@ -8,7 +8,7 @@ from typing import Any
 import anyio
 from anyio.abc import TaskStatus
 
-from squid_reactive import Shared, SharedPool, TopicBus, export_state, restore_state
+from squid_reactivity import Shared, SharedPool, TopicBus, export_state, restore_state
 from squid_stores.scoped import ScopedStore, Slot
 
 _logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class PersistedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     :meth:`close` drains what is queued and lets `run` return. A pool is loadable only while
     it is running, because hydration is a read and a read must not quietly acquire a task.
 
-    The canonical-handle machinery is a :class:`~squid_reactive.pool.SharedPool` held privately.
+    The canonical-handle machinery is a :class:`~squid_reactivity.pool.SharedPool` held privately.
     This class composes one rather than subclassing it because `SharedPool.get` is synchronous and
     would publish a handle before the store had been read: a concurrent `load` of the same scope
     would then be handed an un-hydrated namespace and hydrate nothing. The pool's `_create` and

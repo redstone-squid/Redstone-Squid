@@ -3,7 +3,7 @@
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from squid_reactive import ActionCommit, on_action_commit, transaction
+from squid_reactivity import ActionCommit, on_action_commit, transaction
 from squid_replicated import PreparedReplicatedInverse, ReplicatedChangeToken, ReplicatedDocument, ReplicatedScope
 
 

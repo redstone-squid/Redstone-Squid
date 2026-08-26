@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol, overload
 
-from squid_reactive.actions import (
+from squid_reactivity.actions import (
     DEFAULT_REDACTION,
     ActionContext,
     ActionId,
@@ -20,8 +20,8 @@ from squid_reactive.actions import (
     current_action,
     emit_causal_event,
 )
-from squid_reactive.completion import Completion
-from squid_reactive.resources import AsyncBinding, PendingMode, _observe
+from squid_reactivity.completion import Completion
+from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
 
 
 class OperationOwner(Protocol):
@@ -184,7 +184,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
     @contextmanager
     def start_action(self, name: str, *, kind: ActionKind = ActionKind.SYSTEM):
         """Start a fresh state-publishing action caused by this execution."""
-        from squid_reactive.core import fresh_action_transaction
+        from squid_reactivity.core import fresh_action_transaction
 
         context = ActionContext.create(
             name,
