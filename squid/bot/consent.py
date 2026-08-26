@@ -112,17 +112,16 @@ class ConsentPrompt(sl.Component):
                 sl.truncate(sl.paragraph(self._summary)),
                 bool(card_fields) and sl.fields(*card_fields),
             ),
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        self._accept_label,
-                        self._accept,
-                        "accept",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
-                    sl.primitives.Button(t(self.locale, _("Privacy notice")), self._privacy, "privacy"),
-                )
+            sl.actions(
+                sl.action(
+                    self._accept_label,
+                    self._accept,
+                    key="accept",
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action(t(self.locale, _("Privacy notice")), self._privacy, key="privacy"),
+                key="consent-actions",
             ),
         )
 

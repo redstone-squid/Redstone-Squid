@@ -26,7 +26,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import DISCORD_BLUE, card_layout, create_mount, destination, reply_presentation, text_layout
+from squid.bot.ui import card_layout, create_mount, destination, reply_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
 from squid.bot.utils.visibility import deliver_privately, personal
@@ -57,16 +57,15 @@ class MergeConfirmation(sl.Component):
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (
             sl.section(sl.heading(t(self.locale, _("Confirm account merge"))), sl.paragraph(self.prompt)),
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Confirm")),
-                        self._confirm,
-                        "confirm",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
-                )
+            sl.actions(
+                sl.action(
+                    t(self.locale, _("Confirm")),
+                    self._confirm,
+                    key="confirm",
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                key="merge-actions",
             ),
         )
 

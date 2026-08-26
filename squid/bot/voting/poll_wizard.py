@@ -252,51 +252,50 @@ class PollConfirmationComponent(sl.Component):
             fields.append(sl.field("Reaches", self._scope_label()))
         nodes: list[sl.LayoutNode] = [
             sl.section(sl.heading(preview), sl.fields(*fields)),
-            sl.semantic.Choices(
-                key="visibility",
-                choices=tuple(
-                    sl.semantic.Choice(value.value, label, description)
+            sl.choices(
+                *(
+                    sl.choice(label, key=value.value, description=description)
                     for value, label, description in VISIBILITY_CHOICES
                 ),
+                key="visibility",
                 selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
             ),
-            sl.semantic.Choices(
-                key="duration",
-                choices=tuple(
-                    sl.semantic.Choice(str(seconds), label)
+            sl.choices(
+                *(
+                    sl.choice(label, key=str(seconds))
                     for label, seconds in (*DURATION_PRESETS, ("Custom", CUSTOM_DURATION))
                 ),
+                key="duration",
                 selection=sl.controlled((str(self.draft.duration_seconds),), self._duration_changed),
             ),
         ]
         if self.allow_network:
             nodes.append(
-                sl.semantic.Choices(
-                    key="scope",
-                    choices=tuple(
-                        sl.semantic.Choice(value.value, label, description)
+                sl.choices(
+                    *(
+                        sl.choice(label, key=value.value, description=description)
                         for value, label, description in SCOPE_CHOICES
                     ),
+                    key="scope",
                     selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
                 )
             )
         nodes.append(
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        "Publish",
-                        self._publish,
-                        "publish",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                    ),
-                    sl.primitives.Button("Edit", self._edit, "edit"),
-                    sl.primitives.Button(
-                        "Cancel",
-                        self._cancel,
-                        "cancel",
-                        style=sl.primitives.ActionStyle.DANGER,
-                    ),
-                )
+            sl.actions(
+                sl.action(
+                    "Publish",
+                    self._publish,
+                    key="publish",
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action("Edit", self._edit, key="edit"),
+                sl.action(
+                    "Cancel",
+                    self._cancel,
+                    key="cancel",
+                    tone=sl.Tone.DANGER,
+                ),
+                key="poll-actions",
             )
         )
         return tuple(nodes)
