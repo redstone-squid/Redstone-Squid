@@ -132,7 +132,7 @@ class Pager:
     fragments: list[str]
     footer_slot: MeasuredText
     footer: Callable[[int, int], str]
-    axis: str = Axis.DISPLAY_TEXT
+    axis: Axis = Axis.DISPLAY_TEXT
     """The text pool this pager's body and footer draw from."""
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""

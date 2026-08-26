@@ -87,7 +87,7 @@ class MeasuredLayout:
     limits: MessageLimits = LIMITS
     degradation: DegradationProfile = field(default_factory=DegradationProfile)
 
-    def fits(self, capacities: Mapping[str, int]) -> bool:
+    def fits(self, capacities: Mapping[Axis, int]) -> bool:
         """Whether every budgeted axis is within its cap."""
         return self.cost.within(capacities)
 
@@ -269,7 +269,7 @@ class _Pass:
     footers: dict[int, Callable[[int, int], str]]
     clamps: int
     degradation: DegradationProfile
-    text_used: dict[str, int]
+    text_used: dict[Axis, int]
 
 
 def _measure_once(
