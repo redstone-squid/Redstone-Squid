@@ -40,7 +40,7 @@ def test_options_disable_and_status_appears_after_deciding() -> None:
     pattern = _decision()
     decided = pattern.transition(pattern.initial_state, "choose:delete")
     component = pattern.build_component()
-    component.pattern_state = decided
+    component.machine_state = decided
 
     rendered = component.render()
 
@@ -52,7 +52,7 @@ def test_options_disable_and_status_appears_after_deciding() -> None:
 async def test_component_handler_receives_the_option_and_finish_action_ends_mount() -> None:
     seen: list[tuple[str, sp.DecisionState]] = []
 
-    async def decided(event: sp.PatternEvent[sp.DecisionState], key: str) -> None:
+    async def decided(event: sp.TransitionEvent[sp.DecisionState], key: str) -> None:
         seen.append((key, event.state))
 
     component = _decision().build_component(on_decide=decided, finish_on={"delete"})
@@ -61,7 +61,7 @@ async def test_component_handler_receives_the_option_and_finish_action_ends_moun
 
     await mount.dispatch("delete-build.delete", fake_interaction())
 
-    assert component.pattern_state == sp.DecisionState("delete")
+    assert component.machine_state == sp.DecisionState("delete")
     assert seen == [("delete", sp.DecisionState("delete"))]
     assert mount._finished
 
@@ -69,10 +69,10 @@ async def test_component_handler_receives_the_option_and_finish_action_ends_moun
 async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
     seen: list[str] = []
 
-    async def confirmed(event: sp.PatternEvent[sp.DecisionState]) -> None:
+    async def confirmed(event: sp.TransitionEvent[sp.DecisionState]) -> None:
         seen.append(event.action)
 
-    async def cancelled(event: sp.PatternEvent[sp.DecisionState]) -> None:
+    async def cancelled(event: sp.TransitionEvent[sp.DecisionState]) -> None:
         seen.append(event.action)
 
     component = sp.confirm("Proceed?", on_confirm=confirmed, on_cancel=cancelled, tone=sl.Tone.DANGER)
@@ -94,12 +94,12 @@ async def test_confirm_wires_handlers_default_chrome_and_tone() -> None:
 
 def test_router_shell_encodes_serializable_decision_state() -> None:
     pattern = _decision()
-    routes: list[sp.PatternRoute[sp.DecisionState]] = []
+    routes: list[sp.TransitionRoute[sp.DecisionState]] = []
 
-    def route(request: sp.PatternRoute[sp.DecisionState]) -> str:
+    def route(request: sp.TransitionRoute[sp.DecisionState]) -> str:
         routes.append(request)
         return f"decision:{request.state.decided}"
 
-    sp.RouterShell(route).render(pattern, pattern.initial_state)
+    sp.RouteDriver(route).render(pattern, pattern.initial_state)
 
-    assert sp.PatternRoute("choose:delete", sp.DecisionState("delete"), "next") in routes
+    assert sp.TransitionRoute("choose:delete", sp.DecisionState("delete"), "next") in routes

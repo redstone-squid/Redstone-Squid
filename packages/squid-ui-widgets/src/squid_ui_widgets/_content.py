@@ -1,4 +1,4 @@
-"""Shared content handling for high-level component patterns."""
+"""Shared content handling for high-level component machines."""
 
 import re
 from collections.abc import Iterable, Mapping
@@ -13,7 +13,7 @@ type ContentLike = ContentItem | TextLike | Iterable[ContentItem | TextLike]
 
 
 def normalize_content(value: object, *, name: str) -> tuple[ContentItem, ...]:
-    """Normalize one pattern content slot into renderable nodes and child components."""
+    """Normalize one machine content slot into renderable nodes and child components."""
     if isinstance(value, Component):
         return (value,)
     if isinstance(value, str | ResolvedText | Message):
@@ -50,7 +50,7 @@ def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: 
 
 
 def require_key(value: str, *, name: str) -> str:
-    """Validate a key used to identify a pattern or one of its destinations."""
+    """Validate a key used to identify a machine or one of its destinations."""
     if not value:
         message = f"{name} must not be empty"
         raise ValueError(message)

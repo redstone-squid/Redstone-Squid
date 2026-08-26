@@ -12,7 +12,7 @@ from squid_ui.text import TextLike
 from squid_ui_widgets._content import display_text, require_key
 from squid_ui_widgets._paging import window
 from squid_ui_widgets.commit import CommitMode
-from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternEvent
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,10 +56,10 @@ class MultiChoiceState:
     pages: tuple[tuple[str, int], ...] = ()
 
 
-type MultiChoiceCommitHandler = Callable[[PatternEvent[MultiChoiceState], tuple[str, ...]], Awaitable[None]]
+type MultiChoiceCommitHandler = Callable[[TransitionEvent[MultiChoiceState], tuple[str, ...]], Awaitable[None]]
 
 
-class MultiChoicePanel:
+class MultiChoice:
     """A pure cross-page picker with one explicit Apply boundary."""
 
     def __init__(
@@ -74,34 +74,34 @@ class MultiChoicePanel:
         window_size: int = 25,
         commit: CommitMode = CommitMode.EXPLICIT,
     ) -> None:
-        self.key = require_key(key, name="MultiChoicePanel.key")
+        self.key = require_key(key, name="MultiChoice.key")
         self.title = title
         self.groups = tuple(groups)
         if not self.groups:
-            message = "MultiChoicePanel needs at least one group"
+            message = "MultiChoice needs at least one group"
             raise ValueError(message)
         group_keys = [group.key for group in self.groups]
         if len(set(group_keys)) != len(group_keys):
-            message = f"MultiChoicePanel group keys must be unique: {group_keys!r}"
+            message = f"MultiChoice group keys must be unique: {group_keys!r}"
             raise ValueError(message)
         option_keys = [entry.key for group in self.groups for entry in group.choices]
         if len(set(option_keys)) != len(option_keys):
-            message = "MultiChoicePanel choice keys must be unique across groups"
+            message = "MultiChoice choice keys must be unique across groups"
             raise ValueError(message)
         unknown_rivals = {
             rival for group in self.groups for rival in group.exclusive_with if rival not in set(group_keys)
         }
         if unknown_rivals:
-            message = f"MultiChoicePanel exclusivity names unknown groups: {sorted(unknown_rivals)!r}"
+            message = f"MultiChoice exclusivity names unknown groups: {sorted(unknown_rivals)!r}"
             raise ValueError(message)
         if minimum < 0:
-            message = "MultiChoicePanel.minimum must not be negative"
+            message = "MultiChoice.minimum must not be negative"
             raise ValueError(message)
         if maximum is not None and maximum < minimum:
-            message = "MultiChoicePanel.maximum must be at least minimum"
+            message = "MultiChoice.maximum must be at least minimum"
             raise ValueError(message)
         if window_size < 1 or window_size > 25:
-            message = "MultiChoicePanel.window_size must be between 1 and 25"
+            message = "MultiChoice.window_size must be between 1 and 25"
             raise ValueError(message)
         self.minimum = minimum
         self.maximum = len(option_keys) if maximum is None else maximum
@@ -113,7 +113,7 @@ class MultiChoicePanel:
         initial = tuple(dict.fromkeys(committed))
         unknown = set(initial) - set(option_keys)
         if unknown:
-            message = f"MultiChoicePanel committed values are unknown: {sorted(unknown)!r}"
+            message = f"MultiChoice committed values are unknown: {sorted(unknown)!r}"
             raise ValueError(message)
         self._initial_state = MultiChoiceState(initial, initial)
 
@@ -126,14 +126,14 @@ class MultiChoicePanel:
         *,
         initial: MultiChoiceState | None = None,
         on_commit: MultiChoiceCommitHandler | None = None,
-    ) -> ComponentShell[MultiChoiceState]:
+    ) -> ComponentDriver[MultiChoiceState]:
         """Build an in-memory panel shell and dispatch each new commit once."""
 
-        async def changed(event: PatternEvent[MultiChoiceState]) -> None:
+        async def changed(event: TransitionEvent[MultiChoiceState]) -> None:
             if on_commit is not None and event.state.committed != event.previous.committed:
                 await on_commit(event, event.state.committed)
 
-        return ComponentShell(self, initial=initial, on_change=changed)
+        return ComponentDriver(self, initial=initial, on_change=changed)
 
     def _ordered(self, selected: Iterable[str]) -> tuple[str, ...]:
         values = set(selected)
@@ -146,7 +146,7 @@ class MultiChoicePanel:
         return dict(state.pages)
 
     def _window(
-        self, group: MultiChoiceGroup, state: MultiChoiceState, controls: PatternControls[MultiChoiceState]
+        self, group: MultiChoiceGroup, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]
     ) -> tuple[tuple[Choice, ...], int, int]:
         visible, position, extent = window(
             group.choices,
@@ -258,7 +258,7 @@ class MultiChoicePanel:
             prefill={"selection": state.staged},
         )
 
-    def render(self, state: MultiChoiceState, controls: PatternControls[MultiChoiceState]) -> RenderResult:
+    def render(self, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]) -> RenderResult:
         group_nodes = []
         staged = set(state.staged)
         for group in self.groups:

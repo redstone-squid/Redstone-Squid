@@ -1,4 +1,4 @@
-"""Public namespace and packaging contracts for the pattern library."""
+"""Public namespace and packaging contracts for the machine library."""
 
 import subprocess
 import sys
@@ -13,17 +13,17 @@ SPECIALIST_SAMPLES = (
     "CollectionEditor",
     "Decision",
     "Editor",
-    "Lookup",
+    "SearchPicker",
     "Menu",
-    "MultiChoicePanel",
+    "MultiChoice",
     "RankedList",
     "SourceRankedList",
     "Tabs",
     "Wizard",
-    "Pattern",
-    "PatternEvent",
-    "ComponentShell",
-    "RouterShell",
+    "StateMachine",
+    "TransitionEvent",
+    "ComponentDriver",
+    "RouteDriver",
     "GridCell",
     "RosterPlacement",
     "TallyOption",

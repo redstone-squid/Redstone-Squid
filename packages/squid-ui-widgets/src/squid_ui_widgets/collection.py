@@ -1,4 +1,4 @@
-"""Editable form-value collections over component and routed pattern shells."""
+"""Editable form-value collections over component and routed machine shells."""
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -12,7 +12,7 @@ from squid_ui.semantic import ActionDisplay, FormTrigger, Tone
 from squid_ui.sources import Position
 from squid_ui.text import TextLike
 from squid_ui_widgets._paging import window
-from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternEvent
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,7 +29,7 @@ class CollectionState:
 
 
 type CollectionChangeHandler = Callable[
-    [PatternEvent[CollectionState], tuple[Mapping[str, object], ...]], Awaitable[None]
+    [TransitionEvent[CollectionState], tuple[Mapping[str, object], ...]], Awaitable[None]
 ]
 
 
@@ -107,13 +107,13 @@ class CollectionEditor:
         *,
         initial: CollectionState | None = None,
         on_change: CollectionChangeHandler | None = None,
-    ) -> ComponentShell[CollectionState]:
-        async def changed(event: PatternEvent[CollectionState]) -> None:
+    ) -> ComponentDriver[CollectionState]:
+        async def changed(event: TransitionEvent[CollectionState]) -> None:
             if on_change is None or event.state.entries == event.previous.entries:
                 return
             await on_change(event, tuple(self._mapping(entry) for entry in event.state.entries))
 
-        return ComponentShell(self, initial=initial, on_change=changed)
+        return ComponentDriver(self, initial=initial, on_change=changed)
 
     def values(self, state: CollectionState) -> tuple[Mapping[str, object], ...]:
         """Project state to its ordered public form-value mappings."""
@@ -197,7 +197,7 @@ class CollectionEditor:
         form = self.edit(values)
         return form.spec() if isinstance(form, Form) else form
 
-    def render(self, state: CollectionState, controls: PatternControls[CollectionState]) -> RenderResult:
+    def render(self, state: CollectionState, controls: MachineControls[CollectionState]) -> RenderResult:
         visible, position, pages = window(
             state.entries,
             key=self.key,

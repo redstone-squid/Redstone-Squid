@@ -69,7 +69,7 @@ async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> N
 
     await _submit_form(mount, "wizard.kind", "advanced")
 
-    assert wizard.pattern_state.current == "detail"
+    assert wizard.machine_state.current == "detail"
     view = commit_render(mount)
     button = next(
         item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.label == "Continue"
@@ -93,13 +93,13 @@ async def test_plain_next_opens_the_following_form_without_an_intermediate_rende
     await mount.dispatch("wizard.name", opened)
 
     assert opened.response.send_modal.await_count == 1
-    assert wizard.pattern_state.current == "intro"
+    assert wizard.machine_state.current == "intro"
 
 
 async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
     completed: list[sp.WizardAnswers] = []
 
-    async def finish(_event: sp.PatternEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
+    async def finish(_event: sp.TransitionEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(answers)
 
     wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).build_component(on_finish=finish)
@@ -108,7 +108,7 @@ async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
 
     await _submit_form(mount, "wizard.name", "Ada")
 
-    assert wizard.pattern_state.complete
+    assert wizard.machine_state.complete
     assert completed == [{"name": {"name": "Ada"}}]
 
 
@@ -117,20 +117,20 @@ def test_router_shell_uses_input_phase_for_forms_and_next_state_for_buttons() ->
         "Routed",
         (sp.WizardStep("intro", "Intro", "Hello"), sp.WizardStep("done", "Done", "Bye")),
     )
-    routes: list[sp.PatternRoute[sp.WizardState]] = []
+    routes: list[sp.TransitionRoute[sp.WizardState]] = []
 
-    def route(request: sp.PatternRoute[sp.WizardState]) -> str:
+    def route(request: sp.TransitionRoute[sp.WizardState]) -> str:
         routes.append(request)
         return f"wizard:{request.state.current}:{int(request.state.complete)}"
 
-    sp.RouterShell(route).render(wizard, wizard.initial_state)
-    assert next(request for request in routes if request.action == "next") == sp.PatternRoute(
+    sp.RouteDriver(route).render(wizard, wizard.initial_state)
+    assert next(request for request in routes if request.action == "next") == sp.TransitionRoute(
         "next", sp.WizardState("done"), "next"
     )
 
     form_wizard = sp.Wizard("Form", (sp.WizardStep("name", "Name", _form("Name", "name")),))
-    sp.RouterShell(route).render(form_wizard, form_wizard.initial_state)
-    assert next(request for request in routes if request.action == "submit:name") == sp.PatternRoute(
+    sp.RouteDriver(route).render(form_wizard, form_wizard.initial_state)
+    assert next(request for request in routes if request.action == "submit:name") == sp.TransitionRoute(
         "submit:name", sp.WizardState("name"), "input"
     )
 
@@ -244,7 +244,7 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
 async def test_finish_dispatches_once_from_the_review_screen() -> None:
     completed: list[sp.WizardAnswers] = []
 
-    async def finish(_event: sp.PatternEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
+    async def finish(_event: sp.TransitionEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(dict(answers))
 
     wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),), review=True)
@@ -253,13 +253,13 @@ async def test_finish_dispatches_once_from_the_review_screen() -> None:
     commit_render(mount)
 
     await _submit_form(mount, "wizard.name", "Ada")
-    assert shell.pattern_state.current == REVIEW_STEP
-    assert not shell.pattern_state.complete
+    assert shell.machine_state.current == REVIEW_STEP
+    assert not shell.machine_state.complete
 
     commit_render(mount)
     await mount.dispatch("wizard.finish", fake_interaction())
 
-    assert shell.pattern_state.complete
+    assert shell.machine_state.complete
     assert completed == [{"name": {"name": "Ada"}}]
 
 
@@ -267,9 +267,9 @@ def test_a_review_state_still_routes_through_the_stateless_shell() -> None:
     wizard = sp.Wizard("Routed", _review_steps, review=True)
     state = _answer(wizard, wizard.initial_state, "name", "Ada")
     state = _answer(wizard, state, "kind", "basic")
-    routes: list[sp.PatternRoute[sp.WizardState]] = []
+    routes: list[sp.TransitionRoute[sp.WizardState]] = []
 
-    sp.RouterShell(lambda request: (routes.append(request), "route")[1]).render(wizard, state)
+    sp.RouteDriver(lambda request: (routes.append(request), "route")[1]).render(wizard, state)
 
     assert any(request.action == "goto:name" and request.state.reviewing for request in routes)
     assert any(request.action == "finish" for request in routes)

@@ -8,7 +8,7 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionDisplay
 from squid_ui.text import Message, ResolvedText, TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key, slug
-from squid_ui_widgets.shells import ComponentShell, PatternControls
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls
 
 _MISSING = object()
 
@@ -86,9 +86,9 @@ class Menu:
     def initial_state(self) -> MenuState:
         return self._initial_state
 
-    def build_component(self, *, initial: MenuState | None = None) -> ComponentShell[MenuState]:
+    def build_component(self, *, initial: MenuState | None = None) -> ComponentDriver[MenuState]:
         """Build the in-memory shell, with Close ending its mount."""
-        return ComponentShell(self, initial=initial, finish_actions=("close",))
+        return ComponentDriver(self, initial=initial, finish_actions=("close",))
 
     @staticmethod
     def _validate_entries(entries: tuple[MenuEntry, ...], *, where: str) -> None:
@@ -133,7 +133,7 @@ class Menu:
             return state
         return MenuState((*state.path, destination))
 
-    def render(self, state: MenuState, controls: PatternControls[MenuState]) -> RenderResult:
+    def render(self, state: MenuState, controls: MachineControls[MenuState]) -> RenderResult:
         current, entries = self._resolve_path(state.path)
         if len(entries) <= 5:
             destinations = (

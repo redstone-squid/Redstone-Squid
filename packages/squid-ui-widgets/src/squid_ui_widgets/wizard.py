@@ -10,7 +10,7 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import Action, ActionDisplay, FormTrigger, LayoutNode, RoutedAction, Tone
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
-from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternEvent
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
 
 REVIEW_STEP = "@review"
 """The reserved `WizardState.current` value naming the review screen rather than a step."""
@@ -78,7 +78,7 @@ class WizardStep:
 
 type WizardAnswers = Mapping[str, Mapping[str, object]]
 type StepSource = Iterable[WizardStep] | Callable[[WizardAnswers], Iterable[WizardStep]]
-type WizardFinishHandler = Callable[[PatternEvent[WizardState], WizardAnswers], Awaitable[None]]
+type WizardFinishHandler = Callable[[TransitionEvent[WizardState], WizardAnswers], Awaitable[None]]
 
 
 class Wizard:
@@ -111,14 +111,14 @@ class Wizard:
         *,
         initial: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
-    ) -> ComponentShell[WizardState]:
+    ) -> ComponentDriver[WizardState]:
         """Build an in-memory wizard shell and dispatch Finish once."""
 
-        async def changed(event: PatternEvent[WizardState]) -> None:
+        async def changed(event: TransitionEvent[WizardState]) -> None:
             if on_finish is not None and event.state.complete and not event.previous.complete:
                 await on_finish(event, self.live_answers(event.state))
 
-        return ComponentShell(self, initial=initial, on_change=changed)
+        return ComponentDriver(self, initial=initial, on_change=changed)
 
     @staticmethod
     def _answer_map(answers: tuple[WizardAnswer, ...]) -> dict[str, Mapping[str, object]]:
@@ -258,7 +258,7 @@ class Wizard:
     def _render_review(
         self,
         state: WizardState,
-        controls: PatternControls[WizardState],
+        controls: MachineControls[WizardState],
         review: WizardReview,
     ) -> RenderResult:
         live = self.live_steps(state)
@@ -309,7 +309,7 @@ class Wizard:
             ),
         )
 
-    def render(self, state: WizardState, controls: PatternControls[WizardState]) -> RenderResult:
+    def render(self, state: WizardState, controls: MachineControls[WizardState]) -> RenderResult:
         if self.review is not None and state.current == REVIEW_STEP:
             return self._render_review(state, controls, self.review)
         live = self.live_steps(state)

@@ -1,4 +1,4 @@
-"""A pure materialized ranking pattern for component and router shells."""
+"""A pure materialized ranking machine for component and router shells."""
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
@@ -12,7 +12,7 @@ from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._paging import window
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
-from squid_ui_widgets.shells import ComponentShell, PatternControls
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,7 +26,7 @@ type ContentHook = ContentLike | Callable[[int], ContentLike]
 
 
 class RankedList[EntryT]:
-    """Render a fully materialized ranking through either pattern shell."""
+    """Render a fully materialized ranking through either machine shell."""
 
     def __init__(
         self,
@@ -72,9 +72,9 @@ class RankedList[EntryT]:
     def initial_state(self) -> RankedListState:
         return self._initial_state
 
-    def build_component(self, *, initial: RankedListState | None = None) -> ComponentShell[RankedListState]:
+    def build_component(self, *, initial: RankedListState | None = None) -> ComponentDriver[RankedListState]:
         """Build the in-memory shell for this ranking."""
-        return ComponentShell(self, initial=initial)
+        return ComponentDriver(self, initial=initial)
 
     def transition(
         self,
@@ -95,14 +95,14 @@ class RankedList[EntryT]:
         self,
         hook: ContentHook,
         total: int,
-        controls: PatternControls[RankedListState],
+        controls: MachineControls[RankedListState],
         *,
         name: str,
     ) -> tuple[LayoutNode, ...]:
         value = hook(total) if callable(hook) else hook
         return controls.content(normalize_content(value, name=name), prefix=name)
 
-    def render(self, state: RankedListState, controls: PatternControls[RankedListState]) -> RenderResult:
+    def render(self, state: RankedListState, controls: MachineControls[RankedListState]) -> RenderResult:
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)
         if self.page_size is None:
