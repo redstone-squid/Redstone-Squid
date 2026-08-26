@@ -8,14 +8,14 @@ import pytest
 import squid_discord
 import squid_layouts as sl
 from squid_discord import Everyone, SessionKey, SessionRegistry
-from squid_discord.durability import PurgeResult
-from squid_discord.operations import (
+from squid_discord.devtools_runtime import (
     ActionDisabled,
     ConfirmationRequired,
     DevToolsAction,
     DevToolsPolicy,
     DevToolsRuntime,
 )
+from squid_discord.durability import PurgeResult
 from squid_discord.scheduler import MountSchedulerSnapshot
 from squid_discord.sessions import Opened
 from squid_discord.testing import delivered_to, fake_message
