@@ -8,7 +8,7 @@ from squid_ui.planning.limits import DiscordLimits
 from squid_ui.planning.search import StrategyAxis, StrategyCandidate
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
 from squid_ui.primitives.nodes import Panel
-from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.semantic import (
     Action,
     ActionDisplay,
@@ -30,7 +30,6 @@ from squid_ui.semantic import (
     Items,
     KeepWithNext,
     LayoutNode,
-    Managed,
     Media,
     Navigation,
     NavigationDisplay,
@@ -44,6 +43,7 @@ from squid_ui.semantic import (
     Themed,
     Truncated,
     Unbreakable,
+    Uncontrolled,
 )
 
 ACTIONS_ADAPTER_ID = "discord.actions"
@@ -64,7 +64,7 @@ def nominate_decisions(
     nodes: Sequence[LayoutNode],
     *,
     limits: DiscordLimits,
-    session: PresentationSession,
+    session: PresentationState,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticDecisions:
     """Collect the semantic decisions reachable through the selected fallback branches."""
@@ -131,7 +131,7 @@ def nominate_decisions(
                 match ownership:
                     case Controlled(value=open_):
                         pass
-                    case Managed(initial=initial):
+                    case Uncontrolled(initial=initial):
                         open_ = session.disclosure(node.key, initial=initial).open
                 if open_:
                     walk_children(children, path)
@@ -171,7 +171,7 @@ def strategy_axis(
     preferred: str,
     available: tuple[str, ...],
     order: tuple[str, ...],
-    session: PresentationSession,
+    session: PresentationState,
     active_pagers: frozenset[str] = frozenset(),
 ) -> StrategyAxis:
     baseline = session.strategy(key, adapter_id, adapter_version)
@@ -195,19 +195,19 @@ def individual_fits(controls: int, limits: DiscordLimits) -> bool:
     return limits.fits_controls(controls, rows)
 
 
-def item_state(node: Items, session: PresentationSession) -> tuple[str | None, bool]:
+def item_state(node: Items, session: PresentationState) -> tuple[str | None, bool]:
     keys = {item.key for item in node.items}
     match node.opened:
         case Controlled(value=value):
             return (value if value in keys else None), True
-        case Managed(initial=initial):
+        case Uncontrolled(initial=initial):
             seed = () if initial is None else (initial,)
             remembered = session.selection(node.key, initial=seed).selected
             opened = remembered[0] if remembered and remembered[0] in keys else None
             return opened, node.key in session.selections or initial is not None
 
 
-def items_axis(node: Items, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
+def items_axis(node: Items, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
     opened, fixed = item_state(node, session)
     if fixed:
         available = ("opened",) if opened is not None else ("overview",)
@@ -237,7 +237,7 @@ def items_axis(node: Items, path: str, limits: DiscordLimits, session: Presentat
     return axis
 
 
-def navigation_axis(node: Navigation, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
+def navigation_axis(node: Navigation, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
     available = tuple(destination for destination in node.options if destination.available)
     strategies = ["individual"]
     if not individual_fits(len(available), limits):
@@ -265,7 +265,7 @@ def navigation_axis(node: Navigation, path: str, limits: DiscordLimits, session:
     )
 
 
-def table_axis(node: Table, path: str, session: PresentationSession) -> StrategyAxis:
+def table_axis(node: Table, path: str, session: PresentationState) -> StrategyAxis:
     if node.display is TableDisplay.AUTO:
         preferred = "tabular" if len(node.columns.columns) <= 4 else "records"
         available = ("tabular", "records")
@@ -285,7 +285,7 @@ def table_axis(node: Table, path: str, session: PresentationSession) -> Strategy
     )
 
 
-def grid_axis(node: Grid, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
+def grid_axis(node: Grid, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
     rows = (len(node.cells) + node.columns - 1) // node.columns
     strategies: list[str] = []
     if node.columns <= limits.components.row_buttons and limits.fits_controls(len(node.cells), rows):
@@ -307,7 +307,7 @@ def grid_axis(node: Grid, path: str, limits: DiscordLimits, session: Presentatio
     )
 
 
-def media_axis(node: Media, path: str, session: PresentationSession) -> StrategyAxis:
+def media_axis(node: Media, path: str, session: PresentationState) -> StrategyAxis:
     preferred = "featured" if node.display.value == "featured" else "collection"
     return strategy_axis(
         path=path,
@@ -322,7 +322,7 @@ def media_axis(node: Media, path: str, session: PresentationSession) -> Strategy
     )
 
 
-def action_axis(node: Actions, path: str, limits: DiscordLimits, session: PresentationSession) -> StrategyAxis:
+def action_axis(node: Actions, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
     actions = [action for item in node.items for action in contained_actions(item)]
     forced_pager = any(len(tuple(contained_actions(item))) > 75 for item in node.items if isinstance(item, ActionGroup))
     if not any(isinstance(item, ActionGroup) for item in node.items):

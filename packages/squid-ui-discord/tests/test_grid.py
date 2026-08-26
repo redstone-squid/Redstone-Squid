@@ -5,14 +5,14 @@ from typing import cast
 
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
 import squid_ui_widgets as sp
 from squid_ui import scene
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
-from squid_ui.runtime import PresentationSession, apply_updates
+from squid_ui.runtime import PresentationState, apply_updates
 from squid_ui.runtime.component import render_component_tree
-from squid_ui.runtime.presentation import StrategyUpdate
+from squid_ui.runtime.presentation_state import StrategyUpdate
 
 
 def _cells(count: int) -> tuple[sp.GridCell, ...]:
@@ -113,7 +113,7 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
 
 
 def test_semantic_grid_strategy_remains_sticky_while_available() -> None:
-    session = PresentationSession()
+    session = PresentationState()
     first = sl.planning.plan(
         sl.grid(*_cells(6), key="board", columns=6, on_pick=_pick),
         target=squid_ui_discord.DISCORD_V2_DPY27,

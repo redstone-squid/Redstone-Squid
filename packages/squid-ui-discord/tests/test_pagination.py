@@ -11,10 +11,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_ui as sl
-from squid_ui_discord import V2_LIMITS as LIMITS
-from squid_ui_discord import Everyone, Mount, conform
-from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_ui import Component, field, fields, paragraph, section, truncate
 from squid_ui.chrome import DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
@@ -34,10 +30,14 @@ from squid_ui.primitives import (
     Row,
     Text,
 )
-from squid_ui.runtime import PresentationSession
+from squid_ui.runtime import PresentationState
 from squid_ui.semantic import Item, Items, Paragraph
-from squid_ui.sources import Direction, Position, PositionPolicy
+from squid_ui.sources import Direction, Position, PositionResolver
 from squid_ui.text import NEUTRAL
+from squid_ui_discord import V2_LIMITS as LIMITS
+from squid_ui_discord import Everyone, Mount, conform
+from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
 
 
 class TestSplitPages:
@@ -101,10 +101,10 @@ class TestPositionPolicy:
         ],
     )
     def test_precedence(self, kwargs, expected) -> None:
-        assert PositionPolicy().resolve(**kwargs) == expected
+        assert PositionResolver().resolve(**kwargs) == expected
 
     def test_clamps_only_the_offset(self) -> None:
-        policy = PositionPolicy()
+        policy = PositionResolver()
         assert policy.resolve(override=Position("item", -3, Direction.BACKWARD), upper_bound=8) == Position(
             "item", 0, Direction.BACKWARD
         )
@@ -528,7 +528,7 @@ def test_paginated_documents_fit_on_every_page(body):
         limits=LIMITS,
         chrome=DEFAULT_CHROME,
         localization=NEUTRAL,
-        session=PresentationSession(),
+        session=PresentationState(),
     ).nodes
     solved = measure([*lowered, Code(body, overflow=Paginate())])
     if solved.pager is None:

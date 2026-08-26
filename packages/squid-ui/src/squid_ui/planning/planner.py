@@ -75,7 +75,7 @@ from squid_ui.primitives.nodes import Code as PrimitiveCode
 from squid_ui.primitives.nodes import Footer as PrimitiveFooter
 from squid_ui.primitives.nodes import Heading as PrimitiveHeading
 from squid_ui.primitives.nodes import Text as PrimitiveText
-from squid_ui.runtime.presentation import PresentationSession
+from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.semantic import Code as SemanticCode
 from squid_ui.semantic import Paragraph as SemanticParagraph
@@ -409,7 +409,7 @@ class _Search:
     chrome: Chrome
     localization: Localization
     palette: Palette
-    presentation: PresentationSession
+    presentation: PresentationState
     positions: Mapping[str, Position] | None
     nav: PlannedNav | None
 
@@ -728,7 +728,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     reservation: ResourceCost = EMPTY_RESERVATION,
     positions: Mapping[str, Position] | None = None,
     nav: PlannedNav | None = None,
-    session: PresentationSession | None = None,
+    session: PresentationState | None = None,
     cache: PlanCache | None = None,
     memo: PlanMemo | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
@@ -741,7 +741,7 @@ def plan[ModeT, AdapterT, BodyT: scene.Body](
     if search_budget < 1:
         message = "planner search budget must be positive"
         raise ValueError(message)
-    presentation = session if session is not None else PresentationSession()
+    presentation = session if session is not None else PresentationState()
     exact_key = _exact_key(
         target=target,
         chrome=chrome,
@@ -1059,7 +1059,7 @@ def _plan_cache_context(
     chrome: Chrome,
     localization: Localization,
     palette: Palette,
-    presentation: PresentationSession,
+    presentation: PresentationState,
     reservation: ResourceCost,
     strict: bool,
     nav: PlannedNav | None,

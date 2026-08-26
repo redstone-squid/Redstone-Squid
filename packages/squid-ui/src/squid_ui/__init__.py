@@ -1,5 +1,6 @@
 """Semantic-first, limits-aware UI planning and component runtime."""
 
+from squid_reactivity.operations import operation
 from squid_ui import (
     errors,
     forms,
@@ -67,7 +68,6 @@ from squid_ui.factories import (
     item_label,
     items,
     link,
-    managed,
     measure,
     media,
     media_item,
@@ -91,6 +91,7 @@ from squid_ui.factories import (
     themed,
     timestamp,
     toggle,
+    uncontrolled,
     zoned_timestamp,
 )
 from squid_ui.interactions import (
@@ -133,7 +134,6 @@ from squid_ui.text import (
     plain,
     raw_md,
 )
-from squid_reactivity.operations import operation
 
 __all__ = [
     "ActionEvent",
@@ -199,7 +199,6 @@ __all__ = [
     "items",
     "keep_with_next",
     "link",
-    "managed",
     "md",
     "measure",
     "media",
@@ -246,5 +245,6 @@ __all__ = [
     "toggle",
     "truncate",
     "unbreakable",
+    "uncontrolled",
     "zoned_timestamp",
 ]

@@ -14,14 +14,15 @@ import pprint
 from collections.abc import Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Any
 
+import squid_ui as sl
+
 # The package this module belongs to, imported by name so the devtools panel reads the way
 # a host would write it. Safe despite `__init__` importing this module: every use below is
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
-import squid_ui as sl
-from squid_ui_discord.devtools_runtime import DevToolsRuntime
 from squid_ui.profiling import RuntimeSnapshot
 from squid_ui.runtime.topics import BusSnapshot
+from squid_ui_discord.devtools_runtime import DevToolsRuntime
 
 if TYPE_CHECKING:
     # Annotations only; see the note in operations.py about the `durable` extra.
@@ -684,7 +685,7 @@ def _dump_lines(lines: list[str]) -> str:
     return "\n".join(lines) or "(no components)"
 
 
-def _presentation(session: sl.runtime.PresentationSession) -> dict[str, object]:
+def _presentation(session: sl.runtime.PresentationState) -> dict[str, object]:
     return {
         "cursors": dict(session.cursors),
         "selections": dict(session.selections),

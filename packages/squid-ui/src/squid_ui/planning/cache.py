@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from squid_ui import scene
-from squid_ui.runtime.presentation import SessionUpdate
+from squid_ui.runtime.presentation_state import SessionUpdate
 from squid_ui.scene.model import PlanReport
 
 

@@ -80,7 +80,6 @@ from squid_ui.semantic import (
     Link,
     List,
     ListItem,
-    Managed,
     Measure,
     Media,
     MediaDisplay,
@@ -111,6 +110,7 @@ from squid_ui.semantic import (
     Toggle,
     ToggleOwnership,
     Tone,
+    Uncontrolled,
     ZonedTimestamp,
 )
 from squid_ui.tallies import TallyOption
@@ -287,9 +287,9 @@ def controlled[ValueT, EventT](
     return Controlled(value, on_change)
 
 
-def managed[ValueT](initial: ValueT) -> Managed[ValueT]:
+def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     """Let the engine own this node's value, seeded once with ``initial``."""
-    return Managed(initial)
+    return Uncontrolled(initial)
 
 
 def details(
@@ -785,8 +785,8 @@ def rating(
     entries = tuple(
         Choice(str(point), _text(named[point]) if point in named else _text(_stars(point, maximum))) for point in points
     )
-    if isinstance(value, Managed):
-        selection: ChoiceOwnership = Managed(() if value.initial is None else (str(value.initial),))
+    if isinstance(value, Uncontrolled):
+        selection: ChoiceOwnership = Uncontrolled(() if value.initial is None else (str(value.initial),))
     else:
         chosen = value.value
         on_change = value.on_change
@@ -894,7 +894,6 @@ __all__ = [
     "item_label",
     "items",
     "link",
-    "managed",
     "measure",
     "media",
     "media_item",
@@ -918,5 +917,6 @@ __all__ = [
     "themed",
     "timestamp",
     "toggle",
+    "uncontrolled",
     "zoned_timestamp",
 ]

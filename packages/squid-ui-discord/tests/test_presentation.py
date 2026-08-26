@@ -13,17 +13,17 @@ from unittest.mock import AsyncMock
 import discord
 import pytest
 
-import squid_ui_discord
 import squid_ui as sl
+import squid_ui_discord
+from squid_ui.assets import Asset, InlineAsset
+from squid_ui.errors import LimitViolationError
+from squid_ui.planning.limits import LIMITS
+from squid_ui.primitives import Text
 from squid_ui_discord import delivery
 from squid_ui_discord.durability import FrontendAddress
 from squid_ui_discord.durability.frontend import DiscordFrontend, Promoted, Reconnected, RecoveredBinding
 from squid_ui_discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
 from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
-from squid_ui.assets import Asset, InlineAsset
-from squid_ui.errors import LimitViolationError
-from squid_ui.planning.limits import LIMITS
-from squid_ui.primitives import Text
 
 CLASSIC = DiscordMode.CLASSIC
 V2 = DiscordMode.COMPONENTS_V2
@@ -440,7 +440,7 @@ class TestDurableMode:
                 component_key="panel",
                 component_version=1,
                 components=(),
-                presentation=squid_ui_discord.durability.PresentationState({}, {}, {}, {}),
+                presentation=squid_ui_discord.durability.PresentationSnapshot({}, {}, {}, {}),
                 target_fingerprint=squid_ui_discord.DISCORD_V2_DPY27.fingerprint,
             ),
             address=address,

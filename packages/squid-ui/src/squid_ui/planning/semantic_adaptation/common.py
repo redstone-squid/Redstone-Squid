@@ -6,7 +6,7 @@ from squid_ui.planning.cursors import MaterializedCursorRequest, content_fingerp
 from squid_ui.planning.search import StrategyAxis, choose_strategy
 from squid_ui.planning.semantic_adaptation.model import LoweringContext
 from squid_ui.primitives.styles import ActionStyle
-from squid_ui.runtime.presentation import StrategyState, StrategyUpdate
+from squid_ui.runtime.presentation_state import StrategyState, StrategyUpdate
 from squid_ui.semantic import Emphasis, Tone
 from squid_ui.text import TextLike, resolve_text
 
