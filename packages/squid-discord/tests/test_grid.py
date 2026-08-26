@@ -8,11 +8,11 @@ import pytest
 import squid_discord
 import squid_layouts as sl
 import squid_patterns as sp
+from squid_layouts import scene
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.runtime.component import render_component_tree
 from squid_layouts.runtime.presentation import StrategyUpdate
-from squid_layouts.scene import SceneButton, SceneRow, SceneSelect, SceneText
 
 
 def _cells(count: int) -> tuple[sp.GridCell, ...]:
@@ -42,7 +42,7 @@ def test_explicit_matrix_table_is_dense_and_authoritative() -> None:
     )
 
     result = sl.planning.plan(table, target=squid_discord.DISCORD_V2_DPY27)
-    text = next(item.content for item in _walk(result.scene.body) if isinstance(item, SceneText))
+    text = next(item.content for item in _walk(result.scene.body) if isinstance(item, scene.Text))
 
     assert text.splitlines()[1].split() == ["Name", "Value"]
     assert "-+-" not in text
@@ -63,8 +63,8 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
         squid_discord.button_grid(*cells, key="board", columns=5, on_pick=pick),
         target=squid_discord.DISCORD_V2_DPY27,
     )
-    rows = [item for item in _walk(result.scene.body) if isinstance(item, SceneRow)]
-    buttons = [item for item in _walk(result.scene.body) if isinstance(item, SceneButton)]
+    rows = [item for item in _walk(result.scene.body) if isinstance(item, scene.Row)]
+    buttons = [item for item in _walk(result.scene.body) if isinstance(item, scene.Button)]
 
     assert [len(row.items) for row in rows] == [5, 1]
     assert buttons[-1].disabled
@@ -90,9 +90,9 @@ def test_exact_button_grid_refuses_illegal_discord_shapes_in_planning() -> None:
 @pytest.mark.parametrize(
     ("count", "columns", "scene_type", "strategy"),
     [
-        (5, 5, SceneButton, "buttons"),
-        (6, 6, SceneSelect, "coordinate"),
-        (30, 6, SceneSelect, "paged_select"),
+        (5, 5, scene.Button, "buttons"),
+        (6, 6, scene.Select, "coordinate"),
+        (30, 6, scene.Select, "paged_select"),
     ],
 )
 def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_type: type, strategy: str) -> None:
@@ -107,7 +107,7 @@ def test_semantic_grid_selects_a_legal_strategy(count: int, columns: int, scene_
     )
     assert update.state.strategy_id == strategy
     if strategy == "paged_select":
-        select = next(item for item in _walk(result.scene.body) if isinstance(item, SceneSelect))
+        select = next(item for item in _walk(result.scene.body) if isinstance(item, scene.Select))
         assert len(select.options) == 25
         assert result.scene.pagers[0].pages == 2
 
@@ -127,7 +127,7 @@ def test_semantic_grid_strategy_remains_sticky_while_available() -> None:
         session=session,
     )
 
-    assert any(isinstance(item, SceneSelect) for item in _walk(second.scene.body))
+    assert any(isinstance(item, scene.Select) for item in _walk(second.scene.body))
     update = next(
         update for update in second.session_updates if isinstance(update, StrategyUpdate) and update.key == "board"
     )
@@ -150,7 +150,7 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
         ),
         target=squid_discord.DISCORD_V2_DPY27,
     )
-    select = next(item for item in _walk(result.scene.body) if isinstance(item, SceneSelect))
+    select = next(item for item in _walk(result.scene.body) if isinstance(item, scene.Select))
 
     assert [(option.label, option.value) for option in select.options] == [("A1 ??Open", "open")]
     await result.bindings[select.action].handler(

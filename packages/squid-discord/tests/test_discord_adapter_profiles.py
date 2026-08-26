@@ -9,13 +9,13 @@ from squid_discord.adapter import (
     require_discord_py_capability,
 )
 from squid_discord.target import classic, v2
+from squid_layouts import scene
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import plan
 from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
 from squid_layouts.planning.discord import classic_target, components_v2_target
 from squid_layouts.planning.types import DiscordAdapter
 from squid_layouts.primitives import Text
-from squid_layouts.scene.model import SceneClassicMessage, SceneComponentsV2
 
 
 class AlternateAdapter(DiscordAdapter):
@@ -34,9 +34,9 @@ def test_alternate_profile_can_plan_for_an_injected_renderer() -> None:
     profile = AdapterProfile(AlternateAdapter, "alternate", ">=1", frozenset({"alternate.render"}))
     target = components_v2_target(profile)
 
-    scene = plan(Text("hello"), target=target).scene
+    document = plan(Text("hello"), target=target).scene
 
-    assert isinstance(scene.body, SceneComponentsV2)
+    assert isinstance(document.body, scene.ComponentsV2)
     assert target.adapter is profile
     assert "alternate.render" in target.capabilities
 
@@ -85,8 +85,8 @@ def test_protocol_factories_union_only_applicable_extension_capabilities() -> No
 
 
 def test_scene_body_can_be_narrowed_after_a_broad_decode() -> None:
-    scene = plan(Text("hello"), target=v2()).scene
+    document = plan(Text("hello"), target=v2()).scene
 
-    assert scene.expect_body(SceneComponentsV2) is scene.body
-    with pytest.raises(LayoutInvariantError, match="not SceneClassicMessage"):
-        scene.expect_body(SceneClassicMessage)
+    assert document.expect_body(scene.ComponentsV2) is document.body
+    with pytest.raises(LayoutInvariantError, match="not ClassicMessage"):
+        document.expect_body(scene.ClassicMessage)

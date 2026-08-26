@@ -11,11 +11,11 @@ import squid_layouts as sl
 from squid_discord import render_static
 from squid_discord.routing import Router, _dispatch_item
 from squid_discord.testing import fake_interaction
+from squid_layouts import scene
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.profiling.profiler import _MAX_NAME_LENGTH
-from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")
@@ -954,16 +954,16 @@ class TestDrawing:
     def test_a_routed_scene_round_trips_through_the_codec(self) -> None:
         document = sl.block(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
 
-        scene = sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene
-        payload = sl.scene.Codec.dumps(scene)
+        planned = sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene
+        payload = sl.scene.Codec.dumps(planned)
 
         assert "routed_button" in sl.scene.Codec.schema()["$defs"]
         assert '"route_id":"edit:build:3"' in payload
         assert '"custom_id"' not in payload
-        assert sl.scene.Codec.loads(payload) == scene
-        row = scene.components_v2.children[0].children[0]  # type: ignore[union-attr]
-        assert isinstance(row, SceneRow)
-        assert row.items == (SceneRoutedButton("Edit", "edit:build:3"),)
+        assert sl.scene.Codec.loads(payload) == planned
+        row = planned.components_v2.children[0].children[0]  # type: ignore[union-attr]
+        assert isinstance(row, scene.Row)
+        assert row.items == (scene.RoutedButton("Edit", "edit:build:3"),)
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
@@ -990,17 +990,17 @@ class TestDrawing:
             placeholder="Choose",
         )
 
-        scene = sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene
-        assert scene.components_v2.children == (
-            SceneRoutedSelect(
-                (sl.scene.SceneOption("One", "one", "First"), sl.scene.SceneOption("Two", "two")),
+        planned = sl.planning.plan(document, target=squid_discord.DISCORD_V2_DPY27).scene
+        assert planned.components_v2.children == (
+            scene.RoutedSelect(
+                (sl.scene.Option("One", "one", "First"), sl.scene.Option("Two", "two")),
                 "pick:build:3",
                 "Choose",
             ),
         )
-        payload = sl.scene.Codec.dumps(scene)
+        payload = sl.scene.Codec.dumps(planned)
         assert '"kind":"routed_select"' in payload
-        assert sl.scene.Codec.loads(payload) == scene
+        assert sl.scene.Codec.loads(payload) == planned
 
         view = _static_view(document)
         select = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
@@ -1008,7 +1008,7 @@ class TestDrawing:
         assert [option.value for option in select.options] == ["one", "two"]
         assert not select.is_dispatchable()
 
-        html = sl.html.Renderer().draw(scene)
+        html = sl.html.Renderer().draw(planned)
         assert 'data-route-id="pick:build:3"' in html
 
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:

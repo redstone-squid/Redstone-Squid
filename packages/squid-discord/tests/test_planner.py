@@ -9,7 +9,7 @@ from squid_discord import DISCORD_V2_DPY27
 from squid_discord import V2_LIMITS as LIMITS
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import NativeItem
-from squid_layouts import Document, zoned_timestamp
+from squid_layouts import Document, scene, zoned_timestamp
 from squid_layouts.document import Asset, InlineAsset
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning import plan
@@ -32,8 +32,6 @@ from squid_layouts.primitives import (
     Variant,
     Variants,
 )
-from squid_layouts.scene import Codec as SceneCodec
-from squid_layouts.scene.model import SceneRow, SceneText
 from squid_layouts.sources import Position
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import Localization, Message
@@ -69,7 +67,7 @@ def test_planner_extracts_callbacks_from_the_serializable_scene() -> None:
     )
 
     assert result.bindings["act"].handler is _click
-    encoded = SceneCodec.dumps(result.scene)
+    encoded = scene.Codec.dumps(result.scene)
     assert "_click" not in encoded
     assert '"action":"act"' in encoded
 
@@ -79,7 +77,7 @@ def test_planner_resolves_deferred_text_on_exact_primitives() -> None:
 
     result = plan(Text(Message("Hello")), target=DISCORD_V2_DPY27, localization=localization)
 
-    assert result.scene.components_v2.children == (SceneText("Bonjour"),)
+    assert result.scene.components_v2.children == (scene.Text("Bonjour"),)
 
 
 def test_duplicate_action_keys_fail_before_drawing() -> None:
@@ -117,7 +115,7 @@ def test_assets_are_scene_resources_not_visual_children() -> None:
     asset = Asset("report", "report.txt", "text/plain", InlineAsset(b"full report"))
     result = plan(Document((Text("summary"),), (asset,)), target=DISCORD_V2_DPY27)
 
-    assert result.scene.components_v2.children == (SceneText("summary"),)
+    assert result.scene.components_v2.children == (scene.Text("summary"),)
     assert result.scene.assets[0].key == "report"
     assert result.resources["asset:report"] is asset
 
@@ -126,7 +124,7 @@ def test_action_group_chunks_controls_without_dropping_any() -> None:
     buttons = tuple(Button(label=str(index), on_click=_click, key=f"b{index}") for index in range(6))
     result = plan(ActionGroup(buttons), target=DISCORD_V2_DPY27)
 
-    rows = [node for node in result.scene.components_v2.children if isinstance(node, SceneRow)]
+    rows = [node for node in result.scene.components_v2.children if isinstance(node, scene.Row)]
     assert [len(row.items) for row in rows] == [5, 1]
     assert set(result.bindings) == {f"b{index}" for index in range(6)}
 
@@ -245,8 +243,8 @@ def test_a_ladder_selects_by_capability_before_budget_degradation() -> None:
     basic_scene = plan(ladder, target=basic).scene
     rich_scene = plan(ladder, target=rich).scene
 
-    assert basic_scene.components_v2.children == (SceneText("plain"),)
-    assert rich_scene.components_v2.children == (SceneText("rich"),)
+    assert basic_scene.components_v2.children == (scene.Text("plain"),)
+    assert rich_scene.components_v2.children == (scene.Text("rich"),)
 
 
 def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
@@ -267,8 +265,8 @@ def test_capability_filtering_shortens_the_ladder_the_solver_steps() -> None:
         )
         for index in range(9)
     ]
-    scene = plan(ladders, target=_target("test")).scene
-    rendered = repr(scene.components_v2.children)
+    document = plan(ladders, target=_target("test")).scene
+    rendered = repr(document.components_v2.children)
 
     assert "n0.5" not in rendered  # the gated rung never reaches the solver
     assert "line 0" in rendered  # the ladder still had its last rung to step to
@@ -312,5 +310,5 @@ def test_unsupported_native_extension_uses_its_portable_fallback_without_buildin
     target = _target("portable.test")
     result = plan(NativeItem(factory, fallback=Text("portable")), target=target)
 
-    assert result.scene.components_v2.children == (SceneText("portable"),)
+    assert result.scene.components_v2.children == (scene.Text("portable"),)
     assert not called

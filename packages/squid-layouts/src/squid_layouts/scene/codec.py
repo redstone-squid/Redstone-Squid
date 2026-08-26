@@ -11,50 +11,50 @@ from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
 from squid_layouts.interactions import ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.scene.model import (
-    SceneAsset,
-    SceneBody,
-    SceneButton,
-    SceneClassicMessage,
-    SceneClassicRow,
-    SceneComponentsV2,
-    SceneControl,
-    SceneDocument,
-    SceneEmbed,
-    SceneEmbedAuthor,
-    SceneEmbedField,
-    SceneEmbedFooter,
-    SceneEmbedMedia,
-    SceneEntitySelect,
-    SceneExtension,
-    SceneFile,
-    SceneGallery,
-    SceneGalleryItem,
-    SceneLink,
-    SceneNode,
-    SceneOption,
-    ScenePager,
-    ScenePanel,
-    ScenePremiumButton,
-    SceneRoutedButton,
-    SceneRoutedSelect,
-    SceneRow,
-    SceneSection,
-    SceneSelect,
-    SceneSeparator,
-    SceneText,
-    SceneThumbnail,
-    SceneTime,
-    SceneZonedTime,
+    Asset,
+    Body,
+    Button,
+    ClassicMessage,
+    ClassicRow,
+    ComponentsV2,
+    Control,
+    Document,
+    Embed,
+    EmbedAuthor,
+    EmbedField,
+    EmbedFooter,
+    EmbedMedia,
+    EntitySelect,
+    Extension,
+    File,
+    Gallery,
+    GalleryItem,
+    Link,
+    Node,
+    Option,
+    Pager,
+    Panel,
+    PremiumButton,
+    RoutedButton,
+    RoutedSelect,
+    Row,
+    Section,
+    Select,
+    Separator,
+    Text,
+    Thumbnail,
+    Time,
+    ZonedTime,
 )
-from squid_layouts.scene.schema import SCENE_SCHEMA
+from squid_layouts.scene.schema import SCHEMA
 from squid_layouts.text import Markup
 
 
-class SceneCodecError(ValueError):
+class CodecError(ValueError):
     """A scene payload is malformed or uses an unsupported protocol."""
 
 
-class SceneCodec:
+class Codec:
     """Encode and decode deterministic resolved-scene protocol 1."""
 
     protocol = 1
@@ -62,7 +62,7 @@ class SceneCodec:
     @classmethod
     def schema(cls) -> dict[str, Any]:
         """Return an isolated JSON Schema for cross-language scene consumers."""
-        return deepcopy(SCENE_SCHEMA)
+        return deepcopy(SCHEMA)
 
     @classmethod
     def schema_json(cls) -> str:
@@ -70,29 +70,29 @@ class SceneCodec:
         return json.dumps(cls.schema(), sort_keys=True, separators=(",", ":"))
 
     @classmethod
-    def dumps(cls, scene: SceneDocument[Any]) -> str:
+    def dumps(cls, scene: Document[Any]) -> str:
         return json.dumps(cls.to_dict(scene), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
     @classmethod
-    def loads(cls, payload: str) -> SceneDocument:
+    def loads(cls, payload: str) -> Document:
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
-            raise SceneCodecError(str(error)) from error
+            raise CodecError(str(error)) from error
         if not isinstance(raw, dict):
             msg = "scene must be a JSON object"
-            raise SceneCodecError(msg)
+            raise CodecError(msg)
         return cls.from_dict(raw)
 
     @classmethod
-    def fingerprint(cls, scene: SceneDocument[Any]) -> str:
+    def fingerprint(cls, scene: Document[Any]) -> str:
         return hashlib.blake2s(cls.dumps(scene).encode(), digest_size=16).hexdigest()
 
     @classmethod
-    def to_dict(cls, scene: SceneDocument[Any]) -> dict[str, Any]:
+    def to_dict(cls, scene: Document[Any]) -> dict[str, Any]:
         if scene.protocol != cls.protocol:
             msg = f"unsupported scene protocol {scene.protocol}"
-            raise SceneCodecError(msg)
+            raise CodecError(msg)
         return {
             "protocol": scene.protocol,
             "target": scene.target,
@@ -113,23 +113,23 @@ class SceneCodec:
         }
 
     @classmethod
-    def from_dict(cls, raw: Mapping[str, Any]) -> SceneDocument:
+    def from_dict(cls, raw: Mapping[str, Any]) -> Document:
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
-            raise SceneCodecError(msg)
+            raise CodecError(msg)
         assets = raw.get("assets", [])
         pagers = raw.get("pagers", [])
         if not isinstance(assets, list) or not isinstance(pagers, list):
             msg = "scene assets and pagers must be arrays"
-            raise SceneCodecError(msg)
-        return SceneDocument(
+            raise CodecError(msg)
+        return Document(
             protocol=protocol,
             target=_string(raw, "target"),
             target_version=_integer(raw, "target_version"),
             body=_body_from_dict(_object(raw.get("body"))),
             assets=tuple(
-                SceneAsset(
+                Asset(
                     key=_string(_object(asset), "key"),
                     name=_string(_object(asset), "name"),
                     media_type=_string(_object(asset), "media_type"),
@@ -137,7 +137,7 @@ class SceneCodec:
                 for asset in assets
             ),
             pagers=tuple(
-                ScenePager(
+                Pager(
                     key=_string(_object(pager), "key"),
                     page=_integer(_object(pager), "page"),
                     pages=_integer(_object(pager), "pages"),
@@ -148,69 +148,63 @@ class SceneCodec:
         )
 
 
-def _body_to_dict(body: SceneBody) -> dict[str, Any]:
+def _body_to_dict(body: Body) -> dict[str, Any]:
     match body:
-        case SceneComponentsV2(children=children):
-            return {"kind": SceneComponentsV2.KIND, "children": [_node_to_dict(child) for child in children]}
-        case SceneClassicMessage(content=content, embeds=embeds, rows=rows):
+        case ComponentsV2(children=children):
+            return {"kind": ComponentsV2.KIND, "children": [_node_to_dict(child) for child in children]}
+        case ClassicMessage(content=content, embeds=embeds, rows=rows):
             return {
-                "kind": SceneClassicMessage.KIND,
+                "kind": ClassicMessage.KIND,
                 "content": content,
                 "embeds": [_embed_to_dict(embed) for embed in embeds],
                 "rows": [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows],
             }
 
 
-def _body_from_dict(raw: Mapping[str, Any]) -> SceneBody:
+def _body_from_dict(raw: Mapping[str, Any]) -> Body:
     kind = _string(raw, "kind")
     match kind:
-        case SceneComponentsV2.KIND:
+        case ComponentsV2.KIND:
             children = raw.get("children")
             if not isinstance(children, list):
                 msg = "components_v2 children must be an array"
-                raise SceneCodecError(msg)
-            return SceneComponentsV2(tuple(_node_from_dict(_object(child)) for child in children))
-        case SceneClassicMessage.KIND:
+                raise CodecError(msg)
+            return ComponentsV2(tuple(_node_from_dict(_object(child)) for child in children))
+        case ClassicMessage.KIND:
             embeds = raw.get("embeds")
             rows = raw.get("rows")
             if not isinstance(embeds, list) or not isinstance(rows, list):
                 msg = "classic_message embeds and rows must be arrays"
-                raise SceneCodecError(msg)
-            return SceneClassicMessage(
+                raise CodecError(msg)
+            return ClassicMessage(
                 content=_optional_string(raw, "content"),
                 embeds=tuple(_embed_from_dict(_object(embed)) for embed in embeds),
                 rows=tuple(_row_from_dict(_object(row)) for row in rows),
             )
         case _:
             msg = f"unknown scene body kind {kind!r}"
-            raise SceneCodecError(msg)
+            raise CodecError(msg)
 
 
-def _row_from_dict(raw: Mapping[str, Any]) -> SceneClassicRow:
+def _row_from_dict(raw: Mapping[str, Any]) -> ClassicRow:
     controls = raw.get("controls")
     if not isinstance(controls, list):
         msg = "classic row controls must be an array"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     decoded = tuple(_node_from_dict(_object(control)) for control in controls)
     if not all(
         isinstance(
             control,
-            SceneLink
-            | ScenePremiumButton
-            | SceneButton
-            | SceneRoutedButton
-            | SceneSelect
-            | SceneRoutedSelect
-            | SceneExtension,
+            Link | PremiumButton | Button | RoutedButton | Select | RoutedSelect | Extension,
         )
         for control in decoded
     ):
         msg = "classic row contains an unsupported control"
-        raise SceneCodecError(msg)
-    return SceneClassicRow(cast(tuple[SceneControl, ...], decoded))
+        raise CodecError(msg)
+    return ClassicRow(cast(tuple[Control, ...], decoded))
 
 
-def _embed_to_dict(embed: SceneEmbed) -> dict[str, Any]:
+def _embed_to_dict(embed: Embed) -> dict[str, Any]:
     return {
         "title": embed.title,
         "url": embed.url,
@@ -229,27 +223,27 @@ def _embed_to_dict(embed: SceneEmbed) -> dict[str, Any]:
     }
 
 
-def _media_to_dict(media: SceneEmbedMedia | None) -> dict[str, Any] | None:
+def _media_to_dict(media: EmbedMedia | None) -> dict[str, Any] | None:
     return None if media is None else {"url": media.url, "description": media.description}
 
 
-def _embed_from_dict(raw: Mapping[str, Any]) -> SceneEmbed:
+def _embed_from_dict(raw: Mapping[str, Any]) -> Embed:
     fields = raw.get("fields")
     if not isinstance(fields, list):
         msg = "embed fields must be an array"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     colour = raw.get("colour")
     if not (colour is None or (isinstance(colour, int) and not isinstance(colour, bool))):
         msg = "embed colour must be an integer or null"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     footer = raw.get("footer")
     author = raw.get("author")
-    return SceneEmbed(
+    return Embed(
         title=_optional_string(raw, "title"),
         url=_optional_string(raw, "url"),
         description=_optional_string(raw, "description"),
         fields=tuple(
-            SceneEmbedField(
+            EmbedField(
                 name=_string(_object(field), "name"),
                 value=_string(_object(field), "value"),
                 inline=_boolean(_object(field), "inline"),
@@ -259,14 +253,14 @@ def _embed_from_dict(raw: Mapping[str, Any]) -> SceneEmbed:
         footer=(
             None
             if footer is None
-            else SceneEmbedFooter(
+            else EmbedFooter(
                 text=_string(_object(footer), "text"), icon_url=_optional_string(_object(footer), "icon_url")
             )
         ),
         author=(
             None
             if author is None
-            else SceneEmbedAuthor(
+            else EmbedAuthor(
                 name=_string(_object(author), "name"),
                 url=_optional_string(_object(author), "url"),
                 icon_url=_optional_string(_object(author), "icon_url"),
@@ -279,44 +273,44 @@ def _embed_from_dict(raw: Mapping[str, Any]) -> SceneEmbed:
     )
 
 
-def _media_from_dict(raw: Any) -> SceneEmbedMedia | None:
+def _media_from_dict(raw: Any) -> EmbedMedia | None:
     if raw is None:
         return None
-    return SceneEmbedMedia(url=_string(_object(raw), "url"), description=_optional_string(_object(raw), "description"))
+    return EmbedMedia(url=_string(_object(raw), "url"), description=_optional_string(_object(raw), "description"))
 
 
-def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton) -> dict[str, Any]:
+def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> dict[str, Any]:
     match node:
-        case SceneText(content=content, markup=markup):
+        case Text(content=content, markup=markup):
             # The JSON key stays "dialect": the Python name moved, the wire format did not.
-            return {"kind": SceneText.KIND, "content": content, "dialect": markup.value}
-        case SceneTime(instant=instant, style=style, prefix=prefix):
-            return {"kind": SceneTime.KIND, "instant": instant, "style": style, "prefix": prefix}
-        case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
-            return {"kind": SceneZonedTime.KIND, "instant": instant, "timezone": timezone, "prefix": prefix}
-        case SceneFile(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
+            return {"kind": Text.KIND, "content": content, "dialect": markup.value}
+        case Time(instant=instant, style=style, prefix=prefix):
+            return {"kind": Time.KIND, "instant": instant, "style": style, "prefix": prefix}
+        case ZonedTime(instant=instant, timezone=timezone, prefix=prefix):
+            return {"kind": ZonedTime.KIND, "instant": instant, "timezone": timezone, "prefix": prefix}
+        case File(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
             return {
-                "kind": SceneFile.KIND,
+                "kind": File.KIND,
                 "asset_key": asset_key,
                 "name": name,
                 "media_type": media_type,
                 "spoiler": spoiler,
             }
-        case SceneSeparator(large=large, visible=visible):
-            return {"kind": SceneSeparator.KIND, "large": large, "visible": visible}
-        case SceneLink(label=label, url=url, emoji=emoji, disabled=disabled):
+        case Separator(large=large, visible=visible):
+            return {"kind": Separator.KIND, "large": large, "visible": visible}
+        case Link(label=label, url=url, emoji=emoji, disabled=disabled):
             return {
-                "kind": SceneLink.KIND,
+                "kind": Link.KIND,
                 "label": label,
                 "url": url,
                 "emoji": _emoji_to_dict(emoji),
                 "disabled": disabled,
             }
-        case ScenePremiumButton(sku_id=sku_id):
-            return {"kind": ScenePremiumButton.KIND, "sku_id": sku_id}
-        case SceneButton(label=label, action=action, style=style, emoji=emoji, disabled=disabled, policy=policy):
+        case PremiumButton(sku_id=sku_id):
+            return {"kind": PremiumButton.KIND, "sku_id": sku_id}
+        case Button(label=label, action=action, style=style, emoji=emoji, disabled=disabled, policy=policy):
             return {
-                "kind": SceneButton.KIND,
+                "kind": Button.KIND,
                 "label": label,
                 "action": action,
                 "style": style.value,
@@ -324,16 +318,16 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
                 "disabled": disabled,
                 "policy": policy.value,
             }
-        case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
+        case RoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
             return {
-                "kind": SceneRoutedButton.KIND,
+                "kind": RoutedButton.KIND,
                 "label": label,
                 "route_id": route_id,
                 "style": style.value,
                 "emoji": _emoji_to_dict(emoji),
                 "disabled": disabled,
             }
-        case SceneSelect(
+        case Select(
             options=options,
             action=action,
             placeholder=placeholder,
@@ -343,7 +337,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             policy=policy,
         ):
             return {
-                "kind": SceneSelect.KIND,
+                "kind": Select.KIND,
                 "options": [
                     {
                         "label": option.label,
@@ -361,7 +355,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
                 "disabled": disabled,
                 "policy": policy.value,
             }
-        case SceneRoutedSelect(
+        case RoutedSelect(
             options=options,
             route_id=route_id,
             placeholder=placeholder,
@@ -370,7 +364,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             disabled=disabled,
         ):
             return {
-                "kind": SceneRoutedSelect.KIND,
+                "kind": RoutedSelect.KIND,
                 "options": [
                     {
                         "label": option.label,
@@ -387,7 +381,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
                 "max_values": max_values,
                 "disabled": disabled,
             }
-        case SceneEntitySelect(
+        case EntitySelect(
             entity_type=entity_type,
             action=action,
             placeholder=placeholder,
@@ -399,7 +393,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             policy=policy,
         ):
             return {
-                "kind": SceneEntitySelect.KIND,
+                "kind": EntitySelect.KIND,
                 "entity_type": entity_type.value,
                 "action": action,
                 "placeholder": placeholder,
@@ -410,79 +404,79 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
                 "disabled": disabled,
                 "policy": policy.value,
             }
-        case SceneRow(items=items):
-            return {"kind": SceneRow.KIND, "items": [_node_to_dict(item) for item in items]}
-        case SceneThumbnail(url=url, description=description, spoiler=spoiler):
-            return {"kind": SceneThumbnail.KIND, "url": url, "description": description, "spoiler": spoiler}
-        case SceneGallery(items=items):
+        case Row(items=items):
+            return {"kind": Row.KIND, "items": [_node_to_dict(item) for item in items]}
+        case Thumbnail(url=url, description=description, spoiler=spoiler):
+            return {"kind": Thumbnail.KIND, "url": url, "description": description, "spoiler": spoiler}
+        case Gallery(items=items):
             return {
-                "kind": SceneGallery.KIND,
+                "kind": Gallery.KIND,
                 "items": [
                     {"url": item.url, "description": item.description, "spoiler": item.spoiler} for item in items
                 ],
             }
-        case SceneSection(texts=texts, accessory=accessory):
+        case Section(texts=texts, accessory=accessory):
             return {
-                "kind": SceneSection.KIND,
+                "kind": Section.KIND,
                 "texts": [_node_to_dict(text) for text in texts],
                 "accessory": _node_to_dict(accessory),
             }
-        case ScenePanel(children=children, accent=accent, spoiler=spoiler):
+        case Panel(children=children, accent=accent, spoiler=spoiler):
             return {
-                "kind": ScenePanel.KIND,
+                "kind": Panel.KIND,
                 "children": [_node_to_dict(child) for child in children],
                 "accent": accent,
                 "spoiler": spoiler,
             }
-        case SceneExtension(kind=kind, version=version, payload=payload):
+        case Extension(kind=kind, version=version, payload=payload):
             # Round-trip through json now so errors point at planning rather than a remote renderer.
             try:
                 normalized = json.loads(json.dumps(payload, ensure_ascii=False))
             except (TypeError, ValueError) as error:
                 msg = f"extension {kind!r} payload is not JSON serializable"
-                raise SceneCodecError(msg) from error
-            return {"kind": SceneExtension.KIND, "extension": kind, "version": version, "payload": normalized}
+                raise CodecError(msg) from error
+            return {"kind": Extension.KIND, "extension": kind, "version": version, "payload": normalized}
 
 
 def _node_from_dict(
     raw: Mapping[str, Any],
-) -> SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton:
+) -> Node | Link | PremiumButton | Button | RoutedButton:
     kind = _string(raw, "kind")
     match kind:
-        case SceneText.KIND:
-            return SceneText(_string(raw, "content"), Markup(_string(raw, "dialect")))
-        case SceneTime.KIND:
-            return SceneTime(
+        case Text.KIND:
+            return Text(_string(raw, "content"), Markup(_string(raw, "dialect")))
+        case Time.KIND:
+            return Time(
                 _string(raw, "instant"),
                 _string(raw, "style"),
                 _optional_string(raw, "prefix"),
             )
-        case SceneZonedTime.KIND:
-            return SceneZonedTime(
+        case ZonedTime.KIND:
+            return ZonedTime(
                 _string(raw, "instant"),
                 _string(raw, "timezone"),
                 _optional_string(raw, "prefix"),
             )
-        case SceneFile.KIND:
-            return SceneFile(
+        case File.KIND:
+            return File(
                 _string(raw, "asset_key"),
                 _string(raw, "name"),
                 _string(raw, "media_type"),
                 _boolean(raw, "spoiler", default=False),
             )
-        case SceneSeparator.KIND:
-            return SceneSeparator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))
-        case SceneLink.KIND:
-            return SceneLink(
+        case Separator.KIND:
+            return Separator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))
+        case Link.KIND:
+            return Link(
                 label=_optional_string(raw, "label"),
                 url=_string(raw, "url"),
                 emoji=_emoji_from_value(raw.get("emoji")),
                 disabled=_boolean(raw, "disabled", default=False),
             )
-        case ScenePremiumButton.KIND:
-            return ScenePremiumButton(_integer(raw, "sku_id"))
-        case SceneButton.KIND:
-            return SceneButton(
+        case PremiumButton.KIND:
+            return PremiumButton(_integer(raw, "sku_id"))
+        case Button.KIND:
+            return Button(
                 label=_optional_string(raw, "label"),
                 action=_string(raw, "action"),
                 style=ActionStyle(_string(raw, "style")),
@@ -490,22 +484,22 @@ def _node_from_dict(
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
-        case SceneRoutedButton.KIND:
-            return SceneRoutedButton(
+        case RoutedButton.KIND:
+            return RoutedButton(
                 label=_optional_string(raw, "label"),
                 route_id=_string(raw, "route_id"),
                 style=ActionStyle(_string(raw, "style")),
                 emoji=_emoji_from_value(raw.get("emoji")),
                 disabled=_boolean(raw, "disabled"),
             )
-        case SceneSelect.KIND:
+        case Select.KIND:
             options = raw.get("options")
             if not isinstance(options, list):
                 msg = "select options must be an array"
-                raise SceneCodecError(msg)
-            return SceneSelect(
+                raise CodecError(msg)
+            return Select(
                 options=tuple(
-                    SceneOption(
+                    Option(
                         label=_string(_object(option), "label"),
                         value=_string(_object(option), "value"),
                         description=_optional_string(_object(option), "description"),
@@ -521,14 +515,14 @@ def _node_from_dict(
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
-        case SceneRoutedSelect.KIND:
+        case RoutedSelect.KIND:
             options = raw.get("options")
             if not isinstance(options, list):
                 msg = "routed select options must be an array"
-                raise SceneCodecError(msg)
-            return SceneRoutedSelect(
+                raise CodecError(msg)
+            return RoutedSelect(
                 options=tuple(
-                    SceneOption(
+                    Option(
                         label=_string(_object(option), "label"),
                         value=_string(_object(option), "value"),
                         description=_optional_string(_object(option), "description"),
@@ -543,12 +537,12 @@ def _node_from_dict(
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
             )
-        case SceneEntitySelect.KIND:
+        case EntitySelect.KIND:
             defaults = raw.get("default_values")
             if not isinstance(defaults, list):
                 msg = "entity select default_values must be an array"
-                raise SceneCodecError(msg)
-            return SceneEntitySelect(
+                raise CodecError(msg)
+            return EntitySelect(
                 entity_type=EntityType(_string(raw, "entity_type")),
                 action=_string(raw, "action"),
                 placeholder=_optional_string(raw, "placeholder"),
@@ -562,33 +556,30 @@ def _node_from_dict(
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
-        case SceneRow.KIND:
+        case Row.KIND:
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "row items must be an array"
-                raise SceneCodecError(msg)
+                raise CodecError(msg)
             decoded = tuple(_node_from_dict(_object(item)) for item in items)
-            if not all(
-                isinstance(item, SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension)
-                for item in decoded
-            ):
+            if not all(isinstance(item, Link | PremiumButton | Button | RoutedButton | Extension) for item in decoded):
                 msg = "row contains an unsupported child"
-                raise SceneCodecError(msg)
-            return SceneRow(decoded)
-        case SceneThumbnail.KIND:
-            return SceneThumbnail(
+                raise CodecError(msg)
+            return Row(decoded)
+        case Thumbnail.KIND:
+            return Thumbnail(
                 url=_string(raw, "url"),
                 description=_optional_string(raw, "description"),
                 spoiler=_boolean(raw, "spoiler", default=False),
             )
-        case SceneGallery.KIND:
+        case Gallery.KIND:
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "gallery items must be an array"
-                raise SceneCodecError(msg)
-            return SceneGallery(
+                raise CodecError(msg)
+            return Gallery(
                 tuple(
-                    SceneGalleryItem(
+                    GalleryItem(
                         url=_string(_object(item), "url"),
                         description=_optional_string(_object(item), "description"),
                         spoiler=_boolean(_object(item), "spoiler", default=False),
@@ -596,49 +587,49 @@ def _node_from_dict(
                     for item in items
                 )
             )
-        case SceneSection.KIND:
+        case Section.KIND:
             texts = raw.get("texts")
             if not isinstance(texts, list):
                 msg = "section texts must be an array"
-                raise SceneCodecError(msg)
+                raise CodecError(msg)
             decoded_texts = tuple(_node_from_dict(_object(text)) for text in texts)
             accessory = _node_from_dict(_object(raw.get("accessory")))
-            if not all(isinstance(text, SceneText) for text in decoded_texts):
+            if not all(isinstance(text, Text) for text in decoded_texts):
                 msg = "section contains a non-text slot"
-                raise SceneCodecError(msg)
+                raise CodecError(msg)
             if not isinstance(
                 accessory,
-                SceneThumbnail | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension,
+                Thumbnail | Link | PremiumButton | Button | RoutedButton | Extension,
             ):
                 msg = "section has an unsupported accessory"
-                raise SceneCodecError(msg)
-            return SceneSection(decoded_texts, accessory)
-        case ScenePanel.KIND:
+                raise CodecError(msg)
+            return Section(decoded_texts, accessory)
+        case Panel.KIND:
             children = raw.get("children")
             accent = raw.get("accent")
             if not isinstance(children, list) or not (accent is None or isinstance(accent, int)):
                 msg = "panel children or accent is malformed"
-                raise SceneCodecError(msg)
-            return ScenePanel(
+                raise CodecError(msg)
+            return Panel(
                 tuple(_node_from_dict(_object(child)) for child in children),
                 accent=accent,
                 spoiler=_boolean(raw, "spoiler", default=False),
             )
-        case SceneExtension.KIND:
+        case Extension.KIND:
             payload = raw.get("payload")
             if not isinstance(payload, dict):
                 msg = "extension payload must be an object"
-                raise SceneCodecError(msg)
-            return SceneExtension(kind=_string(raw, "extension"), version=_integer(raw, "version"), payload=payload)
+                raise CodecError(msg)
+            return Extension(kind=_string(raw, "extension"), version=_integer(raw, "version"), payload=payload)
         case _:
             msg = f"unknown scene node kind {kind!r}"
-            raise SceneCodecError(msg)
+            raise CodecError(msg)
 
 
 def _object(value: Any) -> Mapping[str, Any]:
     if not isinstance(value, dict):
         msg = "expected an object"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     return value
 
 
@@ -646,7 +637,7 @@ def _string(raw: Mapping[str, Any], key: str) -> str:
     value = raw.get(key)
     if not isinstance(value, str):
         msg = f"{key} must be a string"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     return value
 
 
@@ -654,7 +645,7 @@ def _optional_string(raw: Mapping[str, Any], key: str) -> str | None:
     value = raw.get(key)
     if value is not None and not isinstance(value, str):
         msg = f"{key} must be a string or null"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     return value
 
 
@@ -662,7 +653,7 @@ def _string_array(raw: Mapping[str, Any], key: str) -> list[str]:
     value = raw.get(key)
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         msg = f"{key} must be an array of strings"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     return value
 
 
@@ -670,7 +661,7 @@ def _integer(raw: Mapping[str, Any], key: str) -> int:
     value = raw.get(key)
     if not isinstance(value, int) or isinstance(value, bool):
         msg = f"{key} must be an integer"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     return value
 
 
@@ -678,7 +669,7 @@ def _boolean(raw: Mapping[str, Any], key: str, *, default: bool | None = None) -
     value = raw.get(key, default)
     if not isinstance(value, bool):
         msg = f"{key} must be a boolean"
-        raise SceneCodecError(msg)
+        raise CodecError(msg)
     return value
 
 
@@ -697,7 +688,7 @@ def _emoji_from_value(value: object) -> Emoji | None:
     emoji_id = raw.get("id")
     if emoji_id is not None and (not isinstance(emoji_id, int) or isinstance(emoji_id, bool)):
         message = "emoji id must be an integer or null"
-        raise SceneCodecError(message)
+        raise CodecError(message)
     return Emoji(
         name=_string(raw, "name"),
         id=emoji_id,

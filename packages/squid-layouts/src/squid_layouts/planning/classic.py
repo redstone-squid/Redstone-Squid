@@ -1,6 +1,6 @@
 """The classic-message dialect: content, embeds, and up to five action rows.
 
-Everything a renderer will draw is decided here. By the time a `SceneClassicMessage` exists,
+Everything a renderer will draw is decided here. By the time a `ClassicMessage` exists,
 which prose became which card, which values became embed fields, which controls share a row,
 and where the page boundaries fall are all settled — a renderer that had to infer any of that
 would be making layout decisions with none of the planner's budget information.
@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
+from squid_layouts import scene
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
@@ -59,25 +60,6 @@ from squid_layouts.primitives.nodes import (
     Variant,
     Variants,
     card_text,
-)
-from squid_layouts.scene.model import (
-    SceneButton,
-    SceneClassicMessage,
-    SceneClassicRow,
-    SceneControl,
-    SceneEmbed,
-    SceneEmbedAuthor,
-    SceneEmbedField,
-    SceneEmbedFooter,
-    SceneEmbedMedia,
-    SceneEntitySelect,
-    SceneExtension,
-    SceneLink,
-    SceneOption,
-    ScenePremiumButton,
-    SceneRoutedButton,
-    SceneRoutedSelect,
-    SceneSelect,
 )
 from squid_layouts.sources import Position
 from squid_layouts.target_types import ClassicTarget
@@ -303,8 +285,8 @@ class _ClassicConverter:
 
     bindings: SceneBindings
     content: str | None = None
-    embeds: list[SceneEmbed] = None  # type: ignore[assignment]
-    rows: list[SceneClassicRow] = None  # type: ignore[assignment]
+    embeds: list[scene.Embed] = None  # type: ignore[assignment]
+    rows: list[scene.ClassicRow] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         self.embeds = []
@@ -322,7 +304,7 @@ class _ClassicConverter:
                     self.convert(inner, f"{here}.")
                 case Row(items=items):
                     self.rows.append(
-                        SceneClassicRow(
+                        scene.ClassicRow(
                             tuple(
                                 _as_control(self.bindings.control(item, f"{here}.{position}"), here)
                                 for position, item in enumerate(items)
@@ -331,9 +313,9 @@ class _ClassicConverter:
                     )
                 case SelectMenu(options=options):
                     self.rows.append(
-                        SceneClassicRow(
+                        scene.ClassicRow(
                             (
-                                SceneSelect(
+                                scene.Select(
                                     options=tuple(_options(options)),
                                     action=self.bindings.action(child),
                                     placeholder=child.placeholder,
@@ -347,9 +329,9 @@ class _ClassicConverter:
                     )
                 case EntitySelect():
                     self.rows.append(
-                        SceneClassicRow(
+                        scene.ClassicRow(
                             (
-                                SceneEntitySelect(
+                                scene.EntitySelect(
                                     entity_type=child.entity_type,
                                     action=self.bindings.action(child),
                                     placeholder=child.placeholder,
@@ -365,9 +347,9 @@ class _ClassicConverter:
                     )
                 case RoutedSelect(options=options):
                     self.rows.append(
-                        SceneClassicRow(
+                        scene.ClassicRow(
                             (
-                                SceneRoutedSelect(
+                                scene.RoutedSelect(
                                     options=tuple(_options(options)),
                                     route_id=child.route_id,
                                     placeholder=child.placeholder,
@@ -381,25 +363,25 @@ class _ClassicConverter:
                 case LinkButton() | RoutedButton() | Button() | RawItem():
                     # A bare control at the root gets its own row rather than being merged
                     # with a neighbour: merging is a layout decision, and lowering made it.
-                    self.rows.append(SceneClassicRow((_as_control(self.bindings.control(child, here), here),)))
+                    self.rows.append(scene.ClassicRow((_as_control(self.bindings.control(child, here), here),)))
                 case _:
                     message = f"{here}: {type(child).__name__} cannot appear in a classic message"
                     raise LayoutInvariantError(message)
 
-    def _embed(self, card: RCard) -> SceneEmbed:
+    def _embed(self, card: RCard) -> scene.Embed:
         description = BLOCK_JOIN.join(text for block in card.blocks if (text := _block_text(block)))
-        return SceneEmbed(
+        return scene.Embed(
             title=_text(card.title),
             url=card.url,
             description=description.strip() or None,
             fields=tuple(
-                SceneEmbedField(field.name.content, field.value.content, field.inline) for field in card.fields
+                scene.EmbedField(field.name.content, field.value.content, field.inline) for field in card.fields
             ),
-            footer=(None if (footer := _text(card.footer)) is None else SceneEmbedFooter(footer, card.footer_icon)),
+            footer=(None if (footer := _text(card.footer)) is None else scene.EmbedFooter(footer, card.footer_icon)),
             author=(
                 None
                 if (author := _text(card.author)) is None
-                else SceneEmbedAuthor(author, card.author_url, card.author_icon)
+                else scene.EmbedAuthor(author, card.author_url, card.author_icon)
             ),
             colour=card.accent,
             image=_media(card.image),
@@ -426,8 +408,8 @@ def _text(slot: RText | None) -> str | None:
     return slot.content.strip() or None
 
 
-def _media(media: CardMedia | None) -> SceneEmbedMedia | None:
-    return None if media is None else SceneEmbedMedia(media.url, media.description)
+def _media(media: CardMedia | None) -> scene.EmbedMedia | None:
+    return None if media is None else scene.EmbedMedia(media.url, media.description)
 
 
 def _timestamp(value: object) -> str | None:
@@ -438,15 +420,15 @@ def _timestamp(value: object) -> str | None:
     return value.isoformat()  # type: ignore[union-attr]
 
 
-def _options(options: Sequence[object]) -> list[SceneOption]:
+def _options(options: Sequence[object]) -> list[scene.Option]:
     return [
-        SceneOption(option.label, option.value, option.description, option.default, option.emoji)  # type: ignore[attr-defined]
+        scene.Option(option.label, option.value, option.description, option.default, option.emoji)  # type: ignore[attr-defined]
         for option in options
     ]
 
 
-def _as_control(node: object, path: str) -> SceneControl:
-    if not isinstance(node, SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension):
+def _as_control(node: object, path: str) -> scene.Control:
+    if not isinstance(node, scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension):
         message = f"{path}: an action row cannot hold {type(node).__name__}"
         raise LayoutInvariantError(message)
     return node
@@ -471,13 +453,13 @@ class ClassicDialect:
         }
     )
     mode = ClassicTarget
-    body_type = SceneClassicMessage
+    body_type = scene.ClassicMessage
     default_limits = CLASSIC_LIMITS
     # A classic message has no component that can hold a native discord.py item.
     realizes_extensions = False
 
     def normalize(
-        self, nodes: Sequence[Node], target: Target[ClassicLimits, SceneClassicMessage, ClassicTarget, Any]
+        self, nodes: Sequence[Node], target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]
     ) -> tuple[Node, ...]:
         return _lower(nodes, target, target.limits)
 
@@ -497,10 +479,10 @@ class ClassicDialect:
     ) -> tuple[MeasuredLayout, int]:
         return _paginate(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)
 
-    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> SceneClassicMessage:
+    def body(self, children: Sequence[Realized], bindings: SceneBindings) -> scene.ClassicMessage:
         converter = _ClassicConverter(bindings)
         converter.convert(children)
-        return SceneClassicMessage(
+        return scene.ClassicMessage(
             content=converter.content,
             embeds=tuple(converter.embeds),
             rows=tuple(converter.rows),

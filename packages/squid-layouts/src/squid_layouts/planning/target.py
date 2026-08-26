@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Self
 
+from squid_layouts import scene
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.adapter import (
     EMPTY_COST as EMPTY_COST,
@@ -19,11 +20,10 @@ from squid_layouts.planning.adapter import (
 )
 from squid_layouts.planning.dialect import TargetDialect
 from squid_layouts.planning.limits import Axis, DiscordLimits
-from squid_layouts.scene.model import SceneBody
 
 
 @dataclass(frozen=True, slots=True)
-class Target[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT, AdapterT]:
+class Target[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT]:
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
     Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather

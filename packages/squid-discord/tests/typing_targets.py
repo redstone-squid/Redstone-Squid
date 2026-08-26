@@ -6,7 +6,7 @@ from squid_discord.classic_renderer import ClassicRenderer
 from squid_discord.presentation import DiscordPresentation
 from squid_discord.renderer import V2Renderer
 from squid_discord.target import classic, v2
-from squid_layouts import fallback
+from squid_layouts import fallback, scene
 from squid_layouts.html import Renderer as HtmlRenderer
 from squid_layouts.planning import (
     AdapterProfile,
@@ -25,7 +25,7 @@ from squid_layouts.planning import (
 from squid_layouts.planning.limits import ClassicLimits, V2Limits
 from squid_layouts.primitives import Card, Panel, Text, Variants
 from squid_layouts.renderer import Renderer
-from squid_layouts.scene.model import PlanResult, SceneClassicMessage, SceneComponentsV2
+from squid_layouts.scene.model import PlanResult
 from squid_layouts.semantic import FallbackContent
 
 
@@ -53,22 +53,22 @@ assert_type(discord_py_27, AdapterProfile[DiscordPy27Adapter])
 assert_type(dynamic, AdapterProfile[DiscordAdapter])
 assert_type(
     components_v2_target(discord_py),
-    Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPyAdapter],
+    Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter],
 )
 assert_type(
     classic_target(discord_py_27),
-    Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPy27Adapter],
+    Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPy27Adapter],
 )
 assert_type(
     v2(),
-    Target[V2Limits, SceneComponentsV2, ComponentsV2Target, DiscordPy27Adapter],
+    Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPy27Adapter],
 )
 assert_type(
     classic(adapter=discord_py),
-    Target[ClassicLimits, SceneClassicMessage, ClassicTarget, DiscordPyAdapter],
+    Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter],
 )
-assert_type(plan(Text("v2"), target=v2()), PlanResult[SceneComponentsV2])
-assert_type(plan(Text("classic"), target=classic()), PlanResult[SceneClassicMessage])
+assert_type(plan(Text("v2"), target=v2()), PlanResult[scene.ComponentsV2])
+assert_type(plan(Text("classic"), target=classic()), PlanResult[scene.ClassicMessage])
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))
@@ -89,20 +89,20 @@ assert_type(
 )
 
 
-def accepts_v2_renderer(value: Renderer[SceneComponentsV2, DiscordPresentation]) -> None:
+def accepts_v2_renderer(value: Renderer[scene.ComponentsV2, DiscordPresentation]) -> None:
     del value
 
 
-def accepts_classic_renderer(value: Renderer[SceneClassicMessage, DiscordPresentation]) -> None:
+def accepts_classic_renderer(value: Renderer[scene.ClassicMessage, DiscordPresentation]) -> None:
     del value
 
 
-def accepts_html_renderer(value: Renderer[SceneComponentsV2, str]) -> None:
+def accepts_html_renderer(value: Renderer[scene.ComponentsV2, str]) -> None:
     del value
 
 
 # A declared protocol nothing implements is how the contravariance bug survived: `draw` took
-# an unparameterized `SceneDocument`, so no renderer that narrowed to its own body could
+# an unparameterized `scene.Document`, so no renderer that narrowed to its own body could
 # satisfy it. These three pin that it is satisfiable.
 accepts_v2_renderer(V2Renderer())
 accepts_classic_renderer(ClassicRenderer())

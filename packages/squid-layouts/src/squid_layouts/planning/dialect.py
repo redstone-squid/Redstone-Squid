@@ -21,6 +21,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
+from squid_layouts import scene
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
@@ -42,16 +43,6 @@ from squid_layouts.primitives.nodes import (
     RoutedButton,
     SelectMenu,
     Thumbnail,
-)
-from squid_layouts.scene.model import (
-    SceneBody,
-    SceneButton,
-    SceneExtension,
-    SceneLink,
-    SceneNode,
-    ScenePremiumButton,
-    SceneRoutedButton,
-    SceneThumbnail,
 )
 
 if TYPE_CHECKING:
@@ -106,18 +97,18 @@ class SceneBindings:
 
     def control(
         self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
-    ) -> SceneNode:
+    ) -> scene.Node:
         """Convert one leaf every target draws the same way."""
         match node:
             case Thumbnail(url=url, description=description, spoiler=spoiler):
-                return SceneThumbnail(url, description, spoiler)
+                return scene.Thumbnail(url, description, spoiler)
             case LinkButton(label=label, url=url, emoji=emoji, disabled=disabled):
-                return SceneLink(label, url, emoji, disabled)
+                return scene.Link(label, url, emoji, disabled)
             case PremiumButton(sku_id=sku_id):
-                return ScenePremiumButton(sku_id)
+                return scene.PremiumButton(sku_id)
             case RoutedButton(label=label, route_id=route_id):
                 # No binding: the router owns dispatch, so the scene is complete without one.
-                return SceneRoutedButton(
+                return scene.RoutedButton(
                     label=label,
                     route_id=route_id,
                     style=node.style,
@@ -125,7 +116,7 @@ class SceneBindings:
                     disabled=node.disabled,
                 )
             case Button():
-                return SceneButton(
+                return scene.Button(
                     label=node.label,
                     action=self.action(node),
                     style=node.style,
@@ -136,10 +127,10 @@ class SceneBindings:
             case RawItem(factory=factory, kind=kind, version=version, payload=payload):
                 resource = f"native:{path}"
                 self.resources[resource] = factory()
-                return SceneExtension(kind, version, {**payload, "resource": resource})
+                return scene.Extension(kind, version, {**payload, "resource": resource})
 
 
-class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
+class TargetDialect[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT](Protocol):
     """One Discord protocol mode: what a legal message of it is, and how to build one.
 
     The first axis of a target. Bound to its own limits and body types, so each dialect's

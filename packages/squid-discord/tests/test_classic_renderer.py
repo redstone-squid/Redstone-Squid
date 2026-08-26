@@ -7,31 +7,18 @@ import pytest
 
 from squid_discord import DISCORD_V1_DPY27, classic
 from squid_discord.classic_renderer import ClassicRenderer, audit_classic_payload
+from squid_layouts import scene
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.planning.limits import CLASSIC_LIMITS
-from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import (
-    SceneButton,
-    SceneClassicMessage,
-    SceneClassicRow,
-    SceneComponentsV2,
-    SceneDocument,
-    SceneEmbed,
-    SceneEmbedField,
-    SceneLink,
-    SceneOption,
-    SceneSelect,
-    SceneText,
-)
 from squid_layouts.semantic import Actions, Link, Note, Paragraph
 
 
-def scene(body: SceneClassicMessage) -> SceneDocument[SceneClassicMessage]:
-    return SceneDocument(SceneCodec.protocol, "discord.components-v1", 1, body)
+def _document(body: scene.ClassicMessage) -> scene.Document[scene.ClassicMessage]:
+    return scene.Document(scene.Codec.protocol, "discord.components-v1", 1, body)
 
 
-def link(label: str = "Docs") -> SceneLink:
-    return SceneLink(label, "https://example.invalid")
+def link(label: str = "Docs") -> scene.Link:
+    return scene.Link(label, "https://example.invalid")
 
 
 class TestDrawing:
@@ -58,14 +45,14 @@ class TestDrawing:
         assert classic.render_static(Paragraph("hi")).view is None
 
     def test_each_planned_row_becomes_its_own_row_index(self) -> None:
-        body = SceneClassicMessage(
+        body = scene.ClassicMessage(
             rows=(
-                SceneClassicRow((link("a"), link("b"))),
-                SceneClassicRow((link("c"),)),
+                scene.ClassicRow((link("a"), link("b"))),
+                scene.ClassicRow((link("c"),)),
             )
         )
 
-        view = ClassicRenderer().draw(scene(body)).view
+        view = ClassicRenderer().draw(_document(body)).view
 
         assert view is not None
         assert [item.row for item in view.children] == [0, 0, 1]
@@ -73,38 +60,38 @@ class TestDrawing:
 
 class TestMalformedScenes:
     def test_a_row_mixing_a_select_with_buttons_is_refused(self) -> None:
-        body = SceneClassicMessage(rows=(SceneClassicRow((SceneSelect((SceneOption("a", "a"),), "act"), link())),))
+        body = scene.ClassicMessage(rows=(scene.ClassicRow((scene.Select((scene.Option("a", "a"),), "act"), link())),))
 
         with pytest.raises(DrawInvariantError, match="mixes a select with other controls"):
-            ClassicRenderer().draw(scene(body))
+            ClassicRenderer().draw(_document(body))
 
     def test_more_than_five_buttons_in_a_row_is_refused(self) -> None:
-        body = SceneClassicMessage(rows=(SceneClassicRow(tuple(link(f"b{index}") for index in range(6))),))
+        body = scene.ClassicMessage(rows=(scene.ClassicRow(tuple(link(f"b{index}") for index in range(6))),))
 
         with pytest.raises(DrawInvariantError, match="holds 6 buttons"):
-            ClassicRenderer().draw(scene(body))
+            ClassicRenderer().draw(_document(body))
 
     def test_an_empty_row_is_refused_because_planning_should_not_emit_one(self) -> None:
         with pytest.raises(DrawInvariantError, match="is empty"):
-            ClassicRenderer().draw(scene(SceneClassicMessage(rows=(SceneClassicRow(()),))))
+            ClassicRenderer().draw(_document(scene.ClassicMessage(rows=(scene.ClassicRow(()),))))
 
     def test_a_components_v2_body_is_refused_by_name(self) -> None:
-        wrong = SceneDocument(SceneCodec.protocol, "discord.components-v1", 1, SceneComponentsV2((SceneText("x"),)))
+        wrong = scene.Document(scene.Codec.protocol, "discord.components-v1", 1, scene.ComponentsV2((scene.Text("x"),)))
 
-        with pytest.raises(DrawInvariantError, match="cannot draw a SceneComponentsV2 body"):
+        with pytest.raises(DrawInvariantError, match="cannot draw a ComponentsV2 body"):
             ClassicRenderer().draw(wrong)  # pyrefly: ignore[bad-argument-type]
 
     def test_the_v2_target_id_is_refused(self) -> None:
-        wrong = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, SceneClassicMessage())
+        wrong = scene.Document(scene.Codec.protocol, "discord.components-v2", 1, scene.ClassicMessage())
 
         with pytest.raises(DrawInvariantError, match=re.escape("cannot draw target 'discord.components-v2'")):
             ClassicRenderer().draw(wrong)
 
     def test_an_interactive_control_needs_a_mounted_frontend(self) -> None:
-        body = SceneClassicMessage(rows=(SceneClassicRow((SceneButton("Save", "save"),)),))
+        body = scene.ClassicMessage(rows=(scene.ClassicRow((scene.Button("Save", "save"),)),))
 
         with pytest.raises(TypeError, match="mounted Discord frontend"):
-            ClassicRenderer().draw(scene(body))
+            ClassicRenderer().draw(_document(body))
 
 
 class TestPayloadAudit:
@@ -213,22 +200,22 @@ class TestPayloadAudit:
 
 class TestRendererAudit:
     def test_the_renderer_refuses_to_return_an_illegal_payload(self) -> None:
-        body = SceneClassicMessage(embeds=tuple(SceneEmbed(description="x" * 1500) for _ in range(5)))
+        body = scene.ClassicMessage(embeds=tuple(scene.Embed(description="x" * 1500) for _ in range(5)))
 
         with pytest.raises(DrawInvariantError, match="embed text totals 7500"):
-            ClassicRenderer().draw(scene(body))
+            ClassicRenderer().draw(_document(body))
 
     def test_the_audit_can_be_turned_off_for_a_caller_that_owns_the_check(self) -> None:
-        body = SceneClassicMessage(embeds=tuple(SceneEmbed(description="x" * 1500) for _ in range(5)))
+        body = scene.ClassicMessage(embeds=tuple(scene.Embed(description="x" * 1500) for _ in range(5)))
 
-        presentation = ClassicRenderer(audit=False).draw(scene(body))
+        presentation = ClassicRenderer(audit=False).draw(_document(body))
 
         assert len(presentation.embeds) == 5
 
     def test_a_field_survives_the_trip_through_discord_py(self) -> None:
-        body = SceneClassicMessage(embeds=(SceneEmbed(fields=(SceneEmbedField("Width", "2", inline=True),)),))
+        body = scene.ClassicMessage(embeds=(scene.Embed(fields=(scene.EmbedField("Width", "2", inline=True),)),))
 
-        embed = ClassicRenderer().draw(scene(body)).embeds[0]
+        embed = ClassicRenderer().draw(_document(body)).embeds[0]
 
         assert (embed.fields[0].name, embed.fields[0].value, embed.fields[0].inline) == ("Width", "2", True)
 

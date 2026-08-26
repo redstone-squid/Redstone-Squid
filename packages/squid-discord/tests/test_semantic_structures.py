@@ -5,18 +5,10 @@ import pytest
 
 import squid_layouts as sl
 from squid_discord import DISCORD_V2_DPY27, render_static
+from squid_layouts import scene
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import plan
 from squid_layouts.runtime import PresentationSession, apply_updates
-from squid_layouts.scene.model import (
-    SceneGallery,
-    ScenePanel,
-    SceneRow,
-    SceneSection,
-    SceneSelect,
-    SceneText,
-    SceneThumbnail,
-)
 from squid_layouts.semantic import (
     Choice,
     Choices,
@@ -46,8 +38,8 @@ def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None
     small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
     large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))
 
-    assert isinstance(plan(small, target=DISCORD_V2_DPY27).scene.components_v2.children[0], SceneRow)
-    assert isinstance(plan(large, target=DISCORD_V2_DPY27).scene.components_v2.children[0], SceneSelect)
+    assert isinstance(plan(small, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Row)
+    assert isinstance(plan(large, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
 
 
 def test_items_switch_from_overview_to_focused_content_through_session_state() -> None:
@@ -63,9 +55,10 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
     session.select("catalog", ("two",))
     focused = plan(document, target=DISCORD_V2_DPY27, session=session)
 
-    assert any(isinstance(node, SceneSelect) for node in overview.scene.components_v2.children)
+    assert any(isinstance(node, scene.Select) for node in overview.scene.components_v2.children)
     assert any(
-        isinstance(node, SceneText) and "second detail" in node.content for node in focused.scene.components_v2.children
+        isinstance(node, scene.Text) and "second detail" in node.content
+        for node in focused.scene.components_v2.children
     )
 
 
@@ -78,10 +71,10 @@ def test_details_disclosure_is_presentation_state() -> None:
     opened = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     assert not any(
-        isinstance(node, SceneText) and "hidden body" in node.content for node in closed.scene.components_v2.children
+        isinstance(node, scene.Text) and "hidden body" in node.content for node in closed.scene.components_v2.children
     )
     assert any(
-        isinstance(node, SceneText) and "hidden body" in node.content for node in opened.scene.components_v2.children
+        isinstance(node, scene.Text) and "hidden body" in node.content for node in opened.scene.components_v2.children
     )
 
 
@@ -96,7 +89,7 @@ def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
 def test_navigation_groups_six_destinations() -> None:
     document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6)))
 
-    assert isinstance(plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0], SceneSelect)
+    assert isinstance(plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0], scene.Select)
 
 
 def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
@@ -114,10 +107,10 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     item_plan = plan(items, target=DISCORD_V2_DPY27, positions={"catalog.items": Position(offset=1)})
     navigation_plan = plan(navigation, target=DISCORD_V2_DPY27, positions={"tabs.destinations": Position(offset=1)})
 
-    choice_select = next(node for node in choice_plan.scene.components_v2.children if isinstance(node, SceneSelect))
-    item_select = next(node for node in item_plan.scene.components_v2.children if isinstance(node, SceneSelect))
+    choice_select = next(node for node in choice_plan.scene.components_v2.children if isinstance(node, scene.Select))
+    item_select = next(node for node in item_plan.scene.components_v2.children if isinstance(node, scene.Select))
     navigation_select = next(
-        node for node in navigation_plan.scene.components_v2.children if isinstance(node, SceneSelect)
+        node for node in navigation_plan.scene.components_v2.children if isinstance(node, scene.Select)
     )
     assert [len(choice_select.options), len(item_select.options), len(navigation_select.options)] == [11, 11, 11]
     assert [(pager.key, pager.page, pager.pages) for pager in choice_plan.scene.pagers] == [("size.choices", 1, 2)]
@@ -139,7 +132,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     apply_updates(session, second_page.session_updates)
     assert (
         "25"
-        in next(node for node in second_page.scene.components_v2.children if isinstance(node, SceneSelect))
+        in next(node for node in second_page.scene.components_v2.children if isinstance(node, scene.Select))
         .options[0]
         .value
     )
@@ -149,7 +142,7 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
     values = {
         option.value
         for node in replanned.scene.components_v2.children
-        if isinstance(node, SceneSelect)
+        if isinstance(node, scene.Select)
         for option in node.options
     }
     assert "25" in values
@@ -161,7 +154,7 @@ def test_choices_minimum_zero_allows_deselecting_all() -> None:
     select = next(
         node
         for node in plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children
-        if isinstance(node, SceneSelect)
+        if isinstance(node, scene.Select)
     )
     assert select.min_values == 0
 
@@ -184,9 +177,9 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     table_scene = plan(table, target=DISCORD_V2_DPY27).scene
     media_scene = plan(media, target=DISCORD_V2_DPY27).scene
 
-    assert isinstance(table_scene.components_v2.children[0], SceneText)
+    assert isinstance(table_scene.components_v2.children[0], scene.Text)
     assert table_scene.components_v2.children[0].content.startswith("```")
-    galleries = [node for node in media_scene.components_v2.children if isinstance(node, SceneGallery)]
+    galleries = [node for node in media_scene.components_v2.children if isinstance(node, scene.Gallery)]
     assert [len(gallery.items) for gallery in galleries] == [10, 2]
 
 
@@ -198,16 +191,16 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
         thumbnail="https://example.invalid/lead.png",
     )
 
-    scene = plan(document, target=DISCORD_V2_DPY27).scene
-    panel = scene.components_v2.children[0]
+    planned = plan(document, target=DISCORD_V2_DPY27).scene
+    panel = planned.components_v2.children[0]
 
-    assert isinstance(panel, ScenePanel)
+    assert isinstance(panel, scene.Panel)
     assert panel.accent == 0x43B581
     lead = panel.children[0]
-    assert isinstance(lead, SceneSection)
+    assert isinstance(lead, scene.Section)
     assert lead.texts[0].content == "## Title"
-    assert lead.accessory == SceneThumbnail("https://example.invalid/lead.png")
-    assert panel.children[-1] == SceneText("-# Submission ID: 5")
+    assert lead.accessory == scene.Thumbnail("https://example.invalid/lead.png")
+    assert panel.children[-1] == scene.Text("-# Submission ID: 5")
 
 
 def test_nested_sections_flatten_inside_the_outer_discord_container() -> None:
@@ -259,7 +252,7 @@ def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> Non
         palette=sl.Palette(brand=0xABCDEF, warning=0x654321),
     ).scene.components_v2.children
 
-    assert [panel.accent for panel in panels if isinstance(panel, ScenePanel)] == [
+    assert [panel.accent for panel in panels if isinstance(panel, scene.Panel)] == [
         0xABCDEF,
         None,
         0x123456,
@@ -276,7 +269,7 @@ def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
 
     panels = plan(document, target=DISCORD_V2_DPY27, palette=sl.Palette(brand=0x111111)).scene.components_v2.children
 
-    assert [panel.accent for panel in panels if isinstance(panel, ScenePanel)] == [0x111111, 0x222222, 0x111111]
+    assert [panel.accent for panel in panels if isinstance(panel, scene.Panel)] == [0x111111, 0x222222, 0x111111]
 
 
 def test_a_lead_image_sits_beside_the_required_heading() -> None:
@@ -284,11 +277,11 @@ def test_a_lead_image_sits_beside_the_required_heading() -> None:
 
     panel = plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0]
 
-    assert isinstance(panel, ScenePanel)
-    assert panel.children[0] == SceneSection(
-        (SceneText("## Title"),), SceneThumbnail("https://example.invalid/lead.png")
+    assert isinstance(panel, scene.Panel)
+    assert panel.children[0] == scene.Section(
+        (scene.Text("## Title"),), scene.Thumbnail("https://example.invalid/lead.png")
     )
-    assert panel.children[1] == SceneText("body")
+    assert panel.children[1] == scene.Text("body")
 
 
 def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
@@ -299,7 +292,7 @@ def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
 
     panel = plan(document, target=DISCORD_V2_DPY27).scene.components_v2.children[0]
 
-    assert isinstance(panel, ScenePanel)
-    body = "\n".join(child.content for child in panel.children if isinstance(child, SceneText))
+    assert isinstance(panel, scene.Panel)
+    body = "\n".join(child.content for child in panel.children if isinstance(child, scene.Text))
     assert all(f"**Field {index}:**" in body for index in range(20))
     assert "short" in body

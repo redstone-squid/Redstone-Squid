@@ -4,41 +4,27 @@ from dataclasses import replace
 
 import pytest
 
+from squid_layouts import scene
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.html import Renderer
 from squid_layouts.interactions import ActionPolicy
-from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import (
-    SceneButton,
-    SceneComponentsV2,
-    SceneDocument,
-    SceneGallery,
-    SceneGalleryItem,
-    SceneOption,
-    ScenePanel,
-    SceneRow,
-    SceneSelect,
-    SceneText,
-    SceneTime,
-    SceneZonedTime,
-)
 
 
-def _scene() -> SceneDocument:
-    return SceneDocument(
-        protocol=SceneCodec.protocol,
+def _scene() -> scene.Document:
+    return scene.Document(
+        protocol=scene.Codec.protocol,
         target="discord.components-v2",
         target_version=1,
-        body=SceneComponentsV2(
+        body=scene.ComponentsV2(
             (
-                ScenePanel(
+                scene.Panel(
                     (
-                        SceneText("<script>alert(1)</script>"),
-                        SceneTime("2026-08-22T14:30:00+00:00", "R", "Updated: "),
-                        SceneZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
-                        SceneRow((SceneButton("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
-                        SceneSelect((SceneOption("One", "1"),), "form.choice"),
-                        SceneGallery((SceneGalleryItem("https://example.invalid/image.png", "preview"),)),
+                        scene.Text("<script>alert(1)</script>"),
+                        scene.Time("2026-08-22T14:30:00+00:00", "R", "Updated: "),
+                        scene.ZonedTime("2026-08-22T14:30:00+00:00", "America/New_York", "Starts: "),
+                        scene.Row((scene.Button("Save", "form.save", policy=ActionPolicy.EXCLUSIVE),)),
+                        scene.Select((scene.Option("One", "1"),), "form.choice"),
+                        scene.Gallery((scene.GalleryItem("https://example.invalid/image.png", "preview"),)),
                     ),
                     accent=0x5865F2,
                 ),
@@ -63,10 +49,10 @@ def test_html_renderer_preserves_structure_and_action_ids_without_callbacks() ->
 
 
 def test_scene_json_can_be_drawn_by_a_separate_frontend_process() -> None:
-    scene = _scene()
-    restored = SceneCodec.loads(SceneCodec.dumps(scene))
+    document = _scene()
+    restored = scene.Codec.loads(scene.Codec.dumps(document))
 
-    assert Renderer().draw(restored) == Renderer().draw(scene)
+    assert Renderer().draw(restored) == Renderer().draw(document)
 
 
 def test_standalone_preview_includes_discord_like_css() -> None:

@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from hashlib import blake2s
 from typing import Literal
 
+from squid_layouts import scene
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
@@ -17,7 +18,6 @@ from squid_layouts.runtime.presentation import (
     PresentationSession,
     SessionUpdate,
 )
-from squid_layouts.scene.model import ScenePager
 from squid_layouts.sources import POSITION_POLICY, Direction, Position, PositionPolicy
 
 
@@ -52,7 +52,7 @@ class CursorCoordinator:
     nav: PlannedNav | None = None
     overrides: Mapping[str, Position] | None = None
     policy: PositionPolicy = POSITION_POLICY
-    _pagers: list[ScenePager] = field(default_factory=list, init=False)
+    _pagers: list[scene.Pager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
 
@@ -88,7 +88,7 @@ class CursorCoordinator:
         if extent <= 1:
             return
         resolved = Position(anchor, position.offset, Direction.AROUND)
-        self._pagers.append(ScenePager(request.key, resolved.offset, extent, request.fingerprint))
+        self._pagers.append(scene.Pager(request.key, resolved.offset, extent, request.fingerprint))
         self._updates.append(CursorUpdate(request.key, CursorState(resolved, extent, request.fingerprint)))
 
     def controls(self, key: str, position: Position, extent: int) -> list[Node]:
@@ -101,7 +101,7 @@ class CursorCoordinator:
         return result
 
     @property
-    def pagers(self) -> tuple[ScenePager, ...]:
+    def pagers(self) -> tuple[scene.Pager, ...]:
         return tuple(self._pagers)
 
     @property

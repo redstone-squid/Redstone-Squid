@@ -8,7 +8,7 @@ import pytest
 import squid_discord
 import squid_layouts as sl
 import squid_patterns as sp
-from squid_layouts.scene import SceneButton, SceneRoutedSelect, SceneSelect, SceneText
+from squid_layouts import scene
 
 OPTIONS = (
     sp.TallyOption("yes", "Yes", 3, mine=True, emoji="✅"),
@@ -28,7 +28,7 @@ def _walk(value: object):
 
 def test_inert_tally_renders_counts_bars_and_reader_emphasis() -> None:
     result = sl.planning.plan(sl.tally(OPTIONS, key="vote"), target=squid_discord.DISCORD_V2_DPY27)
-    text = [item.content for item in _walk(result.scene.body) if isinstance(item, SceneText)]
+    text = [item.content for item in _walk(result.scene.body) if isinstance(item, scene.Text)]
 
     assert any(value.startswith("Yes:") and value.endswith("75%") for value in text)
     assert any(value.startswith("No:") and value.endswith("25%") for value in text)
@@ -46,7 +46,7 @@ async def test_mounted_tally_inherits_button_adaptation_and_reports_one_key() ->
     button = next(
         item
         for item in _walk(result.scene.body)
-        if isinstance(item, SceneButton) and item.label is not None and "Yes" in item.label
+        if isinstance(item, scene.Button) and item.label is not None and "Yes" in item.label
     )
     await result.bindings[button.action].handler(
         sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
@@ -61,7 +61,7 @@ def test_mounted_tally_inherits_select_adaptation_for_many_options() -> None:
     options = tuple(sp.TallyOption(str(index), f"Option {index}", index) for index in range(6))
     result = sl.planning.plan(sl.tally(options, key="vote", on_vote=vote), target=squid_discord.DISCORD_V2_DPY27)
 
-    assert any(isinstance(item, SceneSelect) for item in _walk(result.scene.body))
+    assert any(isinstance(item, scene.Select) for item in _walk(result.scene.body))
 
 
 def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
@@ -69,7 +69,7 @@ def test_routed_tally_uses_one_restart_surviving_selection_route() -> None:
         sl.tally(OPTIONS, key="vote", route_id="poll:vote"),
         target=squid_discord.DISCORD_V2_DPY27,
     )
-    select = next(item for item in _walk(result.scene.body) if isinstance(item, SceneRoutedSelect))
+    select = next(item for item in _walk(result.scene.body) if isinstance(item, scene.RoutedSelect))
 
     assert select.route_id == "poll:vote"
     assert [option.value for option in select.options] == ["yes", "no"]

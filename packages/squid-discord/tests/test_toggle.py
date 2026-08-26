@@ -4,12 +4,12 @@ from collections.abc import Awaitable, Callable
 
 import squid_layouts as sl
 from squid_discord import DISCORD_V2_DPY27
+from squid_layouts import scene
 from squid_layouts.forms import FormLike, SubmitHandler
 from squid_layouts.interactions import ActionPolicy, Actor, PressEvent, Visibility
 from squid_layouts.primitives.styles import ActionStyle
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.runtime.component import render_component_tree
-from squid_layouts.scene.model import SceneButton, SceneRow
 
 
 class _Responder:
@@ -45,10 +45,10 @@ def _event(responder: _Responder | None = None) -> PressEvent:
     return PressEvent(Actor("7"), responder or _Responder())
 
 
-def _button(result: sl.scene.PlanResult) -> SceneButton:
-    row = next(node for node in result.scene.components_v2.children if isinstance(node, SceneRow))
+def _button(result: sl.scene.PlanResult) -> scene.Button:
+    row = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Row))
     button = row.items[0]
-    assert isinstance(button, SceneButton)
+    assert isinstance(button, scene.Button)
     return button
 
 
