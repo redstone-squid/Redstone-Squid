@@ -6,15 +6,15 @@ from unittest.mock import AsyncMock
 
 from squid.bot.devtools import _authorized, setup
 from squid_ui.profiling import MemoryProfiler
-from squid_ui_discord import MessageRootScheduler, SessionRegistry
+from squid_ui_discord import MessageRootScheduler, SessionManager
 from squid_ui_discord.devtools import DevTools
 
 
 async def test_setup_adds_the_generic_cog_with_the_host_registry() -> None:
-    registry = SessionRegistry()
+    registry = SessionManager()
     profiler = MemoryProfiler()
     scheduler = MessageRootScheduler(profiler=profiler)
-    bot = SimpleNamespace(message_roots=registry, layout_scheduler=scheduler, add_cog=AsyncMock())
+    bot = SimpleNamespace(sessions=registry, layout_scheduler=scheduler, add_cog=AsyncMock())
 
     await setup(cast(Any, bot))
 

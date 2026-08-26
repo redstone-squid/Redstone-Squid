@@ -9,7 +9,7 @@ import squid_ui as sl
 import squid_ui_discord
 from squid_ui.profiling import MemoryProfiler, OperationKind
 from squid_ui.runtime import BusSnapshot
-from squid_ui_discord import Everyone, SessionKey, SessionRegistry
+from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.devtools_runtime import (
     ActionDisabled,
     ConfirmationRequired,
@@ -31,7 +31,7 @@ class Panel(sl.Component):
         return sl.paragraph(f"count {self.count}")
 
 
-async def open_panel(registry: SessionRegistry, *, key: SessionKey | None = None) -> Opened:
+async def open_panel(registry: SessionManager, *, key: SessionKey | None = None) -> Opened:
     result = await registry.open(
         squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
         delivered_to(fake_message()),
@@ -42,7 +42,7 @@ async def open_panel(registry: SessionRegistry, *, key: SessionKey | None = None
 
 
 async def test_snapshot_and_message_root_inspection_include_sessions_history_and_middleware() -> None:
-    registry = SessionRegistry()
+    registry = SessionManager()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
     runtime = DevToolsRuntime(sessions=registry)
 
@@ -57,7 +57,7 @@ async def test_snapshot_and_message_root_inspection_include_sessions_history_and
 
 
 async def test_session_inspection_reports_membership_and_capacity() -> None:
-    registry = SessionRegistry()
+    registry = SessionManager()
     opened = await registry.open(
         squid_ui_discord.MessageRoot(Panel(), access=Everyone(), timeout=None),
         delivered_to(fake_message()),
@@ -81,7 +81,7 @@ async def test_session_inspection_reports_membership_and_capacity() -> None:
 
 
 async def test_close_session_requires_confirmation_and_finishes_all_roots() -> None:
-    registry = SessionRegistry()
+    registry = SessionManager()
     opened = await open_panel(registry, key=SessionKey.global_("devtools"))
     runtime = DevToolsRuntime(sessions=registry)
 

@@ -207,8 +207,8 @@ def make_layout_bot(**attributes: Any) -> Any:
     """A bot double with the layout runtime installed, the way `RedstoneSquid` installs it.
 
     Panels reach their chrome, error hook and challenge presenter through
-    `LayoutHost.of(source)`, so a test building one needs a real installation rather than a
-    bare `SessionRegistry`. The installation is weakly keyed, so it leaves with the double.
+    `ClientRuntime.of(source)`, so a test building one needs a real installation rather than a
+    bare `SessionManager`. The installation is weakly keyed, so it leaves with the double.
     """
     import squid_ui_discord as sd
     from squid.bot.ui import HOST_DEFAULTS
@@ -216,13 +216,13 @@ def make_layout_bot(**attributes: Any) -> Any:
 
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
-    host = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
+    runtime = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
-        layout_host=host,
-        message_roots=host.message_roots,
-        layout_scheduler=host.scheduler,
-        layout_challenges=host.challenges,
+        client_runtime=runtime,
+        sessions=runtime.sessions,
+        layout_scheduler=runtime.scheduler,
+        layout_challenges=runtime.challenges,
     )
     return client

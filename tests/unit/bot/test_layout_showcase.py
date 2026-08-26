@@ -19,7 +19,7 @@ from squid.bot.layout_showcase import (
     PreviewPanel,
     Session,
 )
-from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner, SessionKey, SessionRegistry
+from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler, Owner, SessionKey, SessionManager
 from squid_ui_discord.sessions import UserScope
 from squid_ui_discord.testing import (
     assert_within_limits,
@@ -423,12 +423,12 @@ class TestLobby:
         self,
         *,
         capacity: int = 4,
-        registry: SessionRegistry | None = None,
+        registry: SessionManager | None = None,
         guild_id: int = 5,
         host_id: int = 7,
-    ) -> tuple[SessionRegistry, Lobby]:
+    ) -> tuple[SessionManager, Lobby]:
         bot = make_layout_bot()
-        registry = bot.message_roots if registry is None else registry
+        registry = bot.sessions if registry is None else registry
         panel = Lobby(registry, host_id=host_id)
         result = await registry.open(
             panel.mount(source=bot),

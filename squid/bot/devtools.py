@@ -16,7 +16,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     await bot.add_cog(
         sd.devtools.DevTools(
             check=_authorized,
-            registry=bot.message_roots,
+            registry=bot.sessions,
             scheduler=getattr(bot, "layout_scheduler", None),
         )
     )

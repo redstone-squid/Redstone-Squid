@@ -223,7 +223,7 @@ async def run_command_operation(
     target: Messageable,
     work: OperationWork,
     *,
-    source: sd.host.HostSource,
+    source: sd.runtime.RuntimeSource,
     title: str = _("Working"),
     description: str = _("Getting information..."),
     locale: str | None = None,

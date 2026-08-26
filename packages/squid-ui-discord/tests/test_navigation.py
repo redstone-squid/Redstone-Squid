@@ -1,11 +1,11 @@
-"""Navigator: stack navigation by composition."""
+"""StackNavigator: stack navigation by composition."""
 
 import discord
 
 from squid_ui import Component
 from squid_ui.primitives import Heading, Text
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.navigation import Navigator
+from squid_ui_discord.navigation import StackNavigator
 from squid_ui_discord.testing import commit_render, fake_interaction
 
 
@@ -26,7 +26,7 @@ def _labels(view: discord.ui.LayoutView) -> list[str | None]:
 
 
 async def test_push_pop_and_controls_render_last():
-    navigator = Navigator(Screen("root"))
+    navigator = StackNavigator(Screen("root"))
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     view = commit_render(message_root)
     assert "## root" in _texts(view)
@@ -43,7 +43,7 @@ async def test_push_pop_and_controls_render_last():
 
 
 async def test_home_appears_only_when_deep():
-    navigator = Navigator(Screen("root"))
+    navigator = StackNavigator(Screen("root"))
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     navigator.push(Screen("a"))
     navigator.push(Screen("b"))
@@ -64,7 +64,7 @@ async def test_child_state_changes_rerender_through_the_shared_root():
             return [Text(f"count {self.count}")]
 
     child = Counting()
-    navigator = Navigator(Screen("root"))
+    navigator = StackNavigator(Screen("root"))
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     commit_render(message_root)
     navigator.push(child)
@@ -77,7 +77,7 @@ async def test_child_state_changes_rerender_through_the_shared_root():
 
 
 async def test_close_finishes_the_root():
-    navigator = Navigator(Screen("root"))
+    navigator = StackNavigator(Screen("root"))
     message_root = MessageRoot(navigator, access=Everyone(), timeout=None)
     commit_render(message_root)
 

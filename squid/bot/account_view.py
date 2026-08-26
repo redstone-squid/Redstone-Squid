@@ -457,7 +457,7 @@ class AccountPanel(sl.Component):
             )
         return None
 
-    def mount(self, *, source: sd.host.HostSource) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
         self._root = create_message_root(
             self,
             source=source,

@@ -27,7 +27,7 @@ from squid.bot.ui import (
 from squid.core.i18n import _
 from squid_replication import Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
-from squid_ui_discord.screens import Opener
+from squid_ui_discord.session_specs import OpenContext
 from squid_ui_discord.sessions import UserScope
 
 if TYPE_CHECKING:
@@ -375,7 +375,7 @@ class LayoutShowcase(sl.Component):
                 "section",
                 placeholder=L(t"Choose an engine exhibit"),
             ),
-            sl.primitives.ActionGroup(
+            sl.primitives.ControlGroup(
                 (
                     sl.primitives.Button(
                         L(t"Cycle accent"),
@@ -1107,7 +1107,7 @@ class AppearanceControls(sl.Component):
 
     def render(self) -> sl.LayoutNode:
         appearance = self.inject(APPEARANCE)
-        return sl.primitives.ActionGroup(
+        return sl.primitives.ControlGroup(
             (
                 sl.primitives.Button(
                     L(t"Cycle accent"),
@@ -1207,12 +1207,12 @@ class Lobby(sl.Component):
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
 
-    def __init__(self, sessions: sd.SessionRegistry, host_id: int) -> None:
+    def __init__(self, sessions: sd.SessionManager, host_id: int) -> None:
         self.sessions = sessions
         self.host_id = host_id
         self._root: sd.MessageRoot | None = None
 
-    def mount(self, *, source: sd.host.HostSource, locale: str | None = None) -> sd.MessageRoot:
+    def mount(self, *, source: sd.runtime.RuntimeSource, locale: str | None = None) -> sd.MessageRoot:
         # Kept so the panel can find its own session; the mount cannot be handed to the
         # component that renders it any other way.
         self._root = create_message_root(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
@@ -1331,7 +1331,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that share one namespace of view state."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        scope = Opener(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
+        scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
         # of them finishes. Nothing was looking at it, so it wants no pool -- the lifetime the
@@ -1355,8 +1355,8 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Open a four-seat lobby whose roster lives in the session, not the panel."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        panel = Lobby(self.bot.message_roots, ctx.author.id)
-        await self.bot.message_roots.open(
+        panel = Lobby(self.bot.sessions, ctx.author.id)
+        await self.bot.sessions.open(
             panel.mount(source=ctx, locale=locale),
             destination(ctx, locale=locale),
             key=SessionKey.guild("showcase-lobby", ctx.guild.id),

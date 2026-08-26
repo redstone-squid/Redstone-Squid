@@ -13,7 +13,7 @@ import squid_ui_discord
 from squid_storage import SessionRecord
 from squid_ui.primitives import Text
 from squid_ui.profiling import PresentationStatus
-from squid_ui_discord import Everyone, SessionKey, SessionRegistry
+from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.delivery import DeliveryResult
 from squid_ui_discord.durability import (
     ComponentRegistry,
@@ -32,11 +32,11 @@ from squid_ui_discord.durability import (
     Unreachable,
 )
 from squid_ui_discord.sessions import (
+    AdmissionSpec,
     MembershipStatus,
     Opened,
     Rejected,
     RejectionReason,
-    SessionPolicy,
     Unprotected,
 )
 from squid_ui_discord.testing import delivered_to, fake_message
@@ -116,11 +116,11 @@ def runtime(
     store: MemorySessionStore,
     frontend: FakeFrontend,
     *,
-    sessions: SessionRegistry | None = None,
+    sessions: SessionManager | None = None,
     clock: Callable[[], float] = time.time,
 ) -> DurableSessionRuntime:
     return DurableSessionRuntime(
-        sessions=SessionRegistry() if sessions is None else sessions,
+        sessions=SessionManager() if sessions is None else sessions,
         components=components(),
         store=store,
         frontend=frontend,
@@ -271,7 +271,7 @@ async def test_suppressed_runtime_commit_checkpoints_hidden_component_state() ->
 async def test_failed_promotion_keeps_the_durable_incumbent() -> None:
     store = MemorySessionStore()
     frontend = FakeFrontend()
-    sessions = SessionRegistry()
+    sessions = SessionManager()
     durable = runtime(store, frontend, sessions=sessions)
 
     async with anyio.create_task_group() as tasks:
@@ -337,7 +337,7 @@ async def test_task_start_handshake_recovers_after_the_previous_runtime_releases
         assert isinstance(opened, Opened)
         tasks.cancel_scope.cancel()
 
-    second_sessions = SessionRegistry()
+    second_sessions = SessionManager()
     second_runtime = runtime(store, FakeFrontend(), sessions=second_sessions)
     async with anyio.create_task_group() as tasks:
         report = await tasks.start(second_runtime.run)
@@ -370,7 +370,7 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
                 delivered_to(fake_message(message_id=2)),
                 recipe="counter",
                 key=SessionKey.user("counter", 7),
-                policy=SessionPolicy(replacement=Unprotected()),
+                admission=AdmissionSpec(replacement=Unprotected()),
                 actor_id=7,
             )
             assert isinstance(result, Opened)

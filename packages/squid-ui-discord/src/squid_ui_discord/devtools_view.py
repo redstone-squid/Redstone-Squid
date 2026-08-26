@@ -53,7 +53,7 @@ class MessageRootInspector(sl.Component):
     """This panel's own mount id, set by the cog once the mount exists — it is in the list
     like everything else, and unlabelled it reads as a mystery session."""
 
-    def __init__(self, *, focus: str | None = None, registry: squid_ui_discord.SessionRegistry | None = None) -> None:
+    def __init__(self, *, focus: str | None = None, registry: squid_ui_discord.SessionManager | None = None) -> None:
         self.focus = focus
         self._registry = registry
 
