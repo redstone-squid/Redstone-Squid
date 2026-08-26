@@ -137,7 +137,7 @@ class CompensationExecution:
         """Record an inspectable transition without changing any transactional domain state."""
         self.status = status
         self.error = error
-        summary = None if error is None else DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
+        report = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
         emit_causal_event(
             OperationEventSnapshot(
                 str(self.context.execution_id),
@@ -146,7 +146,7 @@ class CompensationExecution:
                 self.context.name,
                 status.value,
                 datetime.now(UTC),
-                summary,
+                report,
             )
         )
 
@@ -423,7 +423,7 @@ class HistoryEntry:
     compensation: CompensationSpec | None = None
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
-    strategy: UndoMode = UndoMode.CONDITIONAL
+    mode: UndoMode = UndoMode.CONDITIONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -522,7 +522,7 @@ class History:
         label: TextLike,
         *,
         compensate: CompensationSpec | None = None,
-        strategy: UndoMode = UndoMode.CONDITIONAL,
+        mode: UndoMode = UndoMode.CONDITIONAL,
     ) -> None:
         """Retain the whole successful action once, using its committed patch lineage."""
 
@@ -536,7 +536,7 @@ class History:
                     UndoPlan.from_commit(commit),
                     compensation=compensate,
                     original_commit=commit,
-                    strategy=strategy,
+                    mode=mode,
                 )
             )
 
@@ -573,7 +573,7 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[object, object]] = []
-                if entry.strategy is UndoMode.LOCAL_OVERWRITE and entry.undo_plan.participants:
+                if entry.mode is UndoMode.LOCAL_OVERWRITE and entry.undo_plan.participants:
                     detail = ConflictDetail("participant", 0, 0)
                     raise ReactiveConflictError(  # noqa: TRY301
                         detail, "local overwrite policy cannot target transaction participants"
@@ -585,7 +585,7 @@ class History:
                             inverse, f"{change.participant_id} cannot be inverted safely"
                         )
                     planned.append((change.token, inverse))
-                if entry.strategy is UndoMode.LOCAL_OVERWRITE:
+                if entry.mode is UndoMode.LOCAL_OVERWRITE:
                     apply_local_overwrite_patches(entry.undo_plan.cells)
                 else:
                     apply_conditional_patches(entry.undo_plan.cells)
@@ -781,7 +781,7 @@ class History:
         try:
             with fresh_action_transaction(action_context=context):
                 planned: list[tuple[object, object]] = []
-                if entry.strategy is UndoMode.LOCAL_OVERWRITE and entry.redo_plan.participants:
+                if entry.mode is UndoMode.LOCAL_OVERWRITE and entry.redo_plan.participants:
                     detail = ConflictDetail("participant", 0, 0)
                     raise ReactiveConflictError(  # noqa: TRY301
                         detail, "local overwrite policy cannot target transaction participants"
@@ -793,7 +793,7 @@ class History:
                             inverse, f"{change.participant_id} cannot be reapplied safely"
                         )
                     planned.append((change.token, inverse))
-                if entry.strategy is UndoMode.LOCAL_OVERWRITE:
+                if entry.mode is UndoMode.LOCAL_OVERWRITE:
                     apply_local_overwrite_patches(entry.redo_plan.cells)
                 else:
                     apply_conditional_patches(entry.redo_plan.cells)

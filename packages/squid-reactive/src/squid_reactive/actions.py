@@ -157,11 +157,11 @@ class ConflictDetail:
 
 @dataclass(frozen=True, slots=True)
 class ParticipantChange:
-    """An opaque reversible participant contribution and its safe summary."""
+    """An opaque reversible participant contribution and its safe report."""
 
     participant_id: str
     token: Any
-    summary: ChangeReport = ChangeReport(participants=1)
+    report: ChangeReport = ChangeReport(participants=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,7 +189,7 @@ class ActionRollback:
     reads: tuple[ObservedRead, ...]
     conflict: ConflictDetail | None
     exception: ExceptionReport | None
-    staged_summary: ChangeReport
+    staged_report: ChangeReport
     cleanup_errors: tuple[ExceptionReport, ...] = ()
 
 
@@ -260,11 +260,11 @@ class ActionResultSnapshot:
             result.rolled_back_at,
             None,
             result.reason.value,
-            result.staged_summary,
+            result.staged_report,
             frozenset(),
             *common,
             result.conflict,
-            policy.exception(result.exception),
+            policy.redact_exception(result.exception),
         )
 
 
@@ -276,10 +276,10 @@ class RedactionPolicy:
     include_metadata: bool = False
     include_exception_messages: bool = False
 
-    def exception(self, summary: ExceptionReport | None) -> ExceptionReport | None:
-        if summary is None or self.include_exception_messages:
-            return summary
-        return ExceptionReport(summary.type_name, "[redacted]")
+    def redact_exception(self, report: ExceptionReport | None) -> ExceptionReport | None:
+        if report is None or self.include_exception_messages:
+            return report
+        return ExceptionReport(report.type_name, "[redacted]")
 
 
 DEFAULT_REDACTION = RedactionPolicy()
@@ -559,7 +559,7 @@ def remove_action_result_sink(sink: ActionResultSink) -> None:
     ]
 
 
-def emit_outcome(result: ActionResult) -> None:
+def emit_result(result: ActionResult) -> None:
     if not _sinks:
         return
     live: list[_SinkRegistration] = []
@@ -601,7 +601,7 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
 
 def emit_aftermath_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
     """Record a redacted post-result failure causally beneath its immutable result."""
-    exception = DEFAULT_REDACTION.exception(ExceptionReport.capture(error))
+    exception = DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
     assert exception is not None
     emit_causal_event(
         AftermathFailureSnapshot(
@@ -617,7 +617,7 @@ def emit_aftermath_failure(result: ActionResult, stage: str, callback: str, erro
 
 
 class Aftermath:
-    """Authority to start fresh causal work after an result; the callback ends it."""
+    """Authority to start fresh causal work after a result; the callback ends it."""
 
     def __init__(self, result: ActionResult) -> None:
         self.result = result

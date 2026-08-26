@@ -78,8 +78,28 @@ HTML's own `details`/`summary` pair is the term of art the node mirrors, and the
 carries the whole meaning. Listed rather than assumed, like every other exemption.
 """
 
+RETIRED_IDENTIFIER_WORDS = frozenset({"feedback", "locator", "outcome", "protection", "reactor", "receipt", "verdict"})
+"""Unambiguous retired words forbidden in functions, attributes, parameters, and locals.
+
+Unlike `Summary`, `Strategy`, and `Policy`, these have no surviving second meaning in the
+six packages. Checking identifiers closes the gap left by the first class-and-method sweep.
+"""
+
+ANNOTATION_VOCABULARY = {
+    "ActionMode": frozenset({"policy"}),
+    "ActionResult": frozenset({"outcome"}),
+    "ChangeReport": frozenset({"summary"}),
+    "ExceptionReport": frozenset({"summary"}),
+    "Markup": frozenset({"dialect"}),
+    "MountScheduler": frozenset({"reactor"}),
+    "ReplacementPolicy": frozenset({"protect", "protection"}),
+    "SessionSnapshot": frozenset({"summary"}),
+    "UndoMode": frozenset({"strategy"}),
+}
+"""Words whose ambiguity disappears once an identifier's annotated type is known."""
+
 RETIRED_VERBS = frozenset({"format_prefill", "list_records", "purge_expired", "drop", "allows", "refresh_now"})
-"""Method names that said in two words what one dictionary verb already said.
+"""Callable names that said in two words what one dictionary verb already said.
 
 `flush` is deliberately absent: persistence `flush` names a different subject -- writing
 pending bytes -- and `PersistedPool.flush` and `DurableSessionRuntime.flush` keep it. What
@@ -212,6 +232,16 @@ def _classes_in_source() -> list[tuple[Path, ast.ClassDef]]:
     ]
 
 
+def _functions_in_source() -> list[tuple[Path, ast.FunctionDef | ast.AsyncFunctionDef]]:
+    return [
+        (path, node)
+        for root in PACKAGE_SOURCE_ROOTS
+        for path in root.rglob("*.py")
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    ]
+
+
 def _method_names(node: ast.ClassDef) -> set[str]:
     return {child.name for child in node.body if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef)}
 
@@ -272,13 +302,73 @@ def test_retired_words_stay_retired() -> None:
 
 
 def test_retired_verbs_stay_retired() -> None:
-    """The write and read families each settled on one word, and it is not these."""
-    offenders = [
-        f"{path}::{node.name}.{verb}"
-        for path, node in _classes_in_source()
-        for verb in sorted(_method_names(node) & RETIRED_VERBS)
-    ]
+    """Public, private, module, and nested callables share the verb dictionary."""
+    offenders = [f"{path}::{node.name}" for path, node in _functions_in_source() if node.name in RETIRED_VERBS]
     assert not offenders, f"use the dictionary verb instead; see docs/squid-vocabulary.md: {offenders}"
+
+
+def _identifier_words(name: str) -> set[str]:
+    return {
+        word.lower()
+        for part in name.strip("_").split("_")
+        for word in re.findall(r"[A-Z]+(?![a-z])|[A-Z]?[a-z0-9]+", part)
+    }
+
+
+def _annotation_names(annotation: ast.expr | None) -> set[str]:
+    if annotation is None:
+        return set()
+    return {node.id for node in ast.walk(annotation) if isinstance(node, ast.Name)}
+
+
+def test_retired_identifier_words_stay_retired() -> None:
+    """The noun reset reaches functions, attributes, parameters, and private locals."""
+    offenders: list[str] = []
+    seen: set[tuple[Path, str]] = set()
+    for root in PACKAGE_SOURCE_ROOTS:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                name = None
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+                    name = node.name
+                elif isinstance(node, ast.Name):
+                    name = node.id
+                elif isinstance(node, ast.Attribute):
+                    name = node.attr
+                elif isinstance(node, ast.arg):
+                    name = node.arg
+                if name is None or not (_identifier_words(name) & RETIRED_IDENTIFIER_WORDS):
+                    continue
+                key = (path, name)
+                if key not in seen:
+                    seen.add(key)
+                    offenders.append(f"{path}::{name}")
+    assert not offenders, f"retired words remain in identifiers: {sorted(offenders)}"
+
+
+def test_annotated_identifiers_follow_their_type_vocabulary() -> None:
+    """A typed value uses the same subject word as the class that defines its meaning."""
+    offenders: list[str] = []
+    for root in PACKAGE_SOURCE_ROOTS:
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                pairs: list[tuple[str, ast.expr | None]] = []
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                    pairs.append((node.name, node.returns))
+                    pairs.extend((argument.arg, argument.annotation) for argument in node.args.args)
+                    pairs.extend((argument.arg, argument.annotation) for argument in node.args.kwonlyargs)
+                elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name | ast.Attribute):
+                    target = node.target.id if isinstance(node.target, ast.Name) else node.target.attr
+                    pairs.append((target, node.annotation))
+                for name, annotation in pairs:
+                    words = _identifier_words(name)
+                    for type_name in _annotation_names(annotation):
+                        retired = ANNOTATION_VOCABULARY.get(type_name, frozenset())
+                        if words & retired:
+                            offenders.append(f"{path}::{name}: {type_name}")
+    assert not offenders, f"identifiers disagree with their annotated types: {sorted(offenders)}"
 
 
 def test_agent_nouns_name_a_verb_the_dictionary_has() -> None:

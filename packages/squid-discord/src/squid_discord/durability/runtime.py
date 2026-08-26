@@ -317,7 +317,7 @@ class DurableSessionRuntime:
             stored = await self.store.inspect(reservation)
             if stored is None:
                 return Rejected((), RejectionReason.ADMISSION_BUSY)
-            remote = tuple(_loads_summary(record.summary_payload, local=False) for record in stored)
+            remote = tuple(_loads_snapshot(record.summary_payload, local=False) for record in stored)
             now = datetime.now(UTC)
             snapshot = SessionSnapshot(str(uuid4()), now, key, actor_id, durable=True, local=True)
 
@@ -360,7 +360,7 @@ class DurableSessionRuntime:
                 token = await self.store.commit(
                     reservation,
                     key=snapshot.id,
-                    summary_payload=_dumps_summary(newcomer.snapshot),
+                    summary_payload=_dumps_snapshot(newcomer.snapshot),
                     snapshot_payload=DurableSessionCodec.dumps(record),
                     victims=tuple(victim.id for victim in victims if victim.durable),
                     lease_seconds=self.lease_seconds,
@@ -456,8 +456,8 @@ class DurableSessionRuntime:
                     await self.store.delete(token)
                     report.expired.append(_item_from_record(record, "session expired before recovery"))
                     continue
-                snapshot = _loads_summary(listed.summary_payload, local=True)
-                _validate_summary_record(snapshot, record)
+                snapshot = _loads_snapshot(listed.summary_payload, local=True)
+                _validate_snapshot_record(snapshot, record)
                 by_id: dict[str, Mount] = {}
                 states_by_id = {state.id: state for state in record.mounts}
                 for state in record.mounts:
@@ -654,7 +654,7 @@ class DurableSessionRuntime:
                 record = self._capture(active)
                 saved = await self.store.save(
                     active.token,
-                    _dumps_summary(active.session.snapshot),
+                    _dumps_snapshot(active.session.snapshot),
                     DurableSessionCodec.dumps(record),
                 )
             if not saved:
@@ -731,7 +731,7 @@ class DurableSessionRuntime:
             raise RuntimeError(message)
 
 
-def _dumps_summary(snapshot: SessionSnapshot) -> str:
+def _dumps_snapshot(snapshot: SessionSnapshot) -> str:
     if not isinstance(snapshot.key, SessionKey):
         message = "durable session snapshots require a SessionKey"
         raise MountStateError(message)
@@ -747,7 +747,7 @@ def _dumps_summary(snapshot: SessionSnapshot) -> str:
     return json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-def _loads_summary(payload: str, *, local: bool) -> SessionSnapshot:
+def _loads_snapshot(payload: str, *, local: bool) -> SessionSnapshot:
     try:
         raw = json.loads(payload)
     except json.JSONDecodeError as error:
@@ -763,8 +763,8 @@ def _loads_summary(payload: str, *, local: bool) -> SessionSnapshot:
         # A payload written before membership existed has no "members" key at all, and its
         # opener is the only member it can have had.
         legacy_members = () if actor_id is None else (actor_id,)
-        members = _summary_ids(raw.get("members", legacy_members))
-        attachment_actors = _summary_ids(raw.get("attachment_actors", ()))
+        members = _snapshot_ids(raw.get("members", legacy_members))
+        attachment_actors = _snapshot_ids(raw.get("attachment_actors", ()))
     except (KeyError, TypeError, ValueError, OverflowError) as error:
         message = "durable session snapshot is malformed"
         raise MountStateError(message) from error
@@ -794,7 +794,7 @@ def _finite_timestamp(value: object) -> float:
     return timestamp
 
 
-def _summary_ids(value: object) -> frozenset[int]:
+def _snapshot_ids(value: object) -> frozenset[int]:
     if not isinstance(value, list | tuple) or not all(
         isinstance(item, int) and not isinstance(item, bool) for item in value
     ):
@@ -804,7 +804,7 @@ def _summary_ids(value: object) -> frozenset[int]:
 
 def _item_from_stored(record: StoredSessionRecord, reason: str) -> RecoveryItem:
     try:
-        snapshot = _loads_summary(record.summary_payload, local=False)
+        snapshot = _loads_snapshot(record.summary_payload, local=False)
     except MountStateError:
         return RecoveryItem(record.key, None, (), reason)
     return RecoveryItem(record.key, snapshot.key if isinstance(snapshot.key, SessionKey) else None, (), reason)
@@ -839,7 +839,7 @@ async def _finish_mounts(mounts: Sequence[Mount]) -> None:
             logger.exception("could not tear down an unregistered recovered mount %s", mount.id)
 
 
-def _validate_summary_record(snapshot: SessionSnapshot, record: DurableSessionRecord) -> None:
+def _validate_snapshot_record(snapshot: SessionSnapshot, record: DurableSessionRecord) -> None:
     if snapshot.id != record.id or snapshot.key != record.key or snapshot.members != record.members:
         message = "stored session snapshot does not match its snapshot record"
         raise MountStateError(message)
