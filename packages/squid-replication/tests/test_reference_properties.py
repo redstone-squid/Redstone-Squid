@@ -4,7 +4,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid_reactivity import ActionCommit, on_action_commit, transaction
-from squid_replication import PreparedReplicatedInverse, ReplicatedChangeToken, ReplicatedDocument, ReplicatedScope
+from squid_replication import PreparedReplicationInverse, ReplicationChangeToken, ReplicatedDocument, Replica
 
 
 @settings(max_examples=30, deadline=None)
@@ -20,7 +20,7 @@ def test_all_delivery_orders_converge(
     second_order: list[int],
     third_order: list[int],
 ) -> None:
-    replicas = [ReplicatedScope(name).open("project") for name in ("a", "b", "c")]
+    replicas = [Replica(name).open("project") for name in ("a", "b", "c")]
     for index, (replica, amount) in enumerate(zip(replicas, amounts, strict=True)):
         with transaction():
             replica.counter("votes").increment(amount)
@@ -38,8 +38,8 @@ def test_all_delivery_orders_converge(
 @settings(max_examples=30, deadline=None)
 @given(local_amount=st.integers(-20, 20), remote_amount=st.integers(-20, 20))
 def test_semantic_inverse_preserves_later_remote_work(local_amount: int, remote_amount: int) -> None:
-    local = ReplicatedScope("local").open("project")
-    remote = ReplicatedScope("remote").open("project")
+    local = Replica("local").open("project")
+    remote = Replica("remote").open("project")
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -53,7 +53,7 @@ def test_semantic_inverse_preserves_later_remote_work(local_amount: int, remote_
 
     token = commits[0].participant_changes[0].token
     inverse = token.plan_inverse()
-    assert isinstance(inverse, PreparedReplicatedInverse)
+    assert isinstance(inverse, PreparedReplicationInverse)
     with transaction():
         token.stage_inverse(inverse)
 
@@ -68,7 +68,7 @@ def _sync(replicas: list[ReplicatedDocument], order: list[int]) -> None:
             replica.import_update(updates[index])
 
 
-def _discard(document: ReplicatedDocument, value: str) -> ReplicatedChangeToken:
+def _discard(document: ReplicatedDocument, value: str) -> ReplicationChangeToken:
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -85,7 +85,7 @@ def _discard(document: ReplicatedDocument, value: str) -> ReplicatedChangeToken:
 def test_a_value_returns_only_when_every_concurrent_removal_is_undone(
     removers: list[int], undone: list[int], order: list[int]
 ) -> None:
-    replicas = [ReplicatedScope(name).open("project") for name in ("a", "b", "c")]
+    replicas = [Replica(name).open("project") for name in ("a", "b", "c")]
     with transaction():
         replicas[0].set("tags").add("shared")
     _sync(replicas, order)
@@ -96,7 +96,7 @@ def test_a_value_returns_only_when_every_concurrent_removal_is_undone(
 
     for index in (index for index in undone if index in tokens):
         inverse = tokens[index].plan_inverse()
-        assert isinstance(inverse, PreparedReplicatedInverse)
+        assert isinstance(inverse, PreparedReplicationInverse)
         with transaction():
             tokens[index].stage_inverse(inverse)
     _sync(replicas, order)

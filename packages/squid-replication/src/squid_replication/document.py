@@ -26,24 +26,24 @@ from squid_reactivity.core import (
     enlist,
     transaction,
 )
-from squid_replication.fake import (
-    FakeEngine,
-    FakeOperation,
-    FakeSnapshot,
-    FakeVersion,
-    PreparedFakeUpdate,
+from squid_replication.reference import (
+    ReferenceEngine,
+    ReferenceOperation,
+    ReferenceSnapshot,
+    ReferenceVersion,
+    PreparedReferenceUpdate,
 )
-from squid_replication.transport import ReplicatedUpdate
+from squid_replication.transport import ReplicationUpdate
 
 _DEDUP_LIMIT = 10_000
 _PENDING_UPDATE_LIMIT = 1_000
 
 
-class ReplicatedClosedError(RuntimeError):
+class ReplicaClosedError(RuntimeError):
     """A replicated scope or document has been closed and no longer grants mutation authority."""
 
 
-class ReplicatedResyncRequiredError(RuntimeError):
+class ReplicationResyncRequiredError(RuntimeError):
     """The bounded outbound buffer overflowed, so what it still holds is an incomplete history.
 
     Recover by exporting from the peer's version and acknowledging the resync. Nothing is lost
@@ -53,19 +53,19 @@ class ReplicatedResyncRequiredError(RuntimeError):
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedReplicatedInverse:
+class PreparedReplicationInverse:
     """An opaque semantic inverse tied to the backend-history generation that planned it."""
 
-    operations: tuple[FakeOperation, ...]
+    operations: tuple[ReferenceOperation, ...]
     token_epoch: int
 
 
 @dataclass(frozen=True, slots=True)
-class ReplicatedChangeToken:
+class ReplicationChangeToken:
     """An action-addressable semantic token retained by opted-in history."""
 
     document: weakref.ReferenceType[ReplicatedDocument]
-    operations: tuple[FakeOperation, ...]
+    operations: tuple[ReferenceOperation, ...]
     token_epoch: int
 
     def encode(self) -> bytes:
@@ -73,7 +73,7 @@ class ReplicatedChangeToken:
         document = self.document()
         if document is None or document.closed:
             message = "replicated history token no longer has a live document"
-            raise ReplicatedClosedError(message)
+            raise ReplicaClosedError(message)
         payload = {
             "backend": document.engine.backend_id,
             "document": document.document_id,
@@ -84,7 +84,7 @@ class ReplicatedChangeToken:
         return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
     @classmethod
-    def decode(cls, document: ReplicatedDocument, token: bytes) -> ReplicatedChangeToken:
+    def decode(cls, document: ReplicatedDocument, token: bytes) -> ReplicationChangeToken:
         """Reload an encoded token against the current instance of its document."""
         document._ensure_open()
         try:
@@ -110,13 +110,13 @@ class ReplicatedChangeToken:
             raise ValueError(message) from error
         return cls(weakref.ref(document), operations, token_epoch)
 
-    def plan_inverse(self) -> PreparedReplicatedInverse | ConflictDetail:
+    def plan_inverse(self) -> PreparedReplicationInverse | ConflictDetail:
         document = self.document()
         if document is None or document.closed:
             return ConflictDetail("replicated:closed", 0, 0)
         if self.token_epoch != document.token_epoch:
             return ConflictDetail(f"replicated:{document.document_id}:expired", self.token_epoch, document.token_epoch)
-        inverse: list[FakeOperation] = []
+        inverse: list[ReferenceOperation] = []
         for operation in reversed(self.operations):
             if operation.kind == "increment":
                 assert isinstance(operation.value, int)
@@ -137,9 +137,9 @@ class ReplicatedChangeToken:
                 inverse.append(document.engine.operation("remove", operation.path, operation.value, operation.tags))
             else:
                 return ConflictDetail(f"replicated:{operation.path}", 0, 0)
-        return PreparedReplicatedInverse(tuple(inverse), self.token_epoch)
+        return PreparedReplicationInverse(tuple(inverse), self.token_epoch)
 
-    def stage_inverse(self, inverse: PreparedReplicatedInverse) -> None:
+    def stage_inverse(self, inverse: PreparedReplicationInverse) -> None:
         document = self.document()
         if document is None or document.closed:
             detail = ConflictDetail("replicated:closed", 0, 0)
@@ -161,7 +161,7 @@ class _ReplicationParticipant:
         self,
         document: ReplicatedDocument,
         *,
-        remote: PreparedFakeUpdate | None = None,
+        remote: PreparedReferenceUpdate | None = None,
         remote_update_id: str | None = None,
     ) -> None:
         self.document = document
@@ -169,7 +169,7 @@ class _ReplicationParticipant:
         self.remote = remote
         self.remote_update_id = remote_update_id
 
-    def prepare(self, view: TransactionView) -> PreparedFakeUpdate:
+    def prepare(self, view: TransactionView) -> PreparedReferenceUpdate:
         if self.remote is not None:
             return self.remote
         base = self.branch.base
@@ -180,20 +180,20 @@ class _ReplicationParticipant:
             raise ReactiveConflictError(detail, f"{self.document.identity} changed before replicated prepare")
         return self.branch.prepare(base)
 
-    def describe_change(self, prepared: PreparedFakeUpdate) -> TransactionContribution | None:
+    def describe_change(self, prepared: PreparedReferenceUpdate) -> TransactionContribution | None:
         if not prepared.operations:
             return None
-        token = ReplicatedChangeToken(weakref.ref(self.document), prepared.operations, self.document.token_epoch)
+        token = ReplicationChangeToken(weakref.ref(self.document), prepared.operations, self.document.token_epoch)
         return TransactionContribution(self.document.identity, token, ChangeReport(participants=1))
 
-    def apply(self, prepared: PreparedFakeUpdate) -> None:
+    def apply(self, prepared: PreparedReferenceUpdate) -> None:
         self.document.engine.apply(prepared)
         self.document._version_cell.write(self.document.engine.snapshot())
 
-    def abort(self, prepared: PreparedFakeUpdate | None, cause: BaseException) -> None:
+    def abort(self, prepared: PreparedReferenceUpdate | None, cause: BaseException) -> None:
         return None
 
-    def finalize(self, prepared: PreparedFakeUpdate) -> None:
+    def finalize(self, prepared: PreparedReferenceUpdate) -> None:
         self.document._notify()
         if self.remote_update_id is None and prepared.operations:
             self.document._publish_update(prepared)
@@ -202,14 +202,14 @@ class _ReplicationParticipant:
 class ReplicatedDocument:
     """One immutable-snapshot replicated document. Calling :meth:`close` ends all access."""
 
-    def __init__(self, document_id: str, engine: FakeEngine) -> None:
+    def __init__(self, document_id: str, engine: ReferenceEngine) -> None:
         self.document_id = document_id
         self.engine = engine
         self.closed = False
         self._version_cell = _Cell(engine.snapshot(), address=f"replicated:{document_id}")
         self._listeners: set[Any] = set()
-        self._update_listeners: set[Callable[[ReplicatedUpdate], None]] = set()
-        self._pending_updates: deque[ReplicatedUpdate] = deque(maxlen=_PENDING_UPDATE_LIMIT)
+        self._update_listeners: set[Callable[[ReplicationUpdate], None]] = set()
+        self._pending_updates: deque[ReplicationUpdate] = deque(maxlen=_PENDING_UPDATE_LIMIT)
         self._seen_updates: deque[str] = deque(maxlen=_DEDUP_LIMIT)
         self._seen_update_ids: set[str] = set()
         self._token_epoch = 0
@@ -250,7 +250,7 @@ class ReplicatedDocument:
         """Return the bounded number of remote update identities retained for deduplication."""
         return len(self._seen_update_ids)
 
-    def snapshot(self) -> FakeSnapshot:
+    def snapshot(self) -> ReferenceSnapshot:
         self._ensure_open()
         self._version_cell.read()
         participant = action_participant(self)
@@ -266,9 +266,9 @@ class ReplicatedDocument:
     def set(self, path: str) -> ReplicatedSet:
         return ReplicatedSet(self, path)
 
-    def export_since(self, version: FakeVersion | None = None) -> bytes:
+    def export_since(self, version: ReferenceVersion | None = None) -> bytes:
         self._ensure_open()
-        update = ReplicatedUpdate.create(
+        update = ReplicationUpdate.create(
             document_id=self.document_id,
             backend_id=self.engine.backend_id,
             source_replica_id=self.engine.replica_id,
@@ -279,7 +279,7 @@ class ReplicatedDocument:
 
     def import_update(self, update: bytes) -> None:
         self._ensure_open()
-        envelope = ReplicatedUpdate.decode(update)
+        envelope = ReplicationUpdate.decode(update)
         if envelope.document_id != self.document_id:
             message = f"replicated update targets {envelope.document_id!r}, not {self.document_id!r}"
             raise ValueError(message)
@@ -309,7 +309,7 @@ class ReplicatedDocument:
             assert joined is not None
         self._remember_update(update_id)
 
-    def subscribe(self, callback: Callable[[FakeSnapshot], None]) -> Callable[[], None]:
+    def subscribe(self, callback: Callable[[ReferenceSnapshot], None]) -> Callable[[], None]:
         """Receive each committed snapshot until the returned function or document closes it."""
         self._ensure_open()
         self._listeners.add(callback)
@@ -319,7 +319,7 @@ class ReplicatedDocument:
 
         return unsubscribe
 
-    def subscribe_updates(self, callback: Callable[[ReplicatedUpdate], None]) -> Callable[[], None]:
+    def subscribe_updates(self, callback: Callable[[ReplicationUpdate], None]) -> Callable[[], None]:
         """Receive committed local updates until the returned function or document closes it."""
         self._ensure_open()
         self._update_listeners.add(callback)
@@ -329,10 +329,10 @@ class ReplicatedDocument:
 
         return unsubscribe
 
-    def drain_updates(self) -> tuple[ReplicatedUpdate, ...]:
+    def drain_updates(self) -> tuple[ReplicationUpdate, ...]:
         """Take committed outbound updates retained for an application-owned transport.
 
-        Raises :class:`ReplicatedResyncRequiredError` once this bounded buffer has overflowed,
+        Raises :class:`ReplicationResyncRequiredError` once this bounded buffer has overflowed,
         rather than returning a stream known to have a hole in it. Recover with
         :meth:`export_since` from the peer's version, then :meth:`acknowledge_resync`.
         :meth:`subscribe_updates` is the delivery path that never drops.
@@ -343,7 +343,7 @@ class ReplicatedDocument:
                 f"replicated document {self.document_id!r} dropped {self._dropped_updates} outbound "
                 "updates; export from the peer's version and acknowledge the resync"
             )
-            raise ReplicatedResyncRequiredError(message)
+            raise ReplicationResyncRequiredError(message)
         updates = tuple(self._pending_updates)
         self._pending_updates.clear()
         return updates
@@ -386,11 +386,11 @@ class ReplicatedDocument:
         for callback in tuple(self._listeners):
             callback(self.snapshot())
 
-    def _publish_update(self, prepared: PreparedFakeUpdate) -> None:
+    def _publish_update(self, prepared: PreparedReferenceUpdate) -> None:
         from squid_reactivity import current_action
 
         context = current_action()
-        update = ReplicatedUpdate.create(
+        update = ReplicationUpdate.create(
             document_id=self.document_id,
             backend_id=self.engine.backend_id,
             source_replica_id=self.engine.replica_id,
@@ -417,7 +417,7 @@ class ReplicatedDocument:
     def _ensure_open(self) -> None:
         if self.closed:
             message = f"replicated document {self.document_id!r} is closed"
-            raise ReplicatedClosedError(message)
+            raise ReplicaClosedError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -453,7 +453,7 @@ class ReplicatedSet:
         participant.branch.apply(self.document.engine.operation("remove", self.path, value, tags))
 
 
-class ReplicatedScope:
+class Replica:
     """Own replicated documents and listeners. Calling :meth:`close` closes every document.
 
     `replica_id` names an incarnation, not a machine. A restarted process that reuses one must
@@ -469,10 +469,10 @@ class ReplicatedScope:
     def open(self, document_id: str) -> ReplicatedDocument:
         if self.closed:
             message = "replicated scope is closed"
-            raise ReplicatedClosedError(message)
+            raise ReplicaClosedError(message)
         document = self._documents.get(document_id)
         if document is None:
-            document = self._documents[document_id] = ReplicatedDocument(document_id, FakeEngine(self.replica_id))
+            document = self._documents[document_id] = ReplicatedDocument(document_id, ReferenceEngine(self.replica_id))
         return document
 
     @property

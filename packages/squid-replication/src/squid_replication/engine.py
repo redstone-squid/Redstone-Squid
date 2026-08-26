@@ -3,7 +3,7 @@
 from typing import Protocol
 
 
-class StagedReplica[SnapshotT, OperationT, PreparedT](Protocol):
+class ReplicaBranch[SnapshotT, OperationT, PreparedT](Protocol):
     """An isolated branch whose prepared work has not changed canonical state."""
 
     def apply(self, operation: OperationT) -> None: ...
@@ -13,7 +13,7 @@ class StagedReplica[SnapshotT, OperationT, PreparedT](Protocol):
     def prepare(self, base: object) -> PreparedT: ...
 
 
-class ReplicatedEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
+class ReplicationEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
     """A CRDT backend hidden behind immutable snapshots and opaque causal tokens."""
 
     @property
@@ -23,7 +23,7 @@ class ReplicatedEngine[SnapshotT, OperationT, PreparedT, ChangeT](Protocol):
 
     def version(self) -> object: ...
 
-    def branch(self) -> StagedReplica[SnapshotT, OperationT, PreparedT]: ...
+    def branch(self) -> ReplicaBranch[SnapshotT, OperationT, PreparedT]: ...
 
     def apply(self, prepared: PreparedT) -> ChangeT: ...
 
