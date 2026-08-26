@@ -5,7 +5,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-import squid_patterns as sp
+import squid_ui_widgets as sp
 
 SPECIALIST_SAMPLES = (
     "Agreement",
@@ -71,9 +71,9 @@ class BlockTransport(importlib.abc.MetaPathFinder):
         return None
 
 sys.meta_path.insert(0, BlockTransport())
-import squid_patterns
-assert squid_patterns.Wizard
-assert squid_patterns.guards.confirm
+import squid_ui_widgets
+assert squid_ui_widgets.Wizard
+assert squid_ui_widgets.guards.confirm
 assert not {"discord", "anyio", "squid_storage", "squid_discord"} & set(sys.modules)
 """
     subprocess.run([sys.executable, "-c", code], check=True)

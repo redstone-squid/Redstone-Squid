@@ -27,9 +27,9 @@ from squid_ui.interactions import ActionEvent
 from squid_ui.palette import Tone
 from squid_ui.runtime.component import Component
 from squid_ui.text import TextLike
-from squid_patterns.decision import DecisionState
-from squid_patterns.decision import confirm as confirm_shell
-from squid_patterns.shells import PatternEvent
+from squid_ui_widgets.decision import DecisionState
+from squid_ui_widgets.decision import confirm as confirm_shell
+from squid_ui_widgets.shells import PatternEvent
 
 __all__ = ["confirm"]
 

@@ -11,7 +11,7 @@ from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import ActionDisplay, Emphasis, Tone
 from squid_ui.text import Message, TextLike
-from squid_patterns._content import ContentLike, normalize_content, render_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 
 
 @dataclass(frozen=True, slots=True)

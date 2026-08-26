@@ -15,7 +15,7 @@ import discord
 
 import squid_discord as sd
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     MAX_BIO_LENGTH,

@@ -7,8 +7,8 @@ from squid_ui.factories import actions, choice, heading, stack
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionDisplay
 from squid_ui.text import TextLike
-from squid_patterns._content import ContentItem, ContentLike, normalize_content, require_key
-from squid_patterns.shells import ComponentShell, PatternControls, PatternHandler
+from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
+from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternHandler
 
 
 @dataclass(frozen=True, slots=True, init=False)

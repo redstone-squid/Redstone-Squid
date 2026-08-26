@@ -7,8 +7,8 @@ from squid_ui.factories import actions, choice, heading, stack
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionDisplay
 from squid_ui.text import Message, ResolvedText, TextLike
-from squid_patterns._content import ContentItem, ContentLike, normalize_content, require_key, slug
-from squid_patterns.shells import ComponentShell, PatternControls
+from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key, slug
+from squid_ui_widgets.shells import ComponentShell, PatternControls
 
 _MISSING = object()
 

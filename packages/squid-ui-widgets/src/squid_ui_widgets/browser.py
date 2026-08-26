@@ -23,7 +23,7 @@ from squid_ui.sources import (
     window_footer,
 )
 from squid_ui.text import TextLike
-from squid_patterns._content import ContentLike, normalize_content, render_content, require_key
+from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 
 type BrowserDetail[ItemT] = Callable[[ItemT], ContentLike | Component]
 type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]

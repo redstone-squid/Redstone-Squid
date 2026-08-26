@@ -14,7 +14,7 @@ SCAN_ROOTS = (
     Path("packages/squid-reactivity/src"),
     Path("packages/squid-ui/src"),
     Path("packages/squid-discord/src"),
-    Path("packages/squid-patterns/src"),
+    Path("packages/squid-ui-widgets/src"),
     Path("packages/squid-replication/src"),
 )
 
@@ -69,7 +69,7 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
         .should_not_import("squid_discord*")
-        .should_not_import("squid_patterns*")
+        .should_not_import("squid_ui_widgets*")
         .check("squid_ui", only_direct_imports=True)
     )
 
@@ -110,25 +110,25 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
 def test_patterns_package_is_transport_free() -> None:
     """State machines render through the engine; they never name a runtime.
 
-    The payoff of the extraction: `squid_patterns` sits beside `squid_discord`, not below it,
+    The payoff of the extraction: `squid_ui_widgets` sits beside `squid_discord`, not below it,
     so a pattern cannot quietly acquire a Discord dependency and become unusable anywhere else.
     """
     (
-        archrule("squid-patterns is frontend-neutral")
-        .match("squid_patterns*")
+        archrule("squid-ui-widgets is frontend-neutral")
+        .match("squid_ui_widgets*")
         .should_not_import("discord*")
         .should_not_import("anyio*")
         .should_not_import("squid_discord*")
         .should_not_import("squid_storage*")
         .should_not_import("squid")
         .should_not_import("squid.*")
-        .check("squid_patterns", only_direct_imports=True)
+        .check("squid_ui_widgets", only_direct_imports=True)
     )
 
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
     """Presentation is `squid.bot`'s business; no other layer may reach for a UI package."""
-    for package in ("squid_ui*", "squid_discord*", "squid_patterns*"):
+    for package in ("squid_ui*", "squid_discord*", "squid_ui_widgets*"):
         (
             archrule(f"{package} is a Discord presentation concern")
             .match("squid*")
@@ -564,7 +564,7 @@ def test_the_engine_needs_no_transport_install() -> None:
     TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
     """
     root = Path("packages/squid-ui/src/squid_ui")
-    blocked = {"anyio", "discord", "squid_storage", "squid_discord", "squid_patterns"}
+    blocked = {"anyio", "discord", "squid_storage", "squid_discord", "squid_ui_widgets"}
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):

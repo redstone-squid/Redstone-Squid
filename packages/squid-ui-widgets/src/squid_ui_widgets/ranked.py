@@ -9,10 +9,10 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import LayoutNode
 from squid_ui.sources import ORIGIN, Position
 from squid_ui.text import TextLike
-from squid_patterns._content import ContentLike, normalize_content, require_key
-from squid_patterns._paging import window
-from squid_patterns._ranked import Projector, RankedEntry, RankedRows
-from squid_patterns.shells import ComponentShell, PatternControls
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
+from squid_ui_widgets._paging import window
+from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
+from squid_ui_widgets.shells import ComponentShell, PatternControls
 
 
 @dataclass(frozen=True, slots=True)

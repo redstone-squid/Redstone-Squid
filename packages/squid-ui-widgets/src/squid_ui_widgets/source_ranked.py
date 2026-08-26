@@ -29,8 +29,8 @@ from squid_ui.sources import (
     window_footer,
 )
 from squid_ui.text import TextLike
-from squid_patterns._content import ContentLike, normalize_content, require_key
-from squid_patterns._ranked import Projector, RankedEntry, RankedRows
+from squid_ui_widgets._content import ContentLike, normalize_content, require_key
+from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
 
 type SourceContentHook = ContentLike | Callable[[int | None], ContentLike]
 

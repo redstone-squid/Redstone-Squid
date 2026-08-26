@@ -6,7 +6,7 @@ import anyio
 import discord
 
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
 

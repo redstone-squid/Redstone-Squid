@@ -8,7 +8,7 @@ import discord
 import pytest
 
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid_discord import Everyone, Mount, delivery
 from squid_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_discord.mount import ChallengeRequest

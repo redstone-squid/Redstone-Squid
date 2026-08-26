@@ -8,7 +8,7 @@ from discord.utils import escape_markdown
 
 import squid_discord as sd
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid.bot.i18n import t
 from squid.bot.ui import DISCORD_GREEN, create_mount
 from squid.builds.domain import Build

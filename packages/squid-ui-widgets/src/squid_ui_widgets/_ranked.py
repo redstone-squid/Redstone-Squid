@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
 from squid_ui.text import TextLike
-from squid_patterns._content import display_text
+from squid_ui_widgets._content import display_text
 
 
 @dataclass(frozen=True, slots=True)

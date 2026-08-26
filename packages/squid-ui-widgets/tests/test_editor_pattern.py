@@ -4,7 +4,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 import squid_ui as sl
-import squid_patterns as sp
+import squid_ui_widgets as sp
 from squid_ui.semantic import Actions, FormTrigger, RoutedAction, Stack
 
 
