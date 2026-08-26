@@ -11,13 +11,6 @@ from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.adaptation import (
-    FallbackAxis,
-    SemanticDecisions,
-    SemanticLowering,
-    lower_semantics,
-    nominate_decisions,
-)
 from squid_layouts.planning.cache import CachedPlan, PlanCache
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
@@ -52,6 +45,11 @@ from squid_layouts.planning.search import (
     assignment_cost,
     ranked_candidates,
 )
+from squid_layouts.planning.semantic_adaptation.decisions import nominate_decisions
+from squid_layouts.planning.semantic_adaptation.lowering import (
+    lower_semantics,
+)
+from squid_layouts.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
 from squid_layouts.planning.target import ResourceCost, TargetProfile
 from squid_layouts.planning.v2 import V2_DIALECT
 from squid_layouts.primitives.nodes import (
