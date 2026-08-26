@@ -26,14 +26,14 @@ from squid_reactivity.core import (
     join_action,
     transaction,
 )
-from squid_replicated.fake import (
+from squid_replication.fake import (
     FakeEngine,
     FakeOperation,
     FakeSnapshot,
     FakeVersion,
     PreparedFakeUpdate,
 )
-from squid_replicated.transport import ReplicatedUpdate
+from squid_replication.transport import ReplicatedUpdate
 
 _DEDUP_LIMIT = 10_000
 _PENDING_UPDATE_LIMIT = 1_000

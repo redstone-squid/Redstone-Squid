@@ -75,7 +75,7 @@ class LoroTextEngine:
         try:
             import loro
         except ImportError as error:
-            message = "install squid-replicated[loro] to use LoroTextEngine"
+            message = "install squid-replication[loro] to use LoroTextEngine"
             raise RuntimeError(message) from error
         self.module = loro
         self.doc = loro.LoroDoc()
