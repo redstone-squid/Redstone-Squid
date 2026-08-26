@@ -142,7 +142,7 @@ class DiscordLimits:
 
     components: ComponentLimits = COMPONENT_LIMITS
     attachments: int = 10
-    """A conservative cap: 10 files per message. Discord's message docs do not state it."""
+    """Files per message. Discord's own cap, not discord.py's; the message docs omit it."""
     embeds: EmbedLimits | None = None
     """What one embed may hold, or None in a mode that has no embeds.
 
@@ -265,7 +265,12 @@ class ClassicLimits(DiscordLimits):
     """Embeds per message, which discord.py checks locally."""
     rows: int = 5
     controls: int = 25
-    """Children a `discord.ui.View` accepts, which is the only other one discord.py checks."""
+    """Interactive components per message: 5 action rows of 5 buttons.
+
+    Discord's cap, not discord.py's. discord.py happens to be the only layer that checks it
+    locally — `discord.ui.View` refuses a 26th child — which is why it reads like a library
+    limit at the one site that enforces it.
+    """
 
     @property
     def capacities(self) -> Mapping[Axis, int]:

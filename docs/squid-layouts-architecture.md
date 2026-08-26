@@ -70,9 +70,9 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Resume an opted-in session | sd.durability.DurableSessionRuntime | recovered Session graph |
 | Mount onto a message the bot owns | sd.edit_to(message) | Destination writing that message |
 
-sd.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
+sd.compose is the Components V2 convenience path: plan for `DISCORD_V2_DPY27`, draw with
 `V2Renderer`, then strictly audit the result. `sd.classic.compose` is its counterpart
-for `CLASSIC_TARGET` and `ClassicRenderer`; both return a `DiscordPresentation`, which is the
+for `DISCORD_V1_DPY27` and `ClassicRenderer`; both return a `DiscordPresentation`, which is the
 whole outgoing message rather than half of it. There is no default — the author picks the
 target, because the two modes differ in what a message can carry. Detached composition passes a
 reservation, measured from the host view rather than counted by hand; composing the complete
