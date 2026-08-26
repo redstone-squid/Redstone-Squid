@@ -2,22 +2,22 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
-from squid_ui.forms import Form, FormLike
+from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import (
     ActionControl,
+    AnyLayoutNode,
     Choice,
     ChoiceEvent,
     Choices,
     Emphasis,
     FormTrigger,
-    LayoutNode,
     RoutedActionControl,
     RoutedChoices,
     Tone,
@@ -74,13 +74,24 @@ class StateMachine[StateT](Protocol):
     ) -> StateT: ...
 
 
+@runtime_checkable
+class FormPresentingMachine[StateT](StateMachine[StateT], Protocol):
+    """A machine that can answer one of its own actions with a form.
+
+    Not every machine has forms, so this is a separate shape rather than an optional method
+    on `StateMachine`. `Editor` resolves nested sections through it.
+    """
+
+    def form_for(self, state: StateT, action: str) -> FormSpec | None: ...
+
+
 class MachineControls[StateT](Protocol):
     """Control and content construction injected into a pure machine render."""
 
     @property
     def chrome(self) -> Chrome: ...
 
-    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]: ...
+    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]: ...
 
     def action_control(
         self,
@@ -169,7 +180,7 @@ class _ComponentControls[StateT]:
         self.owner = owner
         self.chrome = chrome
 
-    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]:
+    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]:
         return tuple(
             self.owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
             for index, item in enumerate(content)
@@ -276,15 +287,18 @@ class _RoutedControls[StateT]:
         self.route = route
         self.chrome = chrome
 
-    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]:
+    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]:
         del prefix
-        if component := next((item for item in content if isinstance(item, Component)), None):
-            message = (
-                f"a routed machine cannot embed {type(component).__name__}; "
-                "render frontend-neutral content from route state instead"
-            )
-            raise TypeError(message)
-        return tuple(content)  # type: ignore[bad-return]
+        nodes: list[AnyLayoutNode] = []
+        for item in content:
+            if isinstance(item, Component):
+                message = (
+                    f"a routed machine cannot embed {type(item).__name__}; "
+                    "render frontend-neutral content from route state instead"
+                )
+                raise TypeError(message)
+            nodes.append(item)
+        return tuple(nodes)
 
     def action_control(
         self,
