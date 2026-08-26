@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
 
-from squid_layouts.factories import actions, choice, heading, stack, status
-from squid_layouts.forms import Form, FormLike, FormSpec
-from squid_layouts.runtime.component import RenderResult
-from squid_layouts.semantic import ActionDisplay, FormTrigger, Tone
-from squid_layouts.sources import Position
-from squid_layouts.text import TextLike
+from squid_ui.factories import actions, choice, heading, stack, status
+from squid_ui.forms import Form, FormLike, FormSpec
+from squid_ui.runtime.component import RenderResult
+from squid_ui.semantic import ActionDisplay, FormTrigger, Tone
+from squid_ui.sources import Position
+from squid_ui.text import TextLike
 from squid_patterns._paging import window
 from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 

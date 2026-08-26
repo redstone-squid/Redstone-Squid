@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, Mock
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount
 from squid_discord.modal import CheckboxGroupField, EntityField, EntityType, FileField, build_form_modal
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts.forms import FormText
+from squid_ui.forms import FormText
 
 
 async def _ignore_raw(interaction, values) -> None: ...

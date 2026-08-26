@@ -9,16 +9,16 @@ from squid_discord.mount import Mount
 from squid_discord.sessions import SessionKey
 from squid_discord.target import DISCORD_V2_DPY27
 from squid_discord.targets import DEFAULT_TARGETS, TargetRegistry
-from squid_layouts.runtime.component import Component, render_component_tree
-from squid_layouts.runtime.presentation import (
+from squid_ui.runtime.component import Component, render_component_tree
+from squid_ui.runtime.presentation import (
     CursorState,
     DisclosureState,
     PresentationSession,
     SelectionState,
     StrategyState,
 )
-from squid_layouts.runtime.reactivity import export_state, restore_state
-from squid_layouts.sources import Direction, Position
+from squid_ui.runtime.reactivity import export_state, restore_state
+from squid_ui.sources import Direction, Position
 from squid_stores import (
     AdmissionToken,
     ClaimToken,

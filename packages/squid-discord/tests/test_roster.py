@@ -7,11 +7,11 @@ from typing import cast
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
-from squid_layouts import scene
-from squid_layouts.chrome import Chrome
-from squid_layouts.runtime.component import render_component_tree
+from squid_ui import scene
+from squid_ui.chrome import Chrome
+from squid_ui.runtime.component import render_component_tree
 
 SLOTS = (
     sp.RosterSlot("tank", "Tank", capacity=1),

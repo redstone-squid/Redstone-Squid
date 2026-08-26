@@ -5,14 +5,14 @@ from collections.abc import Awaitable, Callable
 import pytest
 
 from squid_discord import DISCORD_V2_DPY27
-from squid_layouts import fallback, scene, truncate
-from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.interactions import ActionEvent, ActionMode
-from squid_layouts.planning import plan
-from squid_layouts.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
-from squid_layouts.runtime import PresentationSession, apply_updates
-from squid_layouts.runtime.presentation import StrategyState
-from squid_layouts.semantic import (
+from squid_ui import fallback, scene, truncate
+from squid_ui.document import Asset, InlineAsset
+from squid_ui.interactions import ActionEvent, ActionMode
+from squid_ui.planning import plan
+from squid_ui.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
+from squid_ui.runtime import PresentationSession, apply_updates
+from squid_ui.runtime.presentation import StrategyState
+from squid_ui.semantic import (
     Action,
     ActionDisplay,
     ActionGroup,
@@ -26,7 +26,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Stack,
 )
-from squid_layouts.sources import Position
+from squid_ui.sources import Position
 
 
 async def _act(event: ActionEvent) -> None: ...

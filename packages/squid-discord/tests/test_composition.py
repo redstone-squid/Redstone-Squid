@@ -8,13 +8,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 import squid_discord as sd
-import squid_layouts as sl
-import squid_layouts.runtime.owner as owner_module
+import squid_ui as sl
+import squid_ui.runtime.owner as owner_module
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts import Component, ContextKey, PressEvent, state
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.primitives import (
+from squid_ui import Component, ContextKey, PressEvent, state
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.primitives import (
     Boundary,
     Break,
     Budget,
@@ -28,11 +28,11 @@ from squid_layouts.primitives import (
     Row,
     Text,
 )
-from squid_layouts.runtime.component import render_component_tree
-from squid_layouts.runtime.owner import ComponentRuntime
-from squid_layouts.runtime.shared import Shared
-from squid_layouts.runtime.topics import CellAddress, LocalTopicBus
-from squid_layouts.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
+from squid_ui.runtime.component import render_component_tree
+from squid_ui.runtime.owner import ComponentRuntime
+from squid_ui.runtime.shared import Shared
+from squid_ui.runtime.topics import CellAddress, LocalTopicBus
+from squid_ui.semantic import Action, Actions, Choice, Choices, Controlled, Group, List, ListItem
 
 
 class Counter(Component):

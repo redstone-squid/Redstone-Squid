@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_basics_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft

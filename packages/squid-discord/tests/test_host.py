@@ -9,12 +9,12 @@ import discord
 import pytest
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import LayoutHost, install
 from squid_discord.host import _INSTALLED, LayoutHostMissing
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
-from squid_layouts.primitives import Heading
-from squid_layouts.runtime.topics import Topic
+from squid_ui.primitives import Heading
+from squid_ui.runtime.topics import Topic
 from squid_reactivity import LocalTopicBus
 
 

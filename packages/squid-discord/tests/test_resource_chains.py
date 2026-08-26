@@ -10,7 +10,7 @@ from typing import Any
 import discord
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount
 from squid_discord.testing import delivered_to, fake_message
 

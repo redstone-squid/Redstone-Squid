@@ -1,6 +1,6 @@
-# squid-layouts architecture and API interactions
+# squid-ui architecture and API interactions
 
-squid-layouts separates UI intent, target planning, and drawing. Discord is one frontend,
+squid-ui separates UI intent, target planning, and drawing. Discord is one frontend,
 not the data model: the same resolved scene can be drawn as Discord Components V2 or safe
 HTML, serialized to JSON, and handed to another process.
 
@@ -172,7 +172,7 @@ pagers, assets, events, bindings, or staged session writes behind. `PlanCache` s
 winning fallback branches, strategy assignment, and ladder positions; a hit re-lowers only
 those and recollects current callbacks without measuring again.
 
-Target-shaped nodes live under `squid_layouts.primitives`. Their policies are explicit:
+Target-shaped nodes live under `squid_ui.primitives`. Their policies are explicit:
 
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
 - `Alt`/`Alts` supply text ladders and per-entry drop priority.

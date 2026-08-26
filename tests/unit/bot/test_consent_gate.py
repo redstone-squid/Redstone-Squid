@@ -11,7 +11,7 @@ from discord.ext import commands
 from whenever import Instant
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent

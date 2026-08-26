@@ -1,4 +1,4 @@
-"""Mounted squid-layouts component for interactive search results."""
+"""Mounted squid-ui component for interactive search results."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
@@ -7,14 +7,14 @@ from typing import TYPE_CHECKING
 from discord.utils import escape_markdown
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid.bot.i18n import t
 from squid.bot.ui import DISCORD_GREEN, create_mount
 from squid.builds.domain import Build
 from squid.core.i18n import _
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
-from squid_layouts.sources import window_fingerprint
+from squid_ui.sources import window_fingerprint
 
 if TYPE_CHECKING:
     from squid.search.application import SearchService

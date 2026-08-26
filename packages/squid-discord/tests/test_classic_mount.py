@@ -10,7 +10,7 @@ from typing import Any
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount, Owner
 from squid_discord.mount import ClassicMountedView, MountedView
 from squid_discord.presentation import DiscordMode
@@ -21,9 +21,9 @@ from squid_discord.testing import (
     fake_interaction,
     fake_message,
 )
-from squid_layouts import Component
-from squid_layouts.interactions import ActionEvent
-from squid_layouts.semantic import Action, Actions, Heading, Paragraph
+from squid_ui import Component
+from squid_ui.interactions import ActionEvent
+from squid_ui.semantic import Action, Actions, Heading, Paragraph
 
 TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY27, id="classic")]
 

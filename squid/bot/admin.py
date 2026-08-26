@@ -25,7 +25,7 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_REJECT,
 )
 from squid.tags.domain import TagValueType
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app

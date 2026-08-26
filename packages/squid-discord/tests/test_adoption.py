@@ -11,16 +11,16 @@ import discord
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount
 from squid_discord.adoption import AdoptionError, adopt
 from squid_discord.mount import _EntityValues
 from squid_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
-from squid_layouts.assets import Asset, InlineAsset, StoredAsset
-from squid_layouts.document import Document
-from squid_layouts.emoji import Emoji
-from squid_layouts.entity import ChannelType, EntityKind, EntityRef, EntityType
-from squid_layouts.primitives import (
+from squid_ui.assets import Asset, InlineAsset, StoredAsset
+from squid_ui.document import Document
+from squid_ui.emoji import Emoji
+from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_ui.primitives import (
     ActionStyle,
     Button,
     EntitySelect,

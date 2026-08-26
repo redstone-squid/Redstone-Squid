@@ -9,7 +9,7 @@ import anyio
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, MountDefaults, SessionKey, SessionRegistry
 from squid_discord.delivery import Abandoned
 from squid_discord.sessions import (
@@ -27,7 +27,7 @@ from squid_discord.sessions import (
     Unprotected,
 )
 from squid_discord.testing import fake_message
-from squid_layouts.primitives import Button, Heading, Row
+from squid_ui.primitives import Button, Heading, Row
 
 
 class Panel(sl.Component):

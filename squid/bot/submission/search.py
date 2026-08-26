@@ -14,7 +14,7 @@ from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.submission.build_info import BuildInfoComponent
@@ -47,7 +47,7 @@ from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app

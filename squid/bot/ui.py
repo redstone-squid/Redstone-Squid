@@ -1,10 +1,10 @@
-"""squid-layouts glue: localized chrome, house colours, and the semantic layout vocabulary.
+"""squid-ui glue: localized chrome, house colours, and the semantic layout vocabulary.
 
-This module is the bot's front door to the `squid_layouts` package. The package resolves text,
+This module is the bot's front door to the `squid_ui` package. The package resolves text,
 while this host supplies the gettext catalogue and translatable chrome messages.
 
 The bot owns only localized chrome and audience policy; rendering and delivery stay in
-``squid_layouts``.
+``squid_ui``.
 """
 
 from collections.abc import Sequence
@@ -17,7 +17,7 @@ import discord
 from discord.ext.commands import Context
 
 import squid_discord as sd
-import squid_layouts as ui
+import squid_ui as ui
 from squid.core.i18n import catalog_for, negotiate_locale
 
 DISCORD_RED = 0xF04747

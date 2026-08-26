@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.polls import poll_close, poll_refresh, polls
 from squid.bot.ui import respond_presentation, text_layout

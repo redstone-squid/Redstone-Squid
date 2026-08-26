@@ -11,7 +11,7 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Context
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import delivery
 from squid_discord.devtools_runtime import (
     ActionDisabled,
@@ -26,12 +26,12 @@ from squid_discord.mount import MountSnapshot, owned_mount
 from squid_discord.routing import routers
 from squid_discord.scheduler import MountScheduler, MountSchedulerSnapshot
 from squid_discord.sessions import SessionRegistry
-from squid_layouts.document import InlineAsset
-from squid_layouts.factories import code, paragraph, section
-from squid_layouts.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
-from squid_layouts.runtime.histories import HistorySnapshot
-from squid_layouts.runtime.topics import BusSnapshot, TopicBus
-from squid_layouts.semantic import LayoutNode
+from squid_ui.document import InlineAsset
+from squid_ui.factories import code, paragraph, section
+from squid_ui.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
+from squid_ui.runtime.histories import HistorySnapshot
+from squid_ui.runtime.topics import BusSnapshot, TopicBus
+from squid_ui.semantic import LayoutNode
 from squid_reactivity.actions import (
     ActionLedger,
     ActionResultSnapshot,

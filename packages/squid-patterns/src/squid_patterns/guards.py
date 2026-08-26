@@ -1,6 +1,6 @@
 """The one guard whose refusal is a rendered question.
 
-`squid_layouts.guards` is the admission vocabulary and stays portable: it decides whether a
+`squid_ui.guards` is the admission vocabulary and stays portable: it decides whether a
 press is allowed and has no opinion about what a denial looks like. `confirm` is the single
 member that does have one -- its challenge is a `Decision` shell -- so it lives here, beside
 the shells, rather than making the vocabulary import its own rendering.
@@ -14,7 +14,7 @@ any `Guard`.
 
 from dataclasses import dataclass
 
-from squid_layouts.guards import (
+from squid_ui.guards import (
     ADMIT,
     Challenge,
     ChallengeResolver,
@@ -23,10 +23,10 @@ from squid_layouts.guards import (
     GuardResult,
     approvals,
 )
-from squid_layouts.interactions import ActionEvent
-from squid_layouts.palette import Tone
-from squid_layouts.runtime.component import Component
-from squid_layouts.text import TextLike
+from squid_ui.interactions import ActionEvent
+from squid_ui.palette import Tone
+from squid_ui.runtime.component import Component
+from squid_ui.text import TextLike
 from squid_patterns.decision import DecisionState
 from squid_patterns.decision import confirm as confirm_shell
 from squid_patterns.shells import PatternEvent

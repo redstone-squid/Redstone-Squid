@@ -34,17 +34,17 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   still re-read; and `Controlled`/`Managed` still owns domain truth, with 40 §3 making a
   namespace an unsuitable home for anything durable.
   **Revisited 2026-08-23**: the CascadeUI comparison's "steal the scoping/keying ergonomics, but
-  not the singleton store" finding lands as [59](../completed/squid-layouts-redesign/59-shared-pool.md)'s scope vocabulary and
-  [63](../completed/squid-layouts-redesign/63-stores-package.md), and neither reopens this. 59 keys a *lifetime owner* the host
+  not the singleton store" finding lands as [59](../completed/squid-ui-redesign/59-shared-pool.md)'s scope vocabulary and
+  [63](../completed/squid-ui-redesign/63-stores-package.md), and neither reopens this. 59 keys a *lifetime owner* the host
   constructs and holds — there is still no global, no lookup by type, and no way to reach a
   namespace you were not given; adopting `sessions.py`'s existing scope taxonomy as `ScopeT` makes
   the keying typed, not ambient. 63 is a store, but a store of application values in a package
   *below* the UI library with no edge pointing up, which is this entry's own prescription ("add a
   host-side event bus, not a store in the package") applied to durable data instead of events. The
-  test that keeps both honest: neither *store* is reachable from a `squid_layouts` import.
+  test that keeps both honest: neither *store* is reachable from a `squid_ui` import.
   **Amended 2026-08-24** alongside 59's rewrite, which sharpened that last sentence. `SharedPool`
   is re-exported as `sl.runtime.SharedPool`, so a keyed lifetime owner *is* reachable from a
-  `squid_layouts` import and always was going to be — what stays unreachable is a store, a global,
+  `squid_ui` import and always was going to be — what stays unreachable is a store, a global,
   and any way to obtain a namespace nobody handed you. 59 also dropped the `sl.discord.scopes`
   module this note's "scope vocabulary" referred to; the taxonomy it adopts is now reached through
   `screens.py`'s existing `Opener`/`Scope`, which strengthens rather than weakens the point, since
@@ -59,7 +59,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
   `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
   rejected because it names the wrong relationship.
-  **Revisited again 2026-08-23**: [53](../completed/squid-layouts-redesign/53-view-adoption.md) splits the surviving half on one
+  **Revisited again 2026-08-23**: [53](../completed/squid-ui-redesign/53-view-adoption.md) splits the surviving half on one
   fact — whether the view has been *sent*. A live view owns a message and will edit it, and
   that case stays rejected exactly as written above. An unsent view owns nothing: it is items
   and callbacks that have not met Discord, so Squid can translate them into its own exact
@@ -94,20 +94,20 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   host-side helpers *into* `sl.discord` rather than out of it, and a fourth layer would
   re-split what that round deliberately joined. What was worth keeping — that per-open session
   policy is spread across call sites — is 51, landing in `sl.discord` as a value.
-  **Revisited 2026-08-23**: [63](../completed/squid-layouts-redesign/63-stores-package.md) adds a package and this entry does not
+  **Revisited 2026-08-23**: [63](../completed/squid-ui-redesign/63-stores-package.md) adds a package and this entry does not
   forbid it. What was rejected was a *fourth UI layer above* `sl.discord`, re-splitting what the
   productization round deliberately joined and re-deriving `MountDefaults`, `sl.watch` and the
   class-body policy surface under new names. 63 is the opposite direction: durable application
   data, below the UI library and never importing it, answering a question the series has
-  consistently said is *not* the UI library's (`docs/squid-layouts-architecture.md:268`). The
+  consistently said is *not* the UI library's (`docs/squid-ui-architecture.md:268`). The
   distinction this entry turns on is which way the dependency points, so a package that points
   down is outside its reasoning rather than an exception to it. 63 is also mostly *extraction*
   rather than addition: 1,414 lines of it already exist inside `discord/durability/` and already
-  import nothing from `squid_layouts`, so the package boundary is being drawn where the dependency
+  import nothing from `squid_ui`, so the package boundary is being drawn where the dependency
   graph already put one.
   **Revisited 2026-08-25**: [70](70-discord-py-interop.md) takes the *reachability* half of the
   `UIRuntime` idea and this entry does not cover it. The rejection's central claim was that
-  `UIRuntime` is "[43](../completed/squid-layouts-redesign/43-mount-defaults.md)'s `MountDefaults`
+  `UIRuntime` is "[43](../completed/squid-ui-redesign/43-mount-defaults.md)'s `MountDefaults`
   plus a host facade", which holds for construction and fails for lookup: a `MountDefaults` is a
   value, and a value cannot be found from a `discord.Interaction`. The bot proved the gap the
   expensive way — `squid/bot/ui.py` carries a process-global `install_mount_defaults` with a
@@ -116,13 +116,13 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   package already has the pattern in `routing._INSTALLED`/`routers(client)`. What this entry
   actually protects is untouched: 70 adds no policy surface, no presets, no `Projection`, no
   package, and lands inside `sl.discord` rather than above it. The half it leaves alone is the half
-  this entry and [65](../completed/squid-layouts-redesign/65-screen-entrypoints.md) both hold back —
+  this entry and [65](../completed/squid-ui-redesign/65-screen-entrypoints.md) both hold back —
   named audience policy, which stays in the host's `Visibility`/`Private` vocabulary.
   70 landed on 2026-08-25 as `sl.discord.install`/`LayoutHost`; the policy half is still deferred.
 - **Context-manager render DSL** *(still rejected)* — (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** *(still rejected — the 3.10 backport; actual PyPI publication is a separate, still-unmade call, not a rejection)* — irrelevant to this repo (3.14 target).
-  Publishing squid-layouts is a product decision to make explicitly, not design debt.
+  Publishing squid-ui is a product decision to make explicitly, not design debt.
   **2026-08-22**: the productization decision was made — plans [24](24-session-registry-move.md)
   through [28](28-history.md) build for the library user rather than waiting on bot
   consumers. Actual PyPI publication remains a separate, still-unmade call; the 3.10
@@ -247,7 +247,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   motivated it: every `_load` is awaited by whoever started it, and the mount's settle pass runs
   its task group to completion before the next pass, so a superseded load is wasted work rather
   than a leak — and since the resource contract makes a loader safe to run zero, one or many
-  times, wasted work is all it can be. Cancellation also has to live in `squid-layouts`, because
+  times, wasted work is all it can be. Cancellation also has to live in `squid-ui`, because
   `squid-reactivity` is `dependencies = []` and anyio is where CLAUDE.md puts cancellation. The
   removal condition was "a loader expensive enough that the waste shows up, or a port that makes
   concurrent supersession ordinary".
@@ -306,15 +306,15 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   `Agreement` component state. The participant *lifecycle* model is now
   [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
-  **Closed 2026-08-24**: [60](../completed/squid-layouts-redesign/60-session-membership.md) shipped `join`/`leave`, per-session
+  **Closed 2026-08-24**: [60](../completed/squid-ui-redesign/60-session-membership.md) shipped `join`/`leave`, per-session
   capacity, durable membership and the cross-session quota 34 §B.4 asked for, with
   `/layout lobby` as the worked example this entry required. The quota was very nearly
   deferred a third time on "no consumer needs it" — the same reasoning this entry had already
-  been reopened twice under. [59](../completed/squid-layouts-redesign/59-shared-pool.md) is the counter-precedent: it shipped a
+  been reopened twice under. [59](../completed/squid-ui-redesign/59-shared-pool.md) is the counter-precedent: it shipped a
   pool that added no capability, purely so hosts stopped re-deriving one. Batteries a library
   user expects are part of the product, and this series' bar for *speculation* is not a bar
   for *completeness*.
-- **`squid_layouts.patterns` library** *(closed — delivered across 18, 19, and survey batches 29–32)* — (Form, Wizard, richer table/list browser à la
+- **`squid_ui.patterns` library** *(closed — delivered across 18, 19, and survey batches 29–32)* — (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;

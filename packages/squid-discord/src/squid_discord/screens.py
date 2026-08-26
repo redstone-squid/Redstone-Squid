@@ -26,7 +26,7 @@ from squid_discord.sessions import (
     UserGuildScope,
     UserScope,
 )
-from squid_layouts.runtime.component import Component
+from squid_ui.runtime.component import Component
 
 if TYPE_CHECKING:
     from squid_discord.host import HostSource

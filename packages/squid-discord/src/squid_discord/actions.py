@@ -7,13 +7,13 @@ import discord
 
 from squid_discord import delivery as deliver
 from squid_discord.modal import ModalSpec, build_form_modal, build_modal
-from squid_layouts.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
-from squid_layouts.interactions import ActionEvent, ActionMode, Visibility
-from squid_layouts.text import TextLike, resolve_text
+from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
+from squid_ui.interactions import ActionEvent, ActionMode, Visibility
+from squid_ui.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
     from squid_discord.mount import Mount
-    from squid_layouts.runtime.histories import History
+    from squid_ui.runtime.histories import History
 
 
 class ActionResponder:

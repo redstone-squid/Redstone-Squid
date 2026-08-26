@@ -10,13 +10,13 @@ import anyio
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, Mount, MountScheduler
 from squid_discord.testing import delivered_to, fake_interaction, fake_message
-from squid_layouts import Component, PressEvent, state
-from squid_layouts.primitives import Button, Row, Text
-from squid_layouts.profiling import PresentationStatus
-from squid_layouts.runtime import CellAddress, LocalTopicBus, Shared, transaction
+from squid_ui import Component, PressEvent, state
+from squid_ui.primitives import Button, Row, Text
+from squid_ui.profiling import PresentationStatus
+from squid_ui.runtime import CellAddress, LocalTopicBus, Shared, transaction
 
 
 @dataclass(frozen=True, slots=True)

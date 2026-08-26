@@ -3,11 +3,11 @@
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts.semantic import FormTrigger, Stack
+from squid_ui.semantic import FormTrigger, Stack
 from squid_patterns import REVIEW_STEP
 
 

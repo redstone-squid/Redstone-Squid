@@ -4,13 +4,13 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
-from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
-from squid_layouts.factories import action, choice, choices, controlled, form, routed_action, routed_choices
-from squid_layouts.forms import Form, FormLike
-from squid_layouts.interactions import ActionEvent, SubmitEvent
-from squid_layouts.runtime.component import Component, RenderResult
-from squid_layouts.runtime.reactivity import state
-from squid_layouts.semantic import (
+from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
+from squid_ui.factories import action, choice, choices, controlled, form, routed_action, routed_choices
+from squid_ui.forms import Form, FormLike
+from squid_ui.interactions import ActionEvent, SubmitEvent
+from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.reactivity import state
+from squid_ui.semantic import (
     Action,
     Choice,
     ChoiceEvent,
@@ -22,7 +22,7 @@ from squid_layouts.semantic import (
     RoutedChoices,
     Tone,
 )
-from squid_layouts.text import TextLike
+from squid_ui.text import TextLike
 from squid_patterns._content import ContentItem
 
 

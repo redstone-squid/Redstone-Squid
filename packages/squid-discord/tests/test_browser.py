@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-import squid_layouts as sl
+import squid_ui as sl
 import squid_patterns as sp
 from squid_discord import Everyone, Mount
 from squid_discord.testing import commit_render, fake_interaction

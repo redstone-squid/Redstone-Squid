@@ -3,13 +3,13 @@
 import discord
 import pytest
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V2_DPY27, render_static
-from squid_layouts import scene
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import plan
-from squid_layouts.runtime import PresentationSession, apply_updates
-from squid_layouts.semantic import (
+from squid_ui import scene
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning import plan
+from squid_ui.runtime import PresentationSession, apply_updates
+from squid_ui.semantic import (
     Choice,
     Choices,
     Column,
@@ -28,7 +28,7 @@ from squid_layouts.semantic import (
     Table,
     TableRow,
 )
-from squid_layouts.sources import Position
+from squid_ui.sources import Position
 
 
 async def _change(_event) -> None: ...

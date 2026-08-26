@@ -7,10 +7,10 @@ import pytest
 
 from squid_discord import DISCORD_V1_DPY27, classic
 from squid_discord.classic_renderer import ClassicRenderer, audit_classic_payload
-from squid_layouts import scene
-from squid_layouts.errors import DrawInvariantError
-from squid_layouts.planning.limits import CLASSIC_LIMITS
-from squid_layouts.semantic import Actions, Link, Note, Paragraph
+from squid_ui import scene
+from squid_ui.errors import DrawInvariantError
+from squid_ui.planning.limits import CLASSIC_LIMITS
+from squid_ui.semantic import Actions, Link, Note, Paragraph
 
 
 def _document(body: scene.ClassicMessage) -> scene.Document[scene.ClassicMessage]:

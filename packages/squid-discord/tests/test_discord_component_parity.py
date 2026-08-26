@@ -5,12 +5,12 @@ import pytest
 
 from squid_discord import DISCORD_V2_DPY27, classic, render_static
 from squid_discord.testing import without_capabilities
-from squid_layouts import scene
-from squid_layouts.emoji import Emoji
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.html import Renderer as HtmlRenderer
-from squid_layouts.planning import plan
-from squid_layouts.primitives import (
+from squid_ui import scene
+from squid_ui.emoji import Emoji
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.html import Renderer as HtmlRenderer
+from squid_ui.planning import plan
+from squid_ui.primitives import (
     Gallery,
     GalleryItem,
     LinkButton,

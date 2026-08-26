@@ -33,7 +33,7 @@ dependencies = [
     "beartype>=0.19.0",
     "rapidfuzz>=3.13.0",
     "squid-discord",
-    "squid-layouts",
+    "squid-ui",
     "squid-patterns",
     "squid-replicated",
     # Direct: `squid/topics.py` opens the LISTEN/NOTIFY bridge itself rather than reaching
@@ -76,7 +76,7 @@ dev = [
     "docker>=7.2,<8",
     "hypothesis>=6.0.0",
     # Validates the published scene schema against real payloads in
-    # squid-layouts' tests. Arrived transitively via schemathesis before; a
+    # squid-ui' tests. Arrived transitively via schemathesis before; a
     # cross-language contract should not depend on another tool's dependency tree.
     "jsonschema>=4.23",
     "pip-tools>=7.4.1",
@@ -127,7 +127,7 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 squid-discord = { workspace = true }
-squid-layouts = { workspace = true }
+squid-ui = { workspace = true }
 squid-patterns = { workspace = true }
 squid-reactivity = { workspace = true }
 squid-replicated = { workspace = true }
@@ -283,7 +283,7 @@ ignore = [
 # The workspace member's src layout is outside ruff's first-party detection at the repo root.
 known-first-party = [
     "squid_discord",
-    "squid_layouts",
+    "squid_ui",
     "squid_patterns",
     "squid_reactivity",
     "squid_replicated",
@@ -398,7 +398,7 @@ testpaths = [
     "tests/architecture",
     "packages/squid-reactivity/tests",
     "packages/squid-stores/tests",
-    "packages/squid-layouts/tests",
+    "packages/squid-ui/tests",
     "packages/squid-discord/tests",
     "packages/squid-patterns/tests",
     "packages/squid-replicated/tests",
@@ -415,7 +415,7 @@ addopts = [
     "--cov=squid",
     "--cov=squid_reactivity",
     "--cov=squid_stores",
-    "--cov=squid_layouts",
+    "--cov=squid_ui",
     "--cov=squid_replicated",
     "--cov=squid_discord",
     "--cov=squid_patterns",

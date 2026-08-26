@@ -31,7 +31,7 @@ from squid.permissions.domain.catalogue import (
 from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app

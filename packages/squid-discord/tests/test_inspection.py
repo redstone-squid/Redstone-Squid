@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 
 import squid_discord
 import squid_discord.target
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import V2_LIMITS as LIMITS
 from squid_discord import ExistingLayoutError, LimitViolationError, conform
 from squid_discord.inspection import ViolationCode, audit, cost, measure

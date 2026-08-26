@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import Everyone, SessionKey, SessionRegistry
 from squid_discord.devtools_runtime import (
     ActionDisabled,
@@ -19,8 +19,8 @@ from squid_discord.durability import PurgeResult
 from squid_discord.scheduler import MountSchedulerSnapshot
 from squid_discord.sessions import Opened
 from squid_discord.testing import delivered_to, fake_message
-from squid_layouts.profiling import MemoryProfiler, OperationKind
-from squid_layouts.runtime import BusSnapshot
+from squid_ui.profiling import MemoryProfiler, OperationKind
+from squid_ui.runtime import BusSnapshot
 
 
 class Panel(sl.Component):

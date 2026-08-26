@@ -10,8 +10,8 @@ from typing import Any
 import discord
 
 from squid_discord.routing import RouteComponent, RouteGroup
-from squid_layouts.emoji import EmojiLike, normalize_emoji
-from squid_layouts.primitives.nodes import (
+from squid_ui.emoji import EmojiLike, normalize_emoji
+from squid_ui.primitives.nodes import (
     ActionGroup,
     Heading,
     Node,
@@ -22,9 +22,9 @@ from squid_layouts.primitives.nodes import (
     Variant,
     Variants,
 )
-from squid_layouts.routing import Route
-from squid_layouts.runtime.component import Component
-from squid_layouts.text import TextLike
+from squid_ui.routing import Route
+from squid_ui.runtime.component import Component
+from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

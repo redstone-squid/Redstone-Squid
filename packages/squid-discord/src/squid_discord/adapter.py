@@ -10,15 +10,15 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from squid_discord.inspection import cost
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning.adapter import (
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.planning.adapter import (
     AdapterCapability,
     AdapterProfile,
     ExtensionAdapter,
     PreparedExtension,
 )
-from squid_layouts.planning.target import Target
-from squid_layouts.target_types import DiscordPy27Adapter, DiscordPyAdapter
+from squid_ui.planning.target import Target
+from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
 
 
 class _DiscordItemExtension:

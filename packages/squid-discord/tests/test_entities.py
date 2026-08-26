@@ -3,13 +3,13 @@
 import pytest
 
 import squid_discord
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord.testing import without_capabilities
-from squid_layouts import scene
-from squid_layouts.interactions import Actor, EntitySelectionEvent, Visibility
-from squid_layouts.planning import measure
-from squid_layouts.primitives import EntitySelect
-from squid_layouts.runtime import PresentationSession
+from squid_ui import scene
+from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
+from squid_ui.planning import measure
+from squid_ui.primitives import EntitySelect
+from squid_ui.runtime import PresentationSession
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...

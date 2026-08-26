@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 import discord
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import t
 from squid.bot.ui import CardField, L, localization_for
 from squid.bot.utils.permissions import allows
@@ -75,7 +75,7 @@ class SettingsPanel(sl.Component):
     """A semantic, mount-owned settings workspace."""
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
-    """Undo for the server page's writes; see `docs/plans/squid-layouts-redesign/28-history.md`."""
+    """Undo for the server page's writes; see `docs/plans/squid-ui-redesign/28-history.md`."""
 
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)

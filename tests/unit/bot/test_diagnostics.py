@@ -21,7 +21,7 @@ from squid_discord import (
 from squid_discord import Mount, Owner
 from squid_discord.mount import MountedView
 from squid_discord.testing import assert_within_limits, commit_render, fake_interaction
-from squid_layouts.sources import Position
+from squid_ui.sources import Position
 from tests.helpers.discord import make_layout_bot
 
 

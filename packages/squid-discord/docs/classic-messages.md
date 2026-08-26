@@ -11,7 +11,7 @@ So the classic target is a permanent capability, not a migration ramp. Pick a ta
 saying which one you mean:
 
 ```python
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import CLASSIC_TARGET, V2_TARGET, classic
 
 document = [
@@ -140,7 +140,7 @@ replacing the whole presentation.
 Where the semantic layer is not enough, the classic primitives are exact:
 
 ```python
-from squid_layouts.primitives import Card, CardField, CardFooter, Content, Text, Truncate
+from squid_ui.primitives import Card, CardField, CardFooter, Content, Text, Truncate
 
 document = [
     Content("@here the build is ready"),
@@ -189,7 +189,7 @@ registration:
 
 ```python
 from squid_discord import Target, TargetRegistry
-from squid_layouts.planning.limits import ClassicLimits
+from squid_ui.planning.limits import ClassicLimits
 
 compact = Target.classic(limits=ClassicLimits(embeds=2))
 targets = TargetRegistry(compact)

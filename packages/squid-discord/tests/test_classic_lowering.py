@@ -1,10 +1,10 @@
 """How each semantic node reaches a classic message. One test per row of the mapping."""
 
 from squid_discord import DISCORD_V1_DPY27
-from squid_layouts import Tone, scene
-from squid_layouts.document import Asset, InlineAsset
-from squid_layouts.planning import plan
-from squid_layouts.semantic import (
+from squid_ui import Tone, scene
+from squid_ui.document import Asset, InlineAsset
+from squid_ui.planning import plan
+from squid_ui.semantic import (
     Article,
     Aside,
     Column,

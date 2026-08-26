@@ -16,16 +16,16 @@ from squid_discord.emoji import discord_emoji
 from squid_discord.presentation import DiscordPresentation
 from squid_discord.render_cache import RenderProgramCache
 from squid_discord.target import DISCORD_V2_DPY27
-from squid_layouts import scene
-from squid_layouts.assets import Asset, StoredAsset
-from squid_layouts.errors import DrawInvariantError
-from squid_layouts.interactions import ActionBinding
-from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
-from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.scene.model import PlanResult
-from squid_layouts.target_types import DiscordPyAdapter
-from squid_layouts.temporal import ZonedDateTime
-from squid_layouts.text import discord_text
+from squid_ui import scene
+from squid_ui.assets import Asset, StoredAsset
+from squid_ui.errors import DrawInvariantError
+from squid_ui.interactions import ActionBinding
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.scene.model import PlanResult
+from squid_ui.target_types import DiscordPyAdapter
+from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import discord_text
 
 type Control = scene.Button | scene.Select | scene.EntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]

@@ -2,14 +2,14 @@
 
 from collections.abc import Awaitable, Callable
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid_discord import DISCORD_V2_DPY27
-from squid_layouts import scene
-from squid_layouts.forms import FormLike, SubmitHandler
-from squid_layouts.interactions import ActionMode, Actor, PressEvent, Visibility
-from squid_layouts.primitives.styles import ActionStyle
-from squid_layouts.runtime import PresentationSession
-from squid_layouts.runtime.component import render_component_tree
+from squid_ui import scene
+from squid_ui.forms import FormLike, SubmitHandler
+from squid_ui.interactions import ActionMode, Actor, PressEvent, Visibility
+from squid_ui.primitives.styles import ActionStyle
+from squid_ui.runtime import PresentationSession
+from squid_ui.runtime.component import render_component_tree
 
 
 class _Responder:

@@ -8,7 +8,7 @@ import discord
 from discord import Interaction
 from discord.ext.commands import Cog, Context, hybrid_group
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.redstoner_roles import redstoner_roles, remove_redstoner_role

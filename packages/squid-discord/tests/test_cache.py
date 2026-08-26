@@ -4,16 +4,16 @@ from dataclasses import replace
 from time import perf_counter
 
 from squid_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, compose
-from squid_layouts import Palette, fallback, form, scene
-from squid_layouts.forms import FormSpec, TextField
-from squid_layouts.planning import PlanCache, PlanMemo, plan
-from squid_layouts.planning.adapter import AdapterProfile
-from squid_layouts.planning.cache import CachedPlan
-from squid_layouts.planning.discord import components_v2_target
-from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.semantic_adaptation.handlers import ChooseChoice
-from squid_layouts.planning.types import DiscordAdapter
-from squid_layouts.primitives import (
+from squid_ui import Palette, fallback, form, scene
+from squid_ui.forms import FormSpec, TextField
+from squid_ui.planning import PlanCache, PlanMemo, plan
+from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.cache import CachedPlan
+from squid_ui.planning.discord import components_v2_target
+from squid_ui.planning.limits import LIMITS, V2Limits
+from squid_ui.planning.semantic_adaptation.handlers import ChooseChoice
+from squid_ui.planning.types import DiscordAdapter
+from squid_ui.primitives import (
     Button,
     Code,
     Paginate,
@@ -23,9 +23,9 @@ from squid_layouts.primitives import (
     Variant,
     Variants,
 )
-from squid_layouts.runtime import PresentationSession
-from squid_layouts.scene.model import PlanReport
-from squid_layouts.semantic import (
+from squid_ui.runtime import PresentationSession
+from squid_ui.scene.model import PlanReport
+from squid_ui.semantic import (
     Action,
     Actions,
     Choice,
@@ -38,7 +38,7 @@ from squid_layouts.semantic import (
     Section,
     Stack,
 )
-from squid_layouts.text import Localization, Message
+from squid_ui.text import Localization, Message
 
 
 def _target(name: str, *, capabilities: frozenset[str] = frozenset(), limits: V2Limits = LIMITS):
@@ -120,7 +120,7 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
 
 
 def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     attempts = 0
     original = planner_module.measure
@@ -153,7 +153,7 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
 
 
 def test_structural_program_rebinds_generated_form_adapter_without_lowering(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     cache = PlanCache()
     spec = FormSpec("Edit", (TextField(key="name", label="Name"),))
@@ -175,7 +175,7 @@ def test_structural_program_rebinds_generated_form_adapter_without_lowering(monk
 
 
 def test_structural_program_rebinds_managed_controls_to_the_current_session(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     cache = PlanCache()
     document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Managed(()))
@@ -214,7 +214,7 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
 
 def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> None:
     """All three decision classes travel in the entry, so a hit never re-searches."""
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     cache = PlanCache()
 
@@ -256,7 +256,7 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
 
 
 def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     cache = PlanCache()
 
@@ -295,7 +295,7 @@ def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
 
 
 def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     document = Actions((Action("run", "Run", _first),), key="tools")
     session = PresentationSession()
@@ -312,7 +312,7 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
 
 
 def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     cases = []
     for make_document in (Text, Paragraph):
@@ -335,7 +335,7 @@ def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch)
 
 
 def test_classic_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     expected = plan(Text("x" * 2500), target=DISCORD_V1_DPY27)
     cache = PlanCache()
@@ -354,7 +354,7 @@ def test_classic_lossless_text_growth_replans_locally_without_global_search(monk
 
 
 def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch) -> None:
-    import squid_layouts.planning.planner as planner_module
+    import squid_ui.planning.planner as planner_module
 
     cache = PlanCache()
     plan(Text("x" * 2000), target=DISCORD_V2_DPY27, cache=cache)

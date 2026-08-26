@@ -15,10 +15,10 @@ import discord
 from squid_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_discord.conformance import conform_modal
 from squid_discord.emoji import discord_emoji
-from squid_layouts.capabilities import Capability
-from squid_layouts.entity import EntityType
-from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.forms import (
+from squid_ui.capabilities import Capability
+from squid_ui.entity import EntityType
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.forms import (
     BoolField,
     ChoiceField,
     ChoiceOption,
@@ -40,10 +40,10 @@ from squid_layouts.forms import (
     UploadedFile,
     ZonedDateTimeField,
 )
-from squid_layouts.planning.adapter import AdapterCapability, AdapterProfile
-from squid_layouts.planning.limits import COMPONENT_LIMITS, ComponentLimits
-from squid_layouts.target_types import DiscordPyAdapter
-from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.limits import COMPONENT_LIMITS, ComponentLimits
+from squid_ui.target_types import DiscordPyAdapter
+from squid_ui.text import NEUTRAL, Localization, TextLike, resolve_text
 
 logger = logging.getLogger(__name__)
 

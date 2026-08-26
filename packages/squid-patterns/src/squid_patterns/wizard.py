@@ -4,11 +4,11 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from types import MappingProxyType
 
-from squid_layouts.factories import actions, field, fields, heading, progress, stack
-from squid_layouts.forms import Form, FormField, FormLike, FormSpec
-from squid_layouts.runtime.component import RenderResult
-from squid_layouts.semantic import Action, ActionDisplay, FormTrigger, LayoutNode, RoutedAction, Tone
-from squid_layouts.text import TextLike
+from squid_ui.factories import actions, field, fields, heading, progress, stack
+from squid_ui.forms import Form, FormField, FormLike, FormSpec
+from squid_ui.runtime.component import RenderResult
+from squid_ui.semantic import Action, ActionDisplay, FormTrigger, LayoutNode, RoutedAction, Tone
+from squid_ui.text import TextLike
 from squid_patterns._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_patterns.shells import ComponentShell, PatternControls, PatternEvent
 

@@ -16,13 +16,13 @@ from squid_discord.mount import (
 )
 from squid_discord.render_cache import RenderProgramCache
 from squid_discord.target import DISCORD_V2_DPY27, Target
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
-from squid_layouts.interactions import ActionMiddleware
-from squid_layouts.palette import DEFAULT_PALETTE, Palette
-from squid_layouts.planning.navigation import NavFactory
-from squid_layouts.profiling import Profiler
-from squid_layouts.runtime.component import Component
-from squid_layouts.text import NEUTRAL, Localization
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.interactions import ActionMiddleware
+from squid_ui.palette import DEFAULT_PALETTE, Palette
+from squid_ui.planning.navigation import NavFactory
+from squid_ui.profiling import Profiler
+from squid_ui.runtime.component import Component
+from squid_ui.text import NEUTRAL, Localization
 
 
 class MountOptions(TypedDict, total=False):

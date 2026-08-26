@@ -7,7 +7,7 @@ from typing import Protocol
 
 import discord
 
-from squid_layouts.text import TextLike
+from squid_ui.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)

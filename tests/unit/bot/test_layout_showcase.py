@@ -1,4 +1,4 @@
-"""Public dogfood surface for the squid-layouts engine."""
+"""Public dogfood surface for the squid-ui engine."""
 
 from types import SimpleNamespace
 from typing import Any, cast
@@ -9,7 +9,7 @@ import pytest
 from discord.ext import commands
 
 import squid_discord as sd
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.layout_showcase import (
     Appearance,
     AppearancePanel,

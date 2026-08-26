@@ -5,8 +5,8 @@ import discord
 from squid_discord import Everyone, Mount
 from squid_discord.navigation import Navigator
 from squid_discord.testing import commit_render, fake_interaction
-from squid_layouts import Component
-from squid_layouts.primitives import Heading, Text
+from squid_ui import Component
+from squid_ui.primitives import Heading, Text
 
 
 class Screen(Component):
@@ -55,7 +55,7 @@ async def test_home_appears_only_when_deep():
 
 
 async def test_child_state_changes_rerender_through_the_shared_mount():
-    from squid_layouts import state
+    from squid_ui import state
 
     class Counting(Component):
         count: int = state(0)
