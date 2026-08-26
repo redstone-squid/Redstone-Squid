@@ -229,7 +229,7 @@ async def test_atomic_resource_pipeline_benchmark_reports_separate_phase_evidenc
     assert result.loads_per_operation == 1
     assert not result.scheduler_included
     phases = {phase.name: phase for phase in result.phases}
-    assert phases.keys() >= {"runtime_render", "resource_settle.atomic", "preflight", "planner", "renderer"}
+    assert phases.keys() >= {"runtime_render", "resource_settle.atomic", "preflight", "planner", "renderer", "commit"}
     assert phases["runtime_render"].calls_per_operation == 1
     assert all(phase.p50_ms >= 0 and phase.p95_ms >= phase.p50_ms for phase in phases.values())
 

@@ -444,7 +444,8 @@ async def measure_resource_pipeline(
                     preflight=True,
                     reuse_committed=True,
                 )
-                _commit_candidate(message_root, candidate)
+                with operation.span("commit"):
+                    _commit_candidate(message_root, candidate)
             operations.append(time.perf_counter_ns() - started)
 
         traces = tuple(trace for trace in profiler.snapshot().recent if trace.name == "atomic_resource_pipeline")
@@ -452,7 +453,14 @@ async def measure_resource_pipeline(
         for trace in traces:
             per_operation: dict[str, int] = {}
             for span in trace.spans:
-                if span.name not in {"runtime_render", "resource_settle.atomic", "preflight", "planner", "renderer"}:
+                if span.name not in {
+                    "runtime_render",
+                    "resource_settle.atomic",
+                    "preflight",
+                    "planner",
+                    "renderer",
+                    "commit",
+                }:
                     continue
                 per_operation[span.name] = per_operation.get(span.name, 0) + round(span.duration * 1_000_000_000)
                 phase_calls[span.name] = phase_calls.get(span.name, 0) + 1
