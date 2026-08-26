@@ -2,6 +2,7 @@
 
 import uuid
 from collections.abc import Callable
+from typing import Any, cast
 
 import pytest
 
@@ -25,7 +26,7 @@ def _replica(name: str, peer_id: int) -> Replica:
     return Replica(name, backend=LoroBackend(peer_id=peer_id))
 
 
-def _record(callback: Callable[[], None]) -> ReplicationChangeToken:
+def _record(callback: Callable[[], object]) -> ReplicationChangeToken:
     commits: list[ActionCommit] = []
     with transaction():
         on_action_commit(lambda commit, continuation: commits.append(commit))
@@ -40,6 +41,14 @@ def _apply_inverse(token: ReplicationChangeToken) -> None:
     assert not isinstance(inverse, ConflictDetail)
     with transaction():
         token.stage_inverse(inverse)
+
+
+def _mutate_outer(value: Any) -> None:
+    value["items"] = ()
+
+
+def _mutate_inner(value: Any) -> None:
+    value["items"][1]["enabled"] = False
 
 
 def test_one_action_spans_every_public_container_and_undoes_exactly() -> None:
@@ -155,12 +164,12 @@ def test_nested_public_values_are_deeply_immutable() -> None:
     document = _replica("a", 1).open("project")
     with transaction():
         document.map("settings").set("value", {"items": [1, {"enabled": True}]})
-    value = document.map("settings").value["value"]
+    value = cast(Any, document.map("settings").value["value"])
 
     with pytest.raises(TypeError):
-        value["items"] = ()
+        _mutate_outer(value)
     with pytest.raises(TypeError):
-        value["items"][1]["enabled"] = False
+        _mutate_inner(value)
 
 
 def test_token_survives_checkpoint_reload() -> None:
@@ -174,6 +183,88 @@ def test_token_survives_checkpoint_reload() -> None:
     _apply_inverse(reloaded)
 
     assert restored.text("title").value == ""
+
+
+def test_leased_token_survives_shallow_checkpoint_reload() -> None:
+    source = _replica("a", 1).open("project")
+    token = _record(lambda: source.text("title").insert(0, "A"))
+    lease = token.retain()
+    with transaction():
+        source.text("title").insert(1, "B")
+    source.compact_history()
+    checkpoint = source.checkpoint()
+    encoded = token.encode()
+    restored = _replica("restored", 3).open("project")
+    restored.import_update(checkpoint)
+    reloaded = ReplicationChangeToken.decode(restored, encoded)
+
+    _apply_inverse(reloaded)
+
+    assert restored.text("title").value == "B"
+    lease.release()
+
+
+def test_deletion_inverse_restores_logical_values_and_preserves_later_insertions() -> None:
+    document = _replica("a", 1).open("project")
+    movable_id = uuid.uuid7()
+    root_id = uuid.uuid7()
+    child_id = uuid.uuid7()
+    with transaction():
+        document.text("title").insert(0, "AB")
+        document.list("steps").insert(0, "first")
+        document.movable_list("parts").insert(0, "observer", item_id=movable_id)
+        document.tree("outline").create(node_id=root_id, metadata={"label": "root"})
+        document.tree("outline").create(parent_id=root_id, node_id=child_id, metadata={"label": "child"})
+
+    def delete() -> None:
+        document.text("title").delete(0)
+        document.list("steps").delete(0)
+        document.movable_list("parts").delete(movable_id)
+        document.tree("outline").delete(root_id)
+
+    token = _record(delete)
+    with transaction():
+        document.text("title").insert(1, "C")
+        document.list("steps").insert(0, "later")
+
+    _apply_inverse(token)
+
+    assert document.text("title").value == "ABC"
+    assert document.list("steps").value == ("later", "first")
+    assert document.movable_list("parts").value[0].item_id == movable_id
+    tree = document.tree("outline").value
+    assert tree.roots == (root_id,)
+    root = tree.node(root_id)
+    assert root is not None
+    assert root.children == (child_id,)
+
+
+def test_three_replicas_converge_after_rich_updates_arrive_in_different_orders() -> None:
+    replicas = [_replica(name, peer).open("project") for name, peer in (("a", 1), ("b", 2), ("c", 3))]
+    for index, document in enumerate(replicas):
+        with transaction():
+            document.counter("votes").increment(2**53 + index)
+            document.set("tags").add(f"tag-{index}")
+            document.text("title").insert(0, chr(ord("A") + index))
+            document.list("steps").insert(0, {"replica": index})
+            document.movable_list("parts").insert(
+                0,
+                f"part-{index}",
+                item_id=uuid.uuid5(uuid.NAMESPACE_URL, f"part-{index}"),
+            )
+            document.map("reviewers").set(f"reviewer-{index}", {"approved": True})
+            document.tree("outline").create(
+                node_id=uuid.uuid5(uuid.NAMESPACE_URL, f"node-{index}"),
+                metadata={"replica": index},
+            )
+    updates = [document.export_since() for document in replicas]
+
+    for document, order in zip(replicas, ((2, 1, 0), (0, 2, 1), (1, 0, 2)), strict=True):
+        for index in order:
+            document.import_update(updates[index])
+
+    assert replicas[0].snapshot() == replicas[1].snapshot() == replicas[2].snapshot()
+    assert replicas[0].counter("votes").value == 3 * 2**53 + 3
 
 
 def test_compaction_preserves_leased_tokens_and_expires_released_tokens() -> None:
