@@ -228,6 +228,8 @@ async def test_atomic_resource_pipeline_benchmark_reports_separate_phase_evidenc
     assert result.leaf_renders_per_operation == 1
     assert result.loads_per_operation == 1
     assert not result.scheduler_included
+    assert result.planner_reuse == "incremental"
+    assert result.planner_states_explored == 1
     phases = {phase.name: phase for phase in result.phases}
     assert phases.keys() >= {"runtime_render", "resource_settle.atomic", "preflight", "planner", "renderer", "commit"}
     assert phases["runtime_render"].calls_per_operation == 1
