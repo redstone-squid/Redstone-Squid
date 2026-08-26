@@ -47,9 +47,6 @@ from squid_ui.primitives.constraints import (
     Overflow,
 )
 from squid_ui.primitives.nodes import (
-    ActionGroup as PrimitiveActionGroup,
-)
-from squid_ui.primitives.nodes import (
     Break,
     Budget,
     Button,
@@ -67,6 +64,9 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.nodes import (
     Code as PrimitiveCode,
+)
+from squid_ui.primitives.nodes import (
+    ControlGroup as PrimitiveActionGroup,
 )
 from squid_ui.primitives.nodes import (
     Heading as PrimitiveHeading,

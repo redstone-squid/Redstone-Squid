@@ -6,13 +6,24 @@ from typing import Literal
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.factories import action, actions, choice, choices, controlled, form, heading, note, paragraph, stack
+from squid_ui.factories import (
+    action_control,
+    action_controls,
+    choice,
+    choices,
+    controlled,
+    form,
+    heading,
+    note,
+    paragraph,
+    stack,
+)
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component, RenderResult
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
-from squid_ui.semantic import ActionDisplay, ChoiceEvent, LayoutNode, Tone
+from squid_ui.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
 from squid_ui.sources import LoadedWindow, WindowLoader, WindowSource, window_footer
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import require_key
@@ -183,8 +194,8 @@ class SearchPicker[ItemT](Component):
                 stack(
                     paragraph(self.label(item)),
                     note(self.description(item)) if self.description is not None else None,
-                    actions(
-                        action(
+                    action_controls(
+                        action_control(
                             chrome.remove,
                             remove,
                             key=f"{self.key}.remove.{identity}",
@@ -192,7 +203,7 @@ class SearchPicker[ItemT](Component):
                             available=len(self.picked) > self.minimum,
                         ),
                         key=f"{self.key}.remove-row.{identity}",
-                        display=ActionDisplay.INDIVIDUAL,
+                        display=ControlDisplay.INDIVIDUAL,
                     ),
                 )
             )
@@ -226,7 +237,9 @@ class SearchPicker[ItemT](Component):
     def _failure(self) -> tuple[LayoutNode, ...]:
         return (
             note(self.load_failed),
-            actions(action(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"),
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+            ),
         )
 
     def _loaded_nodes(
@@ -258,14 +271,14 @@ class SearchPicker[ItemT](Component):
             else note(chrome.no_results)
         )
         navigation = (
-            actions(
-                action(
+            action_controls(
+                action_control(
                     chrome.previous,
                     self._previous,
                     key=f"{self.key}.previous",
                     available=current.source.capabilities.backward and window.has_previous,
                 ),
-                action(chrome.next, self._next, key=f"{self.key}.next", available=window.has_next),
+                action_control(chrome.next, self._next, key=f"{self.key}.next", available=window.has_next),
                 key=f"{self.key}.navigation",
             )
             if window.has_previous or window.has_next
@@ -276,11 +289,13 @@ class SearchPicker[ItemT](Component):
             picker,
             navigation,
             note(status_text) if status_text is not None else None,
-            actions(action(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row")
+            action_controls(
+                action_control(self.retry, self._retry, key=f"{self.key}.retry"), key=f"{self.key}.retry-row"
+            )
             if retry
             else None,
             note(footer) if footer is not None else None,
         )
 
 
-__all__ = ["SearchPicker", "SearchPickHandler", "SearchProvider"]
+__all__ = ["SearchPickHandler", "SearchPicker", "SearchProvider"]

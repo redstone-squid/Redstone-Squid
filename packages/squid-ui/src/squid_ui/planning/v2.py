@@ -29,11 +29,11 @@ from squid_ui.planning.navigation import PlannedNav, materialized_navigation_sta
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
-    ActionGroup,
     Boundary,
     Break,
     Budget,
     Button,
+    ControlGroup,
     EntitySelect,
     Extension,
     File,
@@ -163,7 +163,7 @@ def _lower(
             case PremiumButton() if Capability.ACTIONS_DISCORD_PREMIUM not in target.capabilities:
                 message = "premium buttons require an explicit Variants fallback on this target"
                 raise LayoutInvariantError(message)
-            case Row(items=items) | ActionGroup(items=items) if (
+            case Row(items=items) | ControlGroup(items=items) if (
                 Capability.ACTIONS_DISCORD_PREMIUM not in target.capabilities
                 and any(isinstance(item, PremiumButton) for item in items)
             ):
@@ -172,7 +172,7 @@ def _lower(
             case Section(accessory=PremiumButton()) if Capability.ACTIONS_DISCORD_PREMIUM not in target.capabilities:
                 message = "premium buttons require an explicit Variants fallback on this target"
                 raise LayoutInvariantError(message)
-            case ActionGroup(items=items):
+            case ControlGroup(items=items):
                 lowered.extend(
                     Row(tuple(items[start : start + limits.components.row_buttons]))
                     for start in range(0, len(items), limits.components.row_buttons)

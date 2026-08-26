@@ -9,10 +9,9 @@ from typing import Any
 
 import discord
 
-from squid_ui_discord.routing import RouteComponent, RouteGroup
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.primitives.nodes import (
-    ActionGroup,
+    ControlGroup,
     Heading,
     Node,
     Option,
@@ -25,6 +24,7 @@ from squid_ui.primitives.nodes import (
 from squid_ui.routing import Route
 from squid_ui.runtime.component import Component
 from squid_ui.text import TextLike
+from squid_ui_discord.routing import RouteComponent, RouteGroup
 
 
 @dataclass(frozen=True, slots=True)
@@ -451,7 +451,7 @@ class RolePanel(Component):
                 min_values=category.cardinality.minimum,
                 max_values=maximum,
             )
-            nodes.append(Variants((Variant((ActionGroup(buttons),)), Variant((select,)))))
+            nodes.append(Variants((Variant((ControlGroup(buttons),)), Variant((select,)))))
         return tuple(nodes)
 
     async def _handle_toggle(

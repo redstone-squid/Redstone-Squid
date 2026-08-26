@@ -63,9 +63,6 @@ from squid_ui.primitives.constraints import (
     alts,
 )
 from squid_ui.primitives.nodes import (
-    ActionGroup as PrimitiveActionGroup,
-)
-from squid_ui.primitives.nodes import (
     Break,
     Budget,
     Button,
@@ -94,6 +91,9 @@ from squid_ui.primitives.nodes import (
     Code as PrimitiveCode,
 )
 from squid_ui.primitives.nodes import (
+    ControlGroup as PrimitiveActionGroup,
+)
+from squid_ui.primitives.nodes import (
     File as PrimitiveFile,
 )
 from squid_ui.primitives.nodes import (
@@ -107,7 +107,7 @@ from squid_ui.runtime.presentation_state import (
 )
 from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
-    Actions,
+    ActionControls,
     Article,
     Aside,
     BestEffort,
@@ -132,8 +132,8 @@ from squid_ui.semantic import (
     KeepWithNext,
     LayoutNode,
     List,
-    Measure,
     Media,
+    Metric,
     Navigation,
     Note,
     OptionalContent,
@@ -258,7 +258,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             branches = (primary, *alternates)
             rung = _fallback_rung(path, len(branches), context.fallbacks)
             return _node(branches[rung], _branch_paths(path, len(branches))[rung], context)
-        case Actions():
+        case ActionControls():
             return _actions(node, path, context)
         case Themed(children=children, palette=palette):
             previous = context.palette
@@ -418,7 +418,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             filled = round(ratio * 10)
             prefix = f"{_resolve(label, context)}: " if label is not None else ""
             return [Text(f"{prefix}{'█' * filled}{'░' * (10 - filled)} {ratio:.0%}", overflow=Never())]
-        case Measure(value=value, label=label, unit=unit):
+        case Metric(value=value, label=label, unit=unit):
             suffix = f" {unit}" if unit else ""
             return [Text(f"**{_resolve(label, context)}:** {value}{suffix}", overflow=Never())]
         case Timestamp(instant=instant, style=style, label=label):

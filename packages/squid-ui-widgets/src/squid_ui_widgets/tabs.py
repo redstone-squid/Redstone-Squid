@@ -3,9 +3,9 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_ui.factories import actions, choice, heading, stack
+from squid_ui.factories import action_controls, choice, heading, stack
 from squid_ui.runtime.component import RenderResult
-from squid_ui.semantic import ActionDisplay
+from squid_ui.semantic import ControlDisplay
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionHandler
@@ -91,9 +91,9 @@ class Tabs:
     def render(self, state: TabsState, controls: MachineControls[TabsState]) -> RenderResult:
         current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
         if len(self.tabs) <= 5:
-            selector = actions(
+            selector = action_controls(
                 *(
-                    controls.action(
+                    controls.action_control(
                         tab.label,
                         f"select:{tab.key}",
                         key=f"{self.key}.{tab.key}",
@@ -102,7 +102,7 @@ class Tabs:
                     for tab in self.tabs
                 ),
                 key=self.key,
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             )
         else:
             selector = controls.choices(

@@ -6,10 +6,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_ui_discord import DISCORD_V2_DPY27, render_static
-from squid_ui_discord import (
-    V2_LIMITS as LIMITS,
-)
 from squid_ui import scene
 from squid_ui.errors import LayoutDegradedError
 from squid_ui.planning import (
@@ -20,8 +16,8 @@ from squid_ui.planning import (
 from squid_ui.planning.layout_measurement.model import MeasuredPanel, MeasuredText
 from squid_ui.planning.navigation import NavigationContext, default_nav
 from squid_ui.primitives import (
-    ActionGroup,
     Alt,
+    ControlGroup,
     Fidelity,
     Lines,
     LinkButton,
@@ -37,6 +33,10 @@ from squid_ui.primitives import (
     Variants,
 )
 from squid_ui.scene.model import PlanResult
+from squid_ui_discord import DISCORD_V2_DPY27, render_static
+from squid_ui_discord import (
+    V2_LIMITS as LIMITS,
+)
 
 
 def _rendered(solved) -> str:
@@ -337,13 +337,13 @@ def test_a_bare_ladder_plans_to_its_first_rung() -> None:
 
 
 def test_a_rung_may_lower_to_several_nodes() -> None:
-    """An ActionGroup rung becomes one Row per five buttons, spliced without a wrapper."""
+    """An ControlGroup rung becomes one Row per five buttons, spliced without a wrapper."""
     buttons = tuple(LinkButton(f"b{index}", "https://e.invalid") for index in range(8))
 
     async def choose(event) -> None: ...
 
     ladder = Variants.of(
-        ActionGroup(buttons),
+        ControlGroup(buttons),
         SelectMenu(tuple(Option(f"b{index}", str(index)) for index in range(8)), choose, key="k"),
     )
     document = plan([ladder], target=DISCORD_V2_DPY27).scene

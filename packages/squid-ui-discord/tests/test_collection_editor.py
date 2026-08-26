@@ -6,9 +6,9 @@ import discord
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.semantic import ActionControls, RoutedActionControl, Stack
 from squid_ui_discord import Everyone, Mount
 from squid_ui_discord.testing import commit_render, fake_interaction
-from squid_ui.semantic import Actions, RoutedAction, Stack
 
 
 def _form() -> sl.forms.FormSpec:
@@ -31,7 +31,7 @@ def _walk(node: object) -> Iterable[object]:
     if isinstance(node, Stack):
         for child in node.children:
             yield from _walk(child)
-    elif isinstance(node, Actions):
+    elif isinstance(node, ActionControls):
         yield from node.items
 
 
@@ -92,10 +92,12 @@ def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
 
     rendered = editor.build_component(initial=selected).render()
     add = next(
-        item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.add"
+        item for item in _walk(rendered) if isinstance(item, sl.semantic.ActionControl) and item.key == "collection.add"
     )
     remove = next(
-        item for item in _walk(rendered) if isinstance(item, sl.semantic.Action) and item.key == "collection.remove"
+        item
+        for item in _walk(rendered)
+        if isinstance(item, sl.semantic.ActionControl) and item.key == "collection.remove"
     )
     assert not add.available
     assert not remove.available
@@ -151,5 +153,5 @@ def test_custom_identity_and_routed_form_parity() -> None:
     rendered = sp.RouteDriver(route).render(editor, state)
 
     assert editor.form_for(state, "edit") is not None
-    assert any(isinstance(item, RoutedAction) and item.key == "collection.edit" for item in _walk(rendered))
+    assert any(isinstance(item, RoutedActionControl) and item.key == "collection.edit" for item in _walk(rendered))
     assert sp.TransitionRoute("edit", state, "input") in routes

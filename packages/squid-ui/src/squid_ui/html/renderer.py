@@ -56,7 +56,7 @@ class Renderer:
         self.css = css
         self.asset_resolver = asset_resolver
 
-    def draw(self, document: scene.Document, *, plan: PlanResult | None = None) -> str:
+    def draw(self, document: scene.Scene, *, plan: PlanResult | None = None) -> str:
         if document.protocol != scene.Codec.protocol:
             message = f"Renderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)

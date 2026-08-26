@@ -184,17 +184,17 @@ class MountInspector(sl.Component):
 
     # --- Controls -----------------------------------------------------------------------
 
-    def _controls(self, *, back: bool) -> sl.semantic.Actions:
-        controls: list[sl.semantic.Action] = []
+    def _controls(self, *, back: bool) -> sl.semantic.ActionControls:
+        controls: list[sl.semantic.ActionControl] = []
         if back:
-            controls.append(sl.action("Back", self._back, key="back"))
+            controls.append(sl.action_control("Back", self._back, key="back"))
         controls.extend(
             (
-                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.semantic.Emphasis.SUBTLE),
-                sl.action("Close", self._close, key="close", emphasis=sl.semantic.Emphasis.SUBTLE),
+                sl.action_control("Refresh", self._refresh, key="refresh", emphasis=sl.semantic.Emphasis.SUBTLE),
+                sl.action_control("Close", self._close, key="close", emphasis=sl.semantic.Emphasis.SUBTLE),
             )
         )
-        return sl.actions(*controls, key="controls")
+        return sl.action_controls(*controls, key="controls")
 
     async def _open(self, event: sl.ChoiceEvent) -> None:
         self.focus = event.selected[0]
@@ -314,14 +314,14 @@ class OperationalInspector(sl.Component):
             session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
             if session is not None:
                 confirmation = (
-                    sl.actions(
-                        sl.action("Confirm close", self._confirm_close_session, key="confirm-close"),
-                        sl.action("Cancel", self._cancel_close_session, key="cancel-close"),
+                    sl.action_controls(
+                        sl.action_control("Confirm close", self._confirm_close_session, key="confirm-close"),
+                        sl.action_control("Cancel", self._cancel_close_session, key="cancel-close"),
                         key="confirmation",
                     )
                     if self.confirming_session == session.id
-                    else sl.actions(
-                        sl.action("Close session", self._request_close_session, key="close-session"),
+                    else sl.action_controls(
+                        sl.action_control("Close session", self._request_close_session, key="close-session"),
                         key="session-actions",
                     )
                 )
@@ -418,17 +418,17 @@ class OperationalInspector(sl.Component):
             selection=sl.controlled((), self._select_section),
         )
 
-    def _controls(self, *, back: bool = False) -> sl.semantic.Actions:
-        controls: list[sl.semantic.Action] = []
+    def _controls(self, *, back: bool = False) -> sl.semantic.ActionControls:
+        controls: list[sl.semantic.ActionControl] = []
         if back:
-            controls.append(sl.action("Back", self._back, key="back"))
+            controls.append(sl.action_control("Back", self._back, key="back"))
         controls.extend(
             (
-                sl.action("Refresh", self._refresh, key="refresh", emphasis=sl.semantic.Emphasis.SUBTLE),
-                sl.action("Close", self._close, key="close", emphasis=sl.semantic.Emphasis.SUBTLE),
+                sl.action_control("Refresh", self._refresh, key="refresh", emphasis=sl.semantic.Emphasis.SUBTLE),
+                sl.action_control("Close", self._close, key="close", emphasis=sl.semantic.Emphasis.SUBTLE),
             )
         )
-        return sl.actions(*controls, key="controls")
+        return sl.action_controls(*controls, key="controls")
 
     async def _select_section(self, event: sl.ChoiceEvent) -> None:
         self.section = event.selected[0]

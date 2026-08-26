@@ -12,29 +12,6 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Protocol
 
-from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.factories import action, action_group
-from squid_ui.interactions import ActionEvent
-from squid_ui.runtime.reactivity import (
-    ActionCommit,
-    ActionContext,
-    ActionPurpose,
-    TransactionParticipant,
-    CellPatchSet,
-    ConditionalCellPatch,
-    FrameworkIntegrityError,
-    FreshActionError,
-    ReactiveConflictError,
-    TransactionView,
-    apply_conditional_patches,
-    apply_local_overwrite_patches,
-    fresh_action_transaction,
-    has_action_hook,
-    enlist,
-    on_action_commit,
-)
-from squid_ui.semantic import ActionGroup
-from squid_ui.text import TextLike
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
     CausalRef,
@@ -46,6 +23,29 @@ from squid_reactivity.actions import (
     emit_causal_event,
 )
 from squid_reactivity.operations import OperationContext
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.factories import action_control, control_group
+from squid_ui.interactions import ActionEvent
+from squid_ui.runtime.reactivity import (
+    ActionCommit,
+    ActionContext,
+    ActionPurpose,
+    CellPatchSet,
+    ConditionalCellPatch,
+    FrameworkIntegrityError,
+    FreshActionError,
+    ReactiveConflictError,
+    TransactionParticipant,
+    TransactionView,
+    apply_conditional_patches,
+    apply_local_overwrite_patches,
+    enlist,
+    fresh_action_transaction,
+    has_action_hook,
+    on_action_commit,
+)
+from squid_ui.semantic import ControlGroup
+from squid_ui.text import TextLike
 
 logger = logging.getLogger(__name__)
 
@@ -896,7 +896,7 @@ def history(*, limit: int = 20, compensation_outbox: CompensationOutbox | None =
     return _HistoryField(limit, compensation_outbox)  # type: ignore[bad-return]
 
 
-def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DEFAULT_CHROME) -> ActionGroup:
+def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DEFAULT_CHROME) -> ControlGroup:
     """Build ordinary controls for the history's current LIFO entries."""
 
     async def undo(event: ActionEvent) -> None:
@@ -905,9 +905,9 @@ def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DE
     async def redo(event: ActionEvent) -> None:
         await stack.redo()
 
-    return action_group(
-        action(chrome.undo, undo, key=f"{key}.undo", available=stack.can_undo),
-        action(chrome.redo, redo, key=f"{key}.redo", available=stack.can_redo),
+    return control_group(
+        action_control(chrome.undo, undo, key=f"{key}.undo", available=stack.can_undo),
+        action_control(chrome.redo, redo, key=f"{key}.redo", available=stack.can_redo),
         key=key,
     )
 

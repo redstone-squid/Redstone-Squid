@@ -8,6 +8,16 @@ from datetime import UTC, datetime
 import anyio
 import pytest
 
+from squid_reactivity import (
+    ActionLedger,
+    ChangeReport,
+    OperationEventSnapshot,
+    TransactionContribution,
+    add_action_result_sink,
+    enlist,
+    on_action_commit,
+)
+from squid_reactivity.operations import OperationContext
 from squid_ui import Component, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import (
@@ -31,17 +41,7 @@ from squid_ui.runtime import (
     inspect_cells,
     transaction,
 )
-from squid_ui.semantic import Action
-from squid_reactivity import (
-    ActionLedger,
-    ChangeReport,
-    OperationEventSnapshot,
-    TransactionContribution,
-    add_action_result_sink,
-    enlist,
-    on_action_commit,
-)
-from squid_reactivity.operations import OperationContext
+from squid_ui.semantic import ActionControl
 
 
 class Workspace(SharedState[str]):
@@ -85,10 +85,10 @@ def panel() -> tuple[Panel, Workspace]:
     return subject, workspace
 
 
-def controls(stack: History) -> tuple[Action, Action]:
-    undo, redo = history_actions(stack).actions
-    assert isinstance(undo, Action)
-    assert isinstance(redo, Action)
+def controls(stack: History) -> tuple[ActionControl, ActionControl]:
+    undo, redo = history_actions(stack).controls
+    assert isinstance(undo, ActionControl)
+    assert isinstance(redo, ActionControl)
     return undo, redo
 
 

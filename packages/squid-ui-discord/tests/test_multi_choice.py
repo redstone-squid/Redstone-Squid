@@ -6,9 +6,17 @@ import discord
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui.semantic import (
+    ActionControls,
+    Choices,
+    FallbackContent,
+    FormTrigger,
+    RoutedActionControl,
+    RoutedChoices,
+    Stack,
+)
 from squid_ui_discord import Everyone, Mount
 from squid_ui_discord.testing import commit_render, fake_interaction
-from squid_ui.semantic import Actions, Choices, FallbackContent, FormTrigger, RoutedAction, RoutedChoices, Stack
 
 
 def _options(prefix: str, count: int) -> tuple[sl.semantic.Choice, ...]:
@@ -24,7 +32,7 @@ def _walk(node: object) -> Iterable[object]:
         yield from _walk(node.primary)
         for alternate in node.alternates:
             yield from _walk(alternate)
-    elif isinstance(node, Actions):
+    elif isinstance(node, ActionControls):
         yield from node.items
 
 
@@ -75,7 +83,7 @@ def test_cardinality_violation_blocks_apply_and_reduces_other_window_capacity() 
     component = pattern.build_component(initial=invalid)
     rendered = component.render()
     apply = next(
-        node for node in _walk(rendered) if isinstance(node, sl.semantic.Action) and node.key == "choices.apply"
+        node for node in _walk(rendered) if isinstance(node, sl.semantic.ActionControl) and node.key == "choices.apply"
     )
     assert not apply.available
     assert pattern.errors(invalid) == ("Select no more than 3 options.",)
@@ -156,7 +164,7 @@ def test_router_shell_encodes_page_and_apply_state_and_uses_input_for_selection(
     staged = sp.MultiChoiceState(("role-0",), (), ())
     routes.clear()
     rendered = sp.RouteDriver(route).render(pattern, staged)
-    assert any(isinstance(node, RoutedAction) and node.key == "choices.apply" for node in _walk(rendered))
+    assert any(isinstance(node, RoutedActionControl) and node.key == "choices.apply" for node in _walk(rendered))
     apply = next(request for request in routes if request.action == "apply")
     assert apply == sp.TransitionRoute("apply", sp.MultiChoiceState(("role-0",), ("role-0",), ()), "next")
 
@@ -181,7 +189,7 @@ async def test_immediate_policy_commits_valid_changes_without_apply() -> None:
     assert panel.machine_state == sp.MultiChoiceState(("role-1",), ("role-1",))
     assert commits == [("role-1",)]
     assert not any(
-        isinstance(node, sl.semantic.Action) and node.key == "choices.apply" for node in _walk(panel.render())
+        isinstance(node, sl.semantic.ActionControl) and node.key == "choices.apply" for node in _walk(panel.render())
     )
 
 

@@ -11,6 +11,9 @@ import discord
 import pytest
 
 import squid_ui as sl
+from squid_ui import Component
+from squid_ui.interactions import ActionEvent
+from squid_ui.semantic import ActionControl, ActionControls, Heading, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Mount, Owner
 from squid_ui_discord.mount import ClassicMountedView, MountedView
 from squid_ui_discord.presentation import DiscordMode
@@ -21,9 +24,6 @@ from squid_ui_discord.testing import (
     fake_interaction,
     fake_message,
 )
-from squid_ui import Component
-from squid_ui.interactions import ActionEvent
-from squid_ui.semantic import Action, Actions, Heading, Paragraph
 
 TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY27, id="classic")]
 
@@ -38,7 +38,7 @@ class Screen(Component):
         return [
             Heading("Piston door"),
             Paragraph(f"pressed {self.presses}"),
-            Actions((Action("press", "Press", press),), key="controls"),
+            ActionControls((ActionControl("press", "Press", press),), key="controls"),
         ]
 
 

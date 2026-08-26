@@ -5,16 +5,16 @@ import re
 import discord
 import pytest
 
-from squid_ui_discord import DISCORD_V1_DPY27, classic
-from squid_ui_discord.classic_renderer import ClassicRenderer, audit_classic_payload
 from squid_ui import scene
 from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.limits import CLASSIC_LIMITS
-from squid_ui.semantic import Actions, Link, Note, Paragraph
+from squid_ui.semantic import ActionControls, Link, Note, Paragraph
+from squid_ui_discord import DISCORD_V1_DPY27, classic
+from squid_ui_discord.classic_renderer import ClassicRenderer, audit_classic_payload
 
 
-def _document(body: scene.ClassicMessage) -> scene.Document[scene.ClassicMessage]:
-    return scene.Document(scene.Codec.protocol, "discord.components-v1", 1, body)
+def _document(body: scene.ClassicMessage) -> scene.Scene[scene.ClassicMessage]:
+    return scene.Scene(scene.Codec.protocol, "discord.components-v1", 1, body)
 
 
 def link(label: str = "Docs") -> scene.Link:
@@ -32,7 +32,7 @@ class TestDrawing:
     def test_controls_become_a_real_view_with_explicit_rows(self) -> None:
         """Not a `LayoutView`: an ActionRow-only one would still flag the message V2."""
         presentation = classic.render_static(
-            [Paragraph("hi"), Actions((Link("d", "Docs", "https://example.invalid"),), key="k")]
+            [Paragraph("hi"), ActionControls((Link("d", "Docs", "https://example.invalid"),), key="k")]
         )
         view = presentation.view
 
@@ -76,13 +76,13 @@ class TestMalformedScenes:
             ClassicRenderer().draw(_document(scene.ClassicMessage(rows=(scene.ClassicRow(()),))))
 
     def test_a_components_v2_body_is_refused_by_name(self) -> None:
-        wrong = scene.Document(scene.Codec.protocol, "discord.components-v1", 1, scene.ComponentsV2((scene.Text("x"),)))
+        wrong = scene.Scene(scene.Codec.protocol, "discord.components-v1", 1, scene.ComponentsV2((scene.Text("x"),)))
 
         with pytest.raises(DrawInvariantError, match="cannot draw a ComponentsV2 body"):
             ClassicRenderer().draw(wrong)  # pyrefly: ignore[bad-argument-type]
 
     def test_the_v2_target_id_is_refused(self) -> None:
-        wrong = scene.Document(scene.Codec.protocol, "discord.components-v2", 1, scene.ClassicMessage())
+        wrong = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, scene.ClassicMessage())
 
         with pytest.raises(DrawInvariantError, match=re.escape("cannot draw target 'discord.components-v2'")):
             ClassicRenderer().draw(wrong)

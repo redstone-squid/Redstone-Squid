@@ -11,7 +11,7 @@ from squid_ui.scene.model import PlanReport
 
 @dataclass(frozen=True, slots=True)
 class CachedPlan:
-    scene: scene.Document[Any]
+    scene: scene.Scene[Any]
     report: PlanReport
     session_updates: tuple[SessionUpdate, ...] = ()
     """Replayed on a hit: the session is part of the key, so these stay correct."""

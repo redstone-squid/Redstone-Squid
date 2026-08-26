@@ -17,7 +17,7 @@ lives beside the code that answers it.
 
 Names are checked against the route when the handler registers, so a typo is an import
 error rather than a click that fails in production. The interaction stays raw and is a
-deliberate asymmetry with `Action`: a routed control's state lives in the message and the
+deliberate asymmetry with `ActionControl`: a routed control's state lives in the message and the
 store, so handlers need `interaction.message`, `interaction.guild` and the client — facts
 no portable event can carry. The *node* stays portable; only dispatch is Discord's, which
 is why this lives here rather than beside the semantic layer.
@@ -44,12 +44,12 @@ from typing import Any, Concatenate, Self, cast, override
 import anyio
 import discord
 
-from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
-from squid_ui_discord.mount import ErrorHook
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceResult, TraceStatus
 from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
+from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
+from squid_ui_discord.mount import ErrorHook
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()

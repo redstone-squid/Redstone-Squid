@@ -33,7 +33,6 @@ from squid_ui.planning.navigation import PlannedNav, materialized_navigation_sta
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
-    ActionGroup,
     Boundary,
     Break,
     Budget,
@@ -41,6 +40,7 @@ from squid_ui.primitives.nodes import (
     Card,
     CardMedia,
     Content,
+    ControlGroup,
     EntitySelect,
     Extension,
     File,
@@ -73,7 +73,7 @@ def _lower(nodes: Sequence[Node], target: Target, limits: ClassicLimits) -> tupl
     lowered: list[Node] = []
     for node in nodes:
         match node:
-            case ActionGroup(items=items):
+            case ControlGroup(items=items):
                 lowered.extend(
                     Row(tuple(items[start : start + limits.components.row_buttons]))
                     for start in range(0, len(items), limits.components.row_buttons)

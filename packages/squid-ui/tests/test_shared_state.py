@@ -267,7 +267,7 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
     assert seen == [CellAddress(draft, "body")]
 
 
-# --- Actions ----------------------------------------------------------------------------
+# --- ActionControls ----------------------------------------------------------------------------
 
 
 async def test_writes_stage_and_publish_together(bus: LocalTopicBus, here: Member) -> None:

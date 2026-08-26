@@ -19,7 +19,6 @@ from squid_ui.primitives.constraints import (
     alts,
 )
 from squid_ui.primitives.nodes import (
-    ActionGroup,
     Boundary,
     Break,
     Budget,
@@ -32,6 +31,7 @@ from squid_ui.primitives.nodes import (
     CardText,
     Code,
     Content,
+    ControlGroup,
     EntitySelect,
     Extension,
     Fidelity,
@@ -66,7 +66,6 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import ActionStyle, Color
 
 __all__ = [
-    "ActionGroup",
     "ActionStyle",
     "Alt",
     "Alts",
@@ -84,6 +83,7 @@ __all__ = [
     "Color",
     "Condense",
     "Content",
+    "ControlGroup",
     "Drop",
     "Emoji",
     "EmojiLike",

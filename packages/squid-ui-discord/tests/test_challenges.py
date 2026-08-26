@@ -9,11 +9,6 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui_discord import Everyone, Mount, delivery
-from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.mount import ChallengeRequest
-from squid_ui_discord.sessions import SessionRegistry
-from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_ui import ActionEvent, Component, state
 from squid_ui import form as sl_form
 from squid_ui.forms import FormSpec, TextField
@@ -21,6 +16,11 @@ from squid_ui.guards import Challenge, ChallengeResolver, GuardDecision, GuardLe
 from squid_ui.interactions import ActionMode
 from squid_ui.profiling import DispatchDisposition, MemoryProfiler, OperationKind
 from squid_ui.runtime.reactivity import readonly_transaction, transaction
+from squid_ui_discord import Everyone, Mount, delivery
+from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
+from squid_ui_discord.mount import ChallengeRequest
+from squid_ui_discord.sessions import SessionRegistry
+from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
 class _Panel(Component):
@@ -33,7 +33,9 @@ class _Panel(Component):
         self.mode = mode
 
     def render(self):
-        return sl.actions(sl.action("Go", self.go, key="go", guard=self.guard, mode=self.mode), key="panel")
+        return sl.action_controls(
+            sl.action_control("Go", self.go, key="go", guard=self.guard, mode=self.mode), key="panel"
+        )
 
     async def go(self, event: ActionEvent) -> None:
         self.count += 1
@@ -196,9 +198,9 @@ class TestResuming:
 
             def render(self):
                 guard = sp.guards.confirm("Sure?")
-                return sl.actions(
-                    sl.action("Go", self.go, key="go", guard=guard),
-                    sl.action("Stop", self.stop, key="stop", guard=guard),
+                return sl.action_controls(
+                    sl.action_control("Go", self.go, key="go", guard=guard),
+                    sl.action_control("Stop", self.stop, key="stop", guard=guard),
                     key="panel",
                 )
 
@@ -283,8 +285,8 @@ class TestResuming:
                 self.reads: list[str] = []
 
             def render(self):
-                return sl.actions(
-                    sl.action(
+                return sl.action_controls(
+                    sl.action_control(
                         "Go",
                         self.go,
                         key="go",

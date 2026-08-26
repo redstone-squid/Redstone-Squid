@@ -6,25 +6,25 @@ from types import MappingProxyType
 from typing import Any, cast
 
 from squid_ui.document import Document
-from squid_ui.factories import actions, heading, paragraph, stack, status
+from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
 from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import (
-    Action,
-    ActionDisplay,
+    ActionControl,
     Choice,
     Choices,
+    ControlDisplay,
     Emphasis,
     FormTrigger,
     LayoutNode,
-    RoutedAction,
+    RoutedActionControl,
     RoutedChoices,
     Tone,
 )
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, display_text, normalize_content, require_key
 from squid_ui_widgets.commit import CommitMode
-from squid_ui_widgets.drivers import ComponentDriver, StateMachine, MachineControls, TransitionEvent
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls, StateMachine, TransitionEvent
 
 type EditorValues = Mapping[str, object]
 type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
@@ -386,10 +386,10 @@ class Editor:
                     heading(self.title),
                     heading(section.label, level=3),
                     *self._nodes(nested),
-                    actions(
-                        controls.action(controls.chrome.back, "back", key=f"{self.key}.back"),
+                    action_controls(
+                        controls.action_control(controls.chrome.back, "back", key=f"{self.key}.back"),
                         key=f"{self.key}.workspace",
-                        display=ActionDisplay.INDIVIDUAL,
+                        display=ControlDisplay.INDIVIDUAL,
                     ),
                 )
 
@@ -415,7 +415,7 @@ class Editor:
                     label=controls.chrome.edit,
                 )
             else:
-                edit = controls.action(
+                edit = controls.action_control(
                     controls.chrome.edit,
                     f"edit:{section.key}",
                     key=f"{self.key}.{section.key}",
@@ -424,22 +424,24 @@ class Editor:
                 stack(
                     heading(section.label, level=3),
                     paragraph(section.summary(value)),
-                    edit if isinstance(edit, FormTrigger) else actions(edit, key=f"{self.key}.{section.key}.actions"),
+                    edit
+                    if isinstance(edit, FormTrigger)
+                    else action_controls(edit, key=f"{self.key}.{section.key}.actions"),
                 )
             )
 
         issues = self.issues(state)
         dirty = self.dirty_sections(state)
         commit = (
-            actions(
-                controls.action(
+            action_controls(
+                controls.action_control(
                     self.commit_label or controls.chrome.save,
                     "save",
                     key=f"{self.key}.save",
                     available=not issues,
                 ),
                 key=f"{self.key}.commit",
-                display=ActionDisplay.INDIVIDUAL,
+                display=ControlDisplay.INDIVIDUAL,
             )
             if self.commit is CommitMode.EXPLICIT and dirty
             else None
@@ -481,7 +483,7 @@ class _NestedControls[ParentStateT, ChildStateT]:
     def content(self, content: Sequence[Any], *, prefix: str) -> tuple[LayoutNode, ...]:
         return self.parent.content(content, prefix=self._key(prefix))
 
-    def action(
+    def action_control(
         self,
         label: TextLike,
         action_name: str,
@@ -490,8 +492,8 @@ class _NestedControls[ParentStateT, ChildStateT]:
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> Action | RoutedAction:
-        return self.parent.action(
+    ) -> ActionControl | RoutedActionControl:
+        return self.parent.action_control(
             label,
             self._action(action_name),
             key=self._key(key),
@@ -532,7 +534,7 @@ class _NestedControls[ParentStateT, ChildStateT]:
         label: TextLike,
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> FormTrigger | RoutedAction:
+    ) -> FormTrigger | RoutedActionControl:
         return self.parent.form(
             spec,
             self._action(action_name),

@@ -25,8 +25,8 @@ from squid_ui.primitives import (
 from squid_ui.runtime import PresentationState
 from squid_ui.scene.model import PlanReport
 from squid_ui.semantic import (
-    Action,
-    Actions,
+    ActionControl,
+    ActionControls,
     Choice,
     Choices,
     Heading,
@@ -107,10 +107,16 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     cache = PlanCache()
     session = PresentationState()
     first = plan(
-        Actions((Action("run", "Run", _first),), key="tools"), target=DISCORD_V2_DPY27, session=session, cache=cache
+        ActionControls((ActionControl("run", "Run", _first),), key="tools"),
+        target=DISCORD_V2_DPY27,
+        session=session,
+        cache=cache,
     )
     second = plan(
-        Actions((Action("run", "Run", _second),), key="tools"), target=DISCORD_V2_DPY27, session=session, cache=cache
+        ActionControls((ActionControl("run", "Run", _second),), key="tools"),
+        target=DISCORD_V2_DPY27,
+        session=session,
+        cache=cache,
     )
 
     assert not first.metrics.cache_hit
@@ -136,8 +142,8 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
     def document(handler):
         return (
             *(Paragraph(f"component {index}") for index in range(35)),
-            Actions(
-                tuple(Action(f"run.{index}", f"Run {index}", handler) for index in range(5)),
+            ActionControls(
+                tuple(ActionControl(f"run.{index}", f"Run {index}", handler) for index in range(5)),
                 key="tools",
             ),
         )
@@ -223,7 +229,7 @@ def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> Non
             *(Paragraph(f"component {index}") for index in range(35)),
             fallback(
                 Stack(tuple(Paragraph(f"primary {index}") for index in range(10))),
-                Actions((Action("run", "Run", handler),), key="fallback-actions"),
+                ActionControls((ActionControl("run", "Run", handler),), key="fallback-actions"),
             ),
         )
 
@@ -243,7 +249,7 @@ def _never_measured(*_args, **_kwargs):
 
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     cache = PlanCache(capacity=2)
-    document = scene.Document(scene.Codec.protocol, "discord.components-v2", 1, scene.ComponentsV2(()))
+    document = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, scene.ComponentsV2(()))
     cached = CachedPlan(document, PlanReport())
 
     cache.put("first", cached)
@@ -297,7 +303,7 @@ def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
 def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
     import squid_ui.planning.planner as planner_module
 
-    document = Actions((Action("run", "Run", _first),), key="tools")
+    document = ActionControls((ActionControl("run", "Run", _first),), key="tools")
     session = PresentationState()
     memo = PlanMemo()
     first = plan(document, target=DISCORD_V2_DPY27, session=session, cache=PlanCache(), memo=memo)
