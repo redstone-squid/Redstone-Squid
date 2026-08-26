@@ -1,4 +1,4 @@
-"""A keyed tab pattern with component and routed shells."""
+"""A keyed tab machine with component and routed shells."""
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -8,7 +8,7 @@ from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ActionDisplay
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
-from squid_ui_widgets.shells import ComponentShell, PatternControls, PatternHandler
+from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionHandler
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -34,7 +34,7 @@ class TabsState:
 
 
 class Tabs:
-    """A pure keyed tab pattern with generic component and router shells."""
+    """A pure keyed tab machine with generic component and router shells."""
 
     def __init__(
         self,
@@ -67,10 +67,10 @@ class Tabs:
         self,
         *,
         initial: TabsState | None = None,
-        on_change: PatternHandler[TabsState] | None = None,
-    ) -> ComponentShell[TabsState]:
+        on_change: TransitionHandler[TabsState] | None = None,
+    ) -> ComponentDriver[TabsState]:
         """Build the in-memory shell for this tab set."""
-        return ComponentShell(self, initial=initial, on_change=on_change)
+        return ComponentDriver(self, initial=initial, on_change=on_change)
 
     def transition(
         self,
@@ -88,7 +88,7 @@ class Tabs:
             return state
         return TabsState(selected)
 
-    def render(self, state: TabsState, controls: PatternControls[TabsState]) -> RenderResult:
+    def render(self, state: TabsState, controls: MachineControls[TabsState]) -> RenderResult:
         current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
         if len(self.tabs) <= 5:
             selector = actions(

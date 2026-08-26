@@ -55,7 +55,7 @@ class AccountPanel(sl.Component):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sp.ComponentShell[sp.EditorState] | None = sl.state(None, persist=False, opaque=True)
+    _profile_editor: sp.ComponentDriver[sp.EditorState] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -238,7 +238,7 @@ class AccountPanel(sl.Component):
 
         await self._with_consent(event, apply)
 
-    def _build_profile_editor(self) -> sp.ComponentShell[sp.EditorState]:
+    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState]:
         profile_section = sp.EditorSection.from_form(
             "profile",
             t(self.locale, _("Profile")),
@@ -352,7 +352,7 @@ class AccountPanel(sl.Component):
 
     async def _profile_committed(
         self,
-        event: sp.PatternEvent[sp.EditorState],
+        event: sp.TransitionEvent[sp.EditorState],
         values: sp.EditorValues,
         _changed: frozenset[str],
     ) -> None:

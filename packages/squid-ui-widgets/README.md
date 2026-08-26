@@ -1,6 +1,6 @@
 # squid-ui-widgets
 
-Reusable application patterns built on [`squid-ui`](../squid-ui/README.md): the
+Reusable application machines built on [`squid-ui`](../squid-ui/README.md): the
 state machines behind a wizard, a browser, an editor, a lookup, a ranked list, a vote.
 
 `squid-ui` gives you the words and the compiler. This package is a set of useful
@@ -11,7 +11,7 @@ import squid_ui as sl
 import squid_ui_widgets as sp
 
 
-async def chosen(event: sp.PatternEvent[sp.DecisionState]) -> None:
+async def chosen(event: sp.TransitionEvent[sp.DecisionState]) -> None:
     await event.source.finish()
 
 
@@ -27,16 +27,16 @@ panel = sp.confirm("Delete this build?", on_confirm=chosen)
 | `CollectionEditor` | add, remove and reorder a typed collection |
 | `Decision`, `confirm` | a one-way choice, and the two-option shell over it |
 | `Editor` | sectioned form editing with unsaved-change tracking |
-| `Lookup` | search a source and pick from it |
+| `SearchPicker` | search a source and pick from it |
 | `Menu`, `Tabs` | routed navigation between panels |
-| `MultiChoicePanel` | grouped multi-select with a commit policy |
+| `MultiChoice` | grouped multi-select with a commit policy |
 | `RankedList`, `SourceRankedList` | ordered lists, in memory or paged from a source |
 | `Wizard` | multi-step flow with a review step |
-| `Pattern`, `ComponentShell`, `RouterShell` | the shells the rest are composed from |
+| `StateMachine`, `ComponentDriver`, `RouteDriver` | the shells the rest are composed from |
 
 ## Frontend-neutral, deliberately
 
-Nothing here imports `discord.py`, `squid-ui-discord`, or a store backend — the patterns are state
+Nothing here imports `discord.py`, `squid-ui-discord`, or a store backend — the machines are state
 machines that render portable documents, and any target `squid-ui` can plan for can display
 them. `tests/architecture/test_boundaries.py::test_patterns_package_is_transport_free` is what
 keeps that true.

@@ -117,8 +117,8 @@ def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
     )
 
     component = panel._build_profile_editor()
-    editor = cast(sp.Editor, component.pattern)
-    values = editor.values(component.pattern_state)
+    editor = cast(sp.Editor, component.machine)
+    values = editor.values(component.machine_state)
 
     assert values["profile"] == {"display_name": "Builder", "pronouns": None, "bio": "Hello"}
     assert tuple(dict(link) for link in cast(tuple, values["links"])) == (
@@ -140,9 +140,9 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     panel._refresh = AsyncMock()  # type: ignore[method-assign]
     component = panel._build_profile_editor()
     panel._profile_editor = component
-    editor = cast(sp.Editor, component.pattern)
+    editor = cast(sp.Editor, component.machine)
     staged = editor.transition(
-        component.pattern_state,
+        component.machine_state,
         "submit:profile",
         submitted={"display_name": "Builder", "pronouns": None, "bio": "Hello"},
     )
@@ -150,7 +150,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     source = SimpleNamespace(notice=AsyncMock())
 
     assert component.on_change is not None
-    await component.on_change(sp.PatternEvent(cast(Any, source), "save", staged, committed))
+    await component.on_change(sp.TransitionEvent(cast(Any, source), "save", staged, committed))
 
     cast(AsyncMock, panel._accounts.update_profile).assert_awaited_once()
     assert panel._profile_editor is None

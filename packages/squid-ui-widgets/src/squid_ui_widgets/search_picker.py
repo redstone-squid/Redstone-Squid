@@ -17,8 +17,8 @@ from squid_ui.sources import LoadedWindow, WindowLoader, WindowSource, window_fo
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import require_key
 
-type LookupSearch[ItemT] = Callable[[str], WindowSource[ItemT]]
-type LookupPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]
+type SearchProvider[ItemT] = Callable[[str], WindowSource[ItemT]]
+type SearchPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,7 +35,7 @@ class _LookupWindow[ItemT]:
     loaded: LoadedWindow[ItemT]
 
 
-class Lookup[ItemT](Component):
+class SearchPicker[ItemT](Component):
     """Search a windowed domain source and retain the resolved items a reader picks."""
 
     query: str | None = state(None)
@@ -44,7 +44,7 @@ class Lookup[ItemT](Component):
 
     def __init__(
         self,
-        search: LookupSearch[ItemT],
+        search: SearchProvider[ItemT],
         *,
         key: str = "lookup",
         identity: Callable[[ItemT], str],
@@ -53,26 +53,26 @@ class Lookup[ItemT](Component):
         minimum: int = 0,
         maximum: int = 1,
         picked: Sequence[ItemT] = (),
-        on_pick: LookupPickHandler[ItemT],
+        on_pick: SearchPickHandler[ItemT],
         page_size: int = 10,
         loading: TextLike = "Loading…",
         load_failed: TextLike = "Could not load results.",
         retry: TextLike = "Retry",
     ) -> None:
-        self.key = require_key(key, name="Lookup.key")
+        self.key = require_key(key, name="SearchPicker.key")
         if minimum < 0 or maximum < 1 or minimum > maximum:
-            message = "Lookup bounds must satisfy 0 <= minimum <= maximum and maximum >= 1"
+            message = "SearchPicker bounds must satisfy 0 <= minimum <= maximum and maximum >= 1"
             raise ValueError(message)
         if not 1 <= page_size <= 25:
-            message = "Lookup.page_size must be between 1 and 25"
+            message = "SearchPicker.page_size must be between 1 and 25"
             raise ValueError(message)
         initial = tuple(picked)
         identities = tuple(identity(item) for item in initial)
         if len(initial) > maximum:
-            message = "Lookup.picked exceeds maximum"
+            message = "SearchPicker.picked exceeds maximum"
             raise ValueError(message)
         if len(set(identities)) != len(identities):
-            message = "Lookup.picked identities must be unique"
+            message = "SearchPicker.picked identities must be unique"
             raise ValueError(message)
         self.search = search
         self.identity = identity
@@ -91,7 +91,7 @@ class Lookup[ItemT](Component):
     async def results(self) -> _LookupWindow[ItemT]:
         query = self.query
         if query is None:
-            message = "Lookup.results was observed before a query was submitted"
+            message = "SearchPicker.results was observed before a query was submitted"
             raise LayoutInvariantError(message)
         # Read before the branch, not inside it: the request selects the operation on every
         # run, so a run that happens not to consult it still depends on it.
@@ -283,4 +283,4 @@ class Lookup[ItemT](Component):
         )
 
 
-__all__ = ["Lookup", "LookupPickHandler", "LookupSearch"]
+__all__ = ["SearchPicker", "SearchPickHandler", "SearchProvider"]

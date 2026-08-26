@@ -1,4 +1,4 @@
-"""Form and nested-pattern sections under one editor commit boundary."""
+"""Form and nested-machine sections under one editor commit boundary."""
 
 from collections.abc import Iterable, Mapping
 from typing import Any, cast
@@ -53,7 +53,7 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
     commits: list[tuple[sp.EditorValues, frozenset[str]]] = []
 
     async def committed(
-        _event: sp.PatternEvent[sp.EditorState],
+        _event: sp.TransitionEvent[sp.EditorState],
         values: sp.EditorValues,
         changed: frozenset[str],
     ) -> None:
@@ -65,14 +65,14 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
         on_commit=committed,
     )
     state = editor.transition(
-        component.pattern_state,
+        component.machine_state,
         "submit:profile",
         submitted={"name": "New", "bio": None},
     )
-    previous = component.pattern_state
-    component.pattern_state = state
+    previous = component.machine_state
+    component.machine_state = state
     assert component.on_change is not None
-    await component.on_change(sp.PatternEvent(cast(Any, object()), "submit:profile", previous, state))
+    await component.on_change(sp.TransitionEvent(cast(Any, object()), "submit:profile", previous, state))
 
     assert commits[-1][0]["profile"] == {"name": "New", "bio": None}
     assert commits[-1][1] == frozenset({"profile"})
@@ -143,13 +143,13 @@ def test_nested_forms_keep_router_shell_parity() -> None:
     _collection, section = _collection_section()
     editor = sp.Editor("Account", (section,))
     state = editor.transition(editor.initial_state, "edit:links")
-    routes: list[sp.PatternRoute[sp.EditorState]] = []
+    routes: list[sp.TransitionRoute[sp.EditorState]] = []
 
-    def route(request: sp.PatternRoute[sp.EditorState]) -> str:
+    def route(request: sp.TransitionRoute[sp.EditorState]) -> str:
         routes.append(request)
         return f"editor:{len(routes)}"
 
-    rendered = sp.RouterShell(route).render(editor, state)
+    rendered = sp.RouteDriver(route).render(editor, state)
 
     add = next(node for node in _walk(rendered) if isinstance(node, RoutedAction) and node.key.endswith("links.add"))
     assert add
