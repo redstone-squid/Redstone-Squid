@@ -1817,10 +1817,18 @@ class Observation:
     Held by strong reference for the same reason as `_Transaction.born`: an id must not be
     recycled onto something else while this render is still using it as a key.
     """
+    constructed: dict[int, object] = field(default_factory=dict)
+    """Objects whose construction began during this observation, including initialized ones.
+
+    ``born`` is the temporary write-guard exemption and therefore forgets an object when its
+    constructor returns. This set answers a different question: whether memoizing a render would
+    retain an object that the render contract currently reconstructs on every pass.
+    """
 
     def note_born(self, owner: object) -> None:
         """Exempt `owner`'s writes from the render guard until its own render() runs."""
         self.born[id(owner)] = owner
+        self.constructed[id(owner)] = owner
 
     def entering_own_render(self, owner: object) -> None:
         """`owner`'s own render() is starting: end its construction exemption.
@@ -1833,6 +1841,15 @@ class Observation:
     def exempts(self, owner: object) -> bool:
         """Whether `owner` is still within the construction window this render excuses."""
         return id(owner) in self.born
+
+    def current(self) -> bool:
+        """Whether every directly observed reactive source still yields the seen version.
+
+        Settling a computed here preserves its backdating contract: an upstream write that
+        recomputes to the same value leaves the computed's version unchanged and therefore does
+        not invalidate a cached pure projection.
+        """
+        return all(source.settle() == seen for source, seen in tuple(self.sources.items()))
 
     def addresses(self) -> tuple[Any, ...]:
         """Every addressed cell this run reached, deduplicated, in read order.
