@@ -1,4 +1,4 @@
-"""The two shells shared by every interactive pattern."""
+"""The two shells shared by every interactive machine."""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -27,7 +27,7 @@ from squid_ui_widgets._content import ContentItem
 
 
 @dataclass(frozen=True, slots=True)
-class PatternRoute[StateT]:
+class TransitionRoute[StateT]:
     """One routed interaction and the state its custom id must carry.
 
     ``phase="next"`` means a button's deterministic transition has already been
@@ -41,8 +41,8 @@ class PatternRoute[StateT]:
 
 
 @dataclass(frozen=True, slots=True)
-class PatternEvent[StateT]:
-    """A shell interaction after the pattern transition has been applied."""
+class TransitionEvent[StateT]:
+    """A shell interaction after the machine transition has been applied."""
 
     source: ActionEvent
     action: str
@@ -52,17 +52,17 @@ class PatternEvent[StateT]:
     submitted: Mapping[str, object] | None = None
 
 
-type PatternHandler[StateT] = Callable[[PatternEvent[StateT]], Awaitable[None]]
-type RouteBuilder[StateT] = Callable[[PatternRoute[StateT]], str]
+type TransitionHandler[StateT] = Callable[[TransitionEvent[StateT]], Awaitable[None]]
+type RouteEncoder[StateT] = Callable[[TransitionRoute[StateT]], str]
 
 
-class Pattern[StateT](Protocol):
+class StateMachine[StateT](Protocol):
     """A pure state machine that describes a tree through injected controls."""
 
     @property
     def initial_state(self) -> StateT: ...
 
-    def render(self, state: StateT, controls: PatternControls[StateT]) -> RenderResult: ...
+    def render(self, state: StateT, controls: MachineControls[StateT]) -> RenderResult: ...
 
     def transition(
         self,
@@ -74,8 +74,8 @@ class Pattern[StateT](Protocol):
     ) -> StateT: ...
 
 
-class PatternControls[StateT](Protocol):
-    """Control and content construction injected into a pure pattern render."""
+class MachineControls[StateT](Protocol):
+    """Control and content construction injected into a pure machine render."""
 
     @property
     def chrome(self) -> Chrome: ...
@@ -118,31 +118,31 @@ class PatternControls[StateT](Protocol):
     ) -> FormTrigger | RoutedAction: ...
 
 
-class ComponentShell[StateT](Component):
-    """Store pattern state in ``sl.state`` and inject closure-backed controls."""
+class ComponentDriver[StateT](Component):
+    """Store machine state in ``sl.state`` and inject closure-backed controls."""
 
-    # RouterShell is the restart boundary; a generic state dataclass has no honest JSON
+    # RouteDriver is the restart boundary; a generic state dataclass has no honest JSON
     # decoder for durable component restoration.
-    pattern_state: Any = state(persist=False)
+    machine_state: Any = state(persist=False)
 
     def __init__(
         self,
-        pattern: Pattern[StateT],
+        machine: StateMachine[StateT],
         *,
         initial: StateT | None = None,
-        on_change: PatternHandler[StateT] | None = None,
-        handlers: Mapping[str, PatternHandler[StateT]] | None = None,
+        on_change: TransitionHandler[StateT] | None = None,
+        handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
         finish_actions: Sequence[str] = (),
     ) -> None:
-        self.pattern = pattern
-        self.pattern_state = pattern.initial_state if initial is None else initial
+        self.machine = machine
+        self.machine_state = machine.initial_state if initial is None else initial
         self.on_change = on_change
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)
 
     def render(self) -> RenderResult:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
-        return self.pattern.render(self.pattern_state, _ComponentControls(self, chrome))
+        return self.machine.render(self.machine_state, _ComponentControls(self, chrome))
 
     async def _dispatch(
         self,
@@ -152,20 +152,20 @@ class ComponentShell[StateT](Component):
         values: tuple[str, ...] = (),
         submitted: Mapping[str, object] | None = None,
     ) -> None:
-        previous = self.pattern_state
-        current = self.pattern.transition(previous, action_name, values=values, submitted=submitted)
-        self.pattern_state = current
-        pattern_event = PatternEvent(event, action_name, previous, current, values, submitted)
+        previous = self.machine_state
+        current = self.machine.transition(previous, action_name, values=values, submitted=submitted)
+        self.machine_state = current
+        transition_event = TransitionEvent(event, action_name, previous, current, values, submitted)
         if self.on_change is not None:
-            await self.on_change(pattern_event)
+            await self.on_change(transition_event)
         if handler := self.handlers.get(action_name):
-            await handler(pattern_event)
+            await handler(transition_event)
         if action_name in self.finish_actions:
             await event.finish()
 
 
 class _ComponentControls[StateT]:
-    def __init__(self, owner: ComponentShell[StateT], chrome: Chrome) -> None:
+    def __init__(self, owner: ComponentDriver[StateT], chrome: Chrome) -> None:
         self.owner = owner
         self.chrome = chrome
 
@@ -237,22 +237,22 @@ class _ComponentControls[StateT]:
 
 
 @dataclass(frozen=True, slots=True)
-class RouterShell[StateT]:
-    """Inject route-backed controls into a stateless pattern render.
+class RouteDriver[StateT]:
+    """Inject route-backed controls into a stateless machine render.
 
-    A host route decodes ``PatternRoute.state``, calls :meth:`transition` when the
+    A host route decodes ``TransitionRoute.state``, calls :meth:`transition` when the
     interaction carries input, and replaces the whole message with a fresh render.
     """
 
-    route: RouteBuilder[StateT]
+    route: RouteEncoder[StateT]
     chrome: Chrome = DEFAULT_CHROME
 
-    def render(self, pattern: Pattern[StateT], state: StateT) -> RenderResult:
-        return pattern.render(state, _RoutedControls(pattern, state, self.route, self.chrome))
+    def render(self, machine: StateMachine[StateT], state: StateT) -> RenderResult:
+        return machine.render(state, _RoutedControls(machine, state, self.route, self.chrome))
 
     def transition(
         self,
-        pattern: Pattern[StateT],
+        machine: StateMachine[StateT],
         state: StateT,
         action_name: str,
         *,
@@ -260,18 +260,18 @@ class RouterShell[StateT]:
         submitted: Mapping[str, object] | None = None,
     ) -> StateT:
         """Apply input received by a routed select or form handler."""
-        return pattern.transition(state, action_name, values=values, submitted=submitted)
+        return machine.transition(state, action_name, values=values, submitted=submitted)
 
 
 class _RoutedControls[StateT]:
     def __init__(
         self,
-        pattern: Pattern[StateT],
+        machine: StateMachine[StateT],
         current: StateT,
-        route: RouteBuilder[StateT],
+        route: RouteEncoder[StateT],
         chrome: Chrome,
     ) -> None:
-        self.pattern = pattern
+        self.machine = machine
         self.current = current
         self.route = route
         self.chrome = chrome
@@ -280,7 +280,7 @@ class _RoutedControls[StateT]:
         del prefix
         if component := next((item for item in content if isinstance(item, Component)), None):
             message = (
-                f"a routed pattern cannot embed {type(component).__name__}; "
+                f"a routed machine cannot embed {type(component).__name__}; "
                 "render frontend-neutral content from route state instead"
             )
             raise TypeError(message)
@@ -296,8 +296,8 @@ class _RoutedControls[StateT]:
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> RoutedAction:
-        next_state = self.pattern.transition(self.current, action_name)
-        route_id = self.route(PatternRoute(action_name, next_state, "next"))
+        next_state = self.machine.transition(self.current, action_name)
+        route_id = self.route(TransitionRoute(action_name, next_state, "next"))
         return routed_action(label, route_id, key=key, tone=tone, emphasis=emphasis, available=available)
 
     def choices(
@@ -313,7 +313,7 @@ class _RoutedControls[StateT]:
         available: bool = True,
     ) -> RoutedChoices:
         del selected
-        route_id = self.route(PatternRoute(action_name, self.current, "input"))
+        route_id = self.route(TransitionRoute(action_name, self.current, "input"))
         return routed_choices(
             *entries,
             route_id=route_id,
@@ -335,5 +335,5 @@ class _RoutedControls[StateT]:
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> RoutedAction:
         del spec
-        route_id = self.route(PatternRoute(action_name, self.current, "input"))
+        route_id = self.route(TransitionRoute(action_name, self.current, "input"))
         return routed_action(label, route_id, key=key, tone=tone, emphasis=emphasis)

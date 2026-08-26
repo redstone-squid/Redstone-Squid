@@ -1,4 +1,4 @@
-"""Reusable, frontend-neutral state-machine patterns."""
+"""Reusable, frontend-neutral state-machine machines."""
 
 from squid_ui_widgets import guards
 from squid_ui_widgets.agreement import Agreement, AgreementParticipant, AgreementResolveHandler
@@ -20,12 +20,12 @@ from squid_ui_widgets.editor import (
     EditorValues,
 )
 from squid_ui_widgets.grid import GridCell
-from squid_ui_widgets.lookup import Lookup, LookupPickHandler, LookupSearch
+from squid_ui_widgets.search_picker import SearchPicker, SearchPickHandler, SearchProvider
 from squid_ui_widgets.menu import Menu, MenuEntry, MenuState
-from squid_ui_widgets.multichoice import (
+from squid_ui_widgets.multi_choice import (
     MultiChoiceCommitHandler,
     MultiChoiceGroup,
-    MultiChoicePanel,
+    MultiChoice,
     MultiChoiceState,
 )
 from squid_ui_widgets.ranked import RankedEntry, RankedList, RankedListState
@@ -38,15 +38,15 @@ from squid_ui_widgets.roster import (
     RosterStatus,
     place_roster,
 )
-from squid_ui_widgets.shells import (
-    ComponentShell,
-    Pattern,
-    PatternControls,
-    PatternEvent,
-    PatternHandler,
-    PatternRoute,
-    RouteBuilder,
-    RouterShell,
+from squid_ui_widgets.drivers import (
+    ComponentDriver,
+    StateMachine,
+    MachineControls,
+    TransitionEvent,
+    TransitionHandler,
+    TransitionRoute,
+    RouteEncoder,
+    RouteDriver,
 )
 from squid_ui_widgets.source_ranked import SourceRankedList
 from squid_ui_widgets.tabs import Tab, Tabs, TabsState
@@ -76,7 +76,7 @@ __all__ = [
     "CollectionEntry",
     "CollectionState",
     "CommitMode",
-    "ComponentShell",
+    "ComponentDriver",
     "Decision",
     "DecisionHandler",
     "DecisionOption",
@@ -88,21 +88,21 @@ __all__ = [
     "EditorState",
     "EditorValues",
     "GridCell",
-    "Lookup",
-    "LookupPickHandler",
-    "LookupSearch",
+    "SearchPicker",
+    "SearchPickHandler",
+    "SearchProvider",
     "Menu",
     "MenuEntry",
     "MenuState",
     "MultiChoiceCommitHandler",
     "MultiChoiceGroup",
-    "MultiChoicePanel",
+    "MultiChoice",
     "MultiChoiceState",
-    "Pattern",
-    "PatternControls",
-    "PatternEvent",
-    "PatternHandler",
-    "PatternRoute",
+    "StateMachine",
+    "MachineControls",
+    "TransitionEvent",
+    "TransitionHandler",
+    "TransitionRoute",
     "RankedEntry",
     "RankedList",
     "RankedListState",
@@ -112,8 +112,8 @@ __all__ = [
     "RosterPlacement",
     "RosterSlot",
     "RosterStatus",
-    "RouteBuilder",
-    "RouterShell",
+    "RouteEncoder",
+    "RouteDriver",
     "SourceRankedList",
     "Tab",
     "Tabs",

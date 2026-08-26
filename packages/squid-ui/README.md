@@ -383,7 +383,7 @@ unbounded half of the profiler stays free of identifiers.
 
 ## Interaction patterns and two shells
 
-`Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoicePanel` are pure state machines.
+`Tabs`, `Menu`, materialized `RankedList`, `Wizard`, and `MultiChoice` are pure state machines.
 They do not choose between in-memory callbacks and restart-surviving routes. Instead, a shell injects
 that control construction:
 
@@ -397,7 +397,7 @@ tabs = sp.Tabs(
 mount = sd.Mount(tabs.build_component(), access=sd.Everyone())
 
 # A restart-surviving message: state is decoded from and encoded into route parameters.
-shell = sp.RouterShell(
+shell = sp.RouteDriver(
     lambda request: BUILD_TAB.id(build_id=build.id, tab=request.state.selected),
 )
 document = shell.render(tabs, sp.TabsState(selected=tab))
@@ -454,10 +454,10 @@ Stateful drafts that must survive restarts open through `DurableSessionRuntime`,
 fenced admission, recoverable Discord bindings, whole-session checkpoints, and lease supervision.
 See [Durable sessions](docs/durable-mounts.md) for the imperative and `DurableBot` startup paths.
 
-`PatternRoute.phase` is `next` for deterministic buttons: its state is already the state the next
+`TransitionRoute.phase` is `next` for deterministic buttons: its state is already the state the next
 document should render. Selects and forms use `input`, because their values arrive in the
-interaction; a route handler calls `RouterShell.transition(...)` with those values and rebuilds the
-whole document. `Wizard.form_for(...)` and `MultiChoicePanel.form_for(...)` return the form a routed
+interaction; a route handler calls `RouteDriver.transition(...)` with those values and rebuilds the
+whole document. `Wizard.form_for(...)` and `MultiChoice.form_for(...)` return the form a routed
 input action should present. The route builder owns compact state encoding and receives the normal
 100-character custom-id budget check from `sl.routed_action`/`sl.routed_choices`.
 
@@ -735,7 +735,7 @@ loading and failure as visible resource states, retaining the previous window du
 `NavigationContext`, which takes a zero-based page; exact or approximate sequential sources get
 range totals; offset-only sources get a range; keyset-only sources get no numeric footer. A source that
 declares no count must return `total=None`. Source-backed rankings are components because fetching stays
-outside planning and cannot run in `RouterShell.render()`.
+outside planning and cannot run in `RouteDriver.render()`.
 
 ## Testing a panel with no Discord attached
 

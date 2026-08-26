@@ -55,7 +55,7 @@ async def _submit(mount: Mount, action: str, value: str) -> discord.ui.Modal:
 async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collection() -> None:
     changes: list[tuple[Mapping[str, object], ...]] = []
 
-    async def changed(_event: sp.PatternEvent[sp.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
+    async def changed(_event: sp.TransitionEvent[sp.CollectionState], values: tuple[Mapping[str, object], ...]) -> None:
         changes.append(values)
 
     component = _editor().build_component(on_change=changed)
@@ -64,21 +64,21 @@ async def test_add_appends_a_minted_entry_and_reports_the_full_ordered_collectio
 
     await _submit(mount, "collection.add", "OpenAI")
 
-    assert component.pattern_state == sp.CollectionState((sp.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
+    assert component.machine_state == sp.CollectionState((sp.CollectionEntry("1", (("name", "OpenAI"),)),), "1")
     assert tuple(dict(value) for value in changes[-1]) == ({"name": "OpenAI"},)
 
 
 async def test_edit_prefills_and_retains_the_entry_identity() -> None:
     editor = _editor()
     component = editor.build_component(initial=editor.initial_from(({"name": "Old"},)))
-    component.pattern_state = editor.transition(component.pattern_state, "select", values=("1",))
+    component.machine_state = editor.transition(component.machine_state, "select", values=("1",))
     mount = Mount(component, access=Everyone(), timeout=None)
     commit_render(mount)
 
     modal = await _submit(mount, "collection.edit", "New")
 
     assert _text_input(modal).default == "Old"
-    assert component.pattern_state.entries == (sp.CollectionEntry("1", (("name", "New"),)),)
+    assert component.machine_state.entries == (sp.CollectionEntry("1", (("name", "New"),)),)
 
 
 def test_remove_and_add_are_gated_by_minimum_and_maximum() -> None:
@@ -142,14 +142,14 @@ def test_custom_identity_and_routed_form_parity() -> None:
     )
     state = editor.initial_from(({"name": "Docs"},))
     state = editor.transition(state, "select", values=("docs",))
-    routes: list[sp.PatternRoute[sp.CollectionState]] = []
+    routes: list[sp.TransitionRoute[sp.CollectionState]] = []
 
-    def route(request: sp.PatternRoute[sp.CollectionState]) -> str:
+    def route(request: sp.TransitionRoute[sp.CollectionState]) -> str:
         routes.append(request)
         return f"collection:{request.action}"
 
-    rendered = sp.RouterShell(route).render(editor, state)
+    rendered = sp.RouteDriver(route).render(editor, state)
 
     assert editor.form_for(state, "edit") is not None
     assert any(isinstance(item, RoutedAction) and item.key == "collection.edit" for item in _walk(rendered))
-    assert sp.PatternRoute("edit", state, "input") in routes
+    assert sp.TransitionRoute("edit", state, "input") in routes
