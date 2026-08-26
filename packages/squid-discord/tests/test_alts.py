@@ -12,7 +12,8 @@ from squid_discord import (
 )
 from squid_discord.testing import assert_within_limits
 from squid_layouts.planning import SolveNoteCode, measure
-from squid_layouts.planning.measurement import MeasuredLayout, RPanel, RSection, RText
+from squid_layouts.planning.layout_measurement.model import RPanel, RSection, RText
+from squid_layouts.planning.measurement import MeasuredLayout
 from squid_layouts.primitives import (
     Alt,
     Condense,

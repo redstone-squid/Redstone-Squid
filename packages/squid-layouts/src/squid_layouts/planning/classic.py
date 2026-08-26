@@ -14,14 +14,16 @@ from squid_layouts.errors import LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_layouts.planning.dialect import SceneBindings
 from squid_layouts.planning.identity import stable_fingerprint
-from squid_layouts.planning.limits import ClassicLimits
-from squid_layouts.planning.measurement import (
-    MeasuredLayout,
+from squid_layouts.planning.layout_measurement.model import (
     RCard,
     RContent,
     Realized,
     RGroup,
     RText,
+)
+from squid_layouts.planning.limits import ClassicLimits
+from squid_layouts.planning.measurement import (
+    MeasuredLayout,
     measure,
 )
 from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state

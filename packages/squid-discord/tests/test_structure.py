@@ -16,7 +16,7 @@ from squid_layouts.planning import (
     measure,
     plan,
 )
-from squid_layouts.planning.measurement import RPanel, RText
+from squid_layouts.planning.layout_measurement.model import RPanel, RText
 from squid_layouts.planning.navigation import NavigationContext, default_nav
 from squid_layouts.primitives import (
     ActionGroup,

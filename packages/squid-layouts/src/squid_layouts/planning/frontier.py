@@ -10,14 +10,16 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile
-from squid_layouts.planning.limits import COMPONENTS, V2Limits
-from squid_layouts.planning.measurement import (
+from squid_layouts.planning.layout_measurement.diagnostics import (
     SolveNote,
     SolveNoteCode,
     SolveNoteSeverity,
-    _Builder,
+    note,
+)
+from squid_layouts.planning.layout_measurement.realization import Builder
+from squid_layouts.planning.limits import COMPONENTS, V2Limits
+from squid_layouts.planning.measurement import (
     _component_count,
-    _note,
     _prune,
 )
 from squid_layouts.planning.target import ResourceCost
@@ -134,7 +136,7 @@ def variant_notes(nodes: Sequence[Node], positions: Positions) -> list[SolveNote
         for step in range(rung):
             fidelity = node.variants[step + 1].fidelity
             notes.append(
-                _note(
+                note(
                     _FIDELITY_NOTES[fidelity],
                     f"{format_path(path)} stepped to {_FIDELITY_WORDS[fidelity]}variant "
                     f"{step + 2} of {len(node.variants)} (priority {node.priority}) under layout pressure",
@@ -194,7 +196,7 @@ def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
 
 def static_cost(nodes: Sequence[Node], limits: V2Limits) -> ResourceCost:
     """A rung's own resource cost, with every nested ladder left at rung 0."""
-    builder = _Builder(limits=limits)
+    builder = Builder(limits=limits)
     children = _prune(builder.realize_children(resolve_variants(nodes, {})))
     text = dict(builder.raw_text_cost)
     for unit in builder.units:

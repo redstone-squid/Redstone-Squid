@@ -11,14 +11,12 @@ Nothing here chooses between alternatives. `Variants` and semantic fallbacks are
 planner's search decisions, and a layout reaching this module has already made them.
 """
 
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from heapq import heappop, heappush
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning.breaking import BreakItem, balanced_breaks
 from squid_layouts.planning.degradation import DegradationProfile, DegradationRecorder
 from squid_layouts.planning.layout_measurement.diagnostics import (
     LayoutOverflowError,
@@ -34,27 +32,32 @@ from squid_layouts.planning.layout_measurement.model import (
     PAGE_FOOTER_PREFIX,
     Pager,
     RCard,
-    RCardField,
     RContent,
     Realized,
     RGroup,
     RPanel,
     RSection,
     RText,
-    RTime,
-    RZonedTime,
+)
+from squid_layouts.planning.layout_measurement.realization import Builder as _Builder
+from squid_layouts.planning.layout_measurement.text import (
+    BudgetRegion as _BudgetRegion,
+)
+from squid_layouts.planning.layout_measurement.text import (
+    TextUnit as _Unit,
+)
+from squid_layouts.planning.layout_measurement.text import (
+    split_pages,
+)
+from squid_layouts.planning.layout_measurement.text import (
+    trim_keep as _trim_keep,
 )
 from squid_layouts.planning.limits import (
     COMPONENTS,
-    CONTENT_TEXT,
     CONTROLS,
-    DISPLAY_TEXT,
-    ELLIPSIS,
-    EMBED_TEXT,
     EMBEDS,
     LIMITS,
     ROWS,
-    TEXT_AXES,
     DiscordLimits,
 )
 from squid_layouts.planning.navigation import (
@@ -63,45 +66,28 @@ from squid_layouts.planning.navigation import (
     materialized_navigation_state,
 )
 from squid_layouts.planning.target import EMPTY_COST, ResourceCost
-from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
+from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
-    Boundary,
     Break,
     Budget,
-    Button,
     Card,
-    CardText,
-    Code,
-    Content,
     EntitySelect,
-    Footer,
     Gallery,
-    Heading,
     Lines,
-    LinkButton,
     MediaCollection,
     Node,
-    Option,
     Panel,
     RawItem,
-    RoutedButton,
     RoutedSelect,
     Row,
-    Section,
     SelectMenu,
     Sep,
-    Text,
     Thumbnail,
-    Time,
     Variants,
-    ZonedTime,
-    card_text,
 )
 from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
-
-type TextBearing = Text | Heading | Footer | Code | Lines
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,179 +175,6 @@ class MeasuredLayout:
 # --- Text units -----------------------------------------------------------------------------
 
 
-@dataclass(slots=True)
-class _Unit:
-    """One text-bearing node's mutable allocation state."""
-
-    node: TextBearing
-    slot: RText
-    index: int
-    axis: str
-    """Which message-wide text pool this unit draws from.
-
-    Set where the unit is realized, because that is the only place that knows whether it
-    sits in a card, in message content, or in the message body itself. Pools never lend to
-    each other, so this decides which allocation it takes part in.
-    """
-    prefix: str
-    suffix: str
-    content: str
-    ladders: tuple[tuple[str, ...], ...] | None
-    ranks: tuple[int, ...]
-    """One drop priority per ladder; empty for nodes that are not entry lists."""
-    join: str
-    priority: int
-    overflow: Overflow
-    grant: int = 0
-    fragments: list[str] | None = None
-    count_pages: list[str] | None = None
-    """Count-based pages, when the node paginates every N entries rather than on overflow."""
-
-    @property
-    def chrome_len(self) -> int:
-        return len(self.prefix) + len(self.suffix)
-
-    @property
-    def need(self) -> int:
-        # A count-paginated node only ever shows one page, so that is all it asks for.
-        if self.count_pages is not None:
-            return self.chrome_len + max(len(page) for page in self.count_pages)
-        return self.chrome_len + len(self.content)
-
-
-@dataclass(frozen=True, slots=True)
-class _BudgetRegion:
-    units: tuple[_Unit, ...]
-    minimum: int
-    preferred: int
-    stretch: int
-    best_effort: bool
-
-    @property
-    def axis(self) -> str | None:
-        """The single text pool this region reserves from, or None if it holds no text.
-
-        A `Budget` states one preferred size. Applying that same size independently to two
-        pools would silently double the author's reservation, so a region spanning pools is
-        rejected rather than guessed at.
-        """
-        axes = {unit.axis for unit in self.units}
-        if len(axes) > 1:
-            named = ", ".join(sorted(axes))
-            message = f"a Budget region spans the text axes {named}; give each axis its own Budget"
-            raise LayoutInvariantError(message)
-        return next(iter(axes), None)
-
-
-def _escape_fences(content: str) -> str:
-    # A closing fence inside the content would end the block early; break it invisibly.
-    return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
-
-
-def _make_unit(node: TextBearing, slot: RText, index: int, axis: str = DISPLAY_TEXT) -> _Unit | None:
-    prefix, suffix, ladders, join = "", "", None, "\n"
-    ranks: tuple[int, ...] = ()
-    match node:
-        case Text(content=content):
-            pass
-        case Heading(content=content, level=level):
-            prefix = "#" * level + " "
-        case Footer(content=content):
-            prefix = "-# "
-        case Code(content=content, lang=lang):
-            prefix = f"```{lang}\n"
-            suffix = "\n```"
-            content = _escape_fences(content)
-        case Lines(lines=raw_lines, join=join):
-            entries = [
-                ((entry,), 0) if isinstance(entry, str) else (entry.steps, entry.priority) for entry in raw_lines
-            ]
-            kept = [(ladder, rank) for ladder, rank in entries if ladder[0]]
-            ladders = tuple(ladder for ladder, _ in kept)
-            ranks = tuple(rank for _, rank in kept)
-            content = join.join(ladder[0] for ladder in ladders)
-    if not content:
-        slot.dropped = True
-        return None
-    return _Unit(
-        node=node,
-        slot=slot,
-        index=index,
-        axis=axis,
-        prefix=prefix,
-        suffix=suffix,
-        content=content,
-        ladders=ladders,
-        ranks=ranks,
-        join=join,
-        priority=node.priority,
-        overflow=node.overflow,
-    )
-
-
-def _hard_split(segment: str, limit: int) -> list[str]:
-    return [segment[start : start + limit] for start in range(0, len(segment), limit)]
-
-
-def split_pages(
-    text: str,
-    limit: int,
-    boundary: str = "\n",
-    *,
-    min_fill: int = 0,
-    widows: int = 1,
-) -> list[str]:
-    """Balance ``text`` across the fewest bounded pages, preferring semantic cuts."""
-    if limit < 1:
-        message = "page limit must be positive"
-        raise ValueError(message)
-    chunks: list[tuple[str, str]] = []
-    for segment_index, segment in enumerate(text.split(boundary)):
-        separator = boundary if segment_index else ""
-        pieces = _hard_split(segment, limit) if len(segment) > limit else [segment]
-        for piece_index, piece in enumerate(pieces):
-            chunks.append((separator if piece_index == 0 else "", piece))
-    if not chunks:
-        return [""]
-
-    def page_text(start: int, end: int) -> str:
-        return chunks[start][1] + "".join(separator + content for separator, content in chunks[start + 1 : end])
-
-    cuts = balanced_breaks(
-        [BreakItem(len(content), leading_chars=len(separator)) for separator, content in chunks],
-        max_chars=limit,
-        min_fill=min_fill,
-        widows=widows,
-        ideal_total=len(text),
-    )
-    result: list[str] = []
-    start = 0
-    for end in cuts:
-        result.append(page_text(start, end))
-        start = end
-    return result or [""]
-
-
-def _trim_keep(text: str, limit: int, keep: str) -> str:
-    if len(text) <= limit:
-        return text
-    if limit <= 1:
-        return ELLIPSIS if limit == 1 else ""
-    if keep == "tail":
-        return ELLIPSIS + text[-(limit - 1) :].lstrip()
-    return text[: limit - 1].rstrip() + ELLIPSIS
-
-
-def text_total(cost: ResourceCost) -> int:
-    """Every text axis a cost spends on, added up.
-
-    Safe to add only because a single region lives in a single pool: a card's text is all
-    `embed_text`, a content node's is all `content_text`. Callers reasoning about one region
-    want its size; callers reasoning about a whole message must ask per axis instead.
-    """
-    return sum(value for axis, value in cost.values.items() if axis in TEXT_AXES)
-
-
 def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> ResourceCost:
     """Measure preferred cost per named axis, without applying any budget pressure."""
 
@@ -399,294 +212,7 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
     return ResourceCost({**text, **_structural_cost(children)})
 
 
-def split_text_node(
-    node: Node,
-    limit: int,
-    *,
-    min_fill: int = 0,
-    widows: int = 1,
-) -> tuple[Node, ...] | None:
-    """Losslessly split one text primitive into independently renderable fragments."""
-    if not isinstance(node, Text | Heading | Footer | Code | Lines):
-        return None
-    slot = RText()
-    unit = _make_unit(node, slot, 0)
-    if unit is None:
-        return (node,)
-    usable = limit - unit.chrome_len
-    if usable < 1:
-        return None
-    boundary = node.join if isinstance(node, Lines) else "\n"
-    fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
-    if len(fragments) <= 1:
-        return (node,)
-    if isinstance(node, Lines):
-        return tuple(Text(fragment, overflow=Never(), priority=node.priority) for fragment in fragments)
-    return tuple(replace(node, content=fragment, overflow=Never()) for fragment in fragments)
-
-
 # --- Solve ----------------------------------------------------------------------------------
-
-
-@dataclass(slots=True)
-class _Builder:
-    limits: DiscordLimits = LIMITS
-    notes: list[SolveNote] = field(default_factory=list)
-    units: list[_Unit] = field(default_factory=list)
-    raw_text_cost: dict[str, int] = field(default_factory=dict)
-    """Text no overflow policy can shrink, per axis: timestamps and prepared native items."""
-    budgets: list[_BudgetRegion] = field(default_factory=list)
-    axis: str = DISPLAY_TEXT
-    """The pool text realized right now draws from; target shape moves it, nothing else."""
-
-    def charge(self, characters: int) -> None:
-        self.raw_text_cost[self.axis] = self.raw_text_cost.get(self.axis, 0) + characters
-
-    def unit(self, node: TextBearing, slot: RText) -> None:
-        made = _make_unit(node, slot, len(self.units), self.axis)
-        if made is not None:
-            self.units.append(made)
-
-    @contextmanager
-    def pool(self, axis: str) -> Iterator[None]:
-        """Realize everything inside this block against another text pool."""
-        previous = self.axis
-        self.axis = axis
-        try:
-            yield
-        finally:
-            self.axis = previous
-
-    def slot(self, value: CardText | None, cap: int, what: str) -> RText | None:
-        """Realize one card text slot, clamping it to its own local cap first.
-
-        Local caps are the target's shape, not its remaining room: an embed title is 256
-        characters whatever else the message holds. A slot that cannot shrink and does not
-        fit is rejected by the dialect's validation before this ever runs, so anything
-        trimmed here asked to be.
-        """
-        if value is None:
-            return None
-        node = card_text(value)
-        content = node.content.strip()
-        if not content:
-            return None
-        if len(content) > cap:
-            self.notes.append(
-                _note(
-                    SolveNoteCode.CLAMP_EMBED_TEXT,
-                    f"{what} clamped from {len(content)} to {cap}",
-                    SolveNoteSeverity.CLAMP,
-                )
-            )
-            content = _trim_keep(content, cap, "head")
-        slot = RText()
-        self.unit(replace(node, content=content), slot)
-        return slot
-
-    def card(self, node: Card) -> RCard:
-        limits = self.limits
-        fields = node.fields[: getattr(limits, "embed_fields", len(node.fields))]
-        if len(fields) != len(node.fields):
-            self.notes.append(
-                _note(
-                    SolveNoteCode.CLAMP_EMBED_FIELDS,
-                    f"card holds {len(node.fields)} fields; keeping {len(fields)}",
-                    SolveNoteSeverity.CLAMP,
-                )
-            )
-        realized_fields: list[RCardField] = []
-        for field_node in fields:
-            name = self.slot(field_node.name, getattr(limits, "field_name", 256), "field name")
-            value = self.slot(field_node.value, getattr(limits, "field_value", 1024), "field value")
-            if name is None or value is None:
-                # Discord rejects an empty field name or value outright, and a field with
-                # neither is not a smaller field, it is a different document.
-                message = "a CardField needs a non-empty name and value after trimming"
-                raise LayoutInvariantError(message)
-            realized_fields.append(RCardField(name, value, field_node.inline))
-        return RCard(
-            title=self.slot(node.title, getattr(limits, "embed_title", 256), "embed title"),
-            url=node.url,
-            blocks=self.realize_children(node.children),
-            fields=realized_fields,
-            footer=None
-            if node.footer is None
-            else self.slot(node.footer.text, getattr(limits, "embed_footer", 2048), "embed footer"),
-            footer_icon=None if node.footer is None else node.footer.icon_url,
-            author=None
-            if node.author is None
-            else self.slot(node.author.name, getattr(limits, "embed_author", 256), "embed author"),
-            author_url=None if node.author is None else node.author.url,
-            author_icon=None if node.author is None else node.author.icon_url,
-            accent=node.accent,
-            image=node.image,
-            thumbnail=node.thumbnail,
-            timestamp=node.timestamp,
-        )
-
-    def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
-        if button.label is None:
-            return button
-        if len(button.label) <= self.limits.button_label:
-            return button
-        self.notes.append(
-            _note(
-                SolveNoteCode.CLAMP_BUTTON_LABEL,
-                f"button label clamped from {len(button.label)}",
-                SolveNoteSeverity.CLAMP,
-            )
-        )
-        trimmed = _trim_keep(button.label, self.limits.button_label, "head")
-        return replace(button, label=trimmed)
-
-    def _clamp_select[SelectT: SelectMenu | RoutedSelect](self, select: SelectT) -> SelectT:
-        limits = self.limits
-        options = select.options
-        if len(options) > limits.select_options:
-            self.notes.append(
-                _note(
-                    SolveNoteCode.CLAMP_SELECT_OPTIONS,
-                    f"{len(options)} select options clamped to {limits.select_options}",
-                    SolveNoteSeverity.CLAMP,
-                )
-            )
-            options = options[: limits.select_options]
-        clamped_options = []
-        for option in options:
-            label = _trim_keep(option.label, limits.option_label, "head")
-            value = option.value[: limits.option_value]
-            description = option.description
-            if description is not None and len(description) > limits.option_description:
-                description = _trim_keep(description, limits.option_description, "head")
-            if (label, value, description) != (option.label, option.value, option.description):
-                self.notes.append(
-                    _note(SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP)
-                )
-                option = Option(label=label, value=value, description=description, default=option.default)
-            clamped_options.append(option)
-        placeholder = select.placeholder
-        if placeholder is not None and len(placeholder) > limits.select_placeholder:
-            self.notes.append(
-                _note(
-                    SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
-                    f"select placeholder clamped from {len(placeholder)}",
-                    SolveNoteSeverity.CLAMP,
-                )
-            )
-            placeholder = _trim_keep(placeholder, limits.select_placeholder, "head")
-        return replace(
-            select,
-            options=tuple(clamped_options),
-            placeholder=placeholder,
-            max_values=min(select.max_values, len(clamped_options) or 1),
-        )
-
-    def _clamp_entity_select(self, select: EntitySelect) -> EntitySelect:
-        placeholder = select.placeholder
-        if placeholder is not None and len(placeholder) > self.limits.select_placeholder:
-            self.notes.append(
-                _note(
-                    SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
-                    f"select placeholder clamped from {len(placeholder)}",
-                    SolveNoteSeverity.CLAMP,
-                )
-            )
-            placeholder = _trim_keep(placeholder, self.limits.select_placeholder, "head")
-        return replace(select, placeholder=placeholder)
-
-    def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
-        return [self.realize(node) for node in nodes]
-
-    def realize(self, node: Node) -> Realized:
-        match node:
-            case Text() | Heading() | Footer() | Code() | Lines():
-                slot = RText()
-                self.unit(node, slot)
-                return slot
-            case Time(instant=instant, style=style, prefix=prefix):
-                unix = int(instant.timestamp())
-                self.charge(len(prefix or "") + len(f"<t:{unix}:{style}>"))
-                return RTime(instant, style, prefix)
-            case ZonedTime(value=value, prefix=prefix):
-                self.charge(len(prefix or "") + len(value.isoformat()))
-                return RZonedTime(value, prefix)
-            case Section(texts=texts, accessory=accessory):
-                if len(texts) > 3:
-                    self.notes.append(
-                        _note(
-                            SolveNoteCode.CLAMP_SECTION_TEXTS,
-                            f"section holds {len(texts)} texts; keeping 3",
-                            SolveNoteSeverity.CLAMP,
-                        )
-                    )
-                    texts = texts[:3]
-                slots: list[RText] = []
-                for text_node in texts:
-                    slot = RText()
-                    self.unit(text_node, slot)
-                    slots.append(slot)
-                if isinstance(accessory, RawItem):
-                    self.charge(accessory.text_cost)
-                return RSection(texts=slots, accessory=accessory)
-            case Content(content=text, overflow=overflow, priority=priority):
-                slot = RText()
-                # Message content is its own pool. Nothing in an embed can borrow from it and
-                # nothing here can borrow from them, which is the whole point of the split.
-                with self.pool(CONTENT_TEXT):
-                    self.unit(Text(text, overflow=overflow, priority=priority), slot)
-                return RContent(slot)
-            case Card():
-                with self.pool(EMBED_TEXT):
-                    return self.card(node)
-            case Panel(children=children, accent=accent, spoiler=spoiler):
-                return RPanel(children=self.realize_children(children), accent=accent, spoiler=spoiler)
-            case Budget(
-                children=children,
-                minimum=minimum,
-                preferred=preferred,
-                stretch=stretch,
-                best_effort=best_effort,
-            ):
-                first = len(self.units)
-                realized = self.realize_children(children)
-                self.budgets.append(_BudgetRegion(tuple(self.units[first:]), minimum, preferred, stretch, best_effort))
-                return RGroup(realized)
-            case Break(children=children):
-                return RGroup(self.realize_children(children))
-            case Gallery(items=items):
-                if len(items) > 10:
-                    self.notes.append(
-                        _note(
-                            SolveNoteCode.CLAMP_GALLERY_ITEMS,
-                            f"gallery holds {len(items)} items; keeping 10",
-                            SolveNoteSeverity.CLAMP,
-                        )
-                    )
-                    node = Gallery(items=items[:10])
-                return node
-            case Row(items=items):
-                self.charge(sum(item.text_cost for item in items if isinstance(item, RawItem)))
-                clamped = tuple(
-                    self._clamp_button(item) if isinstance(item, Button | LinkButton | RoutedButton) else item
-                    for item in items
-                )
-                return Row(items=clamped)
-            case SelectMenu() | RoutedSelect():
-                return self._clamp_select(node)
-            case EntitySelect():
-                return self._clamp_entity_select(node)
-            case RawItem(text_cost=text_cost):
-                self.charge(text_cost)
-                return node
-            case Boundary():
-                message = "Boundary must be expanded before solving"
-                raise ValueError(message)
-            case Variants():
-                message = "Variants must be resolved before measuring; plan() owns that choice"
-                raise LayoutInvariantError(message)
-            case _:
-                return node
 
 
 def _apply(unit: _Unit, chrome: Chrome, notes: list[SolveNote], degradation: DegradationRecorder) -> bool:
