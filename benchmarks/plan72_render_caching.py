@@ -406,7 +406,7 @@ async def _measure_resource_resolution(components: int, samples: int) -> ChangeS
         result = await _measure_async_changes("atomic_resource_resolution", components, samples, prepare, operation)
         assert root.renders == 2
         assert leaf.loads == samples + 1
-        assert leaf.renders == 2 * (samples + 1)
+        assert leaf.renders == samples + 2
         return result
     finally:
         message_root._teardown()
