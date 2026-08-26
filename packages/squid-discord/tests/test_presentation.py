@@ -6,6 +6,7 @@ coherence at construction and about which mode transitions reach Discord at all.
 """
 
 import io
+import json
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -434,7 +435,7 @@ class TestDurableMode:
     def test_the_mode_survives_a_durable_record_round_trip(self) -> None:
         address = FrontendAddress("discord", {"channel_id": 5, "message_id": 99, "mode": "components_v2"})
         record = squid_discord.durability.DurableMountRecord(
-            protocol=1,
+            protocol=squid_discord.durability.DurableMountCodec.protocol,
             state=squid_discord.durability.MountState(
                 protocol=squid_discord.durability.MountStateCodec.protocol,
                 component_key="panel",
@@ -446,8 +447,16 @@ class TestDurableMode:
             address=address,
         )
 
-        restored = squid_discord.durability.DurableMountCodec.loads(
-            squid_discord.durability.DurableMountCodec.dumps(record)
-        )
-
+        encoded = squid_discord.durability.DurableMountCodec.dumps(record)
+        raw = json.loads(encoded)
+        assert {"state", "address"} <= raw.keys()
+        assert "snapshot" not in raw
+        assert "locator" not in raw
+        restored = squid_discord.durability.DurableMountCodec.loads(encoded)
         assert restored.address.values["mode"] == "components_v2"
+
+        raw["protocol"] = 1
+        raw["snapshot"] = raw.pop("state")
+        raw["locator"] = raw.pop("address")
+        legacy = squid_discord.durability.DurableMountCodec.loads(json.dumps(raw))
+        assert legacy.address.values["mode"] == "components_v2"
