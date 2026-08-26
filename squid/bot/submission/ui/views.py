@@ -242,28 +242,26 @@ class SubmissionFormComponent(sl.Component):
                 sl.note(t(self.locale, _("Only the door type and opening size are required."))),
                 accent=sl.palette.INHERIT if self.is_ready else DISCORD_YELLOW,
             ),
-            sl.semantic.Choices(
+            sl.choices(
+                *(sl.choice(t(self.locale, _(value)), key=value) for value in DOOR_ORIENTATION_NAMES),
                 key="door_type",
-                choices=tuple(sl.semantic.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
                 selection=sl.controlled(
                     (self.build.door_orientation,) if self.build.door_orientation is not None else (),
                     self._door_changed,
                 ),
             ),
-            sl.semantic.Choices(
-                key="location",
-                choices=(
-                    sl.semantic.Choice(
-                        "Directional",
-                        t(self.locale, _("Directional")),
-                        t(self.locale, _("May depend on the direction it faces")),
-                    ),
-                    sl.semantic.Choice(
-                        "Locational",
-                        t(self.locale, _("Locational")),
-                        t(self.locale, _("May depend on its position in the world")),
-                    ),
+            sl.choices(
+                sl.choice(
+                    t(self.locale, _("Directional")),
+                    key="Directional",
+                    description=t(self.locale, _("May depend on the direction it faces")),
                 ),
+                sl.choice(
+                    t(self.locale, _("Locational")),
+                    key="Locational",
+                    description=t(self.locale, _("May depend on its position in the world")),
+                ),
+                key="location",
                 selection=sl.controlled(
                     tuple(
                         value
@@ -275,28 +273,27 @@ class SubmissionFormComponent(sl.Component):
                 minimum=0,
                 maximum=2,
             ),
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Edit basics")),
-                        self._edit_basics,
-                        "edit_basics",
-                        style=sl.primitives.ActionStyle.PRIMARY,
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Add links & details")),
-                        self._edit_details,
-                        "edit_details",
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Submit for review")),
-                        self._submit,
-                        "submit",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                        disabled=self.submitting,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
-                )
+            sl.actions(
+                sl.action(
+                    t(self.locale, _("Edit basics")),
+                    self._edit_basics,
+                    key="edit_basics",
+                    emphasis=sl.semantic.Emphasis.STRONG,
+                ),
+                sl.action(
+                    t(self.locale, _("Add links & details")),
+                    self._edit_details,
+                    key="edit_details",
+                ),
+                sl.action(
+                    t(self.locale, _("Submit for review")),
+                    self._submit,
+                    key="submit",
+                    tone=sl.Tone.SUCCESS,
+                    available=not self.submitting,
+                ),
+                sl.action(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                key="submission-actions",
             ),
         )
 
@@ -563,33 +560,33 @@ class BuildEditComponent(sl.Component):
             if not self.validation_error
             else t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
         )
-        controls: list[sl.primitives.Button] = [
-            sl.primitives.Button(t(self.locale, _("Edit this section")), self._open, "open"),
-            sl.primitives.Button(t(self.locale, _("Previous")), self._previous, "previous", disabled=self.page == 1),
-            sl.primitives.Button(t(self.locale, _("Next")), self._next, "next", disabled=self.page == self.max_pages),
+        controls: list[sl.semantic.Action] = [
+            sl.action(t(self.locale, _("Edit this section")), self._open, key="open"),
+            sl.action(t(self.locale, _("Previous")), self._previous, key="previous", available=self.page != 1),
+            sl.action(t(self.locale, _("Next")), self._next, key="next", available=self.page != self.max_pages),
         ]
         if self.confirming:
             controls.extend(
                 (
-                    sl.primitives.Button(
+                    sl.action(
                         t(self.locale, _("Apply changes")),
                         self._apply,
-                        "apply",
-                        style=sl.primitives.ActionStyle.SUCCESS,
+                        key="apply",
+                        tone=sl.Tone.SUCCESS,
                     ),
-                    sl.primitives.Button(t(self.locale, _("Back")), self._unconfirm, "unconfirm"),
+                    sl.action(t(self.locale, _("Back")), self._unconfirm, key="unconfirm"),
                 )
             )
         else:
             controls.append(
-                sl.primitives.Button(
+                sl.action(
                     t(self.locale, _("Review changes")),
                     self._review,
-                    "review",
-                    style=sl.primitives.ActionStyle.SUCCESS,
+                    key="review",
+                    tone=sl.Tone.SUCCESS,
                 )
             )
-        controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
+        controls.append(sl.action(t(self.locale, _("Close")), self._close, key="close"))
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading(t(self.locale, _("Edit build"))),
@@ -600,7 +597,7 @@ class BuildEditComponent(sl.Component):
         ]
         if (node := self._current()[1]) is not None:
             nodes.append(node)
-        nodes.append(sl.primitives.ActionGroup(tuple(controls)))
+        nodes.append(sl.actions(*controls, key="build-edit-actions", display=sl.semantic.ActionDisplay.INDIVIDUAL))
         return tuple(nodes)
 
     def summary_text(self) -> str:

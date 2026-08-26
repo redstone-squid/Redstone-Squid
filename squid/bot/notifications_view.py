@@ -101,16 +101,16 @@ class NotificationPanel(sl.Component):
         ]
         if self.subscriptions:
             nodes.append(
-                sl.semantic.Choices(
-                    key="unfollow",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            str(subscription.id),
+                sl.choices(
+                    *(
+                        sl.choice(
                             self.describe(subscription),
-                            self.detail(subscription),
+                            key=str(subscription.id),
+                            description=self.detail(subscription),
                         )
                         for subscription in self.subscriptions
                     ),
+                    key="unfollow",
                     selection=sl.controlled(self.selected_ids, self._selection_changed),
                     minimum=0,
                     maximum=len(self.subscriptions),
@@ -133,21 +133,20 @@ class NotificationPanel(sl.Component):
             )
         )
         nodes.append(
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Unfollow selected")),
-                        self._unfollow,
-                        "unfollow_selected",
-                        style=sl.primitives.ActionStyle.DANGER,
-                        disabled=not self.selected_ids,
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Close")),
-                        self._close,
-                        "close",
-                    ),
-                )
+            sl.actions(
+                sl.action(
+                    t(self.locale, _("Unfollow selected")),
+                    self._unfollow,
+                    key="unfollow_selected",
+                    tone=sl.Tone.DANGER,
+                    available=bool(self.selected_ids),
+                ),
+                sl.action(
+                    t(self.locale, _("Close")),
+                    self._close,
+                    key="close",
+                ),
+                key="notification-actions",
             )
         )
         return tuple(nodes)
