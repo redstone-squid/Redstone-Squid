@@ -1,6 +1,6 @@
 # ADR: Plan 68 action ledger and replicated backend gate
 
-Status: accepted; Loro hardening direction selected, production promotion deferred
+Status: accepted; Loro production adapter promoted 2026-08-27
 Audit base: `13ce58a3755d3629e916c40cbe1d87200f5d8a31`  
 Audit date: 2026-08-24
 
@@ -127,16 +127,18 @@ post-commit `ReplicatedUpdate` envelopes.
 
 ## Current production gate result
 
-Loro is now selected as the generalized adapter hardening direction, based on the expanded evidence in
-[the final backend report](68-replicated-backend-report.md). This is not production promotion. Both adapters
-remain experimental while register-conflict planning, backend-wide property tests, representative document
-benchmarks, compaction authority, cancellation/ownership under transport load, corrupted-input mapping, and
-durable restart coordination are incomplete. The supported shipped behavior remains narrowed to the
-deterministic counter/tagged-set reference engine.
+The explicitly injected `LoroBackend` is now the production generalized adapter. It implements named text,
+list, movable-list, map, tree, exact-counter, and tagged-set handles without exposing backend containers.
+Type-aware tokens limit raw frontier reversal to filtered text roots. Register replacements and moves record
+an action authority and conflict the complete inverse if a later operation wins. History-held leases define
+the shallow-compaction floor, including checkpoint reload; released pre-floor tokens are classified as
+expired before the binding's failing diff path is called.
 
-There is no unsafe fallback. Applications needing a real backend may run the experimental SPI tests,
-but the public package does not silently promise production support or leak a backend container. A
-later ADR may select one adapter only after all twelve Plan 68 production criteria pass.
+The adapter translates Loro's bare `BaseException` decode/import failures, bounds updates, tokens, roots,
+operations, paths, and container cardinality, and rejects stale staging before canonical apply. Versioned
+p50/p95/p99 build-review fixtures provide generous hard performance and encoded-size ceilings. The host still
+owns transport tasks, sender authentication, authorization, and durable storage. The legacy text-only Loro
+and pycrdt engines remain experimental conformance oracles.
 
 ## Atomicity limits
 
